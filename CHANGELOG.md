@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–393
+## Steps 193–394
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -245,6 +245,16 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   cost table for every shot, and the air has its own cookbook ([COOKBOOK-AIR.md](docs/COOKBOOK-AIR.md));
   three space showcases are in the [web scene gallery](docs/gallery/web/README.md): a skim at sunset,
   from orbit to the sea, along a giant ship.
+
+- **Seven orchestral Shorts as examples** (Step 394):
+  [examples/orchestral-shorts](examples/orchestral-shorts/README.md) holds seven published portrait
+  music videos (First Light, The Signal, Gate of Stars, Choir of the Void, Ascension, Eclipse and
+  Orchestra, which labels each section of the orchestra on screen), one project per film, with an
+  original score each and one shared three.js module and `web_cut` type for all seven; pictures and
+  sound as published. New top-level key `web_root`: the folder `web` scenes' pages are served from,
+  the project folder or one that holds it, so projects side by side share a page or script
+  (`web_root: ..` with `script: ../shared/orch.js`). The gallery's Shorts have their titles, and
+  Orchestra is the tenth.
 
 ### Space scenes (Phase AN, Steps 367–378)
 

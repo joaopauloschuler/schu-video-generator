@@ -124,7 +124,7 @@ class Web(NarratedScene):
     def validate_project(cls, params: Any, project: Any) -> list[str]:
         """The page or script file exists in the project folder and has the right suffix; a
         scene with ``music_data:`` is in a video that plays music."""
-        problems = web_entry_problems(project.root, params)
+        problems = web_served_entry_problems(project, params)
         if getattr(params, "music_data", False) and not video_has_music(project.config):
             problems.append("music_data: the video plays no music; add music: (a score file, a bed or a music file) or turn music_data off")
         return problems
@@ -199,8 +199,8 @@ class Web(NarratedScene):
                                         music=extra.get("music"), orbits=extra.get("orbits"))
             extra["orbits"] = web_with_flights(extra.get("orbits"), flights)
         return {**extra,
-            "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
-            "params": self.params, "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,
+            "root": web_served_root(self.project), "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
+            "params": web_served_params(self.project, self.params), "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,
             "beats": beats, "shape": web_page_shape(frame, self.params.region),
         }
 

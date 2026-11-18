@@ -4726,6 +4726,7 @@ the text (here the video's background, since the canvas is transparent).
 |---|---|
 | `scenes[0].params: give exactly one of page: (an HTML file) or script: (a JavaScript module)` | both or neither given |
 | `page: file not found: extensions/hello.html (looked for …)` (validate) | the path is relative to the project folder (where `video.yaml` is) |
+| `script: must be a path inside the project folder, got ../shared/x.js` (validate) | a page or script outside the project folder: copy it in, or, to share one file between projects side by side, set `web_root: ..` (pages are then served from the folder that holds them; `examples/orchestral-shorts` does this) |
 | `scene 'x': JavaScript error in extensions/orbit.js line 7 in frame(t=0.500): TypeError: …` | your code threw; the file, line and time are given. At load: `… line 3 at load: …` |
 | `scene 'x': JavaScript error in extensions/x.js …: a module script did not load (a file it imports is missing or refused)` | an `import` names a missing file or a URL on the internet |
 | `scene 'x': the page imports the three.js add-on '…', which is not shipped with vidgen …` | an add-on vidgen does not ship (list above): copy the file into the project |

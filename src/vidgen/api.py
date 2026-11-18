@@ -673,6 +673,8 @@ from vidgen.three_d.spec import Camera3D, Floor3D, Light3D, Object3D, Scene3DPar
 from vidgen.browser.timing import clip_plan, planned_still_frames  # noqa: E402
 from vidgen.web.clip import make_web_clip, web_page_layouts  # noqa: E402
 from vidgen.web.entry import web_entry_problems  # noqa: E402
+from vidgen.web.entry import served_entry_problems as web_served_entry_problems, served_params as web_served_params  # noqa: E402
+from vidgen.web.entry import served_root as web_served_root  # noqa: E402
 from vidgen.web.inputs import json_problem as web_json_problem  # noqa: E402
 from vidgen.web.inputs import design_width_problem as web_design_width_problem  # noqa: E402
 from vidgen.web.inputs import page_shape as web_page_shape  # noqa: E402
@@ -1002,6 +1004,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "web_page_layouts",
     "planned_still_frames",
     "web_entry_problems",
+    "web_served_entry_problems",
+    "web_served_params",
+    "web_served_root",
     "web_json_problem",
     "web_page_inputs",
     "web_page_shape",

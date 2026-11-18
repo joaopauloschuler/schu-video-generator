@@ -1,0 +1,171 @@
+# The Signal: an original 32 s cue for vidgen's orchestra. No samples, no SoundFont.
+# 120 BPM in E minor; one bar = 2 s = 60 frames at 30 fps.
+#   pulse  4  a hit on the first frame, then the spiccato engine (cellos, violas) and taikos; a muted horn
+#             sends the signal (E E - B), the men's choir answers on "da"
+#   call   4  four horns sing the theme, the trumpet answers with the signal, the choir on "ooh"
+#   build  2  toms fall, a timpani roll, a snare roll and a cymbal swell into...
+#   blaze  4  violins high, the trumpets' signal over the whole orchestra, the choir on "aah"
+#   end    2  a last hit on C, then E major and the tam-tam
+version: 1
+title: The Signal
+key: E minor
+tempo: 120
+seed: 3702
+loop: false
+sections:
+  - {name: pulse, bars: 4, progression: "Em C G D"}
+  - {name: call, bars: 4, progression: "Em C G D"}
+  - {name: build, bars: 2, progression: "Am B"}
+  - {name: blaze, bars: 4, progression: "Em C G D"}
+  - {name: end, bars: 2, progression: "C E"}
+tracks:
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 3.6, mix: 0.3, tone: 4800}
+    sections:
+      pulse: {settings: {stroke: tremolo, brightness: 0.7}, steps: "[mf] B4+E5 - - - - - - - | C5+E5 - - - - - - - | B4+D5 - - - - - - - | A4+D5 - - - - - - -"}
+      call:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] E5 G5 B5 E5 G5 B5 G5 E5 E5 G5 B5 E5 G5 B5 G5 E5 | E5 G5 C6 E5 G5 C6 G5 E5 E5 G5 C6 E5 G5 C6 G5 E5 | D5 G5 B5 D5 G5 B5 G5 D5 D5 G5 B5 D5 G5 B5 G5 D5 | D5 F#5 A5 D5 F#5 A5 F#5 D5 D5 F#5 A5 D5 F#5 A5 F#5 D5"}
+      build: {settings: {stroke: spiccato}, steps: "[mf <] A4 C5 E5 A5 A4 C5 E5 A5 A4 C5 E5 A5 A4 C5 E5 A5 | B4 D#5 F#5 B5 B4 D#5 F#5 B5 B4 D#5 F#5 B5 B4 D#5 F#5 B5 [ff]"}
+      blaze: {settings: {attack: 0.08, vibrato: 14}, steps: "[ff] (B5 - - - E6 - - - | G6 - - - - - E6 - | D6 - - - B5 - G5 - | A5 - - - - - - -)"}
+      end:   {steps: "[ff] G5+C6 - - - - - - - | [>] G#5+B5 - - - - - . . [mp]"}
+  violas:
+    instrument: violas
+    pan: -0.05
+    reverb: {size: 3.6, mix: 0.3, tone: 4800}
+    sections:
+      pulse: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] E3 G3 B3 E3 G3 B3 G3 E3 E3 G3 B3 E3 G3 B3 G3 E3 | E3 G3 C4 E3 G3 C4 G3 E3 E3 G3 C4 E3 G3 C4 G3 E3 | D3 G3 B3 D3 G3 B3 G3 D3 D3 G3 B3 D3 G3 B3 G3 D3 | D3 F#3 A3 D3 F#3 A3 F#3 D3 D3 F#3 A3 D3 F#3 A3 F#3 D3"}
+      call:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] E3 G3 B3 E3 G3 B3 G3 E3 E3 G3 B3 E3 G3 B3 G3 E3 | E3 G3 C4 E3 G3 C4 G3 E3 E3 G3 C4 E3 G3 C4 G3 E3 | D3 G3 B3 D3 G3 B3 G3 D3 D3 G3 B3 D3 G3 B3 G3 D3 | D3 F#3 A3 D3 F#3 A3 F#3 D3 D3 F#3 A3 D3 F#3 A3 F#3 D3"}
+      build: {settings: {stroke: tremolo, brightness: 0.8}, steps: "[mf <] C4+E4 - - - - - - - | D#4+F#4 - - - - - - - [ff]"}
+      blaze: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] E4 G4 B4 E4 G4 B4 G4 E4 E4 G4 B4 E4 G4 B4 G4 E4 | E4 G4 C5 E4 G4 C5 G4 E4 E4 G4 C5 E4 G4 C5 G4 E4 | D4 G4 B4 D4 G4 B4 G4 D4 D4 G4 B4 D4 G4 B4 G4 D4 | D4 F#4 A4 D4 F#4 A4 F#4 D4 D4 F#4 A4 D4 F#4 A4 F#4 D4"}
+      end:   {steps: "[ff] E4+G4 - - - - - - - | [>] E4+G#4 - - - - - . . [mp]"}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 3.6, mix: 0.28, tone: 4500}
+    sections:
+      pulse: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[sfz] E2 E2 B2 E2 G2 E2 B2 E2 [f] E2 E2 B2 E2 G2 E2 B2 E2 | C2 C2 G2 C2 E2 C2 G2 C2 C2 C2 G2 C2 E2 C2 G2 C2 | G2 G2 D3 G2 B2 G2 D3 G2 G2 G2 D3 G2 B2 G2 D3 G2 | D2 D2 A2 D2 F#2 D2 A2 D2 D2 D2 A2 D2 F#2 D2 A2 D2"}
+      call:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] E2 E2 B2 E2 G2 E2 B2 E2 E2 E2 B2 E2 G2 E2 B2 E2 | C2 C2 G2 C2 E2 C2 G2 C2 C2 C2 G2 C2 E2 C2 G2 C2 | G2 G2 D3 G2 B2 G2 D3 G2 G2 G2 D3 G2 B2 G2 D3 G2 | D2 D2 A2 D2 F#2 D2 A2 D2 D2 D2 A2 D2 F#2 D2 A2 D2"}
+      build: {settings: {stroke: spiccato}, steps: "[mf <] A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 | B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 B2 [ff]"}
+      blaze: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] E2 E2 B2 E2 G2 E2 B2 E2 E2 E2 B2 E2 G2 E2 B2 E2 | C2 C2 G2 C2 E2 C2 G2 C2 C2 C2 G2 C2 E2 C2 G2 C2 | G2 G2 D3 G2 B2 G2 D3 G2 G2 G2 D3 G2 B2 G2 D3 G2 | D2 D2 A2 D2 F#2 D2 A2 D2 D2 D2 A2 D2 F#2 D2 A2 D2"}
+      end:   {steps: "[ff] C3 - - - - - - - | [>] E3 - - - - - . . [mp]"}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 3.6, mix: 0.26, tone: 4000}
+    sections:
+      pulse: {settings: {stroke: pizzicato}, steps: "[f] E1 . . . E1 . . . | C1 . . . C1 . . . | G1 . . . G1 . . . | D1 . . . D1 . . ."}
+      call:  {steps: "[f] E1 - - - - - - - | C1 - - - - - - - | G1 - - - - - - - | D1 - - - - - - -"}
+      build: {steps: "[mf <] A1 - - - - - - - | B1 - - - - - - - [ff]"}
+      blaze: {steps: "[ff] E1 - - - - - - - | C1 - - - - - - - | G1 - - - - - - - | D1 - - - - - - -"}
+      end:   {steps: "[ff] C1 - - - - - - - | [>] E1 - - - - - . . [mp]"}
+  horns:
+    instrument: horn
+    settings: {players: 4, attack: 0.1}
+    pan: 0.1
+    reverb: {size: 4, mix: 0.32, tone: 4500}
+    sections:
+      pulse: {settings: {players: 1, mute: 1, attack: 0.04}, volume: 3, steps: ". | . | [f] E4 . E4 . B4 - - . | [f] E4 . E4 . B4 - - ."}
+      call:  {volume: 3, steps: "[f] (E4 - - - G4 - B4 - | C5 - - - B4 - G4 - | D5 - - - B4 - G4 - | A4 - - - F#4 - - -)"}
+      build: {steps: "[fp <] A3+E4 - - - - - - - | B3+D#4 - - - - - - - [ff]"}
+      blaze: {steps: "[ff] E4+G4 - - - - - - - | E4+G4 - - - - - - - | D4+G4 - - - - - - - | D4+F#4 - - - - - - -"}
+      end:   {steps: "[ff] E4+G4 - - - - - - - | [>] E4+G#4 - - - - - . . [mp]"}
+  trumpet:
+    instrument: trumpet
+    only: [call, blaze, end]
+    settings: {vibrato: 10, vibrato_delay: 0.3, attack: 0.03, players: 2}
+    pan: 0.2
+    reverb: {size: 4, mix: 0.3, tone: 4800}
+    sections:
+      call:  {steps: ". | [mf] E5 . E5 . B5 - - . | . | [f] E5 . E5 . B5 - - ."}
+      blaze: {steps: "[ff] E5 . E5 . B5 - - . | E5 . E5 . C6 - - . | D5 . D5 . B5 - - . | A5 - - - F#5 - - -"}
+      end:   {steps: "[ff] E5 - - - - - - - | [>] G#5 - - - - - . . [mp]"}
+  low:
+    instrument: low_brass
+    settings: {tuba: 0.7, attack: 0.08}
+    reverb: {size: 4, mix: 0.3, tone: 4000}
+    sections:
+      pulse: {steps: "[ff] E2+B2 - - . . . . . | . | . | ."}
+      call:  {steps: "[mf] E2 - - - - - - - | C2 - - - - - - - | G1 - - - - - - - | D2 - - - - - - -"}
+      build: {settings: {attack: 0.3}, steps: ". | [pp <] B1+F#2 - - - - - - - [ff]"}
+      blaze: {steps: "[ff] E2+B2 - - - - - - - | C2+G2 - - - - - - - | G1+D2 - - - - - - - | D2+A2 - - - - - - -"}
+      end:   {steps: "[ff] C2+G2 - - - - - - - | [>] E2+B2 - - - - - . . [mp]"}
+  men:
+    instrument: choir
+    settings: {voices: men}
+    volume: 3
+    pan: 0.15
+    reverb: {size: 4.5, mix: 0.36, tone: 4500}
+    sections:
+      pulse: {volume: 8, steps: ". | . | [mf] [da] E3 . E3 . [na] B3 - - . | [da] D3 . D3 . [na] A3 - - ."}
+      call:  {settings: {vowel: ooh}, steps: "[mf] E3+B3 - - - - - - - | C3+G3 - - - - - - - | D3+B3 - - - - - - - | D3+A3 - - - - - - -"}
+      build: {settings: {vowel: aah}, steps: "[mf <] A2+E3 - - - - - - - | B2+F#3 - - - - - - - [ff]"}
+      blaze: {settings: {vowel: aah, brightness: 0.7}, steps: "[ff] E3+B3 - - - - - - - | C3+G3 - - - - - - - | D3+B3 - - - - - - - | D3+A3 - - - - - - -"}
+      end:   {settings: {vowel: aah, brightness: 0.7, ring: 1.4}, steps: "[ff] C3+G3 - - - - - - - | [>] E3+B3 - - - - - . . [p]"}
+  women:
+    instrument: choir
+    only: [call, build, blaze, end]
+    settings: {voices: women, vowel: ooh}
+    volume: 1
+    pan: -0.15
+    reverb: {size: 4.5, mix: 0.38, tone: 4500}
+    sections:
+      call:  {steps: "[mp] G4+B4 - - - - - - - | G4+C5 - - - - - - - | G4+B4 - - - - - - - | F#4+A4 - - - - - - -"}
+      build: {settings: {vowel: aah}, steps: "[mf <] C5+E5 - - - - - - - | D#5+F#5 - - - - - - - [ff]"}
+      blaze: {settings: {vowel: aah, brightness: 0.7}, steps: "[ff] G4+B4+E5 - - - - - - - | G4+C5+E5 - - - - - - - | G4+B4+D5 - - - - - - - | F#4+A4+D5 - - - - - - -"}
+      end:   {settings: {vowel: aah, brightness: 0.7, ring: 1.4}, steps: "[ff] G4+C5+E5 - - - - - - - | [>] G#4+B4+E5 - - - - - . . [p]"}
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.5, mix: 0.27}
+    sections:
+      pulse: {steps: "[ff] E2 . . . . . . . | [mf] C3 . . . G2 . . . | G2 . . . D3 . . . | D2 . . . A2 . . ."}
+      call:  {steps: "[f] E2 . . . B2 . . . | C3 . . . G2 . . . | G2 . . . D3 . . . | D2 . . . A2 . D2 D2"}
+      build: {settings: {mallet: 0.2, ring: 0.3}, steps: "[f] A2 . . . E2 . A2 . | [roll pp <] B2 - - - - - - - [ff]"}
+      blaze: {steps: "[ff] E2 . . . B2 . . . | C3 . . . G2 . . . | G2 . . . D3 . . . | D2 . . . A2 . D2 D2"}
+      end:   {steps: "[ff] C3 . . . . . . . | E2+B2 . . . . . . ."}
+  taiko:
+    instrument: taiko
+    settings: {players: 6}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      pulse: {volume: -2, steps: "X... .... .... .... | X... ..x. .... .... | X... ..x. X... .... | X... ..x. X... x.x."}
+      call:  {volume: -3, steps: "X... ..x. X... ..x."}
+      build: {volume: -1, steps: "X... ..x. X... ..x. | X..x ..x. X.x. xxxx"}
+      blaze: {steps: "X..x ..x. X..x .x.. | X..x ..x. X..x .x.. | X..x ..x. X..x .x.. | X..x ..x. X.x. xxxx"}
+      end:   {volume: 1, steps: "X... .... .... .... | X... .... .... ...."}
+  toms:
+    instrument: toms
+    only: [build]
+    steps: ". . . . . . . . | C4 A3 F3 D3 C3 A2 G2 G2"
+  bass_drum:
+    instrument: bass_drum
+    only: [pulse, blaze, end]
+    sections:
+      pulse: {steps: "x . . . . . . . | . | . | ."}
+      blaze: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end:   {steps: "x . . . . . . . | x . . . . . . ."}
+  snares:
+    instrument: snare_drum
+    only: [build]
+    settings: {players: 4}
+    steps: ". | [roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [build]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [pulse, blaze, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      pulse: {steps: "x . . . . . . . | . | . | ."}
+      blaze: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end:   {steps: "x . . . . . . . | ."}
+  gong:
+    instrument: tam_tam
+    only: [end]
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | [f] x . . . . . . ."

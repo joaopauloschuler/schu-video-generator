@@ -1,0 +1,19 @@
+title: "First Light"
+output: first_light
+score: first_light
+tail: 3.5
+shots:
+  - {bars: 2, mode: drift, lookY: -38, colours: {base: "#ffb36b", accent: "#8fd0ff", deep: "#07050b"}, react: {pulse: [taiko, timpani], glint: [horns], glow: [choir]},
+     title: {title: "FIRST LIGHT", subtitle: "an orchestral short", made: true, hold: 3.4}}
+  - {bars: 1, mode: crystal, kind: octa, colours: {base: "#9fc4ff", accent: "#ffc98f", deep: "#05060d"}, react: {pulse: [timpani, taiko], glint: [horns], glow: [choir]}}
+  - {bars: 1, mode: tesseract, colours: {base: "#ffd08a", accent: "#7fb6ff", deep: "#07050a"}, react: {pulse: [taiko, timpani], glint: [horns], glow: [choir]}}
+  - {bars: 1, mode: portal, colours: {base: "#ffbf7a", accent: "#6fa8ff", deep: "#05050c"}, react: {pulse: [taiko, timpani], glow: [violins]}}
+  - {bars: 1, mode: swarm, colours: {base: "#ffcf8f", accent: "#a6d4ff", deep: "#08060a"}, react: {pulse: [taiko, timpani], glow: [violins]}}
+  - {bars: 1, mode: tunnel, speed: 12, colours: {base: "#ff9f5a", accent: "#ffd27a", deep: "#0a0505"}, react: {pulse: [taiko, timpani], glow: [choir]}}
+  - {bars: 1, mode: crystal, kind: dodeca, size: 4.2, colours: {base: "#ffc27a", accent: "#ff8a6a", deep: "#0a0506"}, react: {pulse: [taiko, timpani, snares], glow: [choir]}}
+  - {bars: 1, mode: rings, colours: {base: "#ffb04f", accent: "#ffe2a8", deep: "#0b0604"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [choir]}}
+  - {bars: 1, mode: swarm, seed: 211, colours: {base: "#ffc46a", accent: "#ff8f6a", deep: "#0b0604"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [choir]}}
+  - {bars: 1, mode: portal, seed: 312, colours: {base: "#ffd27f", accent: "#ff9a5c", deep: "#0b0604"}, react: {pulse: [taiko, timpani], glow: [choir]}}
+  - {bars: 1, mode: rings, seed: 413, colours: {base: "#ffe0a0", accent: "#ffa860", deep: "#0b0604"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [choir]}}
+  - {bars: 1, mode: ribbon, melody: trumpet, mid: 74, lookY: -10, colours: {base: "#ffb86b", accent: "#ffe7b8", deep: "#07050a"}, react: {pulse: [timpani, gong], glow: [choir]},
+     end: {title: "FIRST LIGHT", start: 0.5}}

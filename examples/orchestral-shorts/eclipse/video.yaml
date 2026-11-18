@@ -1,0 +1,197 @@
+# Eclipse: a portrait orchestral music video.
+# Music: assets/music/eclipse.yaml, an original score for vidgen's own orchestra (90.0 BPM, F minor; one bar = 2.6667 s).
+# Pictures: ../shared/orch.js (vidgen/three-kit, music-time, three-finish, title-cards), one web_cut shot per 1-2 bars.
+# Written by ../tools/gen.py from shots.yaml.
+title: Eclipse
+output: eclipse
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 360, height: 640, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}
+music: {source: eclipse, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 256k}
+extensions: [../shared]
+web_root: ..
+scenes:
+- id: 01_crystal
+  type: web_cut
+  duration: 5.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 100
+      colours: {base: '#ff5a3c', accent: '#7f6bff', deep: '#060204'}
+      react:
+        pulse: [taiko, timpani, bass_drum]
+        glow: [low]
+      grade: &id001 {temperature: -0.05, saturation: 1.0}
+      kind: tetra
+      lookY: -6
+      title: {title: ECLIPSE, subtitle: an orchestral short, made: true, hold: 3.4}
+      note: bars 1-2 (shadow, verse)
+    music_data: &id002
+      tracks: [bass_drum, crash, gong, horns, low, snares, taiko, timpani, trumpet, violins, women]
+- id: 02_portal
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 117
+      colours: {base: '#ffb07a', accent: '#6f5cff', deep: '#030208'}
+      react:
+        pulse: [timpani]
+        glow: [women]
+      grade: *id001
+      note: bars 3-3 (totality, verse)
+    music_data: *id002
+- id: 03_crystal
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 606
+      colours: {base: '#a99bff', accent: '#ffb07a', deep: '#030208'}
+      react:
+        pulse: [timpani]
+        glint: [violins]
+        glow: [women]
+      grade: *id001
+      kind: dodeca
+      size: 3.4
+      note: bars 4-4 (totality, verse)
+    music_data: *id002
+- id: 04_rings
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 151
+      colours: {base: '#ff7a4f', accent: '#9b8cff', deep: '#070306'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [horns]
+      grade: &id003 {temperature: 0.15, saturation: 1.15}
+      note: bars 5-5 (corona, climax)
+    music_data: *id002
+- id: 05_tesseract
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tesseract
+      seed: 168
+      colours: {base: '#ff9a5f', accent: '#8f7bff', deep: '#070306'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [horns]
+      grade: *id003
+      note: bars 6-6 (corona, climax)
+    music_data: *id002
+- id: 06_swarm
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 185
+      colours: {base: '#ffb47a', accent: '#7f6bff', deep: '#070306'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [horns]
+        glow: [women]
+      grade: *id003
+      note: bars 7-7 (corona, climax)
+    music_data: *id002
+- id: 07_crystal
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 202
+      colours: {base: '#ffc48f', accent: '#ff6a4f', deep: '#070306'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [women]
+      grade: *id003
+      kind: ico
+      note: bars 8-8 (corona, climax)
+    music_data: *id002
+- id: 08_tunnel
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 219
+      colours: {base: '#ff8a4f', accent: '#ffd27a', deep: '#080405'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [violins]
+      grade: &id004 {temperature: -0.15, saturation: 0.95}
+      speed: 13
+      note: bars 9-9 (dawn, intro)
+    music_data: *id002
+- id: 09_swarm
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 277
+      colours: {base: '#ffd27a', accent: '#ff8a4f', deep: '#080405'}
+      react:
+        pulse: [taiko, snares]
+        glow: [violins]
+      grade: *id004
+      note: bars 10-10 (dawn, intro)
+    music_data: *id002
+- id: 10_rings
+  type: web_cut
+  duration: 2.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 388
+      colours: {base: '#ffe2a0', accent: '#ffb04f', deep: '#0a0604'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [women]
+      grade: *id003
+      note: bars 11-11 (sunrise, climax)
+    music_data: *id002
+- id: 11_drift
+  type: web_cut
+  duration: 6.1666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 270
+      colours: {base: '#ffcf8a', accent: '#ffe8c0', deep: '#080505'}
+      react:
+        pulse: [timpani, gong]
+        glow: [women]
+      grade: *id003
+      lookY: -38
+      end: {title: ECLIPSE, start: 0.4}
+      fadeOut: 1.8
+      note: bars 12-12 (sunrise, climax)
+    music_data: *id002

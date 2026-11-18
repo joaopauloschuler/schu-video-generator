@@ -1,0 +1,199 @@
+# Choir of the Void: a portrait orchestral music video.
+# Music: assets/music/choir_of_the_void.yaml, an original score for vidgen's own orchestra (72.0 BPM, B minor; one bar = 3.3333 s).
+# Pictures: ../shared/orch.js (vidgen/three-kit, music-time, three-finish, title-cards), one web_cut shot per 1-2 bars.
+# Written by ../tools/gen.py from shots.yaml.
+title: Choir of the Void
+output: choir_of_the_void
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 360, height: 640, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}
+music: {source: choir_of_the_void, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 256k}
+extensions: [../shared]
+web_root: ..
+scenes:
+- id: 01_crystal
+  type: web_cut
+  duration: 5.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 100
+      colours: {base: '#b48cff', accent: '#5fe0d0', deep: '#05030c'}
+      react:
+        pulse: [taiko, gong, timpani]
+        glow: [women]
+      grade: &id001 {temperature: -0.15, saturation: 0.95}
+      kind: ico
+      lookY: -6
+      title: {title: CHOIR OF THE VOID, subtitle: an orchestral short, made: true, hold: 3.2}
+      note: bars 1-1.5 (void, intro)
+    music_data: &id002
+      tracks: [bass_drum, crash, gong, men, solo, taiko, timpani, women]
+- id: 02_drift
+  type: web_cut
+  duration: 1.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 117
+      colours: {base: '#8f7bff', accent: '#6fe8d8', deep: '#04030c'}
+      react:
+        pulse: [timpani]
+        glow: [women]
+      grade: *id001
+      note: bars 2.5-2.0 (void, intro)
+    music_data: *id002
+- id: 03_crystal
+  type: web_cut
+  duration: 3.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 404
+      colours: {base: '#e8d8ff', accent: '#9b7bff', deep: '#05030c'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [solo]
+        glow: [women]
+      grade: &id003 {temperature: -0.05, saturation: 1.0}
+      kind: dodeca
+      size: 3.6
+      note: bars 3.0-3.0 (voice, verse)
+    music_data: *id002
+- id: 04_portal
+  type: web_cut
+  duration: 3.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 151
+      colours: {base: '#8fe8ff', accent: '#b48cff', deep: '#03050c'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [solo]
+        glow: [men]
+      grade: *id003
+      note: bars 4.0-4.0 (voice, verse)
+    music_data: *id002
+- id: 05_tesseract
+  type: web_cut
+  duration: 1.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tesseract
+      seed: 168
+      colours: {base: '#b48cff', accent: '#7fffe0', deep: '#05030c'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [solo]
+        glow: [men]
+      grade: *id003
+      note: bars 5.0-4.5 (voice, verse)
+    music_data: *id002
+- id: 06_swarm
+  type: web_cut
+  duration: 1.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 185
+      colours: {base: '#7fe8d8', accent: '#c9a0ff', deep: '#03050c'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [solo]
+        glow: [men]
+      grade: *id003
+      note: bars 5.5-5.0 (voice, verse)
+    music_data: *id002
+- id: 07_tunnel
+  type: web_cut
+  duration: 3.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 202
+      colours: {base: '#9b7bff', accent: '#5fe0d0', deep: '#04030c'}
+      react:
+        pulse: [timpani]
+        glow: [women]
+      grade: *id003
+      speed: 8
+      note: bars 6.0-6.0 (voice, verse)
+    music_data: *id002
+- id: 08_rings
+  type: web_cut
+  duration: 3.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 219
+      colours: {base: '#d0a8ff', accent: '#6fffe0', deep: '#06030c'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [women]
+      grade: &id004 {temperature: 0.08, saturation: 1.12}
+      note: bars 7.0-7.0 (chorus, drop)
+    music_data: *id002
+- id: 09_swarm
+  type: web_cut
+  duration: 1.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 288
+      colours: {base: '#e0c0ff', accent: '#6fe8ff', deep: '#06030c'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [solo]
+        glow: [women]
+      grade: *id004
+      note: bars 8.0-7.5 (chorus, drop)
+    music_data: *id002
+- id: 10_crystal
+  type: web_cut
+  duration: 1.6666667
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 299
+      colours: {base: '#a0f0e0', accent: '#d0a8ff', deep: '#03050c'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [solo]
+        glow: [women]
+      grade: *id004
+      kind: octa
+      note: bars 8.5-8.0 (chorus, drop)
+    music_data: *id002
+- id: 11_drift
+  type: web_cut
+  duration: 6.9333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 270
+      colours: {base: '#c9a0ff', accent: '#8fffe8', deep: '#05030c'}
+      react:
+        pulse: [timpani, gong]
+        glow: [women]
+      grade: *id004
+      lookY: -38
+      end: {title: CHOIR OF THE VOID, start: 0.5}
+      fadeOut: 1.8
+      note: bars 9.0-9.0 (chorus, drop)
+    music_data: *id002

@@ -524,8 +524,11 @@ def test_committed_gallery_ends_with_the_youtube_videos() -> None:
     assert [s["url"] for s in gallery.YOUTUBE_SHORTS] == [
         f"https://www.youtube.com/shorts/{vid}"
         for vid in ("gLsKCVGfdz4", "cEob9Rqooqo", "8EZThIyJKOQ", "nSDKRQBD6V4", "VIaxZaXD56Y", "y1zxGYL9OOE",
-                    "TSMGYvusLXA", "CrLAV33RlIU", "78nKM7xIsRE")
+                    "TSMGYvusLXA", "CrLAV33RlIU", "78nKM7xIsRE", "rHDSSkKPzPw")
     ]
+    titles = [s["title"] for s in gallery.YOUTUBE_SHORTS]
+    assert titles == ["eclipse", "Ascension", "Choir of the Void", "Gate of Stars", "The Signal", "First Light",
+                      "YouTube Short 7", "YouTube Short 8", "Moon of Fire", "Orchestra"]
 
 
 def test_youtube_id_reads_short_and_watch_links() -> None:

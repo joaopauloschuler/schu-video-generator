@@ -138,6 +138,8 @@ WEB_SECTION_NOTES: dict[str, str] = {
         "[Parallel Space](../../../examples/parallel-space/README.md) (`examples/parallel-space`), a 3:05 trance and "
         "choir film of a flight through parallel realities, and "
         "[Signal Fire](../../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture. "
+        "Seven portrait orchestral music videos of about 35 s, sharing one scene module: "
+        "[Orchestral shorts](../../../examples/orchestral-shorts/README.md) (`examples/orchestral-shorts`). "
         "A film of `space` scenes written in YAML alone: [Outbound](../../../examples/outbound/README.md) (`examples/outbound`), "
         "58 s from a sunrise over a world, past a ringed giant, to a black hole, with an orchestral score. "
         "How to make them: [the 3D cookbook](../../COOKBOOK-3D.md), [the space cookbook](../../COOKBOOK-SPACE.md) and [the air cookbook](../../COOKBOOK-AIR.md)."
@@ -169,14 +171,15 @@ YOUTUBE_VIDEOS: list[dict[str, str]] = [
 #: YouTube Shorts made with schu-video-generator, shown as a row of thumbnails under the videos.
 YOUTUBE_SHORTS: list[dict[str, str]] = [
     {"title": "eclipse", "url": "https://www.youtube.com/shorts/gLsKCVGfdz4"},
-    {"title": "YouTube Short 2", "url": "https://www.youtube.com/shorts/cEob9Rqooqo"},
-    {"title": "YouTube Short 3", "url": "https://www.youtube.com/shorts/8EZThIyJKOQ"},
-    {"title": "YouTube Short 4", "url": "https://www.youtube.com/shorts/nSDKRQBD6V4"},
-    {"title": "YouTube Short 5", "url": "https://www.youtube.com/shorts/VIaxZaXD56Y"},
-    {"title": "YouTube Short 6", "url": "https://www.youtube.com/shorts/y1zxGYL9OOE"},
+    {"title": "Ascension", "url": "https://www.youtube.com/shorts/cEob9Rqooqo"},
+    {"title": "Choir of the Void", "url": "https://www.youtube.com/shorts/8EZThIyJKOQ"},
+    {"title": "Gate of Stars", "url": "https://www.youtube.com/shorts/nSDKRQBD6V4"},
+    {"title": "The Signal", "url": "https://www.youtube.com/shorts/VIaxZaXD56Y"},
+    {"title": "First Light", "url": "https://www.youtube.com/shorts/y1zxGYL9OOE"},
     {"title": "YouTube Short 7", "url": "https://www.youtube.com/shorts/TSMGYvusLXA"},
     {"title": "YouTube Short 8", "url": "https://www.youtube.com/shorts/CrLAV33RlIU"},
-    {"title": "YouTube Short 9", "url": "https://www.youtube.com/shorts/78nKM7xIsRE"},
+    {"title": "Moon of Fire", "url": "https://www.youtube.com/shorts/78nKM7xIsRE"},
+    {"title": "Orchestra", "url": "https://www.youtube.com/shorts/rHDSSkKPzPw"},
 ]
 
 

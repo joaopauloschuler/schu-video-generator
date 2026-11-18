@@ -50,6 +50,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
 | `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
+| `web_root` | none (the project folder) | the folder `web` scenes' pages are served from: the project folder or a folder (relative to the project) that holds it. With `web_root: ..`, projects side by side share a page or script: `script: ../shared/orch.js` (written from the project folder, as every path) must lie inside that folder, and a page may load any file in it. `vidgen validate` names a `web_root` that is missing or does not hold the project, and a page or script outside it. Example: [examples/orchestral-shorts](../examples/orchestral-shorts/README.md) (seven films, one `shared/orch.js`, with `extensions: [../shared]` for their `web_cut` type) |
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
@@ -6777,7 +6778,7 @@ command, same `vidgen validate` warning).
 | param | type | default | meaning |
 |---|---|---|---|
 | `page` | path | — | an HTML file in the project folder (`extensions/gears.html`): any HTML, CSS and JavaScript |
-| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the page, on a transparent background (what the script does not draw shows the video's background) |
+| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the page, on a transparent background (what the script does not draw shows the video's background); with the top-level `web_root:` the page or script may lie anywhere in that folder (`../shared/orch.js`) |
 | `title` | str | `""` | a heading drawn by vidgen (in the theme's heading font): on a plate over the top of the page with `region: bleed` (as on `3d`), above the page with `region: body` (as on `video_clip`); action target `title` |
 | `region` | `bleed` \| `body` | `bleed` | `bleed`: the page fills the whole frame, edge to edge; `body`: the page fills the safe area below the title (the whole safe area without a title), clear of overlays that reserve room (bottom captions) and, in a Short, of the parts the app covers. The page is laid out at that size: its viewport, `ctx.width` / `ctx.height` and `100vw` / `100vh` are the region's pixels, not the frame squeezed |
 | `design_width` | int (200–8192) | — | for a page built in fixed pixels: the window width it was designed for, in CSS pixels (`1280`). The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality (see below) |
@@ -18467,7 +18468,7 @@ for `confirm_cost: true` when the project's `stt.provider` is a paid service (`e
 to `--root` (default: the current folder) and must resolve inside it, `..` and symbolic links
 included; other paths are refused. The files a project's config names (a scene's `path` /
 `logo`, a watermark, thumbnail, stage or layer `image`, a music `source` file,
-`pronunciation_file`, `translations`, `extensions`, `output_dir`, `soundfont`, a character's `look.svg`, a
+`pronunciation_file`, `translations`, `extensions`, `web_root`, `output_dir`, `soundfont`, a character's `look.svg`, a
 stage prop's `svg`, a Kokoro `voice` file ending in `.pt`, in every variant, set and included
 file; and the `include:` files themselves, also those of `screenplay`'s `cast`) must be inside
 the root too: a config naming

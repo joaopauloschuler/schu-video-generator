@@ -30347,3 +30347,61 @@ globe's cloud map (they agree in colour and roughly in cover, not in place); the
 not kept between pages; no ground shadow under a plane; a whole hull on black reads as a model;
 `scaleZoom` loses the ship under a pixel; `hullReveal`'s traverse over black; the shock layer's
 stepped edge; everything listed as not reachable from YAML in §123.14.
+
+### 123.16 The orchestral Shorts as examples; projects that share a page (`web_root`) (Step 394)
+
+The owner's seven portrait orchestral music videos (published as YouTube Shorts) are
+`examples/orchestral-shorts/<film>/`, one project per film. "Polish" was only removing duplicate
+code; picture and sound stay as published.
+
+**One scene module.** The films carried `extensions/orch.js` in two versions. The newer one (Choir
+of the Void, Eclipse) differs from the older one (the other five) in one line of the `ribbon` mode:
+the ribbon's speed and gain read `D.ribbonSpeed ?? 2.6` and `D.ribbonGain ?? 3.6` where the older
+had the constants 2.6 and 3.6. No film sets either key, so the newer module draws the older films'
+pictures unchanged: 16 stills at 180x320 of the five older films (their ribbon shots included),
+own copy against the newer module, identical in every pixel. The newer module is
+`examples/orchestral-shorts/shared/orch.js`, the only copy.
+
+**One straight-cut type.** `web_cut` (the `web` scene without its 0.5 s fade-out) was copied into
+each film. vidgen has no built-in straight cut for `web` scenes (`space` has `fade: false`;
+`vidgen music plan --out` still writes `extensions/web_cut.py` into its draft), so one copy stays,
+`shared/web_cut.py`, loaded by each film with `extensions: [../shared]` (allowed before this step:
+the list's folders are relative to the project and may leave it, except under `vidgen mcp`'s root).
+
+**`web_root:` (new top-level key).** A `web` scene's page or script had to lie inside the project
+folder, because its page is served from that folder: `script: ../shared/orch.js` was refused, and
+a page's URL could not reach above the folder. `web_root` names the folder pages are served from:
+the project folder (default, unchanged) or a folder (relative to the project) that holds it.
+`vidgen.web.entry`: `served_root(project)` (that folder, or a `VidgenError` when it is missing or
+does not hold the project), `served_params(project, params)` (the `page:` / `script:`, written from
+the project folder as every path in `video.yaml`, made a path from the served folder:
+`../shared/orch.js` → `shared/orch.js`; the same object without `web_root`), `served_entry_problems`
+(validate: the file must lie inside the served folder) and `served_prefix` (the project's path on
+its pages, `first-light/`, put before the project's own font files' URLs). The `web` and `space`
+scenes, `vidgen still` and the render fingerprint take the root and the entry from these; the page
+server, the clip cache and the `loaded` records are unchanged (they already took a root and a path).
+`vidgen.api` exports three of them for scene types built on `Web` (built-ins use only the API):
+`web_served_root`, `web_served_params`, `web_served_entry_problems`.
+
+Safety: without the key nothing changes (same root, same entry, same clip keys). With it the page
+may load any file under the named folder, which the author chose; it must hold the project, so it
+is never a sibling or an unrelated folder; it is a path key (`PATH_KEYS`), so under `vidgen mcp`
+it must lie inside the server's root. A page or script outside the served folder is refused at
+validate (`script: must be a path inside the web_root folder (…), got …`) and at render.
+`web_root` is left out of the config part of the scene fingerprint: what it changes (the entry's
+path and the loaded files) is in the scene's `web` part.
+
+**The tools.** `tools/gen.py` (rewrites a film's `video.yaml` from its `shots.yaml` with `vidgen
+music plan --json`) is kept, without copying files into the project, and writes each committed
+`video.yaml` byte for byte (a test). The committed files differ from the published ones only in
+the script path, two header comments and the two keys `extensions:` and `web_root:`. The owner's
+`stems.py` and `balance.py` (per-group stems and per-section levels) and `sheet.py` (a contact
+sheet) were dropped: `vidgen music check` plays every track on its own and reports its share of the
+power, voice range, bass and highs (per track over the piece, not per section and group), and
+`vidgen still --sheet` writes a contact sheet.
+
+**Proof.** 20 stills at 180x320 (two or three per film) from the example folders are identical in
+every pixel to the published projects' stills; the audio-only render (`vidgen render --audio-only`,
+the video's soundtrack with its normalisation) of each of the seven films is byte-identical
+(MD5 of the WAV) between the published project and the example. Not rendered: no film, no
+draft.

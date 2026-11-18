@@ -216,13 +216,14 @@ def _web_records(project: Project, scene_id: str) -> list[Path]:
 def _web_inputs(project: Project, spec: SceneConfig) -> dict[str, Any]:
     """A ``web`` scene's part: its page or script file, the files its clips' pages loaded (their
     contents now) and its beats' stored alignments."""
-    from vidgen.web.entry import entry_digest
+    from vidgen.web.entry import entry_digest, served_params, served_root
     from vidgen.web.loaded import current_loaded, recorded_loaded
 
     paths = [rel for record in _web_records(project, spec.id) for rel in recorded_loaded(record)]
+    root = served_root(project)
     data = {
-        **entry_digest(project.root, spec.params),
-        "loaded": current_loaded(project.root, paths),
+        **entry_digest(root, served_params(project, spec.params)),
+        "loaded": current_loaded(root, paths),
         "align": {beat.id: _stat(project.audio_dir / f"{beat.id}.align.json") for beat in spec.beats},
     }
     music = _web_music(project, spec)
@@ -252,12 +253,13 @@ def drawn_fingerprint(inputs: dict[str, Any], project: Project, preview: bool, s
     its clip's record), so the next run compares them with the files as they are then."""
     if "web" not in inputs:
         return fingerprint_digest(inputs)
+    from vidgen.web.entry import served_root
     from vidgen.web.loaded import current_loaded, record_path, recorded_loaded
 
     drawn = recorded_loaded(record_path(project.render_dir(preview) / "web", scene_id))
     before = inputs["web"]["loaded"]
     paths = sorted({rel for record in _web_records(project, scene_id) for rel in recorded_loaded(record)})
-    now = current_loaded(project.root, [rel for rel in paths if rel not in drawn and rel not in before])
+    now = current_loaded(served_root(project), [rel for rel in paths if rel not in drawn and rel not in before])
     loaded = {rel: drawn[rel] if rel in drawn else before[rel] if rel in before else now[rel] for rel in paths}
     return fingerprint_digest({**inputs, "web": {**inputs["web"], "loaded": loaded}})
 
@@ -290,6 +292,8 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
         "credits", "cold_open", "audio_output",
         # generated video (§113): the provider, budget and key settings, the style sheet; the clips are files
         "videogen", "style_sheet",
+        # where web pages are served from (§123.16): the page's files are in "web" (_web_inputs)
+        "web_root",
     }
     if project.config.cut is not None:
         # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end

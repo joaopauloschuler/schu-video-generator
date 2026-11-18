@@ -1,0 +1,171 @@
+# Gate of Stars: an original 30 s cue for vidgen's orchestra. No samples, no SoundFont.
+# 80 BPM in Eb major; one bar = 3 s = 90 frames at 30 fps.
+#   gate        2  the first frame: a cathedral organ chord, the choir on "aah", timpani and a tam-tam;
+#                  violins in tremolo high above
+#   procession  3  four horns in a chorale, plucked basses walking, the sopranos sing the melody on "la"
+#   rise        1  a timpani roll, a snare roll and a cymbal swell, the strings growing into...
+#   open        3  the gate opens: the trumpets' melody over the full organ, brass, choir and taikos
+#   end         1  Eb major, tam-tam, the organ's last chord
+version: 1
+title: Gate of Stars
+key: Eb major
+tempo: 80
+seed: 4813
+loop: false
+sections:
+  - {name: gate, bars: 2, progression: "Eb Cm"}
+  - {name: procession, bars: 3, progression: "Ab Bb Gm"}
+  - {name: rise, bars: 1, progression: "Bb"}
+  - {name: open, bars: 3, progression: "Eb Ab Bb"}
+  - {name: end, bars: 1, progression: "Eb"}
+tracks:
+  organ:
+    instrument: organ
+    settings: {registration: cathedral}
+    volume: -3
+    reverb: {size: 5, mix: 0.4, tone: 4200}
+    sections:
+      gate:       {steps: "Eb3+G3+Bb3+Eb4 - - - - - - - | C3+G3+C4+Eb4 - - - - - - -"}
+      procession: {settings: {registration: principal}, steps: "Ab2+Eb3+Ab3+C4 - - - - - - - | Bb2+F3+Bb3+D4 - - - - - - - | G2+D3+G3+Bb3 - - - - - - -"}
+      rise:       {settings: {registration: principal}, steps: "Bb2+F3+Bb3+D4 - - - - - - -"}
+      open:       {settings: {registration: full}, steps: "Eb3+G3+Bb3+Eb4 - - - - - - - | Ab2+Eb3+Ab3+C4 - - - - - - - | Bb2+F3+Bb3+D4 - - - - - - -"}
+      end:        {settings: {registration: full}, steps: "Eb3+G3+Bb3+Eb4 - - - - - . . ."}
+  pedal:
+    instrument: organ
+    octave: 1
+    settings: {drawbars: "86 8400 000"}
+    volume: -4
+    reverb: {size: 5, mix: 0.4, tone: 3000}
+    steps: "x - - - - - - -"
+    sections:
+      end: {steps: "x - - - - - . ."}
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 4.2, mix: 0.34, tone: 4800}
+    sections:
+      gate:       {settings: {stroke: tremolo, brightness: 0.7, attack: 0.08}, steps: "[f >] Bb5+Eb6 - - - - - - - | [mf] G5+C6 - - - - - - -"}
+      procession: {settings: {attack: 0.2}, steps: "[mp] Eb5+Ab5 - - - - - - - | F5+Bb5 - - - - - - - | D5+G5 - - - - - - -"}
+      rise:       {settings: {stroke: tremolo, brightness: 0.8}, steps: "[mp <] D5+F5 - - - - - - - [ff]"}
+      open:       {settings: {attack: 0.1}, steps: "[ff] G5+Bb5 - - - - - - - | Ab5+C6 - - - - - - - | F5+Bb5 - - - - - - -"}
+      end:        {steps: "[ff >] G5+Bb5 - - - - - . . [mp]"}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 4.2, mix: 0.32, tone: 4500}
+    sections:
+      gate:       {steps: "[f] Eb3 - - - - - - - | C3 - - - - - - -"}
+      procession: {steps: "[mf] (Ab2 - - - C3 - Eb3 - | Bb2 - - - D3 - F3 - | G2 - - - Bb2 - D3 -)"}
+      rise:       {settings: {stroke: tremolo}, steps: "[mp <] Bb2 - - - - - - - [ff]"}
+      open:       {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] Eb3 Eb3 Bb3 Eb3 G3 Eb3 Bb3 Eb3 Eb3 Eb3 Bb3 Eb3 G3 Eb3 Bb3 Eb3 | Ab2 Ab2 Eb3 Ab2 C3 Ab2 Eb3 Ab2 Ab2 Ab2 Eb3 Ab2 C3 Ab2 Eb3 Ab2 | Bb2 Bb2 F3 Bb2 D3 Bb2 F3 Bb2 Bb2 Bb2 F3 Bb2 D3 Bb2 F3 Bb2"}
+      end:        {steps: "[ff >] Eb3 - - - - - . . [mp]"}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 4.2, mix: 0.3, tone: 4000}
+    sections:
+      gate:       {steps: "[f] Eb1 - - - - - - - | C1 - - - - - - -"}
+      procession: {settings: {stroke: pizzicato}, steps: "[f] Ab1 . C2 . Eb2 . C2 . | Bb1 . D2 . F2 . D2 . | G1 . Bb1 . D2 . Bb1 ."}
+      rise:       {steps: "[mp <] Bb1 - - - - - - - [ff]"}
+      open:       {steps: "[ff] Eb1 - - - - - - - | Ab1 - - - - - - - | Bb1 - - - - - - -"}
+      end:        {steps: "[ff >] Eb1 - - - - - . . [mp]"}
+  horns:
+    instrument: horn
+    settings: {players: 4, attack: 0.14}
+    pan: 0.1
+    reverb: {size: 4.5, mix: 0.34, tone: 4500}
+    sections:
+      gate:       {steps: "[f] Eb4+G4 - - - - - - - | Eb4+G4 - - - - - - -"}
+      procession: {volume: 2, steps: "[mf] Eb4+Ab4 - - - C4+Eb4 - - - | D4+F4 - - - D4+Bb4 - - - | D4+G4 - - - Bb3+D4 - - -"}
+      rise:       {steps: "[fp <] D4+F4 - - - - - - - [ff]"}
+      open:       {steps: "[ff] Eb4+G4 - - - - - - - | Eb4+Ab4 - - - - - - - | D4+F4 - - - - - - -"}
+      end:        {steps: "[ff >] Eb4+G4 - - - - - . . [mp]"}
+  trumpet:
+    instrument: trumpet
+    only: [open, end]
+    settings: {vibrato: 12, vibrato_delay: 0.35, attack: 0.05, players: 2}
+    pan: 0.2
+    reverb: {size: 4.5, mix: 0.32, tone: 4800}
+    sections:
+      open: {steps: "[f <] (Bb4 - - - Eb5 - G5 - | Ab5 - - - G5 - Eb5 - | F5 - - - D5 - Bb4 -) [ff]"}
+      end:  {steps: "[ff >] Eb5 - - - - - . . [mp]"}
+  low:
+    instrument: low_brass
+    settings: {tuba: 0.6, attack: 0.12}
+    reverb: {size: 4.5, mix: 0.32, tone: 4000}
+    sections:
+      gate:       {steps: "[ff] Eb2+Bb2 - - - - - - - | [mf] C2+G2 - - - - - - -"}
+      procession: {steps: "[mp] Ab1+Eb2 - - - - - - - | Bb1+F2 - - - - - - - | G1+D2 - - - - - - -"}
+      rise:       {settings: {attack: 2.4, brightness: 1.0}, steps: "[pp <] Bb1+F2 - - - - - - - [ff]"}
+      open:       {steps: "[ff] Eb2+Bb2 - - - - - - - | Ab1+Eb2 - - - - - - - | Bb1+F2 - - - - - - -"}
+      end:        {steps: "[ff >] Eb2+Bb2 - - - - - . . [mp]"}
+  choir:
+    instrument: choir
+    volume: 3
+    reverb: {size: 4.8, mix: 0.4, tone: 4500}
+    sections:
+      gate:       {settings: {vowel: aah, brightness: 0.6, attack: 0.2}, steps: "[f] Eb3+Bb3+Eb4+G4+Bb4 - - - - - - - | [mf] C3+G3+C4+Eb4+G4 - - - - - - -"}
+      procession: {settings: {vowel: ooh, voices: men}, octave: 3, steps: "[mp] Ab2+Eb3 - - - - - - - | Bb2+F3 - - - - - - - | G2+D3 - - - - - - -"}
+      rise:       {settings: {vowel: aah}, steps: "[mp <] Bb2+F3+Bb3+D4+F4 - - - - - - - [ff]"}
+      open:       {settings: {vowel: aah, brightness: 0.7}, volume: 5, steps: "[ff] Eb3+Bb3+Eb4+G4+Bb4 - - - - - - - | Ab2+Eb3+Ab3+C4+Eb4 - - - - - - - | Bb2+F3+Bb3+D4+F4 - - - - - - -"}
+      end:        {settings: {vowel: aah, brightness: 0.7, ring: 1.5}, volume: 5, steps: "[ff >] Eb3+Bb3+Eb4+G4+Bb4 - - - - - . . [p]"}
+  sopranos:
+    instrument: choir
+    only: [procession]
+    settings: {voices: sopranos, vowel: aah, syllable: la}
+    volume: 4
+    pan: -0.1
+    reverb: {size: 4.8, mix: 0.38, tone: 5000}
+    steps: "[mf] [la] Eb5 - - - [la] C5 - Eb5 - | [la] F5 - - - [la] D5 - Bb4 - | [na] G5 - - - [ah-oh] F5 - - . "
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.8, mix: 0.3}
+    sections:
+      gate:       {steps: "[ff] Eb2 . . . . . . . | [mf] C3 . . . G2 . . ."}
+      procession: {steps: "[mf] Ab2 . . . Eb2 . . . | Bb2 . . . F2 . . . | G2 . . . D3 . . ."}
+      rise:       {settings: {mallet: 0.2, ring: 0.3}, steps: "[roll pp <] Bb2 - - - - - - - [ff]"}
+      open:       {steps: "[ff] Eb2 . . . Bb2 . . . | Ab2 . . . Eb2 . . . | Bb2 . . . F2 . Bb2 Bb2"}
+      end:        {steps: "[ff] Eb2+Bb2 . . . . . . ."}
+  taiko:
+    instrument: taiko
+    only: [gate, procession, open, end]
+    settings: {players: 6}
+    reverb: {size: 3.6, mix: 0.32, tone: 3000}
+    sections:
+      gate:       {volume: 1, steps: "X... .... .... .... | .... .... .... ...."}
+      procession: {volume: -6, steps: "X... .... X... .... | X... .... X... .... | X... .... X... ..x."}
+      open:       {steps: "X... ..x. X..x .x.. | X... ..x. X..x .x.. | X... ..x. X.x. xxxx"}
+      end:        {volume: 1, steps: "X... .... .... ...."}
+  bass_drum:
+    instrument: bass_drum
+    only: [gate, open, end]
+    sections:
+      gate: {steps: "x . . . . . . . | ."}
+      open: {steps: "x . . . . . . . | x . . . . . . . | ."}
+      end:  {steps: "x . . . . . . ."}
+  snares:
+    instrument: snare_drum
+    only: [rise]
+    settings: {players: 4}
+    steps: "[roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [rise]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: "x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [open, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      open: {steps: "x . . . . . . . | . | ."}
+      end:  {steps: "x . . . . . . ."}
+  gong:
+    instrument: tam_tam
+    only: [gate, end]
+    reverb: {size: 4.8, mix: 0.38}
+    sections:
+      gate: {steps: "[f] x . . . . . . . | ."}
+      end:  {steps: "[f] x . . . . . . ."}

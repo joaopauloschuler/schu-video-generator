@@ -13,6 +13,7 @@ import math
 import re
 from math import gcd
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 from urllib.parse import quote
 
@@ -265,13 +266,16 @@ def scene_page_inputs(scene: Any, spans: Sequence[Any], css_scale: float = 1.0) 
 
     from vidgen.fonts import project_fonts
     from vidgen.speech import beat_word_times
+    from vidgen.web.entry import served_prefix
 
     project = scene.project
     words = [
         beat_word_times(project.audio_dir, beat.id, beat.text, span.start, span.end, project.spoken(beat), project.config.language)
         for beat, span in zip(scene.beats, spans)
     ]
-    theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height) * css_scale), project_fonts(project.root))
+    prefix = served_prefix(project)   # the project folder's place on the page (web_root:, §123.16)
+    fonts = [replace(font, rel=prefix + font.rel) for font in project_fonts(project.root)]
+    theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height) * css_scale), fonts)
     return theme, page_beats(spans, scene.beats, words)
 
 

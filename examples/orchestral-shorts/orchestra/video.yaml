@@ -1,0 +1,118 @@
+# Orchestra Test: a portrait orchestral music video.
+# Music: assets/music/orchestra_test.yaml, an original score for vidgen's own orchestra (90.0 BPM, D minor; one bar = 2.6667 s).
+# Pictures: ../shared/orch.js (vidgen/three-kit, music-time, three-finish, title-cards), one web_cut shot per 1-2 bars.
+# Written by ../tools/gen.py from shots.yaml.
+title: Orchestra Test
+output: orchestra_test
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 360, height: 640, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}
+music: {source: orchestra_test, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 256k}
+extensions: [../shared]
+web_root: ..
+scenes:
+- id: 01_crystal
+  type: web_cut
+  duration: 5.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 100
+      colours: {base: '#477bba', accent: '#d98d78', deep: '#070b10'}
+      react:
+        pulse: [gong]
+        glow: [violins]
+      grade: {temperature: -0.15, saturation: 0.95}
+      kind: octa
+      label: [Strings, 'violins + violas: tremolo', 'cellos + basses: swell']
+      note: bars 1-2 (strings, intro)
+    music_data: &id001
+      tracks: [bass_drum, cellos, crash, gong, horns, men, taiko, timpani, violins, women]
+- id: 02_tunnel
+  type: web_cut
+  duration: 5.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 117
+      colours: {base: '#4f7bff', accent: '#b46cff', deep: '#05040f'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [cellos]
+      grade: {temperature: 0.0, saturation: 1.05}
+      label: [Taiko + Timpani, rolls and a cymbal swell into the hit]
+      note: bars 3-4 (drums, build)
+    music_data: *id001
+- id: 03_rings
+  type: web_cut
+  duration: 5.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 134
+      colours: {base: '#f6751f', accent: '#52f3ff', deep: '#140a03'}
+      react:
+        pulse: [timpani, bass_drum]
+        ring: [crash]
+        glow: [horns]
+      grade: &id002 {temperature: 0.15, saturation: 1.15}
+      label: [Brass, "four horns \xB7 trumpet fanfare", low brass]
+      note: bars 5-6 (brass, climax)
+    music_data: *id001
+- id: 04_portal
+  type: web_cut
+  duration: 5.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 151
+      colours: {base: '#30a6c7', accent: '#e66b79', deep: '#060f11'}
+      react:
+        pulse: [taiko]
+        glow: [men]
+      grade: {temperature: -0.05, saturation: 1.0}
+      label: [Choir, "men \"na \xB7 la\" \xB7 women \"ooh\"", "soprano solo \"la \xB7 ah-oh\""]
+      note: bars 7-8 (choir, verse)
+    music_data: *id001
+- id: 05_swarm
+  type: web_cut
+  duration: 5.3333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 168
+      colours: &id003 {base: '#f5741f', accent: '#52f3ff', deep: '#140a03'}
+      react:
+        pulse: [taiko, timpani]
+        ring: [crash]
+        glow: [men]
+      grade: *id002
+      label: [Tutti, "the whole orchestra \xB7 choir on \"aah\""]
+      note: bars 9-10 (tutti, climax)
+    music_data: *id001
+- id: 06_drift
+  type: web_cut
+  duration: 8.5333333
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 185
+      colours: *id003
+      react:
+        pulse: [timpani, gong]
+        glow: [women]
+      grade: *id002
+      lookY: -38
+      end: {title: Orchestra Test, start: 0.4}
+      fadeOut: 1.8
+      note: bars 11-12 (tutti, climax)
+    music_data: *id001

@@ -1,0 +1,21 @@
+title: "The Signal"
+output: the_signal
+score: the_signal
+tail: 3.5
+shots:
+  - {bars: 2, mode: tesseract, lookY: -9, size: 3.0, colours: {base: "#35e8ff", accent: "#ff3fb4", deep: "#03050c"}, react: {pulse: [taiko, timpani], glow: [violas]},
+     title: {title: "THE SIGNAL", subtitle: "an orchestral short", made: true, hold: 2.6}}
+  - {bars: 1, mode: portal, colours: {base: "#3fc8ff", accent: "#ff4fa8", deep: "#03050c"}, react: {pulse: [horns, taiko], glow: [men]}}
+  - {bars: 1, mode: crystal, kind: tetra, colours: {base: "#ff4fb8", accent: "#45e0ff", deep: "#05030c"}, react: {pulse: [horns, taiko], glow: [men]}}
+  - {bars: 1, mode: tunnel, speed: 13, colours: {base: "#3f7bff", accent: "#35e8ff", deep: "#03040c"}, react: {pulse: [taiko, timpani], glow: [horns]}}
+  - {bars: 1, mode: swarm, colours: {base: "#45e0ff", accent: "#b35cff", deep: "#04030c"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [horns]}}
+  - {bars: 1, mode: crystal, kind: ico, colours: {base: "#9b5cff", accent: "#35e8ff", deep: "#05030c"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [horns]}}
+  - {bars: 1, mode: tesseract, seed: 177, colours: {base: "#ff3fb4", accent: "#6fd8ff", deep: "#08030a"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [horns]}}
+  - {bars: 1, mode: tunnel, speed: 16, colours: {base: "#b35cff", accent: "#ff4fb8", deep: "#06030b"}, react: {pulse: [toms, timpani, taiko], glow: [violins]}}
+  - {bars: 1, mode: swarm, seed: 233, colours: {base: "#ff5fc0", accent: "#ffd166", deep: "#0a0309"}, react: {pulse: [taiko, snares], glow: [violins]}}
+  - {bars: 1, mode: rings, colours: {base: "#ff3fb4", accent: "#35e8ff", deep: "#09030a"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [women]}}
+  - {bars: 1, mode: portal, seed: 344, colours: {base: "#35e8ff", accent: "#ffd166", deep: "#03060c"}, react: {pulse: [taiko, timpani], glow: [women]}}
+  - {bars: 1, mode: swarm, seed: 455, colours: {base: "#ffd166", accent: "#ff3fb4", deep: "#0a0507"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [women]}}
+  - {bars: 1, mode: rings, seed: 566, colours: {base: "#35e8ff", accent: "#ff6ac0", deep: "#03060c"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [women]}}
+  - {bars: 2, mode: drift, lookY: -38, colours: {base: "#ff8fd0", accent: "#6fe8ff", deep: "#05030a"}, react: {pulse: [timpani, gong], glow: [women]},
+     end: {title: "THE SIGNAL", start: 0.6}}

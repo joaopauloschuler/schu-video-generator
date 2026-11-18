@@ -1,0 +1,11 @@
+title: "Orchestra Test"
+output: orchestra_test
+score: orchestra_test
+tail: 3.2
+shots:
+  - {bars: 2, mode: crystal, kind: octa, react: {pulse: [gong], glow: [violins]}, label: ["Strings", "violins + violas: tremolo", "cellos + basses: swell"]}
+  - {bars: 2, mode: tunnel, colours: {base: "#4f7bff", accent: "#b46cff", deep: "#05040f"}, react: {pulse: [taiko, timpani], glow: [cellos]}, label: ["Taiko + Timpani", "rolls and a cymbal swell into the hit"]}
+  - {bars: 2, mode: rings, react: {pulse: [timpani, bass_drum], ring: [crash], glow: [horns]}, label: ["Brass", "four horns · trumpet fanfare", "low brass"]}
+  - {bars: 2, mode: portal, react: {pulse: [taiko], glow: [men]}, label: ["Choir", "men \"na · la\" · women \"ooh\"", "soprano solo \"la · ah-oh\""]}
+  - {bars: 2, mode: swarm, react: {pulse: [taiko, timpani], ring: [crash], glow: [men]}, label: ["Tutti", "the whole orchestra · choir on \"aah\""]}
+  - {bars: 2, mode: drift, lookY: -38, react: {pulse: [timpani, gong], glow: [women]}, end: {title: "Orchestra Test", start: 0.4}}

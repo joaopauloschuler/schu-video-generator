@@ -625,6 +625,13 @@ my_video/
   original orchestral score in D minor at 75 BPM (strings, horns, low brass, men's choir, timpani
   and taikos) that the pictures follow through `music_data` (the final render is estimated at
   35 to 45 min on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [examples/orchestral-shorts](examples/orchestral-shorts/README.md) — seven portrait (9:16)
+  orchestral music videos published as YouTube Shorts, 33 to 37 s each, source only: "First
+  Light", "The Signal", "Gate of Stars", "Choir of the Void", "Ascension", "Eclipse" and
+  "Orchestra" (which labels each section of the orchestra on screen, a listening test). Each has
+  an original score for vidgen's orchestra and choir; all seven draw with one shared three.js
+  module (eight modes: drift, crystal, portal, tesseract, swarm, rings, tunnel, ribbon) that reads
+  the score through `music_data`, cut straight on the bar lines (about 20 min a film on 2 cores).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets, the types drawn in a web page (`3d`,
   `web`, `space`) in the [web scene gallery](docs/gallery/web/README.md); regenerate with `vidgen gallery`.

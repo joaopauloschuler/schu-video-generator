@@ -1475,3 +1475,10 @@ class WebCut(Web):
 Its scenes take the same params and are cached like `web` scenes: an edit to the script, or to a
 file the page imports or fetches, renders them again (since Step 341; DESIGN §120.1).
 `vidgen.scenes.web` is not part of `vidgen.api`, so check such a class after an update of vidgen.
+
+Projects side by side can share one such type and one script instead of a copy each: put them in
+a folder next to the projects and write, in each project's `video.yaml`, `extensions:
+[../shared]` (the type) and `web_root: ..` (pages are served from the folder that holds the
+projects, so `script: ../shared/orch.js` is allowed; CONFIG, "Top-level keys"). The seven films
+of [examples/orchestral-shorts](../examples/orchestral-shorts/README.md) share their scene module
+and their `web_cut` type this way.

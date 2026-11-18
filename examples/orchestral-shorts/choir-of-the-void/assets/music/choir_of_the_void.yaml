@@ -1,0 +1,163 @@
+# Choir of the Void: an original 30 s cue for vidgen's choir and orchestra. No samples, no words.
+# 72 BPM in B minor; one bar = 3.333 s = 100 frames at 30 fps.
+#   void    2  the first frame: taikos, a bass drum and the tam-tam; low strings in tremolo; the women whisper a
+#              chord that turns into a sung "ooh"; the men hum
+#   voice   3  a soprano soloist sings on "la" and "ah-oh" over the women's "ooh", the men's "na - la" and
+#              plucked basses
+#   swell   1  a timpani roll, a cymbal swell, the low brass and the choir growing into...
+#   chorus  2  the full choir on "aah" with horns, trumpet and taikos, the soloist above them
+#   end     1  B major (the minor key's last chord turned major), tam-tam
+version: 1
+title: Choir of the Void
+key: B minor
+tempo: 72
+seed: 5924
+loop: false
+sections:
+  - {name: void, bars: 2, progression: "Bm G"}
+  - {name: voice, bars: 3, progression: "Bm G D"}
+  - {name: swell, bars: 1, progression: "F#"}
+  - {name: chorus, bars: 2, progression: "Bm G"}
+  - {name: end, bars: 1, progression: "B"}
+tracks:
+  women:
+    instrument: choir
+    settings: {voices: women, vowel: ooh, syllable: mm-oo}
+    volume: 2
+    pan: -0.15
+    reverb: {size: 5, mix: 0.42, tone: 4500}
+    sections:
+      void:   {steps: "[mf] [whisper=0.8] D4+F#4+B4 - - - - - - - | [whisper=0] [mf] D4+G4+B4 - - - - - - -"}
+      voice:  {steps: "[mp] D4+F#4 - - - - - - - | D4+G4 - - - - - - - | D4+F#4+A4 - - - - - - -"}
+      swell:  {settings: {vowel: aah}, steps: "[mp <] C#4+F#4+A#4 - - - - - - - [ff]"}
+      chorus: {settings: {vowel: aah, brightness: 0.7}, volume: 5, steps: "[ff] D4+F#4+B4 - - - - - - - | D4+G4+B4 - - - - - - -"}
+      end:    {settings: {vowel: aah, brightness: 0.7, ring: 1.6}, volume: 5, steps: "[ff >] D#4+F#4+B4 - - - - - . . [p]"}
+  men:
+    instrument: choir
+    settings: {voices: men}
+    volume: 2
+    pan: 0.15
+    reverb: {size: 5, mix: 0.4, tone: 4500}
+    sections:
+      void:   {settings: {vowel: mm}, steps: "[mf] B2+F#3 - - - - - - - | G2+D3 - - - - - - -"}
+      voice:  {steps: "[mf] [na] B2 - [la] F#3 - [na] D3 - [la] F#3 - | [na] G2 - [la] D3 - [na] B2 - [la] D3 - | [na] D3 - [la] A3 - [na] F#3 - [la] A3 -"}
+      swell:  {settings: {vowel: aah}, steps: "[mf <] F#2+C#3 - - - - - - - [ff]"}
+      chorus: {settings: {vowel: aah, brightness: 0.7}, volume: 5, steps: "[ff] B2+F#3+B3 - - - - - - - | G2+D3+B3 - - - - - - -"}
+      end:    {settings: {vowel: aah, brightness: 0.7, ring: 1.6}, volume: 5, steps: "[ff >] B2+F#3+B3 - - - - - . . [p]"}
+  solo:
+    instrument: choir
+    only: [voice, chorus, end]
+    settings: {voices: sopranos, soloist: true, vowel: aah, vibrato_delay: 0.35}
+    volume: 6
+    reverb: {size: 4.6, mix: 0.36, tone: 5200}
+    sections:
+      voice:  {steps: "[mf] [la] F#5 - - - (E5 - D5 - | [ah-oh] B4 - - - - - D5 -) | [la] (E5 - - - F#5 - - -) "}
+      chorus: {volume: 10, steps: "[f] [la] (B5 - - - A5 - F#5 - | [ah-oh] G5 - - - - - - -)"}
+      end:    {volume: 10, steps: "[f >] [ah-oh] F#5 - - - - - . . [p]"}
+  violins:
+    instrument: violins
+    only: [voice, swell, chorus, end]
+    pan: -0.4
+    reverb: {size: 4.4, mix: 0.34, tone: 4500}
+    sections:
+      voice:  {settings: {attack: 0.5, brightness: 0.3, mute: 1}, steps: "[p] B4+D5 - - - - - - - | B4+D5 - - - - - - - | A4+D5 - - - - - - -"}
+      swell:  {settings: {stroke: tremolo, brightness: 0.8}, steps: "[mp <] A#4+C#5 - - - - - - - [ff]"}
+      chorus: {settings: {attack: 0.1}, steps: "[ff] F#5+B5 - - - - - - - | G5+B5 - - - - - - -"}
+      end:    {steps: "[ff >] F#5+B5 - - - - - . . [mp]"}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 4.4, mix: 0.32, tone: 4500}
+    sections:
+      void:   {settings: {stroke: tremolo, brightness: 0.6}, steps: "[f >] B2 - - - - - - - | [mf] G2 - - - - - - -"}
+      voice:  {settings: {attack: 0.4, brightness: 0.35}, steps: "[mp] B2 - - - - - - - | G2 - - - - - - - | D3 - - - - - - -"}
+      swell:  {settings: {stroke: tremolo}, steps: "[mp <] F#2 - - - - - - - [ff]"}
+      chorus: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] B2 B2 F#3 B2 D3 B2 F#3 B2 B2 B2 F#3 B2 D3 B2 F#3 B2 | G2 G2 D3 G2 B2 G2 D3 G2 G2 G2 D3 G2 B2 G2 D3 G2"}
+      end:    {steps: "[ff >] B2 - - - - - . . [mp]"}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 4.4, mix: 0.3, tone: 4000}
+    sections:
+      void:   {settings: {stroke: tremolo}, steps: "[f >] B1 - - - - - - - | [mf] G1 - - - - - - -"}
+      voice:  {settings: {stroke: pizzicato}, steps: "[f] B1 . . . F#1 . . . | G1 . . . D2 . . . | D2 . . . A1 . . ."}
+      swell:  {steps: "[mp <] F#1 - - - - - - - [ff]"}
+      chorus: {steps: "[ff] B1 - - - - - - - | G1 - - - - - - -"}
+      end:    {steps: "[ff >] B1 - - - - - . . [mp]"}
+  horns:
+    instrument: horn
+    only: [swell, chorus, end]
+    settings: {players: 4, attack: 0.14}
+    pan: 0.1
+    reverb: {size: 4.6, mix: 0.34, tone: 4500}
+    sections:
+      swell:  {steps: "[fp <] C#4+F#4 - - - - - - - [ff]"}
+      chorus: {steps: "[ff] (D4 - - - F#4 - B4 - | B4 - - - A4 - G4 -)"}
+      end:    {steps: "[ff >] D#4+F#4 - - - - - . . [mp]"}
+  trumpet:
+    instrument: trumpet
+    only: [chorus, end]
+    settings: {vibrato: 10, vibrato_delay: 0.35, attack: 0.06, brightness: 0.7}
+    volume: -3
+    pan: 0.2
+    reverb: {size: 4.6, mix: 0.32, tone: 4500}
+    sections:
+      chorus: {steps: "[f] F#4+B4 - - - - - - - | G4+B4 - - - - - - -"}
+      end:    {steps: "[f >] F#4+B4 - - - - - . . [mp]"}
+  low:
+    instrument: low_brass
+    only: [void, swell, chorus, end]
+    settings: {tuba: 0.7, attack: 0.12}
+    reverb: {size: 4.6, mix: 0.32, tone: 4000}
+    sections:
+      void:   {steps: "[ff] B1+F#2 - - - . . . . | ."}
+      swell:  {settings: {attack: 2.8, brightness: 1.0}, steps: "[pp <] F#1+C#2 - - - - - - - [ff]"}
+      chorus: {steps: "[ff] B1+F#2 - - - - - - - | G1+D2 - - - - - - -"}
+      end:    {steps: "[ff >] B1+F#2 - - - - - . . [mp]"}
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.8, mix: 0.3}
+    sections:
+      void:   {steps: "[ff] B2 . . . . . . . | [mp] G2 . . . D3 . . ."}
+      voice:  {steps: "[mp] B2 . . . . . . . | G2 . . . . . . . | D3 . . . A2 . . ."}
+      swell:  {settings: {mallet: 0.2, ring: 0.3}, steps: "[roll pp <] F#2 - - - - - - - [ff]"}
+      chorus: {steps: "[ff] B2 . . . F#2 . . . | G2 . . . D3 . G2 G2"}
+      end:    {steps: "[ff] B2+F#2 . . . . . . ."}
+  taiko:
+    instrument: taiko
+    only: [void, voice, chorus, end]
+    settings: {players: 6, pitch: 55}
+    reverb: {size: 3.6, mix: 0.32, tone: 3000}
+    sections:
+      void:   {volume: 1, steps: "X... .... .... .... | .... .... .... ...."}
+      voice:  {volume: -8, steps: "X... .... .... .... | X... .... .... .... | X... .... X... ...."}
+      chorus: {steps: "X... ..x. X..x .x.. | X... ..x. X.x. xxxx"}
+      end:    {volume: 1, steps: "X... .... .... ...."}
+  bass_drum:
+    instrument: bass_drum
+    only: [void, chorus, end]
+    sections:
+      void:   {steps: "x . . . . . . . | ."}
+      chorus: {steps: "x . . . . . . . | ."}
+      end:    {steps: "x . . . . . . ."}
+  swell_cym:
+    instrument: cymbal
+    only: [swell]
+    settings: {stroke: swell}
+    reverb: {size: 4.6, mix: 0.38}
+    steps: "x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [chorus, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.6, mix: 0.38}
+    sections:
+      chorus: {steps: "x . . . . . . . | ."}
+      end:    {steps: "x . . . . . . ."}
+  gong:
+    instrument: tam_tam
+    only: [void, end]
+    reverb: {size: 5, mix: 0.4}
+    sections:
+      void: {steps: "[f] x . . . . . . . | ."}
+      end:  {steps: "[f] x . . . . . . ."}

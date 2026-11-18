@@ -135,7 +135,7 @@ class Space(Web):
         """``script:`` exists as a ``.js`` file of the project; ``music_data`` with music in the video."""
         problems = []
         if params.script is not None:
-            problems += web_entry_problems(project.root, {"script": params.script})
+            problems += web_served_entry_problems(project, {"script": params.script})
         if params.music_data and not video_has_music(project.config):
             problems.append("music_data: the video plays no music; add music: (a score file, a bed or a music file) or turn music_data off")
         return problems
@@ -178,7 +178,8 @@ class Space(Web):
         fps = int(config.frame_rate)
         p = self.params
         path = self.page_path()
-        rel = path.relative_to(self.project.root).as_posix()
+        root = web_served_root(self.project)
+        rel = path.resolve().relative_to(root.resolve()).as_posix()
         seconds = (frames - SPARE_FRAMES - round(self.outro * fps)) / fps
         page = {"script": rel, "data": {**p.data, "scene_seconds": round(seconds, 6)}}
         extra: dict[str, Any] = {}
@@ -189,7 +190,7 @@ class Space(Web):
             extra["orbits"] = web_scene_orbits(self.project, p.orbits, fps, frames, frames - SPARE_FRAMES)
         if p.world is not None and p.flights is not None:
             extra["orbits"] = web_with_flights(None, scene_flights(self.project, self.spec.id, p, fps, frames, extra.get("music")))
-        return {**extra, "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
+        return {**extra, "root": root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
                 "params": page, "size": size, "fps": fps, "frames": frames, "theme": theme, "beats": beats,
                 "shape": web_page_shape(frame, "bleed")}
 

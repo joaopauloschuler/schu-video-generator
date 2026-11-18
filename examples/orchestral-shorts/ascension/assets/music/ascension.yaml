@@ -1,0 +1,155 @@
+# Ascension: an original 33.6 s cue for vidgen's orchestra. No samples, no SoundFont.
+# 100 BPM, A major rising to B major; one bar = 2.4 s = 72 frames at 30 fps.
+#   spark   2  the first frame: horns, timpani and a crash on A; then plucked strings ticking like a clock
+#   climb   4  the spiccato engine, four horns sing the heroic theme, the choir on "ooh"
+#   lift    2  the violins carry the theme up, taikos build, a snare roll and a cymbal swell into...
+#   summit  4  a step up to B major: the trumpets' theme over the whole orchestra and the choir on "aah"
+#   end     2  E to B (amen), tam-tam
+version: 1
+title: Ascension
+key: A major
+tempo: 100
+seed: 6035
+loop: false
+sections:
+  - {name: spark, bars: 2, progression: "A F#m"}
+  - {name: climb, bars: 4, progression: "D A E F#m"}
+  - {name: lift, bars: 2, progression: "D E"}
+  - {name: summit, bars: 4, progression: "B G#m E F#"}
+  - {name: end, bars: 2, progression: "E B"}
+tracks:
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 3.8, mix: 0.3, tone: 4800}
+    sections:
+      spark:  {settings: {stroke: pizzicato}, steps: "[sfz] A5+E6 . [f] E5 . A5 . E5 . C#6 . E5 . A5 . E5 . | F#5 . C#5 . F#5 . C#5 . A5 . C#5 . F#5 . C#5 ."}
+      climb:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] D5 F#5 A5 D5 F#5 A5 F#5 D5 D5 F#5 A5 D5 F#5 A5 F#5 D5 | C#5 E5 A5 C#5 E5 A5 E5 C#5 C#5 E5 A5 C#5 E5 A5 E5 C#5 | B4 E5 G#5 B4 E5 G#5 E5 B4 B4 E5 G#5 B4 E5 G#5 E5 B4 | C#5 F#5 A5 C#5 F#5 A5 F#5 C#5 C#5 F#5 A5 C#5 F#5 A5 F#5 C#5"}
+      lift:   {settings: {attack: 0.1, vibrato: 14}, steps: "[f <] (F#5 - - - A5 - D6 - | E6 - - - - - - -) [ff]"}
+      summit: {settings: {attack: 0.1}, steps: "[ff] D#6+F#6 - - - - - - - | D#6+G#6 - - - - - - - | B5+E6 - - - - - - - | C#6+F#6 - - - - - - -"}
+      end:    {steps: "[ff] B5+E6 - - - - - - - | [>] B5+D#6 - - - - - . . [mp]"}
+  violas:
+    instrument: violas
+    pan: -0.05
+    reverb: {size: 3.8, mix: 0.3, tone: 4800}
+    sections:
+      spark:  {settings: {stroke: pizzicato}, steps: "[f] A3 . . . C#4 . . . E4 . . . C#4 . . . | F#3 . . . A3 . . . C#4 . . . A3 . . ."}
+      climb:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] D4 F#4 A4 D4 F#4 A4 F#4 D4 D4 F#4 A4 D4 F#4 A4 F#4 D4 | C#4 E4 A4 C#4 E4 A4 E4 C#4 C#4 E4 A4 C#4 E4 A4 E4 C#4 | B3 E4 G#4 B3 E4 G#4 E4 B3 B3 E4 G#4 B3 E4 G#4 E4 B3 | C#4 F#4 A4 C#4 F#4 A4 F#4 C#4 C#4 F#4 A4 C#4 F#4 A4 F#4 C#4"}
+      lift:   {settings: {stroke: tremolo, brightness: 0.8}, steps: "[f <] D4+F#4 - - - - - - - | E4+G#4 - - - - - - - [ff]"}
+      summit: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] D#4 F#4 B4 D#4 F#4 B4 F#4 D#4 D#4 F#4 B4 D#4 F#4 B4 F#4 D#4 | D#4 G#4 B4 D#4 G#4 B4 G#4 D#4 D#4 G#4 B4 D#4 G#4 B4 G#4 D#4 | E4 G#4 B4 E4 G#4 B4 G#4 E4 E4 G#4 B4 E4 G#4 B4 G#4 E4 | C#4 F#4 A#4 C#4 F#4 A#4 F#4 C#4 C#4 F#4 A#4 C#4 F#4 A#4 F#4 C#4"}
+      end:    {steps: "[ff] G#4+B4 - - - - - - - | [>] F#4+B4 - - - - - . . [mp]"}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 3.8, mix: 0.28, tone: 4500}
+    sections:
+      spark:  {steps: "[sfz] A2 - - - - - - - | [mf] F#2 - - - - - - -"}
+      climb:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] D3 D3 A3 D3 F#3 D3 A3 D3 D3 D3 A3 D3 F#3 D3 A3 D3 | A2 A2 E3 A2 C#3 A2 E3 A2 A2 A2 E3 A2 C#3 A2 E3 A2 | E2 E2 B2 E2 G#2 E2 B2 E2 E2 E2 B2 E2 G#2 E2 B2 E2 | F#2 F#2 C#3 F#2 A2 F#2 C#3 F#2 F#2 F#2 C#3 F#2 A2 F#2 C#3 F#2"}
+      lift:   {settings: {stroke: spiccato}, steps: "[f <] D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 D3 | E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 E3 [ff]"}
+      summit: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] B2 B2 F#3 B2 D#3 B2 F#3 B2 B2 B2 F#3 B2 D#3 B2 F#3 B2 | G#2 G#2 D#3 G#2 B2 G#2 D#3 G#2 G#2 G#2 D#3 G#2 B2 G#2 D#3 G#2 | E2 E2 B2 E2 G#2 E2 B2 E2 E2 E2 B2 E2 G#2 E2 B2 E2 | F#2 F#2 C#3 F#2 A#2 F#2 C#3 F#2 F#2 F#2 C#3 F#2 A#2 F#2 C#3 F#2"}
+      end:    {steps: "[ff] E3 - - - - - - - | [>] B2 - - - - - . . [mp]"}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 3.8, mix: 0.26, tone: 4000}
+    sections:
+      spark:  {settings: {stroke: pizzicato}, steps: "[f] A1 . . . A1 . . . | F#1 . . . F#1 . . ."}
+      climb:  {steps: "[f] D2 - - - - - - - | A1 - - - - - - - | E1 - - - - - - - | F#1 - - - - - - -"}
+      lift:   {steps: "[f <] D2 - - - - - - - | E2 - - - - - - - [ff]"}
+      summit: {steps: "[ff] B1 - - - - - - - | G#1 - - - - - - - | E1 - - - - - - - | F#1 - - - - - - -"}
+      end:    {steps: "[ff] E1 - - - - - - - | [>] B1 - - - - - . . [mp]"}
+  horns:
+    instrument: horn
+    settings: {players: 4, attack: 0.1}
+    pan: 0.1
+    reverb: {size: 4.2, mix: 0.32, tone: 4500}
+    sections:
+      spark:  {steps: "[ff] A3+E4 - - - . . . . | ."}
+      climb:  {volume: 4, steps: "[f] (A3 - - - D4 - F#4 - | E4 - - - - - C#4 - | B3 - - - E4 - G#4 - | A4 - - - - - - -)"}
+      lift:   {steps: "[f <] A3+D4 - - - - - - - | B3+E4 - - - - - - - [ff]"}
+      summit: {steps: "[ff] D#4+F#4 - - - - - - - | D#4+G#4 - - - - - - - | E4+G#4 - - - - - - - | C#4+F#4 - - - - - - -"}
+      end:    {steps: "[ff] E4+G#4 - - - - - - - | [>] D#4+F#4 - - - - - . . [mp]"}
+  trumpet:
+    instrument: trumpet
+    only: [summit, end]
+    settings: {vibrato: 12, vibrato_delay: 0.3, attack: 0.04, players: 2}
+    pan: 0.2
+    reverb: {size: 4.2, mix: 0.3, tone: 4800}
+    sections:
+      summit: {steps: "[f <] (B4 - - - E5 - G#5 - | F#5 - - - - - D#5 - | C#5 - - - F#5 - A#5 - | B5 - - - - - - -) [ff]"}
+      end:    {steps: "[ff] B5 - - - G#5 - - - | [>] F#5 - - - - - . . [mp]"}
+  low:
+    instrument: low_brass
+    settings: {tuba: 0.6, attack: 0.1}
+    reverb: {size: 4.2, mix: 0.3, tone: 4000}
+    sections:
+      spark:  {steps: "[ff] A1+E2 - - - . . . . | ."}
+      climb:  {steps: "[mf] D2 - - - - - - - | A1 - - - - - - - | E2 - - - - - - - | F#1 - - - - - - -"}
+      lift:   {settings: {attack: 0.3}, steps: ". | [pp <] E1+B1 - - - - - - - [ff]"}
+      summit: {steps: "[ff] B1+F#2 - - - - - - - | G#1+D#2 - - - - - - - | E1+B1 - - - - - - - | F#1+C#2 - - - - - - -"}
+      end:    {steps: "[ff] E1+B1 - - - - - - - | [>] B1+F#2 - - - - - . . [mp]"}
+  choir:
+    instrument: choir
+    only: [climb, lift, summit, end]
+    volume: 4
+    reverb: {size: 4.6, mix: 0.38, tone: 4500}
+    sections:
+      climb:  {settings: {vowel: ooh}, steps: "[mf] D3+A3+D4+F#4 - - - - - - - | A2+E3+C#4+E4 - - - - - - - | E3+B3+E4+G#4 - - - - - - - | F#3+C#4+F#4+A4 - - - - - - -"}
+      lift:   {settings: {vowel: aah, brightness: 0.6}, steps: "[mf <] D3+A3+D4+F#4+A4 - - - - - - - | E3+B3+E4+G#4+B4 - - - - - - - [ff]"}
+      summit: {settings: {vowel: aah, brightness: 0.7}, volume: 6, steps: "[ff] B2+F#3+B3+D#4+F#4 - - - - - - - | G#2+D#3+B3+D#4+G#4 - - - - - - - | E3+B3+E4+G#4+B4 - - - - - - - | F#2+C#3+A#3+C#4+F#4 - - - - - - -"}
+      end:    {settings: {vowel: aah, brightness: 0.7, ring: 1.5}, volume: 6, steps: "[ff] E3+B3+E4+G#4+B4 - - - - - - - | [>] B2+F#3+B3+D#4+F#4 - - - - - . . [p]"}
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.6, mix: 0.28}
+    sections:
+      spark:  {steps: "[ff] A2 . . . . . . . | [mf] F#2 . . . C#3 . . ."}
+      climb:  {steps: "[f] D2 . . . A2 . . . | A2 . . . E2 . . . | E2 . . . B2 . . . | F#2 . . . C#3 . F#2 F#2"}
+      lift:   {settings: {mallet: 0.2, ring: 0.3}, steps: "[f] D2 . . . A2 . D2 . | [roll pp <] E2 - - - - - - - [ff]"}
+      summit: {steps: "[ff] B2 . . . F#2 . . . | G#2 . . . D#2 . . . | E2 . . . B2 . . . | F#2 . . . C#3 . F#2 F#2"}
+      end:    {steps: "[ff] E2 . . . B2 . . . | B2+F#2 . . . . . . ."}
+  taiko:
+    instrument: taiko
+    only: [climb, lift, summit, end]
+    settings: {players: 6}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      climb:  {volume: -5, steps: "X... ..x. X... .... | X... ..x. X... .... | X... ..x. X... .... | X... ..x. X... x.x."}
+      lift:   {volume: -1, steps: "X..x ..x. X..x ..x. | X..x ..x. X.x. xxxx"}
+      summit: {steps: "X..x ..x. X..x .x.. | X..x ..x. X..x .x.. | X..x ..x. X..x .x.. | X..x ..x. X.x. xxxx"}
+      end:    {volume: 1, steps: "X... .... X... .... | X... .... .... ...."}
+  toms:
+    instrument: toms
+    only: [spark]
+    steps: ". | . . . . . . . . . . . . C4 A3 F3 D3"
+  bass_drum:
+    instrument: bass_drum
+    only: [spark, summit, end]
+    sections:
+      spark:  {steps: "x . . . . . . . | ."}
+      summit: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end:    {steps: ". | x . . . . . . ."}
+  snares:
+    instrument: snare_drum
+    only: [lift]
+    settings: {players: 4}
+    steps: ". | [roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [lift]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [spark, summit, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      spark:  {steps: "x . . . . . . . | ."}
+      summit: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end:    {steps: ". | x . . . . . . ."}
+  gong:
+    instrument: tam_tam
+    only: [end]
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | [f] x . . . . . . ."

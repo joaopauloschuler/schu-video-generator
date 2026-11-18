@@ -3861,6 +3861,8 @@ class VideoConfig(_Strict):
     """Translation file (YAML, relative to the project; `vidgen translate-template`) whose texts replace the beat texts and on-screen texts, usually set in a variant."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
     """Folders (relative to the project) whose *.py files and packages are imported."""
+    web_root: str | None = Field(default=None, min_length=1)
+    """The folder `web` scenes' pages are served from: the project folder (default), or a folder (relative to the project) that holds it, so that projects side by side share a page or script (`web_root: ..` with `script: ../shared/orch.js`); a page may then load any file in that folder."""
     lint: LintConfig = Field(default_factory=LintConfig)
     """Thresholds and severities of `vidgen lint`."""
     overlays: list[OverlayConfig] = Field(default_factory=list)

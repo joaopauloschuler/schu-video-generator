@@ -1,0 +1,168 @@
+# Orchestra Test: an original 32 s listening test for vidgen's orchestral instruments.
+# 90 BPM, D minor -> D major; one bar = 2.667 s = 80 frames at 30 fps.
+#   strings 2 bars  violins + violas in tremolo, cellos and basses swelling under them
+#   drums   2 bars  taiko ensemble and timpani join; a timpani roll, a snare roll and a cymbal swell into...
+#   brass   2 bars  four horns and a trumpet fanfare over low brass, crash on the downbeat
+#   choir   2 bars  men singing "na / la", women on "ooh", a soprano soloist on "la" and "ah-oh"
+#   tutti   4 bars  everything; the choir on "aah"; ends in D major with the tam-tam
+version: 1
+title: Orchestra Test
+key: D minor
+tempo: 90
+seed: 1116
+loop: false
+sections:
+  - {name: strings, bars: 2, progression: "Dm Bb"}
+  - {name: drums, bars: 2, progression: "Gm A"}
+  - {name: brass, bars: 2, progression: "Dm Bb"}
+  - {name: choir, bars: 2, progression: "Gm A"}
+  - {name: tutti, bars: 4, progression: "Bb A D D"}
+tracks:
+  # ----- strings -----
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 3.8, mix: 0.32, tone: 4500}
+    sections:
+      strings: {settings: {stroke: tremolo, brightness: 0.75, attack: 0.3}, steps: "[p <] D5+A5 - - - - - - - | D5+Bb5 - - - - - - - [f]"}
+      drums:   {settings: {stroke: tremolo, brightness: 0.6}, steps: "[mp] D5+G5 - - - - - - - | [<] C#5+A5 - - - - - - - [f]"}
+      brass:   {steps: "[mf] F5 - - - - - - - | F5 - - - D5 - - -"}
+      choir:   {settings: {stroke: spiccato}, steps: "[mp] G4 Bb4 D5 Bb4 G4 Bb4 D5 Bb4 G4 Bb4 D5 Bb4 G4 Bb4 D5 Bb4 | A4 C#5 E5 C#5 A4 C#5 E5 C#5 A4 C#5 E5 C#5 A4 C#5 E5 C#5"}
+      tutti:   {steps: "[f] (D5 - - - F5 - - - | E5 - - - - - C#5 - | [ff] D5 - - - - - - - | - - - - - -) . ."}
+  violas:
+    instrument: violas
+    pan: -0.05
+    reverb: {size: 3.8, mix: 0.32, tone: 4500}
+    sections:
+      strings: {settings: {stroke: tremolo, brightness: 0.75, attack: 0.3}, steps: "[p <] F4 - - - - - - - | F4 - - - - - - - [f]"}
+      drums:   {settings: {stroke: tremolo, brightness: 0.6}, steps: "[mp] Bb4 - - - - - - - | [<] A4 - - - - - - - [f]"}
+      brass:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "D4 F4 A4 D4 F4 A4 F4 D4 D4 F4 A4 D4 F4 A4 F4 D4 | D4 F4 Bb4 D4 F4 Bb4 F4 D4 D4 F4 Bb4 D4 F4 Bb4 F4 D4"}
+      choir:   {steps: "[mp] D4 - - - - - - - | E4 - - - - - - -"}
+      tutti:   {steps: "[f] F4 - - - - - - - | E4 - - - - - - - | [ff] F#4 - - - - - - - | - - - - - - . ."}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 3.8, mix: 0.3, tone: 4500}
+    sections:
+      strings: {settings: {attack: 1.2, brightness: 0.4}, steps: "[p <] D3 - - - - - - - | Bb2 - - - - - - - [f]"}
+      drums:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] G2 G2 D3 G2 Bb2 G2 D3 G2 G2 G2 D3 G2 Bb2 G2 D3 G2 | A2 A2 E3 A2 C#3 A2 E3 A2 A2 A2 E3 A2 C#3 A2 E3 A2"}
+      brass:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] D3 D3 A3 D3 F3 D3 A3 D3 D3 D3 A3 D3 F3 D3 A3 D3 | Bb2 Bb2 F3 Bb2 D3 Bb2 F3 Bb2 Bb2 Bb2 F3 Bb2 D3 Bb2 F3 Bb2"}
+      choir:   {steps: "[mf] G2 - - - - - - - | A2 - - - - - - -"}
+      tutti:   {steps: "[f] Bb2 - - - - - - - | A2 - - - - - - - | [ff] D3 - - - - - - - | - - - - - - . ."}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 3.8, mix: 0.28, tone: 4000}
+    sections:
+      strings: {settings: {attack: 1.2, brightness: 0.35}, steps: "[p <] D2 - - - - - - - | Bb1 - - - - - - - [f]"}
+      drums:   {steps: "[mf] G1 - - - - - - - | A1 - - - - - - -"}
+      brass:   {steps: "[f] D2 - - - - - - - | Bb1 - - - - - - -"}
+      choir:   {settings: {stroke: pizzicato}, steps: "[mf] G1 . . . D2 . . . | A1 . . . E2 . . ."}
+      tutti:   {steps: "[f] Bb1 - - - - - - - | A1 - - - - - - - | [ff] D2 - - - - - - - | - - - - - - . ."}
+  # ----- brass -----
+  horns:
+    instrument: horn
+    only: [brass, choir, tutti]
+    settings: {players: 4, attack: 0.12}
+    pan: 0.1
+    reverb: {size: 4, mix: 0.32, tone: 4500}
+    sections:
+      brass: {steps: "[fp <] (D4 - - - F4 - A4 - | Bb4 - - - A4 - F4 -) [ff]"}
+      choir: {steps: "[p] D4 - - - - - - - | C#4 - - - - - - -"}
+      tutti: {steps: "[f] D4+F4 - - - - - - - | C#4+E4 - - - - - - - | [ff] D4+F#4 - - - - - - - | - - - - - - . ."}
+  trumpet:
+    instrument: trumpet
+    only: [brass, tutti]
+    settings: {vibrato: 10, vibrato_delay: 0.35, attack: 0.03}
+    pan: 0.2
+    reverb: {size: 4, mix: 0.3, tone: 4500}
+    sections:
+      brass: {steps: "[f] A4 . A4 D5 - - . . | [ff] F5 - - - E5 - D5 -"}
+      tutti: {steps: "[f <] (F4 - - - A4 - - - | C#5 - - - E5 - - - | D5 - - - - - - - | - - - - -) [fff] . . ."}
+  low:
+    instrument: low_brass
+    only: [drums, brass, tutti]
+    settings: {tuba: 0.6, attack: 0.12}
+    reverb: {size: 4, mix: 0.3, tone: 4000}
+    sections:
+      drums: {steps: ". | [pp <] A1+E2 - - - - - - - [ff]"}
+      brass: {steps: "[ff] D2+A2 - - - - - - - | Bb1+F2 - - - - - - -"}
+      tutti: {steps: "[f] Bb1+F2 - - - - - - - | A1+E2 - - - - - - - | [ff] D2+A2 - - - - - - - | - - - - - - . ."}
+  # ----- choir -----
+  men:
+    instrument: choir
+    only: [choir, tutti]
+    settings: {voices: men}
+    pan: 0.15
+    reverb: {size: 4.5, mix: 0.36, tone: 4500}
+    sections:
+      choir: {steps: "[mf] [na] D3 - [la] F3 - [na] G3 - [la] Bb3 - | [na] A3 - [la] G3 - [na] E3 - [la] A3 -"}
+      tutti: {volume: 3, settings: {vowel: aah, brightness: 0.7}, steps: "[f] Bb2+F3 - - - - - - - | A2+E3 - - - - - - - | [ff] D3+A3 - - - - - - - | - - - - - - . ."}
+  women:
+    instrument: choir
+    only: [choir, tutti]
+    settings: {voices: women, vowel: ooh}
+    pan: -0.15
+    volume: -4
+    reverb: {size: 4.5, mix: 0.38, tone: 4500}
+    sections:
+      choir: {steps: "[p] D4+G4+Bb4 - - - - - - - | C#4+E4+A4 - - - - - - -"}
+      tutti: {volume: 3, settings: {vowel: aah, brightness: 0.7}, steps: "[f] D4+F4+Bb4 - - - - - - - | C#4+E4+A4 - - - - - - - | [ff] D4+F#4+A4 - - - - - - - | - - - - - - . ."}
+  solo:
+    instrument: choir
+    only: [choir]
+    settings: {voices: sopranos, soloist: true, vowel: aah}
+    volume: 2
+    reverb: {size: 4.5, mix: 0.34, tone: 5000}
+    steps: "[mf] [la] D5 - - - (Bb4 - D5 - | [ah-oh] C#5 - - - - -) . ."
+  # ----- percussion -----
+  timpani:
+    instrument: timpani
+    only: [drums, brass, tutti]
+    reverb: {size: 3.6, mix: 0.28}
+    sections:
+      drums: {settings: {mallet: 0.3}, steps: "[f] G2 . . . D2 . G2 . | [roll pp <] A2 - - - - - - - [ff]"}
+      brass: {steps: "[ff] D2 . . . A2 . . . | Bb2 . . . F2 . . ."}
+      tutti: {steps: "[f] Bb2 . . . . . . . | A2 . . . A2 . A2 A2 | [ff] D2+A2 . . . . . . . | ."}
+  taiko:
+    instrument: taiko
+    only: [drums, brass, choir, tutti]
+    settings: {players: 6}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      drums: {steps: "X... ..x. X... x.x. | X..x ..x. X.x. xxxx"}
+      brass: {volume: -3, steps: "X... .... X... ...."}
+      choir: {volume: -8, steps: "X... .... .... ...."}
+      tutti: {volume: 1, steps: "X..x ..x. X..x .x.. | X..x ..x. X.x. xxxx | X... .... .... .... | ."}
+  bass_drum:
+    instrument: bass_drum
+    only: [brass, tutti]
+    steps: "x . . . . . . . | ."
+    sections:
+      tutti: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+  snares:
+    instrument: snare_drum
+    only: [drums]
+    settings: {players: 4}
+    steps: ". | [roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [drums]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [brass, tutti]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      brass: {steps: "x . . . . . . . | ."}
+      tutti: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+  gong:
+    instrument: tam_tam
+    only: [strings, tutti]
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      strings: {steps: "[pp] x . . . . . . . | ."}
+      tutti: {steps: ". | . | [f] x . . . . . . . | ."}
