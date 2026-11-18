@@ -29425,21 +29425,35 @@ vapour trails, engine exhaust in air, the vapour of a transonic pass and of a ha
   by the sky (`skyAmbient`): white by day, orange at dusk; the shaded side at 40 % (a cloud is
   never black), a forward gleam at thin edges; hazed by `airThrough`. No wind, no shadow on or
   from clouds.
-- **Exhaust in air.** The craft kit's plume method (light summed along the view ray, samples
-  crowded where the ray passes the axis), with its shape set each frame by `plumeShape(air,
-  boost)`: half angle 0.045 + 0.6 e^2 with e = 1 - air^0.3 (2.6 degrees at sea level, 31 in a
-  vacuum), shock diamonds x (1 - e)^2 and only from 45 % throttle, colours from a warm flame to a
-  pale blue bell, the afterburner longer and brighter with closer diamonds. The exponent and the
-  angles are a look tied to the air's density, not nozzle theory. On a craft with kit engines the
-  module hides the kit's plume and draws its own in its place at the power the kit's has now (so
-  `ship.update(t, {throttle})` and burns still drive it). No heat shimmer (it would need the
-  picture behind as a texture).
-- **Condensation.** `coneLevel(mach, air)`: a bell round Mach 0.96 (width 0.07 below, 0.05
-  above), only in air denser than a quarter of sea level's; the cone is a flared tube round the
-  body, thin at its front, cut off at its back. `wingVapour(load, air)`: from 2.4 g, full at 5 g:
-  a ball of mist over each wing half (summed in closed form) and a thread from each wing tip (a
-  trail of 1.6 s, laid in the world). Looks; brief by construction (the flight passes Mach 0.96
-  in seconds). No sonic-boom ring, by decision. No dust or spray from the ground (not built).
+- **Exhaust in air** (Step 387.1; the first version, the craft kit's stepped plume with other
+  numbers, drew a pale fog with three blobs). Each bell has its own flame of three parts, all
+  summed in closed form where the view ray passes nearest the flame's axis (no steps, so the
+  core's edge stays sharp): a sharp-edged core leaving the bell (blue-white; orange-yellow with
+  the afterburner), a translucent outer flame that tapers to a point in dense air and opens to a
+  wide faint bell in thin air, and on the axis a row of shock diamonds: lozenges every `spacing`
+  exit radii, each 16 % smaller and a third dimmer than the one before, only from 45 % throttle.
+  `plumeShape(air, boost)` gives the numbers: half angle 0.045 + 0.6 e^2 with e = 1 - air^0.3
+  (2.6 degrees at sea level, 31 in a vacuum), length 9 exit radii to 1/e (x 1.55 with the
+  afterburner), diamonds x (1 - e)^2, spacing (1.7 + 2.6 e) exit radii (wider as the pressure
+  ratio grows), taper (1 - e)^2. The exponents and the angles are a look tied to the air's
+  density, not nozzle theory. Two bells side by side give two flames whose outer parts merge
+  downstream. Part throttle: a shorter flame, no diamonds. On a craft with kit engines the
+  module hides the kit's plume and draws its own in its place at the power the kit's has now
+  (so `ship.update(t, {throttle})` and burns still drive it). No heat shimmer (it would need the
+  picture behind as a texture). Seen along its axis the flame is an approximation (the sum is
+  taken at one place on the ray).
+- **Condensation** (Step 387.1; the first cone was a flared tube that read as a glass bell).
+  `coneLevel(mach, air)` = exp(-((mach - 0.97) / 0.026)^2), a tenth at 0.93 and 1.01, and only
+  in air denser than 0.4 to 0.8 of sea level's (low and humid). The cone is two balls of mist
+  summed in closed form: a dense thin disc across the flow just aft of the body's middle, opaque
+  at its core, and a longer, thinner one behind it; their density is made uneven by noise at the
+  place where the ray passes nearest (it drifts with the time), so it is not a perfect surface of
+  revolution; rim and back feather to nothing. `wingVapour(load, air)`: from 2.4 g, full at 5 g:
+  two flat patches of the same mist just over each wing half (a sheet, 0.5 m thick) and a thread
+  from each wing tip (a trail of 1.6 s, laid in the world). Looks; brief by construction (the
+  flight passes Mach 0.97 in seconds). The mist is summed along the whole ray: a wing or body
+  inside it does not cut it. No sonic-boom ring, by decision. No dust or spray from the ground
+  (not built).
 - **What is physical and what is a look.** Physical: the windward side from the velocity and the
   attitude; when things show (heating, Mach number, load, height from the flight); a trail along
   the path flown, ages in flight seconds; the plume widening as the air thins. Looks: every
@@ -29448,7 +29462,9 @@ vapour trails, engine exhaust in air, the vapour of a transonic pass and of a ha
   ground only through the depth the land writes (trails and glows test it; a trail never fades
   softly into a ridge). The windward map sees solid meshes only and ends half a texel inside the
   craft's outline: in a frame-filling close-up from below, steps of a few pixels show at the
-  layer's edge behind a trailing edge. The wake is straight (it does not follow a turn); the
+  layer's edge behind a trailing edge, and on an unlit craft seen from the side the layer's
+  edge along the belly is toothed (Step 387.1 tried four reads of the map round each place:
+  no visible gain for four times the reads, not kept). The wake is straight (it does not follow a turn); the
   train and trails do. The glow lights neither the air, the clouds nor the sea. A trail's lumps
   come from value noise and can show faint cross lines. The ball of the layer is tested against
   the craft only: another craft inside it would not hide its part of the glow.
@@ -29462,7 +29478,9 @@ vapour trails, engine exhaust in air, the vapour of a transonic pass and of a ha
   plane over the sea at 90 m: 1.39 / 0.15 without, 1.31 to 1.39 / 0.16 with exhaust, vapour,
   trails or all three (their cost is inside the measurement's scatter of 0.05 s). The first
   frame of a page is 0.5 s longer with `reentry` (shaders, the map).
-  The nine part tiles: 13 s.
+  The nine part tiles: 13 s. After Step 387.1 (same shots, another session): a re-entry 0.86,
+  the plane filling the frame 1.16 to 1.4, over the sea 1.45 without and 1.38 to 1.52 with
+  exhaust, vapour or all (inside the scatter; the exhaust no longer takes steps).
 - **Tests** (`tests/test_web_space_effects.py`): the module and its parts; in Node: heat to
   colour and brightness (monotonic), the plume's shape by density, cone, wing vapour and
   contrail levels, ring times, a flight read between frames and before the scene, sparks,

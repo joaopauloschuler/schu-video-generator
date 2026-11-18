@@ -73,15 +73,17 @@ vec3 heatLight(float h) { return heatColor(h) * heatLevel(h); }`;
 /** The air's density at a height over its density at height 0 (an isothermal air, as the flight's). */
 export const airDensity = (height, scaleHeight = 8500) => Math.exp(-Math.max(height, 0) / scaleHeight);
 /** An exhaust's shape by the air round it (`air`: density over sea level's, 1 .. 0 the vacuum) and the
- * afterburner (`boost` 0..1): narrow, bright and with shock diamonds in dense air, a wide faint bell in none. */
+ * afterburner (`boost` 0..1): a tapering flame with a sharp core and shock diamonds in dense air, a wide faint
+ * bell in none; the core blue-white, orange-yellow with the afterburner; the diamonds further apart as the air thins. */
 export function plumeShape(air = 1, boost = 0) {
   const e = 1 - Math.pow(clamp(air), 0.3), b = clamp(boost), warm = 1 - e;
-  return {spread: 0.045 + 0.6 * e * e, length: (12 - 1.5 * e) * (1 + 0.55 * b), diamonds: warm * warm * (0.55 + 0.45 * b), spacing: 2.0 / (1 + 0.35 * b),
-    gain: mix(0.12, 0.15, warm) * (1 + 0.25 * b), spike: mix(0.36, 0.12, warm) + 0.1 * b, haze: mix(1, 1.5, warm),
-    core: [mix(0.82, 1.0, warm), mix(0.9, 0.85 + 0.1 * b, warm), mix(1.0, 0.6 + 0.35 * b, warm)], edge: [mix(0.3, 1.0, warm), mix(0.45, 0.4, warm), mix(1.0, 0.08 + 0.1 * b, warm)]};
+  return {spread: 0.045 + 0.6 * e * e, length: (9 - 1.5 * e) * (1 + 0.55 * b), diamonds: warm * warm * (0.55 + 0.45 * b), spacing: (1.7 + 2.6 * e) * (1 + 0.25 * b),
+    gain: mix(0.5, 1, warm) * (1 + 0.5 * b), coreLength: mix(2.5, 6.5, warm) * (1 + 0.5 * b), coreRadius: mix(0.5, 0.42, warm), taper: warm * warm, outer: mix(0.4, 0.26, warm) * (1 + 0.25 * b),
+    core: [mix(0.62, 1.0, b) * mix(1.15, 1, warm), mix(0.78, 0.72, b), mix(1.0, 0.3, b)], edge: [mix(0.3, 1.0, warm), mix(0.42, 0.42 + 0.1 * b, warm), mix(1.0, 0.1, warm)]};
 }
-/** How much of a vapour cone a Mach number shows (0..1): only close under and at Mach 1, and only in dense air. */
-export const coneLevel = (mach, air = 1) => { const m = (mach - 0.96) / (mach < 0.96 ? 0.07 : 0.05); return Math.exp(-m * m) * smooth(0.25, 0.7, air); };
+/** How much of a vapour cone a Mach number shows (0..1): all of it at Mach 0.97, a tenth 0.04 away, and only in
+ * dense (low, humid) air. */
+export const coneLevel = (mach, air = 1) => { const m = (mach - 0.97) / 0.026; return Math.exp(-m * m) * smooth(0.4, 0.8, air); };
 /** How much vapour a turn pulls over the wings (0..1): from about 2.5 g, all of it at 5, only in dense air. */
 export const wingVapour = (load, air = 1) => smooth(2.4, 5, Math.abs(load)) * smooth(0.2, 0.65, air);
 /** The heights contrails form in ([from, full] metres over the sphere): none below, all of them above. */
@@ -151,9 +153,9 @@ export function sparkAt(i, t, seed = 1) {
 export const flicker = (t, i = 0) => 1 + 0.06 * Math.sin(TAU * 13.1 * t + i * 2.1) + 0.04 * Math.sin(TAU * 29.3 * t + i * 4.3) + 0.04 * Math.sin(TAU * 5.3 * t + i);
 
 export const QUALITIES = Object.freeze({
-  fast: Object.freeze({sides: 6, per: 14, sparks: 14, steps: 6, skin: true, layer: 8, map: 64}),
-  standard: Object.freeze({sides: 8, per: 24, sparks: 36, steps: 10, skin: true, layer: 14, map: 192}),
-  fine: Object.freeze({sides: 12, per: 36, sparks: 72, steps: 14, skin: true, layer: 24, map: 256}),
+  fast: Object.freeze({sides: 6, per: 14, sparks: 14, skin: true, layer: 8, map: 64}),
+  standard: Object.freeze({sides: 8, per: 24, sparks: 36, skin: true, layer: 14, map: 192}),
+  fine: Object.freeze({sides: 12, per: 36, sparks: 72, skin: true, layer: 24, map: 256}),
 });
 
 // ---------- shaders ----------
@@ -395,61 +397,59 @@ void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; vCam =
 const MIST_FRAG = `
 precision highp float;
 ${OUT_GLSL}
+${NOISE_GLSL}
 varying vec3 vWorld; varying vec3 vCam;
-uniform mat3 uBack; uniform vec3 uSunDir, uSun, uSky; uniform vec2 uMist;   // density (1 / metre), -
+uniform mat3 uBack; uniform vec3 uSunDir, uSun, uSky; uniform vec2 uMist;   // density (1 / metre), a number that tells the mists apart and moves their unevenness
 void main() {
   vec3 rd = normalize(vWorld - cameraPosition), d = uBack * rd, o = vCam;
   float dd = dot(d, d), od = dot(o, d), k = 6.76;
+  vec3 near = o - d * (od / dd);
+  float uneven = 0.25 + 1.5 * vnoise(near.xy * 2.6 + near.z * 1.7 + uMist.y) * vnoise(near.yx * 5.3 + uMist.y * 1.3 + 7.0) + 0.5 * vnoise(near.xy * 9.0 - uMist.y);
   float sum = sqrt(3.14159 / (k * dd)) * exp(-k * max(dot(o, o) - od * od / dd, 0.0));
-  float alpha = 1.0 - exp(-uMist.x * sum);
+  float alpha = 1.0 - exp(-uMist.x * sum * uneven);
   float ahead = pow(max(dot(rd, uSunDir), 0.0), 6.0);
   gl_FragColor = vapourOut(uSun * (0.72 + 0.9 * ahead * (1.0 - alpha)) + uSky * 1.3, alpha * 0.92);
 }`;
 
-// engine exhaust in air: the craft kit's plume (light summed along the view ray, the samples crowded where
-// the ray passes the axis), its shape, colours and shock diamonds set each frame from the air's density
+// engine exhaust in air: a flame of two parts, each summed in closed form where the view ray passes nearest
+// the flame's axis (no steps: the core's edge stays sharp): an inner core leaving the bell, a translucent
+// outer flame that tapers in dense air and opens to a wide faint bell in thin air, and along the axis a row
+// of shock diamonds, evenly spaced, each smaller and dimmer than the one before
 const EXHAUST_VERT = `
 uniform vec4 uShape;   // exit radius, spread, length (exit radii to 1/e), bound radius
 varying vec3 vPos; varying vec3 vCam;
 void main() {
   float s = -position.y, Re = uShape.x;
-  vPos = vec3(position.x * mix(1.15 * Re, uShape.w, s), mix(1.3 * Re, -uShape.z * REACH * Re, s), position.z * mix(1.15 * Re, uShape.w, s));
+  vPos = vec3(position.x * mix(1.3 * Re, uShape.w, s), mix(1.0 * Re, -uShape.z * REACH * Re, s), position.z * mix(1.3 * Re, uShape.w, s));
   vCam = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(vPos, 1.0);
 }`;
 const EXHAUST_FRAG = `
 precision highp float;
 ${OUT_GLSL}
+${NOISE_GLSL}
 varying vec3 vPos; varying vec3 vCam;
-uniform vec3 uCore, uEdge; uniform vec4 uShape; uniform vec4 uNow; uniform vec4 uMore;   // uNow: power, time, diamonds, spike; uMore: haze, the diamonds' spacing, -, -
+uniform vec3 uCore, uEdge; uniform vec4 uShape;
+uniform vec4 uNow;    // power, time, diamonds, the core's length (exit radii)
+uniform vec4 uMore;   // the diamonds' spacing (exit radii), the core's radius, how much the outer flame tapers, its brightness
 void main() {
-  vec3 rd = normalize(vPos - vCam);
-  float tB = length(vPos - vCam), t0 = 0.0, Re = uShape.x;
-  float a = dot(rd.xz, rd.xz), b = dot(vCam.xz, rd.xz), c = dot(vCam.xz, vCam.xz) - uShape.w * uShape.w;
-  if (a > 1e-9) { float h = b * b - a * c; if (h > 0.0) t0 = max(t0, (-b - sqrt(h)) / a); }
-  if (abs(rd.y) > 1e-6) { float y0 = (-uShape.z * REACH * Re - vCam.y) / rd.y, y1 = (1.3 * Re - vCam.y) / rd.y; t0 = max(t0, min(y0, y1)); }
-  if (tB <= t0) discard;
-  float tc = a > 1e-9 ? clamp(-b / a, t0, tB) : t0;
-  vec3 pc = vCam + rd * tc;
-  float sc = -pc.y / Re, wc = sc > 0.0 ? 1.0 + sc * uShape.y : 1.0;
-  float h = sqrt(dot(pc.xz, pc.xz) + 0.3 * wc * wc * Re * Re) / sqrt(max(a, 1e-4));
-  float u0 = atan((t0 - tc) / h), du = (atan((tB - tc) / h) - u0) / float(STEPS);
-  vec3 sum = vec3(0.0);
-  float power = uNow.x, reach = uShape.z * (0.35 + 0.65 * min(power, 1.0));
-  for (int i = 0; i < STEPS; i++) {
-    float tn = tan(u0 + (float(i) + 0.5) * du), dt = h * (1.0 + tn * tn) * du;
-    vec3 p = (vCam + rd * (tc + h * tn)) / Re;
-    float s = -p.y, r2 = dot(p.xz, p.xz), sp = max(s, 0.0);
-    float w = s > 0.0 ? 1.0 + s * uShape.y : max(0.3, 1.0 + s * 0.55), q2 = r2 / (w * w);
-    float body = exp(-q2 * 2.3 - sp / reach) / (w * w) * smoothstep(-1.3, -0.2, s);
-    float w2 = 0.34 * (1.0 + sp * 0.12);
-    float spike = uNow.w * exp(-r2 / (w2 * w2) - sp / (reach * 0.3)) * smoothstep(-1.3, -0.5, s);
-    float flow = 1.0 + 0.09 * sin(s * 2.7 - uNow.y * 31.0) / (1.0 + s * 0.2);
-    vec3 light = uEdge * (body * flow * 0.5 * uMore.x) + uCore * (spike * 4.0 + body * body * w * w * 0.14 * uMore.x) + vec3(spike * spike * 1.4 / max(uNow.w, 0.05));
-    float k = max(cos(s * uMore.y - 1.0), 0.0); k *= k;
-    light *= 1.0 + uNow.z * (5.0 * k * k * exp(-s * 0.14 - q2 * 3.0) - 0.55);
-    sum += light * (s < 0.0 ? 0.45 : 1.0) * dt;
-  }
-  gl_FragColor = glowOut(sum / Re * power);
+  vec3 o = vCam / uShape.x, d = normalize(vPos - vCam);
+  float a = dot(d.xz, d.xz), t = a > 1e-6 ? max(-dot(o.xz, d.xz) / a, 0.0) : 0.0;
+  vec3 p = o + d * t;
+  float s = -p.y, r = length(p.xz), across = 1.0 / max(sqrt(a), 0.2), power = min(uNow.x, 1.0);
+  float len = uShape.z * (0.3 + 0.7 * power), begin = smoothstep(-0.4, 0.15, s);
+  // the outer flame
+  float taper = 1.0 - uMore.z * smoothstep(0.15 * len, 1.9 * len, s);
+  float ro = 0.95 * (1.0 + uShape.y * max(s, 0.0)) * max(taper, 0.04);
+  float lick = 0.86 + 0.28 * vnoise(vec2(s * 0.9 - uNow.y * 34.0, r * 2.0 + 3.0));
+  float outer = exp(-r * r / (ro * ro)) * exp(-max(s, 0.0) / len) * (1.0 - smoothstep(1.9 * len, 2.35 * len, s)) * begin * across * lick / (1.0 + 0.35 * uShape.y * max(s, 0.0));
+  // the core: a sharp-edged spike
+  float lc = uNow.w * (0.3 + 0.7 * power), u = clamp(s / lc, 0.0, 1.0), rc = uMore.y * pow(1.0 - u, 0.75) * (1.0 + 0.04 * sin(uNow.y * 53.0));
+  float core = s < lc ? smoothstep(rc, rc * 0.72, r) * (0.6 + 0.4 * sqrt(max(1.0 - r * r / max(rc * rc, 1e-6), 0.0))) * begin * min(across, 2.5) : 0.0;
+  // the diamonds: lozenges on the axis, every uMore.x radii
+  float phase = s / uMore.x - 0.3, cell = floor(phase), x = abs(fract(phase) - 0.5) * 2.0;
+  float size = uMore.y * 1.15 * exp(-0.17 * cell), lozenge = cell >= 0.0 ? smoothstep(1.0, 0.45, r / size + x * 1.05) * exp(-0.4 * cell) * (1.0 - smoothstep(0.9 * len, 1.5 * len, s)) * min(across, 2.5) : 0.0;
+  vec3 light = uEdge * (outer * uMore.w) + uCore * (core * 1.5 + lozenge * uNow.z * 2.2) + vec3(lozenge * lozenge * uNow.z * 0.4);
+  gl_FragColor = glowOut(light * uNow.x);
 }`;
 const EXHAUST_REACH = 2.4;
 
@@ -656,10 +656,18 @@ export class Effects {
 
   _buildVapour() {
     const o = this.vapour, a = this.anchors, {radii, center} = this.shape;
-    if (o.cone) {
-      this.parts.cone = new Tube(14, Math.max(this.q.sides * 2, 16), {sky: null, soft: 0.9, lumps: 0.6, grain: 1});
-      this.attached.add(this.parts.cone.mesh); this._vapours.push(this.parts.cone.mesh);
-    }
+    const mist = (name) => {
+      const material = tune(new THREE.ShaderMaterial({vertexShader: MIST_VERT, fragmentShader: MIST_FRAG, uniforms: {uBack: {value: new THREE.Matrix3()}, uSunDir: {value: V3(0, 1, 0)}, uSun: {value: V3(1, 1, 1)}, uSky: {value: V3(0.2, 0.25, 0.3)}, uMist: {value: new THREE.Vector2(0, 0)}}}), false);
+      const mesh = new THREE.Mesh(this._ball ?? (this._ball = new THREE.IcosahedronGeometry(1, 3)), material), back = new THREE.Matrix4(), eye = V3();
+      watch(mesh, (renderer, camera) => {
+        material.uniforms.uBack.value.setFromMatrix4(back.copy(mesh.matrixWorld).invert());
+        material.side = mesh.worldToLocal(eye.setFromMatrixPosition(camera.matrixWorld)).length() < 1.05 ? THREE.BackSide : THREE.FrontSide;
+      });
+      mesh.renderOrder = 4; mesh.visible = false; mesh.name = name; this.attached.add(mesh); this._vapours.push(mesh);
+      return mesh;
+    };
+    // the cone: a dense thin disc of mist across the flow and a longer, thinner one behind it
+    if (o.cone) this.parts.cone = [mist("vapour cone"), mist("vapour cone")];
     const tips = (a.wingTips ?? []).map((w) => w.p);
     if (o.tips && tips.length) {
       const kind = TRAILS.tip, levels = Math.ceil(Math.log2(kind.life / (kind.step * this.q.per) + 1)) + 1;
@@ -667,18 +675,14 @@ export class Effects {
       for (let i = 0; i < tips.length; i++) { const tube = new Tube(levels * this.q.per + 2, this.q.sides, {sky: null, soft: 1.2, lumps: kind.lumps, grain: 14}); this.parts.tips.push(tube); this.object.add(tube.mesh); this._vapours.push(tube.mesh); }
     }
     if (o.wings && tips.length) {
-      const ball = new THREE.IcosahedronGeometry(1, 3), chord = 0.3 * radii[2];
-      for (const tip of tips) for (const share of [0.38, 0.72]) {
-        const material = tune(new THREE.ShaderMaterial({vertexShader: MIST_VERT, fragmentShader: MIST_FRAG, uniforms: {uBack: {value: new THREE.Matrix3()}, uSunDir: {value: V3(0, 1, 0)}, uSun: {value: V3(1, 1, 1)}, uSky: {value: V3(0.2, 0.25, 0.3)}, uMist: {value: new THREE.Vector2(0, 0)}}}), false);
-        const mesh = new THREE.Mesh(ball, material), back = new THREE.Matrix4(), eye = V3();
-        const k = 1 - 0.45 * share;
-        mesh.position.set(tip[0] * share, tip[1] + 0.2 + 0.035 * Math.abs(tip[0]), mix(center[2], tip[2], share) + chord * 0.15 * k);
-        mesh.scale.set(Math.abs(tip[0]) * 0.33, 0.28 + 0.05 * Math.abs(tip[0]) * k, chord * k).multiplyScalar(2.6);
-        watch(mesh, (renderer, camera) => {
-          material.uniforms.uBack.value.setFromMatrix4(back.copy(mesh.matrixWorld).invert());
-          material.side = mesh.worldToLocal(eye.setFromMatrixPosition(camera.matrixWorld)).length() < 1.05 ? THREE.BackSide : THREE.FrontSide;
-        });
-        mesh.renderOrder = 4; mesh.visible = false; mesh.name = "wing vapour"; this.attached.add(mesh); this.parts.mists.push(mesh); this._vapours.push(mesh);
+      // a sheet over each wing half: two flat patches of mist just above the upper surface
+      const chord = 0.3 * radii[2];
+      for (const tip of tips) for (const share of [0.4, 0.74]) {
+        const mesh = mist("wing vapour"), k = 1 - 0.45 * share;
+        mesh.position.set(tip[0] * share, tip[1] + 0.22 + 0.02 * Math.abs(tip[0]) * (1 - share), mix(center[2], tip[2], share) + chord * 0.1 * k);
+        mesh.scale.set(Math.abs(tip[0]) * 0.36, 0.2, chord * 1.15 * k).multiplyScalar(2.6);
+        mesh.rotation.z = Math.atan2(tip[1] - center[1], Math.abs(tip[0])) * Math.sign(tip[0]) * 0.5;
+        this.parts.mists.push(mesh);
       }
     }
   }
@@ -686,8 +690,8 @@ export class Effects {
   _buildExhaust() {
     const o = this.exhaust, craft = this.craft, tube = new THREE.CylinderGeometry(1, 1, 1, 20, 1, false); tube.translate(0, -0.5, 0);
     const make = (exit) => {
-      const material = tune(new THREE.ShaderMaterial({vertexShader: EXHAUST_VERT, fragmentShader: EXHAUST_FRAG, defines: {STEPS: this.q.steps, REACH: EXHAUST_REACH.toFixed(1)}, side: THREE.BackSide,
-        uniforms: {uCore: {value: V3()}, uEdge: {value: V3()}, uShape: {value: new THREE.Vector4(exit, 0.05, 12, exit * 3)}, uNow: {value: new THREE.Vector4()}, uMore: {value: new THREE.Vector4(1, 2, 0, 0)}}}), true);
+      const material = tune(new THREE.ShaderMaterial({vertexShader: EXHAUST_VERT, fragmentShader: EXHAUST_FRAG, defines: {REACH: EXHAUST_REACH.toFixed(1)}, side: THREE.BackSide,
+        uniforms: {uCore: {value: V3()}, uEdge: {value: V3()}, uShape: {value: new THREE.Vector4(exit, 0.05, 12, exit * 3)}, uNow: {value: new THREE.Vector4()}, uMore: {value: new THREE.Vector4(2, 0.4, 1, 0.2)}}}), true);
       const mesh = watch(new THREE.Mesh(tube, material)); mesh.renderOrder = 5; mesh.visible = false; mesh.name = "exhaust in air"; mesh.userData.keep = true;
       return mesh;
     };
@@ -826,17 +830,15 @@ export class Effects {
     const cone = o.cone ? coneLevel(s.mach, s.air) * o.level : 0, wings = wingVapour(s.load, s.air) * o.level;
     Object.assign(this.state, {cone, wingVapour: wings});
     if (parts.cone) {
-      // a skirt round the body where the flow is fastest: thin at its front, thick and cut off at its back
-      const body = Math.min(radii[0], radii[1] * 1.6, radii[2]), n = parts.cone.rings, points = [], shimmer = 0.9 + 0.1 * Math.sin(TAU * 7.3 * s.t);
-      for (let i = 0; i < n; i++) {
-        const u = i / (n - 1), along = radii[2] * (0.02 - 0.5 * u), radius = body * (1.15 + 2.6 * Math.pow(u, 0.85)), alpha = Math.pow(smooth(0, 0.6, u), 1.3) * (1 - smooth(0.93, 1, u));
-        points.push({p: [center[0] + local.x * along, center[1] + local.y * along, center[2] + local.z * along], tangent: [-local.x, -local.y, -local.z], radius, alpha: 0.85 * cone * alpha * shimmer, along: u * 2.2 + s.t * 2.5, color: [1, 1, 1]});
-      }
-      parts.cone.lay(points, [0, 0, 0], true);
-      parts.cone.mesh.visible = cone > 0.01;
+      const body = Math.min(radii[0], radii[1] * 1.6, radii[2]), aim = new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), local);
+      parts.cone.forEach((mesh, i) => {
+        const along = radii[2] * (i ? -0.34 : -0.14), wide = body * (i ? 2.5 : 2.0), deep = radii[2] * (i ? 0.22 : 0.05);
+        mesh.position.set(center[0] + local.x * along, center[1] + local.y * along, center[2] + local.z * along); mesh.quaternion.copy(aim); mesh.scale.set(wide, wide, deep).multiplyScalar(2.6);
+        mesh.visible = cone > 0.01; mesh.material.uniforms.uMist.value.set((i ? 0.5 : 1.6) * cone / Math.max(deep, 0.2) * 1.2, 11 * i + 0.6 * s.t);
+      });
     }
     parts.tips.forEach((tube, i) => this._lay(tube, TRAILS.tip, this._tipFrom[i], s, 1, (then) => ({alpha: TRAILS.tip.density * o.level * wingVapour(then.load, airDensity(then.height, this.options.scaleHeight)), color: [1, 1, 1]})));
-    for (const mesh of parts.mists) { mesh.visible = wings > 0.01; mesh.material.uniforms.uMist.value.x = 2.4 * wings * (0.9 + 0.1 * Math.sin(TAU * 4.1 * s.t + mesh.position.x)); }
+    for (const mesh of parts.mists) { mesh.visible = wings > 0.01; mesh.material.uniforms.uMist.value.set(7 * wings * (0.9 + 0.1 * Math.sin(TAU * 4.1 * s.t + mesh.position.x)), mesh.position.x + 0.8 * s.t); }
   }
 
   _exhaust(s, expose) {
@@ -850,9 +852,9 @@ export class Effects {
       if (e.engine) e.engine.plume.visible = false;
       const u = e.mesh.material.uniforms, f = power * (own ? 1 : flicker(s.t, i + 5));
       e.mesh.visible = power > 0.002;
-      u.uShape.value.set(e.exit, shape.spread, shape.length, e.exit * (1 + shape.spread * shape.length * EXHAUST_REACH) * 1.1);
+      u.uShape.value.set(e.exit, shape.spread, shape.length, e.exit * (1 + shape.spread * shape.length * EXHAUST_REACH) * 1.9);
       u.uCore.value.set(...shape.core).multiplyScalar(shape.gain * o.level * expose); u.uEdge.value.set(...shape.edge).multiplyScalar(shape.gain * o.level * expose);
-      u.uNow.value.set(f, s.t, shape.diamonds * smooth(0.45, 0.9, power), shape.spike); u.uMore.value.set(shape.haze, shape.spacing, 0, 0);
+      u.uNow.value.set(f, s.t, shape.diamonds * smooth(0.45, 0.9, power), shape.coreLength); u.uMore.value.set(shape.spacing, shape.coreRadius, shape.taper, shape.outer);
       if (e.engine && e.engine.glow) e.engine.glow.color.setRGB(0.02 + shape.edge[0] * f * 3.2, 0.02 + shape.edge[1] * f * 3.2, 0.02 + shape.edge[2] * f * 3.2);
     });
   }

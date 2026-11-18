@@ -56,7 +56,7 @@ definePart({"name": "effect-contrails", "kind": "effect", "module": "vidgen/spac
 (s) => show(s, glider(s), {view: [0.75, 0.35, 0.55], fill: 7, look: [0, 0, -5], velocity: [0, 0, 240], fx: {contrails: {always: true}}, state: {height: 10500}}));
 
 definePart({"name": "effect-exhaust-air", "kind": "effect", "module": "vidgen/space-effects",
-  "label": "exhaust in dense air: a narrow bright flame with shock diamonds, the afterburner on",
+  "label": "exhaust in dense air: a sharp core from each bell, a row of shock diamonds, the afterburner on",
   "use": "effects(ship, {flight: ctx.flight, sky, exhaust: true}); ship.update(t, {throttle: 1}); fx.update(t, {boost: 1})",
   "options": {}, "seed": 1},
 (s) => show(s, glider(s), {view: [0.85, 0.2, -0.6], fill: 2.6, look: [0, 0, -1.3], fx: {exhaust: true}, craftState: {throttle: 1}, state: {height: 500, boost: 1}}));
@@ -68,10 +68,10 @@ definePart({"name": "effect-exhaust-thin", "kind": "effect", "module": "vidgen/s
 (s) => show(s, glider(s), {view: [0.85, 0.2, -0.6], fill: 2.6, look: [0, 0, -1.3], fx: {exhaust: true}, craftState: {throttle: 1}, state: {height: 45000}}));
 
 definePart({"name": "effect-vapour-cone", "kind": "effect", "module": "vidgen/space-effects",
-  "label": "a vapour cone at Mach 0.96 in dense air: there only close to Mach 1",
+  "label": "a vapour cone at Mach 0.97 in dense air: a soft disc of mist, there only within about 0.04 of that",
   "use": "effects(ship, {flight: ctx.flight, sky, vapour: true})   // from the flight's Mach number and load",
   "options": {}, "seed": 1},
-(s) => show(s, glider(s), {view: [0.9, 0.2, 0.5], fill: 3.0, velocity: [0, 0, 335], fx: {vapour: true}, state: {mach: 0.96, height: 100}}));
+(s) => show(s, glider(s), {view: [0.9, 0.2, 0.5], fill: 3.0, velocity: [0, 0, 335], fx: {vapour: true}, state: {mach: 0.97, height: 100}}));
 
 definePart({"name": "effect-wing-vapour", "kind": "effect", "module": "vidgen/space-effects",
   "label": "a hard turn (5 g) in dense air: mist over the wings, a thread of vapour from each wing tip",

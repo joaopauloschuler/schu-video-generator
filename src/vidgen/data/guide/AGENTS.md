@@ -3935,7 +3935,7 @@ fx.update(t);
   `reentry: {full: 0.65}`), or by hand: `fx.update(t, {heating: 0.8})`.
 - `contrails`: only above 8 to 9 km (`{always: true}` anywhere); `exhaust`: replaces the craft's
   plumes with one shaped by the air's density, `fx.update(t, {boost: 1})` for the afterburner;
-  `vapour`: a cone near Mach 0.96 and wing vapour in turns over 2.4 g, low down only.
+  `vapour`: a cone near Mach 0.97 and wing vapour in turns over 2.4 g, low down only.
 - Without a flight give `velocity`, `height`, `heating`, `mach`, `load` to `update`. Unknown names
   are refused with the closest word.
 - A re-entry costs about 0.4 s a frame at 1280x720 (`quality: "fast"` 0.3), the others next to

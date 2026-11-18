@@ -464,8 +464,8 @@ fx.update(t);                      // or by hand: fx.update(t, {heating: 0.8, ve
 `reentry: {full: 0.65}` is the heating shown as the white-pink peak (the 400 km re-entry of
 DESIGN §123.7 reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5.
 Contrails form only above 8 to 9 km (`contrails: {always: true}` anywhere, `from: "wingTips"`);
-`exhaust` gives the engines a short flame with shock diamonds low down and a wide pale one high
-up; `vapour` adds a cone near Mach 0.96 and mist over the wings in hard turns, both only in dense
+`exhaust` gives each bell a flame with a sharp core and a row of shock diamonds low down (from
+45 % throttle) and a wide pale plume high up; `vapour` adds a cone near Mach 0.97 and mist over the wings in hard turns, both only in dense
 air. Music: `fx.update(t, {boost: level, pulse: 1 + 0.3 * level})`. The same call works on
 `craft("lander")` or a group of your own (`shape: {radii: [across, up, along]}`). Shapes, colours
 and lifetimes are looks; where and when things show follows the flight. Everything is drawn in

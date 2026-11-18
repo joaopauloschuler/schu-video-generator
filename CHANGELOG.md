@@ -128,6 +128,9 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   an afterburner), a vapour cone near Mach 1 and wing vapour in hard turns. With `flight_data:`
   everything follows `ctx.flight` (heating, Mach number, load, height, the path behind); each
   number can be set by hand or from music. Nine parts under `vidgen parts --kind effect`.
+  Step 387.1: the exhaust is a defined flame (a sharp core from each bell, a tapering outer
+  flame, a row of shock diamonds, a wide faint plume in thin air); the vapour cone is a soft
+  uneven disc of mist near Mach 0.97; wing vapour is a sheet over the wing.
 - **Space plane parts** (Step 386): `vidgen/space-plane` builds winged craft on the spacecraft
   kit. A lofted body (length, width, height, five nose shapes, droop, a round to flat belly, a
   boat tail, a dorsal hump, a payload bay), ONE wing function (span, root and tip chord, sweep,

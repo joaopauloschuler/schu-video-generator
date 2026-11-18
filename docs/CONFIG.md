@@ -7923,7 +7923,7 @@ re-entry, vapour trails, engine exhaust in air and condensation, for a plane, a 
 | `reentry` | off | `true` or `{full: 0.65, level: 1, shock, skin, wake, sparks, trail, head: true, thickness: 0.055, length: 7, persist: 5}`: `full` is the flight's heating shown as 1; `persist` the seconds the far train glows |
 | `contrails` | off | `true` or `{from: "nozzles" \| "wingTips" \| "tail" \| [[x, y, z], ...], band: [8000, 9000], always: false, life: 70, size: 1, level: 1, color: [1, 1, 1]}`: laid only above the band unless `always` |
 | `exhaust` | off | `true` or `{nozzles: [{p, n, radius}], level: 1, air}`: replaces the craft kit's plumes; the shape follows the air's density |
-| `vapour` | off | `true` or `{cone: true, wings: true, tips: true, level: 1}`: a cone near Mach 0.96, mist and tip threads from 2.4 g, in dense air only |
+| `vapour` | off | `true` or `{cone: true, wings: true, tips: true, level: 1}`: a cone near Mach 0.97, a sheet of mist and tip threads from 2.4 g, in dense air only |
 
 - `fx.update(t, {...})`: `velocity` ([x, y, z] metres a second, the scene's axes), `heating` (0..1
   as shown), `mach`, `load`, `height`, `air` (density over sea level's), `throttle` (default: what

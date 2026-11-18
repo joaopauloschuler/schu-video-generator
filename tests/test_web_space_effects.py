@@ -90,8 +90,8 @@ const hs = Array.from({length: 101}, (_, i) => i / 100);
 out.push([hs.map(E.heatLevel), hs.map((h) => E.heatColor(h)), E.heatLight(1), E.HEAT_WHITES]);
 const airs = [1, 0.5, 0.1, 0.01, 0.0001, 0];
 out.push(airs.map((a) => { const p = E.plumeShape(a); return [r4(p.spread), r4(p.diamonds), r4(p.gain)]; }));
-out.push([E.plumeShape(1, 1).length > E.plumeShape(1, 0).length, E.plumeShape(1, 1).gain > E.plumeShape(1, 0).gain]);
-out.push([0.7, 0.9, 0.96, 1.0, 1.1, 1.5].map((m) => r4(E.coneLevel(m, 1))).concat([r4(E.coneLevel(0.96, 0.05))]));
+out.push([E.plumeShape(1, 1).length > E.plumeShape(1, 0).length, E.plumeShape(1, 1).gain > E.plumeShape(1, 0).gain, E.plumeShape(0.001).spacing > E.plumeShape(1).spacing, E.plumeShape(1).core[2] > E.plumeShape(1).core[0], E.plumeShape(1, 1).core[0] > E.plumeShape(1, 1).core[2], E.plumeShape(1).taper > E.plumeShape(0.001).taper]);
+out.push([0.7, 0.93, 0.97, 1.01, 1.1, 1.5].map((m) => r4(E.coneLevel(m, 1))).concat([r4(E.coneLevel(0.97, 0.05))]));
 out.push([1, 2, 3.5, 5, 9].map((g) => r4(E.wingVapour(g, 1))).concat([r4(E.wingVapour(9, 0.05))]));
 out.push([0, 7999, 8500, 9000, 12000].map((h) => r4(E.contrailLevel(h))).concat([r4(E.airDensity(0)), r4(E.airDensity(8500)), r4(E.airDensity(85000, 8500))]));
 // a trail's rings: the head now, the rest at fixed multiples of the step, sparser with age, none older than the life
@@ -128,9 +128,9 @@ out.push([fx.shape.radii, JSON.stringify(first) === JSON.stringify(again), first
     spread, diamonds = [p[0] for p in out[1]], [p[1] for p in out[1]]
     assert all(b > a for a, b in zip(spread, spread[1:])) and spread[0] < 0.06 and spread[-1] > 0.55                                                       # the plume widens as the air thins
     assert all(b <= a for a, b in zip(diamonds, diamonds[1:])) and diamonds[0] > 0.5 and diamonds[-1] == 0                                                 # shock diamonds only in dense air
-    assert out[2] == [True, True]
+    assert out[2] == [True, True, True, True, True, True]                                       # the afterburner longer and brighter; diamonds further apart in thin air; a blue-white core, orange-yellow with the afterburner; a taper only in dense air
     cone = out[3]
-    assert cone[2] > 0.99 and cone[0] < 0.01 and cone[4] < 0.01 and cone[5] == 0 and cone[1] > cone[0] and cone[3] < cone[2] and cone[6] == 0                # a cone only close to Mach 1, only in dense air
+    assert cone[2] == 1 and cone[0] == 0 and cone[4] == 0 and cone[5] == 0 and 0.05 < cone[1] < 0.15 and 0.05 < cone[3] < 0.15 and cone[6] == 0                # a cone only within about 0.04 of Mach 0.97, only in dense air
     assert out[4][:2] == [0, 0] and 0 < out[4][2] < 1 and out[4][3] == 1 and out[4][4] == 1 and out[4][5] == 0
     assert out[5][:5] == [0, 0, 0.5, 1, 1] and out[5][5] == 1 and abs(out[5][6] - 0.3679) < 1e-4 and out[5][7] < 1e-4
     head, count, multiples, falling, inside, young, old, shared = out[6]
