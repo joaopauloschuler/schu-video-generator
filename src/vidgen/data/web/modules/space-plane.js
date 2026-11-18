@@ -1026,7 +1026,7 @@ export const PLANES = Object.freeze({
 });
 const kindSeed = (kind) => [...kind].reduce((s, c) => (Math.imul(s, 31) + c.charCodeAt(0)) >>> 0, 7);
 const WEAR = {glider: [0.15, 0.7], freighter: [0.2, 0.8], needle: [0.05, 0.4], lifter: [0.3, 0.9], scout: [0, 0.3], skiff: [0.1, 0.6]};
-const LOOKS = {glider: ["tiles", "tiles", "grey"], freighter: ["grey", "tiles", "paint"], needle: ["metal", "paint", "grey"], lifter: ["tiles", "grey", "paint"], scout: ["plain", "plain", "metal"], skiff: ["paint", "tiles", "metal"]};
+const LOOKS = {glider: ["grey", "dark", "grey"], freighter: ["grey", "tiles", "paint"], needle: ["metal", "paint", "grey"], lifter: ["tiles", "grey", "paint"], scout: ["plain", "plain", "metal"], skiff: ["paint", "tiles", "metal"]};
 const merged = (base, over) => { const out = {...base}; for (const [k, v] of Object.entries(over)) out[k] = v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object" ? {...base[k], ...v} : v; return out; };
 /** The description of a ready-made plane (plain numbers and words: what planeFrom takes): `kind` (PLANES),
  * {seed (1), and any part of the description to replace: body, wing, fins, canard, engines, nacelles, gear,

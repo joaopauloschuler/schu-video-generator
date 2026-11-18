@@ -297,7 +297,7 @@ def test_a_plane_draws_banked_the_way_it_turns_in_chromium(tmp_path: Path) -> No
     for picture in (level, turn_right, turn_left):
         drawn = np.abs(picture - picture[2, 2]).max(axis=-1) > 12
         assert 1_500 < drawn.sum() < 0.5 * drawn.size and np.abs(picture[2, 2] - sky).max() < 40          # a plane before the sky
-        assert (picture.min(axis=-1) > 150).sum() > 150                                                # its white back in the sun
+        assert (picture.min(axis=-1) > 100).sum() > 40                                                 # its lit back and markings in the sun (a glider is grey or dark by default)
     rows = made["rows"]
     assert all(r["nose"] > 0.98 for r in rows)                                                         # the nose along the flight (less the angle of attack)
     port, starboard = rows[0]["tips"]
