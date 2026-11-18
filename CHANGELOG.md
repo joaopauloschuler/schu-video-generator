@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–392
+## Steps 193–393
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -14,6 +14,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   the [scene gallery](docs/gallery/README.md), which keeps the videos on YouTube. `vidgen gallery`
   puts every type drawn in headless Chromium there, a new one included; `--json` names the web
   index (`web_index`) and says which entries are in it; the MCP server serves its pages too.
+
 - **A cache for baked maps** (Step 380): the surface maps of worlds (`vidgen/space-bodies`) and
   the sky's cube map (`vidgen/space-sky`) are baked once and kept in vidgen's cache folder; later
   pages (scenes, stills, drafts, renders, parallel jobs) load them with the same pixels, bit for
@@ -22,6 +23,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   `VIDGEN_BAKED_CACHE_MB` sets the limit (`0`: off), `vidgen cache` shows it and `vidgen cache
   clear` empties it. `vidgen/baked` gives a page's own bake the same cache
   ([CONFIG](docs/CONFIG.md#baked-maps-vidgen-cache)).
+
 - **The sky from inside an atmosphere** (Step 381): `vidgen/space-air` draws the view from
   within a world's air, at any height from the ground to space: `air(renderer, "earth", {sun})`
   gives the sky for any sun (day, golden hour, sunset, twilight with the stars coming out, night),
@@ -34,6 +36,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   stated by its numbers. Exposure `film` (dusk lifted, a convention), `camera` and `auto`, as
   `vidgen/space-light`. 0.19 s a frame at 1280x720 in software GL; ten parts under the new kind
   `air` (`vidgen parts --kind air`). [CONFIG](docs/CONFIG.md#web), [space cookbook](docs/COOKBOOK-SPACE.md).
+
 - **Twilight, the Mars-like sunset and the sun's disc** (Step 381.1): from sunset to night the
   sky of `vidgen/space-air` now fades without a step (it went black with the sun 10 degrees down):
   light scattered twice reaches the shadowed air, the dusk is blue, the arch stays on the horizon,
@@ -63,22 +66,6 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   the wind, no cut-out patches and no net of cells; at dusk in film exposure near water keeps
   the sky's colours until the sun is about 9 degrees down.
 
-- **Ground with relief** (Step 384): `vidgen/space-land` draws mountains, canyon land, dunes,
-  Mars-like desert, crater fields, snow and basalt plains under the air of `vidgen/space-air`,
-  with the ground's own long shadows, clouds' shadows and the air between. The large forms and
-  colours are those the same world of `vidgen/space-bodies` shows from orbit; the relief under
-  them comes from a seed. Presets `alpine`, `mars`, `canyon`, `dunes`, `snow`, `volcanic`,
-  `airless`; `ground.heightAt(x, z)` for paths and cameras; a coast with `vidgen/space-sea`
-  (`depth: ground.depth`); clouds behind mountains (`behind: ground.behind`, new in
-  `vidgen/space-clouds`). 1.35 s a frame at 1280x720 after 7 to 19 s for the maps; nine parts
-  under the new kind `land` (`vidgen parts --kind land`).
-- **Canyon land, volcanoes, a sharper range** (Step 384.1): the `canyon` ground of
-  `vidgen/space-land` is a plateau cut by winding canyons 1,100 m deep with stepped walls in
-  banded rock and mesas between; `volcanic` has cones with a crater, a lava lake and channels
-  that glow at dusk (`ground.setGlow(level)` for a pulse on the music); the `alpine` range has
-  finer ridges and gullies and holds from about 150 m. The height maps are kept in vidgen's
-  cache of baked maps: a page that starts where another did draws its first still in 8 s
-  instead of 12 s at 1280x720.
 - **Cloud decks and gas giants** (Step 383): `vidgen/space-clouds` draws clouds in a
   `vidgen/space-air` sky, on the world's own sphere: `clouds(renderer, sky, {sky: "fair", seed})`
   gives decks the camera can be under, in, between and over (`cumulus`: a broken field with flat
@@ -105,6 +92,25 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   40 times narrower than true so that several are in view (`squeeze`; a stated look), with clouds
   drawn out along the wind and deeper gaps in the dark bands. `giantSky` gives no towers unless
   asked. `fair` and `overcast` cost as before within 8 %; towers 14 %, a giant 27 % more.
+
+- **Ground with relief** (Step 384): `vidgen/space-land` draws mountains, canyon land, dunes,
+  Mars-like desert, crater fields, snow and basalt plains under the air of `vidgen/space-air`,
+  with the ground's own long shadows, clouds' shadows and the air between. The large forms and
+  colours are those the same world of `vidgen/space-bodies` shows from orbit; the relief under
+  them comes from a seed. Presets `alpine`, `mars`, `canyon`, `dunes`, `snow`, `volcanic`,
+  `airless`; `ground.heightAt(x, z)` for paths and cameras; a coast with `vidgen/space-sea`
+  (`depth: ground.depth`); clouds behind mountains (`behind: ground.behind`, new in
+  `vidgen/space-clouds`). 1.35 s a frame at 1280x720 after 7 to 19 s for the maps; nine parts
+  under the new kind `land` (`vidgen parts --kind land`).
+
+- **Canyon land, volcanoes, a sharper range** (Step 384.1): the `canyon` ground of
+  `vidgen/space-land` is a plateau cut by winding canyons 1,100 m deep with stepped walls in
+  banded rock and mesas between; `volcanic` has cones with a crater, a lava lake and channels
+  that glow at dusk (`ground.setGlow(level)` for a pulse on the music); the `alpine` range has
+  finer ridges and gullies and holds from about 150 m. The height maps are kept in vidgen's
+  cache of baked maps: a page that starts where another did draws its first still in 8 s
+  instead of 12 s at 1280x720.
+
 - **Flight paths** (Step 385): a `web` scene's `flight_data:` plans flights in words — a start
   (place, height or height over the ground, heading, speed), then legs: `straight`, `turn` (to a
   heading or by an angle, at a bank or a radius), `climb` / `descend` / `level`, `speed` (m/s or
@@ -120,6 +126,35 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   error naming the time and the place (or, with `lift: true`, it is raised there). Python:
   `vidgen.api.flight`, `web_scene_flights`; `vidgen cache clear` also removes the ground heights
   kept for flights.
+
+- **Space plane parts** (Step 386): `vidgen/space-plane` builds winged craft on the spacecraft
+  kit. A lofted body (length, width, height, five nose shapes, droop, a round to flat belly, a
+  boat tail, a dorsal hump, a payload bay), ONE wing function (span, root and tip chord, sweep,
+  crank, curve, dihedral, thickness, airfoil, twist, fillet, winglets or tip fins, elevons and
+  flaps) with nine presets (`delta`, `double-delta`, `cranked-arrow`, `swept`, `straight`,
+  `ogival`, `stub`, `blended`, `long`), tails (`single`, `twin`, `vee`), rocket bells for the
+  tail, air-breathing pods, a belly intake, landing gear that folds behind doors, bay doors that
+  open on their radiators, a body flap, brakes, canards, thrusters and lights. Surfaces that
+  hold in close-up: black heat tiles, quilted blankets, panel lines, bare metal, scorch streaks
+  (`scorch`), stripes and an invented registration; schemes and colours as options. Six
+  ready-made planes, each another one for every seed: `plane("glider" | "freighter" | "needle"
+  | "lifter" | "scout" | "skiff", {seed})`; `planeFrom({...})` for a plane of one's own,
+  `planeFleet` for a formation, `problems()` for what looks wrong. On a flight of `flight_data`
+  a plane banks with the turn and its surfaces move with the flight's rates. All designs are
+  invented. `vidgen parts 'plane-*'` shows them (kinds `craft` and `craft-part`).
+
+- **Re-entry and flight effects** (Step 387): `vidgen/space-effects` adds to a plane, a craft or
+  any object: the glow of a re-entry (a layer on the windward side made from the craft's own shape,
+  hot surfaces, a wake, sparks, and from far away a bright head with a train of light along the
+  path), vapour trails that stay where they were laid in the world and spread, break up and fade,
+  engine exhaust shaped by the air's density (shock diamonds low down, a wide pale plume high up,
+  an afterburner), a vapour cone near Mach 1 and wing vapour in hard turns. With `flight_data:`
+  everything follows `ctx.flight` (heating, Mach number, load, height, the path behind); each
+  number can be set by hand or from music. Nine parts under `vidgen parts --kind effect`.
+  Step 387.1: the exhaust is a defined flame (a sharp core from each bell, a tapering outer
+  flame, a row of shock diamonds, a wide faint plume in thin air); the vapour cone is a soft
+  uneven disc of mist near Mach 0.97; wing vapour is a sheet over the wing.
+
 - **Giant ship hulls** (Step 388): `vidgen/space-hull` builds hulls of ships 0.5 to 10 km long
   on the spacecraft kit, in seven invented families, each another ship for every seed: `spine`
   (a long truss with drums, tank clusters and great radiator vanes), `carrier` (a thick block
@@ -134,34 +169,21 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   proportions. For later fine detail every hull carries named regions, anchors (bells, hangars,
   docks, lights, the command place) and one atlas of non-overlapping charts with their metres
   per texel. Fourteen parts under `vidgen parts 'hull-*'`.
-- **Air, planes and giant ships in `video.yaml`** (Step 392): the `space` scene reaches the parts
-  of Steps 381–391 with no JavaScript. With `world:` it is a surface scene: one world from orbit to
-  the ground at a place (`planet`, `at: [latitude, longitude]`, `sun: [elevation, azimuth]` or `{date,
-  utc}`, `air`, `sea: rough`, `land: alpine`, `clouds: fair` or decks, towers and lightning on times
-  or a track), `flights:` in the words of `flight_data` over the world's own ground, planes and
-  craft flying them with contrails, exhaust, vapour or a re-entry glow, and the moves `skim`,
-  `climb-through`, `descend-through`, `chase`, `wing`, `fly-past`, `orbit-peak`, `rise`, `descend`,
-  `ascend` (a `skim` that `continues` a descent). An orbital scene takes giant ships (`hull:
-  carrier`, dressed with windows and bays, a small craft beside it for size, fleets), planes, craft
-  of the kit's own parts, the moves `hull-pass`, `hull-reveal`, `into-bay`, `stern-burn`,
-  `scale-zoom`, flashes on cuts, a warp across a cut and match cuts. Every key and name is checked
-  with the closest word, and a move that needs a flight, a deck, ground or a hull the scene lacks is
-  named; `vidgen lint` estimates a costly scene's seconds a frame; `vidgen space-page` writes either
-  kind out as a `web` scene with the same picture; `vidgen music plan --style space-air` drafts a
-  film of skims, descents, chases, hull passes and bays. Existing `space` scenes write the same pages.
-- **Orbit to ground in one shot** (Step 391): the new module `vidgen/space-descent` gives
-  `world(renderer, {planet, at, sun, sea, land, clouds})`: the globe, the air, the sea, the ground
-  and the cloud decks of one world for one place and one sun, drawn for any camera height from
-  the surface to orbit. The air is one model at every height (the globe is seen through it, so
-  the limb's glow becomes the sky with no handover); the globe's picture is laid over the sea,
-  the ground and the decks where a pixel's ground is far and the camera is high, and fades out on
-  the way down (`HANDOVERS`: 80 km to 2.5 km over a sea or decks, 600 km to 60 km over bare
-  ground). `vidgen/space-camera-air` gains `descend` and `ascend`: from 400 km to 300 m with equal
-  time for each power of ten of height, the view going from the globe under its limb to the
-  level horizon, ending level and moving so that a `skim` given `shot.end` follows with no cut.
-  `world.honest` says what is not true (the camera's speed; single clouds of the globe and of the
-  decks are in different places; the surface is soft between 150 km and 25 km over a sea). Four
-  parts: `vidgen parts 'joined-*' camera-descend`.
+
+- **Giant ships that read as kilometres long** (Step 389): `dress(ship, renderer)` of the new
+  module `vidgen/space-hull-detail` gives a hull of `vidgen/space-hull` its fine detail: panel
+  seams, hatches, pipe runs and vents at 5 to 20 m and panel lines, rivet rows and stencil bars
+  at 1 to 5 m (tiling maps, each fading with the metres a pixel covers); windows by the thousand
+  in rows along the decks, dense on crew regions and absent from tanks, radiators and engines, a
+  seeded share lit, banks coming on with `lights` (for example from `ctx.music`); lit hangar bays
+  with floor marks, parked craft and cargo; clutter on decks and in the trench; hull numbers,
+  floodlit walls, navigation and guide lamps; dressed engine banks with one long plume a bank
+  that lights the stern. `detail.fly(craft, "hangar-2", u)` flies a small craft into a bay. The
+  maps are baked once and kept by `vidgen cache`. A fleet of `hullFleet` now has one palette and
+  one accent (`navy: false` for the old mix); the `lance`, the `twin` and the `ark`'s terraces
+  have more character, and the lance has a hangar. Six new parts under `vidgen parts 'hull-*'`;
+  recipes for the shots that show size and the costs are in `docs/COOKBOOK-SPACE.md`.
+
 - **Camera moves in the air and beside giant ships** (Step 390): the new module
   `vidgen/space-camera-air` gives `airCamera(...)`, the rig of `vidgen/space-camera` with thirteen
   more moves, each a function of the scene's time. In the air: `skim` (a low pass over sea or
@@ -178,45 +200,51 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   beats of the score; a move may start or end moving; the camera is never under the ground or
   the water and takes "up" from the local vertical. Twelve parts under `vidgen parts
   'camera-*'`; recipes and costs in `docs/COOKBOOK-SPACE.md`.
-- **Giant ships that read as kilometres long** (Step 389): `dress(ship, renderer)` of the new
-  module `vidgen/space-hull-detail` gives a hull of `vidgen/space-hull` its fine detail: panel
-  seams, hatches, pipe runs and vents at 5 to 20 m and panel lines, rivet rows and stencil bars
-  at 1 to 5 m (tiling maps, each fading with the metres a pixel covers); windows by the thousand
-  in rows along the decks, dense on crew regions and absent from tanks, radiators and engines, a
-  seeded share lit, banks coming on with `lights` (for example from `ctx.music`); lit hangar bays
-  with floor marks, parked craft and cargo; clutter on decks and in the trench; hull numbers,
-  floodlit walls, navigation and guide lamps; dressed engine banks with one long plume a bank
-  that lights the stern. `detail.fly(craft, "hangar-2", u)` flies a small craft into a bay. The
-  maps are baked once and kept by `vidgen cache`. A fleet of `hullFleet` now has one palette and
-  one accent (`navy: false` for the old mix); the `lance`, the `twin` and the `ark`'s terraces
-  have more character, and the lance has a hangar. Six new parts under `vidgen parts 'hull-*'`;
-  recipes for the shots that show size and the costs are in `docs/COOKBOOK-SPACE.md`.
-- **Re-entry and flight effects** (Step 387): `vidgen/space-effects` adds to a plane, a craft or
-  any object: the glow of a re-entry (a layer on the windward side made from the craft's own shape,
-  hot surfaces, a wake, sparks, and from far away a bright head with a train of light along the
-  path), vapour trails that stay where they were laid in the world and spread, break up and fade,
-  engine exhaust shaped by the air's density (shock diamonds low down, a wide pale plume high up,
-  an afterburner), a vapour cone near Mach 1 and wing vapour in hard turns. With `flight_data:`
-  everything follows `ctx.flight` (heating, Mach number, load, height, the path behind); each
-  number can be set by hand or from music. Nine parts under `vidgen parts --kind effect`.
-  Step 387.1: the exhaust is a defined flame (a sharp core from each bell, a tapering outer
-  flame, a row of shock diamonds, a wide faint plume in thin air); the vapour cone is a soft
-  uneven disc of mist near Mach 0.97; wing vapour is a sheet over the wing.
-- **Space plane parts** (Step 386): `vidgen/space-plane` builds winged craft on the spacecraft
-  kit. A lofted body (length, width, height, five nose shapes, droop, a round to flat belly, a
-  boat tail, a dorsal hump, a payload bay), ONE wing function (span, root and tip chord, sweep,
-  crank, curve, dihedral, thickness, airfoil, twist, fillet, winglets or tip fins, elevons and
-  flaps) with nine presets (`delta`, `double-delta`, `cranked-arrow`, `swept`, `straight`,
-  `ogival`, `stub`, `blended`, `long`), tails (`single`, `twin`, `vee`), rocket bells for the
-  tail, air-breathing pods, a belly intake, landing gear that folds behind doors, bay doors that
-  open on their radiators, a body flap, brakes, canards, thrusters and lights. Surfaces that
-  hold in close-up: black heat tiles, quilted blankets, panel lines, bare metal, scorch streaks
-  (`scorch`), stripes and an invented registration; schemes and colours as options. Six
-  ready-made planes, each another one for every seed: `plane("glider" | "freighter" | "needle"
-  | "lifter" | "scout" | "skiff", {seed})`; `planeFrom({...})` for a plane of one's own,
-  `planeFleet` for a formation, `problems()` for what looks wrong. On a flight of `flight_data`
-  a plane banks with the turn and its surfaces move with the flight's rates. All designs are
-  invented. `vidgen parts 'plane-*'` shows them (kinds `craft` and `craft-part`).
+
+- **Orbit to ground in one shot** (Step 391): the new module `vidgen/space-descent` gives
+  `world(renderer, {planet, at, sun, sea, land, clouds})`: the globe, the air, the sea, the ground
+  and the cloud decks of one world for one place and one sun, drawn for any camera height from
+  the surface to orbit. The air is one model at every height (the globe is seen through it, so
+  the limb's glow becomes the sky with no handover); the globe's picture is laid over the sea,
+  the ground and the decks where a pixel's ground is far and the camera is high, and fades out on
+  the way down (`HANDOVERS`: 80 km to 2.5 km over a sea or decks, 600 km to 60 km over bare
+  ground). `vidgen/space-camera-air` gains `descend` and `ascend`: from 400 km to 300 m with equal
+  time for each power of ten of height, the view going from the globe under its limb to the
+  level horizon, ending level and moving so that a `skim` given `shot.end` follows with no cut.
+  `world.honest` says what is not true (the camera's speed; single clouds of the globe and of the
+  decks are in different places; the surface is soft between 150 km and 25 km over a sea). Four
+  parts: `vidgen parts 'joined-*' camera-descend`.
+
+- **Air, planes and giant ships in `video.yaml`** (Step 392): the `space` scene reaches the parts
+  of Steps 381–391 with no JavaScript. With `world:` it is a surface scene: one world from orbit to
+  the ground at a place (`planet`, `at: [latitude, longitude]`, `sun: [elevation, azimuth]` or `{date,
+  utc}`, `air`, `sea: rough`, `land: alpine`, `clouds: fair` or decks, towers and lightning on times
+  or a track), `flights:` in the words of `flight_data` over the world's own ground, planes and
+  craft flying them with contrails, exhaust, vapour or a re-entry glow, and the moves `skim`,
+  `climb-through`, `descend-through`, `chase`, `wing`, `fly-past`, `orbit-peak`, `rise`, `descend`,
+  `ascend` (a `skim` that `continues` a descent). An orbital scene takes giant ships (`hull:
+  carrier`, dressed with windows and bays, a small craft beside it for size, fleets), planes, craft
+  of the kit's own parts, the moves `hull-pass`, `hull-reveal`, `into-bay`, `stern-burn`,
+  `scale-zoom`, flashes on cuts, a warp across a cut and match cuts. Every key and name is checked
+  with the closest word, and a move that needs a flight, a deck, ground or a hull the scene lacks is
+  named; `vidgen lint` estimates a costly scene's seconds a frame; `vidgen space-page` writes either
+  kind out as a `web` scene with the same picture; `vidgen music plan --style space-air` drafts a
+  film of skims, descents, chases, hull passes and bays. Existing `space` scenes write the same pages.
+
+- **Review of the phase** (Step 393): the sea no longer draws rings and whorls from 100 m to a few
+  km up (each wave's crests wander along their length instead of one warp of the whole pattern);
+  the alpine range's rock bands are broken beds on steep faces only, not stripes over every slope;
+  cloud decks vary their cover with a broad weather of their own (deck option `fronts`) and show no
+  repeat from 150 km, so the descent from orbit shows decks from about 150 km; in a `SpaceView` a
+  world added with `at` and `size` stands behind nearer things, a hull close to the camera is never
+  drawn under the world behind it, things drawn without frustum culling stay in the world unless
+  marked as sky (`userData.sky`), and a world's air is added once at the limb (a thinner limb in
+  Outbound's first scenes); a ship falls into a world's shadow with the sun given as a direction;
+  the Milky Way is dimmed over a sunlit world from high up in the film look; the glider is grey or
+  dark by default. The space cookbook is ordered (orbital scenes, giant ships, camera moves) with one
+  cost table for every shot, and the air has its own cookbook ([COOKBOOK-AIR.md](docs/COOKBOOK-AIR.md));
+  three space showcases are in the [web scene gallery](docs/gallery/web/README.md): a skim at sunset,
+  from orbit to the sea, along a giant ship.
 
 ### Space scenes (Phase AN, Steps 367–378)
 

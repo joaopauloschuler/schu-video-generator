@@ -30327,8 +30327,9 @@ bytes): Phase AN's `space` scenes and `examples/outbound` (space-scale, space-li
 once more (their key holds every module's bytes), with the same pixels and numbers. Outbound at
 320x180, ten stills compared byte for byte: eight identical; `01_dawn` (3 s, 12 s) and `02_depart`
 (2 s) differ at the limb: the air's glow is now drawn once (a thinner, dimmer band, up to 67 codes
-there; mean 0.4 to 4 codes over the frame). The gallery's `space` entry: see the gallery section of
-HANDOFF Step 393. The automatic `near: 4` beside a hull (§123.14) is no longer needed for
+there; mean 0.4 to 4 codes over the frame). The gallery's `space` entry, regenerated into another folder, is byte-identical
+(not touched); three showcases were added to the web gallery (`sunset_skim`, `orbit_to_sea`,
+`carrier_pass`), and a still may fall back to 128 colours before 64 (skies at dusk band less). The automatic `near: 4` beside a hull (§123.14) is no longer needed for
 correctness (default `near` draws the bay right, still 08); it is kept for depth precision.
 
 **Drawn for the first time** (320x180 stills, no error): a craft into a bay, `stern-burn`,

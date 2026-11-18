@@ -360,7 +360,7 @@ narration.
 | `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
 | `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
-| `vidgen cache [info\|clear]` | vidgen's cache folder: `info` (the default) shows the baked maps of web pages (worlds' surfaces, skies; kept so a later page opens faster with the same pixels), their size and limit (`VIDGEN_BAKED_CACHE_MB`, `0` off) and the other folders in it; `clear` removes the baked maps |
+| `vidgen cache [info\|clear]` | vidgen's cache folder: `info` (the default) shows the baked maps of web pages (worlds' surfaces, skies, the ground's height maps; kept so a later page opens faster with the same pixels), their size and limit (`VIDGEN_BAKED_CACHE_MB`, `0` off) and the other folders in it; `clear` removes the baked maps and the ground heights kept for flights |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
@@ -376,7 +376,7 @@ narration.
 | `vidgen space-page [PROJECT] --scene ID [--out FILE] [--force] [--json]` | writes the page a `space` scene draws as a `web` scene's script (`extensions/<id>.js`) and prints the `web` scene that replaces it: the same picture, to go on in code ([CONFIG](docs/CONFIG.md#space)) |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
-| `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
+| `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); the types drawn in a web page (`web`, `3d`, `space`) and the showcases using them go to its `web/` folder, a gallery with its own index; default `docs/gallery` ([this repository's](docs/gallery/README.md), [its web scenes](docs/gallery/web/README.md)) |
 | `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
 | `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
 | `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
@@ -649,8 +649,12 @@ my_video/
   [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md) — space films with the `space` scene: choosing
   what to show, honest scale and exposure, a recipe per shot (a sunrise over a limb, a ringed
   world as a crescent, a craft on a real transfer with its burn on the beat, a fly-by, a
-  powers-of-ten zoom, a black hole, a comet, a warp cut), the cost of each shot, the checks, common
-  mistakes and their messages;
+  powers-of-ten zoom, a black hole, a comet, a warp cut, a craft of the kit's parts; giant ships: a
+  pass along the hull, a craft into a bay, a reveal, a fleet), the camera moves, the cost of every
+  shot in one table, the checks, common mistakes and their messages;
+  [docs/COOKBOOK-AIR.md](docs/COOKBOOK-AIR.md) — shots inside an atmosphere (`space` scenes with
+  `world:`): a dusk at sea, a skim, a volcano, a climb through a cloud deck, planes chased, from the
+  wingtip and flying past, the descent from orbit in one shot, what is true and what is a stated look;
   [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
   discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
   detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
@@ -741,7 +745,8 @@ remaining rendering tests. No test needs network or keys.
     orbit data, enlarging stated on screen; every key
     checked with did-you-mean; `vidgen space-page` writes it out as a `web` scene to go on in code;
     `vidgen music plan --style space` (or `space-air`) drafts a whole space film from a score; `vidgen guide space-scenes`;
-    a recipe per shot and what each costs in [the space cookbook](docs/COOKBOOK-SPACE.md));
+    a recipe per shot and what each costs in [the space cookbook](docs/COOKBOOK-SPACE.md) and
+    [the air cookbook](docs/COOKBOOK-AIR.md));
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
