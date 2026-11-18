@@ -2033,12 +2033,12 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
     if found is None or found.suffix.lower() not in (".yaml", ".yml"):
         raise VidgenError(f"music plan: {args.project} is not a score file (.yaml): the plan reads a score's sections, tracks and notes")
     plan = plan_music_video(found, max_seconds=args.max_scene, min_seconds=args.min_scene)
-    space = args.style == "space"
+    space = args.style in ("space", "space-air")
     seed = args.seed if args.seed is not None else 1
     if space:
         from vidgen.music_space_plan import space_plan_text, write_space_video
 
-        draft = write_space_video(plan, Path(args.out), force=args.force, seed=seed) if args.out else None
+        draft = write_space_video(plan, Path(args.out), force=args.force, seed=seed, style=args.style) if args.out else None
     else:
         draft = write_music_video(plan, Path(args.out), force=args.force) if args.out else None
     problems: list[str] = []
@@ -2049,10 +2049,10 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
         return jsonout.music_plan_document(plan_dict(plan), draft, [str(p) for p in problems])
     print(plan_text(plan))
     if space:
-        print(space_plan_text(plan, seed))
+        print(space_plan_text(plan, seed, args.style))
     if draft is None:
         if space:
-            print(f"draft it: vidgen music plan {args.project} --style space --out my_film   (video.yaml with a space scene per cut, the score)")
+            print(f"draft it: vidgen music plan {args.project} --style {args.style} --out my_film   (video.yaml with a space scene per cut, the score)")
         else:
             print(f"draft it: vidgen music plan {args.project} --out my_video   (video.yaml, the score, a starter page per scene)")
         return 0
@@ -2730,9 +2730,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--max-scene", type=float, default=16.0, metavar="SECONDS", help="plan: split a section longer than this on a phrase line (default: 16)")
     p.add_argument("--min-scene", type=float, default=5.0, metavar="SECONDS", help="plan: join a section shorter than this to the one before (default: 5)")
-    p.add_argument("--style", choices=["web", "space"], default="web",
+    p.add_argument("--style", choices=["web", "space", "space-air"], default="web",
                    help="plan: web (default): web_cut scenes with a starter page each; space: space scenes written in YAML alone "
-                   "(a world by the scene's colour, a camera move by its role, sunrise on a section start; --seed picks among the choices)")
+                   "(a world by the scene's colour, a camera move by its role, sunrise on a section start; --seed picks among the choices); "
+                   "space-air: space scenes in the air and beside giant ships (a skim at sunset, a descent, a chase over a range, a hull pass, into a bay)")
     p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with schu-video-generator)")
     p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists; plan: write the draft into a folder that is not empty")

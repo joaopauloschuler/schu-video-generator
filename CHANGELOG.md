@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–391
+## Steps 193–392
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -134,6 +134,21 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   proportions. For later fine detail every hull carries named regions, anchors (bells, hangars,
   docks, lights, the command place) and one atlas of non-overlapping charts with their metres
   per texel. Fourteen parts under `vidgen parts 'hull-*'`.
+- **Air, planes and giant ships in `video.yaml`** (Step 392): the `space` scene reaches the parts
+  of Steps 381–391 with no JavaScript. With `world:` it is a surface scene: one world from orbit to
+  the ground at a place (`planet`, `at: [latitude, longitude]`, `sun: [elevation, azimuth]` or `{date,
+  utc}`, `air`, `sea: rough`, `land: alpine`, `clouds: fair` or decks, towers and lightning on times
+  or a track), `flights:` in the words of `flight_data` over the world's own ground, planes and
+  craft flying them with contrails, exhaust, vapour or a re-entry glow, and the moves `skim`,
+  `climb-through`, `descend-through`, `chase`, `wing`, `fly-past`, `orbit-peak`, `rise`, `descend`,
+  `ascend` (a `skim` that `continues` a descent). An orbital scene takes giant ships (`hull:
+  carrier`, dressed with windows and bays, a small craft beside it for size, fleets), planes, craft
+  of the kit's own parts, the moves `hull-pass`, `hull-reveal`, `into-bay`, `stern-burn`,
+  `scale-zoom`, flashes on cuts, a warp across a cut and match cuts. Every key and name is checked
+  with the closest word, and a move that needs a flight, a deck, ground or a hull the scene lacks is
+  named; `vidgen lint` estimates a costly scene's seconds a frame; `vidgen space-page` writes either
+  kind out as a `web` scene with the same picture; `vidgen music plan --style space-air` drafts a
+  film of skims, descents, chases, hull passes and bays. Existing `space` scenes write the same pages.
 - **Orbit to ground in one shot** (Step 391): the new module `vidgen/space-descent` gives
   `world(renderer, {planet, at, sun, sea, land, clouds})`: the globe, the air, the sea, the ground
   and the cloud decks of one world for one place and one sun, drawn for any camera height from

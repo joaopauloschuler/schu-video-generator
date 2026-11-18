@@ -321,7 +321,9 @@ src/vidgen/
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (space.py, space_params.py, space_page.py: the `space` scene, its words and
-                          # the page written from them, §122.12; flight_data.py: a `web` scene's flights, §123.7;
+                          # the page written from them, §122.12; space_air_params.py, space_air_page.py, space_checks.py,
+                          # space_costs.py: its surface scenes, hulls, planes and their checks and costs, §123.14;
+                          # flight_data.py: a `web` scene's flights, §123.7;
                           # registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
                           # pan/follow, §69.7;
@@ -384,7 +386,8 @@ src/vidgen/
                           # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10); space-hull-detail.js
                           # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11); space-camera-air.js
                           # `vidgen/space-camera-air`: camera moves in the air and beside giant ships, on `vidgen/space-camera`'s rig (§123.12); space-descent.js
-                          # `vidgen/space-descent`: one world from orbit to the ground: globe, air, sea, ground and decks joined (§123.13)
+                          # `vidgen/space-descent`: one world from orbit to the ground: globe, air, sea, ground and decks joined (§123.13); space-scene-air.js
+                          # `vidgen/space-scene-air`: the helpers of a declarative space scene in the air or beside a giant ship (ramp, flashes, hitTimes, once; §123.14)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -30157,3 +30160,131 @@ the Phase AN body's).
   Chromium (`slow`): 16 heights from 400 km to 300 m draw, the stages are as stated, bounded steps
   across the handover, a frame is the same after other frames, with the maps baked cold, from the
   cache and without the cache (within 2 of 255).
+
+### 123.14 Reach from `video.yaml`: surface scenes, giant ships, planes (Step 392)
+
+The parts of Steps 381–391 written in `video.yaml` alone, in the `space` scene type (§122.12), with
+no JavaScript and with did-you-mean on every key and name.
+
+**Two kinds of `space` scene, chosen by one key.** Without `world:` a scene is **orbital** (§122.12
+as it was: a `SpaceView`, bodies from `orbits:` or standing at `at:`). With `world:` it is a
+**surface** scene: the joined world of `vidgen/space-descent` (§123.13), a plain three.js scene in
+the place's local frame (metres, x east, y up, z south, the origin on the sphere under `world.at`),
+the stars of `vidgen/space-sky` behind the air. A surface scene refuses `orbits`, `scale`, `bodies`,
+`phenomena`, `light` and `sun` (each message says where the job is done there: `world.at`,
+`world.planet`, `world.exposure`, `world.sun`), and an orbital scene refuses `flights` and the air
+moves. One key rather than a second scene type: the page, the clip, the cache, `vidgen still`,
+`vidgen space-page`, the lint and the music plan are the `space` scene's already; a key is what an
+agent adds to turn a scene into the other kind and the messages carry it between them.
+
+**The surface vocabulary** (`scenes/space_air_params.py`). `world: {planet, at, sun, air, sea, land,
+clouds, globe, handover, match, exposure, ev, quality}`: each part a name or the module's options
+(`sea: rough`, `land: {preset: alpine, seed: 3, mountains: {...}}`, `clouds: {decks: [...], towers:
+4, lightning: {times: [3.5, 'bar 9'], track: kick}}`). `sun`: `[elevation, azimuth]` in degrees at
+the place, or `{date, utc}`: the Earth's Sun from `vidgen.orbits.ephemeris` (JPL's approximate
+elements), the mean obliquity and Greenwich mean sidereal time, no refraction (Greenwich at midsummer
+noon: 62° up, due south; tested). `flights:` is the `flight_data` vocabulary (Step 385: a list, or
+`{flights, start, speedup, margin, path_samples}`) with `ground`, `world` and `at` taken from the
+world: its land (with the world's planet, place and air when they are stated), else its sea (the
+state's wave height added to the margin: `rough` 3.2 m, a wind sea 0.0246 x wind²), else its
+sphere. The same parser and cache as a `web` scene's (`web_scene_flights`; the key holds the
+settings, the frames, the code), so `vidgen space-page` hands over `flight_data` unchanged. A start
+from orbit is refused (a surface scene has no orbit data; a real re-entry ends thousands of km from
+its start, §123.13). `craft:` in a surface scene: `plane:`, `kind:` or `parts:`, each flying a
+flight (`fly:`), with `effects:` following it (`vidgen/space-effects` with `flight: ctx.flight`).
+
+**What an orbital scene gains.** A craft may be `plane:` (a `Plane` is a `Craft`: `fly(space,
+{body})` or standing at `at`), `hull:` (a family, `length`, `age`, `palette`, the family's numbers;
+`fleet: N` with a list of families: `hullFleet`), or `parts:` (the kit's own parts as a tree: `{part:
+hull, ..., attach: [{at: fore, part: dish}, {around: {count: 2}, part: solar-wing}]}`, written as
+`kit.hull(...)`, `attach(...)`, `around(...)`, `kit.craft(root)`). A hull is dressed by default
+(`dress: true`; `false` bare, or `vidgen/space-hull-detail`'s options) and may take `scale_ref` (a
+small craft of the kit for size, `hull.scaleRef`; `into: {hangar, over}` flies it into a bay along
+the detail's approach; `escort: true` puts it where a `hull-reveal` wants it). **The near plane**:
+with any hull in the scene the page makes the `SpaceView` with `near: 4` and says so in a comment
+(Step 390: the default 0.01 m slices a hull the camera is inside the bounding sphere of and draws the
+world over it); scenes without a hull keep their page. The moves beside a ship (`hull-pass`,
+`hull-reveal`, `into-bay`, `stern-burn`, `scale-zoom`) switch the rig to `airCamera({space, ...,
+ships})`; the ship's attitude at t is set before the camera (`space.update(t, {from: {body},
+to})` and the hull's update: a move reads it), and the hull's throttle follows a `stern-burn`
+shot's `throttle`. Effects on an orbital craft are `exhaust` only (the rest follow a flight through
+air). A warp may run across a cut (`cut: {at, seconds, split}`: `warpCut`), any scene may flash on
+cuts (`flash: [{at, amount, rise, fall}]`: `flashCut` through three-finish's `flash`, a function of
+t), and a move may be a match cut (`match: THING, cut: true`: `matchDisc` of THING's disc in the
+move before, worked out once).
+
+**Moves** are written kebab-case as the parts sheet names them (`climb-through`, `fly-past`,
+`hull-pass`); camelCase is accepted. Their options are each move's own `known(...)` list read from
+`vidgen/space-camera-air`; names in them (`flight`, `ship`, `deck`, `hangar`, `world`, `behind`,
+`craft`) are checked against the scene; lengths may be text with units; `at` of `fly-past` and
+`hull-reveal` and `light` of `stern-burn` are times (seconds or bars). A `skim` with `continues:
+true` after a `descend` spreads the descent's `end` into its options (the recipe of §123.13).
+
+**Pages** (`scenes/space_air_page.py` for a surface scene; `scenes/space_page.py` gains the hull,
+plane, parts, effects, ship moves, flash, warp cut and match). One line per part, options as exact
+JSON literals, everything in `S`: `S.world`, `S.craft`, `S.fx`, `S.cam`, `S.moves`. A surface page:
+`world(renderer, {..., stars: S.sky, scene})`, each plane `plane(kind, opts).fly(ctx.flight,
+{flight})` hazed by the air, effects, `airCamera({camera, ...S.world.rig, flight: ctx.flight,
+crafts, music: ctx.music})`, `S.step(t)`: the craft, the camera, `S.world.update(t, {camera})`, the
+effects; drawn straight to the canvas unless `finish:` is given (every measurement of Steps 381–391
+is straight to the canvas; three-finish over a joined world was never drawn). `checkMoves` samples a
+surface scene's moves 6 times a second (an air move may sample the ground: every frame would cost
+seconds when the page opens). `world.problems(camera)` becomes page notes. Lightning on a track's
+hits uses the new helper module `vidgen/space-scene-air` (`hitTimes`: song time less the scene's
+start; also `ramp` for gear and bay over time, `flashes`, `once`): a module of its own so that
+`space-scene.js`'s bytes, in the key of every Phase AN `space` scene, did not change.
+
+**Checks** (`scenes/space_checks.py`): beyond every key and name, a move that needs a flight, a deck,
+ground or water, land for a peak or cloud towers, a hull; a `fly:` naming no flight; a stand-off or a
+scale zoom's `close` under 10 m beside a hull, an orbital move closer to a hull's middle than half
+its length (the family's shortest usual length when none is given); `scale_ref.into` without
+`dress`; music targets (`lightning` needs clouds and is a `pulse`, `lava` volcanic ground, `boost` and
+`pulse` a craft with effects); `flash` needs a finish; times in bars need `music_data`. A flight under
+the ground or the sea is Step 385's error, raised when the frames are made, with the scene's name
+(`space scene 'x': flight Plane: at 19.92 s ... under the 20 m it must keep`).
+
+**One registry of names** (`web/space_names.py`, `air_names()`, `yaml_names()`): every list is read
+from the modules' own source (presets, states, waters, skies with their decks, deck types, land
+presets and recipe parts, the world's options, planes and their options, the effects' groups and keys,
+hull families with their numbers and usual lengths, palettes, dress options, each move's options,
+sides, wing views, the kit's parts from the class's methods); the reader learned one more literal
+form (`const A = [...], B = [...]`). Validation reads them; the guide lists them and a test compares
+the guide's lists with the registry; the parts sheet names its tiles with the same words
+(`plane-glider`, `hull-carrier`, `sea-rough`, `land-alpine`, `clouds-fair`, `camera-hull-pass`), tested.
+
+**Cost** (`scenes/space_costs.py`): one table of seconds a frame at 1280x720 from the measurements
+of Steps 381–391 (a sea 1.2, ground 1.4, fair clouds 1.9, a sea under cumulus 3.0, all three 3.5 —
+not measured, the sum less the dome —, a descent through the handover 3.1, a dressed hull 1.0, the
+ship moves 0.8 to 2.1), combined for a scene (the dearest stretch, scaled by quality and motion
+blur); `vidgen lint`'s `space_scene` reports a scene from `seconds` (2) with the minutes its frames
+take; the space cookbook prints the same rows and a test reads both.
+
+**Music plan.** `--style space-air` (a new style name, so `--style space` keeps its output for every
+seed: hashed for the three film scores and seeds 1, 2, 7 before and after): by role, a skim at
+sunset, a descent, a plane chased over the alpine range, a pass along a dressed hull and a craft into
+a carrier's bay by turns; bar-locked, `fade: false`, deterministic from the score and the seed. MCP:
+`music_plan` gained `style` and `seed`; `space_page`'s text names both kinds.
+
+**What changed for existing scenes.** Nothing in their pages: the generated page text of
+`examples/outbound`'s five scenes and of Step 376's three demos is byte-identical (a test holds the
+hashes). No existing module's bytes changed (`space-scene.js` untouched: the helpers are a new
+module); `loaded.py` gains one import name; the new module file changes `code_digest()`, so baked
+maps and the ground heights kept for flights are made once more with the same pixels and numbers.
+
+**Not reached from YAML** (the modules have them; `script:` or `vidgen space-page`): the wormhole
+passage (`passage()` moves the camera itself in the scene's frame, outside a `SpaceView`'s floating
+origin and the moves' join check: it needs a move of its own in vidgen/space-camera), a re-entry
+from orbit into a surface scene, a sun that moves through a scene, the camera placed by hand in a
+ship's own axes, a fleet of planes (`planeFleet`), a hull in a surface scene, effects other than
+`exhaust` on an orbital craft, the terminator by `sunVisibility`, a plane's own shadows, a flight's
+re-anchoring along a long path.
+
+**Tests** (`tests/test_space_air_scene.py`): the five examples validate; 24 surface and 16 orbital
+mistakes named with the closest word; 28 cross-checks; the sun on a date; bars; the pages stable and
+saying what the params say; 17 params each changing the page; Outbound's and the demos' pages
+byte-identical; imports and `node --check`; a surface page (a chase, and a descent continued by a
+skim) run in Node with the real camera modules and stand-ins for three.js and the drawing modules;
+the helper module in Node; the flights' ground and key; a flight under the sea with the scene's name;
+`vidgen space-page` for both kinds; the registry against the parts sheet and the guide; the music
+plan; MCP; the lint's estimate; the cookbook's cost rows. `slow`: a skim and a hull pass drawn in
+Chromium at 160x90.

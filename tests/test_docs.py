@@ -446,7 +446,8 @@ def test_the_space_cookbook_recipes_validate_and_it_is_linked() -> None:
         assert scene["type"] in ("space", "web")
         registry.get(scene["type"]).cls.Params.model_validate(scene["params"])
         ids.append(scene["id"])
-    assert ids == ["sunrise", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump", "pass"]
+    assert ids == ["sunrise", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump",      # Step 392: the air and ship recipes in YAML
+                   "dusk", "skim", "volcano", "climb", "chase", "wingtip", "flypast", "carrier", "powers", "burn", "reveal", "fleet", "descent", "kit", "across"]
     for doc in ("docs/COOKBOOK.md", "docs/COOKBOOK-3D.md", "docs/COOKBOOK-ORBITS.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
         assert "COOKBOOK-SPACE.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
     assert "no formal licence" in text and "16.11 h" in text

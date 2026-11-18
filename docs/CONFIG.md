@@ -4301,6 +4301,7 @@ vidgen music plan my_song --json                            # the same as one JS
 vidgen music plan my_song --out my_video                    # and a draft project to start from
 vidgen music plan my_song --out my_video --max-scene 12 --min-scene 4 --force
 vidgen music plan my_song --style space --out my_film     # a draft space film: a space scene per cut, no code
+vidgen music plan my_song --style space-air --out my_film # the same in the air and beside giant ships
 ```
 
 `vidgen music plan SCORE [--out DIR] [--force] [--max-scene SECONDS] [--min-scene SECONDS]
@@ -4387,6 +4388,14 @@ throttle and lights. Every move runs over the scene's bars (`over: ['bar 9', 'ba
 scene has `fade: false`, the first an opening title and the last an end card. The draft is
 validated as it is written; `vidgen still DIR --scene ID --at 2 --size 640x360` before rendering.
 Without `--style`, the draft is the `web_cut` one, unchanged.
+
+**`--style space-air`** (Step 392, DESIGN §123.14): the same plan as scenes in the air and beside
+giant ships, by role, deterministic from the score and `--seed`: quiet, a skim over the sea at
+sunset; build, a descent from orbit to the sea (from 400 km, or 40 km in a scene under 10 s); verse,
+a plane (glider, skiff, needle or scout by the seed) chased over the alpine range with contrails, its
+afterburner on the scene's glow track; drop and climax by turns, a pass along a dressed giant hull
+(carrier, ark, spine, cluster or lance by the seed) and a craft into a carrier's bay, the hull's
+windows on the glow track. Bar-locked and `fade: false` as `--style space`, whose output is unchanged.
 
 #### Project pieces: score files in a video
 
@@ -8582,7 +8591,9 @@ about 2–3 s to start Chromium plus 15–25 ms per frame stepped, against 70–
 ### `space`
 
 **A space scene written in YAML alone** (Step 376, DESIGN §122.12): a sky, a sun, worlds, craft,
-phenomena and camera moves, from the ready-made parts of Phase AN, with no JavaScript. vidgen writes
+phenomena and camera moves, from the ready-made parts of Phase AN, with no JavaScript; since Step 392
+(DESIGN §123.14) also giant ships, planes and kit-built craft, and with `world:` a surface scene: the
+air, sea, ground and clouds of one world from orbit to the ground, flights and planes on them. vidgen writes
 the page from the params (`build/space/<id>.js`) and draws it exactly as a [`web`](#web) scene: the
 same clip and cache (the page's bytes are in the clip's key, so any change of a param draws the
 scene again), `vidgen still`, `--draft`, `--jobs` and `vidgen motion check`. Full frame, no title
@@ -8628,6 +8639,45 @@ timed in bars, a burn and a fly-by from `orbits:`, a warp, a black hole, title a
 | `script` | path | — | your code: a JavaScript module of the project; `setup(S)` runs once after the scene is built, `frame(t, S)` every frame after the scene stands at `t` (`S`: `renderer`, `scene`, `camera`, `space`, `sky`, `sun`, `light`, `bodies`, `craft`, `phenomena`, `subjects`, `cam`, `moves`, `view`, `step`, `finish`, `ctx` by name; replace `S.view` to change the camera) |
 | `data` | mapping | `{}` | values for your script, as `ctx.data` |
 | `fade` | bool | `true` | `false`: no 0.5 s fade-out (scenes on bar lines cut straight into each other) |
+| `world` | mapping | — | a **surface scene** (Step 392, DESIGN §123.14): one world from orbit to the ground in the place's own frame ([`vidgen/space-descent`](#web)); its keys below. Without it the scene is an orbital one |
+| `flights` | list \| mapping | — | a surface scene's flights: the [flight data](#web) of a `web` scene (`[{name, start, legs}]`, or `{flights, start, speedup, margin, path_samples}`); the ground is the world's land, else its sea (its crests added to the margin), else its sphere; the frame is `world.at` |
+| `flash` | list \| mapping \| time | `[]` | flashes on cuts ([`flashCut`](#web) through the finish): `[{at, amount: 3, rise: 0.25, fall: 0.6}]`; `at` in seconds or bars, the same in the scenes on both sides of the cut; needs a finish |
+
+A `craft:` entry also takes (Step 392):
+
+| key | type | default | meaning |
+|---|---|---|---|
+| `plane` | str | — | in place of `kind`: a space plane of [`vidgen/space-plane`](#web): `glider`, `freighter`, `needle`, `lifter`, `scout`, `skiff`; with its parts and the plane kit's options as keys (`wing`, `fins`, `body`, `engines`, `cockpit`, `markings`, `scheme`, `scorch`, `color`, `belly`, `registration`...) |
+| `hull` | str \| list | — | in place of `kind` (orbital scenes): a giant ship of [`vidgen/space-hull`](#web): `spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`, `twin` (a list with `fleet: N`); `length` (200 m to 20 km; default by the seed), `age`, `palette` (`bone`, `slate`, `iron`, `sand`, `frost`), the family's numbers (`hangars`, `bells`, `towers`...) |
+| `parts` | mapping | — | in place of `kind`: a craft of the kit's own parts ([`vidgen/space-craft`](#web)): `{part: hull, ...its options, attach: [{at: fore \| {angle, along, out}, mount, roll, gap, part: dish, ...}, {around: {count, angle, span, along, out}, part: solar-wing, ...}]}`; parts: `hull`, `tank`, `tankCluster`, `truss`, `solarWing`, `radiator`, `dish`, `antenna`, `boom`, `instrument`, `powerUnit`, `dockingPort`, `cupola`, `airlock`, `engine`, `thrusters`, `leg`, `ringHabitat`, `container`, `light` (kebab-case accepted); the kit's `accent`, `foil`, `wear`, `lit` |
+| `effects` | mapping | — | [`vidgen/space-effects`](#web): `reentry`, `contrails`, `exhaust`, `vapour` (each `true` or its options), `quality`, `seed`; in a surface scene they follow the craft's flight; an orbital scene's craft takes `exhaust` only |
+| `gear`, `bay`, `cabin` | number \| mapping | — | a plane's landing gear, payload bay doors, cabin lights: 0..1, or `{over: [start, end], from: 0, to: 1}` (eased) |
+| `controls` | mapping | — | a plane's control surfaces held (`elevon`, `roll`, `rudder`, `flap`, `brake`, `bodyFlap`, `canard`, degrees); default they follow its flight |
+| `dress` | bool \| mapping | `true` | a hull's fine detail ([`vidgen/space-hull-detail`](#web)): `false` (bare), or `{windows, lights, nav, hangars, engines, clutter, marks, atlas, maps, plumes: both \| bank \| bells}` |
+| `scale_ref` | mapping | — | a hull's small craft for size (`hull.scaleRef`): `{kind: ship, at: port \| hangar-N \| bow ..., gap, seed, detail, into: {hangar, over}, escort: true}` (`into` flies it into a bay, needs `dress`; `escort` puts it where a `hull-reveal` wants it) |
+
+In a surface scene a craft flies a flight (`fly:` its name) and takes `plane`, `kind` or `parts`, `seed`, `detail`, `throttle`, `lights`, `effects` and the plane's keys; the orbital words (`at`, `velocity`, `attitude`, `fleet`, `burn`...) are refused.
+
+**The world of a surface scene** (`world:`):
+
+| key | type | default | meaning |
+|---|---|---|---|
+| `planet` | str | the ground's, else `earth` | a world of `bodies` (seen whole as the globe from high up; its air, its ground's colours) |
+| `at` | [lat, lon] | the ground's, else `[0, 0]` | the place under the scene's origin (x east, y up, z south, metres) |
+| `sun` | [elevation, azimuth] \| mapping | `[35, 200]` | degrees over the horizon and from north through east; `{elevation, azimuth}` (`height` too), or `{date: 2026-06-21, utc: "19:30"}`: the Earth's Sun at the place then (JPL's approximate elements, mean obliquity, sidereal time; no refraction) |
+| `air` | str \| mapping | the planet's | [`vidgen/space-air`](#web): `earth`, `mars` (a dusty season), `thin`, `thick`, or its options |
+| `sea` | str \| mapping \| bool | — | [`vidgen/space-sea`](#web): a state (`calm`, `breeze`, `swell`, `rough`, `storm`) or `{state, water: ocean \| green \| tropical \| grey \| methane, seed, quality}` and a state's numbers (`wind`, `height`, `swell`...) |
+| `land` | str \| mapping \| bool | — | [`vidgen/space-land`](#web): a preset (`alpine`, `mars`, `canyon`, `dunes`, `snow`, `volcanic`; `airless` has no air for a surface scene) or `{preset, seed}` and the recipe's parts (`mountains`, `craters`, `dunes`, `canyons`, `volcanoes`, `materials`...) |
+| `clouds` | str \| mapping \| bool | — | [`vidgen/space-clouds`](#web): a sky (`fair`, `overcast`, `layers`, `towers`, `storm`) or `{sky \| decks: [{type: cumulus \| stratus \| cirrus, base, top, cover, name...}], towers: N \| {...}, lightning: true \| {times: [seconds or bars], track: kick, rate, power...}, seed, wind}` |
+| `globe` | mapping | — | more options for the globe (`size`, `clouds`...) |
+| `handover` | str \| mapping | by what is under the air | where the globe hands over to the near picture: `low`, `high`, `{near: [from, to], height: [from, to]}` (metres) |
+| `match`, `exposure`, `ev`, `quality` | | `1`, `film`, `0`, `standard` | the globe's brightness beside the near picture; the air's exposure; `fast`, `standard`, `fine` for the air, sea, ground and clouds |
+
+The stars behind the air are `sky:` (512 px unless it says `size`). A surface scene is drawn straight to the canvas (the air, sea, ground and clouds make the display themselves, as every recipe of Steps 381–391 is measured); `finish:` given draws it through three-finish (not checked by eye). Its camera's moves are the air moves below; `world.problems` (a camera far from the place or under the surface) is printed as a warning.
+
+**Moves in the air and beside a giant ship** ([`vidgen/space-camera-air`](#web)), written kebab-case as the parts sheet names them (camelCase is accepted): in a surface scene `skim` (needs `sea` or `land`), `climb-through` and `descend-through` (`deck:` an index or name of `world.clouds`, or `{base, top}`), `chase`, `wing`, `fly-past` (`flight:` a flight or the craft flying it; the only one by default), `orbit-peak` (`around: {near: [x, z], reach}` needs `land`, `{tower: n}` cloud towers), `rise`, `descend`, `ascend` (`lens: [from, to]`); a `skim` with `continues: true` right after a `descend` starts where it ends. In an orbital scene with a hull: `hull-pass`, `hull-reveal` (`at` a time; `mode: limb` with `behind:`), `into-bay` (`hangar: hangar-N`), `stern-burn` (`light:` a time: the hull's throttle follows the shot), `scale-zoom` (`window`, `world`); `ship:` the hull (the only one by default); a `standoff` or `close` under 10 m is refused (the near plane is 4 m beside a hull), and an orbital move closer to a hull's middle than half its length. Any move of vidgen/space-camera may take `match: THING` with `cut: true` (a match cut: its subject placed and sized as THING's disc was in the move before, `matchDisc`).
+
+**Music in a surface scene**: `{track: kick, pulse: lightning}` (a strike on each hit; needs `clouds`), `{track: level, glow: lava}` (the lava's glow on volcanic ground), `{track: X, glow: Plane, as: lights | throttle | boost | pulse}` (`boost` and `pulse` drive the craft's effects). In an orbital scene `{track: X, glow: Carrier, as: lights}` brings a dressed hull's banks of windows on with the music. A warp across a cut: `phenomena: [{kind: warp, cut: {at: 'bar 9', seconds: 3, split: 0.5}}]` (`warpCut`: the scene before shows the jump up to `split`, the scene after the rest).
 
 **Lengths and axes.** A length is metres or text with a unit (`'58232 km'`, `'1.2 AU'`). Positions
 are the orbit data's axes, also without orbits: x and y in the plane, z up. A distance of a move
@@ -8672,14 +8722,25 @@ and [COOKBOOK-SPACE.md](COOKBOOK-SPACE.md), section 7.
 **Going on in code: `vidgen space-page [PROJECT] --scene ID [--out FILE] [--force] [--json]`**
 writes the page this scene draws as a `web` scene's script (default `extensions/<id>.js`) and
 prints the `web` scene that replaces it (`script`, `data: {scene_seconds}`, `orbit_data`,
-`music_data`): the same picture (a still of each is the same, pixel for pixel), now yours to edit.
+`flight_data` for a surface scene's flights, `music_data`): the same picture (a still of each is
+the same, pixel for pixel: checked for an orbital and a surface scene), now yours to edit.
 
-**Not reached yet from YAML** (the modules have them; use `script:` or `vidgen space-page`): the
-spacecraft kit's own parts (`craftKit`, `attach`), a wormhole passage, a spiral galaxy in the
-foreground (it has no turn of its own or exposure for its light yet), `craftEnvironment` updates,
-flash and warp cuts (`flashCut`, `warpCut`) and match cuts across scenes, sky `set` beyond
-brightness. A belt round a world of the orbit data takes `size` (metres per unit), a comet of the
-data `size` (its scale).
+**Checks across sections (Step 392).** A surface scene refuses `orbits`, `scale`, `bodies`,
+`phenomena`, `light` and `sun` (it says where each job is done) and an orbital one `flights` and the
+air moves; a move that needs a flight, a deck, ground or a hull the scene lacks is refused by name;
+a craft's `fly:`, a move's `flight:`, `ship:`, `deck:`, `hangar:` are checked with the closest
+word; a flight under the ground or the sea is Step 385's error, said with the scene's name when the
+frames are made. `vidgen lint` (`space_scene`, setting `seconds`, 2) warns when a scene's parts cost
+that much a frame or more at 1280x720 by the cookbook's cost table, with the minutes its frames take.
+
+**Not reached from YAML** (the modules have them; use `script:` or `vidgen space-page`): a wormhole
+passage (the passage moves the camera itself, outside the `SpaceView`'s floating origin and the
+moves' join check), a re-entry from orbit into a surface scene (it needs the orbit data and starts
+thousands of km from the place), a sun that moves through a scene, the camera placed by hand in a
+ship's own axes, a fleet of planes, a giant hull in a surface scene, effects other than `exhaust`
+on an orbital craft, the terminator by `sunVisibility`, a plane's own shadows, a spiral galaxy in
+the foreground, `craftEnvironment` updates, sky `set` beyond brightness. A belt round a world of
+the orbit data takes `size` (metres per unit), a comet of the data `size` (its scale).
 
 ### `quote`
 
@@ -17619,7 +17680,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `three_d_off_frame` | warning | in a `3d` scene, an object the beat is about (an object or camera action of the beat names it, or a stand-in whose `voice` says the line) is at least `max_off` (0.5) outside the frame, or behind the camera, at a beat-end or mid-beat still. Fix: `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | warning | in a `3d` scene, an object the beat is about is at least `max_hidden` (0.7) covered by nearer objects (estimated from the objects' spheres; floors, labels, arrows and its own group do not count). Fix: `camera_orbit` round, or move one of them |
 | `web_clipped` | error | in a [`web`](#web) scene, page text cut by more than `tolerance` (of the shorter side) by its own box or an ancestor's with `overflow` other than `visible` (named in the message: `cut by its box card (overflow: hidden) at the right`), or by the page's box where the page does not reach the frame's edge (`region: body`; at the frame's edge it is `off_frame`'s). `off_frame` and `safe_area` leave such text to this rule. Fix: shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
-| `space_scene` | warning | in a [`space`](#space) scene, what its params show before anything is drawn: a world whose globe turns more than `degrees` (12) a frame under the orbit data's speed-up or its own `spin` (it strobes; fix: `spin: locked`, a stated `spin` in seconds, or a smaller speedup), a body drawn enlarged that reaches past another's middle (it covers it; fix: a smaller factor for it), free-standing worlds placed inside each other. What only the page can know (a subject under 3 px, the camera inside a world, a jump between moves) is printed when the page is drawn; narration calling an enlarged or log scene "to scale" is `orbit_scale`'s |
+| `space_scene` | warning | in a [`space`](#space) scene, what its params show before anything is drawn: a world whose globe turns more than `degrees` (12) a frame under the orbit data's speed-up or its own `spin` (it strobes; fix: `spin: locked`, a stated `spin` in seconds, or a smaller speedup), a body drawn enlarged that reaches past another's middle (it covers it; fix: a smaller factor for it), free-standing worlds placed inside each other; a scene whose parts cost `seconds` (2) or more a frame at 1280x720 by the space cookbook's cost table (a sea, ground and clouds together; a descent through the handover; a dressed hull close; with motion blur), with the minutes its frames take and what is cheaper. What only the page can know (a subject under 3 px, the camera inside a world, a jump between moves) is printed when the page is drawn; narration calling an enlarged or log scene "to scale" is `orbit_scale`'s |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -17714,7 +17775,7 @@ lint:
     three_d_off_frame: {max_off: 0.5}       # share of a 3d object (the beat is about) outside the frame
     three_d_hidden: {max_hidden: 0.7}       # share of it covered by nearer objects
     web_clipped: {tolerance: 0.004}        # page text cut by its box (overflow) or the page's box
-    space_scene: {degrees: 12}              # a space scene's globe turning more than this a frame; enlarged bodies covering others
+    space_scene: {degrees: 12, seconds: 2}  # a space scene's globe turning more than this a frame; enlarged bodies covering others; a costly scene
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any

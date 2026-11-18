@@ -1682,10 +1682,12 @@ class OrbitScaleRule(RuleConfig):
 
 
 class SpaceSceneRule(RuleConfig):
-    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other (DESIGN.md §122.12)."""
+    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other (DESIGN.md §122.12); a scene whose parts cost more than ``seconds`` a frame at 1280x720 by the cookbook's cost table (DESIGN.md §123.14)."""
 
     degrees: float = Field(default=12.0, gt=0, le=180)
     """The largest turn of a globe in one frame before it is reported (12: five days a second at 30 fps, as vidgen/space-bodies' own check)."""
+    seconds: float = Field(default=2.0, gt=0, le=600)
+    """The expected seconds a frame at 1280x720 (2 cores, software GL) from which a scene's combination of parts is reported, with the estimate and the minutes its frames take."""
 
 
 class OrbitConservedRule(RuleConfig):

@@ -2,7 +2,8 @@
 
 For an AI agent or a person making space shots with the generator: a sunrise over a planet, a
 ringed world as a crescent, a ship on a real transfer, a fly-by, a powers-of-ten zoom, a black
-hole, a comet, a jump to warp. The `space` scene writes all of these in `video.yaml` alone; this
+hole, a comet, a jump to warp; in the air, a skim over the sea, a plane over a range, a climb
+through a cloud deck, a descent from orbit; a pass along a giant ship and a craft into its bay. The `space` scene writes all of these in `video.yaml` alone; this
 cookbook is about choosing what to show, keeping the picture honest, what each shot costs, and
 how to check it before a render. The full list of keys is in [CONFIG.md](CONFIG.md#space), the
 short form in the author guide (`vidgen guide space-scenes`), a whole film to copy from in
@@ -214,10 +215,329 @@ moves must meet where one hands over); the warp's `over` is when the jump runs, 
       - {move: follow, subject: Ship, view: chase, over: [2, 6], cut: true}
 ```
 
-**A sky from inside the air** (in a `web` scene's script; the `space` scene does not reach it
-yet). `vidgen/space-air` draws the sky from within a world's air for any sun and any height, the
-sun's disc, the haze on far things and the light for things in the air; the air is the one the same
-world shows from orbit. Here a sunset over hills, the sun sinking a degree a second:
+### In the air and beside giant ships (Steps 381–391, in YAML since Step 392)
+
+Two kinds of `space` scene. With `world:` a **surface scene**: one world from orbit to the ground in
+the place's own frame (metres, x east, y up, z south; `vidgen/space-descent`), the air, the sea, the
+ground and cloud decks of one planet, the stars behind them, `flights:` (the `flight_data` words of
+Step 385; the ground is the world's own) and planes flying them; it is drawn straight to the canvas,
+as every number below was measured. Without it an **orbital scene**, which also takes giant ships
+(`hull:`), planes (`plane:`) and craft of the kit's own parts (`parts:`). CONFIG has every key
+([`space`](CONFIG.md#space)); each recipe here validates (`tests/test_docs.py`).
+
+**A dusk from the sea, rising to the curve of the world.** The air (`vidgen/space-air`) is the one
+the same world shows from orbit; a sun 2 degrees up gives the sunset's reds, `film` exposure (the
+default) lifts the dusk. `rise` climbs by equal factors in equal times, so the start is slow and the
+world falls away at the end; `lens: [normal, wide]` widens with the climb.
+
+```yaml
+- id: dusk
+  type: space
+  duration: 10
+  params:
+    world: {sea: calm, sun: [2, 255]}
+    camera: {move: rise, from: 20, to: 8000, heading: 255, horizon: 0.3, lens: [normal, wide]}
+```
+
+The sun's disc is 0.53 degrees across: 7 px in a 640 px frame through a 50 degree lens, so film a
+sunset with a long lens if the disc is the subject. From 20 km the horizon lies 4.5 degrees under the
+level, from 100 km 10 degrees and it curves. `exposure: camera, ev: 0` shows what a camera set for
+daylight sees.
+
+**A skim over the sea at sunset** (1.2 s a frame at 1280x720, 0.18 s in a draft). 14 m over the
+water at 90 m/s towards the sun, turning 14 degrees to the right through the move: the horizon rolls
+into the turn and back (`horizon: level` keeps it level). The glitter path is narrow on a calm sea
+and under a low sun; a `rough` sea shows whitecaps along its crests, a `storm` high waves with dark
+troughs and foam streaks; at dusk the near water keeps the sky's colours (looks, stated in DESIGN
+§123.4). `quality: fast` draws a smoother sea (other waves than `standard`) for a quarter less.
+
+```yaml
+- id: skim
+  type: space
+  duration: 8
+  params:
+    world: {sea: {state: breeze, seed: 3}, sun: [5, 300]}
+    camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}
+```
+
+**Round a volcano** (1.6 s a frame). The ground (`vidgen/space-land`) is the same world's as the
+globe from orbit; `around: {near: [x, z], reach}` finds the highest ground within reach; the circle
+rises over ground that stands too near. Over ground give a skim a clearance the ground holds up at
+(200 m over a desert, 400 m over the alpine range); from under about 400 m the range looks soft.
+`{track: level, glow: lava}` makes the lava glow with the music.
+
+```yaml
+- id: volcano
+  type: space
+  duration: 12
+  params:
+    world: {land: volcanic, sun: [9, 150]}
+    camera: {move: orbit-peak, around: {near: [0, 0], reach: 20000}, radius: 9000, sweep: 30}
+```
+
+**A climb through an overcast, lightning on the kick drum** (2.0 s a frame with a sea and two
+decks). Under a closed deck the day is grey with a bright line at the horizon; inside it is fog; over
+it the deck is a white sea to its own horizon. `adapt: 1` pulls the exposure down a stop as the
+camera nears the top (a look) so the break-out is not a white flash. Decks: `fair`, `overcast`,
+`layers`, `towers`, `storm` ready-made, or your own; `deck:` names one by index or name.
+
+```yaml
+- id: climb
+  type: space
+  duration: 14
+  params:
+    music_data: true
+    world:
+      sea: breeze
+      sun: [12, 30]
+      clouds:
+        seed: 4
+        decks: [{type: stratus, base: 1500, top: 2700}, {type: cirrus, base: 12000}]
+        towers: 4
+        lightning: {track: kick}
+    camera: {move: climb-through, deck: 0, heading: 40, adapt: 1}
+```
+
+**A plane chased over the range, a contrail behind it** (1.45 s a frame with the alpine ground and
+the plane). The flight is planned in Python, checked never to come under the ground (a path into a
+mountain is an error naming the time and place, when the frames are made); the camera follows 60 m
+behind and 16 m above with a lag, swinging wide in a turn. Contrails form only above 8 to 9 km
+(`always: true` anywhere).
+
+```yaml
+- id: chase
+  type: space
+  duration: 20
+  params:
+    world: {land: alpine, clouds: fair, sun: [24, 250]}
+    flights:
+      - name: Plane
+        start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
+        legs:
+          - {follow: {clearance: 300}, for: 12}
+          - {turn: {by: 60, bank: 35}, follow: {clearance: 300}}
+          - {follow: {clearance: 300}, for: 30}
+    craft: [{name: Plane, plane: glider, seed: 7, fly: Plane, effects: {contrails: {always: true}}}]
+    camera: {move: chase, flight: Plane, lens: wide-normal}
+```
+
+**A plane of your own, from its wingtip.** Any part of a ready-made plane's description can be
+given (`wing`, `fins`, `body`, `engines`, `cockpit`, `markings`; the wing presets are `delta`,
+`double-delta`, `cranked-arrow`, `swept`, `straight`, `ogival`, `stub`, `blended`, `long`). The
+`wing` view rides on the plane: the wing and its tip light stand still and the world tilts as it
+banks. `vapour` puts mist over the wings in hard turns, a cone near Mach 0.97, only in dense air.
+The designs are invented and must stay so: no copy of a real or film vehicle.
+
+```yaml
+- id: wingtip
+  type: space
+  duration: 10
+  params:
+    world: {sea: rough, clouds: fair, sun: [30, 120]}
+    flights:
+      - name: Mine
+        start: {x: 0, z: 0, height: 1200, heading: 90, speed: 160}
+        legs: [{straight: 3}, {turn: {by: 90, bank: 40}}, {straight: 20}]
+    craft:
+      - name: Mine
+        plane: skiff
+        seed: 3
+        fly: Mine
+        wing: {preset: swept, span: 17, sweep: 42, dihedral: 3}
+        fins: {type: vee, height: 4}
+        scheme: grey
+        effects: {exhaust: true, vapour: true}
+    camera: {move: wing, flight: Mine, view: wingtip, side: right}
+```
+
+**A fly-past seen from the ground** (0.85 s a frame over a sea). The camera stands 3 m over the
+water where the plane will pass at 2 s, 100 m to its right, and turns to keep it in frame: a
+whip-pan at the pass. `exhaust` gives each bell a flame with a sharp core and shock diamonds low
+down (from 45 % throttle).
+
+```yaml
+- id: flypast
+  type: space
+  duration: 6
+  params:
+    world: {sea: calm, sun: [8, 260]}
+    flights:
+      - name: Plane
+        start: {x: -600, z: 0, height: 40, heading: 90, speed: 300}
+        legs: [{straight: 10}]
+    craft: [{name: Plane, plane: needle, seed: 2, fly: Plane, throttle: 1, effects: {exhaust: true, vapour: true}}]
+    camera: {move: fly-past, flight: Plane, at: 2, closest: 100, side: right, stand: ground, eye: 3}
+```
+
+**A giant ship: a pass along its hull, then a craft into a bay** (1.55 s and 1.6 s a frame). A 16 mm
+lens 60 m off the port wall at 40 m/s: plates, windows and a hangar's mouth stream past while the
+wall runs to a vanishing point; then a 50 m craft of the kit flies into hangar 2 and shrinks to a
+speck against the mouth. A 3 km ship takes 80 s at that speed: show 15 or 20 s of it. vidgen sets
+the view's near plane to 4 m when a hull is in the scene (closer than that the default slices a
+hull and draws the world over it). Families: `spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`,
+`twin`, another ship for every seed; look first: `vidgen parts 'hull-*'`.
+
+```yaml
+- id: carrier
+  type: space
+  duration: 16
+  params:
+    orbits: {central: earth, speedup: 1, bodies: [{name: Carrier, altitude: 900 km}]}
+    bodies: [{name: Earth}]
+    sun: {direction: [0.3, 0.25, 0.9]}
+    craft:
+      - name: Carrier
+        hull: carrier
+        seed: 1
+        length: 3200
+        dress: {plumes: bank}
+        scale_ref: {kind: ship, at: hangar-2, into: {hangar: hangar-2, over: [8, 16]}}
+    camera:
+      - {move: hull-pass, ship: Carrier, over: [0, 8], side: port, standoff: 60, from: 0.3, speed: 40}
+      - {move: into-bay, ship: Carrier, hangar: hangar-2, over: [8, 16], cut: true}
+```
+
+**Powers of ten from a hangar to the world** (0.8 s a frame): from 80 m off the bay's mouth to the
+whole ship to the ship as a speck by its world.
+
+```yaml
+- id: powers
+  type: space
+  duration: 8
+  params:
+    orbits: {central: earth, speedup: 1, bodies: [{name: Ship, altitude: 900 km}]}
+    bodies: [{name: Earth}]
+    craft: [{name: Ship, hull: carrier, seed: 1, length: 3200}]
+    camera: {move: scale-zoom, ship: Ship, window: hangar-2, close: 80, world: Earth}
+```
+
+**The bank lighting on a bar, the windows on the music** (2.1 s a frame with eight bells). The
+camera creeps in behind the bells until `light`, then is pushed back as they fire; the hull's
+throttle follows the shot. `dress: {plumes: bank}` draws one plume per bank (cheaper).
+
+```yaml
+- id: burn
+  type: space
+  duration: 8
+  params:
+    music_data: true
+    orbits: {central: earth, speedup: 1, bodies: [{name: Ship, altitude: 900 km}]}
+    bodies: [{name: Earth}]
+    craft: [{name: Ship, hull: lance, seed: 2, dress: {plumes: bank}}]
+    camera: {move: stern-burn, ship: Ship, light: bar 3, shake: {amount: 0.3}}
+    music: [{track: level, glow: Ship, as: lights}]
+```
+
+**A reveal: the ship keeps coming** (0.45 s a frame while only the bow is in frame, 1.1 s with the
+hull overhead). The bow slides in over the top of the frame at `at` and the hull keeps coming for
+its length over a thirtieth of it a second; the small craft (`escort: true`) enters last, after the
+stern. Hold the shot for all of it: the size is told by the time it takes.
+
+```yaml
+- id: reveal
+  type: space
+  duration: 40
+  params:
+    orbits: {central: earth, speedup: 1, bodies: [{name: Ark, altitude: 1200 km}]}
+    bodies: [{name: Earth}]
+    craft: [{name: Ark, hull: ark, seed: 3, dress: true, scale_ref: {kind: ship, at: bottom, seed: 2, escort: true}}]
+    camera: {move: hull-reveal, ship: Ark, at: 3, lane: 200}
+```
+
+**A fleet**: one palette and one accent (one maker); keep one hull near the lens, the rest behind it.
+Five dressed hulls at `far` detail: 0.9 s a frame.
+
+```yaml
+- id: fleet
+  type: space
+  duration: 10
+  params:
+    sky: {seed: 6}
+    sun: {direction: [1, -0.4, 0.3]}
+    craft: [{name: Fleet, hull: [carrier, spine, twin, lance, cluster], fleet: 5, seed: 3, spacing: 2600, at: [0, 0, 0]}]
+    camera: {move: arc, subject: Fleet, phase: [three-quarter, half], distance: 30000, lens: long}
+```
+
+**From orbit to a skim over the sea, in one shot** (DESIGN §123.13). `descend` comes down by equal
+factors of height in equal times and ends moving, level; the `skim` with `continues: true` takes
+over there with no cut. Keep ten seconds or more for 400 km.
+
+```yaml
+- id: descent
+  type: space
+  duration: 14
+  params:
+    world: {planet: earth, at: [8, -150], sun: [38, 250], sea: {state: breeze, seed: 3}, clouds: {sky: fair, seed: 4}}
+    camera:
+      - {move: descend, over: [0, 10], from: 400 km, to: 300, heading: 300, turn: 30, speed: 90, lens: [normal, wide]}
+      - {move: skim, over: [10, 14], continues: true}
+```
+
+What happens on the way down, and what a frame costs at 1280x720:
+
+| height | drawn | seconds a frame |
+|---|---|---|
+| 400 km to 80 km (`globe`) | the globe through the world's air, the stars | 0.75 |
+| 80 km to 2.5 km (`handover`) | the sea and the decks near the camera, the globe far off; everything is computed | about 3 |
+| under 2.5 km (`local`) | the air, the sea, the decks | 1.8 |
+
+A Mars-like desert is `world: {land: mars, sun: [30, 120]}` with `descend`'s `to: 500` and `speed:
+160`. Honest notes for the film: the camera falls far faster than any vehicle; the globe's clouds and
+the decks' are not the same clouds, one dissolves into the other; between 150 km and 25 km over a sea
+the surface is soft; a thin cirrus deck is a white line on the horizon while the camera passes it.
+
+**A craft of your own parts** (Phase AN's kit, from YAML): the root part, then parts attached at its
+points (`fore`, `aft`, `port`, `starboard`, `zenith`, `nadir`, `tip`, or `{angle, along, out}`) or in
+a ring (`around`).
+
+```yaml
+- id: kit
+  type: space
+  duration: 8
+  params:
+    sun: {direction: [1, 0.3, 0.4]}
+    craft:
+      - name: Mine
+        seed: 3
+        at: [0, 0, 0]
+        parts:
+          part: hull
+          shape: prism
+          sides: 8
+          radius: 1
+          length: 1.4
+          skin: foil
+          attach:
+            - {at: fore, part: dish, diameter: 3}
+            - {around: {count: 2, along: 0.5}, part: solar-wing, panels: 3}
+            - {at: aft, part: engine, exit: 0.3, kind: chemical}
+    camera: {move: arc, subject: Mine, phase: [three-quarter, half], distance: 14, lens: normal}
+```
+
+**A jump across a cut, with a flash on it.** Give the same bar to the scene before the cut and the
+scene after it: the warp's progress (`warpCut`) and the flash (`flashCut`) are each one curve across
+the cut. A match cut inside a scene: `{move: arc, subject: Moon, match: Earth, cut: true}` places the
+Moon as the Earth's disc was in the move before.
+
+```yaml
+- id: across
+  type: space
+  duration: 6.4
+  params:
+    music_data: true
+    fade: false
+    craft: [{name: Ship, kind: ship, at: [0, 0, 0], velocity: [0, 20000, 0], throttle: 1}]
+    phenomena: [{kind: warp, name: Jump, cut: {at: bar 3, seconds: 3}}]
+    flash: [{at: bar 3, amount: 2}]
+    camera: {move: follow, subject: Ship, view: chase}
+```
+
+### What YAML does not reach: three pages in code
+
+`vidgen space-page . --scene ID` writes any `space` scene out as a `web` scene's script to go on
+from. Three things need code from the start.
+
+*Things of your own under the air and a sun that moves through the scene* (a time-lapse sunset):
 
 ```js
 // sketch (parts of a page, not a whole file): a sunset from 300 m
@@ -236,222 +556,9 @@ export function frame(t) {
 }
 ```
 
-Film exposure (the default) lifts the dusk and brings the stars out as the sky darkens: from
-sunset to a sun 12 degrees down the sky fades through orange and deep blue without a step, night
-by 18 degrees (a time-lapse: a degree every 4 s of film is the real rate times 60). The sun is
-0.53 degrees across: 7 px in a 640 px frame through a 50 degree lens, so film a sunset with a long
-lens (`fov` 15 to 25) if the disc is the subject.
-`exposure: "camera", ev: 0` shows what a camera set for daylight sees. For a height, move the
-camera: at 10 km the horizon curves and the sky darkens, above about 70 km (the Earth-like air's
-top) it is space with the limb's glow.
-
-**A sea under that sky** (in a `web` scene's script). `vidgen/space-sea` lays water to the
-horizon under the air: seeded waves on vidgen's clock, the sky mirrored, the sun's glitter path,
-whitecaps when it blows, the horizon where the height puts it. Here a low pass towards a setting
-sun, with something riding the water:
-
-```js
-// sketch (parts of a page, not a whole file): 12 m over a breeze sea at sunset
-import {air, sunDirection} from "vidgen/space-air";
-import {sea} from "vidgen/space-sea";
-const sky = air(renderer, "earth", {sun: sunDirection(3, 5), scene});
-const water = sea(renderer, sky, {state: "breeze", seed: 3});          // "calm", "swell", "rough", "storm"; water: "methane" on an invented world
-scene.add(sky.object, water.object);
-export function frame(t) {
-  camera.position.set(0, 12, -40 * t); camera.lookAt(0, 6, -40 * t - 300);
-  sky.update(t, {camera}); water.update(t, {camera});                  // the air first
-  buoy.position.set(...water.pointAt(20, -40 * t - 150, t));           // the same waves the picture draws
-  renderer.render(scene, camera);
-}
-```
-
-The glitter path is narrow on a calm sea and under a low sun, a broad column from high up; a
-`rough` sea shows whitecaps along its crests, a `storm` high waves with dark troughs and foam streaks; from high up the glitter fades before the horizon, and at dusk (film exposure) the near water keeps the sky's colours: looks, stated in DESIGN §123.4. From 20 km the horizon lies 4.5
-degrees under the level, from 100 km 10 degrees and it curves. Keep the camera over the crests
-(`water.heightAt(x, z, t)` plus a margin). Away from the origin the world's roundness counts
-(3.45 m at 6.6 km): take heights from `water.pointAt` and `water.horizon.height`. `quality:
-"fast"` draws a smoother sea (other waves than `standard`) for a quarter to a third less.
-
-**Ground in that sky** (in a `web` scene's script). `vidgen/space-land` draws mountains, deserts,
-dunes and crater fields on the world's sphere, the same world's as `vidgen/space-bodies` shows
-from orbit; no mesh, so nothing pops.
-
-```js
-import * as THREE from "three";
-import {air, sunDirection} from "vidgen/space-air";
-import {land} from "vidgen/space-land";
-let renderer, scene, camera, sky, ground;
-export function load(ctx) {
-  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
-  renderer.setSize(ctx.width, ctx.height, false);
-  scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
-  camera = new THREE.PerspectiveCamera(55, ctx.width / ctx.height, 1, 1e8);
-  sky = air(renderer, "earth", {sun: sunDirection(9, 150)});          // a low sun: long shadows
-  ground = land(renderer, sky, {preset: "alpine"});                   // "mars", "canyon", "dunes", "snow", "volcanic", "airless"
-  scene.add(sky.object, ground.object);                               // the dome, then the ground
-}
-export function frame(t) {
-  const x = 150 * t, z = -60 * t, y = ground.heightAt(0, 0) + 2500;   // metres; never under ground.heightAt(x, z)
-  camera.position.set(x, y, z); camera.lookAt(x + 980, y - 160, z - 170); camera.updateMatrixWorld();
-  sky.update(t, {camera}); ground.update(t, {camera});                // the air first
-  renderer.render(scene, camera);
-}
-```
-
-A coast: `land(renderer, sky, {world: "earth", at: [-11.5, -15.2], mountains: {from: -300, to:
-500, base: 0.35, height: 2600, length: 9000}})` and `sea(renderer, sky, {depth: ground.depth})`
-added after the ground. Clouds: `clouds(renderer, sky, {sky: "fair", behind: ground.behind})`,
-then `ground.shadedBy(weather.shade)`; update the ground before the clouds. A world without
-air: `air(renderer, vacuum(RADII.moon), {exposure: "camera", ev: 1.3})`. Another place:
-`{world: "mars", at: [latitude, longitude]}`. High views are the strong ones; from under about
-400 m the range looks soft (deserts and craters hold from 200 m). Look first: `vidgen parts
---kind land`.
-
-**Clouds in that sky** (in a `web` scene's script). `vidgen/space-clouds` draws cloud decks on
-the world's sphere: here a climb through an overcast into the sun, with towers standing through
-the deck and lightning in them on the score's kick drum.
-
-```js
-import * as THREE from "three";
-import {air, sunDirection} from "vidgen/space-air";
-import {clouds} from "vidgen/space-clouds";
-import {trackArrays} from "vidgen/music-time";
-let renderer, scene, camera, sky, weather;
-export function load(ctx) {
-  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
-  renderer.setSize(ctx.width, ctx.height, false);
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(60, ctx.width / ctx.height, 1, 1e8);
-  sky = air(renderer, "earth", {sun: sunDirection(12, 30)});
-  const kicks = ctx.music ? trackArrays(ctx.music, {hits: ["kick"]}).hits.kick : [];
-  weather = clouds(renderer, sky, {seed: 4, decks: [{type: "stratus", base: 1500, top: 2700}, {type: "cirrus", base: 12000}],
-    towers: {count: 4}, lightning: {times: kicks}});
-  scene.add(sky.object, weather.object);                               // the dome, then the clouds
-}
-export function frame(t) {
-  camera.position.set(0, 900 + 260 * t, -90 * t);                      // under the deck, through it, over it
-  camera.lookAt(0, 900 + 260 * t + 40, -90 * t - 1000);
-  sky.update(t, {camera}); weather.update(t, {camera});                // the air first; the same camera
-  renderer.render(scene, camera);
-}
-```
-
-Under a closed deck the day is grey with a bright line at the horizon; inside it is fog; over it
-the deck is a white sea to its own horizon (`weather.horizon(0)`), with every swell lit from the
-side when the sun is low. `sky: "fair"`, `"overcast"`, `"layers"`, `"towers"` and `"storm"` are
-ready-made; `weather.coverAt(deck, x, z, t)` tells a camera path where the gaps are. Over a sea,
-`sea(renderer, sky, {shade: weather.shade})` puts the clouds' shadows on the water. A giant of
-gas has no ground: `const sky = air(renderer, giantAir("jupiter")); clouds(renderer, sky,
-giantSky("jupiter", {scale: sky.model.H}))` with the camera about 1.1 x `sky.model.H` up gives
-decks with the bands of the same world in `vidgen/space-bodies` north and south of that
-`latitude`, a high haze and the dark below; its heights, its air and the bands' width (40 times
-narrower than true, `squeeze`) are a look (DESIGN §123.5).
-Things in the scene are drawn in front of every cloud.
-
-**A plane over that ground** (a `web` scene: the path in `video.yaml`, the picture in its
-script). The flight is planned in Python with `flight_data:` — terrain following, a banked turn,
-a climb — checked never to come under the alpine range, and the page reads it as `ctx.flight`.
-Give the page's `land(...)` the same preset (or options) as `ground:`: the frame is the land's.
-
-```yaml
-- id: pass
-  type: web
-  duration: 20
-  params:
-    script: fly.js
-    flight_data:
-      ground: {land: alpine}
-      flights:
-        - name: Plane
-          start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
-          legs:
-            - {follow: {clearance: 300}, for: 12}
-            - {turn: {by: 60, bank: 35}, follow: {clearance: 300}}
-            - {follow: {clearance: 300}, for: 30}
-            - {climb: {to: 5500, rate: 20}, speed: {to: 180}}
-```
-
-```js
-import * as THREE from "three";
-import {air, sunDirection} from "vidgen/space-air";
-import {land} from "vidgen/space-land";
-import {craft} from "vidgen/space-craft";
-let renderer, scene, camera, sky, ground, plane, f;
-export function load(ctx) {
-  f = ctx.flight;
-  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
-  renderer.setSize(ctx.width, ctx.height, false);
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 1, 4e5);
-  sky = air(renderer, "earth", {sun: sunDirection(35, 200), scene});   // scene: the sun's and the sky's light are added to it
-  ground = land(renderer, sky, {preset: "alpine"});                    // the same ground as flight_data's
-  plane = craft("probe", {seed: 1}).fly(f, {flight: "Plane"});         // a stand-in craft (a few metres); its attitude is the flight's
-  scene.add(sky.object, ground.object, plane.object);
-}
-export function frame(t) {
-  plane.update(t);                                                     // where the flight is, banked as it turns
-  const p = new THREE.Vector3(...f.position("Plane", t)), v = new THREE.Vector3(...f.velocity("Plane", t)).normalize();
-  camera.position.copy(p).addScaledVector(v, -24).add(new THREE.Vector3(4, 7, 0)); camera.lookAt(p);   // a chase from behind
-  sky.update(t, {camera}); ground.update(t, {camera});
-  renderer.render(scene, camera);
-}
-```
-
-`f.aboveGround("Plane", t)` is what the page's `ground.above(position)` says (to 10⁻⁷ m), `f.mach`,
-`f.bank`, `f.load` and `f.heating` drive instruments and effects, and `f.path("Plane")` is the
-whole path as a polyline. A path into a mountain is an error when the scene's frames are made
-(`vidgen render`, `vidgen still`), naming the time and place (`lift: true` raises the path there instead). Far ground is drawn
-a little smoother than `heightAt` (valleys filled at tens of kilometres): keep the camera near the
-plane. A start from orbit: `start: {orbit: Ship, at: 'bar 5'}` with the scene's `orbit_data` and a
-first leg `{reentry: {to: {height: 12000, speed: 250}}}` (DESIGN §123.7: what is physical, what is
-a look).
-
-**A space plane on that flight** (`vidgen/space-plane`; in the page above, in place of the probe).
-Six ready-made planes — `glider`, `freighter`, `needle`, `lifter`, `scout`, `skiff` — each
-another plane for every seed. On a flight it banks with the turn (the right wing down in a right
-turn) and its elevons, rudders and brakes move with the flight's rates:
-
-```js
-import {plane} from "vidgen/space-plane";
-const ship = plane("glider", {seed: 7}).fly(f, {flight: "Plane"});     // 22 to 30 m; +z the nose, +y up
-scene.add(ship.object);
-for (const m of Object.values(ship.materials)) sky.haze(m);            // the air between the camera and the plane
-const sunDir = new THREE.Vector3(...sunDirection(35, 200)), light = sky.light.sun, s = light.shadow.camera;   // its own shadows (renderer.shadowMap.enabled = true)
-light.castShadow = true; light.shadow.mapSize.set(2048, 2048); light.shadow.normalBias = 0.04;
-s.left = s.bottom = -ship.shadows.size; s.right = s.top = ship.shadows.size; s.updateProjectionMatrix();
-// each frame, after the camera is placed:
-ship.update(t, {gear: 0});                                             // {gear: 1} on the approach, {bay: 1} in orbit, {throttle: 1}: the bells fire
-light.position.copy(ship.object.position).addScaledVector(sunDir, 4 * ship.shadows.size); light.target.position.copy(ship.object.position); light.target.updateMatrixWorld();
-```
-
-**A plane of your own from the parts.** One description of plain numbers and words; the wing is
-one function whose presets (`delta`, `double-delta`, `cranked-arrow`, `swept`, `straight`,
-`ogival`, `stub`, `blended`, `long`) are only parameter sets, so any of its numbers can be given
-as well:
-
-```js
-import {planeFrom} from "vidgen/space-plane";
-const mine = planeFrom({
-  body: {length: 26, width: 3.8, height: 3.2, nose: "chined", noseLength: 0.34, belly: 0.8, bay: {from: 0.45, to: 0.72, width: 36}},
-  wing: {preset: "swept", span: 17, sweep: 42, dihedral: 3, at: 0.42, up: -0.6, tip: {height: 1.4, cant: 75}},
-  fins: {type: "vee", height: 4, rootChord: 4.5, at: 0.8},
-  engines: {count: 2, kind: "vacuum"}, cockpit: {style: "panes", panes: 3}, markings: {stripes: 2}, bodyFlap: true,
-}, {seed: 3, scheme: "grey", scorch: 0.5, accent: 0x2f5fa8});
-console.log(mine.problems());      // [] — or what looks wrong: a wing off the body, gear too short
-```
-
-`planeSpec("glider", {seed: 7}).spec` is a ready-made plane's description to start from; with
-`planeKit({...})` the parts can be made and placed one by one (`kit.body`, `kit.wing`, `kit.fin`,
-`kit.nozzles`, `kit.nacelle`, `kit.intake`, `kit.gear`, then `kit.plane(body)`). The designs are
-invented and must stay so: no copy of a real or film vehicle, no flags or agency names (markings
-are stripes and a registration made from the seed). It is a look, not aerodynamics. A plane
-casts no shadow on the ground and is drawn in front of every cloud; the ground hides it behind
-a ridge. Look first: `vidgen parts 'plane-*'`.
-
-**A re-entry with its glow, and vapour trails on a flight** (`vidgen/space-effects`; in the page
-above, after the plane is made). On a flight whose first leg is a `reentry` the glow follows the
-flight's `heating`, the layer sits on the side the air comes from, and far away the plane is a
-bright head with a train of light:
+*A re-entry from orbit*: a `web` scene with `orbit_data` and `flight_data` whose flight starts
+`{orbit: Ship}` with a first leg `{reentry: {to: {height: 12000, speed: 250}}}` (DESIGN §123.7), the
+plane flown by `ship.fly(ctx.flight)` and its glow from `vidgen/space-effects`:
 
 ```js
 import {effects} from "vidgen/space-effects";
@@ -461,21 +568,12 @@ scene.add(fx.object);              // trails and the train stay where they were 
 fx.update(t);                      // or by hand: fx.update(t, {heating: 0.8, velocity: [6600, 0, 0], height: 75000})
 ```
 
-`reentry: {full: 0.65}` is the heating shown as the white-pink peak (the 400 km re-entry of
-DESIGN §123.7 reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5.
-Contrails form only above 8 to 9 km (`contrails: {always: true}` anywhere, `from: "wingTips"`);
-`exhaust` gives each bell a flame with a sharp core and a row of shock diamonds low down (from
-45 % throttle) and a wide pale plume high up; `vapour` adds a cone near Mach 0.97 and mist over the wings in hard turns, both only in dense
-air. Music: `fx.update(t, {boost: level, pulse: 1 + 0.3 * level})`. The same call works on
-`craft("lander")` or a group of your own (`shape: {radii: [across, up, along]}`). Shapes, colours
-and lifetimes are looks; where and when things show follows the flight. Everything is drawn in
-front of every cloud. Look first: `vidgen parts --kind effect`.
+`reentry: {full: 0.65}` is the heating shown as the white-pink peak (the 400 km re-entry of DESIGN
+§123.7 reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5. A flight far
+from its anchor is lit by the anchor's sun (the scene's +y is not up there).
 
-**A giant ship in orbit, with something to measure it by** (`vidgen/space-hull`; a `web` scene
-with `orbit_data: {central: earth, speedup: 1, bodies: [{name: Ship, altitude: 900 km}]}`). Seven
-invented families (`spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`, `twin`), another ship
-for every seed. A kilometre of hull says nothing by itself: put a 50 m craft beside a hangar
-slot, or the world behind it.
+*A giant ship with the camera in its own axes, and the terminator by hand*: the moves above place
+the camera from the hull's regions; for a place of your own (x port, y up, z the bow):
 
 ```js
 import {SpaceView} from "vidgen/space-scale";
@@ -496,40 +594,8 @@ space.update(t, {from: {body: "Ship", offset: own([900, 60, 900])}, to: {body: "
 earth.update(t); ship.update(t, {sun, throttle: 0}); small.update(t, {sun}); sun.update(t); light.update(t);
 ```
 
-Lenses that read as large: a normal lens (30 degrees) a few hundred metres off the hull with the
-small craft in frame; a long lens (12 to 18 degrees) from 10 to 45 km with the world behind
-(`own([9000, 6000, 3500])`). A wide lens close along the hull needs the fine detail of the next
-recipe. `ship.anchor("hangar-1")`, `"bridge"`, `"bow"`, `"bell-1"` are places to aim at;
-`ship.problems()` names what looks wrong; `hullFleet(["carrier", "spine", "twin"], {count: 5,
-seed: 3})` is a formation at `far` detail. Look first: `vidgen parts 'hull-*'`.
-
-**A giant ship that reads as kilometres long** (`vidgen/space-hull-detail` on the recipe above).
-Dress the hull once and update the detail after the hull:
-
-```js
-import {dress} from "vidgen/space-hull-detail";
-const detail = dress(ship, renderer);                 // maps baked once (vidgen cache), clutter, bays, lamps, plumes
-// frame(t), after ship.update(t, {sun, throttle}) and light.update(t):
-detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light});   // banks of windows come on with the music; never a flicker
-```
-
-The shots, each with the camera in the ship's own axes (`own(...)` of the recipe above; numbers
-for the 3.2 km carrier of seed 1, whose port wall is at x = 525 m, deck at y = 138 m, hangar 2
-at `[518, -44, 132]`):
-
-| shot | camera and light | why it reads as large |
-|---|---|---|
-| a craft into a bay | `const small = ship.scaleRef("ship", {at: "hangar-2"})`; each frame `detail.fly(small, "hangar-2", u)` (u 0..1 over 8 to 12 s); from `[960, 20, 470]` to `[518, -55, 150]`, 30 degrees; the sun high and ahead (`[0.2, 0.75, 0.6]`) so the mouth is in shade | a 50 m craft shrinks to a speck against the mouth; the bay has a floor, a back wall and parked craft |
-| a slow pass along the hull | from `[572, 70, -1150 + 40 * t]` to `[545, 40, 1200]`, 78 degrees, 50 m off the wall; the sun ahead and low (`[0.3, 0.25, 0.9]`) | seams, hatches and windows stream past near the lens while the wall runs to a vanishing point |
-| over the planet | from `[8000, 6800, 5000]` to `[0, -200, 0]`, 15 degrees, a craft 420 m off the port side (`scaleRef("ship", {at: "port", gap: 420})`) | the long lens lays the hull on the cloud deck; the craft is two pixels |
-| the night side | from `[1300, 300, 900]` to `[400, 50, 0]`, 35 degrees, the sun behind the hull (`[-0.7, 0.3, -0.6]`) | thousands of windows in rows, the bays as lit rooms, red lamps along the side |
-| crossing the terminator | the ship's orbit carries it out of (or into) the world's shadow; from ahead and above (`[2300, 1500, 4400]` to `[250, 60, 500]`, 26 degrees) | the windows of every wall the sun leaves come out; the faces it reaches go plain |
-| the bank firing | from `[1500, 500, -3100]` to `[200, 0, -1700]`, 40 degrees; `ship.update(t, {sun, throttle: 0.3 + 0.7 * ctx.music.level(t)})` | the frames and rings round the bells are small against them; the plume is longer than the block |
-| a fleet | `const fleet = hullFleet(["carrier", "spine", "twin", "lance", "cluster"], {count: 5, seed: 3, spacing: 2600}); const details = dressFleet(fleet, renderer)`; `fleet.update(t, {sun}); details.update(t)` | one palette and one accent: one maker; keep one hull near the lens, the rest behind it |
-
-The terminator with a sun given as a direction: a `spaceLight` does not darken the ship in the
-world's shadow then (the sun stands "nearer" than the world). Do it by hand after
-`light.update(t)`:
+A `spaceLight` with a sun given as a direction does not darken the ship in the world's shadow;
+do it by hand after `light.update(t)`:
 
 ```js
 import {sunVisibility} from "vidgen/space-light";
@@ -538,157 +604,6 @@ const seen = sunVisibility(sun.direction.toArray().map((x) => x * 1e12), Math.ta
   [{at: [w.x - at.x, w.y - at.y, w.z - at.z], radius: earth.object.getWorldScale(new THREE.Vector3()).x, air: null}]);
 light.directional.color.setRGB(...seen.fraction);
 ```
-
-Honest exposure (`spaceLight({exposure: "camera", ev})` and `detail.update(t, {light})`): exposed
-for sunlight no window can be seen; open up about ten stops on the night side and they are
-there. In `film` (the default) windows are dimmed where the sun lights the wall and lifted when
-smaller than a pixel: a look. Cheaper: `dress(ship, renderer, {plumes: "bank"})` when the bells
-fire, `{clutter: false}` or a hull at `far` detail when it is small in the frame. Never give a
-lamp, a plume or anything else that must stand in front of the ship `frustumCulled = false`: a
-`SpaceView` draws such things as sky. Look first: `vidgen parts 'hull-dressed' 'hull-windows'
-'hull-bay' 'hull-torch' 'hull-fleet-dressed'`.
-
-**Camera moves in the air and beside a giant ship** (`vidgen/space-camera-air`; in the pages of
-the recipes above). One rig, `airCamera(...)`, a `spaceCamera` with thirteen more moves; each is
-a function of the scene's time, so a still at t is frame t and two moves cut together on a bar.
-Place the camera first, then update the air and what stands in it with that camera.
-
-*A skim over the sea at sunset* (the sea recipe's page; 1.2 s a frame at 1280x720, 0.18 s in a
-draft at 426x240):
-
-```js
-import {airCamera} from "vidgen/space-camera-air";
-const sky = air(renderer, "earth", {sun: sunDirection(5, 300), scene}), water = sea(renderer, sky, {state: "breeze", seed: 3});
-const cam = airCamera({camera, sky, water, music: ctx.music});
-export function frame(t) {
-  cam.apply(t, cam.skim(t, {over: [0, 8], from: [0, 0], heading: 284, speed: 90, clearance: 14, turn: 14, lens: "wide"}));
-  sky.update(t, {camera}); water.update(t, {camera});
-  renderer.render(scene, camera);
-}
-```
-
-14 m over the water at 90 m/s towards the sun, turning 14 degrees to the right through the move:
-the horizon rolls into the turn and back (`horizon: "level"` keeps it level, `bank: 0` too).
-Over ground give the rig `ground` (the land) and a clearance the ground holds up at (200 m over
-a desert, 400 m over the alpine range): the path rises before a ridge (`lookAhead` seconds of
-flight) and the camera is never nearer the ground than `margin`. `over: [{bar: 5}, {bar: 9}]`
-puts it on bar lines; `ease: [1, 0]` starts at rest and ends moving.
-
-*A chase of a plane over the range* (the plane recipe's page with `flight_data`; 1.45 s a frame
-at 1280x720 with the alpine ground and the plane's shadows, 0.30 s in a draft):
-
-```js
-const cam = airCamera({camera, sky, ground, flight: ctx.flight, crafts: {Plane: ship}});
-export function frame(t) {
-  ship.update(t);                                                   // the plane first: the camera reads the flight
-  cam.apply(t, cam.chase(t, {flight: "Plane", lens: "wide-normal"}));   // 60 m behind, 16 m above, lag 0.7 s, half its bank
-  sky.update(t, {camera}); ground.update(t, {camera});
-  renderer.render(scene, camera);
-}
-```
-
-In a turn the camera swings wide and comes round after the plane, rolling half as far as it
-banks. The same flight from on board: `cam.wing(t, {flight: "Plane", view: "wingtip", side:
-"right"})` (the wing and its tip light stand still, the world tilts; 1.5 s); from the ground or
-the air as it passes: `cam.flyPast(t, {flight: "Plane", at: {bar: 9}, closest: 100, side:
-"right", stand: "ground", eye: 3})` (0.85 s over a sea); on a re-entry `view: "belly"` looks
-back up at the tiles and the glow (1.3 s). Out of a cloud deck: `cam.climbThrough(t, {over: [0,
-14], deck: 0, heading: 40, adapt: 1})` with `air(renderer, "earth", {ev: () => now.ev})` and `now
-= ` the shot of each frame (2.0 s with a sea and two decks). Round a volcano:
-`cam.orbitPeak(t, {over: [0, 12], around: {near: [0, 0], reach: 20000}, radius: 9000, sweep:
-30})` (1.6 s). From the surface to the curve of the world: `cam.rise(t, {over: [0, 10], from: 15,
-to: 60000, heading: 300, lens: ["normal", "ultra-wide"]})` (2.1 s with a sea and fair clouds; in
-under 8 s the clouds strobe).
-
-*A pass along a hull* (the dressed ship's page; 1.55 s a frame at 1280x720, 0.43 s in a draft):
-
-```js
-const space = new SpaceView(ctx, {renderer, scene, camera, near: 4});     // near: the world must not show through a hull this close
-const cam = airCamera({space, camera, ships: {Ship: ship}});
-export function frame(t) {
-  space.update(t, {from: {body: "Ship", offset: [0, 0, 1000]}, to: "Ship"}); ship.update(t, {});   // the ship's attitude at t
-  const shot = cam.apply(t, cam.hullPass(t, {ship: "Ship", over: [0, 20], side: "port", standoff: 60, from: 0.3, speed: 40}));
-  earth.update(t); ship.update(t, {sun, throttle: 0}); sun.update(t); light.update(t); detail.update(t, {lights: 1, light});
-  renderer.render(scene, camera);
-}
-```
-
-A 16 mm lens 60 m off the port wall at 40 m/s: plates, windows and a hangar's mouth stream past
-while the wall runs to a vanishing point. The path is made from the hull's regions: `side:
-"dorsal"` flies over the deck and lifts over its towers. A 3 km ship takes 80 s at that speed:
-show 15 or 20 s of it. Into a bay: `cam.intoBay(t, {ship: "Ship", hangar: "hangar-2", over: [0,
-10]})` (1.6 s; the strongest of the ship moves: the whole ship, the mouth, the cargo inside).
-The bank lighting on a bar: `const shot = cam.sternBurn(t, {ship: "Ship", over: [0, 8], light:
-{bar: 3}, shake: {amount: 0.3}})` and `ship.update(t, {sun, throttle: shot.throttle})` (2.1 s
-with eight bells firing).
-
-*A reveal* (the same page; 0.45 s a frame while only the bow is in the frame, 1.1 s with the
-hull overhead):
-
-```js
-const small = ship.scaleRef("ship", {at: "bottom", seed: 2});         // a 50 m craft for the end of the joke
-// frame(t), in place of the pass:
-const shot = cam.apply(t, cam.hullReveal(t, {ship: "Ship", at: {bar: 3}, lane: 200}));
-small.object.position.set(...shot.escort);                             // it enters the frame last, after the stern
-```
-
-The camera looks along the ship's heading from under it; at `at` the bow slides in over the top
-of the frame and the hull keeps coming for `length / speed` seconds (30 by default), then the
-bells, then the small craft. Hold the shot for all of it: the size is told by the time it takes.
-From behind a world instead: `cam.hullReveal(t, {ship: "Ship", mode: "limb", behind: "Earth",
-at: {bar: 3}, rate: 0.5})`. Powers of ten: `cam.scaleZoom(t, {ship: "Ship", window: "hangar-2",
-close: 80, world: "Earth", over: [0, 8]})` (0.8 s). Look first: `vidgen parts 'camera-*'`.
-
-Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
-text as metres too).
-
-**From orbit to a skim over the sea, in one shot** (`vidgen/space-descent`, DESIGN §123.13). One
-call joins the globe, the air, the sea and the decks of one world; `descend` brings the camera
-down and hands over to a `skim`:
-
-```js
-import * as THREE from "three";
-import {world} from "vidgen/space-descent";
-import {spaceSky} from "vidgen/space-sky";
-import {airCamera} from "vidgen/space-camera-air";
-let renderer, scene, camera, w, cam;
-const fall = {over: [0, 10], from: 400e3, to: 300, heading: 300, turn: 30, speed: 90, lens: ["normal", "wide"]};
-export function load(ctx) {
-  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
-  renderer.setSize(ctx.width, ctx.height, false);
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 2, 4e7);
-  const stars = spaceSky(renderer, {seed: 5, size: 512});
-  scene.add(stars.object);
-  w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze", seed: 3}, clouds: {sky: "fair", seed: 4}, stars, scene});
-  scene.add(w.object);
-  cam = airCamera({camera, ...w.rig});
-}
-export function frame(t) {
-  const shot = t < 10 ? cam.descend(t, fall) : cam.skim(t, {over: [10, 14], ...cam.descend(10, fall).end, follow: 0});
-  cam.apply(t, shot);
-  w.update(t, {camera});
-  renderer.render(scene, camera);
-}
-```
-
-What happens on the way down, and what a frame costs at 1280x720 (`w.state.stage`):
-
-| height | drawn | seconds a frame |
-|---|---|---|
-| 400 km to 80 km (`globe`) | the globe through the world's air, the stars | 0.75 |
-| 80 km to 2.5 km (`handover`) | the sea and the decks near the camera, the globe far off; everything is computed | about 3 |
-| under 2.5 km (`local`) | the air, the sea, the decks | 1.8 |
-
-A Mars-like desert is `world(renderer, {land: "mars", sun: [30, 120], scene})` with `descend`'s
-`to: 500` and `speed: 160`: bare ground holds from orbit, so the globe hands over between 600 km
-and 60 km (1.5 to 1.7 s a frame all the way; 6 to 11 s once when the ground's maps are made).
-`cam.ascend(t, fall)` is the same shot backwards. Keep ten seconds or more for 400 km. Honest
-notes for the film (`w.honest`): the camera falls far faster than any vehicle; the globe's clouds
-and the decks' are not the same clouds, one dissolves into the other; between 150 km and 25 km
-over a sea the surface is soft; a thin cirrus deck is a white line on the horizon while the
-camera passes it. A plane can fly in this scene by `flight_data:` near the place; a whole real
-re-entry cannot (it ends thousands of km from where it starts).
 
 ## 4. What a shot costs
 
@@ -732,6 +647,33 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | the joined world (`vidgen/space-descent`), an ocean with decks: from orbit (the globe and the air) / in the handover, 80 km to 2.5 km (everything) / near the surface; a Mars-like desert at 200 km / 20 km / 500 m | 0.75 / 3.1 / 1.8; 1.6 / 1.5 / 1.7 (a draft at 426x240: 0.32 over a whole descent) | page ready 10 s cold, 2.5 to 5.6 s warm; the first frame with ground 6.5 to 10.8 s more |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
+
+**The estimate `vidgen lint` uses** (`space_scene`, from 2 s a frame): one table in code
+(`vidgen/scenes/space_costs.py`) that this cookbook prints and a test reads; the rows above,
+rounded, for a surface or hull scene's combination of parts (the dearest stretch of the scene; a
+quality other than `standard` scales it, motion blur multiplies it):
+
+| what (1280x720, 2 cores) | s / frame |
+|---|---|
+| the air alone (the dome) | 0.2 |
+| a sea under the air (a skim) | 1.2 |
+| ground under the air (a range from 2,500 m) | 1.4 |
+| cloud decks under the air (fair, from below) | 1.9 |
+| between three decks (layers) | 2.7 |
+| ground and a sea (a coast) | 2.05 |
+| ground under cumulus | 2.5 |
+| a sea under cumulus | 3.0 |
+| ground, a sea and clouds (not measured: the sum less the dome) | 3.5 |
+| a descent through the handover (80 km to 2.5 km over sea or decks) | 3.1 |
+| a plane on top (a third of the frame) | +0.12 |
+| a re-entry's glow on top | +0.37 |
+| a bare hull in a SpaceView (filling the frame, with a sky, a world and a star) | 0.7 |
+| a dressed hull filling the frame from 2.5 km | 1.0 |
+| hull-pass beside a dressed 3.2 km hull | 1.55 |
+| into-bay | 1.6 |
+| stern-burn with eight bells | 2.1 |
+| hull-reveal (the hull overhead) | 1.1 |
+| scale-zoom | 0.8 |
 
 Motion blur (`finish: {motion_blur: 3}`) multiplies a frame by its samples; depth of field adds
 about a tenth. A page opens once per render chunk (and per `vidgen still`); a page may take 90 s
@@ -777,6 +719,11 @@ it; later pages 6 s).
 | stars like small crosses, thin rings broken into dots | FXAA in a finish of your own | `finish: {antialias: none}` (the `space` default) |
 | `did not return within 90 s` at load | very large maps (`size: 2048` on several worlds) | `size: 1024`, or fewer worlds in the scene (a world already in the cache of baked maps loads in about 6 s) |
 | a globe that strobes | it turns too far a frame under the speed-up | `spin: locked` or `spin: 30` (seconds a turn) |
+| `camera[1] (skim): a skim flies low over ground or water: give world.sea or world.land` | a move needs what the scene lacks | add it to `world:`, or another move |
+| `space scene 'chase': flight Plane: at 19.92 s of the flight (leg 1 (descend)) the path is -50.0 m over the ground ...` | the flight goes under the ground or the sea | `follow: {clearance: 300}`, a climb before it, or `lift: true` |
+| `camera[1] (hull-pass).standoff: 4 m is closer to the hull than 10 m` | too close for the near plane beside a hull | a larger `standoff` |
+| `bodies: is an orbital scene's; this scene has world: (a surface scene)` | a word of the other kind of scene | the message says where its job is done |
+| `about 3.5 s a frame at 1280x720 on 2 cores ...` (`vidgen lint`) | a dear combination of parts | `world.quality: fast`, fewer parts in one shot, a shorter scene |
 
 ## 7. Where the numbers come from
 

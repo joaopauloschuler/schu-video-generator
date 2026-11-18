@@ -642,9 +642,11 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["parts"], list(names or []), options), heavy=sheet)
         return paged(doc, [Path(doc["sheet"])] if doc.get("sheet") else [], 0, images if sheet else 0)
 
-    @tool("Write the page a space scene (type space: a sky, worlds, craft, phenomena and camera moves in YAML) draws as a web "
-          "scene's three.js script, to go on in code: the file (default extensions/<scene>.js) and the web scene to put in its "
-          "place in video.yaml (the same picture).", writes)
+    @tool("Write the page a space scene (type space in YAML: an orbital scene of a sky, worlds, craft, giant hulls, planes, "
+          "phenomena and camera moves, or a surface scene with world: (planet, place, sun, air, sea, land, clouds), flights:, "
+          "planes and effects and the moves in the air) draws as a web scene's three.js script, to go on in code: the file "
+          "(default extensions/<scene>.js) and the web scene to put in its place in video.yaml (the same picture; a surface "
+          "scene's flights become its flight_data).", writes)
     async def space_page(
         ctx: Context,
         scene: Annotated[str, Field(description="the space scene's id")],
@@ -750,8 +752,13 @@ def build_server(root: Path) -> Any:
         force: Annotated[bool, Field(description="overwrite the draft's files if they exist")] = False,
         max_scene: Annotated[float, Field(gt=0, description="split a section longer than this many seconds on a phrase line")] = 16.0,
         min_scene: Annotated[float, Field(gt=0, description="join a section shorter than this many seconds to the one before")] = 5.0,
+        style: Annotated[Literal["web", "space", "space-air"], Field(
+            description="the draft's scenes: web_cut scenes with starter pages (web), space scenes in YAML (space), or space scenes in the "
+                        "air and beside giant ships (space-air: a skim at sunset, a descent, a chase over a range, a hull pass, into a bay)")] = "web",
+        seed: Annotated[int | None, Field(ge=0, description="space and space-air: other choices of worlds, planes and hulls (default 1)")] = None,
     ) -> Any:
-        options = {"out": str(where(out, "out")) if out else None, "force": force, "max-scene": max_scene, "min-scene": min_scene}
+        options = {"out": str(where(out, "out")) if out else None, "force": force, "max-scene": max_scene, "min-scene": min_scene,
+                   "style": style if style != "web" else None, "seed": seed}
         return answer(await call(ctx, args_of(["music"], ["plan", piece(score, "score")], options)))
 
     @tool("Measure an audio file, or a project's audio-only render (render with audio_only=true), for agents that cannot "
