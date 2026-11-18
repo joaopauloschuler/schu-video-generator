@@ -3744,12 +3744,12 @@ const update = (t) => { sky.update(t, {camera}); water.update(t, {camera}); weat
 - Lightning on the music: `lightning: {times: trackArrays(ctx.music, {hits: ["kick"]}).hits.kick}`
   (or seconds, or `rate: 12` a minute from the seed). A flash's strength is a look.
 - A giant of gas: `const sky = air(renderer, giantAir("jupiter"));
-  clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H, latitude: 24}))`, the camera
-  about 1.1 x `sky.model.H` up. The decks have the band's colours of the same world in
-  `vidgen/space-bodies`; heights and air are a look (say so).
+  clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H, latitude: 22}))`, the camera
+  about 1.1 x `sky.model.H` up. The decks have the bands of the same world in
+  `vidgen/space-bodies`; heights, air and the bands' width are a look (say so).
 - `weather.update(t, {camera})` needs the camera the picture is drawn with. Things in the scene
   are always in front of the clouds.
-- 0.9 to 1.9 s a frame at 720p (three decks 2.5 s), 0.1 s at 320x180; `quality: "fast"` under half.
+- 1.1 to 2.4 s a frame at 720p (three decks 2.7 s), 0.1 s at 320x180; `quality: "fast"` under half.
   Look first: `vidgen parts --kind cloud`. Reference: CONFIG.md `web`, "Cloud decks, towers,
   lightning, a giant's decks".
 

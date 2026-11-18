@@ -120,7 +120,7 @@ def test_decks_cover_drift_towers_and_storms(tmp_path: Path) -> None:
 out.push([Object.keys(C.DECKS), Object.keys(C.SKIES), Object.keys(C.QUALITIES), C.MOST, C.deckOf("stratus").top - C.deckOf("stratus").base, C.deckOf({type: "stratus", base: 5000}).top, C.deckOf({type: "cirrus", base: 8000, top: 8200}).top, Object.isFrozen(C.deckOf("cumulus"))]);
 out.push([err(() => C.deckOf("cumlus")), err(() => C.deckOf({type: "cirrus", covr: 1})), err(() => C.deckOf({type: "stratus", base: 3000, top: 2000})), err(() => C.deckOf("cumulus", {cover: 2})),
   err(() => C.towerList({count: 9})), err(() => C.towerList({radius: 3, cnt: 1})), err(() => C.clouds(null)), err(() => C.giantSky("earth")), err(() => C.giantAir("mars")), err(() => C.stormOf({rate: 5, tmes: []}, {deck: C.deckField("cumulus")})),
-  err(() => C.stormOf({times: ["a"]}, {deck: C.deckField("cumulus")})), err(() => C.stormOf({rate: 5}))]);
+  err(() => C.stormOf({times: ["a"]}, {deck: C.deckField("cumulus")})), err(() => C.stormOf({rate: 5})), err(() => C.deckOf({type: "stratus", stripes: {colors: [[1, 1, 1]], span: 5}}))]);
 // the cover asked for against the share of places where the pattern stands over its level
 const share = (f, t) => { let n = 0; const N = 12000; for (let i = 0; i < N; i++) if (f.coverAt((i * 7919.3) % 3e6 - 1.5e6, (i * 104729.7) % 2.7e6 - 1e6, t) > 0) n++; return n / N; };
 out.push(["cumulus", "stratus", "cirrus"].map((type) => [0.2, 0.5, 0.8].map((cover) => share(C.deckField({type, cover}, {seed: 5}), 100))));
@@ -148,7 +148,7 @@ out.push([storm.map((f) => [f.time, f.power, f.follows, f.strokes, tw.list.some(
     wrong = out[1]
     assert 'did you mean "cumulus"' in wrong[0] and 'did you mean "cover"' in wrong[1] and "top (metres)" in wrong[2] and "cover must be" in wrong[3]
     assert "towers.count" in wrong[4] and 'did you mean "count"' in wrong[5] and "THREE.WebGLRenderer" in wrong[6] and "not a giant" in wrong[7] and "not a giant" in wrong[8]
-    assert 'did you mean "times"' in wrong[9] and "ctx.music" in wrong[10] and "towers or a deck" in wrong[11]
+    assert 'did you mean "times"' in wrong[9] and "ctx.music" in wrong[10] and "towers or a deck" in wrong[11] and "stripes.colors" in wrong[12]
     for row in out[2]:
         for got, asked in zip(row, (0.2, 0.5, 0.8)):
             assert got == pytest.approx(asked, abs=0.06), out[2]                                                         # roughly the cover asked for
@@ -176,18 +176,22 @@ def test_a_giants_decks_take_its_bands_colours(tmp_path: Path) -> None:
 const g = C.giantSky("jupiter", {latitude: 24, scale: 112000}), again = C.giantSky("jupiter", {latitude: 24, scale: 112000}), o = resolveOptions("jupiter");
 const lin = (c) => linearColor("c", c), ramp = bandRamp(o.seed, {bands: o.bands, contrast: o.contrast, zones: o.palette.zones.map(lin), belts: o.palette.belts.map(lin)});
 const entry = ramp[Math.round((Math.sin(24 * Math.PI / 180) + 1) / 2 * ramp.length - 0.5)].slice(0, 3);
-out.push([JSON.stringify(g) === JSON.stringify(again), g.band, entry, g.decks.map((d) => [d.name, d.type, d.base / 112000, d.top / 112000, d.density * (d.top - d.base)]), g.decks[1].color, g.decks[1].beyond, g.next, g.floor, g.towers.count, g.towers.top / 112000, C.GIANT]);
+const st = g.decks[1].stripes, true1 = C.giantSky("jupiter", {latitude: 24, scale: 112000, squeeze: 1}).decks[1].stripes;
+out.push([JSON.stringify(g) === JSON.stringify(again), g.band, entry, g.decks.map((d) => [d.name, d.type, d.base / 112000, d.top / 112000, d.density * (d.top - d.base)]), g.decks[1].color, [st.colors.length, st.span / 112000, st.colors[32], st.colors.map((c) => c[3]), Math.max(...st.colors.map((c) => c[0])) - Math.min(...st.colors.map((c) => c[0])), Math.max(...true1.colors.map((c) => c[0])) - Math.min(...true1.colors.map((c) => c[0]))], g.next, g.floor, g.towers.count, g.towers.top / 112000, C.GIANT, g.wind, g.direction, C.giantSky("jupiter", {towers: 3}).towers.count]);
 out.push(["jupiter", "saturn", "neptune", "tempest", "azure"].map((w) => { const s = C.giantSky(w, {latitude: -8}); return [s.band, s.decks.length, s.decks[1].color]; }));
 const air = C.giantAir("jupiter"), ice = C.giantAir("neptune"), own = resolveOptions("jupiter").air;
 out.push([air.world, air.air.rayleigh, own.rayleigh, air.air.height, own.height, ice.air.rayleigh, resolveOptions("neptune").air.rayleigh, C.giantSky("jupiter", {latitude: 0}).band, C.giantSky("jupiter", {latitude: -8}).band]);
 """)
-    same, band, entry, decks, colour, beyond, nxt, floor, towers, tower_top, giant = out[0]
+    same, band, entry, decks, colour, stripes, nxt, floor, towers, tower_top, giant, wind, direction, asked = out[0]
     assert same is True and band == pytest.approx(entry)                                                # the colour the planet is painted with at that latitude, from outside
     assert [d[0] for d in decks] == ["deep", "main", "haze"] and [d[1] for d in decks] == ["stratus", "stratus", "cirrus"]
     assert [d[2] for d in decks] == pytest.approx([giant["deep"][0], giant["main"][0], giant["haze"][0]]) and decks[0][3] < decks[1][2] < decks[1][3] < decks[2][2]
     assert decks[0][4] == pytest.approx(10) and decks[1][4] == pytest.approx(9) and decks[2][4] == pytest.approx(0.3)      # two closed decks and a haze you see through
-    assert colour == pytest.approx([min(1, x * 1.05) for x in band]) and beyond is not None and abs(beyond["at"]) < 2e6 and beyond["color"] == nxt
-    assert max(abs(a - b) for a, b in zip(nxt, colour)) > 0.05 and max(floor) < 0.05 and towers == 4 and tower_top == pytest.approx(giant["towers"][1])
+    count, span, here, lifts, squeezed, true_bands = stripes
+    assert colour == pytest.approx([min(1, x * 1.05) for x in band]) and count == 64 and span == pytest.approx(12) and here[:3] == pytest.approx(colour, abs=0.12)
+    assert squeezed > 0.25 and true_bands < 0.5 * squeezed and max(lifts) > 0.02 and min(lifts) < -0.02 and max(abs(x) for x in lifts) <= 0.1 + 1e-9   # several bands in view (a look); at the true width one
+    assert max(abs(a - b) for a, b in zip(nxt, here[:3])) > 0.05 and max(floor) < 0.03 and towers == 0 and asked == 3 and tower_top == pytest.approx(giant["towers"][1])
+    assert wind == 90 and direction == 90                                                                # the wind blows along the bands
     worlds = out[1]
     assert all(n == 3 for _, n, _ in worlds) and worlds[2][0][2] > 3 * worlds[2][0][0] and worlds[0][0][0] > worlds[0][0][2]      # the ice giant blue, the gas giant tawny
     world, deep, own, height, own_height, ice, ice_own, equator, belt = out[2]

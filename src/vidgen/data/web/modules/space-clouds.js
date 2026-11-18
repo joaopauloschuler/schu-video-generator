@@ -153,7 +153,9 @@ export function deckHorizon(radius, height, deck) {
  * 1: the deck is filled); `soft`: how soft the pattern's edge is; `fray`: how much the fine puffs eat the
  * edges; `ragged`: how uneven the base is; `puff`: the round puffs' share of the single clouds' shape;
  * `color`: what the cloud throws back (linear; water cloud is nearly white); `beyond`: {color, at, width}: another colour for
- * the deck's cloud from `at` metres north of the origin (towards -z; negative: south) on, the change `width` metres wide (a giant's next band).
+ * the deck's cloud from `at` metres north of the origin (towards -z; negative: south) on, the change `width` metres wide; `stripes`: {colors, span}:
+ * colours across the deck from `span` metres south of the origin to `span` north of it, evenly spaced [red, green, blue, lift] (lift: how much more cloud
+ * the stripe has, in the pattern's units; negative: less and lower), at most 64: a giant's bands.
  * `cumulus`: a low broken field, flat bases, heaped tops. `stratus`: a closed deck with a rolling top: a cloud
  * sea from above, an overcast from below. `cirrus`: thin high streaks of ice drawn out along the wind. */
 export const DECKS = Object.freeze({
@@ -161,7 +163,7 @@ export const DECKS = Object.freeze({
   stratus: {base: 1800, top: 3000, cover: 1, size: 3200, stretch: 1.4, density: 0.008, weather: 0.35, rise: 0.36, floor: 0.4, soft: 0.05, fray: 0.07, ragged: 0.25, puff: 0.6, color: [0.93, 0.93, 0.93]},
   cirrus: {base: 9500, top: 10100, cover: 0.5, size: 9000, stretch: 5, density: 0.0006, weather: 0.4, rise: 0, floor: 1.2, soft: 0.3, fray: 0.12, ragged: 0, puff: 0.1, color: [0.95, 0.95, 0.97]},
 });
-const DECK_OPTIONS = ["type", "base", "top", "cover", "size", "stretch", "density", "weather", "rise", "floor", "soft", "fray", "ragged", "puff", "color", "beyond", "name"];
+const DECK_OPTIONS = ["type", "base", "top", "cover", "size", "stretch", "density", "weather", "rise", "floor", "soft", "fray", "ragged", "puff", "color", "beyond", "stripes", "name"];
 /** A deck in full: `what` a name of DECKS or {type, base, top, cover, ...}; `extra` over it. Pure. */
 export function deckOf(what = "cumulus", extra = {}) {
   let base = what;
@@ -183,7 +185,14 @@ export function deckOf(what = "cumulus", extra = {}) {
     known("beyond", o.beyond, ["color", "at", "width"]);
     beyond = Object.freeze({color: Object.freeze(linearColor("beyond.color", o.beyond.color)), at: number("beyond.at (metres)", o.beyond.at ?? 0, -1e9, 1e9), width: number("beyond.width (metres)", o.beyond.width ?? 1e4, 1, 1e9)});
   }
-  return Object.freeze({...o, name: o.name ?? type, color: Object.freeze(linearColor("color", o.color)), beyond});
+  let stripes = null;
+  if (o.stripes !== undefined && o.stripes !== null) {
+    known("stripes", o.stripes, ["colors", "span"]);
+    if (!Array.isArray(o.stripes.colors) || o.stripes.colors.length < 2 || o.stripes.colors.length > 64 || o.stripes.colors.some((c) => !Array.isArray(c) || c.length !== 4 || c.some((x) => typeof x !== "number" || !Number.isFinite(x))))
+      throw fail("stripes.colors must be 2 to 64 entries of [red, green, blue, lift]");
+    stripes = Object.freeze({colors: Object.freeze(o.stripes.colors.map((c) => Object.freeze([...c]))), span: number("stripes.span (metres)", o.stripes.span, 1, 1e9)});
+  }
+  return Object.freeze({...o, name: o.name ?? type, color: Object.freeze(linearColor("color", o.color)), beyond, stripes});
 }
 
 /** Ready-made skies: `decks` (the lowest first), `towers` and `lightning` as `clouds()` takes them.
@@ -313,31 +322,33 @@ export const GIANT = Object.freeze({deep: [0.16, 0.34], main: [0.56, 0.8], haze:
  * "saturn", "neptune", "tempest", ... or its options); `latitude` (degrees): the place on it, which picks the
  * band the decks take their colours from (the same ramp the planet is painted with from outside: the same
  * seed, the same bands); `scale`: metres a scale height of the air (the air's own `H`); `radius`: the world's (metres; the real or stated one of
- * vidgen/space-air's RADII by default): how far the next band is; `towers`: how many. Returns {decks, towers, floor (the dark
- * below: its colour), band (the colour at that latitude), next (the neighbouring band's)}: the main deck changes to `next` where the
- * band ends, north or south of the origin. Pure. */
-export function giantSky(world = "jupiter", {latitude = 24, scale = 27000, radius = null, towers = 4} = {}) {
+ * vidgen/space-air's RADII by default); `squeeze`: how many times narrower than on the world the bands are drawn (40: true bands
+ * are wider than the view from inside reaches, so one would see a single colour: a stated look; 1: true); `towers`: how many.
+ * Returns {decks, towers, floor (the dark below: its colour), band (the colour at that latitude), next (the neighbouring band's),
+ * wind, direction (the wind blows east, along the bands)}: the main deck has the ramp's bands as `stripes` to 40 scale heights
+ * north and south, drawn out along the wind. Pure. */
+export function giantSky(world = "jupiter", {latitude = 22, scale = 27000, radius = null, towers = 0, squeeze = 40} = {}) {
   const o = resolveWorld(world);
   if (o.type !== "gas" && o.type !== "ice-giant") throw fail(`giantSky: "${o.name ?? o.type}" is not a giant of gas (types gas and ice-giant are)`);
-  number("latitude (degrees)", latitude, -90, 90); number("scale (metres)", scale, 100, 1e7); number("towers", towers, 0, MOST.towers);
+  number("latitude (degrees)", latitude, -90, 90); number("scale (metres)", scale, 100, 1e7); number("towers", towers, 0, MOST.towers); number("squeeze", squeeze, 1, 100);
   const R = number("radius (metres)", radius ?? RADII[o.name] ?? 6e7, 1e5, 1e9);
   const pal = o.palette, lin = (c) => linearColor("colour", c), ramp = bandRamp(o.seed, {bands: o.bands, contrast: o.contrast, zones: pal.zones.map(lin), belts: pal.belts.map(lin)});
   const at = (lat) => ramp[clamp(Math.round((Math.sin(clamp(lat, -90, 90) * RAD) + 1) / 2 * ramp.length - 0.5), 0, ramp.length - 1)].slice(0, 3);
   const band = at(latitude), light = (c, k) => c.map((x) => Math.min(1, x * k)), mean = pal.belts.map(lin).reduce((sum, c) => sum.map((x, i) => x + c[i] / pal.belts.length), [0, 0, 0]);
-  // the nearest place north or south where the ramp's colour has changed: the next band, and where it begins
-  let edge = null;
-  for (let d = 0.5; d <= 14 && !edge; d += 0.25) for (const side of [1, -1]) {
-    const c = at(latitude + side * d);
-    if (!edge && Math.max(...c.map((x, i) => Math.abs(x - band[i]))) > 0.07) edge = {color: light(at(latitude + side * (d + 1.2)), 1.05), at: side * (d - 0.4) * RAD * R, width: 0.5 * RAD * R};
-  }
+  // the bands north and south of the place, as the ramp has them, `squeeze` times narrower than on the world: a bright band has more and higher cloud
+  const span = 12 * scale, luma = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const colors = Array.from({length: 64}, (_, k) => light(at(latitude + ((k + 0.5) / 32 - 1) * span / R / RAD * squeeze), 1.05)), level = colors.reduce((sum, c) => sum + luma(c) / 64, 0);
+  const stripes = {span, colors: colors.map((c) => [...c, 0.1 * clamp((luma(c) - level) / Math.max(level, 1e-3), -1, 1)])};
+  let next = band;
+  for (let k = 1; k < 32 && next === band; k++) for (const c of [colors[32 + k], colors[31 - k]]) if (next === band && Math.max(...c.map((x, i) => Math.abs(x - colors[32][i]))) > 0.07) next = c;
   const zone = lin(pal.zones[0]), oval = lin(pal.oval), h = (x) => x * scale, size = GIANT.size * scale;
-  return {band, next: edge ? edge.color : band, floor: mean.map((x) => x * 0.06),
+  return {band, next, floor: mean.map((x) => x * 0.03), wind: 90, direction: 90,
     decks: [
-      {type: "stratus", name: "deep", base: h(GIANT.deep[0]), top: h(GIANT.deep[1]), cover: 0.9, size: size * 1.6, stretch: 3, density: 10 / (h(GIANT.deep[1]) - h(GIANT.deep[0])), color: light(mean, 0.8)},
-      {type: "stratus", name: "main", base: h(GIANT.main[0]), top: h(GIANT.main[1]), cover: 0.72, size, stretch: 2.4, density: 9 / (h(GIANT.main[1]) - h(GIANT.main[0])), weather: 0.5, fray: 0.12, color: light(band, 1.05), ...(edge ? {beyond: edge} : {})},
+      {type: "stratus", name: "deep", base: h(GIANT.deep[0]), top: h(GIANT.deep[1]), cover: 0.8, size: size * 1.6, stretch: 5, density: 10 / (h(GIANT.deep[1]) - h(GIANT.deep[0])), color: light(mean, 0.5)},
+      {type: "stratus", name: "main", base: h(GIANT.main[0]), top: h(GIANT.main[1]), cover: 0.78, size, stretch: 4, density: 9 / (h(GIANT.main[1]) - h(GIANT.main[0])), weather: 0.4, fray: 0.12, color: light(band, 1.05), stripes},
       {type: "cirrus", name: "haze", base: h(GIANT.haze[0]), top: h(GIANT.haze[1]), cover: 0.5, size: size * 3, stretch: 6, density: 0.3 / (h(GIANT.haze[1]) - h(GIANT.haze[0])), color: light(zone.map((x, i) => 0.5 * (x + oval[i])), 1)},
     ],
-    towers: {count: towers, spread: 7 * scale, radius: 0.16 * scale, base: h(GIANT.towers[0]), top: h(GIANT.towers[1]), anvil: 2.4, density: 4 / (0.16 * scale), color: light(oval, 0.95)}};
+    towers: {count: towers, spread: 7 * scale, radius: 0.12 * scale, base: h(GIANT.towers[0]), top: h(GIANT.towers[1]), anvil: 2.4, density: 4 / (0.12 * scale), color: light(oval, 0.95)}};
 }
 
 /** The air a giant's flight happens in, as vidgen/space-air's `air(renderer, giantAir("jupiter"))` takes it: the
@@ -406,10 +417,13 @@ uniform vec4 uCloudGeo;       // the world's radius (m), the camera's height (m)
 uniform vec4 uCloudFloor;     // the dark under a giant's decks: its colour, 1 when there is one
 uniform vec3 uCloudE1, uCloudE2;
 uniform vec3 uDeckSun[ND], uDeckSky[ND], uDeckLow[ND], uDeckTint[ND], uDeckTint2[ND];
+uniform sampler2D uCloudStripes;   // a deck's stripes: colours and lifts across it, a row a deck
+uniform vec4 uDeckStripe[ND];     // north in the frame (+x, +z) over the span, the camera's place north over the span, 1 when the deck has stripes
 uniform vec4 uDeckEdge[ND];   // where a deck's second colour begins: the direction (+x, +z), the camera's distance before the edge over the change's width, 1 over that width   // the sun's light at the deck, the sky's from above, what comes from below, what the cloud throws back
 uniform vec4 uTowerA[NT];     // a tower's foot from the camera along +x and +z (m), its radius (m), its anvil's width over that
 uniform vec4 uTowerB[NT];     // its base and top (m), where its puffs are read, the share of light a metre takes
 uniform vec3 uTowerSun, uTowerSky, uTowerLow, uTowerTint;
+uniform vec2 uCloudWind;      // where the wind blows to (+x, +z)
 uniform vec4 uFlashA[NF];     // a flash: its place from the camera (+x, up, +z: m), its brightness now
 uniform vec4 uFlashB[NF];     // its colour, its reach (m)
 varying vec3 vDir;
@@ -429,10 +443,17 @@ vec3 cloudLit(float tau, float y, float open, float cosv, vec3 sun, vec3 sky, ve
   float g = 0.76, fwd = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosv, 1.5), phase = min(0.62 + 0.11 * fwd + 0.25 * (1.0 + cosv * cosv) * step(cosv, 0.0) * -cosv, 3.2);
   return sun * (0.5 * phase * exp(-tau) + 0.5 * exp(-0.22 * tau)) + 1.3 * sky * open * (0.45 + 0.55 * y) + low * (0.35 + 0.65 * (1.0 - y)) * (0.4 + 0.6 * exp(-0.3 * tau));
 }
-// a tower's trunk at height y (0 its foot, 1 the anvil's top): its width over its radius; it closes inside the anvil
-float towerWidth(float y) { return (0.95 - 0.33 * y + 0.5 * smoothstep(0.55, 0.85, y)) * smoothstep(-0.02, 0.05, y) * sqrt(clamp((0.9 - y) / 0.12, 0.0, 1.0)); }
+// a tower is a column of heaped lumps that leans and widens with height; from its seed it is still growing (a round boiling top)
+// or has spread an anvil: a thin sheet drawn out downwind of its top, thinning to nothing
+bool towerGrows(vec4 B) { return fract(B.z * 0.37) < 0.4; }
+// the column's middle at height y (0 its foot, 1 its top), from the tower's foot (m)
+vec2 towerMiddle(vec4 A, vec4 B, float y) { return uCloudWind * (A.z * 0.9 * y * y) + vec2(-uCloudWind.y, uCloudWind.x) * (A.z * 0.3 * sin(3.0 * B.z + 4.2 * y)); }
+// its width there over the tower's radius, before the lumps
+float towerWidth(float y, bool grows) { return (0.42 + 0.42 * pow(max(y, 0.0), 0.8)) * smoothstep(-0.02, 0.05, y) * sqrt(clamp((grows ? 1.0 - y : 0.93 - y) / (grows ? 0.22 : 0.12), 0.0, 1.0)); }
+// the anvil: where its middle is from the tower's foot (xy, m), half its length along the wind (z) and across it (w)
+vec4 towerAnvil(vec4 A) { float along = 1.5 * A.w * A.z; return vec4(uCloudWind * (0.75 * A.z + 0.8 * along), along, 0.7 * A.w * A.z); }
 // the ray and the stretch of it now walked: its level direction, its cosine to the vertical, a pixel's angle, the stretch, the weather along it
-vec2 gDh; float gMu, gCosv, gPix, gT0, gLen, gH; vec3 gWx;
+vec2 gDh; float gMu, gCosv, gPix, gT0, gLen, gH, gPhase; vec3 gWx;
 // what the ray has gathered: the share of light still passing, and of the thing now walked its light and its distance (each times its share)
 float gT, gWay; vec3 gGot;
 float deckWeather(float t) { float u = (t - gT0) / max(gLen, 1e-3) * 2.0; return u < 1.0 ? mix(gWx.x, gWx.y, u) : mix(gWx.y, gWx.z, u - 1.0); }
@@ -467,23 +488,37 @@ vec2 cloudPart(int i, float v0, float v1, float y0, float y1) {
   if (high.y <= high.x) return low;
   return vec2(min(low.x, high.x), max(low.y, high.y));
 }
+// a deck's stripe at a place: its colour and how much more cloud it has (the stripes' edges wander with the puffs)
+vec4 cloudStripe(int i, vec2 p, float wander) {
+  vec4 S = uDeckStripe[i];
+  return texture2D(uCloudStripes, vec2(0.5 + 0.5 * (dot(p, S.xy) + S.z) + 0.03 * (wander - 0.5), (float(i) + 0.5) / float(ND)));
+}
 // a deck from t0 on for len metres. Coarse steps find where cloud may be (the pattern read as its mean over the step, with
 // room for what the mean hides); each such step is walked in fine ones. A thin sheet takes three steps and no fine ones.
 void walkDeck(int it, float t0, float len) {
   vec4 A = uDeckA[it], B = uDeckB[it];
-  bool sheet = B.y >= 1.0, have = false;
+  bool sheet = B.y >= 1.0, have = false, inside = false;
+#ifdef STRIPES
+  bool striped = uDeckStripe[it].w > 0.5;
+#else
+  const bool striped = false;
+#endif
   int coarse = sheet ? 3 : COARSE, fine = sheet ? 1 : FINE;
   // even steps through a deck seen from outside; from inside it shorter ones first
+  if (t0 > 0.0 && !sheet) { float shift = (gPhase - 0.5) * len / float(coarse * fine); t0 += shift; len -= shift; }
   float near = t0 > 0.0 ? 0.0 : 0.7, texels = uDeckR[it * 8 + 4].w / 64.0, cosv = gCosv;
   vec2 last = vec2(0.0);
   for (int c = 0; c < coarse; c++) {
-    float u0 = float(c) / float(coarse), u1 = float(c + 1) / float(coarse);
+    float u0 = float(c) / float(coarse), u1 = float(c + 1) / float(coarse), lift = 0.0;
     float Ta = t0 + len * u0 * (1.0 - near + near * u0), D = t0 + len * u1 * (1.0 - near + near * u1) - Ta;
     if (!sheet) {
       float tm = Ta + 0.5 * D, wide = max(tm * gPix, 0.6 * D);
-      float most = cloudLevel(it, gDh * tm, wide, deckWeather(tm)).x + 0.45 * min(wide * texels, 1.0);
+#ifdef STRIPES
+      if (striped) lift = cloudStripe(it, gDh * tm, 0.5).a;      // a stripe's lift changes slowly: read once a coarse step
+#endif
+      float most = cloudLevel(it, gDh * tm, wide, deckWeather(tm)).x + 0.45 * min(wide * texels, 1.0) + lift;
       // no cloud near, or the whole step passes over the highest top there may be
-      if (most <= 0.0 || (min(heightAt(gMu, Ta), heightAt(gMu, Ta + D)) - A.x) / A.y > cloudTop(it, most)) { have = false; continue; }
+      if (most <= 0.0 || (min(heightAt(gMu, Ta), heightAt(gMu, Ta + D)) - A.x) / A.y > cloudTop(it, most)) { have = false; inside = false; continue; }
     }
     for (int s = 0; s < fine; s++) {
       // a fine step is a stretch of the ray: the pattern is read at its ends and taken as even between them, and so is the
@@ -492,13 +527,30 @@ void walkDeck(int it, float t0, float len) {
       // where a step is coarser than the clouds, the pattern is their mean there and its edge is as much softer: a share of cloud, not a cloud
       float blur = 0.16 * min(foot * texels, 1.0), weather = deckWeather(tb);
       vec2 l0 = have ? last : cloudLevel(it, gDh * ta, foot, deckWeather(ta)) + vec2(blur, 0.0), l1 = cloudLevel(it, gDh * tb, foot, weather) + vec2(blur, 0.0);
+      if (!have) l0.x += lift;
+      l1.x += lift;
       last = l1; have = true;
-      if (max(l0.x, l1.x) <= 0.0) continue;
+      if (max(l0.x, l1.x) <= 0.0) { inside = false; continue; }
       float y0 = (heightAt(gMu, ta) - A.x) / A.y, y1 = (heightAt(gMu, tb) - A.x) / A.y;
       float fray = B.w * (1.0 - cloudRead(it * 8 + 6, gDh * (ta + 0.5 * ds) + (0.3 * (y0 + y1) * A.y) * vec2(0.8, -0.6), foot).b) * (0.35 + 0.65 * clamp(0.5 * (y0 + y1), 0.0, 1.0));
       vec2 part = cloudPart(it, l0.x - fray, l1.x - fray, y0, y1);
-      if (part.y <= part.x) continue;
+      if (part.y <= part.x) { inside = false; continue; }
       // what is seen of the cloud is what the ray meets first
+      // a face (the ray comes into cloud here): the fine caps, read as finely as a pixel shows them, push it in along the ray, more
+      // at a top than at a base: lumps and frayed edges, and where the cloud is thinner than the push a hole. Far off the caps are
+      // their mean and the push is even
+      float lump = 0.5, lit = 0.5;
+      if (!sheet && (part.x > 0.0 || !inside)) {
+        float te = ta + ds * part.x, ye = mix(y0, y1, part.x), wide = te * gPix;
+        vec2 pe = gDh * te + (ye * A.y) * vec2(0.5, -0.4);
+        vec4 caps = cloudRead(it * 8 + 6, pe, wide);
+        lump = smoothstep(0.15, 0.85, 0.55 * caps.g + 0.45 * caps.b);
+        // a lump's crest is lit, the crease between two lumps is not
+        lit = lump;
+        part.x += 3.4 * B.w * A.y * (1.0 - lump) * (0.25 + 0.75 * clamp(ye, 0.0, 1.0)) / ds;
+      }
+      inside = part.y >= 1.0;
+      if (part.y <= part.x) continue;
       float fr = mix(part.x, part.y, 0.2), v = max(mix(l0.x, l1.x, fr) - fray, 0.0), top = cloudTop(it, v), t = ta + ds * fr, y = mix(y0, y1, fr);
       vec2 p = gDh * t;
       float dens = A.z * (part.y - part.x) * smoothstep(0.0, B.z + 2.0 * blur, max(mix(l0.x, l1.x, 0.5 * (part.x + part.y)) - fray, 0.0)) * smoothstep(-0.02, 0.05, y - uDeckC[it].x * (1.0 - mix(l0.y, l1.y, fr)));
@@ -512,43 +564,67 @@ void walkDeck(int it, float t0, float len) {
       // a top's slope towards the sun: the faces turned to it are bright, those turned away grey (only near the top: deeper in, the light has no direction left)
       float slope = (topS - top) * A.y / reach, facing = clamp((uCloudSun.z - slope * uCloudSun.w) * inversesqrt(1.0 + slope * slope), 0.0, 1.0);
       vec3 sun = uDeckSun[it] * cloudShade(p, A.x + A.y) * mix(1.0, clamp(0.4 + 0.75 * facing / max(uCloudSun.z, 0.3), 0.3, 1.6), exp(-2.0 * A.z * A.y * max(top - y, 0.0)) * step(B.y, 0.99));
-      // the fine puffs' creases are a little darker; a thin sheet passes on the bright sky behind it besides (a look: a third more light)
-      gather(dens, ds, t, (sheet ? 1.3 : 1.0 - 2.2 * fray) * mix(uDeckTint[it], uDeckTint2[it], smoothstep(-1.0, 1.0, dot(p, uDeckEdge[it].xy) * uDeckEdge[it].w - uDeckEdge[it].z)) * uAirLight * cloudLit(tau, clamp(y, 0.0, 1.0), open, cosv, sun, uDeckSky[it], uDeckLow[it]));
+      // the fine puffs' creases are a little darker, and so is a face the fine caps pushed far in; a thin sheet passes on the bright sky behind it besides (a look: a third more light)
+      vec3 tint = mix(uDeckTint[it], uDeckTint2[it], smoothstep(-1.0, 1.0, dot(p, uDeckEdge[it].xy) * uDeckEdge[it].w - uDeckEdge[it].z));
+#ifdef STRIPES
+      if (striped) tint = cloudStripe(it, p, mix(l0.y, l1.y, fr)).rgb;
+#endif
+      gather(dens, ds, t, (sheet ? 1.3 : (1.0 - 2.2 * fray) * (0.8 + 0.2 * lump) * (0.7 + 0.6 * lit)) * tint * uAirLight * cloudLit(tau, clamp(y, 0.0, 1.0), open, cosv, sun, uDeckSky[it], uDeckLow[it]));
       if (gT < 0.015) return;
     }
   }
 }
 // a tower from t0 on for len metres: a step is a height and a stretch of the ray, and the tower's round body at that height is cut with that stretch exactly
 void walkTower(int j, float t0, float len) {
-  vec4 A = uTowerA[j], B = uTowerB[j];
-  float a = max(dot(gDh, gDh), 1e-9), b = dot(gDh, A.xy), cc = dot(A.xy, A.xy);
-  for (int s = 0; s < COARSE * 2; s++) {
-    float ds = len / float(COARSE * 2), ta = t0 + ds * float(s), tb = ta + ds, t = ta + 0.5 * ds, foot = max(t * gPix, 0.5 * ds);
-    float alt = heightAt(gMu, t), y = (alt - B.x) / (B.y - B.x);
-    vec2 q = gDh * t - A.xy; float rr = length(q) / A.z;
-    if (y <= 0.0 || y >= 1.0 || rr > A.w * 1.3) continue;
+  vec4 A = uTowerA[j], B = uTowerB[j], N = towerAnvil(A);
+  bool grows = towerGrows(B);
+  float a = max(dot(gDh, gDh), 1e-9), high = B.y - B.x;
+  vec2 across = vec2(-uCloudWind.y, uCloudWind.x), ce = A.xy + N.xy;
+  // the anvil's flat ball in the ray's own numbers (its length along the wind, its width across)
+  float dw = dot(gDh, uCloudWind), dx = dot(gDh, across), cw = dot(ce, uCloudWind), cx = dot(ce, across);
+  float ea = dw * dw / (N.z * N.z) + dx * dx / (N.w * N.w), eb = dw * cw / (N.z * N.z) + dx * cx / (N.w * N.w), ec = cw * cw / (N.z * N.z) + cx * cx / (N.w * N.w), av = 0.065 * high;
+  for (int s = 0; s < COARSE * 3; s++) {
+    float ds = len / float(COARSE * 3), ta = t0 + ds * float(s), tb = ta + ds, t = ta + 0.5 * ds, foot = max(t * gPix, 0.5 * ds);
+    float alt = heightAt(gMu, t), y = (alt - B.x) / high;
+    if (y <= 0.0 || y >= 1.0) continue;
+    vec2 mid = A.xy + towerMiddle(A, B, y), q = gDh * t - mid;
     float lod = log2(max(foot * 256.0 / (A.z * 1.6), 1.0));
     float n1 = textureLod(uCloudNoise, q / (A.z * 1.6) + vec2(B.z + 0.9 * y, 0.37 * B.z - 0.6 * y), lod).g;
-    float n2 = textureLod(uCloudNoise, vec2(dot(q, vec2(0.6, 0.8)) / (A.z * 1.3) + B.z, alt / (A.z * 1.3)), lod + 0.3).g;
-    float n0 = textureLod(uCloudNoise, q / (A.z * 4.0) + vec2(B.z, 0.6 * B.z), lod).r;
-    float wide = towerWidth(y) * (0.7 + 0.55 * (0.5 * n1 + 0.5 * n2));
-    // the trunk: a round body of that width, cut with the step
-    float d = b * b - a * (cc - wide * wide * A.z * A.z), c0 = 1.0, c1 = 0.0, e0 = 1.0, e1 = 0.0;
+    float n2 = textureLod(uCloudNoise, vec2(dot(q, vec2(0.6, 0.8)) / (A.z * 1.3) + B.z, alt / (A.z * 1.1)), lod + 0.3).g;
+    float wide = towerWidth(y, grows) * (0.6 + 0.8 * (0.5 * n1 + 0.5 * n2));
+    // the column: a round body of that width round its middle at this height, cut with the step
+    float b = dot(gDh, mid), d = b * b - a * (dot(mid, mid) - wide * wide * A.z * A.z), c0 = 1.0, c1 = 0.0, e0 = 1.0, e1 = 0.0, thin = 0.0;
     if (d > 0.0) { c0 = max(ta, (b - sqrt(d)) / a); c1 = min(tb, (b + sqrt(d)) / a); }
-    // the anvil: a flat ball under the top, cut with the step (the height taken as even along it)
-    float ah = A.w * A.z * (0.8 + 0.4 * n0), av = 0.13 * (B.y - B.x), sl = (heightAt(gMu, tb) - heightAt(gMu, ta)) / ds, e = alt - sl * t - mix(B.x, B.y, 0.86);
-    float qa = a / (ah * ah) + sl * sl / (av * av), qb = -b / (ah * ah) + sl * e / (av * av), qc = cc / (ah * ah) + e * e / (av * av) - 1.0, qd = qb * qb - qa * qc;
-    if (qd > 0.0) { e0 = max(ta, (-qb - sqrt(qd)) / qa); e1 = min(tb, (-qb + sqrt(qd)) / qa); }
-    float trunk = max(c1 - c0, 0.0) / ds * smoothstep(0.0, 0.12, sqrt(max(d, 0.0)) / (a * A.z)), spread = 0.45 * max(e1 - e0, 0.0) / ds * smoothstep(0.0, 0.3, sqrt(max(qd, 0.0)) / qa / ah);
-    float dens = B.w * max(trunk, spread), anvil = spread > trunk ? 1.0 : 0.0;
+    if (!grows) {
+      // the anvil, cut with the step (the height taken as even along it); its cloud thins downwind and is drawn out in streaks
+      float sl = (heightAt(gMu, tb) - heightAt(gMu, ta)) / ds, e = alt - sl * t - mix(B.x, B.y, 0.9);
+      float qa = ea + sl * sl / (av * av), qb = -eb + sl * e / (av * av), qc = ec + e * e / (av * av) - 1.0, qd = qb * qb - qa * qc;
+      if (qd > 0.0) { e0 = max(ta, (-qb - sqrt(qd)) / qa); e1 = min(tb, (-qb + sqrt(qd)) / qa); }
+      if (e1 > e0) {
+        vec2 r = gDh * (0.5 * (e0 + e1)) - ce; float u = dot(r, uCloudWind) / N.z, w = dot(r, across) / N.w;
+        float streak = textureLod(uCloudNoise, vec2(u * 0.35 + B.z, w * 1.6 + 0.3 * B.z), log2(max(foot * 256.0 * 1.6 / N.w, 1.0))).a;
+        thin = 0.4 * (e1 - e0) / ds * smoothstep(0.25, 0.75, streak + 0.55 * (0.2 - u)) * smoothstep(1.0, 0.75, abs(w));
+      }
+    }
+    float column = max(c1 - c0, 0.0) / ds * smoothstep(0.0, 0.1, sqrt(max(d, 0.0)) / (a * A.z)), lump = 0.5;
+    bool anvil = thin > column;
+    if (!anvil && column > 0.0) {
+      // the fine caps push the column's face in along the ray: lumps on lumps (as a deck's face)
+      vec4 caps = textureLod(uCloudNoise, (gDh * c0 - mid) / (A.z * 0.55) + vec2(alt / (A.z * 0.7), B.z), log2(max(c0 * gPix * 256.0 / (A.z * 0.55), 1.0)));
+      lump = smoothstep(0.15, 0.85, 0.55 * caps.g + 0.45 * caps.b);
+      c0 += 0.22 * A.z * (1.0 - lump);
+      column = max(c1 - c0, 0.0) / ds * smoothstep(0.0, 0.1, sqrt(max(d, 0.0)) / (a * A.z));
+    }
+    float dens = B.w * max(column, thin);
     if (dens <= 0.0) continue;
-    if (anvil > 0.5) { wide = ah / A.z * sqrt(max(1.0 - e * e / (av * av), 0.05)); t = mix(e0, e1, 0.25); } else t = mix(c0, c1, 0.25);
-    q = gDh * t - A.xy; rr = length(q) / A.z;
-    // towards the sun: out through the tower's side, or up through its top
-    float xs = dot(q, uCloudSun.xy) / A.z, side = (sqrt(max(wide * wide - rr * rr + xs * xs, 0.0)) - xs) * A.z / max(uCloudSun.w, 0.15);
-    float path = uCloudSun.z > 0.02 ? min(side, (B.y - alt) / uCloudSun.z) : side;
-    float open = mix(0.35 + 0.65 * smoothstep(0.3, 1.0, rr / max(wide, 1e-3)), 1.0, y * y);
-    gather(dens, ds, t, uTowerTint * uAirLight * cloudLit(0.55 * B.w * max(path, 0.0), y, open, gCosv, uTowerSun, uTowerSky, uTowerLow * (1.0 - 0.6 * anvil)));
+    t = anvil ? mix(e0, e1, 0.25) : mix(c0, c1, 0.2); q = gDh * t - mid;
+    // towards the sun: out through the column's side, or up through its top; an anvil is thin
+    float rr = length(q) / A.z, xs = dot(q, uCloudSun.xy) / A.z, side = (sqrt(max(wide * wide - rr * rr + xs * xs, 0.0)) - xs) * A.z / max(uCloudSun.w, 0.15);
+    float path = anvil ? 0.3 * av : (uCloudSun.z > 0.02 ? min(side, (B.y - alt) / uCloudSun.z) : side);
+    float open = anvil ? 1.0 : mix(0.35 + 0.65 * smoothstep(0.3, 1.0, rr / max(wide, 1e-3)), 1.0, y * y);
+    // the foot stands in its own rain and in the anvil's shade: darker
+    float shaded = anvil ? 1.0 : mix(0.5, 1.0, smoothstep(0.0, 0.4, y)) * (0.75 + 0.5 * lump);
+    gather(dens, ds, t, shaded * uTowerTint * uAirLight * cloudLit(0.55 * B.w * max(path, 0.0), y, open, gCosv, uTowerSun, uTowerSky, uTowerLow * (anvil ? 0.4 : 1.0)));
     if (gT < 0.015) return;
   }
 }
@@ -557,6 +633,9 @@ void main() {
   float mu = dot(rd, uAirUp), cosv = dot(rd, uAirSun), R = uCloudGeo.x, h = uCloudGeo.y, pix = uCloudGeo.w, unit = uCloudGeo.z;
   vec2 dh = vec2(dot(rd, uCloudE1), dot(rd, uCloudE2));
   gDh = dh; gMu = mu; gPix = pix; gCosv = cosv; gH = h;
+  // four neighbouring pixels walk their steps a quarter of a step apart; the picture laid over the scene is their mean
+  vec2 cell = mod(floor(gl_FragCoord.xy), 2.0);
+  gPhase = mod(2.0 * cell.x + 3.0 * cell.y, 4.0) / 4.0 + 0.125;
   float m = (R + h) * mu, cg = h * (2.0 * R + h), dg = m * m - cg, tEnd = mu < 0.0 && dg > 0.0 ? cg / (-m + sqrt(dg)) : 1e20;
   float from[ND + NT], to[ND + NT];
   for (int i = 0; i < ND; i++) {
@@ -566,12 +645,14 @@ void main() {
   }
   for (int j = 0; j < NT; j++) {
     vec4 A = uTowerA[j], B = uTowerB[j];
-    // the trunk's cylinder up to where the anvil spreads, and the anvil's above: the stretch from the first to the last of them
-    float split = mix(B.x, B.y, 0.66), a = max(dot(dh, dh), 1e-9), b = dot(dh, A.xy), cc = dot(A.xy, A.xy);
-    float dt = b * b - a * (cc - A.z * A.z * 1.1), da = b * b - a * (cc - A.z * A.z * A.w * A.w * 1.4);
-    vec2 st = shellSpan(mu, B.x, split), sa = shellSpan(mu, split, B.y);
-    st = vec2(max(st.x, (b - sqrt(max(dt, 0.0))) / a), dt > 0.0 ? min(st.y, (b + sqrt(dt)) / a) : -1.0);
-    sa = vec2(max(sa.x, (b - sqrt(max(da, 0.0))) / a), da > 0.0 ? min(sa.y, (b + sqrt(da)) / a) : -1.0);
+    // the leaning column's cylinder, and the anvil's above it downwind: the stretch from the first to the last of them
+    vec4 N = towerAnvil(A);
+    vec2 ct = A.xy + uCloudWind * (0.45 * A.z), ca = A.xy + N.xy;
+    float a = max(dot(dh, dh), 1e-9), bt = dot(dh, ct), ba = dot(dh, ca);
+    float dt = bt * bt - a * (dot(ct, ct) - A.z * A.z * 4.4), da = towerGrows(B) ? -1.0 : ba * ba - a * (dot(ca, ca) - N.z * N.z * 1.1);
+    vec2 st = shellSpan(mu, B.x, B.y), sa = shellSpan(mu, mix(B.x, B.y, 0.82), mix(B.x, B.y, 0.98));
+    st = vec2(max(st.x, (bt - sqrt(max(dt, 0.0))) / a), dt > 0.0 ? min(st.y, (bt + sqrt(dt)) / a) : -1.0);
+    sa = vec2(max(sa.x, (ba - sqrt(max(da, 0.0))) / a), da > 0.0 ? min(sa.y, (ba + sqrt(da)) / a) : -1.0);
     bool trunk = st.y > max(st.x, 0.0), anvil = sa.y > max(sa.x, 0.0);
     float t0 = max(trunk ? (anvil ? min(st.x, sa.x) : st.x) : sa.x, 0.0), t1 = min(trunk ? (anvil ? max(st.y, sa.y) : st.y) : sa.y, tEnd);
     from[ND + j] = (trunk || anvil) && A.z > 0.0 && t1 > t0 ? t0 : 1e20; to[ND + j] = t1;
@@ -615,10 +696,11 @@ const QUAD_VERT = "varying vec2 vUv; void main() { vUv = 0.5 * position.xy + 0.5
 // the clouds' picture laid over what is behind it
 const OVER_FRAG = /* glsl */`
 ${DISPLAY_GLSL}
-uniform sampler2D uCloudPicture; uniform float uDisplay, uGrain;
+uniform sampler2D uCloudPicture; uniform float uDisplay, uGrain; uniform vec2 uCloudTexel;
 varying vec2 vUv;
 void main() {
-  vec4 c = texture2D(uCloudPicture, vUv);
+  // four readings half a texel of the clouds' picture apart: an edge drawn at a share of the picture's size comes out soft, not in blocks
+  vec4 c = 0.25 * (texture2D(uCloudPicture, vUv + uCloudTexel) + texture2D(uCloudPicture, vUv - uCloudTexel) + texture2D(uCloudPicture, vUv + uCloudTexel * vec2(1.0, -1.0)) + texture2D(uCloudPicture, vUv + uCloudTexel * vec2(-1.0, 1.0)));
   if (c.a < 0.002) discard;
   float n = dither(gl_FragCoord.xy) + dither(gl_FragCoord.xy * 1.7 + 91.0) - 1.0;
   vec3 shown = display(c.rgb / c.a);
@@ -681,16 +763,25 @@ export class Clouds {
       uDeckC: {value: this.decks.map((d) => new THREE.Vector4(d.ragged, d.weather, d.puff, d.density * d.depth > 1 ? 1 : 0))}, uDeckR: {value: Array.from({length: nd * 8}, v4)}};
     this.uniforms = {...sky.uniforms, ...this.fieldUniforms, uCloudGeo: {value: new THREE.Vector4(sky.model.radius, 10, sky.options.unit, 0.002)},
       uCloudFloor: {value: new THREE.Vector4(...(floor ?? [0, 0, 0]), floor ? 1 : 0)}, uCloudE1: {value: this.frame.e1}, uCloudE2: {value: this.frame.e2},
-      uCloudView: {value: new THREE.Matrix4()}, uCloudProj: {value: v4()},
-      uDeckSun: {value: this.decks.map(v3)}, uDeckSky: {value: this.decks.map(v3)}, uDeckLow: {value: this.decks.map(v3)}, uDeckTint: {value: this.decks.map((d) => new THREE.Vector3(...d.color))}, uDeckTint2: {value: this.decks.map((d) => new THREE.Vector3(...(d.beyond ?? d).color))}, uDeckEdge: {value: this.decks.map(v4)},
+      uCloudView: {value: new THREE.Matrix4()}, uCloudWind: {value: new THREE.Vector2(Math.sin(o.direction * RAD), -Math.cos(o.direction * RAD))}, uCloudProj: {value: v4()},
+      uDeckSun: {value: this.decks.map(v3)}, uDeckSky: {value: this.decks.map(v3)}, uDeckLow: {value: this.decks.map(v3)}, uDeckTint: {value: this.decks.map((d) => new THREE.Vector3(...d.color))}, uDeckTint2: {value: this.decks.map((d) => new THREE.Vector3(...(d.beyond ?? d).color))}, uDeckEdge: {value: this.decks.map(v4)}, uDeckStripe: {value: this.decks.map(v4)}, uCloudStripes: {value: null},
       uTowerA: {value: Array.from({length: nt}, v4)}, uTowerB: {value: Array.from({length: nt}, v4)}, uTowerSun: {value: v3()}, uTowerSky: {value: v3()}, uTowerLow: {value: v3()}, uTowerTint: {value: new THREE.Vector3(...made.color)},
       uFlashA: {value: Array.from({length: nf}, v4)}, uFlashB: {value: Array.from({length: nf}, v4)}};
-    this._pass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {ND: nd, NT: nt, NF: nf, COARSE: coarse, FINE: fine}, vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
+    // the decks' stripes: a row a deck, 64 across (a deck without stripes: its own colour, no lift)
+    const rows = new Uint16Array(64 * nd * 4);
+    this.decks.forEach((d, i) => { for (let k = 0; k < 64; k++) {
+      const c = d.stripes ? d.stripes.colors[Math.min(d.stripes.colors.length - 1, Math.floor(k * d.stripes.colors.length / 64))] : [...d.color, 0];
+      for (let j = 0; j < 4; j++) rows[(i * 64 + k) * 4 + j] = THREE.DataUtils.toHalfFloat(c[j]);
+    } });
+    this.stripes = new THREE.DataTexture(rows, 64, nd, THREE.RGBAFormat, THREE.HalfFloatType);
+    Object.assign(this.stripes, {minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, needsUpdate: true});
+    this.uniforms.uCloudStripes.value = this.stripes;
+    this._pass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {ND: nd, NT: nt, NF: nf, COARSE: coarse, FINE: fine, ...(this.decks.some((d) => d.stripes) ? {STRIPES: 1} : {})}, vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
       depthTest: false, depthWrite: false, toneMapped: false, fog: false}));
     this._pass.frustumCulled = false;
     this._scene = new THREE.Scene(); this._scene.add(this._pass); this._camera = new THREE.Camera();
     this.target = new THREE.WebGLRenderTarget(4, 4, {type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false});
-    this.material = new THREE.ShaderMaterial({uniforms: {uCloudPicture: {value: this.target.texture}, uDisplay: {value: 0}, uGrain: {value: 2}}, vertexShader: QUAD_VERT, fragmentShader: OVER_FRAG,
+    this.material = new THREE.ShaderMaterial({uniforms: {uCloudPicture: {value: this.target.texture}, uDisplay: {value: 0}, uGrain: {value: 2}, uCloudTexel: {value: new THREE.Vector2()}}, vertexShader: QUAD_VERT, fragmentShader: OVER_FRAG,
       depthTest: false, depthWrite: false, toneMapped: false, fog: false, transparent: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor});
     /** The clouds: drawn after the air's dome and the sea, before the scene's other things (which stand in front of every cloud). */
@@ -702,7 +793,7 @@ export class Clouds {
     // a giant has no ground: the dark under the decks covers what is under the horizon
     if (floor) sky.under(true);
     this._lights = "";
-    this.material.addEventListener("dispose", () => { this.noise.dispose(); this.target.dispose(); this._pass.material.dispose(); });
+    this.material.addEventListener("dispose", () => { this.noise.dispose(); this.stripes.dispose(); this.target.dispose(); this._pass.material.dispose(); });
     this.t = 0;
   }
 
@@ -733,6 +824,7 @@ export class Clouds {
     this.t = t;
     const size = r.getDrawingBufferSize(new THREE.Vector2()), w = Math.max(2, Math.ceil(size.x * this.share)), hgt = Math.max(2, Math.ceil(size.y * this.share));
     if (this.target.width !== w || this.target.height !== hgt) this.target.setSize(w, hgt);
+    this.material.uniforms.uCloudTexel.value.set(0.5 / w, 0.5 / hgt).multiplyScalar(this.share < 1 ? 1 : 0);
     const p = camera.projectionMatrix.elements;
     u.uCloudGeo.value.set(m.radius, h, unit, 2 / (p[5] * hgt));
     u.uCloudView.value.copy(camera.matrixWorld); u.uCloudProj.value.set(1 / p[0], 1 / p[5], p[8], p[9]);
@@ -745,6 +837,7 @@ export class Clouds {
       u.uDeckR.value[i * 8 + k * 2].set(rd.u[0], rd.u[1], part(rd.u[0] * px + rd.u[1] * pz + rd.at[0]), rd.texels);
       u.uDeckR.value[i * 8 + k * 2 + 1].set(rd.v[0], rd.v[1], part(rd.v[0] * px + rd.v[1] * pz + rd.at[1]), 0);
     }));
+    this.decks.forEach((deck, i) => { if (deck.stripes) u.uDeckStripe.value[i].set(0, -1 / deck.stripes.span, -z / deck.stripes.span, 1); });
     // a deck's second colour: north is towards -z, so the distance north of the origin is -z
     this.decks.forEach((deck, i) => { if (deck.beyond) u.uDeckEdge.value[i].set(0, -Math.sign(deck.beyond.at || 1), (Math.abs(deck.beyond.at) - Math.sign(deck.beyond.at || 1) * -z) / deck.beyond.width, 1 / deck.beyond.width); else u.uDeckEdge.value[i].set(0, 0, 1e9, 0); });
     // the light at each deck: the sun after the air at its height, the sky from above, and from below the sky's and the ground's

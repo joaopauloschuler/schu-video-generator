@@ -28718,7 +28718,7 @@ frame, so the two agree on the horizon and on places).
   cloud (Step 387 or 390 may add depth).
 - **Options.** `sky` (`fair`, `overcast`, `layers`, `towers`, `storm`) or `decks` (names of
   `DECKS`: `cumulus`, `stratus`, `cirrus`, or `{type, base, top, cover, size, stretch, density,
-  weather, rise, floor, soft, fray, ragged, puff, color, beyond}`; at most 4), `towers` (a number
+  weather, rise, floor, soft, fray, ragged, puff, color, beyond, stripes}`; at most 4), `towers` (a number
   or `{count, seed, spread, radius, base, top, anvil, density, color, at}`; at most 6),
   `lightning`, `seed`, `wind`, `direction`, `quality`, `floor`, `anchor`. Unknown names fail with
   the closest known one.
@@ -28751,6 +28751,41 @@ frame, so the two agree on the horizon and on places).
   are `vidgen/space-bodies`' map: this module agrees with it in colour (`color`, a giant's band)
   and in `cover` as a share, not in where the single clouds are (Step 391 may read the body's
   map as the weather).
+- **Step 383.1** (a fix pass on four faults of the pictures; where this differs from the lines above, this holds):
+  - *Fine lumps.* Where a ray comes into a deck's cloud (a face), the fine caps of the tile (the
+    deck's fourth reading: green and blue, 0.55 and 0.45, stretched between 0.15 and 0.85) are read
+    as finely as the pixel shows them and the face is pushed in along the ray by
+    `3.4 fray depth (1 - lump) (0.25 + 0.75 y)` metres (up to 490 m for cumulus, 285 m for
+    stratus; less at a base than at a top); a cloud thinner than the push is a hole there. The
+    face's light is 0.8 + 0.2 lump times 0.7 + 0.6 lump. So the height field itself and its exact
+    solve are unchanged; the lumps are a displacement of the face as seen, not cloud modelled
+    inside (from another direction the same lump is pushed along another ray). Far away the
+    caps are their mean and the push is even: nothing to shimmer.
+  - *Edges.* Four neighbouring pixels of the clouds' picture walk their fine steps a quarter of
+    a step apart (a fixed pattern of four), and the pass that lays the picture over the scene
+    reads it four times half a texel apart: an edge drawn at half the picture's size is soft, not
+    stepped (checked at 1280x720 `standard` on a crop).
+  - *Towers.* A tower is a column of lumps round a middle that leans downwind (0.9 radii at the
+    top) and wanders across the wind (0.3 radii), 0.42 to 0.84 radii wide from foot to top times
+    0.6 to 1.4 by two readings of the caps, its face pushed in by the fine caps (0.22 radii); from
+    its seed it is still growing (4 in 10: a round top) or has an anvil: a flat ball 1.5 `anvil`
+    radii long downwind and 0.7 across, 0.065 of the tower's height thick, its middle 0.8 of its
+    length downwind of the top, its cloud thinning downwind and drawn out in streaks. The foot is
+    darker (0.5 at the base to 1 at 0.4 of the height). 24 steps (3 `COARSE`). Still closed forms.
+  - *A giant.* `giantSky` gives the main deck `stripes`: 64 colours of the planet's ramp from 12
+    scale heights south to 12 north of the place, the latitudes `squeeze` (40) times closer than on
+    the world (a stated look: a true band is wider than the view from inside reaches; `squeeze: 1`
+    is true and shows one colour), each with a lift of the pattern (up to 0.1: a bright band has
+    more and higher cloud, a dark one gaps); the stripes' edges wander with the puffs. The wind
+    blows east (`direction: 90`, 90 m/s) and the clouds are drawn out along it (`stretch` 4 and
+    5); the deep deck is darker (0.5 of the belts' colour), the floor 0.03; default latitude 22,
+    no towers unless asked for (`towers: n`). A deck may be given `stripes: {colors, span}`
+    itself. A page without stripes compiles none of it.
+  - *Cost* (same session, 1280x720 `standard`, with the dome): `fair` from below 1.95 s before,
+    1.95 s after; `overcast` from 10 km 1.03 / 1.05 to 1.11 s; `towers` 1.43 / 1.63 s; `layers`
+    2.50 / 2.72 s; a giant 1.90 / 2.42 s; `fair` over the sea 2.75 / 2.95 s; `fast` 0.84 and
+    0.52 s. (A deck's stripes behind a run-time switch cost every sky 20 %: SwiftShader read the
+    stripes for every deck; they are compiled in only when a deck has them.)
 - **Parts** (`data/web/parts/space-clouds.js`, a new kind `cloud` after `sea`): `clouds-fair`,
   `clouds-sea-of-cloud`, `clouds-sunset`, `clouds-towers`, `clouds-between-decks`,
   `clouds-lightning`, `clouds-over-sea`, `clouds-giant`, `clouds-ice-giant`.

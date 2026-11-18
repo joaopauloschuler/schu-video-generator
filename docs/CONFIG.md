@@ -7955,20 +7955,23 @@ clouds' own picture is drawn in `update`). Add the clouds' object after the dome
 `weather.decks` and `weather.towers` hold what was made (heights, places, radii);
 `weather.coverAt(deck, x, z, t)` says how much cloud a deck has over a place (0 open, towards 1 in
 a cloud); `weather.horizon(deck)` a deck's horizon for the last camera; `weather.flashes(t)` the
-flashes seen now. `giantSky(world, {latitude, scale, radius, towers})` returns the options of a
-giant's sky (three decks, towers, the dark below) in the colours `vidgen/space-bodies` paints
-that latitude with; `giantAir(world)` the air to fly in. The pure functions (`deckOf`,
+flashes seen now. `giantSky(world, {latitude, scale, radius, towers, squeeze})` returns the options
+of a giant's sky (three decks, the dark below, towers when asked for) with the bands
+`vidgen/space-bodies` paints north and south of that latitude, drawn `squeeze` (40) times narrower
+than on the world so that several are in view (1: true width, one colour to the horizon), their
+clouds drawn out along the wind; `giantAir(world)` the air to fly in. The pure functions (`deckOf`,
 `deckField`, `towerList`, `stormOf`, `strikeTimes`, `flashLevel`, `shellSpan`, `deckHorizon`,
 `noiseTile`) need no renderer.
 
 Honest notes: a cloud is a height field over a flat base (no overhangs), soft-edged, and blurs to
-its mean far away; towers are a round trunk under a lens-shaped anvil; everything in the scene
+its mean far away; its fine lumps are pushed into its face as seen, not modelled inside it;
+towers are a leaning column of lumps, some with an anvil drawn out downwind; everything in the scene
 stands in front of every cloud (a plane is not hidden inside one); the sea mirrors no cloud; a
-giant's heights, depths and air are a look (stated in DESIGN §123.5), its rings are not drawn in
+giant's heights, depths, air and band width are a look (stated in DESIGN §123.5), its rings are not drawn in
 the sky, and from orbit the same world's single clouds are elsewhere (colours and cover agree).
 Costs (2 cores, software GL, 1280x720, with the dome): `fair` from below 1.9 s a frame (`fast`
-0.8 s, `fine` 8 s), a cloud sea from above 0.9 s (`fast` 0.4 s), towers 1.4 s, between three decks
-2.5 s, a giant 1.9 s, over a sea 2.8 s; 0.07 to 0.13 s at 320x180. Look first:
+0.8 s, `fine` 8 s), a cloud sea from above 1.1 s (`fast` 0.5 s), towers 1.6 s, between three decks
+2.7 s, a giant 2.4 s, over a sea 3.0 s; 0.07 to 0.13 s at 320x180. Look first:
 `vidgen parts --kind cloud`.
 
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a

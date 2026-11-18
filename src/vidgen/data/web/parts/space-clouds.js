@@ -68,10 +68,10 @@ definePart({"name": "clouds-over-sea", "kind": "cloud", "module": "vidgen/space-
 (s) => show(s, "earth", {sky: "fair"}, {water: true}));
 
 definePart({"name": "clouds-giant", "kind": "cloud", "module": "vidgen/space-clouds",
-  "label": "a giant of gas from inside: the decks of the \"jupiter\" of vidgen/space-bodies in its band colours, towers, haze, the dark below (heights and air: a look)",
+  "label": "a giant of gas from inside: the decks of the \"jupiter\" of vidgen/space-bodies in its bands' colours (drawn 40 times narrower than true), a haze, the dark below (heights, air and band width: a look)",
   "use": "const sky = air(renderer, giantAir(\"jupiter\")); clouds(renderer, sky, giantSky(\"jupiter\", {scale: sky.model.H}))",
-  "options": {"height": 125000, "pitch": -5, "fov": 60, "elevation": 35, "azimuth": 60, "world": "jupiter"}, "seed": 4},
-(s) => show(s, giantAir(s.options.world), (dome) => { const g = giantSky(s.options.world, {scale: dome.model.H}); return {...g, seed: s.seed, towers: {...g.towers, at: [[-170e3, -400e3], [330e3, -760e3], [-520e3, -1200e3]]}}; }));
+  "options": {"height": 125000, "pitch": -7, "fov": 60, "elevation": 35, "azimuth": 60, "world": "jupiter"}, "seed": 4},
+(s) => show(s, giantAir(s.options.world), (dome) => ({...giantSky(s.options.world, {scale: dome.model.H}), seed: s.seed})));
 
 definePart({"name": "clouds-ice-giant", "kind": "cloud", "module": "vidgen/space-clouds",
   "label": "the same for the \"neptune\" of vidgen/space-bodies: blue decks under a teal sky (a look)",

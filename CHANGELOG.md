@@ -81,6 +81,15 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   0.4 to 0.8 s); nine parts under the new kind `cloud` (`vidgen parts --kind cloud`).
   [CONFIG](docs/CONFIG.md#web), [space cookbook](docs/COOKBOOK-SPACE.md).
 
+- **Lumps, soft edges, towers, a banded giant** (Step 383.1): the clouds of `vidgen/space-clouds`
+  have fine lumps and frayed edges (the fine caps push each cloud's face in as seen; a cloud sea's
+  top has a fine ripple), their edges are soft at `standard` (they were stepped), a cloud tower is
+  a leaning column of lumps, still growing or with an anvil drawn out downwind (it was a cylinder
+  under a lens), and a giant's main deck shows the planet's bands north and south of the camera,
+  40 times narrower than true so that several are in view (`squeeze`; a stated look), with clouds
+  drawn out along the wind and deeper gaps in the dark bands. `giantSky` gives no towers unless
+  asked. `fair` and `overcast` cost as before within 8 %; towers 14 %, a giant 27 % more.
+
 ### Space scenes (Phase AN, Steps 367–378)
 
 - **The phase's review** (Step 378): the cookbook [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md)
