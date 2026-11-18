@@ -53,7 +53,7 @@ def test_the_parts_are_registered_under_their_own_kind() -> None:
     assert all(p.module == "vidgen/space-air" and p.kind == "air" for p in found.values())
     assert 'air(renderer, "earth"' in found["air-earth-noon"].use and "sky.haze(" in found["air-haze"].use and "film exposure" in found["air-earth-twilight"].label
     assert "invented" in found["air-thin"].label and "invented" in found["air-thick"].label          # what is not a real world is said on the sheet
-    assert [p.name for p in P.select_parts(P.read_parts(), kind="air")] == [p.name for p in P.read_parts() if p.file == "space-air.js"]
+    assert [p.name for p in P.select_parts(P.read_parts(), kind="air") if p.file == "space-air.js"] == [p.name for p in P.read_parts() if p.file == "space-air.js"]      # other files add to the kind (Step 391)
     assert "Math.random" not in (P.PARTS_DIR / "space-air.js").read_text(encoding="utf-8")
 
 

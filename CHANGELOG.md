@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–390
+## Steps 193–391
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -134,6 +134,19 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   proportions. For later fine detail every hull carries named regions, anchors (bells, hangars,
   docks, lights, the command place) and one atlas of non-overlapping charts with their metres
   per texel. Fourteen parts under `vidgen parts 'hull-*'`.
+- **Orbit to ground in one shot** (Step 391): the new module `vidgen/space-descent` gives
+  `world(renderer, {planet, at, sun, sea, land, clouds})`: the globe, the air, the sea, the ground
+  and the cloud decks of one world for one place and one sun, drawn for any camera height from
+  the surface to orbit. The air is one model at every height (the globe is seen through it, so
+  the limb's glow becomes the sky with no handover); the globe's picture is laid over the sea,
+  the ground and the decks where a pixel's ground is far and the camera is high, and fades out on
+  the way down (`HANDOVERS`: 80 km to 2.5 km over a sea or decks, 600 km to 60 km over bare
+  ground). `vidgen/space-camera-air` gains `descend` and `ascend`: from 400 km to 300 m with equal
+  time for each power of ten of height, the view going from the globe under its limb to the
+  level horizon, ending level and moving so that a `skim` given `shot.end` follows with no cut.
+  `world.honest` says what is not true (the camera's speed; single clouds of the globe and of the
+  decks are in different places; the surface is soft between 150 km and 25 km over a sea). Four
+  parts: `vidgen parts 'joined-*' camera-descend`.
 - **Camera moves in the air and beside giant ships** (Step 390): the new module
   `vidgen/space-camera-air` gives `airCamera(...)`, the rig of `vidgen/space-camera` with thirteen
   more moves, each a function of the scene's time. In the air: `skim` (a low pass over sea or

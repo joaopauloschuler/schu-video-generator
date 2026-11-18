@@ -7,7 +7,7 @@
 //   const cam = airCamera({space, camera, ships: {Ship: ship}});            // beside a hull flown in a SpaceView
 //   cam.apply(t, cam.hullPass(t, {ship: "Ship", over: [0, 12], side: "port", standoff: 60, speed: 40}));
 //
-// Air moves: skim, climbThrough, descendThrough, chase, wing, flyPast, orbitPeak, rise. Ship moves: hullPass,
+// Air moves: skim, climbThrough, descendThrough, chase, wing, flyPast, orbitPeak, rise, descend, ascend. Ship moves: hullPass,
 // hullReveal, intoBay, sternBurn, scaleZoom. Every move is a function of the time it is given (and of
 // where its subjects are then): nothing is kept between frames, so a still at t is frame t, scenes
 // render in any order and two moves cut together on one clock. A move returns a shot as
@@ -32,7 +32,7 @@ const RAD = Math.PI / 180;
 /** The gravity a banked turn is worked out with, m/s² (a look: the camera banks as a plane at that speed would). */
 export const GRAVITY = 9.81;
 /** The moves of this module, air first. */
-export const AIR_MOVES = Object.freeze(["skim", "climbThrough", "descendThrough", "chase", "wing", "flyPast", "orbitPeak", "rise"]);
+export const AIR_MOVES = Object.freeze(["skim", "climbThrough", "descendThrough", "chase", "wing", "flyPast", "orbitPeak", "rise", "descend", "ascend"]);
 export const SHIP_MOVES = Object.freeze(["hullPass", "hullReveal", "intoBay", "sternBurn", "scaleZoom"]);
 /** Sides of a hull: degrees round its long axis from port (+x) towards the top (+y). */
 export const SIDES = Object.freeze({port: 0, dorsal: 90, top: 90, starboard: 180, ventral: 270, bottom: 270});
@@ -549,6 +549,59 @@ export class AirCamera extends SpaceCamera {
     const frame = lookFrame(L.upAt(eye), L.compass(eye, heading), pitch, c.roll);
     return shotOf(eye, frame, fov, c.aspect, along(eye, frame.forward, Math.max(above * 4, 100)), {move: "rise", progress: c.u, notes, height: L.heightOf(eye), aboveGround: above, dip, pitch,
       climb: (options.down ? -1 : 1) * above * Math.log(hi / lo) * c.rate * c.peak / c.T});
+  }
+
+  /** From orbit to the ground in one move (the world of vidgen/space-descent draws every height): the camera
+   * comes down over the scene's `at` ([x, z]) from `from` metres over the sphere (400 km) to `to` metres over
+   * the surface (300), its height falling by equal factors in equal times (the logarithm of the height runs
+   * steadily, so every power of ten of height gets the same time and the fall reads as steady), eased at
+   * the top and settled at the bottom (`ease`: [top, bottom], default [0.3, 0.35]: it ends with no sink). The
+   * view follows the horizon, which stands `horizon` (0.3) of the half frame over the middle: from orbit that
+   * is down at the globe with the limb across the top, at the end along the level; `look` (degrees under
+   * the level) starts it steeper and lets it rise to the horizon's rule over the first two thirds. It turns
+   * by `turn` degrees in all, ending on the compass `heading`, and from `run` (0.45) of the move on it gathers
+   * way along its heading up to `speed` m/s (90) at the end: it ENDS MOVING, level, so a `skim` given
+   * `shot.end` ({from, heading, speed, clearance, pitch, lens}) follows in the same scene with no cut. `lens`:
+   * one lens or [from, to]. `margin`: never nearer the ground or the water. This is a camera's descent, far
+   * faster and steeper than any vehicle's: `shot.sink` (m/s) says how fast. The shot adds {height,
+   * aboveGround, dip, pitch, heading, speed, sink, travelled, end}. */
+  descend(t, options = {}) { return this._descent(t, options, "descend", false); }
+  /** `descend` flown backwards: from `to` metres over the surface, moving, up to `from` metres over the
+   * sphere, the same path, view and timing in reverse (it leaves the level flight of a `skim` given
+   * `shot.end` and ends looking down at the globe). */
+  ascend(t, options = {}) { return this._descent(t, options, "ascend", true); }
+  _descent(t, options, who, upward) {
+    known(`${who} options`, options, [...TIMING.filter((k) => k !== "lens"), "lens", "at", "from", "to", "heading", "turn", "horizon", "look", "speed", "run", "margin"]);
+    const pairOfLenses = Array.isArray(options.lens), c = this._timing(t, {...options, lens: pairOfLenses ? undefined : options.lens, ease: 0}, who, 0), L = this.local, notes = [];
+    const hi = num(`${who} from (m)`, options.from ?? 400e3, 1e-2), lo = num(`${who} to (m)`, options.to ?? 300, 1e-2), at = pair(`${who} at`, options.at ?? [0, 0]);
+    if (!(hi > lo)) throw fail(`${who}: from (${hi} m, the top) must be above to (${lo} m, the bottom)`);
+    const ease = options.ease ?? [0.3, 0.35], speed = num(`${who} speed (m/s)`, options.speed ?? 90, 0), run = num(`${who} run`, options.run ?? 0.45, 0, 0.95);
+    const heading = num(`${who} heading`, options.heading ?? 0), swing = num(`${who} turn`, options.turn ?? 0), horizon = num(`${who} horizon`, options.horizon ?? 0.3, -1, 1);
+    const look = options.look === undefined || options.look === null ? null : num(`${who} look`, options.look, 0, 90);
+    const fovAt = (e) => (pairOfLenses ? Math.exp(mix(Math.log(lens(options.lens[0]).fov), Math.log(lens(options.lens[1]).fov), e)) : c.fov);
+    const headAt = (u) => heading - swing * (1 - smootherstep(u)), wayAt = (u) => speed * smoothstep(run, 1, u);
+    // the ground track: the way made good along the turning heading, summed in fixed steps (the same for every t)
+    const place = (u) => {
+      let x = at[0], z = at[1];
+      if (u > run && speed > 0) {
+        const n = 48, du = (u - run) / n;
+        for (let i = 0; i <= n; i++) { const s = run + du * i, k = (i === 0 || i === n ? 1 : i % 2 ? 4 : 2) * du / 3 * c.T * wayAt(s), a = headAt(s) * RAD; x += Math.sin(a) * k; z -= Math.cos(a) * k; }
+      }
+      return [x, z];
+    };
+    const [ex, ez] = place(1), floor = this.surface(ex, ez, c.time, true);                         // heights are over the surface where the move ends
+    const state = (u) => {
+      const e = easedEnds(u, ease), above = Math.exp(mix(Math.log(hi), Math.log(lo), e)), [x, z] = place(u), fov = fovAt(e);
+      const p = L.at(x, z, floor + above), dip = horizonDip(L.radius, L.heightOf(p)), level = -dip - Math.atan(horizon * Math.tan(fov * RAD / 2)) / RAD;
+      return {e, above, x, z, p, fov, dip, pitch: look === null ? level : mix(-look, level, smootherstep(u / 0.67))};
+    };
+    const u = upward ? 1 - c.u : c.u, s = state(u), last = state(1);
+    const eye = this._clear(s.p, c.time, options.margin, notes, who);
+    const frame = lookFrame(L.upAt(eye), L.compass(eye, headAt(u)), s.pitch, c.roll);
+    const sink = s.above * Math.log(hi / lo) * easedRate(u, ease) * easedPeak(ease) / c.T;
+    return shotOf(eye, frame, s.fov, c.aspect, along(eye, frame.forward, Math.max(s.above * 2, 100)), {move: who, progress: c.u, notes, height: L.heightOf(eye), aboveGround: s.above, dip: s.dip, pitch: s.pitch,
+      heading: headAt(u), speed: wayAt(u), sink: upward ? -sink : sink, travelled: len(sub([s.x, 0, s.z], [at[0], 0, at[1]])),
+      end: {from: [ex, ez], heading, speed, clearance: lo, pitch: last.pitch, lens: {fov: last.fov}}});
   }
 
   // ===== ship moves =====

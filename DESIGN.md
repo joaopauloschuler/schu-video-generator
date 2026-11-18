@@ -383,7 +383,8 @@ src/vidgen/
                           # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9); space-hull.js
                           # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10); space-hull-detail.js
                           # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11); space-camera-air.js
-                          # `vidgen/space-camera-air`: camera moves in the air and beside giant ships, on `vidgen/space-camera`'s rig (§123.12)
+                          # `vidgen/space-camera-air`: camera moves in the air and beside giant ships, on `vidgen/space-camera`'s rig (§123.12); space-descent.js
+                          # `vidgen/space-descent`: one world from orbit to the ground: globe, air, sea, ground and decks joined (§123.13)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -30003,3 +30004,156 @@ cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side:
   and seeded shake, the zoom's landing points; did-you-mean for options, views, flights, ships,
   hangars. In Chromium (`slow`): a skim and a climb drawn at three times each in two orders give
   the same frames (within 2 of 255), the camera over the swell in each.
+
+### 123.13 Orbit to ground in one shot: `vidgen/space-descent`, `descend` / `ascend` (Step 391)
+
+`data/web/modules/space-descent.js` (import name `vidgen/space-descent`, in `VIDGEN_MODULES`;
+imports `three`, `vidgen/space-air`, `-sea`, `-land`, `-clouds`, `-bodies`) and two moves on
+`vidgen/space-camera-air`'s rig.
+
+```js
+import {world} from "vidgen/space-descent";
+import {airCamera} from "vidgen/space-camera-air";
+const w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze"}, clouds: {sky: "fair"}, scene});
+scene.add(w.object);
+const cam = airCamera({camera, ...w.rig});
+function frame(t) {
+  const fall = {over: [0, 10], from: 400e3, to: 300, heading: 300, turn: 30};
+  const shot = t < 10 ? cam.descend(t, fall) : cam.skim(t, {over: [10, 14], ...cam.descend(10, fall).end, follow: 0});
+  cam.apply(t, shot); w.update(t, {camera}); renderer.render(scene, camera);
+}
+```
+
+**The split taken.** Built whole: a CAMERA's descent from orbit to a low pass, and back up, over
+an ocean world with decks and over bare ground (a Mars-like desert), in one frame of reference
+with one air. Not built (the list is in the tasklist): the plane version (a camera following a
+plane through the end of a `reentry` leg), re-anchoring the local frame along a long flight, the
+joined world inside a `SpaceView`, the decks' weather read from the globe's cloud map.
+
+**The audit of the seams** (stills before the work in `/home/claude/work/scratch/ao391/stills/before_*`:
+the same view from 400, 200, 100, 60, 30 and 10 km, the globe alone and the local parts alone).
+
+1. *Frames.* The globe's data are J2000 metres in a `SpaceView`; air, sea, decks and ground are
+   the scene's local frame (x east, y up, z south; the world's middle at [0, -radius, 0]). Every
+   local part already takes "up" and the height from the camera's place on the sphere and draws
+   each pixel on the sphere itself, so the local frame holds for a camera anywhere over the place:
+   drawn from 400 km before this step, the sea and the ground were right in shape. Decision: ONE
+   scene, the local frame; the globe is put into it (radius metres, middle [0, -radius, 0], turned
+   by `globeTurn(at)` = `placeFrame`'s east, up, south as rows, so the place `at` is under the
+   origin and the ground's map and the globe's agree). No `SpaceView`. A camera is free to come
+   down over the anchor, so nothing is re-anchored; a vehicle is not (a re-entry crosses
+   thousands of km): `world.problems(camera)` names a camera further than 0.3 radii along the
+   ground from the place (`REACH`; the ground's large-scale map ends at 0.48).
+2. *Globe and air.* From 400 km the air's limb (`vidgen/space-air`) is a thin bright blue line,
+   the body's own (`vidgen/space-bodies`) a softer, dimmer glow with a pink band; the Mars-like
+   preset is dusty where the body's own air is clear. Decision: one source. The dome of
+   `vidgen/space-air` is drawn at every height and the globe is made with `air: false`; its
+   surface is seen through the dome's own air (`airLight` to the distance of the sphere on the
+   pixel's ray) and lit as the dome's plain ground is (the sun after the air at that place plus
+   the sky's light over the sun's cosine, floor 0.2). No handover of the air exists, so none can
+   show. `space-bodies.js` is not changed; no Phase AN picture or key changes. The joined world's
+   limb is therefore `space-air`'s, not the Phase AN body's: a cut from a Phase AN shot of the same
+   world to a joined one shows the difference (the leftover of Step 381 stands for the review).
+3. *Surface.* Bare ground: `vidgen/space-land` draws well from orbit (craters, the limb), with
+   more detail than the globe's map, but its large-scale map ends 0.48 radii out and it costs
+   more. Sea: empty from high up. The globe: soft from low orbit (a 1024 px map has texels of
+   10 km on an Earth; from 100 km a pixel is 100 m). Decision: the globe's picture (drawn into a
+   half-float target with the page's camera) is laid over the local picture by a full-screen
+   pass at render order -790 (after the decks' -800, before the scene's own things) with the
+   weight `globeWeight(height, distance) = S(ln distance; near) x S(ln height; height)`: `distance`
+   to the sphere along the pixel's ray, `height` the camera's, S a smoothstep. Resolution does not
+   enter (a draft and the film hand over at the same heights). `HANDOVERS.low` (a sea or decks):
+   near 20 to 80 km, height 2.5 to 14 km; `HANDOVERS.high` (bare ground): near 150 to 600 km,
+   height 60 to 300 km. Above `near[1]` only the globe and the dome are updated and drawn; under
+   `height[0]` the globe is not drawn (`stageOf`, `world.state.stage`: `globe`, `handover`,
+   `local`).
+4. *Clouds.* The decks seen from 30 km and up show the noise tile as a lattice (before-still
+   `before_a_local_earth.png`), from 10 km still in the far half; the globe's cloud layer is soft
+   smears. Decision: no deck is shown further than `near[1]` from the camera (the lattice needs
+   many tiles in view), the globe's layer is all there is above; between, one dissolves into the
+   other. Single clouds are NOT in the same places. Decks beyond the globe's horizon stood over the
+   limb as a bright line that appeared at once when the local parts came on: where the far globe
+   has taken over, rays passing under 1.5 x the highest deck top show the air alone (weighted with
+   the height's weight). A world without `clouds` gets a globe without its cloud layer.
+5. *Depth and order.* No `SpaceView`, so none of its traps. The globe's picture is a pass without
+   depth, drawn before the scene's meshes: a craft is always in front of it, as of the decks. The
+   ground writes depth (meshes behind a ridge are hidden); the globe's picture does not.
+6. *Light and exposure.* One exposure: the air's (`film` by default: no lift above the air). The
+   sun, its colour after the air and the stars' share come from the one air at every height, so
+   nothing can jump at a handover. Stars: `stars: spaceSky(...)`, dimmed by the air as before.
+7. *Cost* (2 cores, SwiftShader, `standard`, 1280x720, warm): ocean with decks: 0.75 s a frame in
+   the globe stage, 3.1 s in the handover (everything is drawn), 1.8 s near the surface;
+   Mars-like ground: 1.6 / 1.5 / 1.7 s (the ground is drawn from 600 km down). First frame in
+   which the ground appears: 6.5 to 10.8 s more (its maps). Page ready: 10 s cold (the globe's
+   1024 px map), 2.5 to 5.6 s warm. A draft (426x240): 0.32 s a frame over the whole descent.
+
+**`world(renderer, options)` → `World`.** Options (plain, YAML-friendly; unknown keys refused with
+a did-you-mean): `planet` (a world of `vidgen/space-bodies`, name or options; default the
+ground's own, else `"earth"`), `at` ([latitude, longitude]; default the ground preset's), `sun`
+([elevation, azimuth] at the place, or a direction), `air` (name or options; default the ground
+preset's, else the planet's name), `sea` / `land` / `clouds` (false, true, a name: a sea state, a
+ground preset, a sky; or the part's options), `globe` (more planet options: `size`, `clouds`),
+`handover` (`"low"`, `"high"` or `{near, height}`; default by what lies under the air), `match`
+(the globe's brightness beside the local picture's, 1), `exposure`, `ev`, `quality`, `stars`,
+`scene`. Members: `object` (add to the scene), `update(t, {camera, sun})` (after the camera is
+placed), `heightOf(what)`, `up(what)` (a camera, an object, a point), `sun`, the parts `sky`,
+`water`, `ground`, `weather`, `body`, `rig` (for `airCamera({camera, ...w.rig})`), `light`,
+`stage(height)`, `state` (`height`, `stage`, `globe`, `local`, `below`, `far`, `up`),
+`problems(camera)`, `honest` (where the picture is not true, as sentences), `overlay`,
+`uniforms`, `dispose()`. Pure exports: `globeWeight`, `stageOf`, `handoverOf`,
+`surfaceDistance`, `globeTurn`, `sunOf`, `resolveWorld`, `HANDOVERS`, `STAGES`, `REACH`,
+`VERSION`. The globe's cube maps are 1024 px for a frame of 300 rows or more, else 512
+(`globe: {size}`).
+
+**`cam.descend(t, options)` / `cam.ascend(t, options)`** (`vidgen/space-camera-air`,
+`AIR_MOVES`). From `from` metres over the sphere (400 km) to `to` metres over the surface where
+the move ends (300): the logarithm of the height runs steadily (equal time for each power of ten),
+eased at the top and settled at the bottom (`ease: [0.3, 0.35]`: it ends with no sink). The view
+keeps the horizon `horizon` (0.3) of the half frame over the middle: down at the globe with the
+limb across the top from orbit, along the level at the end; `look` (degrees under the level)
+starts steeper. `turn` degrees in all, ending on `heading`; from `run` (0.45) of the move it
+gathers way to `speed` m/s (90); `lens` one or a pair; `at`, `margin`, the rig's timing (`over`
+in seconds or bars, `progress` + `seconds`). The shot adds `height`, `aboveGround`, `dip`, `pitch`,
+`heading`, `speed`, `sink`, `travelled` and `end` = `{from, heading, speed, clearance, pitch,
+lens}`: a `skim` given `...shot.end, follow: 0` starts at the same place, view, lens and speed
+(tested to 1e-6 m; a straight skim: one that starts turning rolls at once). `ascend` is the same
+path backwards. A function of t only.
+
+**True and not true** (`world.honest`). True: positions, the sphere, the horizon's dip at every
+height, the air's depth and colours at true scale heights, the sun's place, stars fading as the
+sky brightens, the ground's and the globe's great forms in the same places. Not true: the
+camera's speed (400 km in ten seconds: 100 km/s and more at the top; a vehicle's re-entry takes
+half an hour over thousands of km); where single clouds are (globe and decks agree in colour and
+roughly in cover only); the globe's 10 to 30 km craters and its snow are not the ground's; the
+globe is lit as a matt ground (no city lights at night in a joined world); no shadows of decks on
+the globe.
+
+**Measured on the draft clip** (ocean with decks, 400 km to 300 m in 10 s, then a 3 s skim;
+426x240, 10 fps; `vidgen motion check`: no findings). Mean change between consecutive frames
+(display codes): 3.4 to 4.4 from 140 km to 30 km; 5.0 to 5.9 from 27 to 22 km, where the decks
+come into view (1.5 x its neighbours: the largest ratio in the handover, 58 km to 2.9 km); rising
+evenly to 21 by 4 km (the clouds rushing up); 26 against 13 at 1.4 km and at 1.0 km (into the
+cumulus and out of its base: 2.0 and 2.3 x, a true event); 1.2 in the skim, no step at the join.
+In the Chromium test the surface's mean colour changes by under 32 codes and the sky's by under 40
+between heights a sixth of a power of ten apart from 100 km to 3.2 km.
+
+**Where the seams still show.** (1) From about 150 km to 25 km over an ocean the surface is soft
+and nearly featureless: the globe's map has nothing that fine and the decks cannot be shown that
+far; the picture does not pop, it goes blank and then clouds grow out of the haze. (2) The cloud
+pattern changes character in the handover (broad smears → puffs); it reads as resolving detail,
+not as the same clouds. (3) A thin cirrus deck is a white line across the horizon while the
+camera is level with it (about 10 km). (4) Passing through a deck at a kilometre a second is one
+or two grey frames. (5) Over bare ground the globe's albedo markings fade as the ground comes in
+(the ground under the dusty air is plainer). (6) The limb is `space-air`'s (harder and bluer than
+the Phase AN body's).
+
+- **Parts** (`data/web/parts/space-descent.js`): `joined-ocean-orbit`, `joined-ocean-handover`,
+  `joined-desert` (kind `air`), `camera-descend` (kind `camera`).
+- **Tests** (`tests/test_web_space_descent.py`): served by its import name; parts; in Node: the
+  weights (in 0..1, monotonic in distance and in height, steps under 0.12 between heights 8 %
+  apart, the ends), what is drawn at which height, the distance to the sphere without
+  cancellation, the globe's turn, options and did-you-mean, the descent's profile (equal time a
+  power of ten, no sink at the end), its end joined to a skim, `ascend` as the reverse; in
+  Chromium (`slow`): 16 heights from 400 km to 300 m draw, the stages are as stated, bounded steps
+  across the handover, a frame is the same after other frames, with the maps baked cold, from the
+  cache and without the cache (within 2 of 255).

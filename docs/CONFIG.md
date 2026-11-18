@@ -8148,6 +8148,41 @@ cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side:
   ground between the camera and its subject; a reveal from behind a nearer ship is not built.
   Look first: `vidgen parts 'camera-*'`.
 
+**One world from orbit to the ground: `vidgen/space-descent`** (Step 391, DESIGN §123.13). For a
+page of a `web` scene: `import {world} from "vidgen/space-descent"`.
+
+- `const w = world(renderer, {planet, at, sun, air, sea, land, clouds, globe, handover, match,
+  exposure, ev, quality, stars, scene})`; `scene.add(w.object)`; each frame, after the camera is
+  placed: `w.update(t, {camera})`. A plain three.js scene in metres (the local frame of the air,
+  the sea and the ground; not a `SpaceView`).
+- `planet`: a world of `vidgen/space-bodies` (name or options; default the ground's own, else
+  `"earth"`); `at`: `[latitude, longitude]` of the place under the scene's origin; `sun`:
+  `[elevation, azimuth]` in degrees there, or a direction; `air`: as `vidgen/space-air`'s (default
+  the planet's); `sea`, `land`, `clouds`: `false`, `true`, a name (a sea state, a ground preset, a
+  sky) or that module's options; `globe`: more options for the planet (`size`: its cube maps,
+  1024 from 300 rows; `clouds`); `handover`: `"low"` (near 20 to 80 km, height 2.5 to 14 km: the
+  default with a sea or decks), `"high"` (150 to 600 km, 60 to 300 km: bare ground) or `{near:
+  [from, to], height: [from, to]}` in metres; `match`: the globe's brightness beside the local
+  picture's (1).
+- What is drawn: above `near[1]` the globe through the world's own air (`w.state.stage` is
+  `"globe"`); under `height[0]` the sea, the ground and the decks (`"local"`); between, both,
+  the globe where a pixel's ground is far (`"handover"`). `w.stage(height)` says it for any
+  height; `w.heightOf(camera)`, `w.up(camera)`, `w.sun`, the parts `w.sky`, `w.water`, `w.ground`,
+  `w.weather`, `w.body`; `w.problems(camera)` (a camera too far from the place, under the
+  surface); `w.honest` (where the picture is not true). `airCamera({camera, ...w.rig})` for the
+  camera moves.
+- `cam.descend(t, {over, from: 400e3, to: 300, at, heading, turn, speed: 90, run: 0.45, horizon:
+  0.3, look, ease: [0.3, 0.35], lens, margin})` and `cam.ascend` (the same path backwards) on
+  `vidgen/space-camera-air`'s rig: equal time for each power of ten of height, ending level and
+  moving; `shot.end` (`{from, heading, speed, clearance, pitch, lens}`) starts a `skim` with no
+  cut: `cam.skim(t, {over: [10, 14], ...shot.end, follow: 0})`. A camera's descent, far faster and
+  steeper than any vehicle's: `shot.sink` is its speed.
+- Cost at 1280x720 in software GL: 0.75 s a frame from orbit, about 3 s in the handover, 1.5 to
+  1.8 s near the surface; the first frame with ground 6 to 11 s more. Limits: single clouds of
+  the globe and of the decks are not in the same places; from 150 km to 25 km over a sea the
+  surface is soft; no plane version and no re-anchoring along a long flight; not inside a
+  `SpaceView`. Look first: `vidgen parts 'joined-*' camera-descend`.
+
 **The sky from inside an atmosphere: `vidgen/space-air`** (Step 381, DESIGN §123.3). The view
 from within a world's air, at any height from the ground to space: the sky dome for any sun (day,
 golden hour, sunset, twilight with the stars coming out, night), the sun's disc, aerial perspective

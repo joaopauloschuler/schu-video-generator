@@ -4054,6 +4054,30 @@ ship.update(t); cam.apply(t, cam.chase(t, {flight: "Plane"})); sky.update(t, {ca
 - Speeds that read: a pass along a 3 km hull at 40 m/s (show a part of it, not the whole ship in
   ten seconds); a `rise` to 60 km in 8 s or more.
 - Cost: the scene's own, 0.8 to 2.1 s a frame at 1280x720. Look first: `vidgen parts 'camera-*'`.
+
+**Orbit to ground in one shot: `vidgen/space-descent`.** One call makes the globe, the air, the
+sea, the ground and the cloud decks of the same world for one place and one sun, and draws the
+right ones for the camera's height, cross-faded (DESIGN §123.13):
+
+```js
+import {world} from "vidgen/space-descent";
+const w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze"}, clouds: {sky: "fair"}, scene});
+scene.add(w.object);
+const cam = airCamera({camera, ...w.rig});
+const fall = {over: [0, 10], from: 400e3, to: 300, heading: 300, turn: 30};
+// in frame(t): the descent, then a skim from where it ends, with no cut
+const shot = t < 10 ? cam.descend(t, fall) : cam.skim(t, {over: [10, 14], ...cam.descend(10, fall).end, follow: 0});
+cam.apply(t, shot); w.update(t, {camera}); renderer.render(scene, camera);
+```
+
+- `world(renderer, {land: "mars", sun: [30, 120]})` is a Mars-like desert (planet, place and air
+  are the ground's own). A plain scene in metres, not a `SpaceView`.
+- `cam.ascend` is the descent backwards. Give the descent a second for every third of a power of
+  ten of height or more (400 km to 300 m: 10 s).
+- Say in the film's notes what is not true (`w.honest`): the camera's speed; single clouds differ
+  between the globe and the decks; from 150 km to 25 km over a sea the surface is soft.
+- Cost at 1280x720: 0.75 s a frame from orbit, about 3 s in the handover (80 km to 2.5 km over a
+  sea), 1.5 to 1.8 s near the surface. Look first: `vidgen parts 'joined-*' camera-descend`.
   Reference: CONFIG.md `web`, "Camera moves in the air and beside giant ships"; recipes in
   `docs/COOKBOOK-SPACE.md`.
 

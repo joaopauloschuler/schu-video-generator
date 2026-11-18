@@ -116,7 +116,7 @@ out.push({air: A.AIR_MOVES, ship: A.SHIP_MOVES, all: [...A.AIR_MOVES, ...A.SHIP_
     assert pushed["before"] == 0 and pushed["at"] == 0 and pushed["later"] == pytest.approx(40, abs=0.01) and pushed["rises"]
     assert pushed["again"] and pushed["other"] and all(abs(pushed["shake"][k]) <= 0.3 for k in ("yaw", "pitch", "roll"))
     assert pushed["bank"][0] == pytest.approx(28.1, abs=0.1) and pushed["bank"][1] == pytest.approx(-14.05, abs=0.1) and pushed["bank"][2] == 40 and pushed["dip"] == pytest.approx(7.82, abs=0.02)
-    assert names["air"] == ["skim", "climbThrough", "descendThrough", "chase", "wing", "flyPast", "orbitPeak", "rise"]
+    assert names["air"] == ["skim", "climbThrough", "descendThrough", "chase", "wing", "flyPast", "orbitPeak", "rise", "descend", "ascend"]
     assert names["ship"] == ["hullPass", "hullReveal", "intoBay", "sternBurn", "scaleZoom"] and names["all"] and names["old"]
 
 
@@ -124,7 +124,8 @@ def test_the_air_moves_in_node(tmp_path: Path) -> None:
     pure, skim, far, through, chase, wing, past, peak, rise = _run_in_node(tmp_path, """
 const cam = A.airCamera({radius: R, ground, clouds: {decks: [{name: "stratus", base: 1500, top: 2300}], towers: [{x: 9000, z: -3000, radius: 1500, base: 800, top: 9000}]}, crafts: {}});
 const F = circle(), O = {skim: {over: [0, 10], from: [0, 0], heading: 90, speed: 400, clearance: 40, turn: 12}, climbThrough: {over: [0, 10], adapt: 1},
-  descendThrough: {over: [0, 10]}, chase: {flight: F}, wing: {flight: F}, flyPast: {flight: F, over: [0, 10]}, orbitPeak: {over: [0, 10], around: [3000, 0], radius: 3000}, rise: {over: [0, 10], at: [9000, 9000]}};
+  descendThrough: {over: [0, 10]}, chase: {flight: F}, wing: {flight: F}, flyPast: {flight: F, over: [0, 10]}, orbitPeak: {over: [0, 10], around: [3000, 0], radius: 3000}, rise: {over: [0, 10], at: [9000, 9000]},
+  descend: {over: [0, 10], at: [9000, 9000]}, ascend: {over: [0, 10], at: [9000, 9000]}};
 // the same time, the same shot, whatever was asked before
 const order = [3, 1, 7, 1, 9, 3, 7], seen = {}; let stable = true, finite = true, square = 0;
 for (const t of order) for (const m of A.AIR_MOVES) { const s = cam[m](t, O[m]), key = m + t, text = JSON.stringify(s); if (seen[key] !== undefined && seen[key] !== text) stable = false; seen[key] = text;
@@ -171,7 +172,7 @@ const rs = Array.from({length: 11}, (_, i) => cam.rise(i, {over: [0, 10], at: [9
 out.push({above: [rs[0].aboveGround, rs[10].aboveGround], rising: rs.every((s, i) => i === 0 || s.height > rs[i - 1].height), fov: [rs[0].fov, rs[10].fov], dip: rs[10].dip, pitch: rs[10].pitch,
   horizon: C.screenOf(rs[10], C.add(rs[10].from, A.lookFrame(flat.local.upAt(rs[10].from), [0, 0, -1], -rs[10].dip).forward)).y, same: Math.abs(back.height - rs[7].height), order: err(() => cam.rise(0, {progress: 0, from: 50, to: 10}))});
 """)
-    assert pure == {"stable": True, "finite": True, "square": pytest.approx(0, abs=1e-9), "moves": ["skim", "climbThrough", "descendThrough", "chase", "wing", "flyPast", "orbitPeak", "rise"]}
+    assert pure == {"stable": True, "finite": True, "square": pytest.approx(0, abs=1e-9), "moves": ["skim", "climbThrough", "descendThrough", "chase", "wing", "flyPast", "orbitPeak", "rise", "descend", "ascend"]}
     # the ridge is narrower than the plan's samples: the camera is lifted there, and says so; it is never under 0.4 x its clearance
     assert skim["least"] >= 16 - 1e-4 and skim["lifted"] > 50 and skim["notes"] >= 1 and "the camera was lifted" in skim["first"] and "to stay 16 m over the ground" in skim["first"]
     assert skim["top"] > 300 and skim["before"] > 60                                # over the hill; rising before it and settling after it (the look-ahead)

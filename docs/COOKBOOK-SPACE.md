@@ -642,6 +642,54 @@ close: 80, world: "Earth", over: [0, 8]})` (0.8 s). Look first: `vidgen parts 'c
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
+**From orbit to a skim over the sea, in one shot** (`vidgen/space-descent`, DESIGN §123.13). One
+call joins the globe, the air, the sea and the decks of one world; `descend` brings the camera
+down and hands over to a `skim`:
+
+```js
+import * as THREE from "three";
+import {world} from "vidgen/space-descent";
+import {spaceSky} from "vidgen/space-sky";
+import {airCamera} from "vidgen/space-camera-air";
+let renderer, scene, camera, w, cam;
+const fall = {over: [0, 10], from: 400e3, to: 300, heading: 300, turn: 30, speed: 90, lens: ["normal", "wide"]};
+export function load(ctx) {
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 2, 4e7);
+  const stars = spaceSky(renderer, {seed: 5, size: 512});
+  scene.add(stars.object);
+  w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze", seed: 3}, clouds: {sky: "fair", seed: 4}, stars, scene});
+  scene.add(w.object);
+  cam = airCamera({camera, ...w.rig});
+}
+export function frame(t) {
+  const shot = t < 10 ? cam.descend(t, fall) : cam.skim(t, {over: [10, 14], ...cam.descend(10, fall).end, follow: 0});
+  cam.apply(t, shot);
+  w.update(t, {camera});
+  renderer.render(scene, camera);
+}
+```
+
+What happens on the way down, and what a frame costs at 1280x720 (`w.state.stage`):
+
+| height | drawn | seconds a frame |
+|---|---|---|
+| 400 km to 80 km (`globe`) | the globe through the world's air, the stars | 0.75 |
+| 80 km to 2.5 km (`handover`) | the sea and the decks near the camera, the globe far off; everything is computed | about 3 |
+| under 2.5 km (`local`) | the air, the sea, the decks | 1.8 |
+
+A Mars-like desert is `world(renderer, {land: "mars", sun: [30, 120], scene})` with `descend`'s
+`to: 500` and `speed: 160`: bare ground holds from orbit, so the globe hands over between 600 km
+and 60 km (1.5 to 1.7 s a frame all the way; 6 to 11 s once when the ground's maps are made).
+`cam.ascend(t, fall)` is the same shot backwards. Keep ten seconds or more for 400 km. Honest
+notes for the film (`w.honest`): the camera falls far faster than any vehicle; the globe's clouds
+and the decks' are not the same clouds, one dissolves into the other; between 150 km and 25 km
+over a sea the surface is soft; a thin cirrus deck is a white line on the horizon while the
+camera passes it. A plane can fly in this scene by `flight_data:` near the place; a whole real
+re-entry cannot (it ends thousands of km from where it starts).
+
 ## 4. What a shot costs
 
 Measured on 2 cores in headless Chromium with software GL (SwiftShader), 1280x720, through
@@ -681,6 +729,7 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | the same hull dressed (`vidgen/space-hull-detail`: maps, windows, bays, clutter, lamps): filling the frame from 2.5 km / small in it / a close view where it covers every pixel / the night side close / eight bells firing (with `plumes: "bank"`) / five dressed hulls at `far` | +0.28 / +0.07 / +0.7 / +0.4 / +0.16 (-0.3) / 0.9 in all (+0.10 and +0.12 at 320x180; the first frame of a page 3 s more) | dressing: 2.1 s with the cache off, 4.2 s cold, 0.9 s warm (`far`: 1.1 / 0.4 s); 4 MB on disk for the first hull, 1 to 3 MB for each more |
 | camera moves in the air (`vidgen/space-camera-air`), the whole scene straight to the canvas: `skim` over a sea / over a desert / `climbThrough` with a sea and two decks / `chase` or `wing` over the alpine range with a plane / `flyPast` over a sea / `orbitPeak` round a volcano / `rise` with a sea and fair clouds | 1.2 / 1.5 / 2.0 / 1.5 / 0.85 / 1.6 / 2.1 (0.17 to 0.39 in a draft at 426x240) | 2 s with a sea, 8 to 20 s with a land at 1280x720 |
 | camera moves beside a dressed 3.2 km hull over the Earth: `hullPass` / `hullReveal` (the bow, the hull overhead) / `intoBay` / `sternBurn` with eight bells / `scaleZoom` | 1.55 / 0.45, 1.1 / 1.6 / 2.1 / 0.8 (0.20 to 0.44 in a draft at 426x240) | 4 to 5 s warm |
+| the joined world (`vidgen/space-descent`), an ocean with decks: from orbit (the globe and the air) / in the handover, 80 km to 2.5 km (everything) / near the surface; a Mars-like desert at 200 km / 20 km / 500 m | 0.75 / 3.1 / 1.8; 1.6 / 1.5 / 1.7 (a draft at 426x240: 0.32 over a whole descent) | page ready 10 s cold, 2.5 to 5.6 s warm; the first frame with ground 6.5 to 10.8 s more |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
