@@ -29,7 +29,8 @@ stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for
 pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lint), `science`
 (plots and worked calculations: plot or chart, fits, live models, units, significant figures,
 lint), `orbits` (orbital mechanics: views, scale honesty, panels, manoeuvres, three bodies,
-dates, pacing, lint), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
+dates, pacing, lint), `space-scenes` (space with no code: orbital scenes, surface scenes in the air,
+planes, giant ships, a descent from orbit), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
 stand-ins, guide passes, lint), `web` (scenes you write in HTML, CSS and JavaScript: when,
 how, theme, beats, three.js, lint, cost), `particle-physics` (particle-physics videos: planning, choosing the scene,
 natural units, simulated data, sources, significance, pacing, lint), `overlays` (overlays,
@@ -416,7 +417,7 @@ project's own scene types, in its theme).
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut), `match_previous` (no flash where a take continues the one before) |
 | simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a picture or animation no built-in draws, written yourself in HTML, CSS and JavaScript: a bespoke layout, CSS or SVG animation, a canvas drawing, your own three.js scene (`vidgen guide web`) | `web` | `page` (an HTML file of the project: any HTML, CSS, JavaScript) or `script` (a JavaScript module drawn on one canvas), `region` (bleed, body), `title`, `data` (values for the page); CSS animations, requestAnimationFrame, timers and the page's frame hook all follow the video's time; no internet while rendering |
-| space with no code: a sky, a sun, planets with rings and air, craft on a real transfer, a black hole, a jump to warp, giant ships, planes over sea, ground and clouds, a descent from orbit, camera moves on bar lines; true positions and timing from orbit data (`vidgen guide space-scenes`) | `space` | `sky`, `sun`, `bodies` (name, world or type, at, radius), `orbits` (the orbit scene's words), `scale`, `light`, `craft` (kind, fly), `phenomena` (kind), `camera` (move, subject, over in seconds or bars, cut), `finish`, `music` (track, pulse / glow / glint), `title`, `end_card`, `script` (your code); a surface scene: `world` (planet, at, sun, air, sea, land, clouds), `flights`; `craft` with `plane`, `hull`, `parts`, `effects`; `flash` |
+| space with no code: a sky, a sun, planets with rings and air, craft on a real transfer, a black hole, a jump to warp, giant ships, planes over sea, ground and clouds, a descent from orbit, camera moves on bar lines; true positions and timing from orbit data (`vidgen guide space-scenes`) | `space` | `sky`, `sun`, `bodies` (name, world or type, at, radius), `orbits` (the orbit scene's words), `scale`, `light`, `craft` (kind, fly), `phenomena` (kind), `camera` (move, subject, over in seconds or bars, cut), `finish`, `music` (track, pulse / glow / glint), `title`, `end_card`, `script` (your code); a surface scene: `world` (planet, at, sun, air, sea, land, clouds), `flights`; `craft` (with plane, hull, parts, effects); `flash` |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -3204,7 +3205,7 @@ Run `vidgen lint` in 16:9 and 9:16.
       actions: [{burn: "burn:1", at: "@burn"}]
 ```
 
-<!-- topic: space-scenes (also: space-scene, space-yaml, declarative-space, planets, spacecraft) -->
+<!-- topic: space-scenes (also: space-scene, space-yaml, declarative-space, spacecraft, surface-scenes, giant-ships) -->
 ## Space scenes without code: the `space` scene
 
 A `space` scene is written in `video.yaml` alone: name a sky, a sun, worlds, craft, phenomena and
@@ -3961,6 +3962,7 @@ cargo spaceplane, a scout over another world — take a ready-made plane and fly
 `flight_data:` path; do not model one from boxes.
 
 ```js
+// sketch: parts of a page (not a whole file)
 import {plane} from "vidgen/space-plane";
 const ship = plane("glider", {seed: 7}).fly(ctx.flight, {flight: "Plane"});   // glider, freighter, needle, lifter, scout, skiff
 scene.add(ship.object);
@@ -3988,6 +3990,7 @@ glows; a plane high up leaves a vapour trail; an engine in air has a short brigh
 adds them to a plane or any craft, and with `flight_data:` they follow the flight by themselves:
 
 ```js
+// sketch: parts of a page (not a whole file)
 import {effects} from "vidgen/space-effects";
 const fx = effects(ship, {flight: ctx.flight, name: "Plane", sky, reentry: true, contrails: true, exhaust: true, vapour: true});
 scene.add(fx.object);                        // the trails are laid in the world, not tied to the craft
@@ -4013,6 +4016,7 @@ seed. A hull is a craft of `vidgen/space-craft`: it flies a body of `orbit_data`
 with `throttle`, a star's glare hides behind it:
 
 ```js
+// sketch: parts of a page (not a whole file)
 import {hull} from "vidgen/space-hull";
 const ship = hull("carrier", {seed: 4, length: 3000}).fly(space, {body: "Ship"});   // metres; +z the bow, +y up
 ship.scaleRef("ship", {at: "hangar-1", gap: 120});     // a 50 m craft beside a hangar slot: without it nothing says "3 km"
@@ -4088,6 +4092,7 @@ const view = (t) => cam.arc(t, {subject: "Earth", phase: {limb: 0.12}, distance:
 more moves; name the move, do not write camera positions:
 
 ```js
+// sketch: parts of a page (not a whole file)
 import {airCamera} from "vidgen/space-camera-air";
 const cam = airCamera({camera, sky, ground, water, clouds: weather, flight: ctx.flight, music: ctx.music, crafts: {Plane: ship}});
 // each frame, first the plane, then the camera, then the air and what stands in it:
@@ -4125,6 +4130,7 @@ sea, the ground and the cloud decks of the same world for one place and one sun,
 right ones for the camera's height, cross-faded (DESIGN §123.13):
 
 ```js
+// sketch: parts of a page (not a whole file)
 import {world} from "vidgen/space-descent";
 const w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze"}, clouds: {sky: "fair"}, scene});
 scene.add(w.object);
