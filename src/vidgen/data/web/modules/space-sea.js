@@ -36,6 +36,13 @@ export const DETAIL = Object.freeze({fast: [16, 6, 16, 1], standard: [32, 10, 8,
 export const LOWEST = 0.5;
 /** The most of the sea foam may cover, whatever the wind. */
 export const FOAM_MOST = 0.12;
+/** The low haze the glitter is seen through (a look): its optical depth a metre and its top, metres over the sea. */
+export const LOW_HAZE = Object.freeze({depth: 3e-5, top: 2500});
+/** The steepness (significant height over dominant length) from which the waves' bodies are shaded more than the light alone
+ * would (darker troughs, lighter crests, darker faces turned from the sun: a look), and where that is at full strength. */
+export const RELIEF = Object.freeze([0.03, 0.045]);
+/** At dusk in the film look the water mirrors at least this share of the sky (a look: near water stays readable). */
+export const DUSK_MIRROR = 0.4;
 /** How long ago a crest broke where its foam is still seen as a thinning lace, seconds. */
 export const FOAM_LAG = 2.2;
 /** The lengths of the gusts' patches, metres (each varied by the seed). */
@@ -118,7 +125,7 @@ export const STATES = Object.freeze({
   breeze: {wind: 6, swell: {height: 0.4, length: 90, direction: -15}, gusts: 0.4},
   swell: {wind: 4, swell: {height: 2.2, length: 190, direction: 45}, gusts: 0.45},
   rough: {wind: 13, height: 3.2, length: 80, swell: null, chop: 1, gusts: 0.35},
-  storm: {wind: 22, height: 8, length: 170, swell: null, foam: 0.5, chop: 0.8, gusts: 0.3},
+  storm: {wind: 22, height: 8, length: 170, swell: null, foam: 0.6, chop: 0.8, gusts: 0.3},
 });
 const STATE_OPTIONS = ["wind", "direction", "height", "length", "swell", "foam", "chop", "gusts", "gravity", "name"];
 const SWELL_OPTIONS = ["height", "length", "direction"];
@@ -328,9 +335,10 @@ uniform vec4 uSeaGeo;       // the world's radius (m), the camera's height (m), 
 uniform vec4 uSeaFar;       // how far the grid is lifted (m), the horizon's distance (m), height x (2 radius + height), radius + height
 uniform vec4 uSeaBase;      // the slopes finer than the list (xx, xz, zz), the gusts' strength
 uniform vec4 uSeaMap;       // the sea-level sky table's rows
-uniform vec4 uSeaFoam;      // the crest measure foam begins at, the whitecaps' mean cover, the streaks' stretch, the filter (pixels)
-uniform vec4 uSeaLaceAt;    // where the camera stands in the foam pattern's two layers
+uniform vec4 uSeaFoam;      // the crest measure foam begins at, the whitecaps' mean cover, (free), the filter (pixels)
+uniform vec4 uSeaLaceAt;    // where the camera stands in the foam's two layers of soft patches
 uniform vec4 uSeaOptic;     // the refractive index, the glow of faces turned to the eye, the sun's angular radius (its sine), the sky's light at the camera's place
+uniform vec4 uSeaRelief;    // how much steep waves' bodies are shaded (0 to 1), one over the heights' spread (1/m), one over the spread of the slope along the wind
 uniform vec4 uSeaWind;      // the wind's direction (x, z), the camera's place in the sea's frame (m)
 uniform vec3 uSeaE1, uSeaE2, uSeaBody, uSeaShallow, uSeaFoamColor;
 uniform sampler2D uSeaSky, uSeaAmbient, uSeaLace;
@@ -398,8 +406,12 @@ void main() {
   // hardly turned (it mirrors much, from low in the sky: the bright horizon, the twilight arch) and one well turned
   float rough = cov.x * ah.x * ah.x + 2.0 * cov.y * ah.x * ah.y + cov.z * ah.y * ah.y;
   vec2 facing = sqrt(ndv * ndv + (FACES > 1 ? vec2(0.12, 1.5) : vec2(0.35)) * rough), Fs = vec2(seaFresnel(min(facing.x, 1.0)), seaFresnel(min(facing.y, 1.0)));
-  float F = 0.5 * (Fs.x + Fs.y);
   float sunG = dot(uAirSun, upL), sunUp = max(sunG, 0.0);
+  // the film look at dusk (the exposure lifted, the sun down): the water mirrors at least a fixed share, so near water keeps the zenith's and the arch's colours
+  // and from lower in the sky than a mirror would (0.4 of the height): the arch's side, not the dark overhead
+  float dusk = clamp(uAirDusk.x * 2.0, 0.0, 1.0) * smoothstep(0.0, -0.05, sunG);
+  Fs = max(Fs, vec2(${DUSK_MIRROR.toFixed(2)} * dusk));
+  float F = 0.5 * (Fs.x + Fs.y);
   vec3 Tsun = exp(-airTau(0.0, sunG)) * smoothstep(-uSeaOptic.z, uSeaOptic.z, sunG);
   vec3 amb = texture2D(uSeaAmbient, vec2(clamp((sunG - (${PSI_TABLE.sunFrom.toFixed(2)})) / ${(1 - PSI_TABLE.sunFrom).toFixed(2)}, 0.01, 0.99), 0.5)).rgb;
   vec3 mirrored = reflect(rd, n), sky = vec3(0.0);
@@ -407,6 +419,7 @@ void main() {
     vec3 R = normalize(mirrored + upL * (2.0 * (facing[k] - ndv)));
     float muR = dot(R, upL);
     if (muR < 0.0) { R -= 2.0 * muR * upL; muR = -muR; }
+    R = normalize(R - upL * (0.6 * dusk * muR)); muR = dot(R, upL);
     float cosvR = dot(R, uAirSun);
     sky += Fs[k] / float(FACES) * airRead(uSeaSky, airPlace(uSeaMap, max(muR, 0.004), cosvR), cosvR);
     if (rough < 1e-5 * ndv * ndv) { sky *= float(FACES); break; }          // a mirror: one face is all
@@ -415,7 +428,8 @@ void main() {
   sky *= clamp(dot(amb, LUMA) / max(uSeaOptic.w, 1e-12), 0.25, 4.0);
   // the sun's glitter: the share of the faces, resolved and not, that mirror the sun to the eye
   vec3 hv = normalize(uAirSun + v); float hz = max(dot(hv, upL), 1e-3);
-  vec2 d = -vec2(dot(hv, uSeaE1), dot(hv, uSeaE2)) / hz - slope;
+  // the slope that face has, in the water's own level there (far off the world's roundness tilts it against the sea's plane)
+  vec2 d = -(vec2(dot(hv, uSeaE1), dot(hv, uSeaE2)) - hz * vec2(dot(upL, uSeaE1), dot(upL, uSeaE2))) / hz - slope;
   vec3 S = cov + vec3(2e-5, 0.0, 2e-5);
   float det = max(S.x * S.z - S.y * S.y, 1e-14), sigma = sqrt(0.5 * (S.x + S.z));
   float faces = exp(-0.5 * (S.z * d.x * d.x - 2.0 * S.y * d.x * d.y + S.x * d.y * d.y) / det) / (6.2831853 * sqrt(det));
@@ -423,17 +437,24 @@ void main() {
   // as the sun's own disc: the redder the air leaves the sun, the less its mirror image may burn out, so a sunset's glitter keeps its colour
   float most = max(max(Tsun.r, Tsun.g), max(Tsun.b, 1e-9));
   vec3 glitter = Tsun / most * min(most * glint, mix(2.0, ${BURN.toFixed(1)}, pow(most, 1.6)));
+  // a low haze over the water, which the air's model does not have, dims the glitter along its way under the haze's top:
+  // from high up the path fades towards the horizon instead of ending there at full strength (a look: only the glitter takes it)
+  glitter *= exp(-${LOW_HAZE.depth.toExponential(2)} * min(t, ${LOW_HAZE.top.toFixed(1)} / max(muv, sqrt(${(LOW_HAZE.top / 2).toFixed(1)} / uSeaGeo.x))));
   // the water's own colour: light that went in and came back, more of it through a face turned to the eye
   float depth = seaDepth(uSeaWind.zw + p), shoal = exp(-max(depth, 0.0) / uSeaShoal);
-  vec3 body = mix(uSeaBody, uSeaShallow, shoal) * (Tsun * max(dot(n, uAirSun), 0.0) * (1.0 - seaFresnel(sunUp)) + amb) * (1.0 + uSeaOptic.y * clamp(2.5 * dot(slope, ah), -0.4, 1.5));
-  vec3 col = uAirLight * ((1.0 - F) * body + glitter) + sky;
+  float relief = 1.0 + 0.22 * uSeaRelief.x * clamp(high * uSeaRelief.y, -2.0, 2.0);          // steep seas: darker troughs, lighter crests
+  vec3 body = mix(uSeaBody, uSeaShallow, shoal) * relief * (Tsun * max(sunUp + (dot(n, uAirSun) - sunUp) * (1.0 + 1.5 * uSeaRelief.x), 0.0) * (1.0 - seaFresnel(sunUp)) + amb) * (1.0 + uSeaOptic.y * clamp(2.5 * dot(slope, ah), -0.4, 1.5));
+  vec3 col = uAirLight * ((1.0 - F) * body + glitter) + sky * relief;
   // foam: where the crests of many waves meet, broken up by a fine pattern, streaked along the wind
   vec2 w = vec2(dot(p, uSeaWind.xy), dot(p, vec2(-uSeaWind.y, uSeaWind.x)));
-  vec4 lace = texture2D(uSeaLace, vec2(w.x, w.y) / 7.0 + uSeaLaceAt.xy), wide = texture2D(uSeaLace, vec2(w.y / 37.0, -w.x / (37.0 * uSeaFoam.z)) + uSeaLaceAt.zw);
+  float fine = texture2D(uSeaLace, vec2(w.x / 28.0, w.y / 7.0) + uSeaLaceAt.xy).g, wide = texture2D(uSeaLace, vec2(w.x / 30.0, w.y / 110.0) + uSeaLaceAt.zw).g;
   kept = clamp(kept, 0.0, 1.0);
-  // a crest breaking now: a thick white sliver along it; where one broke a moment ago: a lace that thins, drawn out along the wind
-  float fresh = smoothstep(uSeaFoam.x, uSeaFoam.x + 0.4, crest + 0.5 * (wide.b - 0.5) + 0.4 * (lace.g - 0.5)) * mix(0.75, 1.0, lace.b);
-  float old = smoothstep(uSeaFoam.x - 0.5, uSeaFoam.x + 0.5, before + 1.2 * (wide.g - 0.5)) * (0.08 + 0.55 * lace.r * lace.r);
+  // a crest breaking now: white along the steep front of a high crest, a broken line across the wind; where one broke a
+  // moment ago: thin streaks drawn out along the wind. Soft patches vary both (long across the wind for the one, along it
+  // for the other); no pattern of cells
+  float front = -dot(slope, uSeaWind.xy) * uSeaRelief.z;
+  float fresh = smoothstep(uSeaFoam.x, uSeaFoam.x + 0.8, 0.55 * crest + 0.75 * front + 0.7 * (wide - 0.5)) * (0.75 + 0.25 * fine);
+  float old = smoothstep(uSeaFoam.x - 0.7, uSeaFoam.x + 0.5, before) * smoothstep(0.25, 0.9, fine) * 0.3;
   float broken = max(fresh, old);
   float foam = (broken * kept + uSeaFoam.y * (1.0 - kept)) * step(1e-6, uSeaFoam.y);
   col = mix(col, uAirLight * uSeaFoamColor * (Tsun * sunUp + amb), clamp(foam, 0.0, 1.0));
@@ -522,10 +543,11 @@ export class Sea {
     this._lace = this._bakeLace();
     const at = sky.skyAt(0);
     this.uniforms = {...sky.uniforms, uWaveA: {value: A}, uWaveB: {value: B}, uWaveC: {value: C}, uWaveD: {value: D}, uGust: {value: this.list.gusts.map(v4)},
-      uBendA: {value: [v4(), v4(), v4()]}, uBendB: {value: this.list.bends.map((b) => new THREE.Vector4(b.dx, b.dz, 0, 0))}, uSeaShow: {value: 0}, uSeaGust: {value: GUST_SHIFT * TAU},
+      uBendA: {value: [v4(), v4(), v4()]}, uBendB: {value: this.list.bends.map((b) => new THREE.Vector4(b.dx, b.dz, 0, 0))}, uSeaShow: {value: 0}, uSeaRelief: {value: new THREE.Vector4(smooth(RELIEF[0], RELIEF[1], this.state.height / this.state.length), 4 / Math.hypot(this.state.height, this.state.swell ? this.state.swell.height : 0),
+        1 / Math.sqrt(Math.max(this.list.waves.reduce((sum, w) => sum + (w.kx * wind[0] + w.kz * wind[1]) ** 2 * w.amplitude ** 2 / 2, 0), 1e-12)), 0)}, uSeaGust: {value: GUST_SHIFT * TAU},
       uSeaGeo: {value: new THREE.Vector4(sky.model.radius, 10, sky.options.unit, 0.002)}, uSeaFar: {value: v4()}, uSeaGrid: {value: v4()},
       uSeaBase: {value: new THREE.Vector4(...this.list.base, this.state.gusts)}, uSeaMap: {value: v4()},
-      uSeaFoam: {value: new THREE.Vector4(exceeded(Math.max(this.state.cover, 1e-9)), this.state.cover, 1 + 2.5 * smooth(8, 20, this.state.wind), o.filter)},
+      uSeaFoam: {value: new THREE.Vector4(exceeded(Math.max(this.state.cover, 1e-9)), this.state.cover, 0, o.filter)},
       uSeaLaceAt: {value: v4()}, uSeaOptic: {value: new THREE.Vector4(this.water.index, this.water.glow, Math.sin(sky.options.sunSize * RAD), 1)}, uSeaWind: {value: new THREE.Vector4(wind[0], wind[1], 0, 0)},
       uSeaE1: {value: this.frame.e1}, uSeaE2: {value: this.frame.e2}, uSeaAhead: {value: new THREE.Vector3(1, 0, 0)},
       uSeaBody: {value: new THREE.Vector3(...this.water.color)}, uSeaShallow: {value: new THREE.Vector3(...this.water.shallow)}, uSeaFoamColor: {value: new THREE.Vector3(...this.water.foam)},
@@ -610,8 +632,8 @@ export class Sea {
     this.list.waves.forEach((w, i) => u.uWaveA.value[i].set(w.kx, w.kz, w.amplitude, turn(w.kx * x + w.kz * z - w.omega * t + w.phase)));
     this.list.gusts.forEach((g, i) => u.uGust.value[i].set(g.kx, g.kz, turn(g.kx * x + g.kz * z - g.omega * t + g.phase), g.weight));
     this.list.bends.forEach((b, i) => u.uBendA.value[i].set(b.kx, b.kz, turn(b.kx * x + b.kz * z - b.omega * t + b.phase), b.amplitude));
-    const wx = u.uSeaWind.value.x, wz = u.uSeaWind.value.y, along = x * wx + z * wz, across = -x * wz + z * wx, part = (x_) => x_ - Math.floor(x_), stretch = u.uSeaFoam.value.z;
-    u.uSeaLaceAt.value.set(part(along / 7), part(across / 7), part(across / 37), part(-along / (37 * stretch)));
+    const wx = u.uSeaWind.value.x, wz = u.uSeaWind.value.y, along = x * wx + z * wz, across = -x * wz + z * wx, part = (x_) => x_ - Math.floor(x_);
+    u.uSeaLaceAt.value.set(part(along / 28), part(across / 7), part(along / 30), part(across / 110));
     u.uSeaWind.value.z = x; u.uSeaWind.value.w = z;
     const at = sky.skyAt(0), ambient = sky.ambient.at(u.uAirMap.value.w);
     u.uSeaSky.value = at.texture; u.uSeaMap.value.copy(at.map);

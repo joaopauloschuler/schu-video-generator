@@ -266,7 +266,7 @@ export function frame(t) {
 ```
 
 The glitter path is narrow on a calm sea and under a low sun, a broad column from high up; a
-`rough` sea shows whitecaps, a `storm` breaking crests and lace. From 20 km the horizon lies 4.5
+`rough` sea shows whitecaps along its crests, a `storm` high waves with dark troughs and foam streaks; from high up the glitter fades before the horizon, and at dusk (film exposure) the near water keeps the sky's colours: looks, stated in DESIGN §123.4. From 20 km the horizon lies 4.5
 degrees under the level, from 100 km 10 degrees and it curves. Keep the camera over the crests
 (`water.heightAt(x, z, t)` plus a margin). Away from the origin the world's roundness counts
 (3.45 m at 6.6 km): take heights from `water.pointAt` and `water.horizon.height`. `quality:

@@ -253,7 +253,7 @@ def test_the_sea_draws_in_chromium(tmp_path: Path) -> None:
     assert water[2] > 1.5 * water[0] and water[2] > water[1] and away[20:26].mean() < away[40:60].mean() + 80          # blue water under a horizon
     arch, far, near = dusk[20:30].mean(axis=(0, 1)), dusk[35:45].mean(axis=(0, 1)), dusk[60:].mean(axis=(0, 1))
     assert far.sum() > 90 and far[0] > 1.3 * far[2] and far.sum() < arch.sum() and near.sum() > 6 and dusk[45:60].sum(axis=2).mean() > 20                     # at dusk the sea mirrors the arch: not black
-    assert (storm[30:].min(axis=2) > 100).mean() > 0.004 and (away[30:].min(axis=2) > 100).mean() == 0               # foam in a storm, none in a breeze
+    assert (storm[30:].min(axis=2) > 100).mean() > 0.002 and (away[30:].min(axis=2) > 100).mean() == 0               # foam in a storm, none in a breeze
     # the horizon's row is where the formula says, from 50 m to 100 km (a 60 degree lens, 720 rows, a level look)
     for shot, got in zip(SHOTS[5:9], found[5:9]):
         dip = math.acos(EARTH / (EARTH + shot["height"]))

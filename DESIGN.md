@@ -28504,7 +28504,7 @@ by default), +y up at the anchor.
   `length` (default from the wind for a fully developed sea: 0.21 U^2 / g and 8.17 U^2 / g),
   `swell` `{height, length, direction}` or `null`, `foam`, `chop`, `gusts`, `gravity`. A height
   over a tenth of the length is refused. `rough` and `storm` are young seas, steeper than their
-  winds would raise given days, and the storm's foam is halved: looks, stated here.
+  winds would raise given days, and the storm's foam is held back (`foam: 0.6`): looks, stated here.
 - **No shimmer.** A pixel's footprint on the water (across the line of sight, and along it: long
   where the look is level) fades each wave by a Gaussian-like factor of wavenumber times footprint
   (`filter`, 0.8 px, sets how early); the loop stops at the first wave finer than the footprint.
@@ -28526,18 +28526,37 @@ by default), +y up at the anchor.
   the kept covariance; Smith's shadowing), times the sun after the air, so the path's width
   follows the sea state and the sun's height, and it turns gold and orange at sunset; as for the
   sun's disc, the redder the air leaves the sun the less its mirror image may burn out
-  (2 to `BURN` whites: a look). **Body**: the water's colour as a matt surface under the sun on
+  (2 to `BURN` whites: a look). The face's slope is taken in the water's own level there (the
+  world's roundness tilts far water against the sea's plane: 4.5 degrees at the horizon from
+  20 km). The model's glitter is brightest at the horizon under a sun up to about 35 degrees
+  (grazing faces mirror most) and the air of §123.3 lets much of it through from 20 km, so
+  the path ended at the horizon at full strength; since Step 382.1 a low haze over the water,
+  which the air's model does not have, dims the glitter along its way under the haze's top
+  (`LOW_HAZE`: optical depth 0.03 a km under 2,500 m): from high up the path is a tongue that
+  fades before the horizon; from under 2.5 km little changes (a look: only the glitter takes
+  it, the air's picture is not changed). **Dusk** (Step 382.1, a look, film exposure only: by
+  the air's dusk curve, once the sun is under the horizon): the water mirrors at least
+  `DUSK_MIRROR` (0.4) of the sky and from 0.4 of the mirror's height in the sky, so near water
+  carries the arch's and the low sky's colours and the waves stay readable to a sun about 9
+  degrees down (a true mirror shows 3 % of the dark zenith there: 2 to 5 display codes).
+  **Relief** (Step 382.1, a look, for seas steeper than `RELIEF`: height over length from 0.03,
+  full at 0.045: `rough`, `storm`): troughs are darker and crests lighter (up to 44 % at two
+  standard deviations of the height) and faces turned from the sun are shaded 2.5 times as
+  much as the light alone would. **Body**: the water's colour as a matt surface under the sun on
   the resolved normal and the sky's light, more of it through a face turned to the eye (`glow`).
 - **Waters** (`WATERS`, `waterOf`): `ocean`, `green`, `tropical`, `grey` (looks of the Earth's
   seas) and `methane` (an invented dark sea for an invented world: the index 1.27 is liquid
   methane's, the colour is a guess: a look); or `{color, shallow, index, foam, glow}`.
 - **Foam** only when it blows: the cover is Monahan and O'Muircheartaigh's 3.84e-6 U^3.41 times
   `foam`, at most `FOAM_MOST` (0.12): 0.00002 calm, 0.002 in a breeze (a rare speck), 0.02 rough,
-  0.07 in the storm state. Where: a measure of crests meeting (each wave's steepness times its
+  0.09 in the storm state. Where: a measure of crests meeting (each wave's steepness times its
   cosine, for the waves longer than a 25th of the dominant length, fading out to a 60th; unit variance) over the threshold a normal
-  value exceeds with the cover's probability: thick and white now; the same measure `FOAM_LAG`
-  (2.2 s) ago draws a thinning lace behind it, broken up by a baked cell pattern
-  (`space-sea/lace`, 256 px, through `vidgen/baked`). Beyond where the waves are resolved the
+  value exceeds with the cover's probability, since Step 382.1 together with the steepness of
+  the front face along the wind: white along the steep front of a high crest, a broken line
+  across the wind with soft edges; the crest measure `FOAM_LAG` (2.2 s) ago draws thin streaks
+  along the wind behind it (at most 0.3 opaque). Both are varied by soft patches of the baked
+  pattern (`space-sea/lace`, 256 px, through `vidgen/baked`; its green channel only: no cell
+  walls are drawn any more). The storm state's foam factor is 0.6. Beyond where the waves are resolved the
   foam is its mean cover. The drawn cover is not measured against the stated one.
 - **Depth** (optional, for a later coast): `depth: {glsl, uniforms}` with `float seaDepth(vec2
   p)` (metres of water at p, metres along the sea's +x and +z): the water's colour goes to
@@ -28568,7 +28587,8 @@ by default), +y up at the anchor.
   At 320x180: `standard` 0.069 (calm) / 0.078 (rough) s from 50 m, 0.049 s from 20 km; `fast`
   0.056 s; `fine` 0.106 s. Making the sea 0.15 to 0.35 s. Where the time goes at 20 km (0.54 s
   then): gusts and bends 0.10 s, the air between 0.05 s, the mirrored sky and the sun 0.02 s a
-  face; near the camera the 32 waves are the rest.
+  face; near the camera the 32 waves are the rest. After Step 382.1: 1.13 s for `standard`,
+  rough, 50 m (1.09 s before it in the same session).
 - **Honest notes.** The waves are a sum of sines with stated statistics, not a simulation: no
   breaking shapes, no spray, no wakes, no shore waves, no shadows of things on the water and no
   mirror image of things (only the sky and the sun). The waves lie on a plane touching the sphere
@@ -28582,7 +28602,7 @@ by default), +y up at the anchor.
 - **Exports.** `sea`, `Sea`, `seaState`, `waveList`, `waterOf`, `surfaceAt`, `heightAt`, `normalAt`,
   `gustAt`, `horizonDistance`, `horizonDip`, `fresnel`, `slopeVariance`, `whitecaps`, constants
   `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_SHIFT`, `BEND`, `FOAM_MOST`, `FOAM_LAG`,
-  `LOWEST`, `VERSION`.
+  `LOWEST`, `LOW_HAZE`, `RELIEF`, `DUSK_MIRROR`, `VERSION`.
 - **Cache keys.** `space-air.js` changed (the additions above; the dome's pictures are the same),
   so a page importing it draws once more; no page of Phase AN imports it. `parts.js` gained the
   kind. Baked maps are baked once more (their key holds every module's bytes).

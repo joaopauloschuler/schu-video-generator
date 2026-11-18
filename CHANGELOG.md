@@ -56,6 +56,13 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   the new kind `sea` (`vidgen parts --kind sea`). [CONFIG](docs/CONFIG.md#web),
   [space cookbook](docs/COOKBOOK-SPACE.md).
 
+- **Glitter from high up, steep seas, dusk** (Step 382.1): seen from 2 to 100 km the sun's
+  glitter on `vidgen/space-sea` is a tongue that fades before the horizon (it ended there at
+  full strength); `rough` and `storm` seas show their waves' bodies (darker troughs, lighter
+  crests, shaded faces) and their foam is broken lines along the crests with thin streaks down
+  the wind, no cut-out patches and no net of cells; at dusk in film exposure near water keeps
+  the sky's colours until the sun is about 9 degrees down.
+
 ### Space scenes (Phase AN, Steps 367–378)
 
 - **The phase's review** (Step 378): the cookbook [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md)
