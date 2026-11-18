@@ -259,6 +259,9 @@ export function sunVisibility(toSun, sunRadius, occluders = [], right = [1, 0, 0
   return {fraction: total.map((v) => v / SAMPLES), offset: weight > 1e-9 ? [centre[0] / weight, centre[1] / weight] : [0, 0], covered: solid / SAMPLES};
 }
 
+/** How far away (scene units) a sun given as a direction is put when worlds are tested for standing before it. */
+export const SKY_SUN = 1e20;
+
 // ---------- photometry ----------
 /** The share of a full disc's light a round, matt body shows at phase angle `phase` (radians; 0 = full). */
 export const phaseLight = (phase) => (Math.sin(phase) + (Math.PI - phase) * Math.cos(phase)) / Math.PI;
@@ -835,7 +838,8 @@ export class SpaceLight {
     }
     const v = this.star ? this.star.direction : this.direction, dir = unit([v.x, v.y, v.z]);
     const size = Math.tan((this.star ? this.star.options.angularRadius : this.options.sunSize) * RAD);
-    return {dir, distance: Infinity, size, to: dir.map((x) => x * 1e6), radius: size * 1e6};
+    // a sun given as a direction stands beyond every world of the scene (a SpaceView's metres put the Earth millions of units away)
+    return {dir, distance: Infinity, size, to: dir.map((x) => x * SKY_SUN), radius: size * SKY_SUN};
   }
 
   _reference() {

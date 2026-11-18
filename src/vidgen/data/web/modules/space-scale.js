@@ -15,9 +15,12 @@
 // stands at three's origin, so what is near it has small, exact coordinates. Paths are rebuilt the
 // same way every frame. Depth: `split` (the default) draws the scene in depth slices, the farthest
 // first, each with its own near and far planes (each slice spans at most `ratio`), clearing the depth
-// buffer between them; any material works, three-finish's motion blur and bloom see one picture, its
-// depth of field reads the nearest slice, or the whole range around its focus with `dofFocus`. A sky is
-// `scene.background`, or objects with `frustumCulled = false`: drawn first, behind everything. `log` uses
+// buffer between them; a thing is drawn only in the slices its own depth reaches (a world's shell whose depth is
+// held off the far plane never covers a nearer slice); any material works, three-finish's motion blur and bloom
+// see one picture, its depth of field reads the nearest slice, or the whole range around its focus with
+// `dofFocus`. A sky is `scene.background`, or objects marked `userData.sky = true`, or objects with
+// `frustumCulled = false` and a negative `renderOrder` (the sky's, a star's in the sky, the warp's; `userData.sky
+// = false` keeps one in the world): drawn first, behind everything. `log` uses
 // a renderer made with `logarithmicDepthBuffer: true`; `single` one pass with near and far fitted.
 // Scale modes: `true` (sizes and distances true), `enlarged` (every body's radius times `enlarge`,
 // distances true), `log` (distances compressed as the flat `orbit` scene's `radial: log`:
@@ -410,7 +413,10 @@ export class SpaceView {
   }
 
   // view-depth intervals [near, far] of those of `objects` the camera can see (three's units are metres)
-  _intervals(objects) {
+  _intervals(objects) { return this._spans(objects).map((x) => x[1]); }
+
+  // [object, [near, far]] for those of `objects` the camera can see
+  _spans(objects) {
     const cam = this.camera, out = [], tanY = Math.tan(cam.fov * Math.PI / 360), tanX = tanY * cam.aspect;
     const cy = 1 / Math.hypot(1, tanY), cx = 1 / Math.hypot(1, tanX);
     for (const o of objects) {
@@ -423,8 +429,11 @@ export class SpaceView {
       if (z + r <= 0) continue;                                                     // behind the camera
       if ((Math.abs(c.x) - z * tanX) * cx > r || (Math.abs(c.y) - z * tanY) * cy > r) continue;   // beside the frame
       // (a line's `nearest` is a distance: at the frame's corner its depth along the view is that times cx * cy at least)
-      const inside = o.userData.nearest !== undefined ? Math.max(this.near, o.userData.nearest * 0.999 * cx * cy) : this._surface(o);
-      out.push([z - r > this.near ? z - r : inside, z + r]);                        // inside its bounding sphere: how near it comes
+      // outside its bounding sphere but beside the view's axis: no point of it is nearer than (distance - r), so no
+      // point in the frame has a smaller depth than that times cx * cy (a world added with `at` and `size`)
+      const d = c.length(), outside = d > r ? Math.max(this.near, (d - r) * 0.999 * cx * cy) : this.near, surface = this._surface(o);
+      const inside = o.userData.nearest !== undefined ? Math.max(this.near, o.userData.nearest * 0.999 * cx * cy) : surface > this.near ? surface : outside;
+      out.push([o, [z - r > this.near ? z - r : inside, z + r]]);                   // inside its bounding sphere: how near it comes
     }
     return out;
   }
@@ -468,8 +477,9 @@ export class SpaceView {
       return this._pass(n, f);
     }
     // overlays (userData.overlay: a lens's glare) are drawn once, over everything, after the last slice
-    const sky = all.filter((o) => !o.frustumCulled), world = all.filter((o) => o.frustumCulled), overlay = drawn.filter((o) => o.userData.overlay);
-    const iv = this._intervals(world);
+    const isSky = (o) => o.userData.sky === true || (o.userData.sky !== false && !o.frustumCulled && o.renderOrder < 0);
+    const sky = all.filter(isSky), world = all.filter((o) => !isSky(o)), overlay = drawn.filter((o) => o.userData.overlay);
+    const spans = this._spans(world), iv = spans.map((x) => x[1]);
     const slices = iv.length ? depthSlices(iv, {ratio: this.ratio, join: this.join, maxSlices: this.maxSlices, near: this.near}) : [];
     this.slices = slices;
     const background = scene.background, autoClear = r.autoClear, shadows = r.shadowMap.autoUpdate;
@@ -484,7 +494,9 @@ export class SpaceView {
     try {
       if (sky.length) { hide([...world, ...overlay]); next(); this._pass(...this._fit(this._intervals(sky))); }
       hide([...sky, ...overlay]);
-      for (const [n, f] of slices) { next(true); this._pass(n, f); }
+      // a slice draws what its depth reaches: a thing that begins beyond it is hidden there (else a shell that
+      // keeps its depth off the far plane would be drawn over the nearer things' farther parts)
+      for (const [n, f] of slices) { next(true); hide([...sky, ...overlay, ...spans.filter(([, [a]]) => a > f * 1.0001).map(([o]) => o)]); this._pass(n, f); }
       if (passes === 0) { next(true); this._pass(this.near, this.near * 1e6); }
       if (overlay.length) { hide([...sky, ...world]); next(); this._render(scene, cam); }
       if (this.dofFocus !== null && slices.length) this._dofDepth(slices);

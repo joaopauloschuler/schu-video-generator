@@ -280,3 +280,51 @@ def test_no_z_fighting_and_the_right_order_in_chromium(tmp_path: Path) -> None:
             assert g["blue"] > 1000 and g["green"] > 1000                   # the ship (or the box) in front, the planet's shell
             if case == "moon":
                 assert g["white"] > 5000                                    # the Moon in front of the Earth
+
+
+TRAPS = """import * as THREE from "three";
+import {SpaceView} from "vidgen/space-scale";
+let space, renderer, scene;
+const CLAMP = `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = min(gl_Position.z, gl_Position.w * 0.999999); }`;
+export function load(ctx) {
+  const c = ctx.data;
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 0.1, 1000);
+  space = new SpaceView(ctx, {renderer, scene, camera, orbits: null});
+  // a world added by hand (at, size), 1 km under the camera, its shell held off the far plane as a planet's is: red
+  const world = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 64), new THREE.ShaderMaterial({vertexShader: CLAMP, fragmentShader: "void main() { gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); }"}));
+  space.add(world, {at: [0, 0, -1.001e6], size: 1e6});
+  // a 4.4 km bar along the view whose bounding sphere holds the camera (a hull beside it): blue
+  space.add(new THREE.Mesh(new THREE.BoxGeometry(4400, 20, 20), new THREE.MeshBasicMaterial({color: 0x2040ff})), {at: [2000, -30, -300]});
+  // a small box in front of it, drawn without frustum culling (lamps, plumes): green
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshBasicMaterial({color: 0x00ff00}));
+  lamp.frustumCulled = false; space.add(lamp, {at: [60, 0, -9]});
+}
+export function frame(t) { space.update(t, {from: [0, 0, 0], to: [1e4, 0, -1500], up: [0, 0, 1]}); renderer.render(scene, space.camera); }
+"""
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_a_world_added_by_hand_a_near_hull_and_unculled_things_keep_their_order_in_chromium(tmp_path: Path) -> None:
+    """Step 393: a world added with ``at`` and ``size`` gets the depth it really starts at, a slice draws only what
+    its depth reaches (the world's held-off shell never covers the bar's far part), and a thing drawn without
+    frustum culling but with a renderOrder of 0 is in the world, not the sky."""
+    pytest.importorskip("playwright.sync_api")
+    from vidgen.browser import chromium
+    from vidgen.web.entry import WebEntry
+    from vidgen.web.page import WebPage
+
+    if chromium.missing_dependency() is not None:
+        pytest.skip("Chromium for Playwright is not available")
+    (tmp_path / "traps.js").write_text(TRAPS, encoding="utf-8")
+    with WebPage(tmp_path, WebEntry("script", "traps.js"), scene_id="s", size=(320, 180), fps=10, frames=1, data={}) as page:
+        px = page.frame(0)[..., :3].astype(int)
+    r, g, b = px[..., 0], px[..., 1], px[..., 2]
+    blue, green, red = int(((b > 150) & (r < 120)).sum()), int(((g > 150) & (r < 100) & (b < 100)).sum()), int(((r > 150) & (g < 60)).sum())
+    assert red > 5000 and green > 20                         # the world under the horizon, the box in front of the bar
+    # the bar recedes to its far end at 4.2 km: blue on rows down to its vanishing end, not cut off where its nearer slice ends
+    rows = np.nonzero(((b > 150) & (r < 120)).any(axis=1))[0]
+    assert blue > 400 and rows.max() - rows.min() > 40, (blue, rows.min(), rows.max())

@@ -218,12 +218,17 @@ w = build({at: craft}); const dark = w.light.directional.color.toArray();
 craft.position.set(-1.5, 1.003, 0); w = build({at: craft}); const red = w.light.directional.color.toArray();
 craft.position.set(1.5, 0, 0); w = build({at: craft});
 out.push([dark, red, w.light.directional.color.toArray(), w.light.directional.position.toArray(), w.light.fill.intensity / Math.PI, w.light.state.light.source === w.earth]);
+// a sun given as a direction is beyond every world, however many units away the world stands (a SpaceView's metres)
+const huge = body("huge", [0, 0, 0], 6.4e6); scene.add(huge.object); craft.position.set(-9e6, 0, 0);
+const lm = L.spaceLight({scene, camera, sun: [1, 0, 0], bodies: [huge], sky, at: craft}); lm.update(0);
+out.push([lm.directional.color.toArray(), L.SKY_SUN]);
 out.push([err(() => L.spaceLight({scene, camera})), err(() => L.spaceLight({scene, camera, sun: [1, 0, 0], exposur: "film"})), err(() => L.spaceLight({scene, camera, sun: [1, 0, 0], exposure: "kino"})),
   err(() => L.spaceLight({scene, camera, sun: [1, 0, 0], bodies: [{}]})), err(() => L.spaceLight({scene, camera, sun: [1, 0, 0], shadows: true})), err(() => L.spaceLight({camera, sun: [1, 0, 0]})),
   err(() => L.spaceLight({scene, camera, sun: [1, 0, 0], environment: true}))]);
 w.light.dispose(); out.push([w.light.directional.parent === null, sky.level]);
 """)
-    film, no_shine, cam3, cam20, moving, auto, placed, craft, errors, gone = out
+    film, no_shine, cam3, cam20, moving, auto, placed, craft, metres, errors, gone = out
+    assert max(metres[0]) < 1e-6 and metres[1] == 1e20                                       # in the shadow of a world 9e6 units away
     earth, moon, fill_dir, fill, honest, ev, sky, key, second, in_scene, earth_fill = film
     assert earth == {"direction": [1, 0, 0], "color": [1, 1, 1], "intensity": 1} and moon["intensity"] == 1 and ev == 0 and sky == 1.5     # film: nothing changed
     assert fill_dir[2] < -0.99 and 0 < fill_dir[0] < 0.02                                    # the moon's second light comes from the world, a little from its lit side
