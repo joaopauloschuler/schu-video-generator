@@ -631,7 +631,7 @@ def build_server(root: Path) -> Any:
     async def parts(
         ctx: Context,
         names: Annotated[list[str] | None, Field(description="only these parts (names or patterns such as 'star-*'); one part gets one large tile")] = None,
-        kind: Annotated[str | None, Field(description="only this kind: sky, body, light, craft, craft-part, phenomenon, camera, structure, effect, environment")] = None,
+        kind: Annotated[str | None, Field(description="only this kind: sky, body, light, air, craft, craft-part, phenomenon, camera, structure, effect, environment")] = None,
         sheet: Annotated[bool, Field(description="draw the contact sheet (false: only the list, nothing drawn)")] = True,
         size: Annotated[str | None, Field(description="one tile's WIDTHxHEIGHT (default 320x180; 960x540 for a single part)")] = None,
         columns: Annotated[int | None, Field(ge=1, le=12, description="tiles per row")] = None,

@@ -35,7 +35,7 @@ Contents: [1. Choose what to show](#1-choose-what-to-show) ·
 - **Cut on the music.** With `music_data` every time can be a place in the song (`'bar 9'`,
   `'bar 13 beat 3'`); a scene with `fade: false` cuts straight into the next on a bar line.
 - **Look at the parts before you choose.** `vidgen parts --kind body` (worlds), `--kind sky`,
-  `--kind light`, `--kind craft`, `--kind phenomenon`, `--kind camera` draw labelled contact sheets.
+  `--kind light`, `--kind air`, `--kind craft`, `--kind phenomenon`, `--kind camera` draw labelled contact sheets.
 
 ## 2. Honest scale and honest exposure
 
@@ -214,6 +214,33 @@ moves must meet where one hands over); the warp's `over` is when the jump runs, 
       - {move: follow, subject: Ship, view: chase, over: [2, 6], cut: true}
 ```
 
+**A sky from inside the air** (in a `web` scene's script; the `space` scene does not reach it
+yet). `vidgen/space-air` draws the sky from within a world's air for any sun and any height, the
+sun's disc, the haze on far things and the light for things in the air; the air is the one the same
+world shows from orbit. Here a sunset over hills, the sun sinking a degree a second:
+
+```js
+// sketch (parts of a page, not a whole file): a sunset from 300 m
+import * as THREE from "three";
+import {air, sunDirection} from "vidgen/space-air";
+import {spaceSky} from "vidgen/space-sky";
+const stars = spaceSky(renderer, {seed: 7});
+const sky = air(renderer, "earth", {stars, scene});          // "mars": butterscotch days, a blue glow at sunset
+scene.add(stars.object, sky.object);
+const rock = sky.haze(new THREE.MeshStandardMaterial({color: 0x3a3f36, roughness: 1}));   // far hills fade into the sky
+renderer.toneMapping = THREE.ACESFilmicToneMapping;          // only when drawing straight to the canvas
+export function frame(t) {
+  camera.position.set(0, 300, 0); camera.lookAt(0, 400, -1000);
+  sky.update(t, {camera, sun: sunDirection(4 - t, 10)});     // 4 degrees up at the start, twilight after 4 s
+  renderer.render(scene, camera);
+}
+```
+
+Film exposure (the default) lifts the dusk and brings the stars out as the sky darkens;
+`exposure: "camera", ev: 0` shows what a camera set for daylight sees. For a height, move the
+camera: at 10 km the horizon curves and the sky darkens, above about 70 km (the Earth-like air's
+top) it is space with the limb's glow.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -242,6 +269,8 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | an asteroid field / a belt round a world | 0.30–0.33 | |
 | a comet | 0.23–0.25 | |
 | an aurora on an Earth-like world | 0.48–0.59 | |
+| the sky from inside the air (`vidgen/space-air`), straight to the canvas | 0.19 (0.013 at 320x180); 0.22 while the sun or the height moves (`quality: fast` 0.20, `fine` 0.30) | 0.3 s (0.2 s with its table in the cache) |
+| the same with aerial perspective on a few far things / on a ground filling half the frame | 0.21 / 0.28 | |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
@@ -252,7 +281,7 @@ it; later pages 6 s).
 
 ## 5. The checks to run
 
-1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `craft`,
+1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `craft`,
    `craft-part`, `phenomenon`, `camera`): a contact sheet of every ready-made part with its one
    line of use.
 2. **Validate**: `vidgen validate .` checks every key and name with the closest word, what goes

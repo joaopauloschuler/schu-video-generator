@@ -367,7 +367,8 @@ src/vidgen/
                           # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10);
                           # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11); space-scene.js
                           # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12); baked.js
-                          # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2)
+                          # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2); space-air.js
+                          # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -28264,3 +28265,154 @@ its own for scenes drawn in a web page.
   cold / warm, a damaged part (hash) and an unusable part (inflate) baked again, the cache off.
   `tests/conftest.py` sets `VIDGEN_BAKED_CACHE_MB=0` for every test: no test writes the user's
   cache folder unless it passes its own store.
+
+### 123.3 The sky from inside an atmosphere: `vidgen/space-air` (Step 381)
+
+One line gives the view from within the air: `const sky = air(renderer, "earth", {sun}); scene.add(sky.object);
+sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import name `vidgen/space-air`, in
+`VIDGEN_MODULES`; imports `three`, `baked` of `vidgen/baked`, and `AIRS`, `PRESETS`, `resolveOptions`,
+`linearColor` of `vidgen/space-bodies`) is one model for every height, from the ground to space.
+
+- **One source of the air's numbers.** The air is the one `vidgen/space-bodies` draws round the
+  same world from outside (§122.7): its `AIRS` (zenith optical depths per colour of the gas,
+  `rayleigh`, the haze, `haze`, and what is absorbed besides, `absorb`; one scale height `height` as
+  a share of the radius; the shell's top at 8 scale heights; the haze's forward throw `forward`; the
+  night glow `glow`) and the same closed form for the air along a ray (Chapman's function after
+  Schueler; under the horizon twice the tangent path less the path upward). `airOf(what, extra)`
+  resolves a name of this module's `PRESETS`, a world of `vidgen/space-bodies` (its own air and, from
+  `RADII`, its radius in metres: the real worlds' radii, invented ones for the invented), an air of
+  `AIRS`, a body made by `planet()` (that body's air as it is drawn), or `{world | air, radius,
+  forward, ozone, ozoneHeight, ground}`. Earth-like: scale height 8.92 km, zenith optical depth
+  0.088 / 0.164 / 0.313 (red, green, blue; the gas alone 0.062 / 0.130 / 0.290, where the Earth's
+  measured Rayleigh depths are about 0.04 / 0.10 / 0.25 at 680 / 550 / 440 nm: the numbers are broad
+  bands chosen for the outside look), 36.6 columns of air towards the horizon (the Earth: about 38).
+- **Two things only the inside view has, both stated.** (1) A thin absorbing layer (`ozone`: zenith
+  optical depth per colour; `ozoneHeight` metres): each crossing costs the depth over the line's
+  cosine at the layer, at most 16 times (the layer has a depth); the Earth-like preset has 0.030 /
+  0.028 / 0.004 at 25 km (about 300 Dobson units in the Chappuis band: physical). Without it the
+  zenith at sunset is grey (blue over red 1.5); with it 2.1. The outside view has no such layer.
+  (2) `forward` per colour: the Mars-like preset throws blue light onward more sharply (0.52 / 0.58
+  / 0.78: chosen for the look, after the real dust's blue forward peak), which gives the blue glow
+  round a low sun in a tawny sky.
+- **Presets.** `earth` (the world's own air and the layer); `mars` (a dusty season: `air: {like:
+  "mars", density: 3, absorb: [0, 0.013, 0.031]}`, grey extinction 0.26, where the world's own air
+  seen from orbit has 0.09: the world's own is `air(renderer, {world: "mars"})`, and
+  `planet(renderer, "mars", {air: PRESETS.mars.air})` shows the dusty air from outside); `thin`
+  (invented: `AIRS.thin`, radius 2,400 km: a dark sky by day with stars in it) and `thick`
+  (invented: four times the Earth-like air with more haze, radius 7,400 km: a pale bright sky, a
+  yellowed sun). Another atmosphere is stated with scattering numbers, not gases: `air(renderer,
+  {air: {rayleigh: [r, g, b], haze: [r, g, b], absorb: [r, g, b], height: share, forward: g}, radius:
+  metres, forward: [r, g, b], ground: colour})`, or `{like: name, density: factor}`.
+- **The sums.** A unit of light is a white, matt ground square to the sun (as §122.7). Along a ray
+  the air's light is summed slab by slab with each slab's exact share (what the slab takes of the
+  light behind it, times the air's share of that, times the source at its middle): once-scattered
+  light (the sun's light after its own path, Rayleigh's and Henyey-Greenstein's phase functions),
+  and light scattered more often as one stated approximation (after Hillaire's 2020 method): a
+  point's second-hand light from all round (64 directions, 16 steps each, an isotropic phase, the
+  ground's bounce included) over one minus what such light passes on, i.e. every later bounce as a
+  geometric series. That term is a table over height (32 rows, spaced by the square root, 0 to 8
+  scale heights) and the sun's cosine (64 columns, -0.4 to 1), **baked once through `vidgen/baked`**
+  (`space-air/psi`, half float; inputs: the module's `VERSION`, the table's shape, every number of
+  the air and the ground's colour). The Earth-like zenith's light is 20 to 35 % second-hand.
+- **The sky table.** A frame does not march rays: `update` draws a small table of the whole sky for
+  this height and this sun (128 x 192 texels at `quality: "standard"`, 32 steps a texel; `fast` 96 x
+  96 with 16, `fine` 192 x 320 with 48), only when height or sun changed. Across: the bearing from
+  the sun over half the circle (the sky is the same left and right of it); along: the angle from the
+  horizon by its square root, rows above and below the horizon kept apart (so the ground's edge never
+  bleeds into the sky; seen from above the air the rows span only the shell). Left half: light
+  scattered once without its phase function (the picture multiplies it in per pixel, so the glow
+  round the sun stays sharp at any table size); right half: light scattered more often. A pixel
+  costs two reads, the air along its ray in closed form (for what passes from behind), and the
+  phase functions.
+- **The dome** (`sky.object`): a mesh that follows any camera (`frustumCulled = false`,
+  `renderOrder` -900: after a `vidgen/space-sky` sky, before the scene; in `vidgen/space-scale`'s sky
+  pass), premultiplied over what is behind: the stars pass by what the air leaves of them. Under the
+  horizon a plain matt ground of one colour (`ground`; a stand-in until ocean and terrain cover it;
+  `ground: false` for none), lit by the sun after the air and by the sky (a table of 64 entries made
+  in JavaScript), its edge a pixel soft. The sun's disc (`disc`, `sunSize` degrees): limb darkening
+  per colour, seen through the air on its ray; in `camera` and `auto` its true brightness (1 /
+  sin^2 of its radius, 46,000 whites) held at `BURN` 32 with its hue kept; in `film` 32 x
+  (what is left of it)^1.15, so a low sun keeps its colour and its darker limb. Straight to the
+  canvas the dome applies ACES and sRGB itself and dithers by two display codes (one where the
+  picture is bright): with one code `vidgen motion check` found `banding` on 16 % of a dusk clip's
+  frame after the encoder; with two, none.
+- **Aerial perspective** (c): `sky.haze(material)` patches a three.js material (once; a list is
+  fine): each pixel becomes `colour x what passes + the air's light in front of it`. The air's light
+  in front of a point is the ray's whole light from the sky table times (1 - passes to the point) /
+  (1 - passes along the whole ray): exact where the source is the same along the ray, and at both
+  ends always, so a far thing ends in exactly the dome's colour and a ground plane meets the dome's
+  horizon without a seam. A `ShaderMaterial` includes `AIR_GLSL`, takes `sky.uniforms` and calls
+  `airThrough(colour, toPoint)` (or `airLight(mu, cosv, dist, through, hit)`). Not modelled:
+  shadows inside the haze (no light shafts).
+- **Light for things in the air** (d): `sky.light.sun` (a `DirectionalLight`: the sun after the
+  air at the camera's height, mean over the disc as it sinks, pi x its strength as `vidgen/space-light`'s
+  `light.directional`) and `sky.light.sky` (a `HemisphereLight`: the sky from above, the lit ground
+  from below); `scene: scene` adds them. `sky.state` holds `height`, `elevation`, `ev`, `gain`,
+  `stars`, `sunlight`, `ambient`, `inside`.
+- **Exposure**, as `vidgen/space-light` (§122.8). `"film"` (default; a convention): nothing changed
+  by day (a sunlit ground is 1, as in space); as the zenith darkens the exposure opens by
+  `filmExposure` = 0.93 x^2 / (x + 0.3) stops (x: the stops the zenith has lost against a sun 25
+  degrees up), at most 14, never so far that the sky 3 degrees up under the sun is drawn over 1.6
+  whites, and not at all above the air; a `stars` sky is shown from 5 stops (first stars) to 11
+  (all), and wherever the zenith is drawn black (high up, thin air). Measured on the Earth-like
+  ground: 0.4 stops with the sun 10 degrees up, 2.4 at the horizon, 5.4 at -4, 8.1 at -6, 10.1 at
+  -8, 14 by -12. `"camera"`: `ev` stops over a sunlit ground's, honest: the stars at
+  2^(ev - 20) of their look, the night glow at 2^(ev - 12). `"auto"`: metered on nine rays through
+  the frame (a pure function of the frame's inputs).
+- **Measured** (2 cores, SwiftShader, straight to the canvas; `vidgen still` adds the screenshot):
+
+  | | 320x180 | 1280x720 |
+  |---|---|---|
+  | the dome, sun and height unchanged | 0.013 s | 0.185 s |
+  | the dome, sun or height moving (the sky table drawn again): `standard` / `fast` / `fine` | 0.043 s | 0.22 / 0.20 / 0.30 s |
+  | with aerial perspective on small things (seven hills) | 0.018 s | 0.205 s |
+  | with aerial perspective on half the frame (a ground plane) | 0.027 s | 0.28 s |
+  | making the air (two tables in JavaScript, shaders, the baked table) | 0.30 s | 0.30 s; 0.21 s with the table from the cache |
+
+  The baked table is 64 x 32 half floats (24 KB stored): its bake is 0.1 s of the 0.3 s, so the cache
+  saves little here; the tables that cost are the JavaScript ones (the ground's ambient light, the
+  film exposure's meter: 0.1 s). `vidgen parts --kind air`: 10 tiles in 8 s.
+- **Agreement with the outside view** (stills `/home/claude/work/scratch/ao381/stills/09_*`): from
+  400 km, same camera, sun and 14 degree lens, the limb has the same heights and colour order (a blue
+  line over a pale band over the ground) as `planet(renderer, "earth")`; this module's blue line is
+  about twice as bright and more saturated, because the body sums the air in 4 slabs (`quality:
+  "fine"`, 8, comes closer) and has no ozone layer. For the descent of Step 391 two ways are open:
+  hand over above the air where both agree in shape (a brightness step would have to be cross-faded),
+  or draw the body with `air: false` and this module's dome over it (`ground: false, over: true`:
+  drawn once: the ground then takes this model's haze, bluer near the limb than the body's own).
+- **Where it is true and where not.** True: the geometry (a round world, the horizon's dip and the
+  shadow of the world in the air at dusk), single scattering, extinction, the ozone layer's
+  absorption, the sun's size and colour, the order of colours at sunset (red, orange, pale, blue-grey;
+  no green band). Approximate: later bounces (one isotropic term); the air between the camera and a
+  point (differences of the closed form: 4 to 15 % under the true column over 1.5 to 200 km at most
+  angles, up to 55 % over it on a short, exactly level path); no refraction (the sun is not flattened and sets when geometry says). A look:
+  the film exposure, the Mars-like forward throw, the invented airs, the plain ground. Weak: after
+  about 8 degrees below the horizon the model's twilight ends early (the real sky keeps a glow to 18
+  degrees from light scattered many times round the world); the zenith at dusk is slate rather than
+  deep blue; the Earth's shadow band opposite the set sun is there but faint; the horizon seen from
+  10 km shows a pinkish line (long red paths over a dark ground).
+- **Parts** (`data/web/parts/space-air.js`, a new kind `air` in `vidgen/parts` and
+  `vidgen.web.parts.KINDS`, after `light`): `air-earth-noon`, `air-earth-golden-hour`,
+  `air-earth-sunset`, `air-earth-twilight`, `air-mars-day`, `air-mars-sunset`, `air-thin`,
+  `air-thick`, `air-from-30-km`, `air-haze`.
+- **Exports.** `air`, `Air`, `airOf`, `AIR_GLSL`, `PRESETS`, `RADII`, `column`, `crossings`,
+  `opticalDepth`, `transmittance`, `phaseRayleigh`, `phaseHaze`, `psiTable`, `skyLight`, `sunlightAt`,
+  `skyAmbient`, `ambientTable`, `filmExposure`, `filmStars`, `sunDirection`, constants `TOP`,
+  `SUN_SIZE`, `BURN`, `SKY_STOPS`, `FILM_STOPS`, `ARCH_WHITE`, `LIMB`, `EXPOSURES`, `QUALITIES`,
+  `VIEW_TABLES`, `PSI_TABLE`, `VERSION`. The functions without a renderer are pure and run in Node:
+  they are the tests' reference and what the lights and the exposure are computed from.
+- **Cache keys.** No shipped module's bytes changed except `parts.js` (the kind; no film page
+  imports it): every existing scene keeps its key. The cache of baked maps keys on every module's
+  bytes (§123.2), so existing baked maps are baked once more after this step.
+- **Tests** (`tests/test_web_space_air.py`): the module and its imports; the parts and their kind;
+  in Node: the airs equal the bodies' numbers, a body's air handed over, errors with a did-you-mean;
+  the air along a ray (one column overhead, 33 to 40 at the horizon, 1 / e a scale height up, no
+  step at the level), the layer's crossings, the phase functions keep the light; a blue zenith under
+  a paler, brighter horizon, a red sunset with no green over red, the dusk above still blue, a
+  butterscotch Mars-like day and a blue glow round its setting sun, thin and thick air, black above
+  the air, twilight's ladder and arch, no more light on the ground than came in, the sun reddened
+  and gone under the horizon, the same numbers twice; the film exposure's curve, its cap by the
+  arch and an evening's stops; `slow`, in Chromium: the same properties as pixels, a far black box
+  lighter and bluer than a near one, a frame twice the same, a camera two stops under, the limb from
+  150 km, the baked table against JavaScript's (within a quarter), the lights' colours, and the
+  same pixels with the table baked, from the cache and without the cache.

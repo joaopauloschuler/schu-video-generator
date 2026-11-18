@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–380
+## Steps 193–381
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -22,6 +22,18 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   `VIDGEN_BAKED_CACHE_MB` sets the limit (`0`: off), `vidgen cache` shows it and `vidgen cache
   clear` empties it. `vidgen/baked` gives a page's own bake the same cache
   ([CONFIG](docs/CONFIG.md#baked-maps-vidgen-cache)).
+- **The sky from inside an atmosphere** (Step 381): `vidgen/space-air` draws the view from
+  within a world's air, at any height from the ground to space: `air(renderer, "earth", {sun})`
+  gives the sky for any sun (day, golden hour, sunset, twilight with the stars coming out, night),
+  the sun's disc reddened and darker at its limb, a plain ground under the horizon, aerial
+  perspective for anything in the scene (`sky.haze(material)`) and the sun's and the sky's light
+  for things in the air. One scattering model (gas, haze, an ozone layer, one stated term for light
+  scattered more than once) on the air `vidgen/space-bodies` draws round the same world from
+  outside; ready-made airs `earth`, `mars` (butterscotch days, a blue glow round the setting sun),
+  `thin` and `thick` (invented), every world of `vidgen/space-bodies` that has air, or an air
+  stated by its numbers. Exposure `film` (dusk lifted, a convention), `camera` and `auto`, as
+  `vidgen/space-light`. 0.19 s a frame at 1280x720 in software GL; ten parts under the new kind
+  `air` (`vidgen parts --kind air`). [CONFIG](docs/CONFIG.md#web), [space cookbook](docs/COOKBOOK-SPACE.md).
 
 ### Space scenes (Phase AN, Steps 367–378)
 

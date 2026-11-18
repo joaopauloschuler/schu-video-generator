@@ -3672,6 +3672,34 @@ const update = (t) => { earth.update(t); moon.update(t); sun.update(t); light.up
   inverse-square light (Neptune 900 times dimmer than the Earth).
 - Look first: `vidgen parts --kind light`. Reference: CONFIG.md `web`, "Suns and light".
 
+**The sky from inside the air: `vidgen/space-air`.** For a shot within an atmosphere (a plane, a
+landing, a sunset) do not paint a gradient and do not use three.js fog: one object gives the sky
+for any sun, the sun's disc, the haze on far things and the light, from the same air the world
+shows from orbit.
+
+```js
+// sketch (parts of a page, not a whole file): the air round the camera
+import {air, sunDirection} from "vidgen/space-air";
+const sky = air(renderer, "earth", {sun: sunDirection(6, 20), stars: spaceSky(renderer, {seed: 7}), scene});   // also "mars", "thin", "thick"
+scene.add(sky.object);                       // the dome: sky, sun, a plain ground under the horizon
+sky.haze([hill.material, wing.material]);    // far things take the sky's colour
+const update = (t) => { sky.update(t, {camera, sun: sunDirection(6 - t, 20)}); };   // after the camera is placed, before the draw
+```
+
+- Metres, +y up, the origin on the ground; the camera's height is read from where it stands (0 to
+  space: from above the air the same object draws the limb's glow).
+- `sunDirection(elevation, azimuth)`: degrees over the horizon, and round from -z towards +x. Day
+  above 10, golden hour 3 to 10, sunset 0, twilight -2 to -8 (the stars come out), night below -12.
+- Exposure as `vidgen/space-light`: `"film"` (default) lifts dusk so the blue hour is seen and
+  shows the stars once the sky is dark, a convention; `exposure: "camera", ev: 0` is what a camera
+  set for a sunlit ground sees (dusk goes black); `"auto"` meters the frame.
+- `sky.light.sun` and `sky.light.sky` light ordinary meshes (`scene` in the options adds them).
+  Straight to the canvas set `renderer.toneMapping = THREE.ACESFilmicToneMapping` for meshes.
+- Say what is invented: `thin` and `thick` are invented worlds; `mars` is a dusty season, three
+  times the dust the same world shows from orbit by default.
+- 0.19 s a frame at 720p, 0.3 s to make. Look first: `vidgen parts --kind air`. Reference:
+  CONFIG.md `web`, "The sky from inside an atmosphere".
+
 **Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
 comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black
 hole). Each is one call and one `update(t)`.

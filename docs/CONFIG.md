@@ -7806,6 +7806,62 @@ const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); 
   straight (follow a body of the data for a true hyperbola); a subject given as a three.js
   object is read by its `position`. Look first: `vidgen parts --kind camera`.
 
+**The sky from inside an atmosphere: `vidgen/space-air`** (Step 381, DESIGN §123.3). The view
+from within a world's air, at any height from the ground to space: the sky dome for any sun (day,
+golden hour, sunset, twilight with the stars coming out, night), the sun's disc, aerial perspective
+for anything in the scene, and the sun's and the sky's light for things in the air. The air is the
+one `vidgen/space-bodies` draws round the same world from outside.
+
+```js
+import {air, sunDirection} from "vidgen/space-air";
+const sky = air(renderer, "earth", {sun: sunDirection(8, 20), stars: spaceSky(renderer, {seed: 7}), scene});
+scene.add(sky.object);                    // the dome; `scene` above also adds sky.light.sun and sky.light.sky
+sky.haze(hill.material);                  // aerial perspective on a three.js material (or a list of them)
+function frame(t) { camera.position.set(0, 1200, 0); sky.update(t, {camera, sun: sunDirection(8 - t, 20)}); renderer.render(scene, camera); }
+```
+
+Scene units are metres, +y up, the origin on the ground (the world's middle one radius under it).
+`sunDirection(elevation, azimuth)` gives the direction towards a sun so many degrees over the
+horizon (azimuth 0 = towards -z, 90 = towards +x). `update(t, {camera, sun, center})` reads the
+camera's height from where it stands; call it before every draw.
+
+| `air(renderer, what, options)` | default | what it does |
+|---|---|---|
+| `what` | `"earth"` | `earth`, `mars` (a dusty season), `thin`, `thick` (invented worlds); a world of `vidgen/space-bodies` that has air (`venus`, `titan`, `verdant`, ...: its own air and radius); one of its airs (`smoke`, `ice`, ...); a body made by `planet()`; or `{world, air, radius, forward, ozone, ozoneHeight, ground}` |
+| `air` | the world's | another air, stated as for a body: `{like: "earth", density: 2}`, or `{rayleigh: [r, g, b], haze: [r, g, b], absorb: [r, g, b], height: 0.0014, forward: 0.7}` (zenith optical depths per colour; the scale height as a share of the radius) |
+| `radius` | the world's (m) | the world's radius in metres |
+| `forward` | the air's | how sharply the haze throws light onward, a number or per colour `[r, g, b]` (0 to 0.95) |
+| `ozone`, `ozoneHeight` | none; `earth`: `[0.030, 0.028, 0.004]` at 25,000 m | a thin absorbing layer: zenith optical depth per colour and its height in metres (keeps the dusk blue) |
+| `ground` | the preset's colour | the plain ground under the horizon: a colour, or `false` for none (the dome then only lays the air over what is behind it) |
+| `sun` | `[0.35, 0.5, -0.79]` | the direction towards the sun (`[x, y, z]` or a `Vector3`); also `update(t, {sun})` |
+| `color`, `light` | white, 1 | the sunlight's colour and strength before the air |
+| `sunSize`, `disc` | 0.2665, `true` | the sun's angular radius in degrees; `disc: false` draws no disc |
+| `exposure`, `ev` | `"film"`, 0 | `"film"` (a convention: nothing changed by day, dusk lifted up to 14 stops so the blue hour is seen, the stars shown as the sky darkens); `"camera"` (honest: `ev` stops over a sunlit ground's; the stars at 2^(ev - 20)); `"auto"` (honest, metered on the frame). `ev` may be a function of t |
+| `stars` | none | a `vidgen/space-sky` sky: its brightness is set every update (give the sky to this module or to `spaceLight`, not both) |
+| `scene` | none | the lights are added to it |
+| `quality` | `"standard"` | the sky table: `fast` (96 x 96, 16 steps), `standard` (128 x 192, 32), `fine` (192 x 320, 48) |
+| `unit`, `center` | 1, the radius under the origin | metres a scene unit; the world's middle in the scene (`[x, y, z]`, a `Vector3`, or an `Object3D` read at every update: a body's `object`) |
+| `over` | `false` | draw the dome after everything (with `ground: false`: the air over a body made with `air: false`) |
+
+`sky.light.sun` is a `DirectionalLight` (the sun after the air where the camera stands),
+`sky.light.sky` a `HemisphereLight` (the sky from above, the lit ground from below); `sky.state`
+holds `height` (m), `elevation` (the sun's, degrees), `ev`, `gain`, `stars`, `sunlight`,
+`ambient`, `inside`. A `ShaderMaterial` of your own includes `AIR_GLSL`, takes `sky.uniforms` and
+calls `airThrough(colour, toPoint)`. Straight to the canvas the dome applies ACES and sRGB
+itself; meshes then need `renderer.toneMapping = THREE.ACESFilmicToneMapping` (through
+`vidgen/three-finish` everything is linear and the finish applies the curve). The numbers without a
+renderer are pure functions (`airOf`, `transmittance`, `skyLight`, `sunlightAt`, `skyAmbient`,
+`filmExposure`): the sun's colour at a height, the sky's light on a ground.
+
+Honest notes: the same air inside and outside means the same optical depths and scale height;
+`mars` is three times the world's own dust (`air(renderer, {world: "mars"})` is the clear air seen
+from orbit; `planet(renderer, "mars", {air: PRESETS.mars.air})` shows the dusty air from outside);
+`thin` and `thick` are invented; light scattered more than once is one approximate term; there is
+no refraction; after about 8 degrees below the horizon the twilight ends earlier than the real
+one. Costs (2 cores, software GL): 0.19 s a frame at 1280x720 for the dome (0.013 s at 320x180),
+0.03 s more while the sun or the height moves, up to 0.2 s more when hazed things fill the frame;
+0.3 s to make. Look first: `vidgen parts --kind air`.
+
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
 `import {planet} from "vidgen/space-bodies"`.
@@ -17523,7 +17579,7 @@ for `web` scenes on one labelled contact sheet so you can choose by looking: a t
 its name, its kind, what it is and the one line that uses it (blue, in the module it names).
 
 - **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
-  error with the closest one); `--kind` one of `sky`, `body`, `light`, `craft`, `craft-part`, `phenomenon`,
+  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `craft`, `craft-part`, `phenomenon`,
   `camera`, `structure`, `effect`, `environment` (a kind without parts yet says so).
 - **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
   of its own with the registry's default camera and light, sets it to the part's time `at` and
@@ -17534,7 +17590,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.
