@@ -7863,6 +7863,56 @@ stated choice). Costs (2 cores, software GL): 0.19 s a frame at 1280x720 for the
 0.03 s more while the sun or the height moves, up to 0.2 s more when hazed things fill the frame;
 0.3 s to make. Look first: `vidgen parts --kind air`.
 
+**Water to the horizon: `vidgen/space-sea`** (Step 382, DESIGN §123.4). A sea on the world's
+sphere under a `vidgen/space-air` sky: waves at several scales from a seed, moving on vidgen's
+clock; the sky's own picture mirrored with Fresnel's share; the sun's glitter path, as wide as
+the sea state makes it and golden at sunset; the water's own colour; whitecaps when it blows;
+the horizon where the height and the world's radius put it, curved from high up, with the air's
+haze over far water; and a lookup of the water's height for anything that floats or skims.
+
+```js
+import {air, sunDirection} from "vidgen/space-air";
+import {sea} from "vidgen/space-sea";
+const sky = air(renderer, "earth", {sun: sunDirection(12, 0)});
+const water = sea(renderer, sky, {state: "breeze", seed: 3});     // also "calm", "swell", "rough", "storm"
+scene.add(sky.object, water.object);
+function frame(t) { sky.update(t, {camera}); water.update(t, {camera}); renderer.render(scene, camera); }
+const y = water.heightAt(x, z, t);            // metres over sea level; water.pointAt(x, z, t): the point in the scene
+```
+
+Call `water.update` after the air's `update`, with the same camera. The sea replaces the dome's
+plain ground. Keep the camera over the crests (at least 0.5 m over sea level).
+
+| `sea(renderer, sky, options)` | default | what it does |
+|---|---|---|
+| `state` | `"breeze"` | `calm` (1.5 m/s wind, a low swell), `breeze` (6 m/s), `swell` (a 2.2 m swell 190 m long under a light wind), `rough` (13 m/s, 3.2 m waves, whitecaps), `storm` (22 m/s, 8 m waves); or `{wind, direction, height, length, swell, foam, chop, gusts, gravity}` |
+| `wind`, `direction` | the state's; 20 | the wind in m/s; where it blows and its waves run to, in degrees (0 = towards -z, 90 = towards +x) |
+| `height`, `length` | from the wind | the wind sea's significant wave height and dominant wavelength in metres (a fully developed sea when not stated; the height at most a tenth of the length) |
+| `swell` | the state's | a second, regular train from far away: `{height, length, direction}`, or `null` |
+| `foam`, `chop`, `gusts` | 1, 1, 0.4 | a factor on the whitecaps' cover (0: none); how much crests are sharpened (0 to 2); how unevenly the wind ruffles the water (0 to 1) |
+| `gravity` | 9.81 | m/s²: on a small world the same wind raises longer, slower waves |
+| `seed` | 1 | the waves' lengths, directions and phases |
+| `water` | `"ocean"` | `ocean`, `green`, `tropical`, `grey` (looks of the Earth's seas), `methane` (an invented dark sea: a look); or `{color, shallow, index, foam, glow}` (linear colours; `index`: the refractive index) |
+| `quality` | `"standard"` | `fast` (16 waves, one mirror face: a smoother sea, a quarter to a third cheaper), `standard` (32 waves), `fine` (48 waves, a finer grid: half as much again) |
+| `waves` | the quality's | how many waves (4 to 64) |
+| `anchor` | `[0, 1, 0]` | the direction from the world's middle to where the waves' plane touches the sphere |
+| `filter` | 0.8 | how early a wave finer than a pixel fades, in pixels (smaller: crisper and more shimmer) |
+| `depth`, `shoal` | none, 4 | `{glsl, uniforms}` defining `float seaDepth(vec2 p)` (metres of water at p): the colour goes to the water's `shallow` over `shoal` metres and no sea is drawn where there is none |
+
+`water.horizon` holds `{distance, dip, height}` after every update (metres, degrees under the
+level, the camera's height over sea level); `water.heightAt(x, z, t)`, `water.normalAt(x, z, t)`
+and `water.pointAt(x, z, t)` give the surface the picture draws (the time defaults to the last
+update's); `water.list` is the list of waves and `water.state` the sea state in numbers. The
+world is round: 6.6 km from the origin the water lies 3.45 m under the scene's y = 0, so place
+things with `pointAt`. The pure functions (`seaState`, `waveList`, `heightAt`, `surfaceAt`,
+`horizonDip`, `horizonDistance`, `fresnel`, `whitecaps`) need no renderer.
+
+Honest notes: a sum of sine waves with a real sea's statistics, not a simulation (no breaking
+shapes, spray, wakes or shore waves); the water mirrors the sky and the sun, not the things in
+the scene; `rough` and `storm` are steeper than their winds would raise given days, and
+`methane` is a look. Costs (2 cores, software GL, with the dome): 1.1 s a frame at 1280x720 near
+the water, 0.65 s from 20 km, 0.07 s at 320x180; `fast` 0.8 s. Look first: `vidgen parts --kind sea`.
+
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
 `import {planet} from "vidgen/space-bodies"`.
@@ -17580,7 +17630,7 @@ for `web` scenes on one labelled contact sheet so you can choose by looking: a t
 its name, its kind, what it is and the one line that uses it (blue, in the module it names).
 
 - **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
-  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `craft`, `craft-part`, `phenomenon`,
+  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `sea`, `craft`, `craft-part`, `phenomenon`,
   `camera`, `structure`, `effect`, `environment` (a kind without parts yet says so).
 - **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
   of its own with the registry's default camera and light, sets it to the part's time `at` and
@@ -17591,7 +17641,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

@@ -23,7 +23,7 @@ import * as THREE from "three";
 
 export const VERSION = 1;
 /** The kinds of parts, in the order the contact sheet shows them. */
-export const KINDS = Object.freeze(["sky", "body", "light", "air", "craft", "craft-part", "phenomenon", "camera", "structure", "effect", "environment"]);
+export const KINDS = Object.freeze(["sky", "body", "light", "air", "sea", "craft", "craft-part", "phenomenon", "camera", "structure", "effect", "environment"]);
 /** The fields of a part's description: required ones, then optional ones with their defaults. */
 export const REQUIRED = Object.freeze(["name", "kind", "module", "label", "use"]);
 export const DEFAULTS = Object.freeze({options: {}, seed: 1, at: 2});

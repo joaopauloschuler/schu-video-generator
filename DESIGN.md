@@ -368,7 +368,8 @@ src/vidgen/
                           # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11); space-scene.js
                           # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12); baked.js
                           # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2); space-air.js
-                          # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3)
+                          # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3); space-sea.js
+                          # `vidgen/space-sea`: water to the horizon under that sky (§123.4)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -28448,3 +28449,151 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   lighter and bluer than a near one, a frame twice the same, a camera two stops under, the limb from
   150 km, the baked table against JavaScript's (within a quarter), the lights' colours, and the
   same pixels with the table baked, from the cache and without the cache.
+- **Added by Step 382** (for `vidgen/space-sea`, §123.4; nothing drawn before changes): `sky.skyAt(height)`
+  → `{texture, map}`, a second sky table as seen from another height over the same place under the
+  last update's sun (drawn again only when the height or the sun changes; one other height at a
+  time); in `AIR_GLSL` `airPlace(map, mu, cosv)` and `airRead(table, uv, cosv)` read any such table
+  (`airWhere` and `airFromTable` are those for the camera's own); `DISPLAY_GLSL` (`display(linear)`:
+  the dome's tone curve and encoding, `dither(pixel)`) for a shader that draws itself to the canvas
+  beside the dome; `sky.under(covered)`: something of the scene hides all that is under the horizon,
+  so the dome draws neither its plain ground nor anything else there; `sky.state.up` and
+  `sky.state.center`.
+
+### 123.4 Water to the horizon: `vidgen/space-sea` (Step 382)
+
+`const water = sea(renderer, sky, {state: "breeze", seed: 3}); scene.add(water.object);
+water.update(t, {camera})` after the air's own `update`. The module
+`data/web/modules/space-sea.js` (import name `vidgen/space-sea`, in `VIDGEN_MODULES`) imports
+`three`, `baked` of `vidgen/baked` and `AIR_GLSL`, `DISPLAY_GLSL`, `PSI_TABLE`, `SUN_SIZE`, `BURN` of
+`vidgen/space-air`. The sea lies under an air of §123.3: the air's radius is sea level, its sun,
+its light, its exposure and its table of the sky are the sea's. Scene units are the air's (metres
+by default), +y up at the anchor.
+
+- **The surface is the world's sphere.** No mesh in the world: a grid of the picture's own cells
+  (8 px at `standard`) is laid on the sphere along each cell's line of sight every frame, corners
+  over the horizon are put on the horizon, and the pixel works out its own place on the sphere. So
+  there is no edge, no tile and nothing to pop, the horizon is `acos(R / (R + h))` under the level
+  (0.227 degrees and 25.2 km away from 50 m, 1.44 degrees from 2 km, 4.53 from 20 km, 10.09 from
+  100 km on the Earth-like world) and curves in the frame when the height is large. The dome
+  stops drawing under the horizon (`sky.under(true)`); the horizon's pixel mixes sea and sky by
+  how far the pixel's middle is under it; far water is seen through the air (`airThrough`), so it
+  ends in the dome's own colour at the horizon: no seam. `water.horizon` = `{distance, dip,
+  height}` after every update. Away from the anchor the scene's y is not the height over the
+  water (the sphere drops d^2 / 2R: 3.45 m at 6.6 km): `water.pointAt(x, z)` is the surface in
+  scene units, `water.horizon.height` the camera's height.
+- **Waves** (`waveList(state, {seed, count, lifted})`, pure): a list of sine waves, the longest
+  first. The wind sea: wavelengths from twice the dominant one down to its 180th (0.25 m at
+  least), spaced evenly in the logarithm and jittered by the seed, amplitudes after Pierson and
+  Moskowitz' spectrum scaled so that four standard deviations are the stated significant height,
+  directions spread round the wind's (16 degrees for the long, 50 for the short). A swell beside
+  it: 5 to 8 waves within 17 % of its length and 13 degrees of its direction. Every wave moves at
+  the deep-water speed (omega^2 = g k) on vidgen's clock. Crests are sharpened by a second
+  harmonic where waves of about one length are steep together (`chop`). Three things keep a sum
+  of sines from looking like one: **bends** (three long slow shears of the whole pattern, each
+  moving the place a wave is read at by up to a 25th of the bend's length: crests are not ruled
+  lines; their slopes' share is in the lookup), **gusts** (six long slow waves of 0.5 to 9 km in
+  all directions, each moving the finer ones sideways, whose sum raises or lowers the waves
+  shorter than a third of the dominant one in patches) and more swell waves than a narrow band
+  needs. Measured against a baked spectrum only by reasoning, not by trial: a baked tile repeats
+  (the task forbids visible tiling) and needs its own filter chain; the sum costs 32 sines a near
+  pixel and nothing a far one, and its lookup on the JavaScript side is the same sum exactly.
+- **Sea states** (`STATES`, `seaState(what, extra)`): `calm` (1.5 m/s, a 0.25 m swell), `breeze`
+  (6 m/s, the default; 0.77 m, 30 m long, a 0.4 m swell), `swell` (4 m/s, a 2.2 m swell 190 m
+  long), `rough` (13 m/s, 3.2 m, 80 m), `storm` (22 m/s, 8 m, 170 m). Stated by numbers: `wind`
+  (m/s), `direction` (degrees, as `sunDirection`'s azimuth: where the waves run to), `height` and
+  `length` (default from the wind for a fully developed sea: 0.21 U^2 / g and 8.17 U^2 / g),
+  `swell` `{height, length, direction}` or `null`, `foam`, `chop`, `gusts`, `gravity`. A height
+  over a tenth of the length is refused. `rough` and `storm` are young seas, steeper than their
+  winds would raise given days, and the storm's foam is halved: looks, stated here.
+- **No shimmer.** A pixel's footprint on the water (across the line of sight, and along it: long
+  where the look is level) fades each wave by a Gaussian-like factor of wavenumber times footprint
+  (`filter`, 0.8 px, sets how early); the loop stops at the first wave finer than the footprint.
+  What is faded is kept as roughness: the lost slopes' covariance widens the glitter's
+  distribution and turns the mirror towards the eye. The slopes finer than the list are a
+  constant covariance: Cox and Munk's mean square slope for the wind (0.003 + 0.00512 U) less the
+  list's own. A 1.5 s clip at 1280x720, 50 m up at 60 m/s towards a glitter path: no findings in
+  `vidgen motion check`; frame-to-frame flicker of the 60 rows under the horizon 1.0 display code,
+  the same as the sky's own grain (0.9).
+- **Light** (linear, per pixel): `(1 - F) body + glitter + mirrored sky`, then foam, the film
+  look's dusk curve, the air between. **Mirror**: Fresnel's equations for the water's index
+  (1.34); the sky is the air's own table as seen from sea level (`sky.skyAt(0)`, read with
+  `airRead`), not a gradient of its own, so a sunset, a dusk and another world's sky are mirrored
+  as they are. A rough far sea is stood for by two faces, one hardly turned towards the eye (it
+  mirrors much, from low in the sky: the bright horizon, the twilight arch) and one well turned
+  (little, from higher up): at dusk the far sea carries the arch's glow and is not black; `fast`
+  uses one face between them. **Glitter**: the share of faces, resolved and not, that mirror the
+  sun to the eye (a Gaussian of the slope the half vector asks for, less the resolved slope, with
+  the kept covariance; Smith's shadowing), times the sun after the air, so the path's width
+  follows the sea state and the sun's height, and it turns gold and orange at sunset; as for the
+  sun's disc, the redder the air leaves the sun the less its mirror image may burn out
+  (2 to `BURN` whites: a look). **Body**: the water's colour as a matt surface under the sun on
+  the resolved normal and the sky's light, more of it through a face turned to the eye (`glow`).
+- **Waters** (`WATERS`, `waterOf`): `ocean`, `green`, `tropical`, `grey` (looks of the Earth's
+  seas) and `methane` (an invented dark sea for an invented world: the index 1.27 is liquid
+  methane's, the colour is a guess: a look); or `{color, shallow, index, foam, glow}`.
+- **Foam** only when it blows: the cover is Monahan and O'Muircheartaigh's 3.84e-6 U^3.41 times
+  `foam`, at most `FOAM_MOST` (0.12): 0.00002 calm, 0.002 in a breeze (a rare speck), 0.02 rough,
+  0.07 in the storm state. Where: a measure of crests meeting (each wave's steepness times its
+  cosine, for the waves longer than a 25th of the dominant length, fading out to a 60th; unit variance) over the threshold a normal
+  value exceeds with the cover's probability: thick and white now; the same measure `FOAM_LAG`
+  (2.2 s) ago draws a thinning lace behind it, broken up by a baked cell pattern
+  (`space-sea/lace`, 256 px, through `vidgen/baked`). Beyond where the waves are resolved the
+  foam is its mean cover. The drawn cover is not measured against the stated one.
+- **Depth** (optional, for a later coast): `depth: {glsl, uniforms}` with `float seaDepth(vec2
+  p)` (metres of water at p, metres along the sea's +x and +z): the water's colour goes to
+  `shallow` over `shoal` metres, and where the depth is under 0.25 m the sea is not drawn (the
+  scene's ground shows; the dome draws nothing there).
+- **Lookup** (for a hull, a low camera, a plane's shadow): `water.heightAt(x, z, t)` (metres
+  over sea level at the scene's x and z), `water.normalAt(x, z, t)`, `water.pointAt(x, z, t)`
+  (the surface point in scene units, on the sphere); pure: `heightAt(list, x, z, t)`,
+  `surfaceAt` (height and both slopes), `normalAt`, `gustAt`. It is the sum the picture draws,
+  bends and gusts included; every wave's phase at the camera is worked out in double precision
+  each frame, so the picture keeps its fine waves far from the origin (tested 6.6 km out). The
+  list depends on `quality` and `waves`: a `fast` preview is another, smoother sea than the
+  `standard` film. `LOWEST` (0.5 m): the lowest camera the sea is drawn for.
+- **Options** of `sea(renderer, sky, options)`: `state` and any of a state's keys beside it,
+  `seed`, `water`, `quality` (`fast`: 16 waves, a 16 px grid, one mirror face; `standard`: 32, 8
+  px, two; `fine`: 48, 4 px, two), `waves`, `anchor` (the unit vector from the world's middle to
+  where the waves' plane touches the sphere; default +y), `filter`, `depth`, `shoal`. Unknown
+  names are refused with the closest one.
+- **Cost** (2 cores, SwiftShader, to the canvas, with the dome; the dome alone 0.15 s at
+  1280x720, 0.011 s at 320x180):
+
+  | 1280x720 | 50 m | 20 km |
+  |---|---|---|
+  | `standard`, calm / rough | 1.08 / 1.13 s | 0.62 / 0.65 s |
+  | `fast`, calm / rough | 0.80 / 0.78 s | 0.54 s |
+  | `fine`, rough | 1.66 s | 0.83 s |
+
+  At 320x180: `standard` 0.069 (calm) / 0.078 (rough) s from 50 m, 0.049 s from 20 km; `fast`
+  0.056 s; `fine` 0.106 s. Making the sea 0.15 to 0.35 s. Where the time goes at 20 km (0.54 s
+  then): gusts and bends 0.10 s, the air between 0.05 s, the mirrored sky and the sun 0.02 s a
+  face; near the camera the 32 waves are the rest.
+- **Honest notes.** The waves are a sum of sines with stated statistics, not a simulation: no
+  breaking shapes, no spray, no wakes, no shore waves, no shadows of things on the water and no
+  mirror image of things (only the sky and the sun). The waves lie on a plane touching the sphere
+  at the anchor: beyond some hundreds of kilometres from it their pattern is stretched (it is
+  filtered away long before from any height it could be seen at). Deep-water speeds are a few
+  per cent off where a bend stretches the pattern. No refraction at the horizon. No moon or
+  planet light on the water. The mirror does not see the sun's disc itself, only the glitter.
+- **Parts** (`data/web/parts/space-sea.js`, a new kind `sea` after `air` in `vidgen/parts` and
+  `vidgen.web.parts.KINDS`): `sea-calm`, `sea-breeze`, `sea-rough`, `sea-storm`, `sea-sunset`,
+  `sea-dusk`, `sea-from-20-km`, `sea-methane` (8 tiles in 9 s).
+- **Exports.** `sea`, `Sea`, `seaState`, `waveList`, `waterOf`, `surfaceAt`, `heightAt`, `normalAt`,
+  `gustAt`, `horizonDistance`, `horizonDip`, `fresnel`, `slopeVariance`, `whitecaps`, constants
+  `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_SHIFT`, `BEND`, `FOAM_MOST`, `FOAM_LAG`,
+  `LOWEST`, `VERSION`.
+- **Cache keys.** `space-air.js` changed (the additions above; the dome's pictures are the same),
+  so a page importing it draws once more; no page of Phase AN imports it. `parts.js` gained the
+  kind. Baked maps are baked once more (their key holds every module's bytes).
+- **Tests** (`tests/test_web_space_sea.py`): the module and its imports; the parts and their
+  kind; in Node: the horizon's dip and distance against the formula for four heights and a
+  smaller world, Fresnel's limits and rise, Cox and Munk's slopes, the whitecaps' cover by wind,
+  the states and waters with errors and a did-you-mean; the list twice the same and another for
+  another seed, deep-water speeds, the stated height in the heights' spread, the slopes against
+  central differences of the height, the normal, one wave alone travelling at its speed;
+  `slow`, in Chromium: the glitter towards the sun, blue water, the far sea at dusk carrying the
+  arch, foam in a storm and none in a breeze, the horizon's row from 50 m, 2 km, 20 km and 100 km
+  within a row of the formula at 720 rows, the picture's own heights against the lookup at 49
+  places (within 8 cm), the sphere's drop 6.6 km out, a frame twice the same, and the same pixels
+  with the foam's pattern baked, from the cache and without the cache.

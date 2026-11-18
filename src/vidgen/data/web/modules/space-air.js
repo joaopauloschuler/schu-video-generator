@@ -348,7 +348,9 @@ export const sunDirection = (elevation, azimuth = 0) => [Math.cos(elevation * RA
 /** The uniforms and functions any shader needs to put air between the camera and a point: declare
  * nothing else, set the material's uniforms from `air.uniforms`, and call
  * `vec3 airThrough(vec3 colour, vec3 toPoint)` (linear light; `toPoint` from the camera to the point in
- * the scene's axes and units) or `vec3 airLight(mu, cosv, dist, out through, out hit)`. */
+ * the scene's axes and units) or `vec3 airLight(mu, cosv, dist, out through, out hit)`. The sky seen from
+ * another height (a reflection in water, the light on a cloud): `airRead(table, airPlace(map, mu, cosv), cosv)`
+ * with the table and map of `Air.skyAt(height)`. */
 export const AIR_GLSL = /* glsl */`
 uniform vec4 uAirGeo;      // the radius in scale heights, the camera's height, the top, scale heights a scene unit
 uniform vec4 uAirMap;      // the horizon's dip (radians), the span of the rows above and below it, the sun's cosine to the vertical
@@ -392,22 +394,25 @@ vec3 airPsi(float h, float mus) {
   vec2 uv = vec2((mus - (${PSI_TABLE.sunFrom.toFixed(2)})) / ${(1 - PSI_TABLE.sunFrom).toFixed(2)}, sqrt(clamp(h / uAirGeo.z, 0.0, 1.0)));
   return texture2D(uAirPsi, clamp(uv, uAirTable.zw, 1.0 - uAirTable.zw)).rgb;
 }
-// where the sky table keeps a direction: x round from the sun (0..1 over half the circle), y its row
-vec2 airWhere(float mu, float cosv) {
-  float mus = uAirMap.w, a = asin(clamp(mu, -1.0, 1.0)) + uAirMap.x;
+// where a sky table keeps a direction: x round from the sun (0..1 over half the circle), y its row; map: the
+// table's own (uAirMap for the camera's; Air.skyAt(height).map for another height's)
+vec2 airPlace(vec4 map, float mu, float cosv) {
+  float mus = map.w, a = asin(clamp(mu, -1.0, 1.0)) + map.x;
   float phi = acos(clamp((cosv - mu * mus) / sqrt(max((1.0 - mu * mu) * (1.0 - mus * mus), 1e-12)), -1.0, 1.0));
-  float w = clamp(sqrt(min(abs(a) / (a >= 0.0 ? uAirMap.y : uAirMap.z), 1.0)), 2.0 * uAirTable.y, 1.0 - 2.0 * uAirTable.y);
+  float w = clamp(sqrt(min(abs(a) / (a >= 0.0 ? map.y : map.z), 1.0)), 2.0 * uAirTable.y, 1.0 - 2.0 * uAirTable.y);
   return vec2(clamp(phi / 3.14159265, 2.0 * uAirTable.x, 1.0 - 2.0 * uAirTable.x), 0.5 + (a >= 0.0 ? 0.5 : -0.5) * w);
 }
-// the sky table's light at a place in it, for a ray whose cosine to the sun is cosv
-vec3 airFromTable(vec2 uv, float cosv) {
-  vec3 once = texture2D(uAirView, vec2(uv.x * 0.5, uv.y)).rgb, more = texture2D(uAirView, vec2(0.5 + uv.x * 0.5, uv.y)).rgb;
+vec2 airWhere(float mu, float cosv) { return airPlace(uAirMap, mu, cosv); }
+// a sky table's light at a place in it, for a ray whose cosine to the sun is cosv
+vec3 airRead(sampler2D table, vec2 uv, float cosv) {
+  vec3 once = texture2D(table, vec2(uv.x * 0.5, uv.y)).rgb, more = texture2D(table, vec2(0.5 + uv.x * 0.5, uv.y)).rgb;
   // Henyey-Greenstein's lobes: x^-1.5 as the cube of 1 / sqrt(x)
   vec3 g = uAirG, wide = inversesqrt(1.0 + g * g - 2.0 * g * cosv), haze = 0.25 * (1.0 - g * g) * wide * wide * wide;
   float n = uAirAureole.w, thin = inversesqrt(1.0 + n * n - 2.0 * n * cosv);
   haze = mix(haze, vec3(0.25 * (1.0 - n * n) * thin * thin * thin), uAirAureole.rgb);
   return uAirLight * (once * (uAirScatR * 0.1875 * (1.0 + cosv * cosv) + uAirScatM * haze) + more * (uAirScatR + uAirScatM));
 }
+vec3 airFromTable(vec2 uv, float cosv) { return airRead(uAirView, uv, cosv); }
 // the film look's dusk curve (nothing by day, and nothing in the other exposures)
 float airDusked;           // what the last airLight's dusk curve left of the ray's light
 vec3 airDusk(vec3 light) { airDusked = pow(max(dot(light, vec3(0.2126, 0.7152, 0.0722)) / uAirDusk.y, 1.0), -uAirDusk.x); return light * airDusked; }
@@ -501,24 +506,30 @@ void main() {
   gl_FragColor = vec4(L / (1.0 - F), 1.0);
 }`;
 const TONE = THREE.ShaderChunk.tonemapping_pars_fragment.replace("uniform float toneMappingExposure;", "const float toneMappingExposure = 1.0;");
-const DOME_VERT = "varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0); gl_Position.z = 0.0; }";
-// the picture: the air on each pixel's ray, the plain ground under the horizon, the sun's disc
-const DOME_FRAG = /* glsl */`
-${AIR_GLSL}
+/** What a shader drawing itself straight to the canvas beside the dome needs to end up in the same picture:
+ * `vec3 display(vec3 linear)` (the dome's tone curve and the display's encoding) and `float dither(vec2 pixel)`. */
+export const DISPLAY_GLSL = /* glsl */`
 ${TONE}
-varying vec3 vD;
-uniform sampler2D uAmbient;
-uniform vec3 uGround, uLimb;
-uniform vec4 uSun;          // the disc's angular radius, its brightness over the air's light (camera) or 0 (film), the cap, the film look's curve
-uniform float uPix, uDisplay, uGroundOn, uGrain;
 float dither(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 vec3 display(vec3 c) {
   c = clamp(ACESFilmicToneMapping(max(c, 0.0)), 0.0, 1.0);
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 }
+`;
+const DOME_VERT = "varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0); gl_Position.z = 0.0; }";
+// the picture: the air on each pixel's ray, the plain ground under the horizon, the sun's disc
+const DOME_FRAG = /* glsl */`
+${AIR_GLSL}
+${DISPLAY_GLSL}
+varying vec3 vD;
+uniform sampler2D uAmbient;
+uniform vec3 uGround, uLimb;
+uniform vec4 uSun;          // the disc's angular radius, its brightness over the air's light (camera) or 0 (film), the cap, the film look's curve
+uniform float uPix, uDisplay, uGroundOn, uGrain, uCovered;
 void main() {
   vec3 rd = normalize(vD), through; float hit;
   float mu = dot(rd, uAirUp), cosv = dot(rd, uAirSun), mus = uAirMap.w, hc = uAirGeo.y;
+  if (uCovered > 0.5 && asin(clamp(mu, -1.0, 1.0)) + uAirMap.x < -3.0 * uPix) discard;      // something of the scene hides all that is under the horizon
   vec3 col = airLight(mu, cosv, -1.0, through, hit);
   float alpha = 1.0 - dot(through, vec3(0.3333));
   // the ground: a matt ball of one colour under the sun after the air and under the sky; its edge a pixel soft
@@ -558,6 +569,12 @@ export const LIMB = Object.freeze([0.5, 0.62, 0.76]);
 const OPTIONS = Object.freeze({sun: Object.freeze([0.35, 0.5, -0.79]), color: Object.freeze([1, 1, 1]), light: 1, sunSize: SUN_SIZE, disc: true, ground: true, exposure: "film", ev: 0,
   quality: "standard", unit: 1, center: null, stars: null, scene: null, over: false});
 const half = (data) => Uint16Array.from(data, (x) => THREE.DataUtils.toHalfFloat(x));
+// a sky table's rows for a height (scale heights): the horizon's dip, the span from the horizon up to the zenith (or
+// only to the top of the air when the height is over it) and down to the nadir, and whether the height is in the air
+function rowSpans(m, hc) {
+  const dip = Math.acos(m.X0 / (m.X0 + hc)), inside = hc < TOP;
+  return [dip, inside ? Math.PI / 2 + dip : 1.03 * (dip - Math.acos(Math.min(1, (m.X0 + TOP) / (m.X0 + hc)))), Math.max(Math.PI / 2 - dip, 1e-3), inside];
+}
 
 /** The air round the camera: `object` (the dome: add it to the scene), `update(t, {camera, sun, center})`,
  * `haze(material)`, `uniforms` and AIR_GLSL for shaders of your own, `light` ({sun, sky}: lights for
@@ -602,7 +619,7 @@ export class Air {
     this._quad.frustumCulled = false;
     this._scene = new THREE.Scene(); this._scene.add(this._quad); this._camera = new THREE.Camera();
     this.material = new THREE.ShaderMaterial({uniforms: {...this.uniforms, uAmbient: {value: this.ambientTexture}, uGround: {value: v3(m.ground)}, uLimb: {value: v3(LIMB)},
-      uSun: {value: new THREE.Vector4(o.sunSize * RAD, 0, BURN, 1.6)}, uPix: {value: 0.002}, uDisplay: {value: 0}, uGroundOn: {value: o.ground ? 1 : 0}, uGrain: {value: 2}},
+      uSun: {value: new THREE.Vector4(o.sunSize * RAD, 0, BURN, 1.6)}, uPix: {value: 0.002}, uDisplay: {value: 0}, uGroundOn: {value: o.ground ? 1 : 0}, uGrain: {value: 2}, uCovered: {value: 0}},
       vertexShader: DOME_VERT, fragmentShader: DOME_FRAG, side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false, fog: false, transparent: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor});
     this.geometry = new THREE.BoxGeometry(2, 2, 2);
@@ -626,8 +643,8 @@ export class Air {
     this.stars = o.stars;
     this._starBase = this.stars && this.stars.skyMaterial ? this.stars.skyMaterial.uniforms.uGain.value : 1;
     this._drawn = null; this._hazed = new Set();
-    /** What the last update found: `height` (m), `elevation` (the sun's, degrees over the level), `ev`, `gain`, `stars` (their share), `sunlight` and `ambient` (the sun's and the sky's light on a thing at the camera, linear colours times the gain), `inside` (the camera is in the air). */
-    this.state = {height: 0, elevation: 0, ev: 0, gain: 1, stars: 1, sunlight: [1, 1, 1], ambient: [0, 0, 0], inside: true};
+    /** What the last update found: `height` (m), `elevation` (the sun's, degrees over the level), `ev`, `gain`, `stars` (their share), `sunlight` and `ambient` (the sun's and the sky's light on a thing at the camera, linear colours times the gain), `inside` (the camera is in the air), `up` (the vertical at the camera) and `center` (the world's middle, scene units). */
+    this.state = {height: 0, elevation: 0, ev: 0, gain: 1, stars: 1, sunlight: [1, 1, 1], ambient: [0, 0, 0], inside: true, up: [0, 1, 0], center: [0, 0, 0]};
     this.material.addEventListener("dispose", () => { this.view.dispose(); this.psi.dispose(); this.ambientTexture.dispose(); this._quad.material.dispose(); this._quad.geometry.dispose(); });
     this.update(0);
   }
@@ -674,6 +691,15 @@ export class Air {
     return material;
   }
 
+  /** Say that something of the scene hides everything under the horizon (water to the horizon, a ground of
+   * your own): the dome then draws neither its plain ground nor anything else there, which saves that part
+   * of its cost. `under(false)` takes it back. vidgen/space-sea calls it. */
+  under(covered = true) {
+    const u = this.material.uniforms;
+    u.uCovered.value = covered ? 1 : 0; u.uGroundOn.value = !covered && this.options.ground ? 1 : 0;
+    return this;
+  }
+
   // the world's middle in the scene now
   _center() {
     const c = this.options.center, m = this.model;
@@ -699,19 +725,12 @@ export class Air {
     if (!(r > 0)) throw fail("update: the camera stands at the world's middle");
     const up = d.map((x) => x / r), height = Math.max((r - R) * o.unit, 0), hc = height / m.H, mus = clamp(up[0] * this.sun.x + up[1] * this.sun.y + up[2] * this.sun.z, -1, 1);
     const [across, rows] = VIEW_TABLES[o.quality];
-    // the rows' span: from the horizon up to the zenith, or only to the top of the air when the camera is over it
-    const dip = Math.acos(m.X0 / (m.X0 + hc)), inside = hc < TOP;
-    const upSpan = inside ? Math.PI / 2 + dip : 1.03 * (dip - Math.acos(Math.min(1, (m.X0 + TOP) / (m.X0 + hc)))), downSpan = Math.max(Math.PI / 2 - dip, 1e-3);
+    const [dip, upSpan, downSpan, inside] = rowSpans(m, hc);
     u.uAirGeo.value.set(m.X0, hc, TOP, o.unit / m.H); u.uAirMap.value.set(dip, upSpan, downSpan, mus);
     u.uAirUp.value.set(...up); u.uAirSun.value.copy(this.sun);
     u.uAirTable.value.set(0.25 / across, 0.25 / rows, 0.5 / PSI_TABLE.suns, 0.5 / PSI_TABLE.heights);
     const key = `${hc}|${mus}`;
-    if (key !== this._drawn) {
-      const r_ = this.renderer, before = r_.getRenderTarget(), auto = r_.autoClear;
-      this._quad.material.uniforms.uSpread.value = inside ? 0.5 : 0;
-      r_.autoClear = true; r_.setRenderTarget(this.view); r_.render(this._scene, this._camera); r_.setRenderTarget(before); r_.autoClear = auto;
-      this._drawn = key;
-    }
+    if (key !== this._drawn) { this._drawView(this.view, inside); this._drawn = key; }
     // exposure: the film's convention, a camera's stops, or a meter on the sky ahead
     const ev = typeof o.ev === "function" ? o.ev(t) : o.ev, s = this.state;
     let stops = 0, stars = 1;
@@ -739,8 +758,38 @@ export class Air {
     const below = m.ground.map((g, i) => g * (direct[i] * Math.max(mus, 0) + sky[i])), top = Math.max(...sky, ...below, 1e-12);
     this.light.sky.color.setRGB(sky[0] / top, sky[1] / top, sky[2] / top); this.light.sky.groundColor.setRGB(below[0] / top, below[1] / top, below[2] / top);
     this.light.sky.intensity = Math.PI * top; this.light.sky.position.set(...up);
-    Object.assign(s, {height, elevation: Math.asin(mus) / RAD, ev: stops, gain, stars, sunlight: direct, ambient: sky, inside});
+    Object.assign(s, {height, elevation: Math.asin(mus) / RAD, ev: stops, gain, stars, sunlight: direct, ambient: sky, inside, up, center: c});
     return this;
+  }
+
+  // the sky table for the height and sun the uniforms now state, into `target`
+  _drawView(target, inside) {
+    const r = this.renderer, before = r.getRenderTarget(), auto = r.autoClear;
+    this._quad.material.uniforms.uSpread.value = inside ? 0.5 : 0;
+    r.autoClear = true; r.setRenderTarget(target); r.render(this._scene, this._camera); r.setRenderTarget(before); r.autoClear = auto;
+  }
+
+  /** The sky as it is seen from another height over the same place (`height` metres; 0: from the ground), under
+   * the sun of the last update: {texture, map}, a second sky table drawn again only when the height or the sun
+   * changes. A shader reads it with `airRead(table, airPlace(map, mu, cosv), cosv)` of AIR_GLSL (mu: the
+   * direction's cosine to the vertical, cosv: to the sun). Call it after `update`. One other height at a time. */
+  skyAt(height = 0) {
+    const m = this.model, u = this.uniforms, hc = number("skyAt: the height (metres)", height, 0, 1e9) / m.H, mus = u.uAirMap.value.w;
+    const [dip, upSpan, downSpan, inside] = rowSpans(m, hc);
+    if (!this._other) {
+      this._other = {target: this.view.clone(), map: new THREE.Vector4(), drawn: null};
+      this.material.addEventListener("dispose", () => this._other.target.dispose());
+    }
+    const other = this._other, key = `${hc}|${mus}`;
+    other.map.set(dip, upSpan, downSpan, mus);
+    if (key !== other.drawn) {
+      const geo = u.uAirGeo.value.y, map = u.uAirMap.value.clone();
+      u.uAirGeo.value.y = hc; u.uAirMap.value.copy(other.map);
+      this._drawView(other.target, inside);
+      u.uAirGeo.value.y = geo; u.uAirMap.value.copy(map);
+      other.drawn = key;
+    }
+    return {texture: other.target.texture, map: other.map};
   }
 
   // the mean light of the sky and the plain ground on nine rays through the frame

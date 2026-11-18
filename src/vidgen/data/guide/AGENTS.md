@@ -3700,6 +3700,31 @@ const update = (t) => { sky.update(t, {camera, sun: sunDirection(6 - t, 20)}); }
 - 0.19 s a frame at 720p, 0.3 s to make. Look first: `vidgen parts --kind air`. Reference:
   CONFIG.md `web`, "The sky from inside an atmosphere".
 
+**Water to the horizon: `vidgen/space-sea`.** For a sea under that sky do not tile a normal map
+on a plane: one object gives waves from a seed on vidgen's clock, the mirrored sky, the sun's
+glitter path, whitecaps when it blows and the horizon where the height puts it (curved from high
+up), and tells you the water's height anywhere.
+
+```js
+// sketch (parts of a page, not a whole file): a sea under the air
+import {sea} from "vidgen/space-sea";
+const water = sea(renderer, sky, {state: "breeze", seed: 3});   // sky: the air above; "calm", "swell", "rough", "storm"
+scene.add(water.object);
+const update = (t) => { sky.update(t, {camera}); water.update(t, {camera}); };   // the air first, then the sea
+const y = water.heightAt(x, z, t);           // metres over sea level; water.pointAt(x, z, t) is the point in the scene
+```
+
+- States by name or by numbers: `{wind: 9, direction: 40, swell: {height: 1.5, length: 160, direction: -20}}`
+  (m/s, degrees as `sunDirection`'s azimuth, metres). Foam appears from about 8 m/s.
+- `water: "ocean"` (default), `green`, `tropical`, `grey`; `methane` is an invented dark sea for
+  an invented world (say so).
+- Keep the camera over the crests: `water.heightAt` plus a margin; the sea is drawn for a camera
+  at least 0.5 m up. `water.horizon` gives the horizon's distance and dip.
+- The world is round: far from the origin take heights from `water.pointAt`, not from y.
+- 1.1 s a frame at 720p near the water, 0.65 s from 20 km, 0.07 s at 320x180; `quality: "fast"`
+  (a smoother sea) 0.8 s. Look first: `vidgen parts --kind sea`. Reference: CONFIG.md `web`,
+  "Water to the horizon".
+
 **Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
 comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black
 hole). Each is one call and one `update(t)`.

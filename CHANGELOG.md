@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–381
+## Steps 193–382
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -40,6 +40,21 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   and the film exposure keeps a deep-blue glow at 12 degrees. The Mars-like air's dust has a
   narrow second lobe (`aureole`): a compact blue-white glow round a low sun in a tawny sky. A low
   sun is an orange-gold disc with a darker limb and a soft bloom.
+
+- **Ocean** (Step 382): `vidgen/space-sea` lays water to the horizon under a `vidgen/space-air`
+  sky: `sea(renderer, sky, {state: "breeze", seed})` gives waves at several scales from a seed,
+  moving on vidgen's clock (sea states `calm`, `breeze`, `swell`, `rough`, `storm`, or wind,
+  direction, wave height and swell by numbers), the sky's own picture mirrored with Fresnel's
+  share (a sunset and a dusk are mirrored as they are), the sun's glitter path as wide as the sea
+  state makes it and golden at sunset, the water's colour (`ocean`, `green`, `tropical`, `grey`,
+  and `methane`, an invented dark sea), whitecaps and their lace when it blows, and the horizon
+  where the height and the world's radius put it: right from 50 m, curved from 100 km, with the
+  air's haze over far water and no seam to the sky. Waves finer than a pixel fade into the
+  glitter's width, so far water does not shimmer. `water.heightAt(x, z, t)` and `pointAt` give
+  the surface the picture draws, for anything that floats or skims. 1.1 s a frame at 1280x720
+  near the water in software GL (0.65 s from 20 km; `quality: "fast"` 0.8 s); eight parts under
+  the new kind `sea` (`vidgen parts --kind sea`). [CONFIG](docs/CONFIG.md#web),
+  [space cookbook](docs/COOKBOOK-SPACE.md).
 
 ### Space scenes (Phase AN, Steps 367–378)
 

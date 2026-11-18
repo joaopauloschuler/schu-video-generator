@@ -245,6 +245,33 @@ lens (`fov` 15 to 25) if the disc is the subject.
 camera: at 10 km the horizon curves and the sky darkens, above about 70 km (the Earth-like air's
 top) it is space with the limb's glow.
 
+**A sea under that sky** (in a `web` scene's script). `vidgen/space-sea` lays water to the
+horizon under the air: seeded waves on vidgen's clock, the sky mirrored, the sun's glitter path,
+whitecaps when it blows, the horizon where the height puts it. Here a low pass towards a setting
+sun, with something riding the water:
+
+```js
+// sketch (parts of a page, not a whole file): 12 m over a breeze sea at sunset
+import {air, sunDirection} from "vidgen/space-air";
+import {sea} from "vidgen/space-sea";
+const sky = air(renderer, "earth", {sun: sunDirection(3, 5), scene});
+const water = sea(renderer, sky, {state: "breeze", seed: 3});          // "calm", "swell", "rough", "storm"; water: "methane" on an invented world
+scene.add(sky.object, water.object);
+export function frame(t) {
+  camera.position.set(0, 12, -40 * t); camera.lookAt(0, 6, -40 * t - 300);
+  sky.update(t, {camera}); water.update(t, {camera});                  // the air first
+  buoy.position.set(...water.pointAt(20, -40 * t - 150, t));           // the same waves the picture draws
+  renderer.render(scene, camera);
+}
+```
+
+The glitter path is narrow on a calm sea and under a low sun, a broad column from high up; a
+`rough` sea shows whitecaps, a `storm` breaking crests and lace. From 20 km the horizon lies 4.5
+degrees under the level, from 100 km 10 degrees and it curves. Keep the camera over the crests
+(`water.heightAt(x, z, t)` plus a margin). Away from the origin the world's roundness counts
+(3.45 m at 6.6 km): take heights from `water.pointAt` and `water.horizon.height`. `quality:
+"fast"` draws a smoother sea (other waves than `standard`) for a quarter to a third less.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -275,6 +302,7 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | an aurora on an Earth-like world | 0.48–0.59 | |
 | the sky from inside the air (`vidgen/space-air`), straight to the canvas | 0.19 (0.013 at 320x180); 0.22 while the sun or the height moves (`quality: fast` 0.20, `fine` 0.30) | 0.3 s (0.2 s with its table in the cache) |
 | the same with aerial perspective on a few far things / on a ground filling half the frame | 0.21 / 0.28 | |
+| a sea under that sky (`vidgen/space-sea`), straight to the canvas, with the dome: 50 m up / 20 km up | 1.1 / 0.65 (0.07 / 0.05 at 320x180); `quality: fast` 0.8 / 0.54; `fine` 1.66 / 0.83 | 0.3 s more |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
@@ -285,7 +313,7 @@ it; later pages 6 s).
 
 ## 5. The checks to run
 
-1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `craft`,
+1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `sea`, `craft`,
    `craft-part`, `phenomenon`, `camera`): a contact sheet of every ready-made part with its one
    line of use.
 2. **Validate**: `vidgen validate .` checks every key and name with the closest word, what goes
