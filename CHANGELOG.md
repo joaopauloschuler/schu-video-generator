@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–389
+## Steps 193–390
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -134,6 +134,22 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   proportions. For later fine detail every hull carries named regions, anchors (bells, hangars,
   docks, lights, the command place) and one atlas of non-overlapping charts with their metres
   per texel. Fourteen parts under `vidgen parts 'hull-*'`.
+- **Camera moves in the air and beside giant ships** (Step 390): the new module
+  `vidgen/space-camera-air` gives `airCamera(...)`, the rig of `vidgen/space-camera` with thirteen
+  more moves, each a function of the scene's time. In the air: `skim` (a low pass over sea or
+  ground at a stated clearance and speed, following the ground with look-ahead and banking into
+  its turn), `climbThrough` and `descendThrough` (a cloud deck's fog and out the other side, with
+  eye adaptation as a stated look), `chase` (behind a plane on its flight with a lag and part of
+  its bank), `wing` (locked to the plane: wing tip, tail, belly, nose), `flyPast` (a standing
+  camera and a whip-pan), `orbitPeak` (round a mountain, a volcano or a tower of cloud), `rise`
+  (a crane from the surface to the curve of the world). Beside a ship: `hullPass` (a slow pass
+  whose path is made from the hull's regions at a stated stand-off), `hullReveal` (the bow slides
+  into the frame and the hull keeps coming; or from behind a world), `intoBay`, `sternBurn` (the
+  bank lights on a bar, the camera is pushed back, a seeded shake on request) and `scaleZoom`
+  (from a place on the hull to the ship as a speck by its world). Times are seconds or bars and
+  beats of the score; a move may start or end moving; the camera is never under the ground or
+  the water and takes "up" from the local vertical. Twelve parts under `vidgen parts
+  'camera-*'`; recipes and costs in `docs/COOKBOOK-SPACE.md`.
 - **Giant ships that read as kilometres long** (Step 389): `dress(ship, renderer)` of the new
   module `vidgen/space-hull-detail` gives a hull of `vidgen/space-hull` its fine detail: panel
   seams, hatches, pipe runs and vents at 5 to 20 m and panel lines, rivet rows and stencil bars

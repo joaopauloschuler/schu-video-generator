@@ -382,7 +382,8 @@ src/vidgen/
                           # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8); space-effects.js
                           # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9); space-hull.js
                           # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10); space-hull-detail.js
-                          # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11)
+                          # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11); space-camera-air.js
+                          # `vidgen/space-camera-air`: camera moves in the air and beside giant ships, on `vidgen/space-camera`'s rig (§123.12)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -29818,3 +29819,187 @@ detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light});   // light: t
   sunlight shows almost none, the lit hull differs from the bare one, a bay is brighter than the
   void, the same picture from a second page and with the cache off, cold and warm (the nine maps
   come from the cache).
+
+### 123.12 Camera moves in the air and beside giant ships: `vidgen/space-camera-air` (Step 390)
+
+`data/web/modules/space-camera-air.js` (import name `vidgen/space-camera-air`, in `VIDGEN_MODULES`;
+imports `clamp`, `mix`, `smoothstep`, `smootherstep`, `hash` of `vidgen/music-time`, the rig, the
+lenses and the vector helpers of `vidgen/space-camera`, `sceneTime` of `vidgen/space-scene`; no
+three.js: everything runs in Node). The first step of the phase whose subject is motion.
+
+```js
+import {airCamera} from "vidgen/space-camera-air";
+const cam = airCamera({camera, sky, ground, water, clouds: weather, flight: ctx.flight, music: ctx.music, crafts: {Plane: ship}});
+cam.apply(t, cam.skim(t, {over: [0, 8], from: [0, 0], heading: 284, speed: 90, clearance: 14, turn: 14}));
+const cam2 = airCamera({space, camera, ships: {Ship: hull}});               // beside a hull flown in a SpaceView
+cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side: "port", standoff: 60, speed: 40}));
+```
+
+- **A sibling module (decision).** `AirCamera extends SpaceCamera`: every option, move and check
+  of §122.11 works on the rig, and the new moves are its methods. `space-camera.js` is
+  byte-identical (its bytes are in the keys of Phase AN's `space` scenes and of
+  `examples/outbound`); nothing in it had to change: the new module builds its shots from
+  `shotAt`, `lens`, `distanceFor` and the vector helpers that module exports, and overrides only
+  `_common` (times in bars) and `problems` (its own notes).
+- **A move is a function of its time.** As in §122.11: `move(t, options)` returns a shot (`from`,
+  `right`, `up`, `forward`, `fov`, `aspect`, `focus`, plus numbers of its own and `notes`),
+  `cam.apply(t, shot)` places the camera. Nothing is kept between frames (tested in Node: seven
+  times in a shuffled order give the same shots; in Chromium: the same frames from two pages that
+  draw them in different orders). A damped follow is an exponentially weighted mean over the
+  flight's past (`lagged`), a shake is a sum of sines with phases from a seed (`shake`), a kick is
+  a closed-form spring (`pushBack`): no state anywhere.
+- **Times.** `over: [start, end]` in seconds of the scene, or `{bar, beat}` of the score
+  (`music: ctx.music`; `cam.seconds({bar: 9, beat: 3})`), also for `at` and `light`; or `progress`
+  with `seconds`. `ease`: 0 steady, 1 from rest to rest (the speed rises as a smoothstep over
+  half the move), or `[in, out]`: `[1, 0]` starts at rest and ends moving, so two moves cut
+  together on motion (`easedEnds`, `easedRate`). Passes (`skim`, `hullPass`) are steady by
+  default, reveals (`rise`, `intoBay`) eased. `speed` of a pass is its speed between the eased
+  ends.
+- **The local frame.** In the air the frame is the scene's (§123.7: x east, y up at the anchor,
+  z south, metres; the world's middle at `[0, -radius, 0]`). `localFrame({radius, center})` gives
+  `upAt(p)` (the local vertical), `heightOf(p)`, `at(x, z, h)` (the point over the scene's (x, z)
+  at a height over the sphere) and `compass(p, degrees)` (a level heading at p). Every air move
+  takes "up" from `upAt` at the camera, not from +y (tested 2,000 km from the anchor: 18.3 degrees
+  between them), and heights from the ground's own lookups: `ground.heightAt` / `ground.above`
+  (§123.6), `water.heightAt` (§123.4; for a plan the sum of the waves' amplitudes), or a function
+  `(x, z, t) -> metres`. `cam.surface(x, z, t)`, `cam.clearance(p, t)`, `cam.peakNear([x, z],
+  reach)`.
+- **Never under the ground.** A move plans over the surface (below) and then checks the place it
+  got: nearer than its `margin` (a move's own, else the rig's 3 m; a ground stand keeps its eye
+  height) the camera is lifted along
+  the local vertical and the shot's `notes` say by how much and where; `cam.problems(t, shot)`
+  returns the notes with §122.11's findings, `cam.check(move)` walks a whole move.
+- **No flips.** `lookFrame(up, heading, pitch, roll)` builds a frame from a level heading and a
+  pitch, defined straight down and straight up (the frame's top is then the heading); `skim`,
+  `climbThrough` and `rise` use it. Views locked to a plane (`wing`) use the plane's own axes and
+  no vertical at all (tested through a tumble). `chase`, `flyPast` and `orbitPeak` aim with
+  `shotAt` and stay far from the vertical by their geometry.
+- **Air moves.**
+
+  | move | what it does | options (defaults) |
+  |---|---|---|
+  | `skim` | a low pass on a ground track at a stated clearance, following the ground with look-ahead, banking into its turn | `from` [x, z], `heading`, `speed` (90), `clearance` (25), `lookAhead` (3 s), `turn` (degrees in all), `bank` (0.35 of a coordinated turn's, at most `maxBank` 20), `horizon` (`bank` / `level`), `pitch` (-4), `follow` (0.5 of the path's slope), `margin` (0.4 x clearance) |
+  | `climbThrough` / `descendThrough` | from under a deck through its fog out over its top, and back | `deck` (index, name or `{base, top}`), `below` (500), `above` (600), `at`, `heading`, `speed` (70), `pitch` ([10, -5]: up into the deck, then across its top), `adapt` (stops, 0), `settle` (500 m) |
+  | `chase` | behind and above a plane, following with a lag, rolling with part of its bank | `flight`, `distance` (60; a pair closes in), `height` (16), `side` (0), `lag` (0.7 s), `bank` (0.5), `place` ([0, -0.2]), `lead`, `climb` (0.5) |
+  | `wing` | locked to the plane's own frame | `flight`, `view` (`wingtip`, `tail`, `belly`, `nose`, or `{at, toward}`), `side`, `craft` or `length` / `span` |
+  | `flyPast` | a camera standing in the air or on the ground; the plane passes | `flight`, `at` (the pass), `closest` (120), `side`, `rise` (-12), `stand` (`air` / `ground`), `eye` (2), `place` ([0, 0.25]), `lag` (0.06 s) |
+  | `orbitPeak` | circling a mountain, a volcano or a tower of cloud | `around` ([x, z], `{near, reach}`, `{tower}`), `radius` (2500), `height` (0.12 x radius over the top), `start` (180), `sweep` (90), `aim`, `place`, `top`, `clearance` (150) |
+  | `rise` | a vertical crane from the surface to altitude | `at`, `from` (20), `to` (30000), `heading`, `horizon` (0.3), `lens` (one, or [from, to]), `drift`, `down` |
+
+  Terrain following (`skim`, the circle of `orbitPeak`): the ground under the track is sampled at
+  96 stations (72 round a circle); each value becomes the highest within the look-ahead
+  (`envelope`), then a smooth mean over the same reach, and the path is a monotone cubic through
+  the result (no overshoot), so it rises before a ridge and settles after it. A ridge narrower
+  than a station is caught by the last check (the lift and its note). The track itself is on the
+  scene's (x, z) plane (`trackPlan`): over hundreds of kilometres its speed over the sphere
+  differs by the cosine of the angle from the anchor (0.1 % at 280 km). The bank is a look:
+  `bankOf(speed, rate)` is a coordinated turn's bank at 9.81 m/s². `climbThrough`'s `adapt` is a
+  look too: the shot's `ev` falls as the camera nears the deck's top and recovers over `settle`
+  metres above it; the page hands it to the air (`air(..., {ev: (t) => now.ev})`). The chase's
+  camera stands behind the plane along the mean of the flight's direction over the last `lag`
+  seconds (ages up to four lags, 13 samples), so it has no start-up transient and swings wide in
+  a turn; `ctx.flight` gives a value a frame, so sub-frame times step. `flyPast`'s turn is
+  fastest at the pass: speed / closest radians a second (the shot's `pan`; 150 m/s at 100 m is 86
+  degrees a second). `rise` multiplies its height by a constant per step of eased progress and
+  tilts down by the horizon's dip so the horizon stays where `horizon` puts it.
+- **Ship moves.** Places are metres in the hull's own axes (+z the bow, +y up, +x port); the rig
+  turns them by the hull's object (`hull.object.quaternion`; with a `SpaceView` into the data's
+  frame at the body's place, in a plain scene by the object's place and scale): update the ship
+  for t before asking for the move. `ships: {name: hull}` lets a move name its ship.
+
+  | move | what it does | options (defaults) |
+  |---|---|---|
+  | `hullPass` | a slow pass along the hull, a wide lens, the path made from the hull's regions | `ship`, `side` (`port`, `starboard`, `dorsal`, `ventral`, degrees), `lane` (0), `standoff` (60), `reach` (3 stand-offs), `from` (0.1) / `to` or `speed` (40) and `toward`, `ahead`, `inward` (0.6), `yaw` (8), lens `ultra-wide` |
+  | `hullReveal` | `traverse`: the bow slides into the frame from behind the camera and the hull keeps coming; `limb`: from behind a world (`reveal` of §122.11 with the ship as subject) | `ship`, `at`, `side` (`under` / `over`), `lane`, `standoff` (0.03 x length), `speed` (length / 30), `tilt` (22), `escort` (`{after, speed, gap}`); `limb`: `behind`, `rate`, `distance`... |
+  | `intoBay` | an approach to a hangar's mouth at an angle, then inside | `ship`, `hangar`, `from` (4 widths), `along` (0.7 x from), `deep` (0.35), `rise` (-0.28), `out`, `clear` (25), lens `wide` |
+  | `sternBurn` | behind the bank as it lights; pushed back; a shake on request | `ship`, `light`, `distance` (3 bank radii), `off` ([0.45, 0.22]), `creep` (0.06), `push` (0.5 radius), `settle` (0.45 s), `shake` (`{amount 0.25, seed, rate 7, decay 1.6, hold 0.15}`), `rise` (0.35 s) |
+  | `scaleZoom` | powers of ten from a place on the hull to the whole ship to the ship as a speck by its world (`zoom` of §122.11) | `ship`, `window` (an anchor, a region, a place), `close` (60), `fill` (0.7), `world`, `far` ({radii: 4}), `lift` (20), `over` or `rate`, `hold` |
+
+  `passPlan(hull, {side, lane, standoff, reach})`: at 160 stations along the long axis, the
+  furthest reach on that side of every region whose box comes within a stand-off of the lane and
+  of the station; `envelope` with the look-ahead; the camera flies the stand-off outside it. So a
+  pass over the deck swings up over a tower before it meets it and a pass along a wall follows
+  its steps. It is as true as the regions' boxes (a box is never smaller than its region, so the
+  camera is never nearer than the stand-off: tested on a stand-in hull at 800 places; on all
+  seven families of seed 1 the nearest region is 60.0 m away along all four sides). A ring that turns keeps the box it was
+  built with. `hullClearance(regions, p)` names the nearest region; a pass faster than a twelfth
+  of the hull a second is noted (`TOY_SHARE`: a 3 km ship passed in 12 s is a model). The
+  traverse flies a straight line a stand-off clear of the hull's furthest reach in its lane and
+  times the moment the first station crosses the frame's edge (`at`); it is steady by design. Its
+  `escort` is where a small craft should be (the hull's axes: a craft of `ship.scaleRef` is a
+  child of the hull) to enter the frame after the stern. `intoBay` reads the anchor `{p, n, width,
+  height, depth}`: inside it keeps within the mouth, outside it notes a place nearer than `clear`
+  to another region. `sternBurn` returns `throttle` (0 before `light`, 1 after `rise` seconds):
+  hand it to `ship.update(t, {throttle})` so the picture and the push have one clock.
+- **A trap of `vidgen/space-scale`, met again and avoided from the page.** With the default
+  `near` (0.01 m) a `SpaceView` splits a hull the camera is inside the bounding sphere of into
+  several depth slices, and the world behind is drawn over the parts of the hull in the farther
+  slice (seen in `intoBay` and `scaleZoom`: the Earth over the bay's floor; a body of the orbit
+  data, not only an object added by hand as §123.10 says). `new SpaceView(ctx, {..., near: 4})`
+  (the camera is never nearer than that to anything) keeps the hull in one slice: the pictures of
+  this step use it. `space-scale.js` is unchanged (its bytes are in existing scenes' keys); the
+  fix belongs to the review step.
+- **Measured** (2 cores, SwiftShader; seconds a frame at 426x240 in a draft clip / at 1280x720 in
+  `vidgen still`, the first frame of a page left out).
+
+  | move | scene | 426x240 | 1280x720 |
+  |---|---|---|---|
+  | `skim` | air + breeze sea at sunset | 0.18 | 1.2 |
+  | `skim` | Mars-like air + desert | 0.25 to 0.39 | 1.5 (a frame that re-centres the maps 3.9) |
+  | `climbThrough` | air + sea + two decks | 0.31 | 2.0 |
+  | `chase` / `wing` | air + alpine land + a plane with shadows | 0.30 / 0.28 | 1.45 / 1.5 |
+  | `wing` (belly) | air + a plane + re-entry glow | 0.23 | 1.3 |
+  | `flyPast` | air + sea + a plane | 0.17 | 0.85 |
+  | `orbitPeak` | air + volcanic land | 0.32 | 1.6 |
+  | `rise` | air + sea + fair clouds | 0.32 | 2.1 |
+  | `hullPass` | dressed carrier, sky, Earth, 60 m off the wall | 0.43 | 1.55 |
+  | `hullReveal` | the same, under the hull | 0.20 | 0.45 (bow) to 1.1 (hull overhead) |
+  | `intoBay` | the same | 0.44 | 1.6 |
+  | `sternBurn` | the same, eight bells firing | 0.43 | 2.1 |
+  | `scaleZoom` | the same | 0.25 | 0.8 |
+
+  The moves' own arithmetic is 15 to 50 ms a frame of that where a ground is sampled (`skim` over
+  land: about 130 heights and the plan, three times a frame in the test page; `orbitPeak` 170 ms with its peak search each frame: give
+  `around: [x, z]` once the peak is known), under 1 ms otherwise. A page's first frame: 2 s (sea)
+  to 20 s (land at 1280x720). `vidgen motion check` on each of the 14 draft clips (3 to 8 s,
+  426x240, 12 fps): no findings, except a `rise` of 60 km in 5 s (one `strobe` warning: cloud and
+  wave patterns move half their repeat a frame at 12 fps); the same rise in 8 s is clean. The 12
+  part tiles: 21 s.
+- **What reads and what does not** (strips in the step's scratch folder; the moves were looked
+  at as strips of frames and checked by `vidgen motion check`, not watched as film). Strong:
+  `skim` over the sea at sunset, `chase`, `wing` (wingtip), `flyPast`, `rise`, `hullPass`,
+  `intoBay`, `sternBurn`. Fair: `orbitPeak` (correct, slow to show change: give it 12 s and 30
+  degrees), `climbThrough` (the story reads; the fog is flat grey), the traverse of `hullReveal`
+  (the idea works over 30 s; the underside is plain and only stars are under it), `scaleZoom`
+  (the ship is under a pixel long before the world is whole), `wing` on a re-entry (the glow
+  hides the tiles at full heating). Speeds: a `hullPass` at 40 m/s takes 80 s for the whole
+  3.2 km carrier: show a part of it; `rise` to 60 km in 8 s and a climb of 115 m/s are stylised
+  (a film's time), stated here.
+- **Limits and honest notes.** A ground track is planned on the scene's plane (above). The
+  look-ahead is symmetric: the path also stays high behind a ridge. `chase` does not look for
+  ground between the camera and the plane. `flyPast` on the ground stands on the surface as
+  planned (the waves' highest sum over a sea). `hullReveal` behind a nearer ship is not built
+  (mode `limb` takes a round world; a ship is a ball there). `intoBay` knows the mouth, not what
+  is parked inside. `sternBurn` does not know where the plume is: `off` keeps it out by default.
+  Nothing here knows about clouds between the camera and its subject, and (as §123.5 says)
+  everything in a scene is drawn in front of every cloud.
+- **Parts** (`data/web/parts/space-camera-air.js`, kind `camera`): `camera-skim`,
+  `camera-climb-through`, `camera-chase`, `camera-wing`, `camera-fly-past`, `camera-orbit-peak`,
+  `camera-rise`, `camera-hull-pass`, `camera-hull-reveal`, `camera-into-bay`,
+  `camera-stern-burn`, `camera-scale-zoom`.
+- **For Step 392 (YAML).** Options are plain numbers, words and names: flights and ships by name
+  (`flight: "Plane"`, `ship: "Ship"` with the rig's `flight`, `ships`, `crafts`), decks, towers,
+  hangars, anchors and regions by name or index, times as seconds or `{bar, beat}`. The lists for
+  validation: `AIR_MOVES`, `SHIP_MOVES`, `SIDES`, `WING_VIEWS`. No option needs a function.
+- **Tests** (`tests/test_web_space_camera_air.py`): the module and its parts; in Node: eased
+  ends, the envelope, the local frame far from the anchor, no flip straight down, bars; every air
+  move the same for the same time in any order; a skim over a hill and over a ridge narrower than
+  its samples (lifted, noted, never under its margin), its speed, bank and level horizon; up 2,000
+  km from the anchor; the deck's heights, fog and `ev`; the chase's lag, roll, frame and lift;
+  the plane's views through a tumble; the fly-past's standing camera and its fastest turn at the
+  pass; the circle round a peak and over high ground; the crane's heights, lens and horizon; on a
+  stand-in hull: the plan, the stand-off at 800 places, the swing round a tower, a turned and
+  scaled hull, the bow's entry at its bar, the escort, the bay's mouth, the bank's light, push
+  and seeded shake, the zoom's landing points; did-you-mean for options, views, flights, ships,
+  hangars. In Chromium (`slow`): a skim and a climb drawn at three times each in two orders give
+  the same frames (within 2 of 255), the camera over the swell in each.

@@ -4019,6 +4019,44 @@ const view = (t) => cam.arc(t, {subject: "Earth", phase: {limb: 0.12}, distance:
 - Look first: `vidgen parts --kind camera`. Reference: CONFIG.md `web`, "Camera moves for space
   scenes".
 
+**Camera moves in the air and beside giant ships: `vidgen/space-camera-air`.** The same rig with
+more moves; name the move, do not write camera positions:
+
+```js
+import {airCamera} from "vidgen/space-camera-air";
+const cam = airCamera({camera, sky, ground, water, clouds: weather, flight: ctx.flight, music: ctx.music, crafts: {Plane: ship}});
+// each frame, first the plane, then the camera, then the air and what stands in it:
+ship.update(t); cam.apply(t, cam.chase(t, {flight: "Plane"})); sky.update(t, {camera}); ground.update(t, {camera});
+```
+
+- In the air: `skim` (a low pass at a stated `clearance` and `speed`, following the ground,
+  banking into its `turn`), `climbThrough` / `descendThrough` (a cloud deck's fog and out the
+  other side; `adapt: 1` gives an `ev` for the air so the break-out is not a white flash),
+  `chase` (behind a plane with a lag and half its bank), `wing` (locked to the plane: `view:
+  "wingtip" | "tail" | "belly" | "nose"`), `flyPast` (a standing camera, the plane passes at
+  `at`), `orbitPeak` (round a mountain or a cloud tower: `around: {near: [x, z], reach}` or
+  `{tower: 0}`), `rise` (a crane from the surface to tens of kilometres; `down: true` back).
+- Beside a ship (`airCamera({space, camera, ships: {Ship: hull}})`): `hullPass` (a slow pass a
+  `standoff` off a `side`, the path made from the hull's regions), `hullReveal` (the bow slides
+  in over the camera at `at` and the hull keeps coming; `mode: "limb"` from behind a world),
+  `intoBay` (into a `hangar`; `out: true` out of it), `sternBurn` (the bank lights at `light`; give
+  `shot.throttle` to `ship.update`; `shake: {amount: 0.3}` only if you want it), `scaleZoom` (a
+  place on the hull → the whole ship → a speck by its world).
+- Timing: `over: [start, end]` in seconds or `{bar, beat}` of the score (`music: ctx.music`);
+  `ease: [1, 0]` starts at rest and ends moving, `ease: 0` is steady: cut two moves together on
+  motion. Every move is a function of t: a still at t is frame t.
+- The camera is never under the ground or the water (it is lifted and the shot's `notes` say
+  so), never nearer a hull's regions than the stand-off; "up" is the local vertical. Read
+  `cam.check(view, {from, to})` while you develop.
+- Beside a ship: `ship.update(t)` before the move, and `new SpaceView(ctx, {renderer, scene,
+  camera, near: 4})` — with the default near distance the world behind shows through a hull the
+  camera is close to.
+- Speeds that read: a pass along a 3 km hull at 40 m/s (show a part of it, not the whole ship in
+  ten seconds); a `rise` to 60 km in 8 s or more.
+- Cost: the scene's own, 0.8 to 2.1 s a frame at 1280x720. Look first: `vidgen parts 'camera-*'`.
+  Reference: CONFIG.md `web`, "Camera moves in the air and beside giant ships"; recipes in
+  `docs/COOKBOOK-SPACE.md`.
+
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
 added) drawn in one browser, each tile labelled with its name and the one line that uses it.

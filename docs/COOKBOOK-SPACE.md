@@ -548,6 +548,97 @@ lamp, a plume or anything else that must stand in front of the ship `frustumCull
 `SpaceView` draws such things as sky. Look first: `vidgen parts 'hull-dressed' 'hull-windows'
 'hull-bay' 'hull-torch' 'hull-fleet-dressed'`.
 
+**Camera moves in the air and beside a giant ship** (`vidgen/space-camera-air`; in the pages of
+the recipes above). One rig, `airCamera(...)`, a `spaceCamera` with thirteen more moves; each is
+a function of the scene's time, so a still at t is frame t and two moves cut together on a bar.
+Place the camera first, then update the air and what stands in it with that camera.
+
+*A skim over the sea at sunset* (the sea recipe's page; 1.2 s a frame at 1280x720, 0.18 s in a
+draft at 426x240):
+
+```js
+import {airCamera} from "vidgen/space-camera-air";
+const sky = air(renderer, "earth", {sun: sunDirection(5, 300), scene}), water = sea(renderer, sky, {state: "breeze", seed: 3});
+const cam = airCamera({camera, sky, water, music: ctx.music});
+export function frame(t) {
+  cam.apply(t, cam.skim(t, {over: [0, 8], from: [0, 0], heading: 284, speed: 90, clearance: 14, turn: 14, lens: "wide"}));
+  sky.update(t, {camera}); water.update(t, {camera});
+  renderer.render(scene, camera);
+}
+```
+
+14 m over the water at 90 m/s towards the sun, turning 14 degrees to the right through the move:
+the horizon rolls into the turn and back (`horizon: "level"` keeps it level, `bank: 0` too).
+Over ground give the rig `ground` (the land) and a clearance the ground holds up at (200 m over
+a desert, 400 m over the alpine range): the path rises before a ridge (`lookAhead` seconds of
+flight) and the camera is never nearer the ground than `margin`. `over: [{bar: 5}, {bar: 9}]`
+puts it on bar lines; `ease: [1, 0]` starts at rest and ends moving.
+
+*A chase of a plane over the range* (the plane recipe's page with `flight_data`; 1.45 s a frame
+at 1280x720 with the alpine ground and the plane's shadows, 0.30 s in a draft):
+
+```js
+const cam = airCamera({camera, sky, ground, flight: ctx.flight, crafts: {Plane: ship}});
+export function frame(t) {
+  ship.update(t);                                                   // the plane first: the camera reads the flight
+  cam.apply(t, cam.chase(t, {flight: "Plane", lens: "wide-normal"}));   // 60 m behind, 16 m above, lag 0.7 s, half its bank
+  sky.update(t, {camera}); ground.update(t, {camera});
+  renderer.render(scene, camera);
+}
+```
+
+In a turn the camera swings wide and comes round after the plane, rolling half as far as it
+banks. The same flight from on board: `cam.wing(t, {flight: "Plane", view: "wingtip", side:
+"right"})` (the wing and its tip light stand still, the world tilts; 1.5 s); from the ground or
+the air as it passes: `cam.flyPast(t, {flight: "Plane", at: {bar: 9}, closest: 100, side:
+"right", stand: "ground", eye: 3})` (0.85 s over a sea); on a re-entry `view: "belly"` looks
+back up at the tiles and the glow (1.3 s). Out of a cloud deck: `cam.climbThrough(t, {over: [0,
+14], deck: 0, heading: 40, adapt: 1})` with `air(renderer, "earth", {ev: () => now.ev})` and `now
+= ` the shot of each frame (2.0 s with a sea and two decks). Round a volcano:
+`cam.orbitPeak(t, {over: [0, 12], around: {near: [0, 0], reach: 20000}, radius: 9000, sweep:
+30})` (1.6 s). From the surface to the curve of the world: `cam.rise(t, {over: [0, 10], from: 15,
+to: 60000, heading: 300, lens: ["normal", "ultra-wide"]})` (2.1 s with a sea and fair clouds; in
+under 8 s the clouds strobe).
+
+*A pass along a hull* (the dressed ship's page; 1.55 s a frame at 1280x720, 0.43 s in a draft):
+
+```js
+const space = new SpaceView(ctx, {renderer, scene, camera, near: 4});     // near: the world must not show through a hull this close
+const cam = airCamera({space, camera, ships: {Ship: ship}});
+export function frame(t) {
+  space.update(t, {from: {body: "Ship", offset: [0, 0, 1000]}, to: "Ship"}); ship.update(t, {});   // the ship's attitude at t
+  const shot = cam.apply(t, cam.hullPass(t, {ship: "Ship", over: [0, 20], side: "port", standoff: 60, from: 0.3, speed: 40}));
+  earth.update(t); ship.update(t, {sun, throttle: 0}); sun.update(t); light.update(t); detail.update(t, {lights: 1, light});
+  renderer.render(scene, camera);
+}
+```
+
+A 16 mm lens 60 m off the port wall at 40 m/s: plates, windows and a hangar's mouth stream past
+while the wall runs to a vanishing point. The path is made from the hull's regions: `side:
+"dorsal"` flies over the deck and lifts over its towers. A 3 km ship takes 80 s at that speed:
+show 15 or 20 s of it. Into a bay: `cam.intoBay(t, {ship: "Ship", hangar: "hangar-2", over: [0,
+10]})` (1.6 s; the strongest of the ship moves: the whole ship, the mouth, the cargo inside).
+The bank lighting on a bar: `const shot = cam.sternBurn(t, {ship: "Ship", over: [0, 8], light:
+{bar: 3}, shake: {amount: 0.3}})` and `ship.update(t, {sun, throttle: shot.throttle})` (2.1 s
+with eight bells firing).
+
+*A reveal* (the same page; 0.45 s a frame while only the bow is in the frame, 1.1 s with the
+hull overhead):
+
+```js
+const small = ship.scaleRef("ship", {at: "bottom", seed: 2});         // a 50 m craft for the end of the joke
+// frame(t), in place of the pass:
+const shot = cam.apply(t, cam.hullReveal(t, {ship: "Ship", at: {bar: 3}, lane: 200}));
+small.object.position.set(...shot.escort);                             // it enters the frame last, after the stern
+```
+
+The camera looks along the ship's heading from under it; at `at` the bow slides in over the top
+of the frame and the hull keeps coming for `length / speed` seconds (30 by default), then the
+bells, then the small craft. Hold the shot for all of it: the size is told by the time it takes.
+From behind a world instead: `cam.hullReveal(t, {ship: "Ship", mode: "limb", behind: "Earth",
+at: {bar: 3}, rate: 0.5})`. Powers of ten: `cam.scaleZoom(t, {ship: "Ship", window: "hangar-2",
+close: 80, world: "Earth", over: [0, 8]})` (0.8 s). Look first: `vidgen parts 'camera-*'`.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -588,6 +679,8 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | exhaust in air, a vapour cone and wing vapour, vapour trails: each, or all three, on a plane over the sea | under +0.05 (inside the scatter; +0.01 at 320x180) | |
 | a giant hull (`vidgen/space-hull`) on top of a sky, a world and a star in a `SpaceView`: filling the frame / small in it / `far` detail filling it / a bank of eight bells firing seen from astern | +0.33 / +0.12 / +0.24 / +0.8 (+0.12 / +0.03 at 320x180; its shadows are inside the scatter) | 1.0 s for the first hull, 25 to 110 ms for each more |
 | the same hull dressed (`vidgen/space-hull-detail`: maps, windows, bays, clutter, lamps): filling the frame from 2.5 km / small in it / a close view where it covers every pixel / the night side close / eight bells firing (with `plumes: "bank"`) / five dressed hulls at `far` | +0.28 / +0.07 / +0.7 / +0.4 / +0.16 (-0.3) / 0.9 in all (+0.10 and +0.12 at 320x180; the first frame of a page 3 s more) | dressing: 2.1 s with the cache off, 4.2 s cold, 0.9 s warm (`far`: 1.1 / 0.4 s); 4 MB on disk for the first hull, 1 to 3 MB for each more |
+| camera moves in the air (`vidgen/space-camera-air`), the whole scene straight to the canvas: `skim` over a sea / over a desert / `climbThrough` with a sea and two decks / `chase` or `wing` over the alpine range with a plane / `flyPast` over a sea / `orbitPeak` round a volcano / `rise` with a sea and fair clouds | 1.2 / 1.5 / 2.0 / 1.5 / 0.85 / 1.6 / 2.1 (0.17 to 0.39 in a draft at 426x240) | 2 s with a sea, 8 to 20 s with a land at 1280x720 |
+| camera moves beside a dressed 3.2 km hull over the Earth: `hullPass` / `hullReveal` (the bow, the hull overhead) / `intoBay` / `sternBurn` with eight bells / `scaleZoom` | 1.55 / 0.45, 1.1 / 1.6 / 2.1 / 0.8 (0.20 to 0.44 in a draft at 426x240) | 4 to 5 s warm |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 

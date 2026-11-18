@@ -8080,6 +8080,74 @@ const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); 
   straight (follow a body of the data for a true hyperbola); a subject given as a three.js
   object is read by its `position`. Look first: `vidgen parts --kind camera`.
 
+**Camera moves in the air and beside giant ships: `vidgen/space-camera-air`** (Step 390, DESIGN
+§123.12). The same rig with more moves: `airCamera(options)` is a `spaceCamera` (every option and
+move above works on it) that also knows the air's scene and the ships. `import {airCamera} from
+"vidgen/space-camera-air"`.
+
+```js
+const cam = airCamera({camera, sky, ground, water, clouds: weather, flight: ctx.flight, music: ctx.music, crafts: {Plane: ship}});
+cam.apply(t, cam.skim(t, {over: [0, 8], from: [0, 0], heading: 284, speed: 90, clearance: 14, turn: 14}));   // then sky.update(t, {camera}) ...
+const cam2 = airCamera({space, camera, ships: {Ship: hull}});     // beside a hull flown in a SpaceView (give it near: 4, below)
+cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side: "port", standoff: 60, speed: 40}));
+```
+
+- **The rig's own options**: `sky` (the air: the world's radius), `ground` (a land of
+  `vidgen/space-land`, or a function `(x, z, t)` giving metres over the sphere), `water` (a sea),
+  `clouds` (decks and towers by index or name), `flight` (`ctx.flight`), `crafts` (`{flight name:
+  plane}`: its size and wing tips), `ships` (`{name: hull}`), `music` (`ctx.music`: times in
+  bars), `margin` (3: metres the camera keeps over ground and water unless a move states its own),
+  `radius` / `center` for a world without a sky object.
+- **Words every move takes**: `over: [start, end]` in seconds of the scene or `{bar, beat}` of
+  the score, or `progress` (0..1) with `seconds`; `ease`: 0 steady, 1 from rest to rest, or `[in,
+  out]` (`[1, 0]` starts at rest and ends moving: cut the next move in on motion); `lens`;
+  `roll`. Headings are compass degrees (0 north, 90 east), speeds metres a second, places `[x, z]`
+  in metres of the scene. A shot adds `notes`: sentences about what the move had to change;
+  `cam.problems(t, shot)` and `cam.check(view, {from, to})` return them with the rig's findings.
+- **In the air the camera is never under the ground**: a move plans over the surface (the
+  ground's `heightAt`, the water's waves) and is lifted along the local vertical when it would
+  come nearer than its `margin`, with a note. "Up" is the local vertical at the camera (the
+  world is a sphere: 2,000 km from the scene's anchor +y is 18 degrees off).
+
+| Move | Options (defaults) | The picture |
+|---|---|---|
+| `cam.skim(t, {...})` | `from`, `heading`, `speed` (90), `clearance` (25), `lookAhead` (3 s), `turn` (degrees in all, right when positive), `bank` (0.35), `maxBank` (20), `horizon` (`"bank"`; `level`), `pitch` (−4), `follow` (0.5), `margin` (0.4 × clearance); steady by default | a low pass over sea or ground at a stated clearance; the path rises before a ridge and settles after it; the horizon rolls into the turn |
+| `cam.climbThrough(t, {...})`, `cam.descendThrough(t, {...})` | `deck` (0; a name; `{base, top}`), `below` (500), `above` (600), `at`, `heading`, `speed` (70), `pitch` (`[10, -5]`), `adapt` (stops, 0), `settle` (500 m) | from under a cloud deck through its fog out over its top into the sun (or back); the shot adds `height`, `inside`, `fog`, `ev` |
+| `cam.chase(t, {...})` | `flight`, `distance` (60; `[from, to]` with `over`), `height` (16), `side` (0), `lag` (0.7 s), `bank` (0.5), `place` (`[0, -0.2]`), `lead`, `climb` (0.5) | behind and above a plane, swinging wide in its turns, rolling with half its bank; the plane low in the frame under the horizon |
+| `cam.wing(t, {...})` | `flight`, `view` (`"wingtip"`; `tail`, `belly`, `nose`, or `{at, toward}` in the plane's axes), `side` (`"left"`), `craft` or `length`, `span` | locked to the plane: it stands still and the world tilts; `belly` looks back up at the tiles |
+| `cam.flyPast(t, {...})` | `flight`, `at` (the pass; default the middle of `over`), `closest` (120), `side`, `rise` (−12), `stand` (`"air"`; `ground` with `eye` 2), `place` (`[0, 0.25]`), `lag` (0.06 s) | a camera that stands still; the plane comes, passes with a whip-pan (`shot.pan` degrees a second) and goes |
+| `cam.orbitPeak(t, {...})` | `around` (`[x, z]`; `{near: [x, z], reach}`; `{tower: n}`), `radius` (2500; 3 × a tower's), `height` (0.12 × radius over the top), `start` (180), `sweep` (90), `aim`, `place`, `top`, `clearance` (150); lens `wide` | circling a mountain, a volcano or a tower of cloud, held in the frame |
+| `cam.rise(t, {...})` | `at`, `from` (20), `to` (30000), `heading`, `horizon` (0.3), `lens` (one, or `[from, to]`: widening), `drift`, `down` | a crane straight up from the surface to altitude: the horizon held while the world's curve appears; `down: true` flies it back |
+| `cam.hullPass(t, {...})` | `ship`, `side` (`"port"`; `starboard`, `dorsal`, `ventral`, degrees), `lane` (0), `standoff` (60), `reach`, `from` (0.1) and `to` (shares of the length from the stern), or `speed` (40) and `toward` (`"bow"`), `ahead`, `inward` (0.6), `yaw` (8); lens `ultra-wide`; steady | a slow pass along a hull, its detail streaming by; the path swings out round towers and is never nearer a region's box than the stand-off |
+| `cam.hullReveal(t, {...})` | `ship`, `at`, `side` (`"under"`; `over`), `lane`, `standoff` (0.03 × length), `speed` (length / 30), `tilt` (22), `escort`; or `mode: "limb"` with `behind`, `rate`, `distance` | the bow slides into the frame from behind the camera at `at` and the hull keeps coming; `shot.escort` is where a small craft enters last; `limb`: the ship from behind a world |
+| `cam.intoBay(t, {...})` | `ship`, `hangar` (the first), `from` (4 mouth widths), `along` (0.7 × from), `deep` (0.35), `rise` (−0.28), `out`, `clear` (25); lens `wide` | an approach to a hangar's mouth at an angle, then inside it; `out: true` pulls out |
+| `cam.sternBurn(t, {...})` | `ship`, `light`, `distance` (3 bank radii), `off` (`[0.45, 0.22]`), `creep` (0.06), `push` (0.5 radius), `settle` (0.45 s), `rise` (0.35 s), `shake` (off; `{amount: 0.25, seed, rate: 7, decay: 1.6, hold: 0.15}`) | behind the engine bank as it lights on `light`; the camera is pushed back; `shot.throttle` is for `ship.update(t, {throttle})` |
+| `cam.scaleZoom(t, {...})` | `ship`, `window` (an anchor, a region, `[x, y, z]`), `close` (60), `fill` (0.7), `world`, `far` (`{radii: 4}`), `lift` (20), `over` or `rate`, `hold` | powers of ten from a place on the hull to the whole ship to the ship as a speck by its world |
+
+- **Eye adaptation through a deck** is a look: with `adapt: 1` the shot's `ev` falls by a stop as
+  the camera nears the deck's top and recovers above it. Hand it to the air:
+  `let now = {ev: 0}; const sky = air(renderer, "earth", {ev: () => now.ev});` and each frame
+  `now = cam.climbThrough(t, {...})`.
+- **Beside a ship** places are metres in the hull's axes (+z the bow, +y up, +x port); call
+  `ship.update(t)` before the move (the rig reads the hull's attitude) and again with the sun and
+  the throttle after `cam.apply`. Give the view a near distance: `new SpaceView(ctx, {renderer,
+  scene, camera, near: 4})`. With the default (0.01 m) a hull the camera is close to is drawn in
+  several depth slices and the world behind it shows through the farther ones.
+- **Speeds that read**: a pass along a hull is slow (a 3 km ship at 40 m/s takes 80 s: show a
+  part of it; a pass faster than a twelfth of the hull a second is noted as "a model"). `rise`
+  to 60 km wants 8 s or more (in 5 s cloud patterns strobe in `vidgen motion check`).
+- Also exported: `AirCamera`, `localFrame`, `lookFrame`, `easedEnds`, `easedRate`, `lagged`,
+  `envelope`, `trackPlan`, `bankOf`, `horizonDip`, `shake`, `pushBack`, `passPlan`,
+  `hullClearance`, `boxDistance`, `sideAxes`, `AIR_MOVES`, `SHIP_MOVES`, `SIDES`, `WING_VIEWS`,
+  `TOY_SHARE`, `GRAVITY`, `VERSION`. Mistakes stop the render with a did-you-mean:
+  `vidgen/space-camera-air: skim options: unknown option "clearence" (did you mean
+  "clearance"?)`.
+- Cost at 1280x720 in software GL is the scene's, 0.8 to 2.1 s a frame (table in
+  `docs/COOKBOOK-SPACE.md`); a move's own arithmetic is under 1 ms, 15 to 50 ms where it samples a
+  ground. Limits: a ground track is planned on the scene's plane; nothing knows about clouds or
+  ground between the camera and its subject; a reveal from behind a nearer ship is not built.
+  Look first: `vidgen parts 'camera-*'`.
+
 **The sky from inside an atmosphere: `vidgen/space-air`** (Step 381, DESIGN §123.3). The view
 from within a world's air, at any height from the ground to space: the sky dome for any sun (day,
 golden hour, sunset, twilight with the stars coming out, night), the sun's disc, aerial perspective
@@ -18030,7 +18098,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s, the 14 of `vidgen/space-hull` 23 s, the 6 of `vidgen/space-hull-detail` 17 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s, the 14 of `vidgen/space-hull` 23 s, the 6 of `vidgen/space-hull-detail` 17 s, the 12 of `vidgen/space-camera-air` 21 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.
