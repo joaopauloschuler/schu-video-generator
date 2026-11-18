@@ -692,7 +692,22 @@ void main() {
   float shade_ = 1.0 + 0.16 * tone + 0.07 * fine;
   vec3 ground = mix(uMatGround, max(mB.rgb, 0.0), uMat0.w);
   ground = mix(ground, uMatSand, uMat1.z * (1.0 - smoothstep(0.5, 0.9, slope))) * shade_;
-  float band = smoothstep(0.25, 0.75, 0.5 + 0.5 * sin(6.2831853 * (h / uMat1.y + 0.8 * tone))) * clamp(uMat1.y / (3.0 * foot) - 0.5, 0.0, 1.0);
+  // rock beds: layers of uneven thickness and tone (each its own from a hash), tilted and wavy, broken off in patches,
+  // only on truly steep rock, gone before a bed is a few pixels thick (no stripes over whole slopes, no moire)
+  float band = 0.0;
+  if (uMat1.x > 0.0) {
+    vec2 qb = p / 256.0 + uDetA[3].xy, qbc = floor(qb);
+    float n256 = landNoise(ivec2(qbc) + ivec2(uDetA[3].zw), qb - qbc, uint(uLandDet.w) + 23u).x;
+    // bands over 0.5 are layered rock (a canyon's walls): flatter beds, light and dark taking turns, on less steep faces, hardly broken
+    float layered = clamp(2.0 * uMat1.x - 1.0, 0.0, 1.0);
+    float ub = h / uMat1.y + (1.3 * tone + 0.7 * n256) * (1.0 - 0.6 * layered), bed = floor(ub), fb = ub - bed;
+    float edge = clamp(1.5 * foot * max(slopeD, 0.2) / uMat1.y, 0.08, 0.5);
+    float a = float(landHash(ivec2(int(bed), 17), uint(uLandDet.w)) & 1023u) / 1023.0, b = float(landHash(ivec2(int(bed) + 1, 17), uint(uLandDet.w)) & 1023u) / 1023.0;
+    a = mix(a, 0.25 * a + 0.75 * mod(bed, 2.0), 0.8 * layered); b = mix(b, 0.25 * b + 0.75 * mod(bed + 1.0, 2.0), 0.8 * layered);
+    float bedTone = mix(a, b, smoothstep(1.0 - edge, 1.0, fb));
+    band = pow(bedTone, mix(2.0, 0.7, layered)) * mix(smoothstep(-0.15, 0.45, n256 + 0.35 * fine), 1.0, 0.8 * layered)
+         * smoothstep(mix(uMat0.x, 0.15 * uMat0.x, layered), mix(uMat0.y, uMat0.x, layered), slopeD) * clamp(uMat1.y / (4.0 * foot) - 0.5, 0.0, 1.0);
+  }
   vec3 rock = mix(uMatRock, uMatRock2, uMat1.x * band) * (0.92 + 0.3 * tone + 0.12 * fine);
   vec3 albedo = mix(ground, mix(ground, rock, 0.55) * 1.08, uMat0.z * smoothstep(0.5 * uMat0.x, uMat0.x, slope));
   albedo = mix(albedo, rock, smoothstep(uMat0.x, uMat0.y, slopeD));

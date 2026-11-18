@@ -12,8 +12,10 @@
 // The sea is the world's sphere (the air's radius), so the horizon lies where it does and drops with
 // height. No mesh in the world: a grid of the picture's own cells is laid on the sphere every frame, so there
 // is no edge, no tile and nothing to pop. The waves are a seeded list of sine waves with deep-water speeds
-// (a spectrum for the wind, a swell beside it), a pure function of place and time, read through three long
-// slow bends so that no crest is a ruled line: the longest lift the grid near the camera, all of them tilt
+// (a spectrum for the wind, a swell beside it), a pure function of place and time; each wave's phase wanders
+// by its own share of three long slow fields, so crests run roughly parallel yet vary along their length and
+// no lattice and no closed ring forms (one shared warp of the whole pattern drew whorls from 100 m to a few
+// km up): the longest lift the grid near the camera, all of them tilt
 // the picture's normals, each faded as it gets finer than a pixel; what is faded is not lost but widens the
 // sun's glitter (the slopes a pixel no longer shows are counted as roughness), so far water does not shimmer
 // and the glitter path has the width the sea state gives it.
@@ -48,9 +50,12 @@ export const FOAM_LAG = 2.2;
 /** The lengths of the gusts' patches, metres (each varied by the seed). */
 export const GUSTS = Object.freeze([500, 900, 1600, 2900, 5200, 9300]);
 /** How far a gust's wave moves the finer gusts' pattern sideways, as a share of its own length (so no patch is a ruled stripe). */
-export const GUST_SHIFT = 0.13;
-/** How far a bend moves the waves' pattern, as a share of the bend's own length. */
-export const BEND = 0.04;
+export const GUST_SHIFT = 0.03;
+/** How far a wave's phase wanders with each of the three long fields, radians at most (each wave its own share, from
+ * the seed), and how many of the wave's own lengths a field must span for the full share (a longer wave wanders less, so
+ * its crests stay roughly straight: the phase's slope stays under WOBBLE / WOBBLE_SPAN of the wave's own). */
+export const WOBBLE = 1.4;
+export const WOBBLE_SPAN = 8;
 
 const fail = (message) => new Error(`${PREFIX}: ${message}`);
 function editDistance(a, b) {
@@ -166,8 +171,9 @@ export function seaState(what = "breeze", extra = {}) {
  * meet), lag (the cosine and sine of its turn in FOAM_LAG seconds), swell}; `lifted`: how many of them may lift the picture's grid; `base`: the slopes finer than the
  * list, as a covariance [xx, xz, zz] (what Cox and Munk's mean square slope leaves after the list's own);
  * `gusts`: six long slow waves in all directions, the longest first, whose sum ruffles the short ones in patches
- * ({kx, kz, omega, phase, weight, shift}); `bends`: three long slow shears of the whole pattern
- * ({kx, kz, dx, dz, amplitude, omega, phase}: the place a wave is read at moves by amplitude x sin along (dx, dz)). The wind sea: wavelengths from twice the dominant
+ * ({kx, kz, omega, phase, weight, shift}); `bends`: three long slow fields ({kx, kz, omega, phase, size}); a wave's
+ * phase wanders by `wobble[j]` radians times the sine of field j (each wave its own shares: crests of different waves
+ * drift apart, so the sum is short-crested and in groups, never one bent pattern). The wind sea: wavelengths from twice the dominant
  * one down to its 180th (0.25 m at least), amplitudes after Pierson and Moskowitz' spectrum scaled to the
  * stated height, directions spread round the wind's (16 degrees for the long, 50 for the short). Pure. */
 export function waveList(state, {seed = 1, count = 32, lifted = 10} = {}) {
@@ -210,13 +216,15 @@ export function waveList(state, {seed = 1, count = 32, lifted = 10} = {}) {
     const size = length * (0.8 + 0.4 * rand()), e = to(360 * rand()), k = TAU / size;
     return {kx: k * e[0], kz: k * e[1], omega: k * 0.5 * st.wind * (e[0] * d[0] + e[1] * d[1]), phase: rand() * TAU, weight: 0.24, shift: GUST_SHIFT * size};
   }).reverse();
-  // the bends: three long slow shears of the whole pattern (each moves the water's picture across its own
-  // direction by a 25th of its length at most), so crests are not ruled lines and no lattice of sines shows
+  // the bends: three long slow fields; every wave's phase wanders with its own share of each, so crests are not
+  // ruled lines, no lattice of sines shows, and (unlike one warp of the whole pattern) no crest closes into a ring
   const longest = Math.max(st.length, st.swell ? st.swell.length : 0);
   const bends = [1.3, 2.9, 6.1].map((factor) => {
     const size = longest * factor * (0.85 + 0.3 * rand()), e = to(360 * rand()), k = TAU / size;
-    return {kx: k * e[0], kz: k * e[1], dx: -e[1], dz: e[0], amplitude: BEND * size, omega: k * 0.3 * st.wind * (e[0] * d[0] + e[1] * d[1]), phase: rand() * TAU};
+    return {kx: k * e[0], kz: k * e[1], size, omega: k * 0.3 * st.wind * (e[0] * d[0] + e[1] * d[1]), phase: rand() * TAU};
   });
+  // each wave's own share of each field (drawn last, so the waves, gusts and fields are the seed's as before)
+  for (const w of waves) w.wobble = bends.map((b) => WOBBLE * (2 * rand() - 1) * Math.min(1, b.size / (WOBBLE_SPAN * w.length)));
   let n = 0;
   while (n < waves.length && n < lifted && waves[n].ruffled === 0) n++;
   return Object.freeze({waves: Object.freeze(waves.map((w) => Object.freeze(w))), lifted: n, base: Object.freeze(base), gusts: Object.freeze(gusts), bends: Object.freeze(bends), state: st, seed});
@@ -236,18 +244,17 @@ export function gustAt(list, x, z, t) {
  * sea level (metres), the slope along +x, the slope along +z] (the gusts' own slow change of the height is left out of the slopes). A pure function of the list, the place and the time. */
 export function surfaceAt(list, x, z, t) {
   const gust = gustAt(list, x, z, t), turned = list.bends.map((b) => b.kx * x + b.kz * z - b.omega * t + b.phase);
-  let h = 0, sx = 0, sz = 0, px = x, pz = z;
-  list.bends.forEach((b, j) => { const a = b.amplitude * Math.sin(turned[j]); px += b.dx * a; pz += b.dz * a; });
+  const bs = turned.map(Math.sin), bc = turned.map(Math.cos);
+  let h = 0, sx = 0, sz = 0;
   for (const w of list.waves) {
-    const th = w.kx * px + w.kz * pz - w.omega * t + w.phase, s = Math.sin(th), c = Math.cos(th), a = w.amplitude * (1 + w.ruffled * (gust - 1));
+    let th = w.kx * x + w.kz * z - w.omega * t + w.phase, kx = w.kx, kz = w.kz;
+    list.bends.forEach((b, j) => { const m = w.wobble ? w.wobble[j] : 0; th += m * bs[j]; kx += m * bc[j] * b.kx; kz += m * bc[j] * b.kz; });
+    const s = Math.sin(th), c = Math.cos(th), a = w.amplitude * (1 + w.ruffled * (gust - 1));
     h += a * (c + w.sharp * (c * c - s * s));
     const d = -a * s * (1 + 4 * w.sharp * c);
-    sx += w.kx * d; sz += w.kz * d;
+    sx += kx * d; sz += kz * d;
   }
-  // the slopes at the place itself: the bends stretch and turn the pattern a little
-  let bx = 0, bz = 0;
-  list.bends.forEach((b, j) => { const along = b.amplitude * Math.cos(turned[j]) * (sx * b.dx + sz * b.dz); bx += along * b.kx; bz += along * b.kz; });
-  return [h, sx + bx, sz + bz];
+  return [h, sx, sz];
 }
 /** The water's height over sea level, metres, at a place and time. */
 export const heightAt = (list, x, z, t) => surfaceAt(list, x, z, t)[0];
@@ -289,8 +296,8 @@ export function waterOf(what = "ocean", extra = {}) {
 // ---------- the picture ----------
 // the grid: a cell of the picture, laid on the world's sphere along its own line of sight, lifted by the long waves
 const SEA_VERT = /* glsl */`
-uniform vec4 uWaveA[NW], uWaveB[NW];
-uniform vec4 uBendA[3], uBendB[3];
+uniform vec4 uWaveA[NW], uWaveB[NW], uWaveE[NW];
+uniform vec4 uBendA[3];
 uniform vec4 uSeaGeo, uSeaFar, uSeaGrid;
 uniform vec3 uSeaE1, uSeaE2, uSeaAhead, uAirUp;
 varying vec3 vRel;
@@ -312,10 +319,10 @@ void main() {
     vec2 p = vec2(dot(P, uSeaE1), dot(P, uSeaE2)), ah = vec2(dot(rd, uSeaE1), dot(rd, uSeaE2));
     float al = length(ah); ah = al > 1e-5 ? ah / al : vec2(1.0, 0.0);
     float sc = t * uSeaGrid.x, sa = sc / max(-dot(rd, upL), 1e-3), h = 0.0;
-    for (int j = 0; j < 3; j++) p += uBendB[j].xy * (uBendA[j].w * sin(dot(uBendA[j].xy, p) + uBendA[j].z));
+    vec3 bs = vec3(sin(dot(uBendA[0].xy, p) + uBendA[0].z), sin(dot(uBendA[1].xy, p) + uBendA[1].z), sin(dot(uBendA[2].xy, p) + uBendA[2].z));
     for (int i = 0; i < NG; i++) {
       vec4 A = uWaveA[i];
-      float ka = dot(A.xy, ah), kc = dot(A.xy, vec2(-ah.y, ah.x)), th = dot(A.xy, p) + A.w, s = sin(th), c = cos(th);
+      float ka = dot(A.xy, ah), kc = dot(A.xy, vec2(-ah.y, ah.x)), th = dot(A.xy, p) + A.w + dot(uWaveE[i].xyz, bs), s = sin(th), c = cos(th);
       h += A.z * exp(-0.5 * (sa * sa * ka * ka + sc * sc * kc * kc)) * (c + uWaveB[i].x * (c * c - s * s));
     }
     P += upL * (h * fade);
@@ -327,10 +334,10 @@ void main() {
 const SEA_FRAG = (depth, shade) => /* glsl */`
 ${AIR_GLSL}
 ${DISPLAY_GLSL}
-uniform vec4 uWaveA[NW], uWaveB[NW], uWaveC[NW];
+uniform vec4 uWaveA[NW], uWaveB[NW], uWaveC[NW], uWaveE[NW];
 uniform vec2 uWaveD[NW];          // the cosine and sine of each wave's turn in the foam's lag
 uniform vec4 uGust[6];             // a gust's wave vector, its phase at the camera, its weight
-uniform vec4 uBendA[3], uBendB[3];   // a bend's wave vector, its phase at the camera, how far it moves the pattern (m); the direction it moves it in
+uniform vec4 uBendA[3];          // a long field's wave vector, its phase at the camera (each wave's phase wanders by its own share of it: uWaveE)
 uniform vec4 uSeaGeo;       // the world's radius (m), the camera's height (m), metres a scene unit, a pixel's angle
 uniform vec4 uSeaFar;       // how far the grid is lifted (m), the horizon's distance (m), height x (2 radius + height), radius + height
 uniform vec4 uSeaBase;      // the slopes finer than the list (xx, xz, zz), the gusts' strength
@@ -380,9 +387,9 @@ void main() {
   }
   // from very high the patches are drawn fainter: a pixel hundreds of metres wide shows their mean, not each one
   gust = max(0.2, 1.0 + uSeaBase.w * 2.2 * gust / (1.0 + sc2 / 4e4));
-  // the bends: where each wave is read
-  vec3 bent; vec2 q = p;
-  for (int j = 0; j < 3; j++) { float th = dot(uBendA[j].xy, p) + uBendA[j].z; q += uBendB[j].xy * (uBendA[j].w * sin(th)); bent[j] = uBendA[j].w * cos(th); }
+  // the long fields each wave's phase wanders with (its own share of each)
+  vec3 bs, bc;
+  for (int j = 0; j < 3; j++) { float th = dot(uBendA[j].xy, p) + uBendA[j].z; bs[j] = sin(th); bc[j] = cos(th); }
   // the waves: each fades as it gets finer than the footprint; what fades is kept as roughness
   vec2 slope = vec2(0.0); vec3 cov = uSeaBase.xyz * gust * gust; float crest = 0.0, before = 0.0, kept = 1.0, high = 0.0;
   for (int i = 0; i < NW; i++) {
@@ -390,14 +397,15 @@ void main() {
     float amp = A.z * (1.0 + B.z * (gust - 1.0));
     if (dot(A.xy, A.xy) * sc2 > 12.0) { cov += C.xyz * mix(1.0, gust * gust, B.z); kept -= C.w; break; }
     float ka = dot(A.xy, ah), kc = dot(A.xy, ch), e = 0.5 * (sa2 * ka * ka + sc2 * kc * kc), g = 1.0 / (1.0 + e * (1.0 + e * (0.5 + 0.25 * e)));
-    float th = dot(A.xy, q) + A.w, s = sin(th), c = cos(th);
+    vec3 E = uWaveE[i].xyz, Ec = E * bc;
+    float th = dot(A.xy, p) + A.w + dot(E, bs), s = sin(th), c = cos(th);
+    vec2 kw = A.xy + Ec.x * uBendA[0].xy + Ec.y * uBendA[1].xy + Ec.z * uBendA[2].xy;
     high += amp * g * (c + B.x * (c * c - s * s));
-    slope += A.xy * (-amp * g * s * (1.0 + 4.0 * B.x * c));
+    slope += kw * (-amp * g * s * (1.0 + 4.0 * B.x * c));
     float lost = 0.5 * amp * amp * (1.0 - g * g);
     cov += lost * vec3(A.x * A.x, A.x * A.y, A.y * A.y);
     crest += B.y * g * c; before += B.y * g * (c * uWaveD[i].x - s * uWaveD[i].y); kept -= 0.5 * B.y * B.y * (1.0 - g * g);
   }
-  for (int j = 0; j < 3; j++) slope += uBendA[j].xy * (bent[j] * dot(slope, uBendB[j].xy));
   if (uSeaShow > 0.5) { gl_FragColor = vec4(p, high, 1.0); return; }
   vec3 n = normalize(upL - slope.x * uSeaE1 - slope.y * uSeaE2);
   float ndv = dot(n, v);
@@ -550,7 +558,7 @@ export class Sea {
     this._lace = this._bakeLace();
     const at = sky.skyAt(0);
     this.uniforms = {...sky.uniforms, uWaveA: {value: A}, uWaveB: {value: B}, uWaveC: {value: C}, uWaveD: {value: D}, uGust: {value: this.list.gusts.map(v4)},
-      uBendA: {value: [v4(), v4(), v4()]}, uBendB: {value: this.list.bends.map((b) => new THREE.Vector4(b.dx, b.dz, 0, 0))}, uSeaShow: {value: 0}, uSeaRelief: {value: new THREE.Vector4(smooth(RELIEF[0], RELIEF[1], this.state.height / this.state.length), 4 / Math.hypot(this.state.height, this.state.swell ? this.state.swell.height : 0),
+      uWaveE: {value: this.list.waves.map((w) => new THREE.Vector4(...w.wobble, 0))}, uBendA: {value: [v4(), v4(), v4()]}, uSeaShow: {value: 0}, uSeaRelief: {value: new THREE.Vector4(smooth(RELIEF[0], RELIEF[1], this.state.height / this.state.length), 4 / Math.hypot(this.state.height, this.state.swell ? this.state.swell.height : 0),
         1 / Math.sqrt(Math.max(this.list.waves.reduce((sum, w) => sum + (w.kx * wind[0] + w.kz * wind[1]) ** 2 * w.amplitude ** 2 / 2, 0), 1e-12)), 0)}, uSeaGust: {value: GUST_SHIFT * TAU},
       uSeaGeo: {value: new THREE.Vector4(sky.model.radius, 10, sky.options.unit, 0.002)}, uSeaFar: {value: v4()}, uSeaGrid: {value: v4()},
       uSeaBase: {value: new THREE.Vector4(...this.list.base, this.state.gusts)}, uSeaMap: {value: v4()},
@@ -638,7 +646,7 @@ export class Sea {
     const turn = (x_) => x_ - TAU * Math.floor(x_ / TAU);
     this.list.waves.forEach((w, i) => u.uWaveA.value[i].set(w.kx, w.kz, w.amplitude, turn(w.kx * x + w.kz * z - w.omega * t + w.phase)));
     this.list.gusts.forEach((g, i) => u.uGust.value[i].set(g.kx, g.kz, turn(g.kx * x + g.kz * z - g.omega * t + g.phase), g.weight));
-    this.list.bends.forEach((b, i) => u.uBendA.value[i].set(b.kx, b.kz, turn(b.kx * x + b.kz * z - b.omega * t + b.phase), b.amplitude));
+    this.list.bends.forEach((b, i) => u.uBendA.value[i].set(b.kx, b.kz, turn(b.kx * x + b.kz * z - b.omega * t + b.phase), 0));
     const wx = u.uSeaWind.value.x, wz = u.uSeaWind.value.y, along = x * wx + z * wz, across = -x * wz + z * wx, part = (x_) => x_ - Math.floor(x_);
     u.uSeaLaceAt.value.set(part(along / 28), part(across / 7), part(along / 30), part(across / 110));
     u.uSeaWind.value.z = x; u.uSeaWind.value.w = z;

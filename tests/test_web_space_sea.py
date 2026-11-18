@@ -138,6 +138,10 @@ out.push([S.waveList("breeze", {seed: 3, count: 16}).waves.length, S.waveList("c
 const one = {...S.waveList({wind: 5, swell: null}, {seed: 2})}, w = {...one.waves[0], kx: one.waves[0].k, kz: 0, phase: 0, sharp: 0, ruffled: 0};
 const alone = {...one, waves: [w], bends: [], gusts: one.gusts}, speed = Math.sqrt(9.81 / w.k);
 out.push([S.heightAt(alone, 0, 0, 0), w.amplitude, S.heightAt(alone, speed * 2.5, 0, 2.5), S.heightAt(alone, w.length / 2, 0, 0)]);
+// no warp of the whole pattern (it drew rings and whorls): each wave wanders by its own shares, and its crests turn by little
+out.push(Object.keys(S.STATES).map((n) => { const l = S.waveList(n, {seed: 3});
+  return [Math.max(...l.waves.map((v) => l.bends.reduce((sum, b, j) => sum + Math.abs(v.wobble[j]) * Math.hypot(b.kx, b.kz), 0) / v.k)),
+    new Set(l.waves.map((v) => v.wobble.map((m) => Math.sign(m)).join())).size, Math.max(...l.waves.map((v) => Math.max(...v.wobble.map(Math.abs))))]; }));
 """)
     same, other, count, lifted, gusts, bends, frozen = out[0]
     assert same is True and other is False and count == 32 and 1 <= lifted <= 10 and gusts == 6 and bends == 3 and frozen is True
@@ -156,6 +160,8 @@ out.push([S.heightAt(alone, 0, 0, 0), w.amplitude, S.heightAt(alone, speed * 2.5
     assert out[4][5] == {"fast": [16, 6, 16, 1], "standard": [32, 10, 8, 2], "fine": [48, 14, 4, 2]} and out[4][6] == ["fast", "standard", "fine"]
     crest, amplitude, moved, trough = out[5]
     assert crest == pytest.approx(amplitude) and moved == pytest.approx(amplitude, rel=1e-9) and trough == pytest.approx(-amplitude, rel=1e-9)
+    for turn, kinds, most in out[6]:     # the crests turn by under 3 x WOBBLE / WOBBLE_SPAN radians, the waves wander apart
+        assert turn <= 3 * 1.4 / 8 + 1e-9 and kinds >= 5 and 0.5 < most <= 1.4
 
 
 PAGE = """
