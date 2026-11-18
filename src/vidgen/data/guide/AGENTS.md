@@ -3320,7 +3320,8 @@ planes flying them. Each kind refuses the other's words with a message saying wh
 - **The world** (`world:`): `planet` (a world of `bodies`), `at: [latitude, longitude]`, `sun`, `air` (earth, mars, thin, thick),
   `sea` (a state: calm, breeze, swell, rough, storm; or `{state, water, seed}`; waters: ocean, green, tropical, grey, methane),
   `land` (a preset: alpine, mars, canyon, dunes, snow, volcanic, airless; or `{preset, seed, mountains, ...}`), `clouds` (a sky:
-  fair, overcast, layers, towers, storm; or `{decks: [{type: cumulus, base, top}], towers, lightning: {times, track, rate}}`),
+  fair, overcast, layers, towers, storm; or `{decks: [{type: cumulus, base, top, cover, fronts}], towers, lightning: {times, track, rate}}`;
+  a deck's cover is the one asked for round the place and varies tens of km away, `fronts: 0` keeps it even),
   `globe`, `handover` (low, high), `exposure`, `ev`, `quality` (fast, standard, fine). The stars behind the air are `sky:`.
 - **Planes** (`craft: [{plane: glider, fly: FLIGHT}]`): glider, freighter, needle, lifter, scout, skiff; any part of the
   description (`wing: {preset: swept, sweep: 42}`, `fins`, `body`, `scheme`, `scorch`), `gear`, `bay`, `cabin` (0..1, or
@@ -3331,7 +3332,7 @@ planes flying them. Each kind refuses the other's words with a message saying wh
 - **Giant ships** (orbital, `craft: [{hull: carrier}]`): spine, carrier, cluster, lance, wheel, ark, twin; `length`, `age`,
   `palette` (bone, slate, iron, sand, frost), the family's numbers; `dress` (windows, bays, lamps; `false` bare), `scale_ref` (a
   small craft beside it: `{kind: ship, at: hangar-1, gap, into: {hangar, over}, escort: true}`), a fleet: `hull: [carrier, spine]`
-  with `fleet: 5`. With a hull in the scene vidgen sets the view's near plane to 4 m (said in the page).
+  with `fleet: 5`. With a hull in the scene vidgen sets the view's near plane to 4 m (depth precision; said in the page).
 - **Moves in the air**: skim, climb-through, descend-through, chase, wing, fly-past, orbit-peak, rise, descend, ascend
   (`flight:` names a flight or the craft flying it; `deck:` a deck's index or name; `around: {near: [x, z], reach}` a peak;
   wing views: wingtip, tail, belly, nose); a `skim` with `continues: true` after a `descend` takes over where it ends.
@@ -3346,7 +3347,8 @@ planes flying them. Each kind refuses the other's words with a message saying wh
   1 to 2 s; `vidgen lint` says so for a dear combination. A drafted film: `vidgen music plan SCORE --style space-air`
   (a skim at sunset, a descent, a chase over a range, a hull pass, into a bay). Not reachable from YAML (use `script:` or
   `vidgen space-page`): the wormhole passage, a re-entry from orbit, a sun that moves through a scene, the camera placed
-  by hand in a ship's own axes, a plane fleet. The cookbook has a YAML recipe per shot.
+  by hand in a ship's own axes, a plane fleet, a hull in a surface scene. Recipes: COOKBOOK-SPACE.md (orbital
+  scenes, giant ships), COOKBOOK-AIR.md (surface scenes, planes, the descent).
 
 <!-- topic: three-d (also: 3d, threejs, three.js, 3d-scenes, stand-ins, standins, guide-passes) -->
 ## 3D: simple scenes with shapes and stand-ins
@@ -3648,7 +3650,8 @@ export function frame(t) {
   enlarged 50×; distances to scale"; `log`: "distances compressed (log) · sizes not to scale").
 - At true scale a whole system is sub-pixel: `space.pixels("Earth")` says how big a body is drawn.
   `space.problems()` warns when an enlarged planet swallows its moon.
-- Skies: `vidgen/space-sky` (below), `scene.background`, or a mesh with `frustumCulled = false`. With three-finish's depth of
+- Skies: `vidgen/space-sky` (below), `scene.background`, or a mesh marked `userData.sky = true` (or with
+  `frustumCulled = false` and a negative `renderOrder`). With three-finish's depth of
   field focused far away, give `dofFocus` the same focus. Reference: CONFIG.md `web`,
   "Astronomical scales".
 
@@ -4035,10 +4038,8 @@ ship.update(t, {sun, throttle: 0.5});
 - What says "kilometres": rows of windows, a small craft in frame, a bay with depth, a wide lens
   close along a wall, the world behind with a long lens. A hull alone on black from far reads as
   a model whatever its detail.
-- Never set `frustumCulled = false` on something that must stand in front of the ship (a
-  `SpaceView` draws such things as sky).
-- The world must be a body of `orbit_data` (`planet(renderer, "Earth", {space})`), not an object
-  placed by hand, or it is drawn over the ship.
+- Something drawn with `frustumCulled = false` and a negative `renderOrder` is sky in a `SpaceView`
+  (behind everything); give it `userData.sky = false` to keep it in the world.
 - `ship.problems()` names buried bells, absurd proportions and one layout the kit refuses to
   look like. `hullFleet([...], {count, seed})` is a formation at `far` detail.
 - A hull filling a 1280x720 frame costs about 0.3 s. Look first: `vidgen parts 'hull-*'`.
@@ -4118,9 +4119,8 @@ ship.update(t); cam.apply(t, cam.chase(t, {flight: "Plane"})); sky.update(t, {ca
 - The camera is never under the ground or the water (it is lifted and the shot's `notes` say
   so), never nearer a hull's regions than the stand-off; "up" is the local vertical. Read
   `cam.check(view, {from, to})` while you develop.
-- Beside a ship: `ship.update(t)` before the move, and `new SpaceView(ctx, {renderer, scene,
-  camera, near: 4})` — with the default near distance the world behind shows through a hull the
-  camera is close to.
+- Beside a ship: `ship.update(t)` before the move; `new SpaceView(ctx, {renderer, scene, camera,
+  near: 4})` gives the hull's depth more precision (the `space` scene does it for you).
 - Speeds that read: a pass along a 3 km hull at 40 m/s (show a part of it, not the whole ship in
   ten seconds); a `rise` to 60 km in 8 s or more.
 - Cost: the scene's own, 0.8 to 2.1 s a frame at 1280x720. Look first: `vidgen parts 'camera-*'`.

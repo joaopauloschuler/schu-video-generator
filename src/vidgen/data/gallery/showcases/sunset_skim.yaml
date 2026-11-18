@@ -1,0 +1,8 @@
+title: A skim at sunset
+scenes:
+  - id: sunset_skim
+    type: space
+    duration: 6
+    params:
+      world: {sea: {state: breeze, seed: 3}, sun: [3, 290]}                      # one world: its air, its sea; the sun 3 degrees up
+      camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}   # 14 m over the water at 90 m/s, banking into a turn

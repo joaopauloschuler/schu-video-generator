@@ -524,6 +524,11 @@ def test_the_cookbook_cost_table_holds_the_lints_numbers() -> None:
     text = (ROOT / "docs" / "COOKBOOK-SPACE.md").read_text(encoding="utf-8")
     for key, (seconds, row) in COSTS.items():
         assert row in text, key
+    # the one table (Step 393): the cost section prints exactly these rows, and no other cookbook has a table of seconds
+    section = text[text.index("## 8. What a shot costs"):text.index("## 9. The checks to run")]
+    rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| what") and not line.startswith("|---")]
+    assert rows == [row for _, row in COSTS.values()]
+    assert "s / frame" not in (ROOT / "docs" / "COOKBOOK-AIR.md").read_text(encoding="utf-8")
 
 
 # ----- Chromium (slow) -----------------------------------------------------------------------------------------

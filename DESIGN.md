@@ -26309,8 +26309,12 @@ space.path("Moon", {kind: "conic"});      // a line exact every frame
   most `maxSlices` (8). Objects with `userData.overlay` (a lens's glare, §122.8) are left out of
   the intervals and drawn once after the last slice, over everything. Drawn far to near, the depth buffer cleared between, `scene.background`,
   the clear on the first pass only, the shadow maps in the first pass that draws the world (Step 374: in the sky's pass
-  everything that casts a shadow is hidden, so a scene with a sky had no shadows). A sky (`scene.background`, or objects with
-  `frustumCulled = false`) is drawn first with near and far of its own. three-finish's depth of
+  everything that casts a shadow is hidden, so a scene with a sky had no shadows). A sky (`scene.background`, objects with
+  `userData.sky = true`, or since Step 393 objects with `frustumCulled = false` AND a negative `renderOrder`; `userData.sky =
+  false` keeps one in the world) is drawn first with near and far of its own. Since Step 393 a slice draws only the things
+  whose interval reaches it (a thing beginning beyond the slice's far plane is hidden there: a world's shell that holds its
+  depth off the far plane was drawn again in every nearer slice), and a thing outside its bounding sphere but beside the view
+  begins at (distance - radius) times the frame corner's cosines (a world added with `at` and `size` reached to `near`). three-finish's depth of
   field reads the last slice's depth with the camera's near and far, right for a focus in the
   nearest slice; `dofFocus` (metres, an object or a function of t) draws the depth again from
   focus / 10⁵ to the farthest thing, nearer things at depth 0. Slices seen: ship 2, Earth and Moon
@@ -28507,10 +28511,14 @@ by default), +y up at the anchor.
   it: 5 to 8 waves within 17 % of its length and 13 degrees of its direction. Every wave moves at
   the deep-water speed (omega^2 = g k) on vidgen's clock. Crests are sharpened by a second
   harmonic where waves of about one length are steep together (`chop`). Three things keep a sum
-  of sines from looking like one: **bends** (three long slow shears of the whole pattern, each
-  moving the place a wave is read at by up to a 25th of the bend's length: crests are not ruled
-  lines; their slopes' share is in the lookup), **gusts** (six long slow waves of 0.5 to 9 km in
-  all directions, each moving the finer ones sideways, whose sum raises or lowers the waves
+  of sines from looking like one: **bends** (three long slow fields; since Step 393 each wave's
+  phase wanders by its own share of each, `WOBBLE` 1.4 rad at most, less for a wave longer than an
+  eighth of the field (`WOBBLE_SPAN`): crests run roughly parallel yet vary along their length and
+  the waves drift in and out of step, short-crested and in groups; until Step 393 one shared warp
+  moved the whole pattern, which drew rings and whorls from 100 m to a few km up), **gusts** (six
+  long slow waves of 0.5 to 9 km in all directions, each moving the finer ones sideways by
+  `GUST_SHIFT` 0.03 of its length (0.13 until Step 393: it folded the patches into curved bands),
+  whose sum raises or lowers the waves
   shorter than a third of the dominant one in patches) and more swell waves than a narrow band
   needs. Measured against a baked spectrum only by reasoning, not by trial: a baked tile repeats
   (the task forbids visible tiling) and needs its own filter chain; the sum costs 32 sines a near
@@ -28611,8 +28619,8 @@ by default), +y up at the anchor.
   breaking shapes, no spray, no wakes, no shore waves, no shadows of things on the water and no
   mirror image of things (only the sky and the sun). The waves lie on a plane touching the sphere
   at the anchor: beyond some hundreds of kilometres from it their pattern is stretched (it is
-  filtered away long before from any height it could be seen at). Deep-water speeds are a few
-  per cent off where a bend stretches the pattern. No refraction at the horizon. No moon or
+  filtered away long before from any height it could be seen at). A wave's crest turns by at most
+  3 x `WOBBLE` / `WOBBLE_SPAN` radians where its phase wanders (its speed is the deep-water one). No refraction at the horizon. No moon or
   planet light on the water. The mirror does not see the sun's disc itself, only the glitter.
 - **Parts** (`data/web/parts/space-sea.js`, a new kind `sea` after `air` in `vidgen/parts` and
   `vidgen.web.parts.KINDS`): `sea-calm`, `sea-breeze`, `sea-rough`, `sea-storm`, `sea-sunset`,
@@ -28901,7 +28909,8 @@ forests and no plants.
     faded at the pixel's size, longer along a level look: no shimmer), materials, light, air,
     and the depth (`gl_FragDepth`, 0.3 % nearer; ground under water behind everything).
 - **Materials** by height and slope: the flat ground (the globe's colour), scree and rock on
-  slopes from `steep[0]` to `steep[1]` (rock in two colours in bands `band` metres high), sand
+  slopes from `steep[0]` to `steep[1]` (rock in two colours in beds about `band` metres high: Step
+  393 below), sand
   (`sandy`), snow above the line and off faces steeper than `snowSteep`, an open crust's glow
   (lava worlds).
 - **Light.** The sun after the air at the ground's height, the ground's own shadow (for each
@@ -30066,7 +30075,8 @@ the same view from 400, 200, 100, 60, 30 and 10 km, the globe alone and the loca
    weight `globeWeight(height, distance) = S(ln distance; near) x S(ln height; height)`: `distance`
    to the sphere along the pixel's ray, `height` the camera's, S a smoothstep. Resolution does not
    enter (a draft and the film hand over at the same heights). `HANDOVERS.low` (a sea or decks):
-   near 20 to 80 km, height 2.5 to 14 km; `HANDOVERS.high` (bare ground): near 150 to 600 km,
+   near 60 to 400 km, height 2.5 to 80 km (20 to 80 km and 2.5 to 14 km until Step 393, before the
+   decks had a broad weather); `HANDOVERS.high` (bare ground): near 150 to 600 km,
    height 60 to 300 km. Above `near[1]` only the globe and the dome are updated and drawn; under
    `height[0]` the globe is not drawn (`stageOf`, `world.state.stage`: `globe`, `handover`,
    `local`).
@@ -30074,7 +30084,8 @@ the same view from 400, 200, 100, 60, 30 and 10 km, the globe alone and the loca
    `before_a_local_earth.png`), from 10 km still in the far half; the globe's cloud layer is soft
    smears. Decision: no deck is shown further than `near[1]` from the camera (the lattice needs
    many tiles in view), the globe's layer is all there is above; between, one dissolves into the
-   other. Single clouds are NOT in the same places. Decks beyond the globe's horizon stood over the
+   other (Step 393: the decks' broad weather breaks the lattice, so `near[1]` is 400 km and the
+   decks show from about 150 km). Single clouds are NOT in the same places. Decks beyond the globe's horizon stood over the
    limb as a bright line that appeared at once when the local parts came on: where the far globe
    has taken over, rays passing under 1.5 x the highest deck top show the air alone (weighted with
    the height's weight). A world without `clouds` gets a globe without its cloud layer.
@@ -30254,7 +30265,7 @@ the guide's lists with the registry; the parts sheet names its tiles with the sa
 
 **Cost** (`scenes/space_costs.py`): one table of seconds a frame at 1280x720 from the measurements
 of Steps 381–391 (a sea 1.2, ground 1.4, fair clouds 1.9, a sea under cumulus 3.0, all three 3.5 —
-not measured, the sum less the dome —, a descent through the handover 3.1, a dressed hull 1.0, the
+not measured, the sum less the dome —, a descent through the handover 3.1 (3.4 since Step 393), a dressed hull 1.0, the
 ship moves 0.8 to 2.1), combined for a scene (the dearest stretch, scaled by quality and motion
 blur); `vidgen lint`'s `space_scene` reports a scene from `seconds` (2) with the minutes its frames
 take; the space cookbook prints the same rows and a test reads both.
@@ -30288,3 +30299,50 @@ the helper module in Node; the flights' ground and key; a flight under the sea w
 `vidgen space-page` for both kinds; the registry against the parts sheet and the guide; the music
 plan; MCP; the lint's estimate; the cookbook's cost rows. `slow`: a skim and a hull pass drawn in
 Chromium at 160x90.
+
+### 123.15 Review of Steps 379–392 (Step 393)
+
+The coordinator's notes on every step's stills, each step's "still weak" and "not verified" items and
+the tasklist's leftovers were read; the default suite and the slow tests of the touched files were
+run. Each fix was checked on a before/after pair of stills (HANDOFF Step 393 names them).
+
+**Fixed.**
+
+| fault | cause | fix | module bytes (scene keys) |
+|---|---|---|---|
+| the sea showed concentric rings and whorls from about 100 m to a few km up | one warp of the whole wave pattern (the bends) and a strong warp folding the gusts' patches (`GUST_SHIFT` 0.13) | each wave's phase wanders by its own share of the three fields (`WOBBLE`, `WOBBLE_SPAN`; drawn last from the seed, so the waves keep their numbers); `GUST_SHIFT` 0.03 (§123.4) | `space-sea.js` |
+| the alpine range drew even horizontal stripes over whole slopes | rock bands were one sine of height over every rock-coloured slope | beds of uneven tone from a hash per bed, warped and broken by a 256 m noise, only from the material's steep slope, gone before a bed is four pixels thick; `bands` over 0.5 is layered rock (the canyon: light and dark beds in turn, flatter, on less steep faces) | `space-land.js` |
+| cloud decks showed their 256 px tile as a lattice from 30–60 km, so the descent hid them beyond 80 km | the pattern is one repeating tile at four sizes | a broad weather of three octaves of endless gradient noise (40, 15, 5 deck sizes; deck option `fronts`, default 0.8, 0 for giants): varying cover, clear lanes, closed fields; drawn to nothing round the place and the level calibrated without it, so the cover asked for is the one seen there (§123.5) | `space-clouds.js` |
+| the ocean descent nearly blank from 150 to 25 km | the decks were hidden beyond `near[1]` = 80 km | `HANDOVERS.low` near 60–400 km, height 2.5–80 km: decks from about 150 km (§123.13); the handover costs 3.4 s a frame | `space-descent.js` |
+| a world added with `at` and `size` drawn over nearer things; with the default `near` a world drawn over a hull's farther slices (inside a bay, at a zoom's start); the limb of an orbit-data world's air added two or three times | a world's shell holds its depth off the far plane, and every slice drew every thing; a thing inside its bounding sphere's depth range reached to `near` | a slice draws only what its depth reaches; a thing outside its bounding sphere begins at (distance - radius) x the corner cosines (§122.4) | `space-scale.js` |
+| anything with `frustumCulled = false` drawn as sky | the sky rule | sky: `userData.sky = true`, or `frustumCulled = false` with a negative `renderOrder`; `userData.sky = false` keeps one in the world | `space-scale.js` |
+| a ship never in a world's shadow with the sun given as a direction | the sun stood 1e6 units away; a SpaceView's worlds are millions of metres off | `SKY_SUN` 1e20 units | `space-light.js` |
+| the Milky Way bright beside a sunlit globe in the film look | `filmStars` showed all the stars wherever the zenith is drawn black | over the day side `DAY_STARS` (0.35) of them (a look) | `space-air.js` |
+| the glider read close to a familiar vehicle in side view | white over a black belly on a delta, two seeds in three | its seeds choose grey, dark, grey (`scheme: tiles` by name) | `space-plane.js` |
+| three slow guide tests failing | a duplicate alias (`planets`), the topic list, unmarked sketches, a chooser row | fixed | guide only |
+
+**What re-draws.** Scenes whose pages import a changed module draw once more (their key holds its
+bytes): Phase AN's `space` scenes and `examples/outbound` (space-scale, space-light), surface scenes
+(space-air, sea, land, clouds, descent, plane). Every baked map and kept ground-height file is made
+once more (their key holds every module's bytes), with the same pixels and numbers. Outbound at
+320x180, ten stills compared byte for byte: eight identical; `01_dawn` (3 s, 12 s) and `02_depart`
+(2 s) differ at the limb: the air's glow is now drawn once (a thinner, dimmer band, up to 67 codes
+there; mean 0.4 to 4 codes over the frame). The gallery's `space` entry: see the gallery section of
+HANDOFF Step 393. The automatic `near: 4` beside a hull (§123.14) is no longer needed for
+correctness (default `near` draws the bay right, still 08); it is kept for depth precision.
+
+**Drawn for the first time** (320x180 stills, no error): a craft into a bay, `stern-burn`,
+`hull-reveal` with an escort, a hull fleet, a kit-built craft and a plane in an orbital scene, a warp
+across a cut, a match cut, lightning on a track, lava glowing on the music at dusk, a sun on a date,
+`finish:` over a surface scene, the `--style space-air` music-plan draft (three scenes). Four draft
+clips through `vidgen motion check` (a storm sea from 20 m, a turn over cumulus at 2,300 m, a needle's
+flame and vapour cone on a fly-past, the night side of a dressed carrier): no findings.
+
+**Left** (tasklist "Phase AO leftovers"): the two limbs (space-air's from orbit about twice the
+space-bodies body's in a plain scene; not changed: the body's look is Phase AN's pictures); the storm
+sea's woven finest waves and sparse foam; the glitter column's parallel sides from altitude; stubby
+towers; the canyon as loops; a faint repeat of the decks from about 60 km; the decks do not read the
+globe's cloud map (they agree in colour and roughly in cover, not in place); the shadows of a ground
+not kept between pages; no ground shadow under a plane; a whole hull on black reads as a model;
+`scaleZoom` loses the ship under a pixel; `hullReveal`'s traverse over black; the shock layer's
+stepped edge; everything listed as not reachable from YAML in §123.14.

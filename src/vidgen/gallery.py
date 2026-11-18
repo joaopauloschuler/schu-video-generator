@@ -77,9 +77,9 @@ CLIP_FALLBACK_COLORS = ((4, 16), (3, 16), (2, 16), (2, 8))
 CLIP_NOISY_MAX_BYTES = 95_000
 #: Stills are saved with a palette of this many colours (flat pictures: no visible loss).
 STILL_COLORS = 256
-#: A still heavier than this is saved again with the next palette of STILL_FALLBACK_COLORS (only star fields are).
+#: A still heavier than this is saved again with the next palette of STILL_FALLBACK_COLORS (star fields, skies at dusk).
 STILL_MAX_BYTES = 80_000
-STILL_FALLBACK_COLORS = (64, 32, 16)
+STILL_FALLBACK_COLORS = (128, 64, 32, 16)
 #: The work project's variant rendering 9:16.
 PORTRAIT_VARIANT = "portrait"
 #: Index group of a project's own types.
@@ -140,7 +140,7 @@ WEB_SECTION_NOTES: dict[str, str] = {
         "[Signal Fire](../../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture. "
         "A film of `space` scenes written in YAML alone: [Outbound](../../../examples/outbound/README.md) (`examples/outbound`), "
         "58 s from a sunrise over a world, past a ringed giant, to a black hole, with an orchestral score. "
-        "How to make them: [the 3D cookbook](../../COOKBOOK-3D.md) and [the space cookbook](../../COOKBOOK-SPACE.md)."
+        "How to make them: [the 3D cookbook](../../COOKBOOK-3D.md), [the space cookbook](../../COOKBOOK-SPACE.md) and [the air cookbook](../../COOKBOOK-AIR.md)."
     ),
 }
 #: The web gallery's folder under the gallery's output (DESIGN.md §123.1): the entries of types drawn
@@ -153,6 +153,7 @@ SECTION_FOOTERS: dict[str, str] = {
     "genetics": "`vidgen guide genetics` · [the genetics cookbook](../COOKBOOK-GENETICS.md)",
     "orbital mechanics": "`vidgen guide orbits` · [the orbits cookbook](../COOKBOOK-ORBITS.md)",
     "particle physics": "`vidgen guide particle-physics` · [the particle-physics cookbook](../COOKBOOK-PARTICLES.md)",
+    "pictures and media": "`vidgen guide space-scenes` · [the space cookbook](../COOKBOOK-SPACE.md) · [the air cookbook](../COOKBOOK-AIR.md)",
 }
 #: Videos made with schu-video-generator and published on YouTube, listed at the end of the index.
 YOUTUBE_VIDEOS: list[dict[str, str]] = [
@@ -311,6 +312,9 @@ SHOWCASES: tuple[Showcase, ...] = (
     Showcase("higgs_diphoton", "particle physics", "A Higgs boson in two photons",
              "a simulated H → γγ event: two ECAL showers and no tracks, the photons' p_T and η and their invariant mass, "
              "125 GeV/c²"),
+    Showcase("sunset_skim", "pictures and media", "A skim at sunset", "a surface scene: a world's own air and sea, 14 m over the water towards a low sun"),
+    Showcase("orbit_to_sea", "pictures and media", "From orbit to the sea", "a descent in one shot from 400 km through the air to the cloud decks and the sea"),
+    Showcase("carrier_pass", "pictures and media", "Along a giant ship", "a pass along a dressed 3.2 km ship over the Earth, a 50 m craft beside it for size"),
 )
 
 

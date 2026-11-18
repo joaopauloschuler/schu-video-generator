@@ -7457,8 +7457,10 @@ logSizes}` replaces them, `{factors}` where the factor goes), `compress(p, r0)`,
 `DEPTHS`, `NOTES`. How it works: every position stays float64 until the camera's position is
 subtracted, then three.js's camera stands at its origin; `split` replaces the renderer's `render`
 for this scene and camera, so three-finish's chain (bloom, motion blur, depth of field) works
-unchanged. A sky is `scene.background` or objects with `frustumCulled = false` (drawn first,
-behind everything). Mistakes stop the render with a did-you-mean: `vidgen/space-scale: no body
+unchanged. A sky is `scene.background`, or objects marked `userData.sky = true`, or objects with
+`frustumCulled = false` and a negative `renderOrder` (drawn first, behind everything; `userData.sky =
+false` keeps one in the world). A depth slice draws only the things whose depth reaches it, so a
+world's shell that keeps its depth off the far plane is never drawn over nearer things. Mistakes stop the render with a did-you-mean: `vidgen/space-scale: no body
 "Mon" (did you mean "Moon"?)`.
 
 **Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
@@ -8139,9 +8141,8 @@ cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side:
   `now = cam.climbThrough(t, {...})`.
 - **Beside a ship** places are metres in the hull's axes (+z the bow, +y up, +x port); call
   `ship.update(t)` before the move (the rig reads the hull's attitude) and again with the sun and
-  the throttle after `cam.apply`. Give the view a near distance: `new SpaceView(ctx, {renderer,
-  scene, camera, near: 4})`. With the default (0.01 m) a hull the camera is close to is drawn in
-  several depth slices and the world behind it shows through the farther ones.
+  the throttle after `cam.apply`. `new SpaceView(ctx, {renderer, scene, camera, near: 4})` gives a hull close to the
+  camera more depth precision (the `space` scene does it whenever a hull is in it).
 - **Speeds that read**: a pass along a hull is slow (a 3 km ship at 40 m/s takes 80 s: show a
   part of it; a pass faster than a twelfth of the hull a second is noted as "a model"). `rise`
   to 60 km wants 8 s or more (in 5 s cloud patterns strobe in `vidgen motion check`).
@@ -8169,7 +8170,7 @@ page of a `web` scene: `import {world} from "vidgen/space-descent"`.
   `[elevation, azimuth]` in degrees there, or a direction; `air`: as `vidgen/space-air`'s (default
   the planet's); `sea`, `land`, `clouds`: `false`, `true`, a name (a sea state, a ground preset, a
   sky) or that module's options; `globe`: more options for the planet (`size`: its cube maps,
-  1024 from 300 rows; `clouds`); `handover`: `"low"` (near 20 to 80 km, height 2.5 to 14 km: the
+  1024 from 300 rows; `clouds`); `handover`: `"low"` (near 60 to 400 km, height 2.5 to 80 km: the
   default with a sea or decks), `"high"` (150 to 600 km, 60 to 300 km: bare ground) or `{near:
   [from, to], height: [from, to]}` in metres; `match`: the globe's brightness beside the local
   picture's (1).
@@ -8381,6 +8382,7 @@ clouds' own picture is drawn in `update`). Add the clouds' object after the dome
 | a deck's `cover` | the type's | the share of sky it covers, 0 to 1 (roughly: within about a tenth in the picture) |
 | a deck's `size`, `stretch` | the type's | a cloud's width in metres; how much longer than wide along the wind |
 | a deck's `density`, `color` | the type's | the share of light a metre of cloud takes (thinner than real cloud: a look); what the cloud throws back (linear) |
+| a deck's `fronts` | 0.8 | a broad weather over the deck's own (three octaves of noise that never repeats, 40, 15 and 5 deck sizes): clear lanes and closed fields tens of km apart, so the pattern shows no repeat from high up; drawn to nothing round the place, where the cover is the one asked for; `0` an even cover (a giant's decks) |
 | a deck's `weather`, `rise`, `floor`, `soft`, `fray`, `ragged`, `puff`, `beyond` | the type's | the shape in numbers (DESIGN §123.5); `beyond: {color, at, width}` gives the deck another colour from `at` metres north of the origin on |
 | `towers` | none | a number, or `{count, seed, spread, radius, base, top, anvil, density, color, at}`: up to 6 towers scattered within `spread` (60 km) of the origin, or at the places `at: [[x, z], ...]` |
 | `lightning` | none | `{rate, times, power, color, radius, seed, from, to}`: `rate` flashes a minute from the seed; `times` in seconds (numbers, `ctx.music`'s events, or a track of `vidgen/music-time`'s `trackArrays`); flashes sit inside the towers, or in the lowest deck when there are none |

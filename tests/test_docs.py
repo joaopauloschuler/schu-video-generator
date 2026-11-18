@@ -439,15 +439,18 @@ def test_the_space_cookbook_recipes_validate_and_it_is_linked() -> None:
 
     extensions.load_builtins()
     text = (ROOT / "docs" / "COOKBOOK-SPACE.md").read_text(encoding="utf-8")
-    blocks = re.findall(r"```yaml\n(.*?)```", text, re.S)
+    air = (ROOT / "docs" / "COOKBOOK-AIR.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text + air, re.S)
     ids = []
     for block in blocks:
         (scene,) = yaml.safe_load(block)
         assert scene["type"] in ("space", "web")
         registry.get(scene["type"]).cls.Params.model_validate(scene["params"])
         ids.append(scene["id"])
-    assert ids == ["sunrise", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump",      # Step 392: the air and ship recipes in YAML
-                   "dusk", "skim", "volcano", "climb", "chase", "wingtip", "flypast", "carrier", "powers", "burn", "reveal", "fleet", "descent", "kit", "across"]
+    assert ids == ["sunrise", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump", "kit", "across",   # orbital scenes
+                   "carrier", "powers", "burn", "reveal", "fleet",                                            # giant ships
+                   "dusk", "skim", "volcano", "climb", "chase", "wingtip", "flypast", "descent"]              # the air cookbook (Step 393)
+    assert "COOKBOOK-AIR.md" in text and "COOKBOOK-SPACE.md" in air and "COOKBOOK-AIR.md" in (ROOT / "docs" / "COOKBOOK.md").read_text(encoding="utf-8")
     for doc in ("docs/COOKBOOK.md", "docs/COOKBOOK-3D.md", "docs/COOKBOOK-ORBITS.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
         assert "COOKBOOK-SPACE.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
     assert "no formal licence" in text and "16.11 h" in text

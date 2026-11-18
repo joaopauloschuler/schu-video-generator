@@ -159,7 +159,8 @@ def test_showcases_are_whole_valid_configs(tmp_path: Path, monkeypatch: pytest.M
     assert len(set(names)) == len(names) and not set(names) & types
     assert sorted(p.stem for p in gallery.SHOWCASES_DIR.glob("*.yaml")) == sorted(names)
     assert {s.section for s in gallery.SHOWCASES} == {"cartoons", "isometric cartoons", "cell biology", "orbital mechanics",
-                                                      "particle physics"}
+                                                      "particle physics", "pictures and media"}
+    assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "pictures and media"} == {"space"}   # Step 393: in the web gallery
     assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "orbital mechanics"} == {"orbit"}
     assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "particle physics"} == {"detector"}
     cell_types = {"cell", "molecule", "pathway", "cell_cycle", "metabolism"}
@@ -275,14 +276,16 @@ def test_committed_gallery_has_every_showcase() -> None:
     assert "## 2D cartoons" in index and "## Isometric cartoons" in index and "| type | stills |" not in index
     assert index.index("## 2D cartoons") < index.index("[`stage`](stage.md)") < index.index("## Isometric cartoons")
     assert "../../examples/iso-story/video.yaml" in index and (ROOT / "examples" / "iso-story" / "video.yaml").is_file()
-    assert not web_showcases()   # every showcase is in the main gallery (Step 379)
+    assert web_showcases() == {"sunset_skim", "orbit_to_sea", "carrier_pass"}   # the space showcases are in the web gallery (Step 393)
+    web_index = (DOCS / "web" / "README.md").read_text(encoding="utf-8")
     for showcase in gallery.SHOWCASES:
-        page = (DOCS / f"{showcase.name}.md").read_text(encoding="utf-8")
+        web = showcase.name in web_showcases()
+        page = (DOCS / ("web" if web else ".") / f"{showcase.name}.md").read_text(encoding="utf-8")
         assert showcase.text().rstrip() in page, f"docs/gallery/{showcase.name}.md is old: run `vidgen gallery --types {showcase.name}`"
-        assert f"[{showcase.title}]({showcase.name}.md)" in index
+        assert f"[{showcase.title}]({showcase.name}.md)" in (web_index if web else index)
         for fmt in gallery.FORMATS:
-            assert gallery.preview_html(showcase.name, fmt, link=f"{showcase.name}.md") in index
-            with Image.open(DOCS / "media" / gallery.media_name(showcase.name, fmt, ".png")) as image:
+            assert gallery.preview_html(showcase.name, fmt, link=f"{showcase.name}.md") in (web_index if web else index)
+            with Image.open(DOCS / ("web" if web else ".") / "media" / gallery.media_name(showcase.name, fmt, ".png")) as image:
                 assert image.size == gallery.FORMATS[fmt]
     cell = index[index.index("## Cell biology"):index.index("## Data")]
     names = ["[`cell`]", "[`molecule`]", "[`pathway`]", "[`cell_cycle`]", "[`metabolism`]", "(plant_cell.md)", "(sodium_pump.md)",
