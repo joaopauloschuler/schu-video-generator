@@ -140,7 +140,7 @@ def test_the_contact_sheet_draws_every_part(tmp_path: Path, capsys: pytest.Captu
 
     P.compose_sheet = keep
     try:
-        result = P.make_parts_sheet(found, tmp_path / "sheet.png", tile=(96, 54), columns=6)
+        result = P.make_parts_sheet(found, tmp_path / "sheet.png", tile=(96, 54), columns=6, time_limit=900)   # every part (Step 393: over 300 s since Phase AO)
     finally:
         P.compose_sheet = original
     assert [t.part.name for t in result.tiles] == [p.name for p in found] and result.skipped == []
