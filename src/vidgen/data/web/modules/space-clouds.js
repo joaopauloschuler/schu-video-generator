@@ -426,6 +426,9 @@ uniform vec3 uTowerSun, uTowerSky, uTowerLow, uTowerTint;
 uniform vec2 uCloudWind;      // where the wind blows to (+x, +z)
 uniform vec4 uFlashA[NF];     // a flash: its place from the camera (+x, up, +z: m), its brightness now
 uniform vec4 uFlashB[NF];     // its colour, its reach (m)
+#ifdef BEHIND
+uniform sampler2D uCloudBehind; uniform vec2 uCloudBehindSize;   // how far each ray may go before something solid (m; 0 or less: nothing), the clouds' own picture's size
+#endif
 varying vec3 vDir;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 float farRoot(float m, float c, float d) { float s = sqrt(max(d, 0.0)); return m > 0.0 ? -c / (m + s) : -m + s; }
@@ -637,6 +640,11 @@ void main() {
   vec2 cell = mod(floor(gl_FragCoord.xy), 2.0);
   gPhase = mod(2.0 * cell.x + 3.0 * cell.y, 4.0) / 4.0 + 0.125;
   float m = (R + h) * mu, cg = h * (2.0 * R + h), dg = m * m - cg, tEnd = mu < 0.0 && dg > 0.0 ? cg / (-m + sqrt(dg)) : 1e20;
+#ifdef BEHIND
+  // something stands in the sky (a ground with relief): no cloud is gathered behind it
+  float solid = texture2D(uCloudBehind, gl_FragCoord.xy / uCloudBehindSize).r;
+  if (solid > 0.0) tEnd = min(tEnd, solid);
+#endif
   float from[ND + NT], to[ND + NT];
   for (int i = 0; i < ND; i++) {
     vec2 s = shellSpan(mu, uDeckA[i].x, uDeckA[i].x + uDeckA[i].y);
@@ -708,7 +716,7 @@ void main() {
   gl_FragColor = uDisplay < 0.5 ? vec4(max(c.rgb * (1.0 + n * 0.004), 0.0), c.a) : vec4((shown + n * grain / 255.0) * c.a, c.a);
 }`;
 
-const OPTIONS = Object.freeze({sky: null, decks: null, towers: null, lightning: null, seed: 1, wind: 12, direction: 70, quality: "standard", floor: null, anchor: Object.freeze([0, 1, 0])});
+const OPTIONS = Object.freeze({sky: null, decks: null, towers: null, lightning: null, seed: 1, wind: 12, direction: 70, quality: "standard", floor: null, anchor: Object.freeze([0, 1, 0]), behind: null});
 
 /** Clouds under an air: `object` (add it to the scene), `update(t, {camera})`, `decks`, `towers`, `flashes(t)`,
  * `coverAt(deck, x, z, t)`, `shade` (the decks' shadow for vidgen/space-sea), `horizon(deck)`. */
@@ -720,7 +728,8 @@ export class Clouds {
    * ctx.music's events, or a track of vidgen/music-time), power, color, radius (metres), from, to}), `seed`, `wind`
    * (m/s) and `direction` (degrees: where it blows to, as sunDirection's azimuth), `quality` (a name of
    * QUALITIES), `floor` (a giant's dark under the decks: a colour; giantSky() gives one),
-   * `anchor` (as vidgen/space-sea's). `clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H}))` is a giant's sky. */
+   * `anchor` (as vidgen/space-sea's), `behind` ({texture}: how far each ray of the picture may go before something solid, metres, such as
+   * `land(...).behind` of vidgen/space-land: a mountain then hides the cloud behind it and stands in the cloud before it; update the ground before the clouds). `clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H}))` is a giant's sky. */
   constructor(renderer, sky, options = {}) {
     if (!renderer || !renderer.isWebGLRenderer) throw fail("clouds(renderer, sky, options): the first argument must be the page's THREE.WebGLRenderer");
     if (!sky || !sky.uniforms || !sky.model || typeof sky.under !== "function") throw fail("clouds(renderer, sky, options): the second argument must be the air the clouds stand in (air(renderer, ...) of vidgen/space-air)");
@@ -767,6 +776,10 @@ export class Clouds {
       uDeckSun: {value: this.decks.map(v3)}, uDeckSky: {value: this.decks.map(v3)}, uDeckLow: {value: this.decks.map(v3)}, uDeckTint: {value: this.decks.map((d) => new THREE.Vector3(...d.color))}, uDeckTint2: {value: this.decks.map((d) => new THREE.Vector3(...(d.beyond ?? d).color))}, uDeckEdge: {value: this.decks.map(v4)}, uDeckStripe: {value: this.decks.map(v4)}, uCloudStripes: {value: null},
       uTowerA: {value: Array.from({length: nt}, v4)}, uTowerB: {value: Array.from({length: nt}, v4)}, uTowerSun: {value: v3()}, uTowerSky: {value: v3()}, uTowerLow: {value: v3()}, uTowerTint: {value: new THREE.Vector3(...made.color)},
       uFlashA: {value: Array.from({length: nf}, v4)}, uFlashB: {value: Array.from({length: nf}, v4)}};
+    if (o.behind !== null) {
+      if (!o.behind || !o.behind.texture || !o.behind.texture.isTexture) throw fail("behind must be {texture}: a picture of how far each ray may go (metres), such as land(...).behind of vidgen/space-land");
+      this.uniforms.uCloudBehind = {value: o.behind.texture}; this.uniforms.uCloudBehindSize = {value: new THREE.Vector2(4, 4)};
+    }
     // the decks' stripes: a row a deck, 64 across (a deck without stripes: its own colour, no lift)
     const rows = new Uint16Array(64 * nd * 4);
     this.decks.forEach((d, i) => { for (let k = 0; k < 64; k++) {
@@ -776,7 +789,7 @@ export class Clouds {
     this.stripes = new THREE.DataTexture(rows, 64, nd, THREE.RGBAFormat, THREE.HalfFloatType);
     Object.assign(this.stripes, {minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, needsUpdate: true});
     this.uniforms.uCloudStripes.value = this.stripes;
-    this._pass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {ND: nd, NT: nt, NF: nf, COARSE: coarse, FINE: fine, ...(this.decks.some((d) => d.stripes) ? {STRIPES: 1} : {})}, vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
+    this._pass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {ND: nd, NT: nt, NF: nf, COARSE: coarse, FINE: fine, ...(this.decks.some((d) => d.stripes) ? {STRIPES: 1} : {}), ...(o.behind !== null ? {BEHIND: 1} : {})}, vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
       depthTest: false, depthWrite: false, toneMapped: false, fog: false}));
     this._pass.frustumCulled = false;
     this._scene = new THREE.Scene(); this._scene.add(this._pass); this._camera = new THREE.Camera();
@@ -824,6 +837,7 @@ export class Clouds {
     this.t = t;
     const size = r.getDrawingBufferSize(new THREE.Vector2()), w = Math.max(2, Math.ceil(size.x * this.share)), hgt = Math.max(2, Math.ceil(size.y * this.share));
     if (this.target.width !== w || this.target.height !== hgt) this.target.setSize(w, hgt);
+    if (u.uCloudBehindSize) u.uCloudBehindSize.value.set(w, hgt);
     this.material.uniforms.uCloudTexel.value.set(0.5 / w, 0.5 / hgt).multiplyScalar(this.share < 1 ? 1 : 0);
     const p = camera.projectionMatrix.elements;
     u.uCloudGeo.value.set(m.radius, h, unit, 2 / (p[5] * hgt));

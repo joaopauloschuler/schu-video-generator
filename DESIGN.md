@@ -370,7 +370,8 @@ src/vidgen/
                           # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2); space-air.js
                           # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3); space-sea.js
                           # `vidgen/space-sea`: water to the horizon under that sky (§123.4); space-clouds.js
-                          # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5)
+                          # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5); space-land.js
+                          # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -28804,3 +28805,148 @@ frame, so the two agree on the horizon and on places).
   `slow`, in Chromium: tops brighter than bases, a sunset's tops warmer than noon's, more cover
   hides more ground, a flash lights a tower, a giant's tawny decks, `fast` the same sky, a frame
   twice the same, and the same pixels with the air's table baked, from the cache and without it.
+
+### 123.6 Ground with relief: `vidgen/space-land` (Step 384)
+
+`data/web/modules/space-land.js` (import name `vidgen/space-land`, in `VIDGEN_MODULES`)
+draws ground under a `vidgen/space-air` sky: `land(renderer, sky, options)` → `Land`. No
+forests and no plants.
+
+- **What the ground is.** A height over the world's sphere (the air's radius), a pure function
+  of the place (x east, z south of the place under the scene's origin, metres):
+  `heightOf(field, x, z) = reliefAt(recipe, macroAt(macro, x, z)[0], x, z)`.
+- **The tie to the globe (the macro).** The large forms are the same world's of
+  `vidgen/space-bodies`: `macroOf(renderer, world, at, radius)` runs that module's own bake code
+  (its GLSL through the new export `surfaceSource(type)`; `bakeInputs(o)` for the numbers of the
+  seed: the same continents, climates, placed craters, volcanoes, canyons, cracks) on a lattice
+  of 384 x 384 points a 400th of the radius apart (16 km on an Earth, 8.5 km on a Mars, 4.3 km
+  on a Moon) round the place `at` ([latitude, longitude]; +x east, -z north), and the type's
+  paint code for the colour there. Differences from the globe's own maps, stated: the slow
+  fields a globe reads from 128 px cube maps are summed directly; the octaves are a 1024 px
+  map's (7 and 6); an ocean world's clouds are left out. A cubic B-spline through the lattice
+  is the macro's height (`macroAt`), times `TYPES[type].relief` x radius metres a unit (ocean
+  0.001, desert 0.11, rocky and icy 0.2, lava 0.15: chosen so that the heights are plausible;
+  the globe itself only shades its relief). So forms wider than about two lattice cells (30 km
+  on an Earth) are the globe's, in the globe's places; everything finer is this module's. The
+  flat ground takes the globe's colour (`materials.ground`: its share; an ocean world's greens
+  are the globe's paint, damped to 0.55: nothing grows), the snow line of an ocean world is the
+  globe's climate (the height where its `warm` field falls to the globe's snow threshold, plus
+  `snowOver` 300 m because the finer peaks stand over the macro), rock, snow and sand are the
+  globe's palette colours (`TYPES[type].colors`). From high up (pixels wider than 150 m on the
+  ground) the macro's slopes are shaded `materials.wide` (8) times steeper, as the globe
+  exaggerates its relief (a look).
+- **The recipe** (`recipeOf(type, changes, seed)`; every number an option; `reliefAt`):
+  `mountains` (a ridged multifractal after Musgrave: up to 12 octaves from `length` down to
+  `FINEST` 16 m, each weighted by the one before to the power `erosion`, so ridges carry finer
+  ridges and valleys stay smooth; the first `ridged` octaves are ridges with a crest rounded
+  under 0.03, the rest plain; read through a warp of `warp` x `length`; `height` x
+  (sum^`sharp` - `mid`); grown where the macro stands between `from` and `to` metres, `base`
+  elsewhere), `strata` (the mountains' height cut into benches `step` metres apart with cliffs
+  between, `soft` the cliff's share of a step: mesas and scarps), `rough` (four octaves on the
+  plains), `dunes` (ridges `length` apart across the wind `direction`, a gentle windward side
+  and a steep lee, wandering, with a second finer set, in fields), `craters` (five classes of
+  bowls with rims, the largest `largest` metres across, at most one a lattice cell, `density`
+  the share of cells), `materials` (below). Noise: gradient noise on an integer lattice with a
+  32-bit hash, sixteen gradients, quintic fades (`hash2`, `noised`, `GRADIENTS`).
+- **Presets** (`PRESETS`: a world, a place, changes, the air that suits): `alpine` (the
+  Earth-like world at [-34.5, 20]), `mars` ("mars" at [-8, 40]), `canyon` (the invented "ochre"
+  at its long canyon, benches 600 m high), `dunes` ("ochre" at [-52, -150], dunes 90 m high),
+  `snow` (the ice world "boreas"), `volcanic` ("ember" under a thin air, its basalt lighter than
+  the globe's: a look), `airless` (the "moon"; `vacuum(radius)` is an air thin enough for a
+  black sky, since `vidgen/space-air` needs one; `RADII` has the airless worlds' radii).
+  `survey(renderer, world)` gives a world's heights all round the globe to choose a place by.
+- **Method, measured first** (2 cores, SwiftShader, 1280x720, the alpine range from 2,500 m, with
+  the dome's 0.17 s). Two candidates over the same height maps: (a) a camera-centred mesh of
+  rings lifted in the vertex shader: 512 x 384 vertices (edges 9 px long) 0.54 s with a plain
+  colour and 0.67 s with a simple light, 1024 x 512 (4.5 px) 1.0 s, 2048 x 768 (2.3 px) 2.1 s,
+  and 0.59 s at 320x180 (the cost is the vertices'); it would still need the full shading
+  (about 0.8 s) and its outline is a polygon whose vertices slide over the ground unless
+  snapped; (b) each pixel's ray walked through the maps: 1.35 s a frame at 1280x720 and 0.12 s
+  at 320x180 all in, the outline exact to the pixel. Shipped: (b).
+  - *The maps.* Up to 11 square maps of doubling width round the camera (`WIDTH` 4,096 m, then
+    8,192 m ... 4,194 km; never wider than 1.6 radii), each `cells` across (`QUALITIES`: `fast`
+    256 / 512, `standard` 512 / 1024, `fine` 1024, for a picture up to 400 rows / larger),
+    layers of one float texture. A map's middle moves in steps of a sixteenth of its width
+    (`mapMiddle`), so a cell stays where it is in the world and holds the same height in
+    whichever map it lies: a map is baked again only when the camera has moved that far,
+    and nothing pops. Each term of the recipe is faded in a map as it gets finer than two of
+    its cells (a wavelength of four cells is whole), an octave not shown standing at its mean.
+    A place is read from map k from 0.4 of map k - 1's width on (`mapFor`), blended into the
+    next over the last third, and from no finer a map than a pixel is wide on the ground.
+    Maps finer than the picture needs are not baked (from the camera's height over the ground
+    and the steepest ray of the picture).
+  - *The walk.* At half the picture's size (`fast`: a third) each ray is walked from where it
+    enters the shell the ground can lie in: steps of 0.7 of its height over the ground, at
+    least 1 % of the distance, up to 96 steps (`fast` 64, `fine` 144), then five halvings.
+  - *The picture.* Every pixel takes the nearest and the farthest of the four answers round it
+    and puts its own ray on the ground there (Newton's steps): an outline between two ridges
+    is exact; against the sky the pixel beside the ground is its soft edge (one pixel). Then
+    the slope from the maps, four octaves of grain finer than the maps' cells (shading only,
+    faded at the pixel's size, longer along a level look: no shimmer), materials, light, air,
+    and the depth (`gl_FragDepth`, 0.3 % nearer; ground under water behind everything).
+- **Materials** by height and slope: the flat ground (the globe's colour), scree and rock on
+  slopes from `steep[0]` to `steep[1]` (rock in two colours in bands `band` metres high), sand
+  (`sandy`), snow above the line and off faces steeper than `snowSteep`, an open crust's glow
+  (lava worlds).
+- **Light.** The sun after the air at the ground's height, the ground's own shadow (for each
+  cell of a map 32 steps towards the sun through the maps, the world's roundness counted, soft
+  over a tangent of 0.06; baked once a map and sun: a moving sun bakes every map's shadow
+  again), `shade` (clouds), the sky's light from the air's table dimmed in hollows, the light
+  lit ground throws back, the film look's dusk curve, the air between (`airThrough`).
+- **With the other parts.** Order: the dome, the ground (render order -860), the sea, the
+  clouds. `sea(renderer, sky, {depth: ground.depth})`: the sea ends where the ground rises out
+  of it, the shallows paler. `clouds(renderer, sky, {behind: ground.behind})` (new option of
+  `vidgen/space-clouds`: how far each ray may go): a cloud behind a mountain is hidden, a peak
+  stands in the deck; then `ground.shadedBy(weather.shade)` for the clouds' shadows. Meshes of
+  the scene are hidden by the ground in front of them (its depth).
+- **The lookups.** `ground.heightAt(x, z)` (scene coordinates; `heightOf` on the frame's
+  metres), `normalAt`, `pointAt(x, z)` (the scene's y falls with the world's roundness),
+  `above(position)` (a point's height over the ground under it), `cell(map, i, j)` (a baked
+  cell, for checks), `horizon` (`{distance, dip, height, over, finest}`), `definition()` (the
+  recipe and the macro's heights as plain data). The finest map agrees with `heightAt` to
+  0.1 to 0.5 m (cells of 4 to 16 m), a pixel's own place within 1,200 m to 0.4 m in the mean.
+- **For another program** (Step 385's paths): the height is `reliefAt` on `macroAt`, both in
+  the module's first 260 lines with no three.js: 32-bit wrapping integer products for the
+  hash, double arithmetic elsewhere. The macro's lattice comes from the page
+  (`ground.definition().macro.heights`: n x n values, rows along +z, times `scale`): it is the
+  one part made by the GPU.
+- **`LAND_GLSL`** with `ground.fieldUniforms` and `NL = ground.maps.length`:
+  `float landHeight(vec2 p, float foot)` for a shader of another module.
+- **Changed elsewhere.** `vidgen/space-bodies`: the export `surfaceSource(type)` (its pictures
+  are the same; its bytes changed, so a scene importing it has a new cache key and draws once
+  more with the same pixels). `vidgen/space-clouds`: the option `behind` (compiled in only
+  when given).
+- **Cost** (1280x720, with the dome): 1.35 s a frame (`fast` 1.25 s, `fine` 1.4 s: the shading
+  is most of it), with a sea 2.05 s, under cumulus 2.5 s, airless craters 1.45 s; 0.12 s at
+  320x180. The first frame bakes the maps and their shadows: 9 to 10 s at 1280x720 (1024
+  cells; a cratered world 19 s; from 30 km 7 s), 2.4 s at 320x180, `fast` 2.3 s at 1280x720;
+  the macro 1.0 s (0.45 s from the cache). A camera moving 150 m/s near the ground bakes the
+  finest map again every 1.7 s of film (about 1 s of work), each wider one half as often. A
+  moving sun costs 2.4 s a frame more (every shadow again).
+- **Parts** (`data/web/parts/space-land.js`, a new kind `land` after `cloud`): `land-alpine`,
+  `land-alpine-from-30-km`, `land-mars`, `land-canyon`, `land-dunes`, `land-snow`,
+  `land-volcanic`, `land-airless`, `land-coast`.
+- **Honest notes.** The mountains are soft in close-up: under about 400 m over the ground the
+  relief's finest forms (16 m) and the grain do not replace rocks and cliffs, and from 200 m
+  the ground reads as smooth slopes (the deserts and the crater fields hold up better than the
+  range). Ridges repeat one character (no rivers, no glacier valleys, no talus fans). `canyon`
+  gives scarps and benches on a plain rather than table mountains; `snow` and `volcanic` are
+  plain. Forms between the lattice's cells and the relief's longest wave (the globe's
+  mid-sized craters, 10 to 30 km) are not the globe's. Snow covers more of a range than the
+  globe shows there. Far relief is no finer than a map's cells (a 250th of the distance at
+  1024 cells): a far skyline is smoother than a near one. Outlines between two ridges are
+  hard-edged (one against the sky is soft). A camera inside the ground gets a plain colour.
+  The frame is flat (x and z are the scene's): usable within about half a radius of the place.
+- **Exports.** `land`, `Land`, `macroOf`, `survey`, `recipeOf`, `reliefAt`, `macroAt`,
+  `heightOf`, `normalOf`, `flatMacro`, `hash2`, `noised`, `bowl`, `horizonDistance`,
+  `horizonDip`, `rayHeight`, `mapWidths`, `mapFor`, `mapMiddle`, `placeFrame`, `vacuum`,
+  constants `PRESETS`, `TYPES`, `QUALITIES`, `WIDTH`, `MAPS`, `FINEST`, `MACRO`, `OCTAVES`,
+  `GRADIENTS`, `CREST`, `CRATER_CELLS`, `RADII`, `LAND_GLSL`, `VERSION`.
+- **Tests** (`tests/test_web_space_land.py`): the module and its imports; the parts and their
+  kind; in Node: the noise and its slope, recipes with errors and a did-you-mean, the relief
+  from a seed within its bound, benches, craters and dunes only where asked, the spline, the
+  horizon's and the maps' geometry, the place's frame, `surfaceSource`; `slow`, in Chromium: a
+  frame twice the same, a low sun's dark ground, snow above its line only, the maps' cells and
+  the picture's places against `heightAt`, the horizon's row from 100 m to 100 km, a black
+  airless sky, a coast, clouds on and behind the ground, and the same pixels with the macro
+  baked, from the cache and without it.

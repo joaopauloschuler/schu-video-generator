@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–383
+## Steps 193–384
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -63,6 +63,15 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   the wind, no cut-out patches and no net of cells; at dusk in film exposure near water keeps
   the sky's colours until the sun is about 9 degrees down.
 
+- **Ground with relief** (Step 384): `vidgen/space-land` draws mountains, canyon land, dunes,
+  Mars-like desert, crater fields, snow and basalt plains under the air of `vidgen/space-air`,
+  with the ground's own long shadows, clouds' shadows and the air between. The large forms and
+  colours are those the same world of `vidgen/space-bodies` shows from orbit; the relief under
+  them comes from a seed. Presets `alpine`, `mars`, `canyon`, `dunes`, `snow`, `volcanic`,
+  `airless`; `ground.heightAt(x, z)` for paths and cameras; a coast with `vidgen/space-sea`
+  (`depth: ground.depth`); clouds behind mountains (`behind: ground.behind`, new in
+  `vidgen/space-clouds`). 1.35 s a frame at 1280x720 after 7 to 19 s for the maps; nine parts
+  under the new kind `land` (`vidgen parts --kind land`).
 - **Cloud decks and gas giants** (Step 383): `vidgen/space-clouds` draws clouds in a
   `vidgen/space-air` sky, on the world's own sphere: `clouds(renderer, sky, {sky: "fair", seed})`
   gives decks the camera can be under, in, between and over (`cumulus`: a broken field with flat

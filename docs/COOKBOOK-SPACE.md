@@ -272,6 +272,41 @@ degrees under the level, from 100 km 10 degrees and it curves. Keep the camera o
 (3.45 m at 6.6 km): take heights from `water.pointAt` and `water.horizon.height`. `quality:
 "fast"` draws a smoother sea (other waves than `standard`) for a quarter to a third less.
 
+**Ground in that sky** (in a `web` scene's script). `vidgen/space-land` draws mountains, deserts,
+dunes and crater fields on the world's sphere, the same world's as `vidgen/space-bodies` shows
+from orbit; no mesh, so nothing pops.
+
+```js
+import * as THREE from "three";
+import {air, sunDirection} from "vidgen/space-air";
+import {land} from "vidgen/space-land";
+let renderer, scene, camera, sky, ground;
+export function load(ctx) {
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
+  camera = new THREE.PerspectiveCamera(55, ctx.width / ctx.height, 1, 1e8);
+  sky = air(renderer, "earth", {sun: sunDirection(9, 150)});          // a low sun: long shadows
+  ground = land(renderer, sky, {preset: "alpine"});                   // "mars", "canyon", "dunes", "snow", "volcanic", "airless"
+  scene.add(sky.object, ground.object);                               // the dome, then the ground
+}
+export function frame(t) {
+  const x = 150 * t, z = -60 * t, y = ground.heightAt(0, 0) + 2500;   // metres; never under ground.heightAt(x, z)
+  camera.position.set(x, y, z); camera.lookAt(x + 980, y - 160, z - 170); camera.updateMatrixWorld();
+  sky.update(t, {camera}); ground.update(t, {camera});                // the air first
+  renderer.render(scene, camera);
+}
+```
+
+A coast: `land(renderer, sky, {world: "earth", at: [-11.5, -15.2], mountains: {from: -300, to:
+500, base: 0.35, height: 2600, length: 9000}})` and `sea(renderer, sky, {depth: ground.depth})`
+added after the ground. Clouds: `clouds(renderer, sky, {sky: "fair", behind: ground.behind})`,
+then `ground.shadedBy(weather.shade)`; update the ground before the clouds. A world without
+air: `air(renderer, vacuum(RADII.moon), {exposure: "camera", ev: 1.3})`. Another place:
+`{world: "mars", at: [latitude, longitude]}`. High views are the strong ones; from under about
+400 m the range looks soft (deserts and craters hold from 200 m). Look first: `vidgen parts
+--kind land`.
+
 **Clouds in that sky** (in a `web` scene's script). `vidgen/space-clouds` draws cloud decks on
 the world's sphere: here a climb through an overcast into the sun, with towers standing through
 the deck and lightning in them on the score's kick drum.
@@ -346,6 +381,8 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | a sea under that sky (`vidgen/space-sea`), straight to the canvas, with the dome: 50 m up / 20 km up | 1.1 / 0.65 (0.07 / 0.05 at 320x180); `quality: fast` 0.8 / 0.54; `fine` 1.66 / 0.83 | 0.3 s more |
 | clouds in that sky (`vidgen/space-clouds`), with the dome: cumulus and cirrus from below / a cloud sea from above / towers through a deck / between three decks / a giant's decks / cumulus over a sea | 1.9 / 1.1 / 1.6 / 2.7 / 2.4 / 3.0 (0.07 to 0.13 at 320x180); `quality: fast` 0.8 / 0.5; `fine` about 8 / 4 | 0.1 s |
 | the same, methods tried first (cumulus and cirrus from below): 10 jittered steps a deck at half size / 6 at a third / 16 at full size | 1.6 / 0.68 / 7.8: grain or terraces on every cloud narrower than a step, so not shipped | |
+| ground in that sky (`vidgen/space-land`), with the dome: a range from 2,500 m / the same with a sea / under cumulus / airless craters | 1.35 / 2.05 / 2.5 / 1.45 (0.12 at 320x180); `quality: fast` 1.25; a moving sun 2.4 more | the maps: 9–10 s (craters 19 s; from 30 km 7 s; `fast` 2.3 s; 2.4 s at 320x180) |
+| the same, the other method measured (rings of a mesh lifted by the same maps, plain shading): 512 x 384 / 1024 x 512 / 2048 x 768 vertices | 0.67 / 1.0 / 2.1 (0.59 at 320x180): an outline of 9 / 4.5 / 2.3 px edges, and the shading still to pay, so not shipped | |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
@@ -356,7 +393,7 @@ it; later pages 6 s).
 
 ## 5. The checks to run
 
-1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `sea`, `cloud`, `craft`,
+1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `sea`, `cloud`, `land`, `craft`,
    `craft-part`, `phenomenon`, `camera`): a contact sheet of every ready-made part with its one
    line of use.
 2. **Validate**: `vidgen validate .` checks every key and name with the closest word, what goes

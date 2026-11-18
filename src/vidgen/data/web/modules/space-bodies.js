@@ -659,6 +659,15 @@ export const TYPES = Object.freeze(Object.keys(KINDS));
 /** Each type's palettes by name. */
 export const PALETTES = Object.freeze(Object.fromEntries(TYPES.map((t) => [t, Object.freeze(Object.keys(KINDS[t].palettes))])));
 KINDS.lava.defaults.palette = "ember";
+/** The GLSL a surface type's maps are baked with, for a module that draws the same world's ground close up
+ * (vidgen/space-land): `noise` (the uniforms and the noise), `coarse` (`vec4 coarse(vec3 p, int which)`: the slow
+ * fields the bake keeps on small cube maps uK0..uK2), `fields` (`vec4 fields(vec3 p)`: the height and three
+ * fields of the type's own) and `paint` (the colour from them); `relief`: whether the type has a ground at all. */
+export function surfaceSource(type) {
+  if (!(type in KINDS)) throw fail(`no surface type "${type}"${hint(type, Object.keys(KINDS))}; there are: ${Object.keys(KINDS).join(", ")}`);
+  const kind = KINDS[type];
+  return {noise: NOISE, coarse: kind.coarse, fields: kind.fields, paint: kind.paint, relief: Boolean(kind.features.relief) && type !== "gas" && type !== "ice-giant"};
+}
 
 /** The air of a body by name: zenith optical depths (red, green, blue) of its gas (`rayleigh`) and haze
  * (`haze`), what it absorbs besides (`absorb`), the scale height as a share of the radius (`height`), how

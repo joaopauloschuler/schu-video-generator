@@ -3753,6 +3753,29 @@ const update = (t) => { sky.update(t, {camera}); water.update(t, {camera}); weat
   Look first: `vidgen parts --kind cloud`. Reference: CONFIG.md `web`, "Cloud decks, towers,
   lightning, a giant's decks".
 
+**Ground: `vidgen/space-land`.** For mountains, deserts, dunes, canyon land or a crater field
+under the air do not build a mesh from noise: one object draws the ground of the same world
+`vidgen/space-bodies` shows from orbit, to the horizon, with its own shadows.
+
+```js
+// sketch (parts of a page, not a whole file): ground under the air
+import {land} from "vidgen/space-land";
+const ground = land(renderer, sky, {preset: "alpine"});          // sky: the air; "mars", "canyon", "dunes", "snow", "volcanic", "airless"
+scene.add(ground.object);                                         // after the dome, before a sea and clouds
+const update = (t) => { sky.update(t, {camera}); ground.update(t, {camera}); };
+camera.position.y = Math.max(camera.position.y, ground.heightAt(camera.position.x, camera.position.z) + 50);
+```
+
+- Another place or world: `{world: "mars", at: [latitude, longitude]}` (+x is east, -z north of
+  the place; `survey(renderer, world)` gives the heights round the globe).
+- A coast: `sea(renderer, sky, {depth: ground.depth})`. Clouds: `clouds(renderer, sky, {behind:
+  ground.behind})`, then `ground.shadedBy(weather.shade)`. No air: `air(renderer,
+  vacuum(RADII.moon), {exposure: "camera", ev: 1.3})`.
+- 1.35 s a frame at 720p and 7 to 19 s once for the maps (`quality: "fast"`: 2.3 s), 0.12 s a
+  frame at 320x180. High views are the strong ones; under about 400 m over the ground a range
+  looks soft. Look first: `vidgen parts --kind land`. Reference: CONFIG.md `web`, "Ground with
+  relief".
+
 **Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
 comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black
 hole). Each is one call and one `update(t)`.

@@ -7914,6 +7914,55 @@ the scene; `rough` and `storm` are steeper than their winds would raise given da
 `methane` is a look. Costs (2 cores, software GL, with the dome): 1.1 s a frame at 1280x720 near
 the water, 0.65 s from 20 km, 0.07 s at 320x180; `fast` 0.8 s. Look first: `vidgen parts --kind sea`.
 
+**Ground with relief: `vidgen/space-land`** (Step 384, DESIGN §123.6).
+Mountains, canyon land, dunes, deserts, crater fields, snow and basalt plains under a
+`vidgen/space-air` sky, on the world's own sphere: the large forms and colours are those the same
+world of `vidgen/space-bodies` shows from orbit (the same world and seed, a place on it), the
+relief under them comes from a seed. Lit by the air's sun with the ground's own shadows; no plants.
+
+```js
+import {air, sunDirection} from "vidgen/space-air";
+import {land} from "vidgen/space-land";
+const sky = air(renderer, "earth", {sun: sunDirection(9, 150)});
+const ground = land(renderer, sky, {preset: "alpine"});       // also "mars", "canyon", "dunes", "snow", "volcanic", "airless"
+scene.add(sky.object, ground.object);
+function frame(t) { sky.update(t, {camera}); ground.update(t, {camera}); renderer.render(scene, camera); }
+const y = ground.heightAt(x, z);                               // metres over the world's sphere; ground.above(camera.position)
+// a coast: const water = sea(renderer, sky, {depth: ground.depth}); add it after the ground
+// clouds: const weather = clouds(renderer, sky, {sky: "fair", behind: ground.behind}); ground.shadedBy(weather.shade)
+// no air: const sky = air(renderer, vacuum(RADII.moon), {exposure: "camera", ev: 1.3}); land(renderer, sky, {preset: "airless"})
+```
+
+Call `ground.update` after the air's `update` and before the sea's and the clouds', with the
+camera the picture is drawn with. Add the ground's object after the dome and before the sea and
+the clouds. The scene's origin lies on the world's sphere over the place `at`; +x is east, -z
+north; the scene's y is a height only near the origin (the sphere falls away: use `pointAt` and
+`above`).
+
+| `land(renderer, sky, options)` | default | what it does |
+|---|---|---|
+| `preset` | none | `alpine` (an Earth-like range with snow), `mars` (dust, craters, scarps; the air `"mars"`), `canyon` (benches and cliffs on the invented world "ochre"), `dunes` (a sand sea on "ochre"), `snow` (the ice world "boreas"; the air `"thin"`), `volcanic` (the basalt of "ember"; `"thin"`), `airless` (the "moon"; an air from `vacuum()`) |
+| `world`, `at` | the preset's | a world of `vidgen/space-bodies` (a name or its options) and the place on it under the scene's origin, `[latitude, longitude]` in degrees; `survey(renderer, world)` gives the heights round the globe to choose by |
+| `seed` | the world's | the relief's own seed (the large forms are the world's) |
+| `mountains` | the type's | `{height, length, ridged, gain, erosion, warp, sharp, mid, from, to, base, patch}`: `height` and `length` in metres; `from`, `to`: the macro's heights between which the mountains grow; `base`: their share elsewhere |
+| `strata` | the type's | `{step, strength, soft, wobble, length, from, to}`: benches `step` metres apart with cliffs between |
+| `dunes` | none | `{height, length, direction, wander, field, from, to}`: `direction` where the wind blows to (degrees, 0 = north) |
+| `craters` | the type's | `{density, largest, deep}`: the share of cells with a crater (0 to 1), the largest in metres |
+| `rough` | the type's | `{height, length, calm}`: the plains' roughness |
+| `materials` | the type's | `{rock, rock2, snow, sand}` (colours; default the world's own), `steep` (the slopes between which rock shows), `scree`, `bands`, `band` (metres), `snowLine` (metres; default an ocean world's climate, none elsewhere), `snowOver`, `snowSteep`, `sandy`, `grain`, `rough`, `glow`, `ground` (the share of the globe's colour on flat ground), `wide` |
+| `quality` | `"standard"` | `fast` (maps of 256 / 512 cells for a picture up to 400 rows / larger, the walk at a third of the picture), `standard` (512 / 1024, half), `fine` (1024, half, more steps) |
+| `water` | the type's | a sea lies at height 0 (ground under it is drawn behind it): true on an ocean world |
+| `shade` | none | `{glsl, uniforms}` shading the sun's light, or `ground.shadedBy(weather.shade)` afterwards |
+| `macro`, `type` | none | a macro of your own in place of a world's (`flatMacro(radius, height)`) and the type whose defaults the recipe takes |
+
+`ground.heightAt(x, z)`, `normalAt(x, z)`, `pointAt(x, z)`, `above(position)` answer from the
+heights' definition (what the finest map draws); `ground.horizon` holds the last camera's
+`{distance, dip, height, over, finest}`; `ground.definition()` is the recipe and the macro's
+heights as plain data. Costs: 1.35 s a frame at 1280x720 (0.12 s at 320x180), and the first
+frame 7 to 19 s more at 1280x720 for the maps (`fast` 2.3 s; 2.4 s at 320x180); see DESIGN
+§123.6. From under about 400 m over the ground the range looks soft; deserts and crater fields
+hold up from 200 m.
+
 **Cloud decks, towers, lightning, a giant's decks: `vidgen/space-clouds`** (Step 383, DESIGN §123.5).
 Clouds in a `vidgen/space-air` sky, on the world's own sphere: decks to fly under, through,
 between and over, cloud towers with anvils, lightning inside them at seeded or stated times, and
@@ -7951,6 +8000,7 @@ clouds' own picture is drawn in `update`). Add the clouds' object after the dome
 | `quality` | `"standard"` | `fast` (a third of the picture's size, 6 x 3 steps), `standard` (half, 8 x 4), `fine` (full size, 10 x 5: four to five times `standard`'s time) |
 | `floor` | none | a giant's dark under the decks, a colour (`giantSky()` gives one): drawn to the horizon in place of any ground |
 | `anchor` | `[0, 1, 0]` | as the sea's |
+| `behind` | none | `{texture}`: how far each ray of the picture may go before something solid (metres), such as `land(...).behind` of `vidgen/space-land`: a mountain hides the cloud behind it |
 
 `weather.decks` and `weather.towers` hold what was made (heights, places, radii);
 `weather.coverAt(deck, x, z, t)` says how much cloud a deck has over a place (0 open, towards 1 in
@@ -17691,7 +17741,7 @@ for `web` scenes on one labelled contact sheet so you can choose by looking: a t
 its name, its kind, what it is and the one line that uses it (blue, in the module it names).
 
 - **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
-  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `sea`, `cloud`, `craft`, `craft-part`, `phenomenon`,
+  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `sea`, `cloud`, `land`, `craft`, `craft-part`, `phenomenon`,
   `camera`, `structure`, `effect`, `environment` (a kind without parts yet says so).
 - **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
   of its own with the registry's default camera and light, sets it to the part's time `at` and
@@ -17702,7 +17752,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.
