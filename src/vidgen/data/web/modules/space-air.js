@@ -339,8 +339,11 @@ export const duskCurve = (stops) => DUSK_CURVE * smooth(0.5, 4, stops);
 export const ARCH_WHITE = 1.6;
 export const FILM_STOPS = 16;
 /** How much of the stars the film look shows: none until the sky is `stops` = 5 stops darker than by day, all of
- * them from 11; and all of them wherever the zenith is drawn black (`drawn`, 1 = white: high up, by day too). */
-export const filmStars = (stops, drawn = 1) => Math.max(smooth(5, 11, stops), 1 - smooth(0.002, 0.01, drawn));
+ * them from 11; wherever the zenith is drawn black (`drawn`, 1 = white: high up) all of them at night and
+ * DAY_STARS of them over the day side (`sunUp`: the sun's sine over the level there), so the sky's band of light
+ * does not outshine a sunlit world beside it (a look). */
+export const DAY_STARS = 0.35;
+export const filmStars = (stops, drawn = 1, sunUp = -1) => Math.max(smooth(5, 11, stops), (1 - smooth(0.002, 0.01, drawn)) * (1 - (1 - DAY_STARS) * smooth(-0.1, 0.1, sunUp)));
 /** The unit vector towards a sun `elevation` degrees over the horizon at `azimuth` degrees (0 = towards -z, 90 = towards +x), +y up. */
 export const sunDirection = (elevation, azimuth = 0) => [Math.cos(elevation * RAD) * Math.sin(azimuth * RAD), Math.sin(elevation * RAD), -Math.cos(elevation * RAD) * Math.cos(azimuth * RAD)];
 
@@ -738,7 +741,7 @@ export class Air {
     if (o.exposure === "film") {
       const dark = filmExposure(this.ambient.zenithAt(mus), this._day, 0);
       stops = filmExposure(this.ambient.zenithAt(mus), this._day, hc, this.ambient.archAt(mus)) + ev;
-      stars = filmStars(dark, zenith() * o.light * 2 ** stops);
+      stars = filmStars(dark, zenith() * o.light * 2 ** stops, mus);
     } else {
       stops = o.exposure === "camera" ? ev : clamp(Math.log2(0.14 / Math.max(this._meter(camera, height, mus) * o.light, 1e-9)), -2, SKY_STOPS) + ev;
       stars = Math.min(1, 2 ** (stops - SKY_STOPS));

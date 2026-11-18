@@ -203,7 +203,7 @@ const run = []; for (let i = 0; i <= 120; i++) run.push(A.filmExposure(Math.pow(
 out.push([A.filmExposure(2, 1), A.filmExposure(1, 1), A.filmExposure(1e-3, 1, 9), A.filmExposure(1e-3, 1, 2), A.filmExposure(1e-3, 1, 5) / A.filmExposure(1e-3, 1, 0), A.filmExposure(1e-30, 1), A.FILM_STOPS,
   A.filmExposure(1e-4, 1, 0, 0.02), Math.log2(A.DUSK_KNEE * (A.ARCH_WHITE / A.DUSK_KNEE) ** 2 / 0.02), A.filmExposure(1e-4, 1, 0, 100), A.filmExposure(1, 1, 0, 8), Math.log2(A.ARCH_WHITE / 8),
   A.filmExposure(1, 1, 0, 1e9), A.duskCurve(0), A.duskCurve(2), A.duskCurve(9), A.DUSK_CURVE]);
-out.push([A.filmStars(0), A.filmStars(5), A.filmStars(8), A.filmStars(11), A.filmStars(14), A.filmStars(0, 0.001), A.filmStars(0, 0.05), A.filmStars(8, 0.001)]);
+out.push([A.filmStars(0), A.filmStars(5), A.filmStars(8), A.filmStars(11), A.filmStars(14), A.filmStars(0, 0.001), A.filmStars(0, 0.05), A.filmStars(8, 0.001), A.filmStars(0, 0.001, 0.5), A.filmStars(14, 0.001, 0.5), A.DAY_STARS]);
 // through an evening on the Earth-like ground: the exposure and what it leaves of the zenith and of the arch
 const e = A.airOf("earth"), t = A.ambientTable(e), day = t.zenithAt(Math.sin(25 * R));
 out.push([30, 10, 0, -2, -4, -6, -8, -12, -20].map((el) => { const mus = Math.sin(el * R), ev = A.filmExposure(t.zenithAt(mus), day, 0, t.archAt(mus)); const arch = t.archAt(mus) * 2 ** ev;
@@ -216,6 +216,7 @@ out.push([30, 10, 0, -2, -4, -6, -8, -12, -20].map((el) => { const mus = Math.si
     assert abs(marks[10] - marks[11]) < 1e-9 and marks[12] == -3                                                    # a glow brighter than that by itself closes the exposure, three stops at most
     assert marks[13] == 0 and 0 < marks[14] < marks[15] == marks[16] == 0.5                                         # the dusk curve: nothing by day, half the contrast at dusk
     assert stars[0] == 0 and stars[1] == 0 and 0 < stars[2] < 1 and stars[3] == 1 and stars[4] == 1 and stars[5] == 1 and stars[6] == 0 and stars[7] == 1
+    assert stars[8] == stars[10] == 0.35 and stars[9] == 1           # over the day side from high up the band of light is dimmed; a dark sky shows all
     stops = [row[0] for row in evening]
     assert stops[0] == 0 and stops[1] < 1.6 and stops == sorted(stops) and 4 < stops[5] < 10 and stops[-1] == 16    # nothing by day; the blue hour lifted; night at the cap
     assert all(row[2] <= 1.6 + 1e-9 for row in evening) and evening[5][1] > 0.004 and evening[-1][1] < 1e-5         # the arch never burns out; the zenith is still seen at -6 degrees; then night
@@ -317,7 +318,7 @@ def test_the_sky_draws_in_chromium(tmp_path: Path) -> None:
     s = states[0]
     assert s["ev"] == 0 and s["inside"] is True and abs(s["height"] - 2) < 1e-6 and abs(s["elevation"] - 50) < 1e-6 and s["stars"] == 0
     assert s["sun"][0] >= s["sun"][1] > s["sun"][2] and 0.7 * np.pi < s["sunPower"] < np.pi and s["skyColor"][2] > s["skyColor"][0] and 0.03 * np.pi < s["skyPower"] < 0.4 * np.pi
-    assert states[1]["ev"] > 0.5 and states[1]["sun"][0] > 5 * max(states[1]["sun"][2], 1e-9) and states[6]["ev"] == -2 and states[7]["inside"] is False and states[7]["stars"] == 1
+    assert states[1]["ev"] > 0.5 and states[1]["sun"][0] > 5 * max(states[1]["sun"][2], 1e-9) and states[6]["ev"] == -2 and states[7]["inside"] is False and states[7]["stars"] == 0.35   # high over the day side: the band of light dimmed (DAY_STARS)
     # the same pixels with the table baked and stored, from the cache, and without the cache
     cold, _, _, log = draw(store)
     assert log == [("stored", "space-air/psi")]
