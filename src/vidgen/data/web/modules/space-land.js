@@ -25,7 +25,7 @@ import {AIR_GLSL, DISPLAY_GLSL, PSI_TABLE} from "vidgen/space-air";
 import {resolveOptions, bakeInputs, surfaceSource, onGlobe, linearColor} from "vidgen/space-bodies";
 
 /** Bumped when the pictures or the heights change: part of the macro's key. */
-export const VERSION = 1;
+export const VERSION = 2;
 const PREFIX = "vidgen/space-land";
 const RAD = Math.PI / 180;
 /** By quality: the height maps' cells across for a picture up to 400 rows and for a larger one, the steps of a
@@ -95,7 +95,7 @@ export const bowl = (d, floor = 0.8) => (d < 1 ? Math.max(d * d - 1, -floor) : 0
 
 // The recipe's readings of the noise ("slots"): each has a length (metres a lattice cell), a turn (radians) and a
 // seed; the place (x, z) is read at ((cos x - sin z) / length, (sin x + cos z) / length).
-const SLOT = Object.freeze({warp: 0, patch: 2, mountains: 3, rough: 15, strata: 19, dunes: 20, wander: 21, field: 22, ripples: 23, craters: 24, count: 29});
+const SLOT = Object.freeze({warp: 0, patch: 2, mountains: 3, rough: 15, strata: 19, dunes: 20, wander: 21, field: 22, ripples: 23, craters: 24, canyon: 29, volcano: 33, count: 34});
 /** How round a ridge's crest is (the noise's value under which it is rounded): a crest with a crease would cut the worn slopes beside it apart. */
 export const CREST = 0.03;
 const TURN = 0.6435;                    // between a mountain octave and the next: the angle of (0.8, 0.6)
@@ -107,16 +107,20 @@ const ROUGH = Object.freeze({height: 40, length: 1800, calm: 0.5});
 const STRATA = Object.freeze({step: 80, strength: 0, soft: 0.12, wobble: 0.6, length: 5000, from: -1e6, to: -1e6 + 1});
 const DUNES = Object.freeze({height: 0, length: 600, direction: 70, wander: 0.9, field: 0.6, from: -1e6, to: 1e6});
 const CRATERS = Object.freeze({density: 0, largest: 9000, deep: 0.4});
+const CANYONS = Object.freeze({depth: 0, width: 2600, length: 24000, floor: 0.3, steps: 5, branches: 0.6, wander: 0.3});
+const VOLCANOES = Object.freeze({height: 0, radius: 9000, spacing: 34000, density: 0.5, crater: 0.13, ridges: 0.1});
+/** How soft a canyon wall's risers are in the heights' definition (a share of a step). */
+export const RISER = 0.12;
 const MATERIALS = Object.freeze({rock: null, rock2: null, snow: null, sand: null, steep: Object.freeze([0.55, 0.95]), scree: 0.5, bands: 0.25, band: 120, snowLine: null, snowSteep: Object.freeze([0.6, 1.0]),
-  sandy: 0, grain: 1, rough: 0.75, glow: 0, ground: 1, wide: 8, snowOver: 300});
-const PARTS = {mountains: MOUNTAINS, rough: ROUGH, strata: STRATA, dunes: DUNES, craters: CRATERS, materials: MATERIALS};
+  sandy: 0, grain: 1, rough: 0.75, glow: 0, ground: 1, wide: 8, snowOver: 300, gullies: 0});
+const PARTS = {mountains: MOUNTAINS, rough: ROUGH, strata: STRATA, dunes: DUNES, craters: CRATERS, canyons: CANYONS, volcanoes: VOLCANOES, materials: MATERIALS};
 
 /** What each surface type of vidgen/space-bodies gives the ground: `relief` (metres a unit of the type's height
  * field, as a share of the radius), the recipe's defaults for the relief under the map, and which of the bake's
  * colours are the rock, its second layer, the snow or ice and the sand. */
 export const TYPES = Object.freeze({
   ocean: {relief: 0.001, sea: true, colors: {rock: 5, rock2: 7, snow: 6, sand: 2}, snowFromClimate: true,
-    mountains: {}, rough: {}, materials: {ground: 0.55}},
+    mountains: {gain: 0.55}, rough: {}, materials: {ground: 0.55, bands: 0.5, band: 55, gullies: 1}},
   desert: {relief: 0.11, sea: false, colors: {rock: [0, 1], rock2: 2, snow: 3, sand: 0},
     mountains: {height: 900, length: 16000, ridged: 2, from: -3000, to: 4000, base: 0.25, patch: 1500, mid: 0.35}, rough: {height: 70, length: 3000, calm: 0.3},
     craters: {density: 0.3, largest: 8000}, strata: {step: 110, strength: 0.6, from: -2500, to: -500}, materials: {steep: [0.45, 0.85], bands: 0.45, band: 160, sandy: 0.35, rough: 0.6}},
@@ -140,16 +144,17 @@ export const TYPES = Object.freeze({
 export const PRESETS = Object.freeze({
   alpine: {world: "earth", at: [-34.5, 20], air: "earth"},
   mars: {world: "mars", at: [-8, 40], air: "mars"},
-  canyon: {world: "ochre", at: [-1, 74], air: "mars", mountains: {height: 3200, length: 24000, ridged: 1, erosion: 0.3, warp: 0.45, base: 0.6, mid: 0.2, sharp: 1.8},
-    strata: {step: 600, strength: 0.95, soft: 0.04, wobble: 0.5, length: 7000, from: -1e6, to: -1e6 + 1}, craters: {density: 0.03}, materials: {steep: [0.4, 0.8], bands: 0.75, band: 70, sandy: 0.25}},
+  canyon: {world: "ochre", at: [49, -172], air: "mars", mountains: {height: 160, length: 30000, ridged: 0, erosion: 0.3, base: 1, mid: 0.5, sharp: 1, patch: 0}, strata: {strength: 0}, craters: {density: 0}, rough: {height: 8},
+    canyons: {depth: 1100, width: 2200, length: 24000, floor: 0.5, steps: 4}, materials: {rock: [0.3, 0.15, 0.08], rock2: [0.5, 0.31, 0.18], steep: [0.35, 0.7], bands: 1, band: 90, sandy: 0.3, scree: 0.8}},
   dunes: {world: "ochre", at: [-52, -150], air: "mars", mountains: {height: 250, base: 0.15, length: 30000}, strata: {strength: 0}, craters: {density: 0},
     dunes: {height: 90, length: 520, direction: 70, field: 0.9, wander: 1.3}, rough: {height: 6}, materials: {sandy: 1, steep: [0.75, 1.2], rough: 0.25, grain: 0.35}},
   snow: {world: "boreas", at: [30, 20], air: "thin"},
-  volcanic: {world: "ember", at: [10, 60], air: "thin", materials: {rock: [0.1, 0.095, 0.09], rock2: [0.2, 0.11, 0.08], ground: 0.45}},
+  volcanic: {world: "ember", at: [10, 60], air: "thin", mountains: {height: 260, base: 0.5}, craters: {density: 0}, strata: {strength: 0}, rough: {height: 22, length: 500},
+    volcanoes: {height: 3000, radius: 6500, spacing: 30000, density: 0.6}, materials: {rock: [0.075, 0.07, 0.068], rock2: [0.17, 0.1, 0.075], sand: [0.19, 0.18, 0.175], ground: 0.25, sandy: 0.6, glow: 1}},
   airless: {world: "moon", at: [-30, 20], air: null},
 });
 
-const RECIPE_KEYS = ["mountains", "rough", "strata", "dunes", "craters", "materials"];
+const RECIPE_KEYS = ["mountains", "rough", "strata", "dunes", "craters", "canyons", "volcanoes", "materials"];
 /** The recipe in full for a surface type: the type's defaults, then `changes` ({mountains, rough, strata, dunes,
  * craters, materials}: each an object of numbers), every key checked, and `slots` (the readings of the noise:
  * {length, turn, seed} each), `octaves` (the mountain octaves summed: down to FINEST), `bound` (how far the relief
@@ -163,7 +168,7 @@ export function recipeOf(type = "ocean", changes = {}, seed = 1) {
     if (changes[k] !== undefined) known(k, changes[k], Object.keys(PARTS[k]));
     r[k] = {...PARTS[k], ...(TYPES[type][k] ?? {}), ...(changes[k] ?? {})};
   }
-  const m = r.mountains, d = r.dunes, c = r.craters, s = r.strata, g = r.rough;
+  const m = r.mountains, d = r.dunes, c = r.craters, s = r.strata, g = r.rough, k = r.canyons, v = r.volcanoes;
   number("mountains.height (metres)", m.height, 0, 20000); number("mountains.length (metres)", m.length, 500, 200000); number("mountains.ridged", m.ridged, 0, 12);
   number("mountains.gain", m.gain, 0.2, 0.8); number("mountains.erosion", m.erosion, 0, 3); number("mountains.warp", m.warp, 0, 1); number("mountains.sharp", m.sharp, 0.3, 4);
   number("mountains.mid", m.mid, 0, 1); number("mountains.base", m.base, 0, 1); number("mountains.patch (metres)", m.patch, 0, 20000);
@@ -172,6 +177,10 @@ export function recipeOf(type = "ocean", changes = {}, seed = 1) {
   number("strata.step (metres)", s.step, 5, 2000); number("strata.strength", s.strength, 0, 1); number("strata.soft", s.soft, 0.04, 0.5); number("strata.wobble", s.wobble, 0, 4); number("strata.length (metres)", s.length, 200, 100000);
   number("dunes.height (metres)", d.height, 0, 500); number("dunes.length (metres)", d.length, 60, 20000); number("dunes.direction (degrees)", d.direction, -360, 360); number("dunes.wander", d.wander, 0, 4); number("dunes.field", d.field, 0, 1);
   number("craters.density", c.density, 0, 1); number("craters.largest (metres)", c.largest, 200, 100000); number("craters.deep", c.deep, 0, 1);
+  number("canyons.depth (metres)", k.depth, 0, 5000); number("canyons.width (metres)", k.width, 100, 50000); number("canyons.length (metres)", k.length, 2000, 300000); number("canyons.floor", k.floor, 0, 0.9);
+  number("canyons.steps", k.steps, 1, 12); number("canyons.branches", k.branches, 0, 1); number("canyons.wander", k.wander, 0, 1);
+  number("volcanoes.height (metres)", v.height, 0, 20000); number("volcanoes.radius (metres)", v.radius, 500, 200000); number("volcanoes.spacing (metres)", v.spacing, 3.4 * v.radius, 2e6);
+  number("volcanoes.density", v.density, 0, 1); number("volcanoes.crater", v.crater, 0.03, 0.4); number("volcanoes.ridges", v.ridges, 0, 0.4);
   const slots = Array.from({length: SLOT.count}, () => ({length: 1000, turn: 0, seed: 0}));
   const set = (i, length, turn) => { slots[i] = {length, turn, seed: ((seed * 131 + i * 7919) & 0xffff) + 1}; };
   set(SLOT.warp, 2.3 * m.length, 0.3); set(SLOT.warp + 1, 2.3 * m.length, 1.9); set(SLOT.patch, 6 * m.length, 0.9);
@@ -181,13 +190,14 @@ export function recipeOf(type = "ocean", changes = {}, seed = 1) {
   // the dunes' crests lie across the wind: the slot's first axis runs along it (direction: where the wind blows to, 0 = -z, 90 = +x)
   set(SLOT.dunes, d.length, Math.PI / 2 - d.direction * RAD); set(SLOT.wander, 5 * d.length, 0.7); set(SLOT.field, 14 * d.length, 2.6); set(SLOT.ripples, d.length / 4.3, Math.PI / 2 - (d.direction + 24) * RAD);
   for (let i = 0; i < CRATER_CELLS.classes; i++) set(SLOT.craters + i, c.largest * CRATER_CELLS.first * CRATER_CELLS.next ** i, 0.5 * i);
+  set(SLOT.canyon, k.length, 0.8); set(SLOT.canyon + 1, k.length / 3.1, 2.1); set(SLOT.canyon + 2, 2.6 * k.length, 0.2); set(SLOT.canyon + 3, 2.6 * k.length, 1.4); set(SLOT.volcano, v.spacing, 0);
   r.slots = slots;
   r.octaves = clamp(Math.floor(Math.log2(m.length / FINEST)) + 1, 1, 12);
   let norm = 0;
   for (let i = 0, a = 1; i < r.octaves; i++, a *= m.gain) norm += a;
   r.norm = norm;
   const crater = c.density > 0 ? 0.3 * slots[SLOT.craters].length * c.deep : 0;
-  r.bound = {over: m.height * (1 - m.mid) + 2 * g.height + 0.8 * d.height + 0.4 * crater + s.step, under: m.height * m.mid + 2 * g.height + 0.7 * d.height + crater + s.step};
+  r.bound = {over: m.height * (1 - m.mid) + 2 * g.height + 0.8 * d.height + 0.4 * crater + s.step + 1.2 * v.height, under: m.height * m.mid + 2 * g.height + 0.7 * d.height + crater + s.step + k.depth};
   return r;
 }
 
@@ -211,11 +221,35 @@ function craterClass(s, x, z, density, deep) {
   }
   return h;
 }
+// a canyon wall across its width (d: 0 the canyon's middle, 1 its rim): 0 on the floor, benches and risers up to 1 at the rim, a little talus
+function wallAt(k, d, soft) {
+  const u = clamp((d - k.floor) / (1 - k.floor), 0, 1), q = Math.min(u * k.steps, k.steps - 1e-6), f = Math.floor(q);
+  return 0.85 * (f + smooth(0.5 - soft, 0.5 + soft, q - f)) / k.steps + 0.15 * u;
+}
+/** A volcano's height across its radius (d = 1 at its foot) towards the bearing `angle`, as a share of its height: a cone with hollow flanks, ridges down them, a crater at the top. */
+export function coneAt(v, d, angle, turn) {
+  if (d >= 1) return 0;
+  const flank = Math.pow(1 - d, 1.6) * (1 + v.ridges * Math.sin(9 * angle + turn) * smooth(v.crater, 3 * v.crater, d) * (1 - d));
+  return Math.min(flank, Math.pow(1 - v.crater, 1.6) - 0.5 * v.crater * smooth(v.crater, 0.55 * v.crater, d));
+}
+// the volcanoes near a place: at most one in each cell of the slot's lattice: [the height there as a share of `height`, the nearest one's d, its bearing, its turn]
+function volcanoAt(s, v, x, z) {
+  const q = slotAt(s, x, z), cx = Math.floor(q[0]), cz = Math.floor(q[1]), out = [0, 9, 0, 0];
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const a = hash2(cx + i, cz + j, s.seed), b = hash2(cx + i, cz + j, s.seed + 77);
+    if ((b & 65535) / 65535 >= v.density) continue;
+    const size = 0.6 + 0.4 * ((a >>> 20) & 1023) / 1023, ex = q[0] - (cx + i + 0.3 + 0.4 * (a & 1023) / 1023), ez = q[1] - (cz + j + 0.3 + 0.4 * ((a >>> 10) & 1023) / 1023);
+    const d = Math.hypot(ex, ez) * s.length / (v.radius * size), angle = Math.atan2(ez, ex), turn = 6.2831853 * ((b >>> 16) & 255) / 255;
+    out[0] += size * coneAt(v, d, angle, turn);
+    if (d < out[1]) { out[1] = d; out[2] = angle; out[3] = turn; }
+  }
+  return out;
+}
 /** The ground's height (metres over the world's sphere) at a place (metres along the frame's +x and +z) where the
  * macro's height is `M` (metres): the recipe's relief on it. The definition of the height; the maps the picture
  * walks through hold the same sum (each term faded as it gets finer than two of a map's cells). Pure. */
 export function reliefAt(recipe, M, x, z) {
-  const r = recipe, S = r.slots, m = r.mountains, g = r.rough, d = r.dunes, c = r.craters, st = r.strata;
+  const r = recipe, S = r.slots, m = r.mountains, g = r.rough, d = r.dunes, c = r.craters, st = r.strata, k = r.canyons, v = r.volcanoes;
   const wx = slotNoise(S[SLOT.warp], x, z)[0], wz = slotNoise(S[SLOT.warp + 1], x, z)[0], X = x + m.warp * m.length * wx, Z = z + m.warp * m.length * wz;
   const patch = slotNoise(S[SLOT.patch], x, z)[0], level = M + m.patch * patch;
   const mask = m.base + (1 - m.base) * smooth(m.from, m.to, level);
@@ -241,6 +275,13 @@ export function reliefAt(recipe, M, x, z) {
     h += d.height * field * (Math.pow(shape(slotAt(S[SLOT.dunes], x, z)[0] + wander), 1.3) - 0.45 + 0.2 * (shape(slotAt(S[SLOT.ripples], x, z)[0] + 2.3 * wander) - 0.5));
   }
   if (c.density > 0) for (let i = 0; i < CRATER_CELLS.classes; i++) h += S[SLOT.craters + i].length * craterClass(S[SLOT.craters + i], x, z, c.density, c.deep);
+  if (v.height > 0) h += v.height * volcanoAt(S[SLOT.volcano], v, x, z)[0];
+  if (k.depth > 0) {
+    // canyons along the lines where a slow noise is zero (a network of winding loops that leaves mesas between), finer ones beside them
+    const X2 = x + k.wander * k.length * slotNoise(S[SLOT.canyon + 2], x, z)[0], Z2 = z + k.wander * k.length * slotNoise(S[SLOT.canyon + 3], x, z)[0];
+    const d1 = Math.abs(slotNoise(S[SLOT.canyon], X2, Z2)[0]) * k.length / (1.6 * k.width), d2 = Math.abs(slotNoise(S[SLOT.canyon + 1], X2, Z2)[0]) * S[SLOT.canyon + 1].length / (0.72 * k.width);
+    h -= k.depth * Math.max(1 - wallAt(k, d1, RISER), k.branches * (1 - wallAt(k, d2, RISER)));
+  }
   return h;
 }
 // where the terraces are cut: everywhere when `from` is under every height, else between the macro's heights from and to (deep canyon floors and walls)
@@ -312,12 +353,14 @@ export const RADII = Object.freeze({mercury: 2.4397e6, moon: 1.7374e6, io: 1.821
 // ---------- the same sums in GLSL ----------
 const QUAD_VERT = "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }";
 const NUMBERS = ["mHeight", "mLength", "mRidged", "mGain", "mErosion", "mWarp", "mSharp", "mMid", "mFrom", "mTo", "mBase", "mPatch", "norm", "octaves", "gHeight", "gCalm",
-  "dHeight", "dWander", "dField", "dFrom", "dTo", "cDensity", "cDeep", "sStep", "sStrength", "sSoft", "sWobble", "sFrom", "sTo"];
+  "dHeight", "dWander", "dField", "dFrom", "dTo", "cDensity", "cDeep", "sStep", "sStrength", "sSoft", "sWobble", "sFrom", "sTo",
+  "kDepth", "kWidth", "kLength", "kFloor", "kSteps", "kBranches", "kWander", "vHeight", "vRadius", "vDensity", "vCrater", "vRidges"];
 // the recipe's numbers in the order the shaders name them
 function numbersOf(r) {
-  const m = r.mountains, g = r.rough, d = r.dunes, c = r.craters, s = r.strata;
+  const m = r.mountains, g = r.rough, d = r.dunes, c = r.craters, s = r.strata, k = r.canyons, v = r.volcanoes;
   return [m.height, m.length, m.ridged, m.gain, m.erosion, m.warp, m.sharp, m.mid, m.from, m.to, m.base, m.patch, r.norm, r.octaves, g.height, g.calm,
-    d.height, d.wander, d.field, d.from, d.to, c.density, c.deep, s.step, s.strength, s.soft, s.wobble, s.from, s.to];
+    d.height, d.wander, d.field, d.from, d.to, c.density, c.deep, s.step, s.strength, s.soft, s.wobble, s.from, s.to,
+    k.depth, k.width, k.length, k.floor, k.steps, k.branches, k.wander, v.height, v.radius, v.density, v.crater, v.ridges];
 }
 const HASH_GLSL = /* glsl */`
 const vec2 LAND_G[16] = vec2[16](${GRADIENTS.map((g) => `vec2(${g[0].toFixed(9)}, ${g[1].toFixed(9)})`).join(", ")});
@@ -333,12 +376,33 @@ vec3 landNoise(ivec2 ic, vec2 f, uint sd) {
   vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0), du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
   return 1.41421356 * vec3(va + u.x * (vb - va) + u.y * (vc - va) + u.x * u.y * k, a + u.x * (b - a) + u.y * (c - a) + u.x * u.y * (a - b - c + d) + du * vec2(vb - va + u.y * k, vc - va + u.x * k));
 }`;
+const VOLCANO_GLSL = /* glsl */`
+// a volcano across its radius: the cone's height as a share of its own (as coneAt)
+float coneAt(float d, float angle, float turn, float crater, float ridges) {
+  if (d >= 1.0) return 0.0;
+  float flank = pow(1.0 - d, 1.6) * (1.0 + ridges * sin(9.0 * angle + turn) * smoothstep(crater, 3.0 * crater, d) * (1.0 - d));
+  return min(flank, pow(1.0 - crater, 1.6) - 0.5 * crater * smoothstep(crater, 0.55 * crater, d));
+}
+// the volcanoes near q (the lattice's cells; ic: the whole cells of the place): the summed height, the nearest one's d, its bearing, its turn; set: density, radius in cells, crater, ridges
+vec4 volcanoAt(vec2 q, ivec2 ic, uint sd, vec4 set) {
+  vec2 c = floor(q); vec4 o = vec4(0.0, 9.0, 0.0, 0.0);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    uint a = landHash(ic + ivec2(i, j), sd), b = landHash(ic + ivec2(i, j), sd + 77u);
+    if (float(b & 65535u) / 65535.0 >= set.x) continue;
+    float size = 0.6 + 0.4 * float((a >> 20) & 1023u) / 1023.0;
+    vec2 e = q - (c + vec2(float(i), float(j)) + 0.3 + 0.4 * vec2(float(a & 1023u), float((a >> 10) & 1023u)) / 1023.0);
+    float d = length(e) / (set.y * size), angle = atan(e.y, e.x), turn = 6.2831853 * float((b >> 16) & 255u) / 255.0;
+    o.x += size * coneAt(d, angle, turn, set.z, set.w);
+    if (d < o.y) o.yzw = vec3(d, angle, turn);
+  }
+  return o;
+}`;
 // a height map: the macro through its spline, the recipe on it, each term faded as it gets finer than two cells
 const MAP_FRAG = /* glsl */`
 precision highp float; precision highp int;
 uniform sampler2D uMacro;
 uniform vec4 uMacroAt;           // the map's corner in the lattice's cells (x, z), lattice cells a metre, metres a unit of the macro's height
-uniform vec4 uMap;               // a cell (m), the terraces' softness in this map, the lattice's points across
+uniform vec4 uMap;               // a cell (m), the terraces' softness in this map, the lattice's points across, a canyon wall's risers' softness in this map
 uniform vec4 uSlotA[${SLOT.count}];           // a slot's rows: (cos, -sin) and (sin, cos) over its length
 uniform vec4 uSlotB[${SLOT.count}];           // the map's corner in the slot's cells (the share of a cell), the slot's weight in this map, its seed
 uniform vec2 uSlotI[${SLOT.count}];           // the map's corner in the slot's cells (the whole cells)
@@ -373,6 +437,11 @@ float macroHeight(vec2 l) {
   float n = uMap.z; vec2 m = clamp(uMacroAt.xy + l * uMacroAt.z, 0.0, n - 1.0), i = floor(m); vec4 wu = splineW(m.x - i.x), wv = splineW(m.y - i.y); float h = 0.0;
   for (int b = 0; b < 4; b++) for (int a = 0; a < 4; a++) h += wu[a] * wv[b] * texelFetch(uMacro, ivec2(clamp(i + vec2(float(a), float(b)) - 1.0, 0.0, n - 1.0)), 0).r;
   return h * uMacroAt.w;
+}
+${VOLCANO_GLSL}
+float wallAt(float d, float soft) {
+  float u = clamp((d - R_kFloor) / (1.0 - R_kFloor), 0.0, 1.0), q = min(u * R_kSteps, R_kSteps - 1e-4), f = floor(q);
+  return 0.85 * (f + smoothstep(0.5 - soft, 0.5 + soft, q - f)) / R_kSteps + 0.15 * u;
 }
 float duneShape(float ph) { float t = fract(ph); return t < 0.7 ? t / 0.7 : (1.0 - t) / 0.3; }
 void main() {
@@ -411,6 +480,16 @@ void main() {
 #endif
 #ifdef CRATERS
   for (int i = 0; i < int(uCount.z); i++) h += uSlotB[${SLOT.craters} + i].z * inversesqrt(dot(uSlotA[${SLOT.craters} + i].xy, uSlotA[${SLOT.craters} + i].xy)) * craterClass(${SLOT.craters} + i, l);
+#endif
+#ifdef VOLCANOES
+  { vec2 q = slotAt(${SLOT.volcano}, l), c = floor(q); h += R_vHeight * volcanoAt(q, ivec2(c) + ivec2(uSlotI[${SLOT.volcano}]), uint(uSlotB[${SLOT.volcano}].w), vec4(R_vDensity, R_vRadius * length(uSlotA[${SLOT.volcano}].xy), R_vCrater, R_vRidges)).x; }
+#endif
+#ifdef CANYONS
+  {
+    vec2 L2 = l + R_kWander * R_kLength * vec2(slotNoise(${SLOT.canyon + 2}, l), slotNoise(${SLOT.canyon + 3}, l));
+    float d1 = abs(slotNoise(${SLOT.canyon}, L2)) * R_kLength / (1.6 * R_kWidth), d2 = abs(slotNoise(${SLOT.canyon + 1}, L2)) / (length(uSlotA[${SLOT.canyon + 1}].xy) * 0.72 * R_kWidth);
+    h -= R_kDepth * uSlotB[${SLOT.canyon}].z * max(1.0 - wallAt(d1, uMap.w), R_kBranches * uSlotB[${SLOT.canyon + 1}].z * (1.0 - wallAt(d2, uMap.w)));
+  }
 #endif
   gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
 }`;
@@ -515,6 +594,10 @@ ${DISPLAY_GLSL}
 ${LAND_GLSL}
 ${RAY_GLSL}
 ${HASH_GLSL}
+#ifdef VOLCANOES
+${VOLCANO_GLSL}
+uniform vec4 uVolc, uVolcSet, uVolcMore;     // the camera's place in the volcanoes' lattice (the share of a cell, the whole cells); density, radius in cells, crater, ridges; cells a metre, the seed
+#endif
 uniform highp sampler2DArray uLandS;
 uniform sampler2D uLandT, uLandMacroA, uLandMacroB, uLandAmbient;
 uniform vec4 uLandTSize;    // the walk's picture: its size, its share of this picture
@@ -569,7 +652,7 @@ void main() {
   if (gn < (skies > 0.0 ? 0.25 : 1.5) * tn * pix) t = tn;
   else if (gf < 0.25 * tf * pix && tf > tn * 1.004) t = tf;
   else if (under) t = max(tf, lastAt(mu));
-  else if (skies > 0.0) {            // an outline against the sky: the pixel beside the ground is its soft edge
+  else if (skies > 0.0 || mu > uLandRange2.x) {            // an outline against the sky (or a ray over the horizon that clears every answer round it): the pixel beside the ground is its soft edge
     float an = 1.0 - gn / (tn * pix), af = 1.0 - gf / (tf * pix);
     t = an >= af ? tn : tf; cover = max(an, af);
     if (cover <= 0.0) discard;
@@ -586,13 +669,14 @@ void main() {
   float slope = length(grad), tone = 0.0, fine = 0.0; vec2 grain = vec2(0.0);
   // two slow octaves for the tone; then the four octaves under the map's cells, each faded as it gets finer than the pixel
   int j0 = clamp(int(ceil(9.0 - log2(cell))), 2, 11);
+  float gully = uLandWide.z * smoothstep(0.25, 0.7, slope);      // on steep rock the grain is ridges and gullies
   for (int n = 0; n < 6; n++) {
     int j = n < 2 ? n : min(j0 + n - 2, 11);
     float lam = 2048.0 * exp2(-float(j)), w = clamp(lam / (2.5 * foot) - 1.0, 0.0, 1.0) * (n < 2 ? 1.0 : (1.0 - clamp(lam / (2.0 * cell) - 1.0, 0.0, 1.0)) * step(float(j0 + n - 2), 11.5));
     vec2 q = p / lam + uDetA[j].xy, qc = floor(q);
     vec3 v = landNoise(ivec2(qc) + ivec2(uDetA[j].zw), q - qc, uint(uLandDet.w) + uint(j));
     if (n < 2) tone += w * v.x;
-    else { grain += w * uLandDet.x * pow(lam / 100.0, uLandDet.y) / lam * v.yz; fine += w * v.x; }
+    else { grain += w * uLandDet.x * pow(lam / 100.0, uLandDet.y) / lam * mix(v.yz, -1.8 * sign(v.x) * v.yz, gully); fine += w * mix(v.x, 1.0 - 2.4 * abs(v.x), gully); }
   }
   // the world's own colours and climate here
   vec2 mc = uLandMacro.xy + p * uLandMacro.z;
@@ -603,7 +687,7 @@ void main() {
   grain *= min(1.0, 0.45 * inversesqrt(max(dot(grain, grain), 1e-8)));      // no facet of the grain steeper than 0.45: a single pixel must not catch the sun alone
   vec2 gradD = grad + grain * mix(uLandDet.z, 1.0, smoothstep(0.08, 0.6, slope)) + wide * (uLandWide.y * smoothstep(150.0, 1500.0, foot));
   float slopeD = length(gradD);
-  float snow = smoothstep(-120.0, 120.0, h - line + 260.0 * tone + 60.0 * fine) * (1.0 - smoothstep(uSnow.z, uSnow.w, 0.5 * (slope + slopeD)));
+  float snow = smoothstep(-120.0, 120.0, h - line + 260.0 * tone + mix(60.0, -140.0, gully) * fine) * (1.0 - smoothstep(uSnow.z, uSnow.w, 0.5 * (slope + slopeD)));
   gradD = mix(gradD, grad + 0.25 * (gradD - grad), snow);
   float shade_ = 1.0 + 0.16 * tone + 0.07 * fine;
   vec3 ground = mix(uMatGround, max(mB.rgb, 0.0), uMat0.w);
@@ -613,6 +697,19 @@ void main() {
   vec3 albedo = mix(ground, mix(ground, rock, 0.55) * 1.08, uMat0.z * smoothstep(0.5 * uMat0.x, uMat0.x, slope));
   albedo = mix(albedo, rock, smoothstep(uMat0.x, uMat0.y, slopeD));
   albedo = mix(albedo, uMatSnow, snow);
+  float lava = max(mB.a, 0.0) * (0.25 + 0.75 * smoothstep(0.55, 0.95, 1.0 - abs(tone + 0.5 * fine))), warm = 0.0;
+#ifdef VOLCANOES
+  {
+    // a lake in each crater, channels winding down the flanks, fresh flows beside them darker than the old ground, older ones lighter
+    vec2 q = p * uVolcMore.x + uVolc.xy, qc = floor(q); vec4 vo = volcanoAt(q, ivec2(qc) + ivec2(uVolc.zw), uint(uVolcMore.y), uVolcSet);
+    float d = vo.y, cr = uVolcSet.z, a = vo.z + 0.3 * sin(6.0 * d + vo.w) + 0.12 * tone, run = cos(5.0 * a + vo.w);
+    float reach = smoothstep(0.8 * cr, 1.1 * cr, d) * (1.0 - smoothstep(0.6, 1.25, d)), flow = smoothstep(0.8, 0.97, run) * reach;
+    lava = max(smoothstep(0.62 * cr, 0.5 * cr, d), smoothstep(0.992, 0.999, run) * reach * (0.65 + 0.35 * fine));
+    warm = max(smoothstep(1.6 * cr, 0.5 * cr, d), smoothstep(0.93, 1.0, run) * reach);
+    albedo *= (1.0 - 0.55 * flow * (0.6 + 0.4 * tone)) * (1.0 + 0.5 * smoothstep(0.3, 0.9, cos(5.0 * a + vo.w + 2.1)) * reach);
+    albedo = mix(albedo, uMatRock * shade_, smoothstep(1.15, 0.7, d) * (1.0 - 0.6 * flow));      // the cone is bare rock, the plain ash
+  }
+#endif
   // the light: the sun after the air, the ground's shadow and the clouds', the sky's on what is open to it, what lit ground throws back
   vec3 n = normalize(upL - gradD.x * uLandE1 - gradD.y * uLandE2);
   float sunG = dot(uAirSun, upL), ndl = max(dot(n, uAirSun), 0.0), hs = max(h, 0.0) * uAirGeo.w / unit;
@@ -622,8 +719,8 @@ void main() {
   float k3 = min(floor(l) + 3.0, uLandLv.y), hollow = clamp(1.0 + uLandLit.x * (h - landRead(p, k3)) / (10.0 * uLandLv.w * exp2(k3)), 0.5, 1.15);
   vec3 back = uLandLit.y * 0.25 * Tair * max(sunG, 0.0) * (1.0 - 0.5 * dot(n, upL));
   vec3 col = uAirLight * albedo * (Tair * lit * ndl + 1.25 * amb * hollow * (0.55 + 0.45 * dot(n, upL)) + back * hollow);
-  // an open crust glows (the macro's glow, broken into cracks by the grain)
-  col += uMat1.w * vec3(1.0, 0.22, 0.03) * max(mB.a, 0.0) * (0.25 + 0.75 * smoothstep(0.55, 0.95, 1.0 - abs(tone + 0.5 * fine))) * 2.5 * pow(max(uLandLit.w, 1e-6), 0.8) * (1.0 - snow);
+  // lava glows (a volcano's lake and channels, or the macro's open crust broken into cracks by the grain) and lights the ground beside it faintly (a look)
+  col += uMat1.w * vec3(1.0, 0.22, 0.03) * (2.5 * lava + 0.05 * warm * (1.0 - lava)) * pow(max(uLandLit.w, 1e-6), 0.8) * (1.0 - snow);
   col *= pow(max(dot(col, LUMA) / uAirDusk.y, 1.0), -uAirDusk.x);
   col = airThrough(col, P / unit);
   // the depth, for the things of the scene and the water: ground under water lies behind everything
@@ -806,7 +903,8 @@ export class Land {
       uDetA: {value: Array.from({length: 12}, v4)}, uLandDet: {value: new THREE.Vector4(3 * mat.grain, 0.75, 1 - mat.rough * 0.8, (this.recipe.seed * 31 + 977) & 0xffff)},
       uMat0: {value: new THREE.Vector4(mat.steep[0], mat.steep[1], mat.scree, mat.ground)}, uMat1: {value: new THREE.Vector4(mat.bands, mat.band, mat.sandy, mat.glow)},
       uSnow: {value: new THREE.Vector4(climate ? mat.snowOver : (mat.snowLine ?? 1e9), climate ? this.macro.scale : 0, mat.snowSteep[0], mat.snowSteep[1])},
-      uLandLit: {value: new THREE.Vector4(1.2, 1, water ? 1 : 0, 1)}, uLandWide: {value: new THREE.Vector4(this.macro.scale, mat.wide, 0, 0)}, uMatRock: {value: v3().set(...this.colors.rock)}, uMatRock2: {value: v3().set(...this.colors.rock2)}, uMatSnow: {value: v3().set(...this.colors.snow)},
+      uLandLit: {value: new THREE.Vector4(1.2, 1, water ? 1 : 0, 1)}, uLandWide: {value: new THREE.Vector4(this.macro.scale, mat.wide, mat.gullies, 0)}, uVolc: {value: v4()}, uVolcSet: {value: new THREE.Vector4(this.recipe.volcanoes.density, this.recipe.volcanoes.radius / this.recipe.volcanoes.spacing, this.recipe.volcanoes.crater, this.recipe.volcanoes.ridges)},
+      uVolcMore: {value: new THREE.Vector4(1 / this.recipe.volcanoes.spacing, this.recipe.slots[SLOT.volcano].seed, 0, 0)}, uMatRock: {value: v3().set(...this.colors.rock)}, uMatRock2: {value: v3().set(...this.colors.rock2)}, uMatSnow: {value: v3().set(...this.colors.snow)},
       uMatSand: {value: v3().set(...this.colors.sand)}, uMatGround: {value: v3().set(...this.colors.sand)}, uDisplay: {value: 0}, uGrain: {value: 2}, uLandShow: {value: 0}, uLandSunSize: {value: Math.sin(sky.options.sunSize * RAD)},
 };
     // the bake of a map, of its shadow, the walk: a quad each
@@ -814,12 +912,12 @@ export class Land {
     this._plane = new THREE.PlaneGeometry(2, 2); this._camera = new THREE.Camera();
     const slotA = this.recipe.slots.map((s) => new THREE.Vector4(Math.cos(s.turn) / s.length, -Math.sin(s.turn) / s.length, Math.sin(s.turn) / s.length, Math.cos(s.turn) / s.length));
     this._bake = quad(new THREE.ShaderMaterial({vertexShader: QUAD_VERT, fragmentShader: MAP_FRAG, depthTest: false, depthWrite: false, toneMapped: false,
-      defines: {...(this.recipe.dunes.height > 0 ? {DUNES: 1} : {}), ...(this.recipe.craters.density > 0 ? {CRATERS: 1} : {}), ...(this.recipe.strata.strength > 0 ? {STRATA: 1} : {})},
+      defines: {...(this.recipe.canyons.depth > 0 ? {CANYONS: 1} : {}), ...(this.recipe.volcanoes.height > 0 ? {VOLCANOES: 1} : {}), ...(this.recipe.dunes.height > 0 ? {DUNES: 1} : {}), ...(this.recipe.craters.density > 0 ? {CRATERS: 1} : {}), ...(this.recipe.strata.strength > 0 ? {STRATA: 1} : {})},
       uniforms: {uMacro: {value: maps[0].texture}, uMacroAt: {value: v4()}, uMap: {value: v4()}, uCount: {value: v4()}, uTail: {value: 0}, uSlotA: {value: slotA}, uSlotB: {value: this.recipe.slots.map(v4)}, uSlotI: {value: this.recipe.slots.map(() => new THREE.Vector2())}, uR: {value: numbersOf(this.recipe)}}}));
     this._shade = quad(new THREE.ShaderMaterial({vertexShader: QUAD_VERT, fragmentShader: SHADOW_FRAG, defines: {NL: nl}, depthTest: false, depthWrite: false, toneMapped: false,
       uniforms: {...this.fieldUniforms, uShadeSun: {value: v4()}, uShadeAt: {value: v4()}, uShadeSet: {value: new THREE.Vector4(0.06, 0, 0, 0)}}}));
     this._walk = quad(new THREE.ShaderMaterial({vertexShader: RAY_VERT, fragmentShader: WALK_FRAG, defines: {NL: nl, STEPS: steps}, depthTest: false, depthWrite: false, toneMapped: false, uniforms: {...this.fieldUniforms, ...ray}}));
-    this.material = new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {NL: nl}, vertexShader: RAY_VERT, fragmentShader: LAND_FRAG(NONE), depthTest: true, depthFunc: THREE.AlwaysDepth, depthWrite: true, toneMapped: false, fog: false, transparent: false,
+    this.material = new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {NL: nl, ...(this.recipe.volcanoes.height > 0 ? {VOLCANOES: 1} : {})}, vertexShader: RAY_VERT, fragmentShader: LAND_FRAG(NONE), depthTest: true, depthFunc: THREE.AlwaysDepth, depthWrite: true, toneMapped: false, fog: false, transparent: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor});
     /** The ground: drawn after the air's dome and before the sea, the clouds and the scene's other things (which it hides where they are behind it: it writes its depth). */
     this.object = new THREE.Mesh(this._plane, this.material);
@@ -842,7 +940,7 @@ export class Land {
     this._middles = this.maps.map(() => null); this._shaded = this.maps.map(() => null); this._sun = "";
     /** How many height maps and shadows the updates have baked so far. */
     this.bakes = {maps: 0, shadows: 0};
-    this.material.addEventListener("dispose", () => { this.heights.dispose(); this.shadows.dispose(); this.walk.dispose(); for (const q of [this._bake, this._shade, this._walk]) q.material.dispose(); if (this._probe) { this._probe.target.dispose(); this._probe.material.dispose(); } if (this._made) this._made.forEach((m) => m.dispose()); });
+    this.material.addEventListener("dispose", () => { this.heights.dispose(); this.shadows.dispose(); this.walk.dispose(); for (const q of [this._bake, this._shade, this._walk]) q.material.dispose(); if (this._probe) { this._probe.target.dispose(); this._probe.material.dispose(); } if (this._pack) { this._pack.material.dispose(); this._unpack.material.dispose(); } if (this._made) this._made.forEach((m) => m.dispose()); });
   }
 
   /** Let something shade the sun's light on the ground: `shade` is {glsl, uniforms} whose GLSL defines `float landShade(vec2 p,
@@ -857,6 +955,9 @@ export class Land {
     this.material.needsUpdate = true;
     return this;
   }
+
+  /** How strongly lava glows from now on (1: the recipe's own `materials.glow` of 1; 0: none): call it every frame with a level of `ctx.music` for a glow that pulses. Returns the ground. */
+  setGlow(level) { this.uniforms.uMat1.value.w = number("setGlow: the level", level, 0, 20); return this; }
 
   // a scene place in the frame, metres
   _flat(x, z) { const c = this.sky.state.center, unit = this.sky.options.unit; return [(x - c[0]) * unit, (z - c[2]) * unit]; }
@@ -898,6 +999,25 @@ export class Land {
     return {height: out[0], x: mx - W / 2 + (i + 0.5) * cell, z: mz - W / 2 + (j + 0.5) * cell};
   }
 
+  // a height map: baked, or taken from vidgen's cache of baked maps (the heights' own bits as four bytes a cell, so what comes back is what was baked).
+  // Kept: every map of the first update (a still, a camera at rest, the start of a shot) and later the maps from the fourth on (32 km wide: they move rarely)
+  _map(k, key, keep) {
+    if (!keep || !this.macro.inputs) { this._draw(this._bake, this.heights, k); return; }
+    const N = this.cells, m = this.macro, r = this.renderer;
+    if (!this._pack) {
+      const quad = (fragmentShader, uniforms) => { const material = new THREE.ShaderMaterial({vertexShader: QUAD_VERT, fragmentShader, uniforms, depthTest: false, depthWrite: false, toneMapped: false}), mesh = new THREE.Mesh(this._plane, material), scene = new THREE.Scene(); mesh.frustumCulled = false; scene.add(mesh); return {scene, material}; };
+      this._pack = quad("uniform highp sampler2DArray uLandH; uniform float uLayer; void main() { uint b = floatBitsToUint(texelFetch(uLandH, ivec3(gl_FragCoord.xy, int(uLayer)), 0).r); gl_FragColor = vec4(float(b & 255u), float((b >> 8) & 255u), float((b >> 16) & 255u), float(b >> 24)) / 255.0; }", {uLandH: {value: this.heights.texture}, uLayer: {value: 0}});
+      this._unpack = quad("uniform sampler2D uPacked; void main() { uvec4 u = uvec4(texelFetch(uPacked, ivec2(gl_FragCoord.xy), 0) * 255.0 + 0.5); gl_FragColor = vec4(uintBitsToFloat(u.x | (u.y << 8) | (u.z << 16) | (u.w << 24))); }", {uPacked: {value: null}});
+    }
+    let drawn = false;
+    const [packed] = baked(r, "space-land/map", {version: VERSION, map: k, middle: key, cells: N, radius: this.sky.model.radius, numbers: numbersOf(this.recipe), slots: this.recipe.slots, macro: {type: m.type, inputs: m.inputs, at: m.at, n: m.n}}, {
+      targets: () => [new THREE.WebGLRenderTarget(N, N, {type: THREE.UnsignedByteType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, generateMipmaps: false})],
+      draw: ([target]) => { this._draw(this._bake, this.heights, k); this._pack.material.uniforms.uLayer.value = k; this._pack.material.uniformsNeedUpdate = true; this._draw(this._pack, target); drawn = true; },
+    });
+    if (!drawn) { this._unpack.material.uniforms.uPacked.value = packed.texture; this._unpack.material.uniformsNeedUpdate = true; this._draw(this._unpack, this.heights, k); }
+    packed.dispose();
+  }
+
   _draw(pass, target, layer) { const r = this.renderer; r.setRenderTarget(target, layer); r.render(pass.scene, this._camera); }
 
   /** The ground for `camera` (the THREE.PerspectiveCamera the picture is drawn with): the height maps round it (baked
@@ -924,7 +1044,7 @@ export class Land {
     const finest = clamp(Math.max(Math.floor(Math.log2(Math.max(over, 2) * pix / (1.5 * cell0))), Math.floor(Math.log2(Math.max(near, 1) / (0.4 * WIDTH)) + 1)), 0, nl - 2);
     const before = r.getRenderTarget(), auto = r.autoClear, colour = r.getClearColor(new THREE.Color()), alpha = r.getClearAlpha();
     r.autoClear = true; r.setClearColor(0x000000, 0);
-    const bake = this._bake.material.uniforms, m = this.macro;
+    const bake = this._bake.material.uniforms, m = this.macro, first = this.bakes.maps === 0;
     for (let k = finest; k < nl; k++) {
       const W = this.maps[k], cell = W / this.cells, mid = mapMiddle(W, x, z), key = `${mid[0]}|${mid[1]}`;
       u.uLandC.value[k].set(mid[0] - x, mid[1] - z, 1 / W, cell);
@@ -934,7 +1054,8 @@ export class Land {
       this.recipe.slots.forEach((s, i) => {
         const cs = Math.cos(s.turn), sn = Math.sin(s.turn), qx = (cs * ox - sn * oz) / s.length, qz = (sn * ox + cs * oz) / s.length;
         const octave = i >= SLOT.mountains && i < SLOT.mountains + 12 || i >= SLOT.rough && i < SLOT.rough + 4, feature = i === SLOT.dunes || i === SLOT.ripples ? 0.5 : i >= SLOT.craters ? 0.3 : 0;
-        const weight = octave ? clamp(s.length / (2 * cell) - 1, 0, 1) : feature ? clamp(feature * s.length / (2 * cell) - 1, 0, 1) : 1;
+        const kk = this.recipe.canyons, canyon = i === SLOT.canyon ? kk.width : i === SLOT.canyon + 1 ? 0.45 * kk.width : 0;
+        const weight = octave ? clamp(s.length / (2 * cell) - 1, 0, 1) : feature ? clamp(feature * s.length / (2 * cell) - 1, 0, 1) : canyon ? clamp(canyon / (3 * cell) - 1, 0, 1) : 1;
         bake.uSlotB.value[i].set(qx - Math.floor(qx), qz - Math.floor(qz), weight, s.seed); bake.uSlotI.value[i].set(Math.floor(qx), Math.floor(qz));
       });
       const shown = (from, count) => { let n = 0; while (n < count && bake.uSlotB.value[from + n].z > 0) n++; return n; };
@@ -943,9 +1064,9 @@ export class Land {
       for (let i = first + 1, a = mm.gain ** (first + 1); i < this.recipe.octaves; i++, a *= mm.gain) tail += a * Math.pow(clamp(1.6 * mean(i - 1), 1e-4, 1), mm.erosion) * mean(i);
       bake.uCount.value.set(first, shown(SLOT.rough, 4), shown(SLOT.craters, CRATER_CELLS.classes), first < this.recipe.octaves ? mean(first) : 0); bake.uTail.value = tail;
       bake.uMacroAt.value.set(ox / m.spacing + (m.n - 1) / 2, oz / m.spacing + (m.n - 1) / 2, 1 / m.spacing, m.scale);
-      bake.uMap.value.set(cell, clamp(0.15 * cell / this.recipe.strata.step, 0, 0.5), m.n, 0);
+      bake.uMap.value.set(cell, clamp(0.15 * cell / this.recipe.strata.step, 0, 0.5), m.n, clamp(1.5 * cell * this.recipe.canyons.steps / ((1 - this.recipe.canyons.floor) * this.recipe.canyons.width), RISER, 0.5));
       this._bake.material.uniformsNeedUpdate = true;
-      this._draw(this._bake, this.heights, k);
+      this._map(k, key, first || k >= 3);
       this._middles[k] = key; this._shaded[k] = null; this.bakes.maps++;
     }
     u.uLandLv.value.set(finest, nl - 1, 0.4 * WIDTH, cell0);
@@ -972,6 +1093,7 @@ export class Land {
     // the picture's own numbers: the camera's place in the lattice and in every grain octave
     u.uLandMacro.value.set(x / m.spacing + (m.n - 1) / 2, z / m.spacing + (m.n - 1) / 2, 1 / m.spacing, m.n);
     for (let j = 0; j < 12; j++) { const lam = 2048 / 2 ** j, qx = x / lam, qz = z / lam; u.uDetA.value[j].set(qx - Math.floor(qx), qz - Math.floor(qz), Math.floor(qx), Math.floor(qz)); }
+    { const len = this.recipe.volcanoes.spacing, qx = x / len, qz = z / len; u.uVolc.value.set(qx - Math.floor(qx), qz - Math.floor(qz), Math.floor(qx), Math.floor(qz)); }
     u.uLandLit.value.w = sky.state.gain;
     r.setRenderTarget(before); r.autoClear = auto; r.setClearColor(colour, alpha);
     Object.assign(this.horizon, {distance: horizonDistance(R, hc), dip: horizonDip(R, hc), height: hc, over, finest});

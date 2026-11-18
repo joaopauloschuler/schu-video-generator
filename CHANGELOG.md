@@ -72,6 +72,13 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   (`depth: ground.depth`); clouds behind mountains (`behind: ground.behind`, new in
   `vidgen/space-clouds`). 1.35 s a frame at 1280x720 after 7 to 19 s for the maps; nine parts
   under the new kind `land` (`vidgen parts --kind land`).
+- **Canyon land, volcanoes, a sharper range** (Step 384.1): the `canyon` ground of
+  `vidgen/space-land` is a plateau cut by winding canyons 1,100 m deep with stepped walls in
+  banded rock and mesas between; `volcanic` has cones with a crater, a lava lake and channels
+  that glow at dusk (`ground.setGlow(level)` for a pulse on the music); the `alpine` range has
+  finer ridges and gullies and holds from about 150 m. The height maps are kept in vidgen's
+  cache of baked maps: a page that starts where another did draws its first still in 8 s
+  instead of 12 s at 1280x720.
 - **Cloud decks and gas giants** (Step 383): `vidgen/space-clouds` draws clouds in a
   `vidgen/space-air` sky, on the world's own sphere: `clouds(renderer, sky, {sky: "fair", seed})`
   gives decks the camera can be under, in, between and over (`cumulus`: a broken field with flat

@@ -28937,11 +28937,53 @@ forests and no plants.
   1024 cells): a far skyline is smoother than a near one. Outlines between two ridges are
   hard-edged (one against the sky is soft). A camera inside the ground gets a plain colour.
   The frame is flat (x and z are the scene's): usable within about half a radius of the place.
+- **Step 384.1** (a fix pass: canyon land, volcanoes, a sharper range, the start).
+  - *Canyons* (new recipe part `canyons: {depth, width, length, floor, steps, branches, wander}`,
+    used by `canyon` only): a canyon runs where a slow noise (cells of `length`, read through a
+    warp of `wander` x `length`) is zero, so the canyons are a network of winding loops with
+    mesas left between; finer ones (`length` / 3.1, 0.45 of the width, `branches` of the depth)
+    lie beside and across them. Across its width `d` (0 the middle, 1 the rim, half the width
+    `width` metres) the ground is cut by `depth` x (1 - wall): the floor flat to `floor`, then
+    `steps` benches with risers `RISER` (0.12) of a step wide, 15 % of the wall a plain slope
+    (talus). The rock's two colours alternate in bands (`materials.band`). The preset: the
+    world "ochre" at [49, -172] (was [-1, 74]), a nearly flat plateau (mountains 160 m, no
+    ridges, no strata, no craters), canyons 1,100 m deep and 2 x 2,200 m wide, four benches,
+    the floor half the width. Not a drainage tree: loops and crossings (stated).
+  - *Volcanoes* (new part `volcanoes: {height, radius, spacing, density, crater, ridges}`, used
+    by `volcanic` only): at most one cone in each cell of a lattice `spacing` wide (`density`
+    the share of cells), 0.6 to 1 of `height` and `radius`; the height (1 - d)^1.6 with nine
+    ridges down the flanks and a crater `crater` of the radius wide (`coneAt`). In the picture
+    (compiled in only with volcanoes): a lava lake in the crater, five channels winding down
+    each cone, fresh flows beside them darker and older ones lighter than the ash, the cone
+    bare rock; lake and channels glow (`materials.glow`; 2.5 whites, lifted with the exposure
+    to the power 0.8, so they carry a dusk picture) and light the ground beside them a little
+    (5 % of the glow: a look, no light is cast). `ground.setGlow(level)` changes the glow from
+    then on: call it every frame with a level of `ctx.music` for a pulse. The preset: cones
+    3,000 m high, 6.5 km in radius, 30 km apart, on ash plains (mountains 260 m, no craters).
+    A snow cap: `materials: {snowLine: 2200}`.
+  - *The range* (`alpine` and every ocean world): the mountains' `gain` 0.5 → 0.55 (finer
+    ridges 1.5 to 3 times higher), rock bands 55 m high at half strength, and on slopes over
+    0.25 the grain is ridges and gullies (`materials.gullies`), with snow lying in the gullies.
+    The finest map now differs from `heightAt` by up to 1.3 m at 8 m cells (was 0.5 m).
+  - *What Step 385 reads*: `definition().recipe` has two more parts (`canyons`, `volcanoes`) and
+    34 slots (29 before: the old ones keep their index, length, turn and seed); `reliefAt`
+    adds the cones and then cuts the canyons, after everything else. For `mars`, `dunes`,
+    `snow`, `airless` the heights are the same numbers as before (both parts are off there).
+  - *The start*: the height maps go through `vidgen/baked` (`space-land/map`; a map's own
+    float bits as four bytes a cell, so a map from the cache is the baked one bit for bit): all
+    maps of the first update of a page (a still, a camera at rest, a shot's start), later only
+    the maps from the fourth on (32 km wide and wider: they move every 2 km or more). A camera
+    that flies does not fill the cache with fine maps. Measured, the alpine range's first still:
+    1280x720 without the cache 11.8 s, cold 14.8 s (the maps are read back and stored), warm
+    8.0 s; 320x180 3.2 / 4.1 / 2.1 s; on disk 37 MB for the ten maps of 1024 cells, 9 MB for
+    512 cells (a place and a quality). Not kept: the shadows (2.3 s at 1280x720 for a sun).
+    The pictures are the same with, without and from the cache (compared byte for byte).
+  - *Cost*: the range from 2,500 m at 1280x720 1.375 s a frame before, 1.386 s after.
 - **Exports.** `land`, `Land`, `macroOf`, `survey`, `recipeOf`, `reliefAt`, `macroAt`,
-  `heightOf`, `normalOf`, `flatMacro`, `hash2`, `noised`, `bowl`, `horizonDistance`,
+  `heightOf`, `normalOf`, `flatMacro`, `hash2`, `noised`, `bowl`, `coneAt`, `horizonDistance`,
   `horizonDip`, `rayHeight`, `mapWidths`, `mapFor`, `mapMiddle`, `placeFrame`, `vacuum`,
   constants `PRESETS`, `TYPES`, `QUALITIES`, `WIDTH`, `MAPS`, `FINEST`, `MACRO`, `OCTAVES`,
-  `GRADIENTS`, `CREST`, `CRATER_CELLS`, `RADII`, `LAND_GLSL`, `VERSION`.
+  `GRADIENTS`, `CREST`, `RISER`, `CRATER_CELLS`, `RADII`, `LAND_GLSL`, `VERSION`.
 - **Tests** (`tests/test_web_space_land.py`): the module and its imports; the parts and their
   kind; in Node: the noise and its slope, recipes with errors and a did-you-mean, the relief
   from a seed within its bound, benches, craters and dunes only where asked, the spline, the

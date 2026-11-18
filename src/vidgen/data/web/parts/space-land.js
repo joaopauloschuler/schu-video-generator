@@ -16,7 +16,13 @@ function show(s, options, {water = false} = {}) {
   s.scene.remove(s.key, s.fill);
   const dome = air(s.renderer, what, {sun: sunDirection(o.elevation, o.azimuth), stars, ...(preset.air === null ? {exposure: "camera", ev: 1.3} : {})});
   const ground = land(s.renderer, dome, {quality: "fast", ...options});
-  const x = o.x ?? 0, z = o.z ?? 0, h = o.height ?? ground.heightAt(x, z) + o.over;
+  let x = o.x ?? 0, z = o.z ?? 0;
+  if (o.towards) {            // stand `back` metres before the highest ("peak") or the lowest ("floor") ground within 30 km, looking at it
+    let best = null;
+    for (let i = -20; i <= 20; i++) for (let j = -20; j <= 20; j++) { const v = ground.heightAt(i * 1500, j * 1500) * (o.towards === "floor" ? -1 : 1); if (!best || v > best[0]) best = [v, i * 1500, j * 1500]; }
+    x = best[1] - Math.sin(b) * o.back; z = best[2] + Math.cos(b) * o.back;
+  }
+  const h = o.height ?? ground.heightAt(x, z) + o.over;
   s.camera.position.set(x, h, z); s.camera.up.set(0, 1, 0); s.camera.near = 1; s.camera.far = 1e8; s.camera.fov = o.fov;
   s.camera.lookAt(x + Math.sin(b) * Math.cos(a) * 1000, h + Math.sin(a) * 1000, z - Math.cos(b) * Math.cos(a) * 1000); s.camera.updateProjectionMatrix(); s.camera.updateMatrixWorld();
   s.scene.add(dome.object, ground.object);
@@ -44,9 +50,9 @@ definePart({"name": "land-mars", "kind": "land", "module": "vidgen/space-land",
 (s) => show(s, {preset: "mars"}));
 
 definePart({"name": "land-canyon", "kind": "land", "module": "vidgen/space-land",
-  "label": "canyon land on the invented world \"ochre\": benches and cliffs 600 m high cut into the plateau (a look)",
-  "use": "land(renderer, sky, {preset: \"canyon\"})  // strata: {step, strength, soft}",
-  "options": {"over": 3000, "pitch": -12, "heading": 100, "fov": 55, "elevation": 16, "azimuth": 200}, "seed": 3},
+  "label": "canyon land on the invented world \"ochre\": winding canyons 1,100 m deep with stepped, banded walls, mesas between (a look)",
+  "use": "land(renderer, sky, {preset: \"canyon\"})  // canyons: {depth, width, length, floor, steps, branches}",
+  "options": {"towards": "floor", "back": 6000, "over": 3000, "pitch": -20, "heading": 100, "fov": 55, "elevation": 22, "azimuth": 200}, "seed": 3},
 (s) => show(s, {preset: "canyon"}));
 
 definePart({"name": "land-dunes", "kind": "land", "module": "vidgen/space-land",
@@ -62,9 +68,9 @@ definePart({"name": "land-snow", "kind": "land", "module": "vidgen/space-land",
 (s) => show(s, {preset: "snow"}));
 
 definePart({"name": "land-volcanic", "kind": "land", "module": "vidgen/space-land",
-  "label": "the basalt plains of the lava world \"ember\" under a thin air (lighter than the globe's own: a look)",
-  "use": "land(renderer, sky, {preset: \"volcanic\"})",
-  "options": {"over": 1000, "pitch": -8, "heading": 0, "fov": 55, "elevation": 35, "azimuth": 60}, "seed": 3},
+  "label": "a volcano of the lava world \"ember\" after sunset: a cone 3 km high, the lake in its crater and the channels down its flanks glowing (invented; a look)",
+  "use": "land(renderer, sky, {preset: \"volcanic\"})  // volcanoes: {height, radius, spacing, density}; ground.setGlow(level)",
+  "options": {"towards": "peak", "back": 14000, "over": 1200, "pitch": 3, "heading": 0, "fov": 50, "elevation": -4, "azimuth": 20}, "seed": 3},
 (s) => show(s, {preset: "volcanic"}));
 
 definePart({"name": "land-airless", "kind": "land", "module": "vidgen/space-land",

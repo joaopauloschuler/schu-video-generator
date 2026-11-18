@@ -7941,13 +7941,15 @@ north; the scene's y is a height only near the origin (the sphere falls away: us
 
 | `land(renderer, sky, options)` | default | what it does |
 |---|---|---|
-| `preset` | none | `alpine` (an Earth-like range with snow), `mars` (dust, craters, scarps; the air `"mars"`), `canyon` (benches and cliffs on the invented world "ochre"), `dunes` (a sand sea on "ochre"), `snow` (the ice world "boreas"; the air `"thin"`), `volcanic` (the basalt of "ember"; `"thin"`), `airless` (the "moon"; an air from `vacuum()`) |
+| `preset` | none | `alpine` (an Earth-like range with snow), `mars` (dust, craters, scarps; the air `"mars"`), `canyon` (winding canyons with stepped, banded walls and mesas on the invented world "ochre"), `dunes` (a sand sea on "ochre"), `snow` (the ice world "boreas"; the air `"thin"`), `volcanic` (volcanoes with glowing lava on the ash plains of "ember"; `"thin"`), `airless` (the "moon"; an air from `vacuum()`) |
 | `world`, `at` | the preset's | a world of `vidgen/space-bodies` (a name or its options) and the place on it under the scene's origin, `[latitude, longitude]` in degrees; `survey(renderer, world)` gives the heights round the globe to choose by |
 | `seed` | the world's | the relief's own seed (the large forms are the world's) |
 | `mountains` | the type's | `{height, length, ridged, gain, erosion, warp, sharp, mid, from, to, base, patch}`: `height` and `length` in metres; `from`, `to`: the macro's heights between which the mountains grow; `base`: their share elsewhere |
 | `strata` | the type's | `{step, strength, soft, wobble, length, from, to}`: benches `step` metres apart with cliffs between |
 | `dunes` | none | `{height, length, direction, wander, field, from, to}`: `direction` where the wind blows to (degrees, 0 = north) |
 | `craters` | the type's | `{density, largest, deep}`: the share of cells with a crater (0 to 1), the largest in metres |
+| `canyons` | none | `{depth, width, length, floor, steps, branches, wander}`: winding canyons `depth` metres deep and twice `width` wide, `length` apart, with `steps` benches in their walls and mesas between |
+| `volcanoes` | none | `{height, radius, spacing, density, crater, ridges}`: cones with a crater, a lava lake and channels that glow (`materials.glow`; `ground.setGlow(level)` every frame for a pulse, such as a level of `ctx.music`) |
 | `rough` | the type's | `{height, length, calm}`: the plains' roughness |
 | `materials` | the type's | `{rock, rock2, snow, sand}` (colours; default the world's own), `steep` (the slopes between which rock shows), `scree`, `bands`, `band` (metres), `snowLine` (metres; default an ocean world's climate, none elsewhere), `snowOver`, `snowSteep`, `sandy`, `grain`, `rough`, `glow`, `ground` (the share of the globe's colour on flat ground), `wide` |
 | `quality` | `"standard"` | `fast` (maps of 256 / 512 cells for a picture up to 400 rows / larger, the walk at a third of the picture), `standard` (512 / 1024, half), `fine` (1024, half, more steps) |
@@ -7959,8 +7961,9 @@ north; the scene's y is a height only near the origin (the sphere falls away: us
 heights' definition (what the finest map draws); `ground.horizon` holds the last camera's
 `{distance, dip, height, over, finest}`; `ground.definition()` is the recipe and the macro's
 heights as plain data. Costs: 1.35 s a frame at 1280x720 (0.12 s at 320x180), and the first
-frame 7 to 19 s more at 1280x720 for the maps (`fast` 2.3 s; 2.4 s at 320x180); see DESIGN
-§123.6. From under about 400 m over the ground the range looks soft; deserts and crater fields
+frame 7 to 19 s more at 1280x720 for the maps (`fast` 2.3 s; 2.4 s at 320x180); a page that
+starts where another did takes its maps from vidgen's cache of baked maps (the first still 8 s
+instead of 12 s at 1280x720; 37 MB a place on disk); see DESIGN §123.6. From under about 400 m over the ground the range looks soft; deserts and crater fields
 hold up from 200 m.
 
 **Cloud decks, towers, lightning, a giant's decks: `vidgen/space-clouds`** (Step 383, DESIGN §123.5).

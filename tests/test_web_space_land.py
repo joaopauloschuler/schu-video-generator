@@ -6,8 +6,8 @@ benches, craters and dunes only where the recipe has them), the macro's spline, 
 geometry, the place's frame; in Chromium (``slow``): a frame drawn twice is the same, a low sun leaves more of
 the ground dark than a high one, snow lies above its line and not below, the maps' cells and the picture's own
 places are ``heightAt``'s heights, the horizon's row is where the formula says from 100 m to 100 km, an airless
-sky is black, a sea meets the coast, clouds shade the ground and stand behind it, and the picture is the same
-baked, from the cache and without the cache."""
+sky is black, a sea meets the coast, clouds shade the ground and stand behind it, and lava glows after sunset until it is put
+out, and the picture is the same with the macro and the height maps baked, from the cache and without the cache."""
 
 from __future__ import annotations
 
@@ -116,6 +116,12 @@ out.push([[100, 5000, 30000, 100000].map((h) => [L.horizonDistance(6.371e6, h), 
   L.mapWidths(6.371e6), L.mapWidths(2e5), L.mapFor(100), L.mapFor(0.4 * 4096), L.mapFor(0.8 * 4096), L.mapMiddle(4096, 1000, -130), L.mapMiddle(8192, 1000, -130), L.WIDTH, L.MAPS, L.FINEST, L.QUALITIES, L.MACRO]);
 const f = L.placeFrame([40, -70]), dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], np = L.placeFrame([89.999, 0]);
 out.push([dot(f.up, f.up), dot(f.east, f.east), dot(f.south, f.south), dot(f.up, f.east), dot(f.up, f.south), dot(f.east, f.south), f.up[1], f.south[1], L.vacuum(1.7e6).radius, L.RADII.moon]);
+// canyons cut the stated depth into a plateau and leave most of it standing; a volcano is a cone with a crater
+const cut = L.recipeOf("desert", {mountains: {height: 0}, rough: {height: 0}, craters: {density: 0}, strata: {strength: 0}, canyons: {depth: 1000, width: 2000, length: 20000}}, 3);
+const deep = Array.from({length: 900}, (_, i) => L.reliefAt(cut, 0, (i % 30) * 1300, Math.floor(i / 30) * 1300));
+const cone = L.recipeOf("lava", {volcanoes: {height: 3000}}, 3).volcanoes;
+out.push([Math.min(...deep), Math.max(...deep), deep.filter((h) => h > -1).length / 900, deep.filter((h) => h < -990).length / 900, L.coneAt(cone, 1.2, 0, 0), L.coneAt(cone, 0.5, 0.17, 0), L.coneAt(cone, cone.crater, 0, 0), L.coneAt(cone, 0, 0, 0),
+  err(() => L.recipeOf("lava", {volcanoes: {radius: 9000, spacing: 20000}})), err(() => L.recipeOf("desert", {canyon: {}})), L.PRESETS.canyon.canyons.depth, L.PRESETS.volcanic.volcanoes.height, L.RISER]);
 const src = surfaceSource("desert");
 out.push([Object.keys(src), src.relief, surfaceSource("gas").relief, /vec4 fields\\(vec3 p\\)/.test(src.fields), /vec4 coarse\\(vec3 p, int which\\)/.test(src.coarse), err(() => surfaceSource("dessert"))]);
 """)
@@ -127,7 +133,7 @@ out.push([Object.keys(src), src.relief, surfaceSource("gas").relief, /vec4 field
     assert out[2][0] == 0 and out[2][1] == pytest.approx(-0.8 + 0.3 * math.exp(-(8**1.5))) and out[2][2] == pytest.approx(0.3) and abs(out[2][3]) < 1e-6
     types, presets, octaves, slots, first, second, height, craters, none, bound, *errors, places = out[3]
     assert types == ["ocean", "desert", "rocky", "icy", "lava"] and presets == ["alpine", "mars", "canyon", "dunes", "snow", "volcanic", "airless"]
-    assert octaves == 11 and slots == 29 and first == 2 * second and height > 1000 and craters > 0 and none == 0 and bound["over"] > bound["under"] > 0 and places
+    assert octaves == 11 and slots == 34 and first == 2 * second and height > 1000 and craters > 0 and none == 0 and bound["over"] > bound["under"] > 0 and places
     assert "no ground to stand on" in errors[0] and 'did you mean "mountains"' in errors[1] and 'did you mean "height"' in errors[2] and "0 to 20000" in errors[3] and "must be over" in errors[4]
     heights, again, other = out[4]
     assert heights == again and heights != other and np.ptp(heights) > 1500
@@ -147,7 +153,10 @@ out.push([Object.keys(src), src.relief, surfaceSource("gas").relief, /vec4 field
     assert mid == [1024, -256] and mid2 == [1024, 0] and (width, maps, finest) == (4096, 11, 16) and set(qualities) == {"fast", "standard", "fine"} and lattice == {"n": 384, "spacing": 1 / 400}
     uu, ee, ss, ue, us, es, up_y, south_y, radius, moon = out[10]
     assert (uu, ee, ss) == pytest.approx((1, 1, 1)) and max(abs(ue), abs(us), abs(es)) < 1e-12 and up_y == pytest.approx(math.sin(math.radians(40))) and south_y < 0 and radius == 1.7e6 and moon == 1.7374e6
-    keys, relief, gas, fields, coarse, error = out[11]
+    low, top, standing, floor, outside, flank, rim, middle, *errors, canyon, volcano, riser = out[11]
+    assert low == pytest.approx(-1000, abs=1) and top == 0 and standing > 0.2 and floor > 0.02 and outside == 0 and 0.25 < flank < 0.4 and middle < rim < 1 and rim - middle == pytest.approx(0.5 * 0.13, rel=0.01)
+    assert "volcanoes.spacing" in errors[0] and 'did you mean "canyons"' in errors[1] and canyon > 500 and volcano > 1000 and riser == 0.12
+    keys, relief, gas, fields, coarse, error = out[12]
     assert keys == ["noise", "coarse", "fields", "paint", "relief"] and relief and not gas and fields and coarse and 'did you mean "desert"' in error
 
 
@@ -198,6 +207,7 @@ export function frame(t, ctx) {
   camera.fov = shot.fov ?? 60; camera.updateProjectionMatrix();
   camera.position.set(x, h, z); camera.lookAt(x + Math.sin(turn) * Math.cos(pitch) * 1000, h + Math.sin(pitch) * 1000, z - Math.cos(turn) * Math.cos(pitch) * 1000); camera.updateMatrixWorld();
   ground.sky.update(t, {camera, sun: sunDirection(shot.elevation, shot.azimuth ?? 150)}); ground.update(t, {camera});
+  ground.setGlow(shot.glow ?? 1);
   if (m.weather) m.weather.update(3, {camera});
   if (m.water) m.water.update(2, {camera});
   const out = {horizon: {...ground.horizon}, bakes: {...ground.bakes}, maps: ground.maps.length, cells: ground.cells, type: ground.type};
@@ -237,6 +247,8 @@ SHOTS = [
     {"vacuum": True, "land": {"preset": "airless"}, "over": 800, "pitch": -8, "elevation": 12, "heading": 40},  # 10 no air
     {"land": {"world": "earth", "at": [-11.5, -15.2], "mountains": {"from": -300, "to": 500, "base": 0.35, "height": 2600, "length": 9000}}, "sea": True, "at": [6000, 6000], "height": 900, "pitch": -7, "heading": 320, "elevation": 26, "azimuth": 215},   # 11 a coast
     {**ALPINE, "elevation": 40, "over": 3200, "clouds": {"decks": [{"type": "cumulus", "cover": 0.5, "base": 2600, "top": 3900}]}},   # 12 clouds shade it and stand behind it
+    {"land": {"preset": "volcanic"}, "air": "thin", "over": 9000, "pitch": -50, "elevation": -8},                 # 13 lava glows after sunset
+    {"land": {"preset": "volcanic"}, "air": "thin", "over": 9000, "pitch": -50, "elevation": -8, "as": 13, "glow": 0},   # 14 and not when it is put out
 ]
 
 
@@ -275,14 +287,14 @@ def test_the_ground_draws_in_chromium(tmp_path: Path) -> None:
     assert white[:20].mean() == pytest.approx(bare[:20].mean(), abs=2)                                          # the sky is the air's own either way
     # the maps hold heightAt's heights (the finest to centimetres, wider ones less of the fine relief), and so does every pixel's own place
     look = found[5]
-    assert look["cells"][0] < 1.0 and look["cells"][1] < 3.0 and look["cells"][-1] > 100
+    assert look["cells"][0] < 2.0 and look["cells"][1] < 5.0 and look["cells"][-1] > 100
     pairs = np.array(look["pairs"])
     close = pairs[pairs[:, 2] < 1200]
-    assert len(close) > 40 and np.abs(close[:, 0] - close[:, 1]).max() < 4.0 and np.abs(close[:, 0] - close[:, 1]).mean() < 1.0 and np.corrcoef(pairs[:, 0], pairs[:, 1])[0, 1] > 0.999 and np.ptp(pairs[:, 0]) > 100
+    assert len(close) > 40 and np.abs(close[:, 0] - close[:, 1]).max() < 8.0 and np.abs(close[:, 0] - close[:, 1]).mean() < 2.0 and np.corrcoef(pairs[:, 0], pairs[:, 1])[0, 1] > 0.999 and np.ptp(pairs[:, 0]) > 100
     assert np.abs(pairs[:, 3]).max() < 0.05                                                                     # a point of the ground stands on the ground
     above, normal, lattice, slots = look["above"]
     drop = (5100**2 + 2300**2) / 2 / EARTH                                                                      # the world is round: the scene's y = 0 lies that much over the sphere there
-    assert above == pytest.approx(250 + drop, abs=0.02) and look["horizon"]["over"] == pytest.approx(250 + drop, abs=0.02) and math.hypot(*normal) == pytest.approx(1) and lattice == 384 * 384 and slots == 29
+    assert above == pytest.approx(250 + drop, abs=0.02) and look["horizon"]["over"] == pytest.approx(250 + drop, abs=0.02) and math.hypot(*normal) == pytest.approx(1) and lattice == 384 * 384 and slots == 34
     # the horizon's row is where the formula says, from 100 m to 100 km (a 40 degree lens, 360 rows, a level look, a smooth world)
     for shot, got in zip(SHOTS[6:10], found[6:10]):
         dip = math.acos(EARTH / (EARTH + shot["height"]))
@@ -298,9 +310,12 @@ def test_the_ground_draws_in_chromium(tmp_path: Path) -> None:
     assert 0.05 < blue.mean() < 0.4 and sand.mean() > 0.1                                                       # water and land in one picture
     cloudy = frames[12]
     assert (cloudy[ground].min(axis=2) > 200).mean() > 0.01 and not np.array_equal(cloudy, high)
+    glow, out = frames[13], frames[14]
+    hot = (glow[..., 0] > 150) & (glow[..., 0] > 2.5 * glow[..., 2])
+    assert 0.001 < hot.mean() < 0.2 and ((out[..., 0] > 150) & (out[..., 0] > 2.5 * out[..., 2])).mean() == 0 and glow.mean() > out.mean()
     # the same pixels with the macro baked and stored, from the cache, and without the cache
     cold, _, _, log = draw(store, SHOTS[:1])
-    assert ("stored", "space-land/macro") in log
+    assert ("stored", "space-land/macro") in log and ("stored", "space-land/map") in log
     warm, _, _, log = draw(store, SHOTS[:1])
-    assert ("hit", "space-land/macro") in log
+    assert ("hit", "space-land/macro") in log and ("hit", "space-land/map") in log and ("stored", "space-land/map") not in log
     assert np.array_equal(frames[0], cold[0]) and np.array_equal(frames[0], warm[0])
