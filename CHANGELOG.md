@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–385
+## Steps 193–386
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -120,6 +120,21 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   error naming the time and the place (or, with `lift: true`, it is raised there). Python:
   `vidgen.api.flight`, `web_scene_flights`; `vidgen cache clear` also removes the ground heights
   kept for flights.
+- **Space plane parts** (Step 386): `vidgen/space-plane` builds winged craft on the spacecraft
+  kit. A lofted body (length, width, height, five nose shapes, droop, a round to flat belly, a
+  boat tail, a dorsal hump, a payload bay), ONE wing function (span, root and tip chord, sweep,
+  crank, curve, dihedral, thickness, airfoil, twist, fillet, winglets or tip fins, elevons and
+  flaps) with nine presets (`delta`, `double-delta`, `cranked-arrow`, `swept`, `straight`,
+  `ogival`, `stub`, `blended`, `long`), tails (`single`, `twin`, `vee`), rocket bells for the
+  tail, air-breathing pods, a belly intake, landing gear that folds behind doors, bay doors that
+  open on their radiators, a body flap, brakes, canards, thrusters and lights. Surfaces that
+  hold in close-up: black heat tiles, quilted blankets, panel lines, bare metal, scorch streaks
+  (`scorch`), stripes and an invented registration; schemes and colours as options. Six
+  ready-made planes, each another one for every seed: `plane("glider" | "freighter" | "needle"
+  | "lifter" | "scout" | "skiff", {seed})`; `planeFrom({...})` for a plane of one's own,
+  `planeFleet` for a formation, `problems()` for what looks wrong. On a flight of `flight_data`
+  a plane banks with the turn and its surfaces move with the flight's rates. All designs are
+  invented. `vidgen parts 'plane-*'` shows them (kinds `craft` and `craft-part`).
 
 ### Space scenes (Phase AN, Steps 367–378)
 

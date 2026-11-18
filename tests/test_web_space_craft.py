@@ -54,7 +54,7 @@ def test_the_parts_are_registered() -> None:
     assert 'craft("probe", {seed: 1})' in found["craft-probe"].use and "fleet(" in found["craft-fleet"].use and "throttle" in found["plume-ion"].use
     assert all(len(p.label) <= 106 for p in found.values())                    # (longer labels are cut off on the sheet)
     assert "Math.random" not in (P.PARTS_DIR / "space-craft.js").read_text(encoding="utf-8")
-    assert [p.kind for p in P.select_parts(P.read_parts(), kind="craft-part")] == ["craft-part"] * len(CRAFT_PARTS)
+    assert [p.kind for p in P.select_parts(P.read_parts(), kind="craft-part") if p.file == "space-craft.js"] == ["craft-part"] * len(CRAFT_PARTS)   # (the planes' parts share the kind)
 
 
 def _run_in_node(tmp_path: Path, body: str) -> list:

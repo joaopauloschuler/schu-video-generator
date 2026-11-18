@@ -7836,6 +7836,71 @@ function frame(t) { space.update(t, view); earth.update(t); ship.update(t); sun.
   shimmer a little at middle distances without motion blur.
 - Look first: `vidgen parts --kind craft` and `vidgen parts --kind craft-part`.
 
+**Space planes: `vidgen/space-plane`** (Step 386, DESIGN §123.8). Winged craft from parametrized
+parts on the spacecraft kit: six ready-made planes that differ by seed, or a plane of your own from
+a body, one wing function with presets, tails, engines and gear. Invented designs; a look, not
+aerodynamics. `import {plane, planeKit, planeFrom, planeFleet} from "vidgen/space-plane"`.
+
+```js
+const ship = plane("glider", {seed: 7});                 // metres; +z the nose, +y up, +x the left wing
+scene.add(ship.object);
+ship.fly(ctx.flight, {flight: "Plane"});                 // a flight of flight_data: banked as it turns
+for (const m of Object.values(ship.materials)) sky.haze(m);   // the air between (vidgen/space-air)
+// each frame:
+ship.update(t, {gear: 0, bay: 0});                       // on a flight the elevons, rudders and brakes move by its rates
+```
+
+| ready-made plane | what it is |
+|---|---|
+| `glider` | a small crewed orbital glider, 22 to 30 m: chined nose, a delta low on a flat belly, two fins leaning out, a payload bay, two bells |
+| `freighter` | a large cargo spaceplane, 56 to 74 m: a wide low body with a cabin hump, short drooping wings, two air-breathing pods, a row of bells, a long bay |
+| `needle` | a single-stage needle, 60 to 78 m: a pointed body with portholes, a cranked wing far back, a vee tail, engines inside behind a belly intake |
+| `lifter` | a lifting-body shuttle, 16 to 22 m: a wide flat-bellied body, short blended wings with tall tip fins |
+| `scout` | an atmospheric scout for other worlds, no crew, 9 to 13 m long, span 17 to 32 m: long thin wings, a vee tail, no heat shield |
+| `skiff` | a small air-launched skiff, 12 to 17 m: swept wings with winglets, canards, two fins |
+
+- **Options of `plane(kind, {...})`**: `seed` (1; every seed another plane of the kind);
+  the look: `scheme` (`tiles`: white blankets over black heat tiles, `grey`, `metal`, `dark`,
+  `paint`, `plain`: no heat shield), `color` (the back), `belly`, `accent` (the stripes),
+  `scorch` (0 factory fresh .. 1 many flights: streaks behind the nose and the leading edges),
+  `tile` (a heat tile's width, 0.35 m), `registration` (text; default made from the seed),
+  `detail` (`near`, `far`), `lit` (the share of lit portholes); any part of the description
+  to replace (`body`, `wing`, `fins`, `canard`, `engines`, `nacelles`, `intakes`, `gear`,
+  `cockpit`, `windows`, `markings`, `brake`, `bodyFlap`, `rcs`: an object is laid over the
+  design's, `false` removes the part); `gear`, `bay` (0..1 at the start); a craft's (`camera`,
+  `height`, `sun`, `lights`, `marker`).
+- **The wing** (`kit.wing({...})`, or `wing: {...}` in a description): `preset` (`delta`,
+  `double-delta`, `cranked-arrow`, `swept`, `straight`, `ogival`, `stub`, `blended`, `long`),
+  `span`, `rootChord` (or `chord`, a share of the span), `tipChord` (or `taper`), `sweep`,
+  `crank` + `sweepInner`, `curve`, `dihedral`, `thickness`, `airfoil` (`round`, `sharp`,
+  `flat`), `twist`, `fillet`, `edge`, `controls` (`[{name: "elevon" | "flap", from, to,
+  chord}]`), `tip` (`{height, cant, sweep, taper}`: winglets or tip fins), `allMoving`; in a
+  description also `at` (a share of the body's length from the nose) and `up` (−1 the belly ..
+  1 the back).
+- **The body** (`kit.body({...})`): `length`, `width`, `height` (or `diameter`), `nose`
+  (`ogive`, `blunt`, `pointed`, `chined`, `needle`), `noseLength`, `droop`, `belly` (0 round ..
+  1 flat), `tail`, `tailLength`, `upsweep`, `hump` (`{from, to, height}`), `bay` (`{from, to,
+  width}`), `cap`, `waterline`.
+- **Tails** (`kit.fin({...})`): `type` (`single`, `twin`, `vee`), `height`, `rootChord`,
+  `tipChord`, `sweep`, `cant`, `spacing`, `rudder`. **Engines**: `kit.nozzles({count, exit,
+  kind, layout})`, `kit.nacelle({length, radius, pylon})`, `kit.intake({width, height,
+  length})`; in a description `engines`, `nacelles: {mount: "wing" | "body" | "tail"}`,
+  `intakes`.
+- **Moving parts**: `ship.controls({elevon, roll, rudder, flap, brake, bodyFlap, canard})`
+  (degrees), `ship.gear(k)`, `ship.bay(k)`, `ship.cabin(k)` (the cockpit lit from inside), or
+  the same keys in `update(t, {...})`; `auto: false` stops the surfaces following a flight.
+- **`ship.problems()`** names what looks wrong (a wing that does not touch the body, a span
+  inside the body, gear that does not reach the ground, a layout too near a well-known real
+  vehicle); `ship.anchors` / `ship.anchor("nozzles")` are places for effects (nose, leading
+  edges, wing tips, nozzles, gear).
+- **Cost** (720p, software GL): a plane a third of the frame wide 0.12 s a frame, filling the
+  frame 0.2 s (its shadows 0.03 to 0.05 s of that), 0.02 to 0.07 s at 320x180; the first plane
+  of a page 1.0 to 1.3 s, each later one under 0.1 s.
+- **Limits.** A plane casts no shadow on the ground, the sea or the clouds and is drawn in
+  front of every cloud; the ground hides it behind a ridge. Heat tiles are larger than real
+  ones so that the grid reads. Unknown names stop the page with a did-you-mean.
+- Look first: `vidgen parts 'plane-*'`.
+
 **Camera moves for space scenes: `vidgen/space-camera`** (Step 375, DESIGN §122.11). The moves a
 cinematographer names, each a function of time: nothing is kept between frames, so scenes render
 in any order, a cut on a bar line shows one move, and `vidgen/three-finish`'s motion blur works.
@@ -17857,7 +17922,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

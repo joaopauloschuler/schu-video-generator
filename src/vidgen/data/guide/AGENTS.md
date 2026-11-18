@@ -3891,6 +3891,33 @@ probe.update(t, {sun, camera, height: ctx.height});       // wings to the sun, l
 - Look first: `vidgen parts --kind craft` and `--kind craft-part`. Reference: CONFIG.md `web`,
   "Spacecraft".
 
+**Space planes: `vidgen/space-plane`.** For a winged craft — a glider coming home from orbit, a
+cargo spaceplane, a scout over another world — take a ready-made plane and fly it on a
+`flight_data:` path; do not model one from boxes.
+
+```js
+import {plane} from "vidgen/space-plane";
+const ship = plane("glider", {seed: 7}).fly(ctx.flight, {flight: "Plane"});   // glider, freighter, needle, lifter, scout, skiff
+scene.add(ship.object);
+for (const m of Object.values(ship.materials)) sky.haze(m);                   // the air between
+// each frame: ship.update(t, {gear: 0, bay: 0});
+```
+
+- Every seed is another plane of the kind (proportions, wing, scheme, stripes); `scheme`,
+  `color`, `belly`, `accent`, `scorch` set the look by hand; `planeFleet("glider", {count: 6})`
+  is a formation.
+- On a flight the plane banks with the turn and its elevons, rudders and brakes move by the
+  flight's rates; `update(t, {gear: 1})` lowers the gear, `{bay: 1}` opens the payload bay in
+  orbit, `{controls: {flap: 25}}` sets a surface by hand, `{throttle: 1}` fires the bells.
+- A plane of your own: `planeFrom({body: {...}, wing: {preset: "swept", span: 14}, fins:
+  {type: "vee"}, engines: {count: 2}})`, then read `ship.problems()`: it names a wing that does
+  not touch the body or gear that does not reach the ground.
+- Designs are invented: never copy or name a real or film vehicle, and put no flags or agency
+  names on a plane (markings are stripes and an invented registration).
+- Budget (720p, software GL): 0.12 to 0.2 s a frame for a plane close up; it casts no shadow on
+  the ground and is drawn in front of every cloud.
+- Look first: `vidgen parts 'plane-*'`. Reference: CONFIG.md `web`, "Space planes".
+
 **Camera moves in space: `vidgen/space-camera`.** Do not write camera positions by hand: name
 the move. Every move is a function of time (same time, same frame; cuts and motion blur are
 safe) and never puts the subject in the dead middle unless you ask.

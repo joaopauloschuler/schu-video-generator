@@ -406,6 +406,48 @@ plane. A start from orbit: `start: {orbit: Ship, at: 'bar 5'}` with the scene's 
 first leg `{reentry: {to: {height: 12000, speed: 250}}}` (DESIGN §123.7: what is physical, what is
 a look).
 
+**A space plane on that flight** (`vidgen/space-plane`; in the page above, in place of the probe).
+Six ready-made planes — `glider`, `freighter`, `needle`, `lifter`, `scout`, `skiff` — each
+another plane for every seed. On a flight it banks with the turn (the right wing down in a right
+turn) and its elevons, rudders and brakes move with the flight's rates:
+
+```js
+import {plane} from "vidgen/space-plane";
+const ship = plane("glider", {seed: 7}).fly(f, {flight: "Plane"});     // 22 to 30 m; +z the nose, +y up
+scene.add(ship.object);
+for (const m of Object.values(ship.materials)) sky.haze(m);            // the air between the camera and the plane
+const sunDir = new THREE.Vector3(...sunDirection(35, 200)), light = sky.light.sun, s = light.shadow.camera;   // its own shadows (renderer.shadowMap.enabled = true)
+light.castShadow = true; light.shadow.mapSize.set(2048, 2048); light.shadow.normalBias = 0.04;
+s.left = s.bottom = -ship.shadows.size; s.right = s.top = ship.shadows.size; s.updateProjectionMatrix();
+// each frame, after the camera is placed:
+ship.update(t, {gear: 0});                                             // {gear: 1} on the approach, {bay: 1} in orbit, {throttle: 1}: the bells fire
+light.position.copy(ship.object.position).addScaledVector(sunDir, 4 * ship.shadows.size); light.target.position.copy(ship.object.position); light.target.updateMatrixWorld();
+```
+
+**A plane of your own from the parts.** One description of plain numbers and words; the wing is
+one function whose presets (`delta`, `double-delta`, `cranked-arrow`, `swept`, `straight`,
+`ogival`, `stub`, `blended`, `long`) are only parameter sets, so any of its numbers can be given
+as well:
+
+```js
+import {planeFrom} from "vidgen/space-plane";
+const mine = planeFrom({
+  body: {length: 26, width: 3.8, height: 3.2, nose: "chined", noseLength: 0.34, belly: 0.8, bay: {from: 0.45, to: 0.72, width: 36}},
+  wing: {preset: "swept", span: 17, sweep: 42, dihedral: 3, at: 0.42, up: -0.6, tip: {height: 1.4, cant: 75}},
+  fins: {type: "vee", height: 4, rootChord: 4.5, at: 0.8},
+  engines: {count: 2, kind: "vacuum"}, cockpit: {style: "panes", panes: 3}, markings: {stripes: 2}, bodyFlap: true,
+}, {seed: 3, scheme: "grey", scorch: 0.5, accent: 0x2f5fa8});
+console.log(mine.problems());      // [] — or what looks wrong: a wing off the body, gear too short
+```
+
+`planeSpec("glider", {seed: 7}).spec` is a ready-made plane's description to start from; with
+`planeKit({...})` the parts can be made and placed one by one (`kit.body`, `kit.wing`, `kit.fin`,
+`kit.nozzles`, `kit.nacelle`, `kit.intake`, `kit.gear`, then `kit.plane(body)`). The designs are
+invented and must stay so: no copy of a real or film vehicle, no flags or agency names (markings
+are stripes and a registration made from the seed). It is a look, not aerodynamics. A plane
+casts no shadow on the ground and is drawn in front of every cloud; the ground hides it behind
+a ridge. Look first: `vidgen parts 'plane-*'`.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -441,6 +483,7 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | the same, methods tried first (cumulus and cirrus from below): 10 jittered steps a deck at half size / 6 at a third / 16 at full size | 1.6 / 0.68 / 7.8: grain or terraces on every cloud narrower than a step, so not shipped | |
 | ground in that sky (`vidgen/space-land`), with the dome: a range from 2,500 m / the same with a sea / under cumulus / airless craters | 1.35 / 2.05 / 2.5 / 1.45 (0.12 at 320x180); `quality: fast` 1.25; a moving sun 2.4 more | the maps: 9–10 s (craters 19 s; from 30 km 7 s; `fast` 2.3 s; 2.4 s at 320x180); the first still 11.8 s without the cache, 14.8 s cold, 8.0 s from the cache (320x180: 3.2 / 4.1 / 2.1 s) |
 | the same, the other method measured (rings of a mesh lifted by the same maps, plain shading): 512 x 384 / 1024 x 512 / 2048 x 768 vertices | 0.67 / 1.0 / 2.1 (0.59 at 320x180): an outline of 9 / 4.5 / 2.3 px edges, and the shading still to pay, so not shipped | |
+| a space plane (`vidgen/space-plane`) on top of the air and the sea / of a world in space: a third of the frame wide / filling it | +0.12 / +0.19 (+0.02 / +0.07 at 320x180; its shadows 0.03 to 0.05 of that) | 1.0–1.3 s for the first plane, under 0.1 s for each later one |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 

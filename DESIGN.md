@@ -378,7 +378,8 @@ src/vidgen/
                           # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3); space-sea.js
                           # `vidgen/space-sea`: water to the horizon under that sky (§123.4); space-clouds.js
                           # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5); space-land.js
-                          # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6)
+                          # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6); space-plane.js
+                          # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -29189,3 +29190,152 @@ under the ground, and hands it to the page the way `orbit_data` does (§122.3).
   frame in the orbit bridge's; `start: {orbit}` hands an orbit over; the page must draw the land
   and the air with the same `at` and world. 392: `FlightData` is a pydantic model a `space`
   scene can hold as it is.
+
+### 123.8 Space plane parts: `vidgen/space-plane` (Step 386)
+
+`data/web/modules/space-plane.js` (import name `vidgen/space-plane`, in `VIDGEN_MODULES`)
+makes winged craft from parametrized parts: a lofted body, one wing function with presets,
+tails, engines, landing gear, moving surfaces, and six ready-made planes that differ by seed.
+The designs are invented; it is a look, not aerodynamics (nothing here says a plane would fly).
+
+- **Where it lives and why.** A sibling of `vidgen/space-craft`, not a part of it: that
+  module's bytes are in the cache key of every page that imports it (the `space` scenes of
+  Phase AN, `examples/outbound`), and it is 135 KB already. `space-plane` imports its `CraftKit`,
+  `Craft`, `GLARE`, `ACCENTS` and `platingMaps` and adds 97 KB only to pages that want a plane.
+  `PlaneKit` extends `CraftKit` (every part of the craft kit is there: `engine`, `thrusters`,
+  `light`, `radiator`, the surfaces), `Plane` extends `Craft` (`update`, `fly`, `shade`,
+  `occluders`, `shadows`, `size`, `info`, the far point of light). `space-craft.js` is unchanged.
+- **Axes** (the craft kit's): +z the nose, +y up, +x the LEFT wing; metres, true size. A plane's
+  origin is the middle of its body (not of its bounding box, so lowering the gear or opening the
+  bay does not move it). `craft.fly(ctx.flight, {flight})` (§123.7) puts the flight's attitude on
+  these axes: in a right turn the right wing (−x, the green light) is the lower one. Checked in
+  the Chromium test by projecting the wing tips (camera behind, level, in a right and a left
+  turn) and on a still.
+- **Body** (`kit.body(options)`, the numbers alone: `bodyShape(options)`): `length` (3 to 120 m),
+  `width`, `height` (or `diameter` for both), `nose` (`NOSES`: `ogive`, `blunt`, `pointed`,
+  `chined`: widened and flattened into a lens, `needle`: the slender body of least wave drag),
+  `noseLength` (a share of the length, 0.3), `droop` (how far under the middle line the tip sits,
+  in heights), `belly` (0 round .. 1 flat: the lower half's superellipse exponent 2 to 5.5),
+  `tail` (the end's size, a share) with `tailLength` and `upsweep` (0: it narrows evenly, 1: only
+  the underside rises: a boat tail), `hump` (`{from, to, height}`: a dorsal fairing or a cabin
+  hump), `bay` (`{from, to, width}`: a payload bay under two doors), `cap` (the dark nose cap's
+  share of the length), `waterline` (degrees under the widest line where the belly's surface
+  begins), `skins` (`{top, belly, cap}`). The surface is lofted from cross-sections (a
+  superellipse above the widest line and one below; 72 points round, about 44 stations, closer in
+  the nose) with the normals of the whole sheet, so a border between two surfaces has no crease.
+  `userData.shape` gives `point(s, angle, out)`, `normal`, `top`, `bottom`, `half`, `under(s, x)`,
+  `over(s, x)` (s: 0 the nose's tip .. 1 the tail's end; angle: 0 the left side, 90 the top).
+- **Wing: one function** (`kit.wing(options)`, the outline alone: `wingPlanform(options)` →
+  `{semi, le(eta), te(eta), chord(eta), sweepAt(eta), area, aspect, taper, mean}`): `preset`
+  (below), `span` (tip to tip), `rootChord` (or `chord`: a share of the span), `tipChord` (or
+  `taper`: a share of the root's), `sweep` (the leading edge's, degrees, −60 to 85), `crank` +
+  `sweepInner` (the leading edge runs at `sweepInner` to that share of the half span), `curve`
+  (0..1: an ogival leading edge), `dihedral`, `thickness` (a share of the chord), `airfoil`
+  (`round`: a rounded leading edge and a sharp trailing edge; `sharp`: a lens; `flat`: flat
+  underneath), `twist` (degrees at the tip), `fillet` (0..1: the root swells into the body) with
+  `inboard` (metres from the middle line to the body's side), `edge` (the dark leading edge's
+  share of the chord), `controls` (`[{name: elevon | flap, from, to, chord}]`), `tip`
+  (`{height, cant, sweep, taper}`: winglets or tip fins), `allMoving` (a canard), `skins`
+  (`{upper, lower, edge}`). Left and right are the same panel mirrored. The trailing edge is
+  straight. Presets (`WINGS`, parameter sets and nothing more): `delta`, `double-delta`,
+  `cranked-arrow`, `swept`, `straight`, `ogival`, `stub` (short, thick), `blended` (a lifting
+  body's: long root, full fillet), `long` (high aspect ratio for thin air).
+- **Tails** (`kit.fin(options)`): `type` `single`, `twin` (`spacing` apart, leaning out by
+  `cant`: 12°), `vee` (`cant` 42°: fin and tailplane in one); `height`, `rootChord`, `tipChord`,
+  `sweep`, `thickness`, `airfoil`, `rudder` (true, false or `{from, to, chord}`), `sink`. Tip fins
+  are the wing's `tip`; no tail: leave it out. A fin is the wing's panel stood up.
+- **Other parts**: `kit.nozzles({count, exit, kind, layout: row | block | ring})` (the craft
+  kit's bells and plumes for a tail's end, sunk into it), `kit.nacelle({length, radius, spike,
+  pylon, kind})` (an air-breathing pod), `kit.intake({width, height, length})` (a scoop under
+  the belly for engines inside the body), `kit.gear({length, wheel, wheels, fold})`,
+  `kit.patch(bins, body, {from, to, a0, a1, skin})` (a thin piece lying on a body: panes,
+  stripes, text).
+- **A plane from one description**: `planeFrom(spec, options)`; `spec` is plain numbers and
+  words: `body`, `wing`, `fins`, `canard`, `engines` (`{count, layout, exit, kind}`), `nacelles`
+  (`{count, mount: wing | body | tail, at, radius, length}`), `intakes` (`{count: 1 | 2, at,
+  width, height, length}`), `gear` (`{nose, main, track, clearance, wheel}`), `cockpit`
+  (`{style: panes | band, panes, at, width, length}` or false), `windows` (a number of portholes
+  a side), `markings` (`{stripes, numbers, registration, at}`), `brake`, `bodyFlap`, `rcs`,
+  `lights`; a wing, canard or tail is placed by `at` (a share of the length from the nose) and
+  `up` (−1 the belly .. 1 the back). Or with the kit: `kit.plane(body)` after `body.add(wing)`
+  at a position of one's own. `planeSpec(kind, {seed, ...})` returns a ready-made plane's
+  description to change.
+- **Moving parts** (`Plane`): `controls({elevon, roll, rudder, flap, brake, bodyFlap, canard})`
+  (degrees; elevon + is trailing edges down, roll + is a roll to the right, rudder + turns the
+  nose left; a vee tail also answers `elevon`), `gear(k)` (0..1: the doors open over the first
+  third, the legs swing down after; the wells and legs are not drawn when up), `bay(k)` (the
+  doors open to 112°, radiators inside them, a foil-lined trough with frames), `cabin(k)` (the
+  cockpit lit from inside; dark glass by day), and `update(t, {controls, gear, bay, cabin, auto,
+  ...a craft's})`. **On a flight the surfaces move by themselves** (a stated look,
+  `controlsFromRates`): roll = 0.9 × the bank's rate in degrees a second (within 18°), elevon =
+  −1.6 × the pitch's rate less a tenth of the bank's size (within 14°), rudder a quarter of the
+  roll, brake 9° for every m/s² of slowing (to 50°); `auto: false` or `controls: {...}` stops it.
+- **Places for effects** (`plane.anchors`, in the plane's axes; `plane.anchor(name)` in the
+  scene): `nose`, `tail`, `belly`, `cockpit`, `leadingEdges` and `finEdges` (lines of points),
+  `wingTips`, `finTips`, `nozzles` (with radius and kind), `intakes`, `gear`, `ground` (the
+  height the wheels stand on), `low` (the lowest part without gear). For Step 387.
+- **Surfaces** (computed, `SURFACES`, three 512 px maps made with the craft kit's
+  `platingMaps`, 0.18 s for all, once a page: not put through `vidgen/baked`): heat tiles (a
+  grid of tiles 0.35 m wide by default — larger than real ones, so that the grid reads —, every
+  other row moved half a tile, each of its own tone), quilted blankets with seams, panels with
+  lines and rivets; bare metal; a dark leading edge and nose cap. Schemes (`SCHEMES`): `tiles`
+  (white blankets over black tiles), `grey`, `metal` (bare), `dark` (tiles all over), `paint`
+  (white paint with panel lines over black tiles), `plain` (painted all round: no heat shield).
+  Colours: `color` (the back), `belly`, `accent` (stripes). `scorch` (0 factory fresh .. 1 many
+  flights): streaks behind the nose cap and the leading edges and greyed tiles, in the vertices'
+  colours (the request's "wear"; the craft kit's own `wear` is the depth of the surfaces'
+  relief). Markings: stripes round the body and across the wing tips, an invented registration
+  (two letters, a hyphen, three figures from the seed) in block letters on the sides and wings.
+  No flags, no names, no emblems.
+- **Ready-made planes** (`plane(kind, {seed, ...})`, `PLANES`; each seed another one of the
+  kind: proportions, sweep, wing preset or tail where the kind allows, scheme, scorch, stripes,
+  accent, registration): `glider` (a small crewed orbital glider, 22 to 30 m: chined nose, a
+  delta or ogival wing low on a flat belly, two fins leaning out, a bay, two bells),
+  `freighter` (a large cargo spaceplane, 56 to 74 m: a wide low body with a cabin hump, short
+  thick drooping wings, one or two fins, two air-breathing pods, four or five bells, a long
+  bay), `needle` (single-stage, 60 to 78 m: a pointed body with portholes, a cranked wing far
+  back, a vee tail, engines inside behind a belly intake), `lifter` (a lifting-body shuttle, 16
+  to 22 m: the body is most of the wing, short blended wings with tall tip fins), `scout` (an
+  atmospheric scout for other worlds, no crew, 9 to 13 m with a span of 17 to 32 m: long thin
+  wings, winglets, a vee tail, no heat shield), `skiff` (12 to 17 m: swept wings with winglets,
+  canards, two fins). `planeFleet(kind or kinds, {count, seed, spacing})` is a vee formation of
+  seeds seed, seed + 1, ... at the "far" detail.
+- **No look-alikes.** No ready-made plane has a double delta with one tall fin and three
+  bells; `problems()` says so if a description of one's own comes near that layout. No real or
+  invented vehicle, agency or company is named anywhere.
+- **`problems()`** (as `vidgen/space-scale`'s: sentences, an empty list when nothing is wrong):
+  a wing, canard or tail whose root does not touch the body or stands past its ends, a span that
+  hardly leaves the body or is over three times its length, a wing whose area sits in the first
+  30 % of the body or behind its tail, gear that does not reach below the lowest part, the
+  layout above. Every ready-made plane of seeds 1 to 12 has none (test: 1 to 5).
+- **In the air and in space.** The materials are `MeshStandardMaterial`s with the craft kit's
+  glare cap: lit by `sky.light.sun` and `sky.light.sky` when the air was given the scene;
+  `for (const m of Object.values(plane.materials)) sky.haze(m)` for the air between (the page's
+  call, as for any mesh). The land hides a plane behind a ridge (it writes depth: still 10); a
+  plane is drawn in front of every cloud (§123.5) and casts no shadow on the ground or the sea.
+  In space: a hard sun, `plane.shade(star)`, `scene.environment` from `craftEnvironment` or
+  `paintedEnvironment`. Self-shadows are the page's light's (`plane.shadows` gives the size).
+- **Parts** (`data/web/parts/space-plane.js`; no new kind): kind `craft`: `plane-glider`,
+  `plane-freighter`, `plane-needle`, `plane-lifter`, `plane-scout`, `plane-skiff`, `plane-open`,
+  `plane-landing`, `plane-fleet`; kind `craft-part`: `plane-part-bodies`, `plane-part-wings`,
+  `plane-part-tails`, `plane-part-engines`, `plane-part-gear`, `plane-surfaces`. 15 tiles in
+  24 to 26 s.
+- **Measured** (2 cores, SwiftShader): building the first plane of a page 1.0 s (the craft
+  kit's and the plane's surface maps), each later one 25 to 90 ms ("far" 7 to 25 ms); 21,000 to
+  60,000 triangles ("far" 5,000 to 14,000), 63 to 97 meshes (each moving surface is its own). A
+  frame at 1280x720: a plane a third of the frame wide over the sea at sunset 1.24 s against
+  1.12 s without it (+0.12 s, its shadows 0.03 to 0.05 s of that), at 320x180 0.15 against
+  0.13 s; a plane filling the frame over a world in space 0.63 s against 0.44 s (+0.19 s;
+  without shadows 0.60 s), at 320x180 0.13 against 0.05 s. A page's first frame is 1.0 to 1.3 s
+  longer with a plane.
+- **Honest notes.** Proportions are chosen to look right: wing areas, tail sizes, gear and
+  intake sizes follow no calculation, the heat shield's extent follows no heating, and a scout's
+  wing is not sized for any particular air. Tiles are larger than real ones. The auto controls
+  are a look. A plane has no interior beyond the bay's trough, no wheel wells behind the doors
+  (a dark patch), no flexing wing. The canopy does not show a cabin. Soot is a tint of the
+  vertices, so it is as fine as the mesh (about 0.5 m).
+- **Tests** (`tests/test_web_space_plane.py`): the module and its parts; in Node: outlines and
+  cross-sections as numbers, presets, did-you-mean (default); every kind for five seeds: sizes,
+  determinism, mirror symmetry, gear reach, triangles; surfaces, gear, bay, auto controls,
+  `problems()`, a plane from kit parts, a fleet (`slow`); in Chromium (`slow`): drawn on a
+  flight, banked the way it turns, twice the same picture.
