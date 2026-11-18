@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–386
+## Steps 193–387
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -120,6 +120,14 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   error naming the time and the place (or, with `lift: true`, it is raised there). Python:
   `vidgen.api.flight`, `web_scene_flights`; `vidgen cache clear` also removes the ground heights
   kept for flights.
+- **Re-entry and flight effects** (Step 387): `vidgen/space-effects` adds to a plane, a craft or
+  any object: the glow of a re-entry (a layer on the windward side made from the craft's own shape,
+  hot surfaces, a wake, sparks, and from far away a bright head with a train of light along the
+  path), vapour trails that stay where they were laid in the world and spread, break up and fade,
+  engine exhaust shaped by the air's density (shock diamonds low down, a wide pale plume high up,
+  an afterburner), a vapour cone near Mach 1 and wing vapour in hard turns. With `flight_data:`
+  everything follows `ctx.flight` (heating, Mach number, load, height, the path behind); each
+  number can be set by hand or from music. Nine parts under `vidgen parts --kind effect`.
 - **Space plane parts** (Step 386): `vidgen/space-plane` builds winged craft on the spacecraft
   kit. A lofted body (length, width, height, five nose shapes, droop, a round to flat belly, a
   boat tail, a dorsal hump, a payload bay), ONE wing function (span, root and tip chord, sweep,

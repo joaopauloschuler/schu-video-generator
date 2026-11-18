@@ -379,7 +379,8 @@ src/vidgen/
                           # `vidgen/space-sea`: water to the horizon under that sky (§123.4); space-clouds.js
                           # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5); space-land.js
                           # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6); space-plane.js
-                          # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8)
+                          # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8); space-effects.js
+                          # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -29339,3 +29340,133 @@ The designs are invented; it is a look, not aerodynamics (nothing here says a pl
   determinism, mirror symmetry, gear reach, triangles; surfaces, gear, bay, auto controls,
   `problems()`, a plane from kit parts, a fleet (`slow`); in Chromium (`slow`): drawn on a
   flight, banked the way it turns, twice the same picture.
+
+### 123.9 Re-entry and flight effects: `vidgen/space-effects` (Step 387)
+
+`data/web/modules/space-effects.js` (import name `vidgen/space-effects`, in `VIDGEN_MODULES`;
+imports `three` and `AIR_GLSL` / `DISPLAY_GLSL` / `sunlightAt` / `skyAmbient` of
+`vidgen/space-air`). What the air does to a craft and a craft to the air: the glow of a re-entry,
+vapour trails, engine exhaust in air, the vapour of a transonic pass and of a hard turn.
+
+- **A module of its own (decision).** Not inside `space-craft.js` (its bytes are in the cache key
+  of every Phase AN scene and of `examples/outbound`; it is byte-identical to Step 385's) and not
+  inside `space-plane.js`: the effects must also work on a lander and on Step 388's ships. The
+  module imports neither. It takes a craft as "anything with an `object`", a bounding ellipsoid
+  (`shape: {center, radii}`; default from a plane's anchors `nose` / `tail` / `belly` / `wingTips`,
+  else from the meshes' boxes) and named places (`anchors`: `nozzles`, `wingTips`, `tail`), and
+  finds a craft kit's engines through `craft.engines` when they are there.
+- **One call.** `effects(craft, {flight: ctx.flight, name, sky, seed, quality, shape, anchors,
+  scaleHeight, path, sun, light, ambient, reentry, contrails, exhaust, vapour})` → `Effects` with
+  `object` (what is laid in the world: add it to the scene), `attached` (what rides with the craft:
+  added to the craft's object by the call), `update(t, {...})` (after the craft's own update),
+  `state` (the numbers of the last update: `heat`, `air`, `wind`, `cone`, `wingVapour`, `plume`,
+  ...), `parts`, `shape`, `dispose()`. Each of the four groups is `true` or its options:
+  `reentry` {`full` 0.65, `level`, `shock`, `skin`, `wake`, `sparks`, `trail`, `head`, `thickness`
+  0.055, `length` 7, `persist` 5}, `contrails` {`from` nozzles | wingTips | tail | places, `band`
+  [8000, 9000], `always`, `life` 70, `size`, `level`, `color`}, `exhaust` {`nozzles`, `level`,
+  `air`}, `vapour` {`cone`, `wings`, `tips`, `level`}. `update` options (a number or a function of
+  t, each replacing the flight's): `velocity`, `heating`, `mach`, `load`, `height`, `aboveGround`,
+  `air`, `throttle`, `boost` (the afterburner), `pulse` (multiplies glow and exhaust: a level of
+  `ctx.music`), `sun`. Unknown names are refused with a did-you-mean.
+- **No state.** Every picture is a function of the `t` given to `update` and of the flight; the
+  seed feeds a whole-number hash (`hash`), flicker is a sum of fixed sines. The one thing kept is
+  the windward map (below), drawn again when the wind's direction in the craft's axes changes and
+  a function of that direction alone. Tested: a frame drawn after other frames is byte-identical
+  to the frame drawn first.
+- **Where the numbers come from.** With `flight`: `tracker(ctx.flight, name)` reads the frame of
+  `t` (`now`) and any flight second between frames by straight lines (`at`); before the scene's
+  first frame the path is taken straight back along that frame's velocity (the data holds the
+  scene's frames only: stated). Without a flight every number is given to `update`, and trails
+  follow `path(tau)` or a straight line. The air's density over sea level's is `exp(-height /
+  scaleHeight)` (the sky's scale height, the flight's own air), or `air` given.
+- **Re-entry** (strength `heat` 0..1: the flight's `heating` over `full`, or `heating` by hand).
+  - *Colour and brightness*: `heatColor(h)` runs through `HEAT_STOPS` (dull red, red, orange, a
+    pale orange, a white-pink), `heatLevel(h)` = `HEAT_WHITES` (3.2) x h^1.6, nothing under 0.02;
+    both rise with h and never fall (tested). A look: no spectrum of any gas.
+  - *The shock layer*: the craft's solid meshes are drawn once, seen from upwind through an
+    orthographic camera, into a small half-float map with mipmaps (192 px; `fast` 64, `fine` 256):
+    how far upwind the surface reaches and how squarely it faces the flow, premultiplied by cover.
+    A view ray sums a layer whose light falls off as exp(-distance upwind of that surface /
+    thickness): between two samples the distance is taken as a straight line, so the sum over a
+    step is closed-form and a layer much thinner than a step has no bands (14 samples; 8 / 24).
+    The sum is drawn twice: on the inside of a ball round the craft (the rays that miss the
+    craft: the ball's far side is hidden where the craft is), and on the craft's own surfaces
+    drawn once more ("hot surface" meshes sharing the geometry), each summing only as far as
+    its own surface. So the craft hides the glow behind it and nothing shines through a wing,
+    with no depth texture. The layer hugs nose, belly and leading edges of any craft because it
+    is made from the craft's own shape. Tried first and dropped: a glowing ellipsoid shell (a
+    blade standing off a flat belly, visible as an ellipse from below).
+  - *Hot surfaces*: the same extra meshes glow where their normal faces the flow (power 1.6),
+    mottled, and take a little light where they do not (the layer's spill): a look, no heat
+    conduction.
+  - *Bloom*: a ball of light round the windward side, summed in closed form.
+  - *The wake*: two streams behind the craft along the flow, as wide as the craft is across the
+    flow, each summed in closed form where the view ray passes nearest the stream's axis (no
+    steps), with streaks that run down it with the time; white-hot only close to the craft.
+  - *Sparks*: up to 36 points (14 / 72) born on the windward rim of the ellipsoid, carried back,
+    each living again and again from its own numbers (`sparkAt`); shown from heat 0.25.
+  - *From afar*: a head (a point at least 3.4 px in radius that keeps 45 % of its light when
+    shown larger than true: a marker, stated; it fades out when the craft is over 40 px) and the
+    train: a tube of light along the path flown, glowing `persist` flight seconds (5: a look; real
+    trains last from under a second to minutes), at least 1.2 px wide (30 % of its light kept).
+  - *Exposure*: light is multiplied by the air's exposure gain in `camera` and `auto` (honest: a
+    lifted night exposure burns the glow out) and by min(gain, 1) in `film` (never lifted). To the
+    canvas the glow is laid on as a screen blend of display values, so layers roll off towards
+    white instead of clipping; into a target (`vidgen/three-finish`) as linear light, added.
+- **Vapour trails.** A trail is a soft tube through rings at birth times that are fixed multiples
+  of a step (`trailTimes`: the newest 24 rings a 30th of a second apart, the next 24 a 15th, ...,
+  back to `life`), each ring where the trail's place on the craft was at its time, from the
+  flight. A piece of trail therefore stays where it was laid while the craft flies on (tested in
+  Node on the rings and in Chromium on the pixels); it widens (radius 1.2 + 2.2 age^0.75 m times
+  the craft's size) and thins, breaks into lumps along its length and, when old, snakes slowly
+  (`wave`). Laid only where the craft was above `band` at the time (8 to 9 km: where the air is
+  cold enough on an Earth-like world; chosen), or `always`. Engines nearer than 1.5 m join into
+  one trail; at most four. Lit by the sun after the air at the craft's height (`sunlightAt`) and
+  by the sky (`skyAmbient`): white by day, orange at dusk; the shaded side at 40 % (a cloud is
+  never black), a forward gleam at thin edges; hazed by `airThrough`. No wind, no shadow on or
+  from clouds.
+- **Exhaust in air.** The craft kit's plume method (light summed along the view ray, samples
+  crowded where the ray passes the axis), with its shape set each frame by `plumeShape(air,
+  boost)`: half angle 0.045 + 0.6 e^2 with e = 1 - air^0.3 (2.6 degrees at sea level, 31 in a
+  vacuum), shock diamonds x (1 - e)^2 and only from 45 % throttle, colours from a warm flame to a
+  pale blue bell, the afterburner longer and brighter with closer diamonds. The exponent and the
+  angles are a look tied to the air's density, not nozzle theory. On a craft with kit engines the
+  module hides the kit's plume and draws its own in its place at the power the kit's has now (so
+  `ship.update(t, {throttle})` and burns still drive it). No heat shimmer (it would need the
+  picture behind as a texture).
+- **Condensation.** `coneLevel(mach, air)`: a bell round Mach 0.96 (width 0.07 below, 0.05
+  above), only in air denser than a quarter of sea level's; the cone is a flared tube round the
+  body, thin at its front, cut off at its back. `wingVapour(load, air)`: from 2.4 g, full at 5 g:
+  a ball of mist over each wing half (summed in closed form) and a thread from each wing tip (a
+  trail of 1.6 s, laid in the world). Looks; brief by construction (the flight passes Mach 0.96
+  in seconds). No sonic-boom ring, by decision. No dust or spray from the ground (not built).
+- **What is physical and what is a look.** Physical: the windward side from the velocity and the
+  attitude; when things show (heating, Mach number, load, height from the flight); a trail along
+  the path flown, ages in flight seconds; the plume widening as the air thins. Looks: every
+  shape, colour, brightness and lifetime above; the head's and the train's least size.
+- **Limits.** Everything is drawn in front of every cloud (Step 383's order) and is hidden by
+  ground only through the depth the land writes (trails and glows test it; a trail never fades
+  softly into a ridge). The windward map sees solid meshes only and ends half a texel inside the
+  craft's outline: in a frame-filling close-up from below, steps of a few pixels show at the
+  layer's edge behind a trailing edge. The wake is straight (it does not follow a turn); the
+  train and trails do. The glow lights neither the air, the clouds nor the sea. A trail's lumps
+  come from value noise and can show faint cross lines. The ball of the layer is tested against
+  the craft only: another craft inside it would not hide its part of the glow.
+- **Parts** (`data/web/parts/space-effects.js`, kind `effect`): `effect-reentry`,
+  `effect-reentry-early`, `effect-reentry-lander`, `effect-reentry-far`, `effect-contrails`,
+  `effect-exhaust-air`, `effect-exhaust-thin`, `effect-vapour-cone`, `effect-wing-vapour`.
+- **Measured** (2 cores, SwiftShader, straight to the canvas, with the dome and the plane;
+  seconds a frame at 1280x720 / 320x180). A plane a third of the frame wide in a re-entry at
+  75 km: 0.46 / 0.08 without effects, 0.83 / 0.12 with all of `reentry` (+0.37 / +0.04), `fast`
+  0.76 / 0.11, without hot surfaces 0.78; the plane filling the frame from below 1.13 / 0.16. A
+  plane over the sea at 90 m: 1.39 / 0.15 without, 1.31 to 1.39 / 0.16 with exhaust, vapour,
+  trails or all three (their cost is inside the measurement's scatter of 0.05 s). The first
+  frame of a page is 0.5 s longer with `reentry` (shaders, the map).
+  The nine part tiles: 13 s.
+- **Tests** (`tests/test_web_space_effects.py`): the module and its parts; in Node: heat to
+  colour and brightness (monotonic), the plume's shape by density, cone, wing vapour and
+  contrail levels, ring times, a flight read between frames and before the scene, sparks,
+  did-you-mean, a trail's rings the same after other frames and staying where laid; in Chromium
+  (`slow`): brighter at higher heating, brighter under the belly than over the back, a frame
+  after other frames identical, the windward map drawn once, the picture not burnt out, a
+  trail's middle line unmoved while the plane flies on.

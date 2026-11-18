@@ -3918,6 +3918,30 @@ for (const m of Object.values(ship.materials)) sky.haze(m);                   //
   the ground and is drawn in front of every cloud.
 - Look first: `vidgen parts 'plane-*'`. Reference: CONFIG.md `web`, "Space planes".
 
+**Re-entry and flight effects: `vidgen/space-effects`.** A craft coming down through the air
+glows; a plane high up leaves a vapour trail; an engine in air has a short bright flame. One call
+adds them to a plane or any craft, and with `flight_data:` they follow the flight by themselves:
+
+```js
+import {effects} from "vidgen/space-effects";
+const fx = effects(ship, {flight: ctx.flight, name: "Plane", sky, reentry: true, contrails: true, exhaust: true, vapour: true});
+scene.add(fx.object);                        // the trails are laid in the world, not tied to the craft
+// each frame, after ship.update(t):
+fx.update(t);
+```
+
+- `reentry`: a glowing layer on the windward side, hot tiles, a wake, sparks; from far away a
+  bright head with a train of light. Strength from the flight's `heating` (shown as full at
+  `reentry: {full: 0.65}`), or by hand: `fx.update(t, {heating: 0.8})`.
+- `contrails`: only above 8 to 9 km (`{always: true}` anywhere); `exhaust`: replaces the craft's
+  plumes with one shaped by the air's density, `fx.update(t, {boost: 1})` for the afterburner;
+  `vapour`: a cone near Mach 0.96 and wing vapour in turns over 2.4 g, low down only.
+- Without a flight give `velocity`, `height`, `heating`, `mach`, `load` to `update`. Unknown names
+  are refused with the closest word.
+- A re-entry costs about 0.4 s a frame at 1280x720 (`quality: "fast"` 0.3), the others next to
+  nothing. Look first: `vidgen parts --kind effect`. Reference: CONFIG.md `web`, "Re-entry and
+  flight effects".
+
 **Camera moves in space: `vidgen/space-camera`.** Do not write camera positions by hand: name
 the move. Every move is a function of time (same time, same frame; cuts and motion blur are
 safe) and never puts the subject in the dead middle unless you ask.

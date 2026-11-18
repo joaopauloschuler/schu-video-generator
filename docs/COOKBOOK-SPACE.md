@@ -448,6 +448,29 @@ are stripes and a registration made from the seed). It is a look, not aerodynami
 casts no shadow on the ground and is drawn in front of every cloud; the ground hides it behind
 a ridge. Look first: `vidgen parts 'plane-*'`.
 
+**A re-entry with its glow, and vapour trails on a flight** (`vidgen/space-effects`; in the page
+above, after the plane is made). On a flight whose first leg is a `reentry` the glow follows the
+flight's `heating`, the layer sits on the side the air comes from, and far away the plane is a
+bright head with a train of light:
+
+```js
+import {effects} from "vidgen/space-effects";
+const fx = effects(ship, {flight: ctx.flight, name: "Plane", sky, reentry: true, contrails: true, exhaust: true, vapour: true});
+scene.add(fx.object);              // trails and the train stay where they were laid
+// in frame(t), after ship.update(t, {throttle}) and sky.update(t, {camera}):
+fx.update(t);                      // or by hand: fx.update(t, {heating: 0.8, velocity: [6600, 0, 0], height: 75000})
+```
+
+`reentry: {full: 0.65}` is the heating shown as the white-pink peak (the 400 km re-entry of
+DESIGN §123.7 reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5.
+Contrails form only above 8 to 9 km (`contrails: {always: true}` anywhere, `from: "wingTips"`);
+`exhaust` gives the engines a short flame with shock diamonds low down and a wide pale one high
+up; `vapour` adds a cone near Mach 0.96 and mist over the wings in hard turns, both only in dense
+air. Music: `fx.update(t, {boost: level, pulse: 1 + 0.3 * level})`. The same call works on
+`craft("lander")` or a group of your own (`shape: {radii: [across, up, along]}`). Shapes, colours
+and lifetimes are looks; where and when things show follows the flight. Everything is drawn in
+front of every cloud. Look first: `vidgen parts --kind effect`.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -484,6 +507,8 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | ground in that sky (`vidgen/space-land`), with the dome: a range from 2,500 m / the same with a sea / under cumulus / airless craters | 1.35 / 2.05 / 2.5 / 1.45 (0.12 at 320x180); `quality: fast` 1.25; a moving sun 2.4 more | the maps: 9–10 s (craters 19 s; from 30 km 7 s; `fast` 2.3 s; 2.4 s at 320x180); the first still 11.8 s without the cache, 14.8 s cold, 8.0 s from the cache (320x180: 3.2 / 4.1 / 2.1 s) |
 | the same, the other method measured (rings of a mesh lifted by the same maps, plain shading): 512 x 384 / 1024 x 512 / 2048 x 768 vertices | 0.67 / 1.0 / 2.1 (0.59 at 320x180): an outline of 9 / 4.5 / 2.3 px edges, and the shading still to pay, so not shipped | |
 | a space plane (`vidgen/space-plane`) on top of the air and the sea / of a world in space: a third of the frame wide / filling it | +0.12 / +0.19 (+0.02 / +0.07 at 320x180; its shadows 0.03 to 0.05 of that) | 1.0–1.3 s for the first plane, under 0.1 s for each later one |
+| effects (`vidgen/space-effects`) on top of a plane a third of the frame wide: a re-entry (shock layer, hot surfaces, wake, sparks, train) / the same at `quality: fast` / without hot surfaces / the plane filling the frame | +0.37 / +0.30 / +0.32 / about +0.7 (+0.04 at 320x180) | 0.5 s (shaders, the windward map) |
+| exhaust in air, a vapour cone and wing vapour, vapour trails: each, or all three, on a plane over the sea | under +0.05 (inside the scatter; +0.01 at 320x180) | |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 

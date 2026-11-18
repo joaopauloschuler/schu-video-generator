@@ -7901,6 +7901,46 @@ ship.update(t, {gear: 0, bay: 0});                       // on a flight the elev
   ones so that the grid reads. Unknown names stop the page with a did-you-mean.
 - Look first: `vidgen parts 'plane-*'`.
 
+**Re-entry and flight effects: `vidgen/space-effects`** (Step 387, DESIGN §123.9). The glow of a
+re-entry, vapour trails, engine exhaust in air and condensation, for a plane, a craft of
+`vidgen/space-craft` or any object. `import {effects} from "vidgen/space-effects"`.
+
+- `const fx = effects(ship, {flight: ctx.flight, name: "Plane", sky, reentry: true, contrails: true,
+  exhaust: true, vapour: true})`, `scene.add(fx.object)`, and each frame `fx.update(t)` after
+  `ship.update(t)`. With `flight` every number comes from the flight (heating, Mach number, load,
+  height, the path behind the craft); without it, give them to `update`.
+
+| option | default | meaning |
+|---|---|---|
+| `flight`, `name` | none, the first flight | `ctx.flight` and the flight's name |
+| `sky` | none | the air of `vidgen/space-air`: light on vapour, haze on trails, exposure, scale height |
+| `quality` | `standard` | `fast`, `standard`, `fine` |
+| `seed` | the craft's | sparks |
+| `shape` | from the craft | `{center: [x, y, z], radii: [across, up, along]}`: the bounding ellipsoid in the craft's axes |
+| `anchors` | the craft's | `{nozzles: [{p, n, radius}], wingTips: [{p}], nose, tail, belly}` for a craft that has none |
+| `path` | none | without a flight: `(seconds) => ({position, quaternion, velocity})` for trails |
+| `sun`, `light`, `ambient` | a high sun, white, a blue grey | the light on vapour without a `sky` |
+| `reentry` | off | `true` or `{full: 0.65, level: 1, shock, skin, wake, sparks, trail, head: true, thickness: 0.055, length: 7, persist: 5}`: `full` is the flight's heating shown as 1; `persist` the seconds the far train glows |
+| `contrails` | off | `true` or `{from: "nozzles" \| "wingTips" \| "tail" \| [[x, y, z], ...], band: [8000, 9000], always: false, life: 70, size: 1, level: 1, color: [1, 1, 1]}`: laid only above the band unless `always` |
+| `exhaust` | off | `true` or `{nozzles: [{p, n, radius}], level: 1, air}`: replaces the craft kit's plumes; the shape follows the air's density |
+| `vapour` | off | `true` or `{cone: true, wings: true, tips: true, level: 1}`: a cone near Mach 0.96, mist and tip threads from 2.4 g, in dense air only |
+
+- `fx.update(t, {...})`: `velocity` ([x, y, z] metres a second, the scene's axes), `heating` (0..1
+  as shown), `mach`, `load`, `height`, `air` (density over sea level's), `throttle` (default: what
+  the craft's engines do), `boost` (afterburner 0..1), `pulse` (multiplies glow and exhaust), `sun`;
+  each a number or a function of `t`. For music: `fx.update(t, {boost: level, pulse: 1 + 0.3 * level})`
+  with a level of `ctx.music`.
+- Pure helpers: `heatColor`, `heatLevel`, `heatLight`, `plumeShape`, `coneLevel`, `wingVapour`,
+  `contrailLevel`, `airDensity`, `trailTimes`, `trailRadius`, `trailAlpha`, `tracker`, `sparkAt`;
+  constants `HEAT_STOPS`, `HEAT_WHITES`, `TRAILS`, `CONTRAIL_BAND`, `QUALITIES`.
+- Trails stay where they were laid in the world; a still at `t` is frame `t` of a clip. Before the
+  scene's first frame a trail runs straight back along that frame's velocity.
+- Everything is drawn in front of every cloud; the ground hides it. In `film` exposure the glow is
+  never lifted with a dusk exposure; in `camera` it follows the exposure.
+- Cost at 1280x720: a re-entry +0.37 s a frame for a plane a third of the frame wide (`fast`
+  +0.30), about +0.7 s filling the frame; exhaust, vapour and trails under 0.05 s together.
+- Look first: `vidgen parts --kind effect`.
+
 **Camera moves for space scenes: `vidgen/space-camera`** (Step 375, DESIGN §122.11). The moves a
 cinematographer names, each a function of time: nothing is kept between frames, so scenes render
 in any order, a cut on a bar line shows one move, and `vidgen/three-finish`'s motion blur works.
@@ -17922,7 +17962,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.
