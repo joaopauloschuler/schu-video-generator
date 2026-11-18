@@ -1,0 +1,12 @@
+title: Along a giant ship
+scenes:
+  - id: carrier_pass
+    type: space
+    duration: 5
+    params:
+      orbits: {central: earth, speedup: 1, bodies: [{name: Carrier, altitude: 900 km}]}
+      bodies: [{name: Earth}]
+      sun: {direction: [0.3, 0.25, 0.9]}
+      craft:
+        - {name: Carrier, hull: carrier, seed: 1, length: 3200, dress: {plumes: bank}, scale_ref: {kind: ship, at: hangar-2}}   # an invented 3.2 km ship, a 50 m craft beside it
+      camera: {move: hull-pass, ship: Carrier, side: port, standoff: 60, from: 0.3, speed: 40}   # a 16 mm lens 60 m off the wall

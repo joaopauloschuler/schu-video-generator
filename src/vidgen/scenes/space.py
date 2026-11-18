@@ -13,7 +13,10 @@ from typing import Any
 from vidgen.api import *
 
 from .orbit_data import OrbitData
-from .space_page import orbit_names, page_source
+from .space_air_page import page_source as surface_page_source
+from .space_page import orbit_names, page_source as orbital_page_source
+from .space_air_params import FlashSpec, FlightsSpec, WorldSpec
+from .space_checks import check_orbital_air, check_surface
 from .space_params import (BodySpec, CardSpec, CraftSpec, FinishSpec, LightSpec, MoveSpec, PhenomenonSpec, ReactionSpec, ScaleSpec,
                            SkySpec, SunSpec, scene_time, uses_bars)
 from .web import SPARE_FRAMES, Web
@@ -92,11 +95,22 @@ class Space(Web):
         """Values for your script, as ctx.data."""
         fade: bool = True
         """false: no 0.5 s fade-out at the end (scenes cut straight into each other on bar lines)."""
+        world: WorldSpec | None = None
+        """A surface scene (DESIGN.md §123.14): one world from orbit to the ground in the place's own frame (vidgen/space-descent): {planet, at: [lat, lon], sun: [elevation, azimuth] or {date, utc}, air, sea, land, clouds, globe, exposure, ev, quality}. Without it the scene is an orbital one (orbits, bodies, scale, light)."""
+        flights: FlightsSpec | None = None
+        """A surface scene's flights (the flight_data vocabulary, Step 385): [{name: Plane, start: {x, z, above_ground, heading, speed}, legs: [...]}]; the ground is the world's land, else its sea, else its sphere."""
+        flash: list[FlashSpec] = Field(default_factory=list)
+        """Flashes on cuts (vidgen/space-camera's flashCut through the finish): [{at: 'bar 9', amount: 3, rise: 0.25, fall: 0.6}] or a time; give the same at to the scenes on both sides of the cut."""
 
         @field_validator("camera", "bodies", "craft", "phenomena", "music", mode="before")
         @classmethod
         def _one(cls, value: Any) -> Any:
             return [value] if isinstance(value, dict) else value
+
+        @field_validator("flash", mode="before")
+        @classmethod
+        def _one_flash(cls, value: Any) -> Any:
+            return value if isinstance(value, list) else [value]
 
         @field_validator("data", mode="before")
         @classmethod
@@ -121,7 +135,7 @@ class Space(Web):
         """``script:`` exists as a ``.js`` file of the project; ``music_data`` with music in the video."""
         problems = []
         if params.script is not None:
-            problems += web_entry_problems(project.root, {"script": params.script})
+            problems += web_served_entry_problems(project, {"script": params.script})
         if params.music_data and not video_has_music(project.config):
             problems.append("music_data: the video plays no music; add music: (a score file, a bed or a music file) or turn music_data off")
         return problems
@@ -164,7 +178,8 @@ class Space(Web):
         fps = int(config.frame_rate)
         p = self.params
         path = self.page_path()
-        rel = path.relative_to(self.project.root).as_posix()
+        root = web_served_root(self.project)
+        rel = path.resolve().relative_to(root.resolve()).as_posix()
         seconds = (frames - SPARE_FRAMES - round(self.outro * fps)) / fps
         page = {"script": rel, "data": {**p.data, "scene_seconds": round(seconds, 6)}}
         extra: dict[str, Any] = {}
@@ -173,14 +188,22 @@ class Space(Web):
             extra["music"] = web_scene_music(self.project, self.spec.id, fps, settings)
         if p.orbits is not None:
             extra["orbits"] = web_scene_orbits(self.project, p.orbits, fps, frames, frames - SPARE_FRAMES)
-        return {**extra, "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
+        if p.world is not None and p.flights is not None:
+            extra["orbits"] = web_with_flights(None, scene_flights(self.project, self.spec.id, p, fps, frames, extra.get("music")))
+        return {**extra, "root": root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
                 "params": page, "size": size, "fps": fps, "frames": frames, "theme": theme, "beats": beats,
                 "shape": web_page_shape(frame, "bleed")}
 
 
 def check_scene(p: Any) -> None:
     """The checks across a space scene's sections (a ValueError naming the section): unique names,
-    what goes with orbits and what without, the things the camera and the music name, times in bars."""
+    what goes with orbits and what without, the things the camera and the music name, times in bars.
+    A scene with ``world:`` is a surface scene, checked by :func:`~vidgen.scenes.space_checks.check_surface`."""
+    if p.world is not None:
+        check_surface(p)
+        return
+    if p.flights is not None:
+        raise ValueError("flights: are a surface scene's (the flight_data vocabulary over a world's ground): give the scene world: {planet, at, land | sea, ...}")
     orbit = p.orbits is not None
     data_names, _ = orbit_names(p)
     own = [*(b.name for b in p.bodies), *(c.name for c in p.craft), *(ph.name for ph in p.phenomena)]
@@ -227,7 +250,7 @@ def check_scene(p: Any) -> None:
         for key, name in m.named():
             if name not in known:
                 raise ValueError(f"{where}.{key}: no thing named {name}{did_you_mean(name, known)} (names: {', '.join(known) or 'none: give bodies, craft or phenomena'})")
-        if m.subject is None and m.move not in ("reveal", "zoom", "look"):
+        if m.subject is None and not m.air and m.move not in ("reveal", "zoom", "look"):
             raise ValueError(f"{where}: give subject: what the move looks at (one of {', '.join(known)})")
         if m.over is None and len(moves) > 1:
             raise ValueError(f"{where}: with several moves each gives over: [start, end] (seconds or 'bar N'), so the camera knows when it takes over")
@@ -235,7 +258,7 @@ def check_scene(p: Any) -> None:
             times = [scene_time(v, f"{where}.over") for v in m.over]
             bars = bars or any(uses_bars(t) for t in times)
             starts.append(times[0])
-        if uses_bars(m.options().get("at")):
+        if uses_bars(m.options().get("at")) or uses_bars(m.options().get("light")):
             bars = True
     plain = [s for s in starts if not uses_bars(s)]
     if plain != sorted(plain):
@@ -272,9 +295,24 @@ def check_scene(p: Any) -> None:
         p.end_card.card_options("end")
     if p.script is not None and Path(p.script).suffix.lower() not in (".js", ".mjs"):
         raise ValueError(f"script: expected a .js or .mjs file, got {p.script}")
+    check_orbital_air(p, known, bars)
 
 
 
+
+
+def scene_flights(project: Any, scene_id: str, params: Any, fps: int, frames: int, music: dict[str, Any] | None) -> dict[str, Any]:
+    """A surface scene's flights for the page (``ctx.flight``), cached as a web scene's ``flight_data`` (Step 385: the key
+    holds the flights, the ground, the frames, the code); a fault (a path into a mountain) is said with the scene's name."""
+    try:
+        return web_scene_flights(project, params.flights.data(params.world), fps, frames, frames - SPARE_FRAMES, music=music, orbits=None)
+    except VidgenError as error:
+        raise VidgenError(f"space scene '{scene_id}': {error}") from None
+
+
+def page_source(params: Any, scene_id: str) -> str:
+    """The page of a ``space`` scene: a surface scene's (``world:``) or an orbital one's."""
+    return surface_page_source(params, scene_id) if params.world is not None else orbital_page_source(params, scene_id)
 
 
 def written_out(params: Any, scene_id: str, script: str, seconds: float | None) -> tuple[str, dict[str, Any]]:
@@ -291,9 +329,11 @@ def written_out(params: Any, scene_id: str, script: str, seconds: float | None) 
     web: dict[str, Any] = {"script": script, **({"data": data} if data else {})}
     if params.orbits is not None:
         web["orbit_data"] = params.orbits.model_dump(mode="json", exclude_unset=True, by_alias=True)
+    if params.world is not None and params.flights is not None:
+        web["flight_data"] = params.flights.data(params.world).model_dump(mode="json", exclude_unset=True, by_alias=True)
     if params.music_data:
         web["music_data"] = params.music_data if params.music_data is True else params.music_data.model_dump(mode="json", exclude_unset=True)
     return head + "\n" + rest, web
 
 
-__all__ = ["PAGE_FOLDER", "Space", "check_scene", "written_out"]
+__all__ = ["PAGE_FOLDER", "Space", "check_scene", "page_source", "scene_flights", "written_out"]

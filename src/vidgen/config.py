@@ -1682,10 +1682,12 @@ class OrbitScaleRule(RuleConfig):
 
 
 class SpaceSceneRule(RuleConfig):
-    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other (DESIGN.md §122.12)."""
+    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other (DESIGN.md §122.12); a scene whose parts cost more than ``seconds`` a frame at 1280x720 by the cookbook's cost table (DESIGN.md §123.14)."""
 
     degrees: float = Field(default=12.0, gt=0, le=180)
     """The largest turn of a globe in one frame before it is reported (12: five days a second at 30 fps, as vidgen/space-bodies' own check)."""
+    seconds: float = Field(default=2.0, gt=0, le=600)
+    """The expected seconds a frame at 1280x720 (2 cores, software GL) from which a scene's combination of parts is reported, with the estimate and the minutes its frames take."""
 
 
 class OrbitConservedRule(RuleConfig):
@@ -3859,6 +3861,8 @@ class VideoConfig(_Strict):
     """Translation file (YAML, relative to the project; `vidgen translate-template`) whose texts replace the beat texts and on-screen texts, usually set in a variant."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
     """Folders (relative to the project) whose *.py files and packages are imported."""
+    web_root: str | None = Field(default=None, min_length=1)
+    """The folder `web` scenes' pages are served from: the project folder (default), or a folder (relative to the project) that holds it, so that projects side by side share a page or script (`web_root: ..` with `script: ../shared/orch.js`); a page may then load any file in that folder."""
     lint: LintConfig = Field(default_factory=LintConfig)
     """Thresholds and severities of `vidgen lint`."""
     overlays: list[OverlayConfig] = Field(default_factory=list)

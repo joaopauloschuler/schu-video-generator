@@ -1,0 +1,243 @@
+# The Signal: a portrait orchestral music video.
+# Music: assets/music/the_signal.yaml, an original score for vidgen's own orchestra (120.0 BPM, E minor; one bar = 2.0000 s).
+# Pictures: ../shared/orch.js (vidgen/three-kit, music-time, three-finish, title-cards), one web_cut shot per 1-2 bars.
+# Written by ../tools/gen.py from shots.yaml.
+title: The Signal
+output: the_signal
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 360, height: 640, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}
+music: {source: the_signal, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 256k}
+extensions: [../shared]
+web_root: ..
+scenes:
+- id: 01_tesseract
+  type: web_cut
+  duration: 4.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tesseract
+      seed: 100
+      colours: {base: '#35e8ff', accent: '#ff3fb4', deep: '#03050c'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [violas]
+      grade: &id001 {temperature: -0.05, saturation: 1.0}
+      lookY: -9
+      size: 3.0
+      title: {title: THE SIGNAL, subtitle: an orchestral short, made: true, hold: 2.6}
+      note: bars 1-2 (pulse, verse)
+    music_data: &id002
+      tracks: [bass_drum, crash, gong, horns, men, snares, taiko, timpani, toms, trumpet, violas, violins, women]
+- id: 02_portal
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 117
+      colours: {base: '#3fc8ff', accent: '#ff4fa8', deep: '#03050c'}
+      react:
+        pulse: [horns, taiko]
+        glow: [men]
+      grade: *id001
+      note: bars 3-3 (pulse, verse)
+    music_data: *id002
+- id: 03_crystal
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 134
+      colours: {base: '#ff4fb8', accent: '#45e0ff', deep: '#05030c'}
+      react:
+        pulse: [horns, taiko]
+        glow: [men]
+      grade: *id001
+      kind: tetra
+      note: bars 4-4 (pulse, verse)
+    music_data: *id002
+- id: 04_tunnel
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 151
+      colours: {base: '#3f7bff', accent: '#35e8ff', deep: '#03040c'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [horns]
+      grade: &id003 {temperature: 0.15, saturation: 1.15}
+      speed: 13
+      note: bars 5-5 (call, climax)
+    music_data: *id002
+- id: 05_swarm
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 168
+      colours: {base: '#45e0ff', accent: '#b35cff', deep: '#04030c'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [horns]
+      grade: *id003
+      note: bars 6-6 (call, climax)
+    music_data: *id002
+- id: 06_crystal
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 185
+      colours: {base: '#9b5cff', accent: '#35e8ff', deep: '#05030c'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [horns]
+      grade: *id003
+      kind: ico
+      note: bars 7-7 (call, climax)
+    music_data: *id002
+- id: 07_tesseract
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tesseract
+      seed: 177
+      colours: {base: '#ff3fb4', accent: '#6fd8ff', deep: '#08030a'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [horns]
+      grade: *id003
+      note: bars 8-8 (call, climax)
+    music_data: *id002
+- id: 08_tunnel
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 219
+      colours: {base: '#b35cff', accent: '#ff4fb8', deep: '#06030b'}
+      react:
+        pulse: [toms, timpani, taiko]
+        glow: [violins]
+      grade: *id003
+      speed: 16
+      note: bars 9-9 (call, climax)
+    music_data: *id002
+- id: 09_swarm
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 233
+      colours: {base: '#ff5fc0', accent: '#ffd166', deep: '#0a0309'}
+      react:
+        pulse: [taiko, snares]
+        glow: [violins]
+      grade: *id003
+      note: bars 10-10 (call, climax)
+    music_data: *id002
+- id: 10_rings
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 253
+      colours: {base: '#ff3fb4', accent: '#35e8ff', deep: '#09030a'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [women]
+      grade: *id003
+      note: bars 11-11 (blaze, climax)
+    music_data: *id002
+- id: 11_portal
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 344
+      colours: {base: '#35e8ff', accent: '#ffd166', deep: '#03060c'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [women]
+      grade: *id003
+      note: bars 12-12 (blaze, climax)
+    music_data: *id002
+- id: 12_swarm
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 455
+      colours: {base: '#ffd166', accent: '#ff3fb4', deep: '#0a0507'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [women]
+      grade: *id003
+      note: bars 13-13 (blaze, climax)
+    music_data: *id002
+- id: 13_rings
+  type: web_cut
+  duration: 2.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 566
+      colours: {base: '#35e8ff', accent: '#ff6ac0', deep: '#03060c'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [women]
+      grade: *id003
+      note: bars 14-14 (blaze, climax)
+    music_data: *id002
+- id: 14_drift
+  type: web_cut
+  duration: 7.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 321
+      colours: {base: '#ff8fd0', accent: '#6fe8ff', deep: '#05030a'}
+      react:
+        pulse: [timpani, gong]
+        glow: [women]
+      grade: *id003
+      lookY: -38
+      end: {title: THE SIGNAL, start: 0.6}
+      fadeOut: 1.8
+      note: bars 15-16 (blaze, climax)
+    music_data: *id002

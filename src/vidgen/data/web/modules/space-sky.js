@@ -32,6 +32,7 @@
 import * as THREE from "three";
 import {rng} from "vidgen/music-time";
 import {yUp} from "vidgen/space-scale";
+import {baked} from "vidgen/baked";
 import CATALOG from "vidgen/space-sky-stars";
 
 export const VERSION = 2;
@@ -503,8 +504,15 @@ export function faceWindow(face, direction, radius) {
   if (s1 < -1 || s0 > 1 || t1 < -1 || t0 > 1) return null;
   return [Math.max(-1, s0), Math.max(-1, t0), Math.min(1, s1), Math.min(1, t1)];
 }
+// the cube, baked once (kept between pages by vidgen/baked: the inputs are every option the bake reads)
 function bakeSky(renderer, o, size) {
-  const rt = new THREE.WebGLCubeRenderTarget(size, {type: THREE.HalfFloatType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: false, depthBuffer: false});
+  const inputs = {size, seed: o.seed, color: o.color, band: o.band, milkyWay: o.milkyWay, dust: o.dust, limit: o.limit, density: o.density, galaxies: o.galaxies, nebulae: o.nebulae};
+  return baked(renderer, "space-sky/cube", inputs, {
+    targets: () => [new THREE.WebGLCubeRenderTarget(size, {type: THREE.HalfFloatType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: false, depthBuffer: false})],
+    draw: ([rt]) => drawSky(renderer, o, size, rt),
+  })[0];
+}
+function drawSky(renderer, o, size, rt) {
   const r = rng(o.seed * 613 + 1), v3 = (a) => new THREE.Vector3(...a);
   const face = {uRight: {value: new THREE.Vector3()}, uUp: {value: new THREE.Vector3()}, uFwd: {value: new THREE.Vector3()}, uSize: {value: size}, uSat: {value: o.color}};
   const pass = (fragmentShader, uniforms, blend = null) => new THREE.ShaderMaterial({uniforms: {...face, ...uniforms}, vertexShader: BAKE_VERT, fragmentShader, depthTest: false, depthWrite: false,
@@ -544,7 +552,6 @@ function bakeSky(renderer, o, size) {
   renderer.setRenderTarget(target, active, level);
   renderer.xr.enabled = xr; renderer.autoClear = autoClear;
   band.dispose(); geometry.dispose(); for (const thing of things) thing.material.dispose();
-  return rt;
 }
 
 // ---------- drawing: the cube all round the camera, then the stars ----------

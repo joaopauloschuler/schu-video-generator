@@ -22,6 +22,7 @@ import math
 import mimetypes
 import os
 import re
+import shutil
 import signal
 import threading
 import time
@@ -39,6 +40,7 @@ import numpy as np
 from vidgen.browser import chromium
 from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
 from vidgen.errors import VidgenError
+from vidgen.web.baked import BakedStore, bake_key, default_store, part_file, part_sizes, write_part
 from vidgen.web.entry import WebEntry
 from vidgen.web.inputs import css_height, declared_families, page_head, page_shape, page_viewport, with_head
 from vidgen.web.libs import unshipped_lib_message
@@ -66,6 +68,10 @@ LAYOUT_FILE = DATA_DIR / "layout.js"
 WEB_ORIGIN = "http://vidgen-web.invalid/"
 #: Where vidgen's bare page of a ``script:`` scene is served (not a project path).
 CANVAS_PATH = "__vidgen__/canvas.html"
+#: Where a page's ``vidgen/baked`` asks for and hands over baked maps (DESIGN.md §123.2; not a file, never in ``loaded``).
+BAKED_PATH = "__vidgen__/baked/"
+#: Bytes of a baked map read from the page per CDP ``IO.read``.
+BAKED_READ_BYTES = 4 * 1024 * 1024
 #: Chromium flags added for screenshots: no scroll bars, colours as sRGB, and every changed tile
 #: drawn whole (with partial raster an edge pixel of content at a fractional position, changed in
 #: an animation-frame callback, came out differently from one render to the next).
@@ -359,15 +365,24 @@ class WebPage:
     (:func:`vidgen.web.music.scene_music`), given to the page as ``ctx.music`` by vidgen's music
     helper; ``None``: no helper, no ``ctx.music``. ``orbits`` (§122.3): the scene's orbit data
     (:func:`vidgen.scenes.orbit_data.scene_orbit_data`), given as ``ctx.orbits`` by vidgen's orbit
-    helper; ``None``: no helper, no ``ctx.orbits``.
+    helper; ``None``: no helper, no ``ctx.orbits``. ``baked`` (§123.2): the cache of baked maps the
+    page's ``vidgen/baked`` uses (``True``: :func:`~vidgen.web.baked.default_store`, which is off
+    when ``VIDGEN_BAKED_CACHE_MB=0``; ``False``: none; or a store); :attr:`baked_log` lists
+    ``("hit" | "damaged" | "stored" | "baked", name, bytes)`` per bake (``baked``: not kept).
     :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
     to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
                  beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None,
-                 design_width: int | None = None, music: dict[str, Any] | None = None, orbits: dict[str, Any] | None = None) -> None:
+                 design_width: int | None = None, music: dict[str, Any] | None = None, orbits: dict[str, Any] | None = None,
+                 baked: BakedStore | bool = True) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
+        self.baked: BakedStore | None = (default_store() if baked else None) if isinstance(baked, bool) else baked
+        self.baked_log: list[tuple[str, str, int]] = []
+        self._baked_seen: dict[str, tuple[str, list[int], list[int]]] = {}
+        self._baked_asked: dict[str, tuple[str, list[int], list[int]]] = {}
+        self._baked_ready: dict[str, dict[str, Any]] = {}
         self.music = music
         self.orbits = orbits
         self.size, self.fps, self.frames = size, fps, frames
@@ -397,6 +412,9 @@ class WebPage:
         other origin; 404 a missing file. Notes what it served in :attr:`loaded`."""
         url = route.request.url
         rel = project_path(url)
+        if rel is not None and rel.startswith(BAKED_PATH):
+            self._serve_baked(route, rel.removeprefix(BAKED_PATH))
+            return
         if rel is None:
             if url not in self.refused:
                 self.refused.append(url)
@@ -446,6 +464,112 @@ class WebPage:
         start, end = span
         headers["Content-Range"] = f"bytes {start}-{end}/{len(body)}"
         route.fulfill(status=206, body=body[start:end + 1], headers=headers)
+
+    # ----- baked maps (DESIGN.md §123.2) -----------------------------------------------------------
+
+    def _serve_baked(self, route: Any, what: str) -> None:
+        """``status``; ``lookup`` (POST: the bake's key and whether an entry is there); ``<key>/<n>``
+        (a stored part's bytes); ``<key>/damaged`` (POST: the page could not use the entry, which is
+        removed); ``<key>/ready`` (POST: the page holds a new bake for :meth:`_store_baked`)."""
+        request, store = route.request, self.baked
+        if what == "status":
+            self._answer(route, {"on": store is not None})
+            return
+        key, _, part = what.partition("/")
+        try:
+            if store is None:
+                raise LookupError(what)
+            if what == "lookup" and request.method == "POST":
+                asked = json.loads(request.post_data or "")
+                described = part_sizes(asked)
+                if described is None:
+                    raise LookupError(what)
+                sizes, widths = [n for n, _ in described], [w for _, w in described]
+                key = bake_key(asked, engine_id())
+                found = store.checked(key, sizes)
+                name = str(asked.get("name"))
+                self._baked_seen[key] = (name, sizes, widths)
+                if found is not None:
+                    self.baked_log.append(("hit", name, sum(found.sizes)))
+                elif store.has_room(sum(sizes)):
+                    self._baked_asked[key] = self._baked_seen[key]
+                else:
+                    self.baked_log.append(("baked", name, sum(sizes)))
+                    key = ""
+                self._answer(route, {"key": key or None, "found": found is not None, "meta": found.meta if found is not None else None})
+                return
+            if part == "damaged" and request.method == "POST" and key in self._baked_seen:   # the page could not use it: baked again, kept anew
+                store.remove(key)
+                self._baked_asked[key] = self._baked_seen[key]
+                self.baked_log.append(("damaged", self._baked_seen[key][0], sum(self._baked_seen[key][1])))
+                route.fulfill(status=204, body=b"")
+                return
+            if part == "ready" and request.method == "POST" and key in self._baked_asked:
+                told = json.loads(request.post_data or "")
+                if told.get("parts") == self._baked_asked[key][1] and isinstance(told.get("meta"), dict):
+                    self._baked_ready[key] = told["meta"]
+                route.fulfill(status=204, body=b"")
+                return
+            found = store.entry(key) if part.isdigit() else None
+            if found is None or int(part) >= len(found.sizes):
+                raise LookupError(what)
+            route.fulfill(status=200, path=str(found.part(int(part))), headers={"Content-Type": "application/octet-stream"})
+        except (LookupError, ValueError, TypeError, OSError):
+            route.fulfill(status=404, body=b"", headers={"Content-Type": CONTENT_TYPES[".txt"]})
+
+    @staticmethod
+    def _answer(route: Any, data: dict[str, Any]) -> None:
+        route.fulfill(status=200, body=json.dumps(data), headers={"Content-Type": CONTENT_TYPES[".json"]})
+
+    def _store_baked(self) -> None:
+        """Keep the bakes the page announced (``globalThis.__vidgenBaked``: each a key, its parts as
+        Blobs and its ``meta``): each part read with CDP ``IO.read`` into a staged folder, then
+        committed. A failure loses only that entry (logged); the page is never stopped for it."""
+        if not self._baked_ready or self.baked is None or self._page is None:
+            return
+        ready, self._baked_ready = self._baked_ready, {}
+        store = self.baked
+        try:
+            listed = self._page.evaluate("() => (globalThis.__vidgenBaked || []).map((e) => ({key: e.key, sizes: e.blobs.map((b) => b.size)}))")
+            for index, item in enumerate(listed):
+                key = str(item.get("key"))
+                if key not in ready or key not in self._baked_asked:
+                    continue
+                name, sizes, widths = self._baked_asked.pop(key)
+                if item.get("sizes") != sizes or store.entry(key) is not None:
+                    continue
+                folder = store.staging(key)
+                try:
+                    for n, size in enumerate(sizes):
+                        if write_part(part_file(folder, n), self._blob_chunks(f"globalThis.__vidgenBaked[{index}].blobs[{n}]"), widths[n]) != size:
+                            raise ValueError(f"part {n} of {key} is not {size} bytes")
+                    stored = store.commit(key, folder, sizes, ready[key])
+                except BaseException:
+                    shutil.rmtree(folder, ignore_errors=True)
+                    raise
+                self.baked_log.append(("stored" if stored else "baked", name, sum(sizes)))
+        except Exception as exc:  # noqa: BLE001 - the cache never stops a page: the bake stands, it is only not kept
+            log.warning("scene '%s': a baked map was not kept in the cache: %s", self.scene_id, first_line(exc))
+        finally:
+            try:
+                self._page.evaluate("() => { if (globalThis.__vidgenBaked) globalThis.__vidgenBaked.length = 0; }")
+                self._cdp.send("Runtime.releaseObjectGroup", {"objectGroup": "vidgen-baked"})
+            except Exception:  # noqa: BLE001 - a page gone meanwhile has nothing left to free
+                pass
+
+    def _blob_chunks(self, expression: str) -> Iterator[bytes]:
+        """The bytes of the Blob ``expression`` names in the page, in pieces (CDP ``IO.resolveBlob`` and ``IO.read``)."""
+        found = self._cdp.send("Runtime.evaluate", {"expression": expression, "objectGroup": "vidgen-baked"})
+        handle = "blob:" + self._cdp.send("IO.resolveBlob", {"objectId": found["result"]["objectId"]})["uuid"]
+        try:
+            while True:
+                chunk = self._cdp.send("IO.read", {"handle": handle, "size": BAKED_READ_BYTES})
+                data = chunk.get("data", "")
+                yield base64.b64decode(data) if chunk.get("base64Encoded") else data.encode("latin-1")
+                if chunk.get("eof"):
+                    break
+        finally:
+            self._cdp.send("IO.close", {"handle": handle})
 
     def _warn_google_fonts(self, families: list[str]) -> None:
         """One warning per family asked of Google Fonts (a style sheet's ``Space Grotesk`` and a
@@ -514,6 +638,10 @@ class WebPage:
             from vidgen.web.orbits import helper_source as orbit_helper
 
             context.add_init_script(script=orbit_helper())
+            if "flights" in self.orbits:   # ctx.flight (DESIGN.md §123.7): the flights travel in the orbit payload
+                from vidgen.web.flights import helper_source as flight_helper
+
+                context.add_init_script(script=flight_helper())
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
         self._cdp = context.new_cdp_session(page)
@@ -533,6 +661,7 @@ class WebPage:
                 **({} if self.orbits is None else {"orbits": self.orbits})}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
+        self._store_baked()
         self.notes = [str(n) for n in self._page.evaluate("() => Array.isArray(globalThis.__vidgenNotes) ? globalThis.__vidgenNotes.map(String) : []")]
         for note in self.notes:
             log.warning("scene '%s': %s", self.scene_id, note)
@@ -586,6 +715,7 @@ class WebPage:
         self._advanced = True
         errors = self._evaluate("n => window.__vidgen.frame(n)", n, when, f"frame(t={t:.3f})", seconds)
         self._raise_first(errors, when)
+        self._store_baked()
 
     def layout(self, n: int) -> dict[str, Any]:
         """What text the page shows now, the page at frame ``n`` (call after :meth:`advance` or
@@ -651,6 +781,6 @@ class WebPage:
         self._chromium = self._page = self._cdp = None
 
 
-__all__ = ["CANVAS_PATH", "FIRST_FRAME_TIMEOUT_S", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_POLL_MS", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
+__all__ = ["BAKED_PATH", "BAKED_READ_BYTES", "CANVAS_PATH", "FIRST_FRAME_TIMEOUT_S", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_POLL_MS", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
            "content_type", "engine_id", "error_location", "error_message", "fit_pixels", "google_font_families", "google_font_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
            "renderer_pids", "runtime_digest", "script_base", "unshipped_addon_message"]

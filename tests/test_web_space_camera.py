@@ -52,7 +52,7 @@ def test_the_framings_are_registered() -> None:
     assert set(found) == CAMERA_PARTS and all(p.kind == "camera" and p.module == "vidgen/space-camera" for p in found.values())
     assert "phase: {limb: 0.12}" in found["camera-crescent"].use and "cam.reveal(" in found["camera-sunrise"].use and "spaceCamera({space, camera})" in found["camera-three-quarter"].use
     assert all(len(p.label) <= 106 for p in found.values())
-    assert [p.kind for p in P.select_parts(P.read_parts(), kind="camera")] == ["camera"] * len(CAMERA_PARTS)
+    assert [p.kind for p in P.select_parts(P.read_parts(), kind="camera") if p.file == "space-camera.js"] == ["camera"] * len(CAMERA_PARTS)
 
 
 def _run_in_node(tmp_path: Path, body: str, names: tuple[str, ...] = ("music-time", "space-camera"), three: bool = False) -> list:

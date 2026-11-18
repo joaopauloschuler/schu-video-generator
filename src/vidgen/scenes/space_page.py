@@ -176,11 +176,16 @@ class _Page:
     def craft(self) -> None:
         if not self.p.craft:
             return
-        self.use("vidgen/space-craft", "craft")
-        self.out("// the craft (vidgen/space-craft)")
+        if any(c.maker == "kit" for c in self.p.craft):
+            self.use("vidgen/space-craft", "craft")
+        self.out("// the craft (vidgen/space-craft)" if all(c.maker == "kit" for c in self.p.craft) else
+                 "// the craft (vidgen/space-craft, vidgen/space-plane, vidgen/space-hull and -hull-detail, vidgen/space-effects)")
         for c in self.p.craft:
             ref = f"S.craft[{json.dumps(c.name)}]"
             opts = c.craft_options()
+            if c.maker != "kit":
+                self._other_craft(c, ref, opts)
+                continue
             if c.fleet:
                 self.use("vidgen/space-craft", "fleet")
                 f = {**opts, "count": c.fleet, **({"spacing": length(c.spacing, "spacing")} if c.spacing is not None else {})}
@@ -205,6 +210,62 @@ class _Page:
             else:
                 self._free_craft(c, ref, f"{ref}.size.radius")
             self.out(f"{ref}.shade(S.sun);")
+            self._effects(c, ref)
+
+    def _other_craft(self, c: Any, ref: str, opts: dict[str, Any]) -> None:
+        """A plane, a giant hull (with its detail and its small craft for size) or a craft of the kit's parts."""
+        from .space_air_params import ScaleRefSpec
+
+        key = json.dumps(c.name)
+        if c.maker == "plane":
+            self.use("vidgen/space-plane", "plane")
+            self.out(f"{ref} = plane({js(c.plane)}, {{{pairs(opts)}camera, height: ctx.height}});")
+        elif c.maker == "parts":
+            self.use("vidgen/space-craft", "craftKit", "attach", "around")
+            kit = {k: v for k, v in opts.items() if k not in ("marker", "lights")}
+            own = {k: v for k, v in opts.items() if k in ("marker", "lights")}
+            self.out(f"{{ const kit = craftKit({js(kit)});   // a craft of the kit's own parts")
+            root = parts_lines(self, c.parts, 2)
+            self.out(f"{ref} = kit.craft({root}, {{{pairs(own)}name: {js(c.name)}, camera, height: ctx.height}}); }}", 2)
+        elif c.fleet:
+            self.use("vidgen/space-hull", "hullFleet")
+            f = {**opts, "count": c.fleet, **({"spacing": length(c.spacing, "spacing")} if c.spacing is not None else {})}
+            self.out(f"{ref} = hullFleet({js(c.hull)}, {{{pairs(f)}camera, height: ctx.height}});")
+        else:
+            self.use("vidgen/space-hull", "hull")
+            self.out(f"{ref} = hull({js(c.hull)}, {{{pairs(opts)}camera, height: ctx.height}});")
+        lead = f"{ref}.hulls[0]" if c.fleet else ref
+        if self.orbit:
+            body = c.fly or c.name
+            if c.fleet:
+                self.out(f"space.add({ref}.object, {{body: {js(body)}, size: 1}}); S.subjects[{key}] = {{body: {js(body)}, radius: 3 * {lead}.size.radius, name: {js(c.name)}}};")
+            else:
+                fly: dict[str, Any] = {"body": body, "attitude": c.attitude or "prograde"}
+                if isinstance(c.burn, dict) or c.burn is False:
+                    fly["burn"] = c.burn
+                if c.target is not None:
+                    fly["target"] = c.target
+                self.out(f"{ref}.fly(space, {js(fly)}); S.subjects[{key}] = {ref};")
+        else:
+            self._free_craft(c, ref, f"{'3 * ' if c.fleet else ''}{lead}.size.radius")
+        self.out(f"for (const one of {ref}.hulls) one.shade(S.sun);" if c.fleet else f"{ref}.shade(S.sun);")
+        if c.maker == "hull":
+            if c.dress is not False:
+                self.use("vidgen/space-hull-detail", "dressFleet" if c.fleet else "dress")
+                dress = c.dress if isinstance(c.dress, dict) else {}
+                self.out(f"S.detail[{key}] = {'dressFleet' if c.fleet else 'dress'}({ref}, renderer, {js(dress)});   // windows, bays, lamps, plumes (maps baked once: vidgen cache)")
+            if c.scale_ref is not None:
+                r = ScaleRefSpec.model_validate(c.scale_ref)
+                self.out(f"S.refs[{key}] = {ref}.scaleRef({js(r.kind)}, {js(r.options())}); S.refs[{key}].shade(S.sun);   // a small craft beside it, for size")
+        self._effects(c, ref)
+
+    def _effects(self, c: Any, ref: str) -> None:
+        if c.effects is None:
+            return
+        spec = c.effects_spec()
+        self.use("vidgen/space-effects", "effects")
+        opts = {**spec.groups(), "quality": spec.quality, **({"seed": spec.seed} if spec.seed is not None else {})}
+        self.out(f"S.fx[{json.dumps(c.name)}] = effects({ref}, {js(opts)});   // in vacuum: the bells' flame (vidgen/space-effects)")
 
     def _free_craft(self, c: Any, ref: str, radius: str) -> None:
         at = [length(v, f"craft {c.name}.at") for v in (c.at or [0, 0, 0])]
@@ -230,6 +291,9 @@ class _Page:
                 self.out(f"{ref} = P.wormhole(renderer, {{{pairs(opts)}sky: S.sky, other: spaceSky(renderer, {js(other)})}}); space.add({ref}.object, {{at: {js(at)}, size: {js(size)}}});")
             elif k == "asteroid":
                 self.out(f"{ref} = P.asteroid({js(opts)}); space.add({ref}.object, {{at: {js(at)}, size: {js(size)}}});")
+            elif k == "warp" and ph.cut is not None:
+                self.use("vidgen/space-camera", "warpCut")
+                self.out(f"{ref} = P.warp(renderer, {{{pairs(opts)}fps: ctx.fps, seconds: {js(float(ph.cut.get('seconds', 3)))}}}); scene.add({ref}.object);   // a jump across a cut (warpCut)")
             elif k == "warp":
                 a, b = (ph.over or [0, Ref("S.seconds")])
                 self.out(f"{ref} = P.warp(renderer, {{{pairs(opts)}fps: ctx.fps, seconds: Math.max({js(when(b))} - {js(when(a))}, 0.1)}}); scene.add({ref}.object);")
@@ -274,19 +338,37 @@ class _Page:
         self.out("// the light (vidgen/space-light): one hard sun, planet-shine, no ambient by default")
         lead = f"S.craft[{json.dumps(self.p.craft[0].name)}]" if self.p.craft else None
         if lead and self.p.craft[0].fleet:
-            lead += ".craft[0]"
+            lead += ".hulls[0]" if self.p.craft[0].maker == "hull" else ".craft[0]"
         at = f", at: {lead}.object" + (f", shadows: {lead}.shadows" if l.shadows else "") if lead else ""
         self.out(f"S.light = spaceLight({{{pairs(opts)}scene, camera, renderer, sun: S.sun, bodies: Object.values(S.bodies), sky: S.sky ?? null{at}}});")
         self.use("vidgen/space-light", "spaceLight")
 
+    def ship_names(self) -> list[str]:
+        """The hulls the moves beside a ship name (the only hull when a move names none)."""
+        hulls = [c.name for c in self.p.craft if c.maker == "hull"]
+        return list(dict.fromkeys(str(m.options().get("ship") or hulls[0]) for m in self.p.camera if m.ship)) if hulls else []
+
     def moves(self) -> None:
-        self.use("vidgen/space-camera", "spaceCamera")
         self.use("vidgen/space-scene", "moveTrack")
-        self.out("// the camera (vidgen/space-camera): its moves one after another")
-        self.out("S.cam = spaceCamera({space, sun: S.sun, height: ctx.height, bodies: S.worlds});")
+        ships = [c.name for c in self.p.craft if c.maker == "hull" and not c.fleet]
+        if any(m.ship for m in self.p.camera):
+            self.use("vidgen/space-camera-air", "airCamera")
+            self.out("// the camera (vidgen/space-camera-air: vidgen/space-camera's moves and the moves beside a giant ship): its moves one after another")
+            rig = ", ".join(f"{json.dumps(n)}: S.craft[{json.dumps(n)}]" for n in ships)
+            self.out(f"S.cam = airCamera({{space, sun: S.sun, height: ctx.height, bodies: S.worlds, ships: {{{rig}}}}});")
+        else:
+            self.use("vidgen/space-camera", "spaceCamera")
+            self.out("// the camera (vidgen/space-camera): its moves one after another")
+            self.out("S.cam = spaceCamera({space, sun: S.sun, height: ctx.height, bodies: S.worlds});")
+        if any(m.match for m in self.p.camera):
+            self.use("vidgen/space-camera", "matchDisc", "lens")
+            self.use("vidgen/space-scene-air", "once")
         self.out("S.moves = [")
         moves = self.p.camera
         for k, m in enumerate(moves):
+            if m.air:
+                self._ship_move(k, m)
+                continue
             opts = move_lengths(m.options(), f"camera {m.move}")
             for key, value in list(opts.items()):
                 if key in ("behind", "of", "target", "around", "level", "from", "to") and isinstance(value, str):
@@ -306,9 +388,61 @@ class _Page:
             if over and "over" in names_of(m.move):
                 opts["over"] = [when(over[0]), when(over[1])]
             name = f"camera[{k + 1}] ({m.move})"
+            if m.match is not None:
+                before = moves[k - 1]
+                lens_name = m.lens if m.lens is not None else "normal"
+                fov = f"lens({js(lens_name)}).fov"
+                self.out(f"// a match cut: {m.subject} placed and sized as {m.match}'s disc in camera[{k}] at the cut (matchDisc)", 2)
+                matched = (f"S.matched[{k}] ??= once(() => {{ const at = {js(start)}, d = S.cam.disc(S.moves[{k - 1}].shot(at), {subject(m.match)}, at); "
+                           f"return matchDisc(d, S.cam.subject({subject(str(m.subject))}, at).radius, {fov}); }})")
+                self.out(f"{{name: {js(name)}, start: {js(start)}, cut: true, shot: (t) => S.cam.{MOVE_CALLS[m.move]}(t, {{...{js(opts)}, ...({matched})()}})}},", 2)
+                continue
             self.out(f"{{name: {js(name)}, start: {js(start)}, cut: {js(m.cut)}, shot: (t) => S.cam.{MOVE_CALLS[m.move]}(t, {js(opts)})}},", 2)
         self.out("];")
         self.out("S.view = moveTrack(S.moves);")
+
+    def _craft_update(self, c: Any, sets: dict[str, str], burns: set[str] | frozenset[str] = frozenset()) -> dict[str, Any]:
+        """The options of a plane's, a hull's or a kit-built craft's update(t, ...) at scene time t."""
+        o: dict[str, Any] = {"sun": Ref("S.sun")}
+        if not self.orbit and not c.fleet:
+            if c.velocity is not None:
+                o["velocity"] = three(c.velocity)
+            if c.attitude is not None or c.velocity is not None:
+                o["attitude"] = c.attitude or "prograde"
+        for key in ("throttle", "rcs"):
+            if getattr(c, key) is not None:
+                o[key] = getattr(c, key)
+        for prop, expr in sets.items():
+            if prop in ("throttle", "rcs") or (prop == "lights" and c.maker != "hull"):
+                o[prop] = Ref(expr)
+        if c.name in burns:
+            o["throttle"] = Ref(f"S.shot.throttle ?? {js(o.get('throttle', 0))}")
+        if c.maker == "plane":
+            o.update(plane_controls(self, c))
+        return o
+
+    def _ship_move(self, k: int, m: Any) -> None:
+        """A move beside a giant ship (vidgen/space-camera-air) in the list of moves."""
+        from .space_air_params import MOVE_LENGTHS, TIME_OPTIONS, camel_move
+
+        opts = dict(m.options())
+        for key in MOVE_LENGTHS.get(m.move, ()):
+            if isinstance(opts.get(key), str):
+                opts[key] = length(opts[key], f"camera {m.move}.{key}")
+        for key in TIME_OPTIONS.get(m.move, ()):
+            if key in opts:
+                opts[key] = when(opts[key])
+        for key in ("world", "behind"):
+            if isinstance(opts.get(key), str):
+                opts[key] = subject(opts[key])
+        if m.lens is not None:
+            opts["lens"] = m.lens
+        over = m.over or ([0.0, Ref("S.seconds")] if len(self.p.camera) == 1 else None)
+        start = when(over[0]) if over else 0.0
+        if over and "over" in names_of(m.move):
+            opts["over"] = [when(over[0]), when(over[1])]
+        name = f"camera[{k + 1}] ({m.move})"
+        self.out(f"{{name: {js(name)}, start: {js(start)}, cut: {js(m.cut)}, shot: (t) => S.cam.{camel_move(m.move)}(t, {js(opts)})}},", 2)
 
     def reactions(self) -> None:
         if not self.p.music:
@@ -323,6 +457,12 @@ class _Page:
         p = self.p
         self.out("// everything at scene time t: a function of t alone (the same in any order, at sub-frames too)")
         self.out("S.step = (t) => {")
+        burns = {str(m.options().get("ship") or next((c.name for c in p.craft if c.maker == "hull"), "")) for m in p.camera if m.move == "stern-burn"}
+        for name in self.ship_names():
+            c = next(x for x in p.craft if x.name == name)
+            if self.orbit:
+                self.out(f"space.update(t, {{from: {{body: {js(c.fly or c.name)}, offset: [0, 0, 1000]}}, to: {js(c.fly or c.name)}}});   // the ship's attitude at t first: the move reads it", 2)
+            self.out(f"S.craft[{json.dumps(name)}].update(t, {js(self._craft_update(c, {}))});", 2)
         self.out("S.shot = S.cam.apply(t, S.view(t));", 2)
         bright: dict[str, list[str]] = {}
         craft_set: dict[str, dict[str, str]] = {}
@@ -332,8 +472,9 @@ class _Page:
             v = f"S.react[{i}](t)"
             if r.target in craft:
                 prop = r.as_ or ("throttle" if r.action == "glow" else "lights")
-                base = {"lights": "1", "throttle": "0", "rcs": "0"}[prop]
-                expr = f"Math.min(1, {js(r.amount)} * {v})" if prop != "lights" else f"{base} + {js(r.amount)} * {v}"
+                base = {"lights": "1", "throttle": "0", "rcs": "0", "boost": "0", "pulse": "1"}[prop]
+                hull_lights = prop == "lights" and any(c.name == r.target and c.maker == "hull" for c in p.craft)
+                expr = (f"Math.min(1, {js(r.amount)} * {v})" if prop not in ("lights", "pulse") or hull_lights else f"{base} + {js(r.amount)} * {v}")
                 craft_set.setdefault(r.target, {})[prop] = expr
             else:
                 key = "sun" if r.target.lower() == "sun" else "sky" if r.target.lower() == "sky" else kinds.get(r.target, "")
@@ -341,7 +482,12 @@ class _Page:
         sky_terms = [t for k, terms in bright.items() if k.startswith("sky:") for t in terms]
         for ph in p.phenomena:
             ref = f"S.phenomena[{json.dumps(ph.name)}]"
-            if ph.kind == "warp":
+            if ph.kind == "warp" and ph.cut is not None:
+                terms = " * ".join(bright.get(f"warp:{ph.name}", [])) or "1"
+                cut = {"seconds": float(ph.cut.get("seconds", 3)), "split": float(ph.cut.get("split", 0.5))}
+                self.out(f"{{ const w = {ref}, u = warpCut(t, {js(when(ph.cut['at']))}, {js(cut)}); w.state = w.update(t, {{progress: u, camera, intensity: {terms}}}); }}   // the jump across the cut", 2)
+                sky_terms.append(f"({ref}.state ? {ref}.state.sky : 1)")
+            elif ph.kind == "warp":
                 terms = " * ".join(bright.get(f"warp:{ph.name}", [])) or "1"
                 self.out(f"{{ const w = {ref}, u = Math.min(1, Math.max(0, (t - w.over[0]) / (w.over[1] - w.over[0]))); w.state = w.update(t, {{progress: u, camera, intensity: {terms}}}); }}", 2)
                 sky_terms.append(f"({ref}.state ? {ref}.state.sky : 1)")
@@ -374,8 +520,26 @@ class _Page:
                     o[key] = getattr(c, key)
             for prop, expr in craft_set.get(c.name, {}).items():
                 o[prop] = Ref(expr)
+            if c.maker != "kit":
+                o = self._craft_update(c, craft_set.get(c.name, {}), burns)
             self.out(f"{ref}.update(t, {js(o)});", 2)
         self.out("S.light.update(t);", 2)
+        for c in p.craft:
+            key, sets = json.dumps(c.name), craft_set.get(c.name, {})
+            if c.maker == "hull" and c.dress is not False:
+                lights = Ref(sets["lights"]) if "lights" in sets else 1 if c.lights is None else min(1.0, float(c.lights))
+                self.out(f"S.detail[{key}].update(t, {js({'lights': lights, 'light': Ref('S.light')})});", 2)
+            if c.maker == "hull" and c.scale_ref is not None:
+                ref = c.scale_ref
+                self.out(f"S.refs[{key}].update(t, {{sun: S.sun}});", 2)
+                if ref.get("into"):
+                    a, b = ref["into"]["over"]
+                    self.out(f"S.detail[{key}].fly(S.refs[{key}], {js(ref['into'].get('hangar', 'hangar-1'))}, Math.min(1, Math.max(0, (t - {js(when(a))}) / ({js(when(b))} - {js(when(a))}))));   // into the bay", 2)
+                if ref.get("escort"):
+                    self.out(f"if (S.shot.escort) S.refs[{key}].object.position.set(...S.shot.escort);   // where the reveal wants it: into the frame last", 2)
+            if c.effects is not None:
+                fx = {"air": 0, **{prop: Ref(expr) for prop, expr in sets.items() if prop in ("boost", "pulse", "throttle")}}
+                self.out(f"S.fx[{key}].update(t, {js(fx)});", 2)
         if p.script:
             self.out("if (hook.frame) hook.frame(t, S);", 2)
         self.out("};")
@@ -388,6 +552,10 @@ class _Page:
         opts = f.options()
         dof = opts.pop("dof", None)
         extra = f", dof: () => ({{{pairs(dof)}focus: S.focus()}})" if dof is not None else ""
+        if self.p.flash:
+            self.use("vidgen/space-scene-air", "flashes")
+            cuts = [{"at": when(f.at), "amount": f.amount, "rise": f.rise, "fall": f.fall} for f in self.p.flash]
+            extra += f", flash: (t) => flashes(t, {js(cuts)})"
         self.out("// finishing (vidgen/three-finish): no FXAA by default (it breaks stars and thin rings)")
         self.out(f"S.finish = new Finish(renderer, scene, camera, ctx, {{{pairs(opts)}update: (t) => S.step(t){extra}}});")
 
@@ -411,7 +579,16 @@ class _Page:
             view["enlarge"] = p.scale.enlarge
         dof = p.finish is not False and bool(p.finish.depth_of_field)
         self.use("vidgen/space-scale", "SpaceView")
+        if any(c.maker == "hull" for c in p.craft):
+            from .space_air_params import HULL_NEAR
+
+            view["near"] = HULL_NEAR
+            self.out(f"// near: {HULL_NEAR:g} m, set by vidgen because a giant hull is in the scene (the default near plane slices a hull and draws the world behind it over it: DESIGN.md §123.12)")
         self.out(f"const space = new SpaceView(ctx, {{{pairs(view)}renderer, scene, camera{', dofFocus: () => S.focus()' if dof else ''}}});")
+        stores = [k for k, used in (("detail", any(c.maker == "hull" and c.dress is not False for c in p.craft)), ("refs", any(c.scale_ref for c in p.craft)),
+                                    ("fx", any(c.effects for c in p.craft)), ("matched", any(m.match for m in p.camera))) if used]
+        if stores:
+            self.out("Object.assign(S, {" + ", ".join(f"{k}: {{}}" for k in stores) + "});")
         self.out("Object.assign(S, {ctx, THREE, renderer, scene, camera, space, seconds: ctx.data.scene_seconds ?? ctx.duration});")
         self.out("const T = (time) => sceneTime(ctx, time);")
         self.use("vidgen/space-scene", "sceneTime", "freeSubject", "pageNote", "checkMoves")
@@ -434,7 +611,7 @@ class _Page:
         self.out("S.step(0);")
         if p.craft:
             self.use("vidgen/space-craft", "craftEnvironment")
-            lead = f"S.craft[{json.dumps(p.craft[0].name)}]" + (".craft[0]" if p.craft[0].fleet else "")
+            lead = f"S.craft[{json.dumps(p.craft[0].name)}]" + ((".hulls[0]" if p.craft[0].maker == "hull" else ".craft[0]") if p.craft[0].fleet else "")
             self.out(f"S.env = craftEnvironment(renderer, scene, {{at: {lead}.object}}); scene.environment = S.env.texture;")
         self.finish()
         self.cards()
@@ -477,7 +654,50 @@ class _Page:
 
 def names_of(move: str) -> list[str]:
     """The options the camera move ``move`` takes."""
-    return names()["moves"][move]
+    from .space_air_params import move_option_list
+
+    return move_option_list(move) or names()["moves"][move]
+
+
+def plane_controls(page: Any, c: Any) -> dict[str, Any]:
+    """A plane's gear, bay and cabin (numbers, or ramps over time) and held control surfaces, for its update."""
+    from .space_air_params import Ramp
+
+    out: dict[str, Any] = {}
+    for key in ("gear", "bay", "cabin"):
+        value = getattr(c, key)
+        if isinstance(value, dict):
+            r = Ramp.model_validate(value)
+            page.use("vidgen/space-scene-air", "ramp")
+            out[key] = Ref(f"ramp(t, {js({'over': [when(r.over[0]), when(r.over[1])], 'from': r.from_, 'to': r.to})})")
+        elif value is not None:
+            out[key] = float(value)
+    if c.controls is not None:
+        out["controls"] = dict(c.controls)
+    return out
+
+
+def parts_lines(page: Any, node: dict[str, Any], indent: int, counter: list[int] | None = None) -> str:
+    """The lines that make a ``parts:`` tree with the kit (``kit.hull(...)``, ``attach(...)``, ``around(...)``);
+    returns the root part's variable."""
+    from .space_air_params import part_options
+
+    counter = counter if counter is not None else [0]
+    name = f"p{counter[0]}"
+    counter[0] += 1
+    page.out(f"const {name} = kit.{node['part']}({js(part_options(node))});", indent)
+    for child in node.get("attach") or []:
+        if "around" in child:
+            ring = {**{k: v for k, v in child["around"].items()}}
+            make = f"kit.{child['part']}({js(part_options(child))})"
+            if child.get("attach"):
+                raise VidgenError(f"parts: a ring of {child['part']} (around:) cannot carry parts of its own: attach them to a single part")
+            page.out(f"around({name}, () => {make}, {js(ring)});", indent)
+            continue
+        sub = parts_lines(page, {k: v for k, v in child.items()}, indent, counter)
+        extra = {k: child[k] for k in ("roll", "gap") if k in child}
+        page.out(f"attach({name}, {js(child['at'])}, {sub}, {js(child.get('mount', 'mount'))}{', ' + js(extra) if extra else ''});", indent)
+    return name
 
 
 __all__ = ["DEFAULT_SIZES", "DEFAULT_SUN", "MOVE_CALLS", "PAGE_VERSION", "Ref", "js", "pairs", "orbit_names", "page_source", "sun_direction", "three"]

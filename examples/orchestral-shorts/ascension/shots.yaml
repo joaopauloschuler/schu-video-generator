@@ -1,0 +1,19 @@
+title: "Ascension"
+output: ascension
+score: ascension
+tail: 3.5
+shots:
+  - {bars: 2, mode: crystal, kind: octa, lookY: -6, colours: {base: "#8fd8ff", accent: "#ffd27a", deep: "#03060c"}, react: {pulse: [timpani, violins, bass_drum], glow: [horns]},
+     title: {title: "ASCENSION", subtitle: "an orchestral short", made: true, hold: 3.2}}
+  - {bars: 1, mode: tunnel, speed: 11, colours: {base: "#5fb8ff", accent: "#9fe8ff", deep: "#03050c"}, react: {pulse: [taiko, timpani], glow: [horns]}}
+  - {bars: 1, mode: tesseract, colours: {base: "#9fe0ff", accent: "#ffd27a", deep: "#03060c"}, react: {pulse: [taiko, timpani], glint: [horns], glow: [choir]}}
+  - {bars: 1, mode: portal, colours: {base: "#7fc8ff", accent: "#ffe0a0", deep: "#03060c"}, react: {pulse: [taiko, timpani], glow: [choir]}}
+  - {bars: 1, mode: swarm, colours: {base: "#a8e4ff", accent: "#ffcf7a", deep: "#03060c"}, react: {pulse: [taiko, timpani], glint: [horns], glow: [choir]}}
+  - {bars: 1, mode: tunnel, speed: 15, colours: {base: "#ffd27a", accent: "#7fc8ff", deep: "#05050a"}, react: {pulse: [taiko, timpani], glow: [violins]}}
+  - {bars: 1, mode: crystal, kind: cube, size: 4.0, colours: {base: "#ffe0a0", accent: "#8fd8ff", deep: "#05050a"}, react: {pulse: [taiko, snares], glow: [violins]}}
+  - {bars: 1, mode: rings, colours: {base: "#ffc46a", accent: "#9fe8ff", deep: "#08050a"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [choir]}}
+  - {bars: 1, mode: swarm, seed: 244, colours: {base: "#ffd98a", accent: "#7fd0ff", deep: "#08050a"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [choir]}}
+  - {bars: 1, mode: portal, seed: 355, colours: {base: "#ffe8b8", accent: "#ffb04f", deep: "#08050a"}, react: {pulse: [taiko, timpani], glow: [choir]}}
+  - {bars: 1, mode: rings, seed: 466, colours: {base: "#fff0c8", accent: "#ffb04f", deep: "#08050a"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [choir]}}
+  - {bars: 2, mode: ribbon, melody: trumpet, mid: 78, lookY: -10, colours: {base: "#ffd27a", accent: "#fff4dc", deep: "#05050b"}, react: {pulse: [timpani, gong], glow: [choir]},
+     end: {title: "ASCENSION", start: 0.8}}

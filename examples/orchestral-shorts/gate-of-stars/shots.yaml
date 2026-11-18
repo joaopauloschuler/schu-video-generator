@@ -1,0 +1,16 @@
+title: "Gate of Stars"
+output: gate_of_stars
+score: gate_of_stars
+tail: 3.5
+shots:
+  - {bars: 2, mode: portal, lookY: -9, colours: {base: "#ffd27a", accent: "#5f8cff", deep: "#03040c"}, react: {pulse: [timpani, gong, taiko], glow: [organ]},
+     title: {title: "GATE OF STARS", subtitle: "an orchestral short", made: true, hold: 3.6}}
+  - {bars: 1, mode: crystal, kind: dodeca, colours: {base: "#7f9fff", accent: "#ffd27a", deep: "#03040c"}, react: {pulse: [timpani, taiko], glint: [sopranos], glow: [horns]}}
+  - {bars: 1, mode: tesseract, colours: {base: "#ffcf7a", accent: "#7f9fff", deep: "#04040b"}, react: {pulse: [timpani, taiko], glint: [sopranos], glow: [horns]}}
+  - {bars: 1, mode: drift, lookY: -10, colours: {base: "#8fb0ff", accent: "#ffe1a0", deep: "#03040c"}, react: {pulse: [timpani, taiko], glint: [sopranos], glow: [horns]}}
+  - {bars: 1, mode: tunnel, speed: 10, colours: {base: "#5f8cff", accent: "#ffd27a", deep: "#03040c"}, react: {pulse: [timpani, snares], glow: [violins]}}
+  - {bars: 1, mode: rings, colours: {base: "#ffd27a", accent: "#6f9cff", deep: "#05040a"}, react: {pulse: [taiko, bass_drum], ring: [crash], glow: [organ]}}
+  - {bars: 1, mode: swarm, colours: {base: "#ffdf9a", accent: "#7fa8ff", deep: "#05040a"}, react: {pulse: [taiko, timpani], glint: [trumpet], glow: [choir]}}
+  - {bars: 1, mode: portal, seed: 321, colours: {base: "#ffe6b0", accent: "#ffb04f", deep: "#06040a"}, react: {pulse: [taiko, timpani], glow: [choir]}}
+  - {bars: 1, mode: ribbon, melody: trumpet, mid: 75, lookY: -10, colours: {base: "#ffd27a", accent: "#fff0c8", deep: "#04040b"}, react: {pulse: [timpani, gong], glow: [organ]},
+     end: {title: "GATE OF STARS", start: 0.5}}

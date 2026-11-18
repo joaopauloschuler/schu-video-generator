@@ -12,7 +12,7 @@ generated from code, free to use.** [Listen](docs/music/README.md) ·
 - **[3D scenes](docs/COOKBOOK-3D.md):** plain shapes, labels and stand-in figures under one light, with a camera that moves on the narration's words, all described in the project file.
 - **[2D cartoon](docs/gallery/README.md#2d-cartoons):** characters that walk, talk and act on a stage.
 - **[Isometric cartoon](docs/gallery/README.md#isometric-cartoons):** the same characters in a village or a room seen from above at an angle, with rain, snow and time of day.
-- **[Web scenes](docs/gallery/web.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
+- **[Web scenes](docs/gallery/web/README.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
 - **[Video-model scenes](docs/COOKBOOK-GENERATED-VIDEO.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
 
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
@@ -355,11 +355,12 @@ narration.
 | `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
-| `vidgen music plan SCORE.yaml\|NAME [--out DIR] [--force] [--max-scene S] [--min-scene S] [--style web\|space] [--seed N] [--json]` | proposes a music video's scenes from a score file without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro), cuts on bar lines (long sections split on a phrase line where the material changes), drops, breaths and silent bars, a colour per scene and the tracks each scene follows (drums pulse the light, melodies leave glints, pads set the glow); `--out` writes and validates a draft project of `web_cut` scenes with a starter page each, or with `--style space` of `space` scenes written in YAML alone (a world by the scene's colour, a camera move by its role, sunrise on a section start) ([CONFIG](docs/CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)) |
+| `vidgen music plan SCORE.yaml\|NAME [--out DIR] [--force] [--max-scene S] [--min-scene S] [--style web\|space\|space-air] [--seed N] [--json]` | proposes a music video's scenes from a score file without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro), cuts on bar lines (long sections split on a phrase line where the material changes), drops, breaths and silent bars, a colour per scene and the tracks each scene follows (drums pulse the light, melodies leave glints, pads set the glow); `--out` writes and validates a draft project of `web_cut` scenes with a starter page each, or with `--style space` of `space` scenes written in YAML alone (a world by the scene's colour, a camera move by its role, sunrise on a section start), with `--style space-air` scenes in the air and beside giant ships ([CONFIG](docs/CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
 | `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
 | `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
+| `vidgen cache [info\|clear]` | vidgen's cache folder: `info` (the default) shows the baked maps of web pages (worlds' surfaces, skies, the ground's height maps; kept so a later page opens faster with the same pixels), their size and limit (`VIDGEN_BAKED_CACHE_MB`, `0` off) and the other folders in it; `clear` removes the baked maps and the ground heights kept for flights |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
@@ -375,7 +376,7 @@ narration.
 | `vidgen space-page [PROJECT] --scene ID [--out FILE] [--force] [--json]` | writes the page a `space` scene draws as a `web` scene's script (`extensions/<id>.js`) and prints the `web` scene that replaces it: the same picture, to go on in code ([CONFIG](docs/CONFIG.md#space)) |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
-| `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
+| `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); the types drawn in a web page (`web`, `3d`, `space`) and the showcases using them go to its `web/` folder, a gallery with its own index; default `docs/gallery` ([this repository's](docs/gallery/README.md), [its web scenes](docs/gallery/web/README.md)) |
 | `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
 | `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
 | `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
@@ -624,8 +625,16 @@ my_video/
   original orchestral score in D minor at 75 BPM (strings, horns, low brass, men's choir, timpani
   and taikos) that the pictures follow through `music_data` (the final render is estimated at
   35 to 45 min on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [examples/orchestral-shorts](examples/orchestral-shorts/README.md) — seven portrait (9:16)
+  orchestral music videos published as YouTube Shorts, 33 to 37 s each, source only: "First
+  Light", "The Signal", "Gate of Stars", "Choir of the Void", "Ascension", "Eclipse" and
+  "Orchestra" (which labels each section of the orchestra on screen, a listening test). Each has
+  an original score for vidgen's orchestra and choir; all seven draw with one shared three.js
+  module (eight modes: drift, crystal, portal, tesseract, swarm, rings, tunnel, ribbon) that reads
+  the score through `music_data`, cut straight on the bar lines (about 20 min a film on 2 cores).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
-  stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
+  stills, a GIF each) with its YAML, params and targets, the types drawn in a web page (`3d`,
+  `web`, `space`) in the [web scene gallery](docs/gallery/web/README.md); regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
 - [docs/COOKBOOK.md](docs/COOKBOOK.md) — craft notes from real videos (hooks, pacing, sound, QA);
   [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
@@ -647,8 +656,12 @@ my_video/
   [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md) — space films with the `space` scene: choosing
   what to show, honest scale and exposure, a recipe per shot (a sunrise over a limb, a ringed
   world as a crescent, a craft on a real transfer with its burn on the beat, a fly-by, a
-  powers-of-ten zoom, a black hole, a comet, a warp cut), the cost of each shot, the checks, common
-  mistakes and their messages;
+  powers-of-ten zoom, a black hole, a comet, a warp cut, a craft of the kit's parts; giant ships: a
+  pass along the hull, a craft into a bay, a reveal, a fleet), the camera moves, the cost of every
+  shot in one table, the checks, common mistakes and their messages;
+  [docs/COOKBOOK-AIR.md](docs/COOKBOOK-AIR.md) — shots inside an atmosphere (`space` scenes with
+  `world:`): a dusk at sea, a skim, a volcano, a climb through a cloud deck, planes chased, from the
+  wingtip and flying past, the descent from orbit in one shot, what is true and what is a stated look;
   [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
   discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
   detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
@@ -732,10 +745,15 @@ remaining rendering tests. No test needs network or keys.
     stars, a sun, ready-made worlds with rings and air or worlds of your own, invented spacecraft
     flying a real transfer with its burns, a black hole, a jump to warp, camera moves one after
     another in seconds or bars of the score, reactions to the music, an opening title and an end
-    card; positions and timing true from the orbit data, enlarging stated on screen; every key
+    card; giant ships kilometres long with a pass along the hull and a craft into a bay, space planes,
+    craft built from the kit's parts; with `world:` a scene in the air: sea, ground and cloud decks
+    of one world from orbit to the ground, planes on planned flights with contrails and exhaust, a
+    skim, a chase, a climb through a deck, a descent from orbit; positions and timing true from the
+    orbit data, enlarging stated on screen; every key
     checked with did-you-mean; `vidgen space-page` writes it out as a `web` scene to go on in code;
-    `vidgen music plan --style space` drafts a whole space film from a score; `vidgen guide space-scenes`;
-    a recipe per shot and what each costs in [the space cookbook](docs/COOKBOOK-SPACE.md));
+    `vidgen music plan --style space` (or `space-air`) drafts a whole space film from a score; `vidgen guide space-scenes`;
+    a recipe per shot and what each costs in [the space cookbook](docs/COOKBOOK-SPACE.md) and
+    [the air cookbook](docs/COOKBOOK-AIR.md));
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -749,9 +767,9 @@ remaining rendering tests. No test needs network or keys.
     and rain, voice sounds like `[laugh]`, overlapping lines, and automatic directing with
     `auto_direct`), `card` (title cards, opened and closed with an iris).
 
-  See them all in the **[scene gallery](docs/gallery/README.md)**: every type at 16:9 and 9:16,
-  with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
-  types).
+  See them all in the **[scene gallery](docs/gallery/README.md)** and the
+  **[web scene gallery](docs/gallery/web/README.md)**: every type at 16:9 and 9:16, with a GIF,
+  its YAML, params and targets (`vidgen gallery` makes them, also for a project's own types).
 - **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
   agent how to make a good video with schu-video-generator (see [For AI agents](#for-ai-agents)); `vidgen mcp`
   gives an agent's client every command as an MCP tool, storyboards returned as images

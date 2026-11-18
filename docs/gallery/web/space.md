@@ -235,4 +235,4 @@ From the author guide (`vidgen guide scenes`):
 
 Any number.
 
-[All scene types](README.md) · `vidgen list-scenes` · `vidgen schema --scene space`
+[All web scenes](README.md) · [All scene types](../README.md) · `vidgen list-scenes` · `vidgen schema --scene space`

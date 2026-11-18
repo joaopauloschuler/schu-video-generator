@@ -235,6 +235,10 @@ src/vidgen/
                           # (elements <-> state vectors, vis-viva, period, energy), bodies.py (GM, radii, preset orbits
                           # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py,
                           # laws.py (ellipse geometry, equal-time areas, Newton's cannon, Kepler III; §98.4)
+  flight/                 # flight in the air of a world (§123.7; no manim): spec.py (a flight in words: start, legs),
+                          # plan.py (legs -> position, velocity, attitude; the ground check), profiles.py (the smooth
+                          # functions of time), frames.py (local <-> planet-fixed <-> ecliptic), terrain.py (vidgen/space-land's
+                          # heights in numpy, level ground, sea, flat world), worlds.py (radius, gravity, air), reentry.py (from orbit)
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -274,7 +278,9 @@ src/vidgen/
                           # layout.py (the page's text as layout objects, for lint; §118.12), still.py
                           # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8), parts.py
                           # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5), space_names.py
-                          # (the space modules' names and options read from their source, §122.12)
+                          # (the space modules' names and options read from their source, §122.12), baked.py
+                          # (the cache of baked maps: key, store, limit; §123.2), flights.py (`flight_data:`: ctx.flight,
+                          # its cache and key), land.py (vidgen/space-land's height definition fetched from a page, kept; §123.7)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -315,7 +321,10 @@ src/vidgen/
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (space.py, space_params.py, space_page.py: the `space` scene, its words and
-                          # the page written from them, §122.12; registered like extensions; actions.py:
+                          # the page written from them, §122.12; space_air_params.py, space_air_page.py, space_checks.py,
+                          # space_costs.py: its surface scenes, hulls, planes and their checks and costs, §123.14;
+                          # flight_data.py: a `web` scene's flights, §123.7;
+                          # registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
                           # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
@@ -351,7 +360,8 @@ src/vidgen/
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
   data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118),
-                          # layout.js (reads the page's text after a screenshot, for lint; §118.12)
+                          # layout.js (reads the page's text after a screenshot, for lint; §118.12), orbits.js (ctx.orbits, §122.3),
+                          # flight.js (ctx.flight, §123.7)
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
@@ -365,7 +375,19 @@ src/vidgen/
                           # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
                           # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10);
                           # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11); space-scene.js
-                          # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12)
+                          # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12); baked.js
+                          # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2); space-air.js
+                          # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3); space-sea.js
+                          # `vidgen/space-sea`: water to the horizon under that sky (§123.4); space-clouds.js
+                          # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5); space-land.js
+                          # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6); space-plane.js
+                          # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8); space-effects.js
+                          # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9); space-hull.js
+                          # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10); space-hull-detail.js
+                          # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11); space-camera-air.js
+                          # `vidgen/space-camera-air`: camera moves in the air and beside giant ships, on `vidgen/space-camera`'s rig (§123.12); space-descent.js
+                          # `vidgen/space-descent`: one world from orbit to the ground: globe, air, sea, ground and decks joined (§123.13); space-scene-air.js
+                          # `vidgen/space-scene-air`: the helpers of a declarative space scene in the air or beside a giant ship (ramp, flashes, hitTimes, once; §123.14)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -389,6 +411,7 @@ docs/
   EXTENDING.md            # how to write project extensions
   ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
   gallery/                # scene gallery written by `vidgen gallery`: README.md, <type>.md, media/ (§60)
+    web/                  # the web gallery: types drawn in headless Chromium, README.md, <type>.md, media/ (§123.1)
 AGENTS.md                 # the author guide for agents *using* vidgen (copy of data/guide/AGENTS.md, §59)
 DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
 ```
@@ -4713,6 +4736,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     the same spots one clearance further out.
 
 ## 60.1 Animated previews and showcases (Step 182)
+
+Since Step 379 the types drawn in a web page have a gallery of their own, `docs/gallery/web` (§123.1).
 
 - **Previews in the index.** Each cell of `docs/gallery/README.md` shows the scene's GIFs (16:9
   and 9:16, 180 px high), each its own link to the page, each in a `<picture>` whose
@@ -23783,7 +23808,7 @@ variant, the Step 330 and 331 demos.
 - **Gallery:** the guide's `scenes` snippet names `extensions/gears.html`; `gallery.sample_asset`
   maps a `web` snippet's page or script (`WEB_SUFFIXES`) to `data/gallery/web/<name>` and
   `_copy_files` copies it into the work project (`_is_web_entry`), so `vidgen gallery --types web`
-  renders the entry (`docs/gallery/web.md`).
+  renders the entry (`docs/gallery/web.md`; since Step 379 `docs/gallery/web/web.md`, §123.1).
 - **Measured** (1 CPU, drawing the frames only through `make_web_clip`, Chromium start included,
   1920x1080 at 30 fps; HANDOFF Step 333): `cycle` (HTML + CSS page, 1760x668, 582 frames) 453 ms per
   frame = 13.6 s per second of video; `rain` (canvas, 1760x660, 460 frames) 325 ms = 9.7 s; `globe`
@@ -26284,8 +26309,12 @@ space.path("Moon", {kind: "conic"});      // a line exact every frame
   most `maxSlices` (8). Objects with `userData.overlay` (a lens's glare, §122.8) are left out of
   the intervals and drawn once after the last slice, over everything. Drawn far to near, the depth buffer cleared between, `scene.background`,
   the clear on the first pass only, the shadow maps in the first pass that draws the world (Step 374: in the sky's pass
-  everything that casts a shadow is hidden, so a scene with a sky had no shadows). A sky (`scene.background`, or objects with
-  `frustumCulled = false`) is drawn first with near and far of its own. three-finish's depth of
+  everything that casts a shadow is hidden, so a scene with a sky had no shadows). A sky (`scene.background`, objects with
+  `userData.sky = true`, or since Step 393 objects with `frustumCulled = false` AND a negative `renderOrder`; `userData.sky =
+  false` keeps one in the world) is drawn first with near and far of its own. Since Step 393 a slice draws only the things
+  whose interval reaches it (a thing beginning beyond the slice's far plane is hidden there: a world's shell that holds its
+  depth off the far plane was drawn again in every nearer slice), and a thing outside its bounding sphere but beside the view
+  begins at (distance - radius) times the frame corner's cosines (a world added with `at` and `size` reached to `near`). three-finish's depth of
   field reads the last slice's depth with the camera's near and far, right for a focus in the
   nearest slice; `dofFocus` (metres, an object or a function of t) draws the depth again from
   focus / 10⁵ to the farthest thing, nearer things at depth 0. Slices seen: ship 2, Earth and Moon
@@ -28097,3 +28126,2282 @@ draw again (their bytes changed; no released film uses them), as do scenes with 
 (`ORBIT_DATA_VERSION` 2 and the orbit code's digest). No module shipped before Phase AN changed
 (three-finish, three-kit, music-time, title-cards); the earlier films' pages and score audio keep
 their keys (the scene fingerprint of `vidgen storyboard`, which holds vidgen's whole source, changes with any step).
+
+## 123. Air, planes and giant ships (Phase AO, Steps 379–394)
+
+Phase AO (owner's request, 2026-11-17) adds flight inside atmospheres (the sky from inside, ocean,
+cloud decks and gas giants, terrain; no forests), parametrized space plane parts and giant ships,
+a cache for baked maps and the owner's orchestral Shorts as examples. It starts with a gallery of
+its own for scenes drawn in a web page.
+
+### 123.1 Two galleries: the main one and the web gallery (Step 379)
+
+- **Why.** The entries of types drawn by a web page are the heaviest (a star field under a
+  moving camera changes every pixel of every frame) and Phase AO adds more of them; the main
+  gallery's budget had already been raised to 17 MB for `space` (Step 378). Decision (owner): a
+  second gallery, `docs/gallery/web/`, with a budget of its own (20 MB); the main gallery back to
+  16.5 MB (16.1 MB without `web/` at Step 379); the two indexes link to each other; the "Videos on
+  YouTube" section (videos and Shorts) stays at the end of the main index, unchanged.
+- **The rule** (a property of the type, not a list of names): an entry is a web entry when its
+  scene class is drawn by a web page in headless Chromium. `NarratedScene.drawn_in_browser`
+  (a `ClassVar[bool]`, default `False`) says so; `web` (`scenes/web.py`) and `3d`
+  (`scenes/scene_3d.py`) set it, and every subclass inherits it: `space` (a `Web`) and any later
+  type built on `Web` (a straight-cut scene type of the music films, Step 394) land in the web
+  gallery with no further work; a project's own type sets it the same way. `gallery.is_web_type`
+  reads it from the registry, `GalleryType.web` carries it (an alias has its class's), a showcase
+  is a web entry when one of its scenes is (`is_web_showcase`; none at Step 379). The music films
+  (`examples/escapement`, `parallel-space`, `signal-fire`, `outbound`) are not gallery entries;
+  the line naming them under "Pictures and media" moved to the web index (`WEB_SECTION_NOTES`,
+  links one folder deeper), with links to the 3D and space cookbooks.
+- **Layout.** A web entry's page is `web/<name>.md`, its media `web/media/<name>-16x9|9x16.png|gif`
+  (`gallery_folder`); the page, the stills and the GIFs are written exactly as before (same sizes,
+  palettes, caps, `ENTRY_MAX`), only their folder differs, and the page's last line reads "[All
+  web scenes](README.md) · [All scene types](../README.md)". `write_index(..., web=True)` writes
+  `web/README.md` ("# Web scene gallery", the same table per guide group, no YouTube section);
+  the main index lists the other entries and, when the web gallery has any, one line naming the
+  web types and linking `web/README.md`. A showcase's links to the types it shows go to either
+  gallery (`page_link`), its footer one folder deeper in the web gallery (`relink_for_web`). When
+  an entry is written, its page and media in the other gallery are removed (`_remove_other_copy`),
+  so a type that becomes a web type moves on the next `vidgen gallery --types <name>`. A
+  project's gallery splits the same way (`<output>/web/` only when it has a web type).
+- **Elsewhere.** `vidgen gallery` prints the web index too; `--json` gains `web_index` and `web`
+  per type and showcase; the MCP server serves the web gallery's pages as `vidgen://gallery/<type>`
+  (names are unique across the two) and its index as `vidgen://gallery/web-index`.
+  `.gitignore` lets `docs/gallery/web/media/` in.
+- **Moved, not regenerated** (Step 379): the 12 media files of `3d`, `web` and `space` were moved
+  with `git mv`; the generator writes them from the same renders with the same code, only into
+  `web/media/`, so they are byte-identical to what it would write. The three pages and both
+  indexes were rewritten by `write_page` / `write_index` from the committed media (no render):
+  `3d.md` and `space.md` differ only in the last line; `web.md` also picked up the `web` type's
+  current description and params (`design_width`, `music_data`, `orbit_data`), which had changed
+  since its entry was made (its YAML, which the tests compare, had not). A main page written the
+  same way (`pie.md`, `stat.md`) came out byte-identical.
+- **Tests** (`tests/test_gallery.py`): `BUDGET` 16.5 MB for `docs/gallery` without `web/`,
+  `WEB_BUDGET` 20 MB for `web/`, `ENTRY_MAX` per entry in either; each index lists exactly its
+  entries and its folder holds exactly their pages; the two link each other; no relative link in
+  any page of either gallery is broken; the rule (`{3d, web, space}`); writing into two galleries
+  without rendering; the tiny render test checks `web_index`. Not changed: which types
+  `vidgen validate` warns about when Chromium is missing (`browser.chromium.BROWSER_SCENE_TYPES`,
+  `3d` and `web`; `space` scenes are not in it).
+
+### 123.2 The cache of baked maps (Step 380)
+
+- **Why.** Pages bake pictures before their first frame: a planet's two surface cube maps
+  (`vidgen/space-bodies`, §122.7: about 30 s for `size: 2048` on 2 cores in software GL) and the
+  sky's cube map (`vidgen/space-sky`, §122.6: 4.5 s of the 5.6 s a 1024 sky takes). Every page is
+  new (each `web` / `space` scene, each `vidgen still`, draft and render, each parallel job), so
+  the same map was baked again every time. Later steps of Phase AO bake more (the air's lookup
+  tables, Step 381; terrain, 384; a giant ship's detail maps, 389).
+- **Every bake in the modules** (read at Step 380). Cached: `space-bodies` (the maps A and B,
+  RGBA 8-bit cube maps with mipmaps; the coarse and field cubes are intermediate and not kept)
+  and `space-sky` (the cube, RGBA half float with mipmaps). Not cached: the CPU-made textures of
+  `space-light` (a corona of six 256 faces), `space-phenomena` (a 256 noise texture, lanes, a
+  heat ramp, a disc), `space-craft` (256 tiling panel maps, made once per page and shared) and
+  the ring profile (1024 texels) — each costs well under a second; `space-sky`'s stars (69,000 from
+  the seed, 0.55 s, CPU arrays), its `background` and `environment` (drawn from the sky on first
+  use) and `space-craft`'s reflection cubes (drawn from the scene round the craft: they depend on
+  the scene, so they have no key); `three-kit`'s and `three-finish`'s nebula and studio bakes
+  (small; changing those modules would change the key of every 3d-kit page).
+- **One helper, `vidgen/baked`** (`data/web/modules/baked.js`, on the import map):
+  `baked(renderer, name, inputs, {targets, draw})` returns the render targets `targets()` makes
+  (2D or cube, RGBA, unsigned byte / half float / float; `null` for one not needed), filled by
+  `draw(targets)` or from the cache. Synchronous, so `planet()` and `spaceSky()` stay
+  synchronous. `inputs` is every input that changes the pixels besides what vidgen adds: the
+  bodies pass `{type, size, float, inputs: bakeInputs(o)}` (all the bake reads), the sky
+  `{size, seed, color, band, milkyWay, dust, limit, density, galaxies, nebulae}`. A later bake
+  (Steps 381, 384, 389) calls it the same way; a project's script may too, with a version of its
+  own bake code in `inputs`. Also exported, pure and tested in Node: `inflate`, `halfBits`,
+  `joinPlanes`, `layout`.
+- **The key** (`web/baked.py` `bake_key`): SHA-256 of canonical JSON (sorted keys) of `name`,
+  `inputs`, the parts' layout (target, face, width, height, type, bytes), the GL renderer
+  (`RENDERER`, `VERSION`, shading language, the sorted extension list), `vidgen/baked`'s
+  `VERSION`, `code_digest()` (every file in `data/web/modules/` and the bundled three.js: any
+  change of vidgen's page code is a new key), `engine_id()` (vidgen's page files, Chromium's
+  flags, time zone, locale, the Playwright version that pins Chromium and SwiftShader) and
+  `STORE_VERSION`. Values cross as JSON (a number keeps all its bits; `-0` and `0` are one key).
+- **How the bytes travel.** The page asks with a synchronous `XMLHttpRequest` to vidgen's own
+  origin, `POST __vidgen__/baked/lookup` (`WebPage._serve_baked`; never a loaded file, so no
+  scene's key sees it). *Miss*: the page draws, reads level 0 of each face back (`readPixels`; a
+  half-float target read as float and made half again by `halfBits`, exact for every half),
+  keeps the bytes as Blobs in `globalThis.__vidgenBaked` and says `POST <key>/ready`; when the
+  hook returns, `WebPage._store_baked` reads each Blob with CDP `IO.resolveBlob` / `IO.read`
+  (36 MB/s here; a request body through Playwright's route was 6 MB/s) into a staged folder and
+  commits it. *Hit*: `GET <key>/<n>` per face, answered with `route.fulfill(path=...)`; the page
+  inflates (raw deflate, `inflate`), joins the planes of a float type (`joinPlanes`), uploads
+  with `texSubImage2D` into the target's own texture and, when the bake had mipmaps, calls
+  `generateMipmap` — the call three.js makes after a bake, on the same bytes. A part that does
+  not arrive or does not inflate: the page says `POST <key>/damaged` (vidgen removes the entry),
+  bakes and stores it anew. Off, or anywhere but vidgen's pages (Node, a browser): `draw` runs.
+- **The store** (`BakedStore`): `<cache folder>/baked/<key>/` (`VIDGEN_CACHE_DIR`, else
+  `~/.cache/vidgen`, `%LOCALAPPDATA%\vidgen`, `~/Library/Caches/vidgen`), one file per face
+  (`<n>.z`: zlib level 1 raw deflate; a half float's or float's bytes split into byte planes
+  first, a third smaller) and `meta.json` (sizes, stored sizes, SHA-256 of each file, the page's
+  `meta`: which targets had mipmaps). Written into `baked/.staging/` and renamed into place: two
+  pages or render jobs baking one map at once both bake, the second rename finds the folder and
+  drops its copy, and no reader ever sees half an entry. Before a hit vidgen checks every file
+  against its hash (about 0.1 s for a 2048 planet's 50 MB); a damaged entry is removed and baked again.
+  **Limit** 2000 MB by default (`VIDGEN_BAKED_CACHE_MB`; counted on disk, after compression);
+  after each store the least recently used entries go (a hit touches `meta.json`); an entry is
+  not stored when it is larger than the limit or would leave under 500 MB free on the disk;
+  staged copies left by stopped pages go after an hour. **Off**: `VIDGEN_BAKED_CACHE_MB=0` (an
+  environment variable like `VIDGEN_CACHE_DIR`: the cache serves every command that opens a page,
+  not one project). **Commands**: `vidgen cache` / `vidgen cache info` (the cache folder, the
+  baked maps' count, size and limit, the other folders and who keeps them) and
+  `vidgen cache clear` (removes the baked maps only; the SoundFont, studio sessions and model
+  list stay). Before Step 380 vidgen had no cache command.
+- **Same pixels.** Proved with `vidgen still` at 320x180 (PNG bytes compared, cache off vs cold
+  vs warm): a 512, a 2048 and a moon-like planet, the seeded and the real sky, `examples/outbound`
+  scenes `01_dawn` and `02_depart`, and the default sky at 1280x720 — all byte-identical. The
+  slow test draws a planet, a sky and a float target of the page's own off, cold, warm, with a
+  damaged entry and switched off by the environment: the same pixels and floats every time.
+- **Measured** (2 cores, SwiftShader; "page ready" of `vidgen still`, off / cold / warm):
+
+  | Page | Off | Cold (bake + store) | Warm |
+  |---|---|---|---|
+  | Earth-like world, `size: 2048` (201 MB of maps, 50 MB stored) | 30.5 s (bake 29.7 s) | 40.0 s | 7.1 s (6.3 s) |
+  | Earth-like world, default size (256 at 320x180) | 1.9 s | 2.1 s | 1.1 s |
+  | Moon-like world, default size (256 at 320x180) | 2.1 s | 2.4 s | 1.2 s |
+  | Default sky at 1280x720 (cube 1024, 50 MB half float, 22 MB stored) | 6.4 s (sky 5.6 s) | 9.9 s | 4.5 s (sky 3.5 s) |
+  | Default sky at 320x180 (cube 512) | 2.8 s | 3.8 s | 2.3 s |
+  | `examples/outbound` `02_depart` at 320x180 (Earth 1024, sky, ship) | 13.7 s | 17.5 s | 7.6 s |
+
+  Warm, the 2048 planet's time is the bytes crossing from vidgen to the page (sync requests
+  through Playwright's route: about 16–19 MB/s) and inflating them (60–150 MB/s in V8); the
+  sky's 3.5 s include its 0.55 s of stars and its shaders. Memory: a part (one face) at a time
+  in the page and in Python, the Blobs of one bake in the page until vidgen reads them (201 MB
+  for a 2048 planet, 50 MB for a 1024 sky).
+- **Cache keys of scenes.** No scene's key depends on the cache (the requests are not loaded
+  files, the setting is not in any key). But `space-bodies.js` and `space-sky.js` changed and a
+  page importing them now also loads `baked.js`, so every scene whose page imports either module
+  (every `space` scene, the outbound example, a `web` page using them) draws its frames clip once
+  more after Step 380 — unavoidable, as the modules must call the cache — with the same pixels.
+  Other pages (three-finish, three-kit, music films without these modules, `3d`) keep their keys.
+- **Tests** (`tests/test_web_baked.py`): the module and its imports; the limit from the
+  environment; the key changes with each input, the engine and the code digest, not with key
+  order; part sizes checked; an entry stored whole and read back (planes, deflate); damaged
+  (flipped, cut, unreadable record) entries removed; two pages storing one key (the second
+  loses); least-recently-used eviction and stale staged copies; `vidgen cache` and
+  `vidgen cache clear`; `WebPage`'s answers to every request (status, lookup miss and hit, part,
+  ready, unknown paths, off, a full disk or limit), never in `loaded`; in Node: `inflate` of
+  Python's raw deflate at levels 0, 1, 6, 9, damaged streams refused, every half survives
+  `halfBits`, `joinPlanes`, `layout`, no vidgen means a bake; `slow`, in Chromium: the pixels off /
+  cold / warm, a damaged part (hash) and an unusable part (inflate) baked again, the cache off.
+  `tests/conftest.py` sets `VIDGEN_BAKED_CACHE_MB=0` for every test: no test writes the user's
+  cache folder unless it passes its own store.
+
+### 123.3 The sky from inside an atmosphere: `vidgen/space-air` (Step 381)
+
+One line gives the view from within the air: `const sky = air(renderer, "earth", {sun}); scene.add(sky.object);
+sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import name `vidgen/space-air`, in
+`VIDGEN_MODULES`; imports `three`, `baked` of `vidgen/baked`, and `AIRS`, `PRESETS`, `resolveOptions`,
+`linearColor` of `vidgen/space-bodies`) is one model for every height, from the ground to space.
+
+- **One source of the air's numbers.** The air is the one `vidgen/space-bodies` draws round the
+  same world from outside (§122.7): its `AIRS` (zenith optical depths per colour of the gas,
+  `rayleigh`, the haze, `haze`, and what is absorbed besides, `absorb`; one scale height `height` as
+  a share of the radius; the shell's top at 8 scale heights; the haze's forward throw `forward`; the
+  night glow `glow`) and the same closed form for the air along a ray (Chapman's function after
+  Schueler; under the horizon twice the tangent path less the path upward). `airOf(what, extra)`
+  resolves a name of this module's `PRESETS`, a world of `vidgen/space-bodies` (its own air and, from
+  `RADII`, its radius in metres: the real worlds' radii, invented ones for the invented), an air of
+  `AIRS`, a body made by `planet()` (that body's air as it is drawn), or `{world | air, radius,
+  forward, ozone, ozoneHeight, ground}`. Earth-like: scale height 8.92 km, zenith optical depth
+  0.088 / 0.164 / 0.313 (red, green, blue; the gas alone 0.062 / 0.130 / 0.290, where the Earth's
+  measured Rayleigh depths are about 0.04 / 0.10 / 0.25 at 680 / 550 / 440 nm: the numbers are broad
+  bands chosen for the outside look), 36.6 columns of air towards the horizon (the Earth: about 38).
+- **Two things only the inside view has, both stated.** (1) A thin absorbing layer (`ozone`: zenith
+  optical depth per colour; `ozoneHeight` metres): each crossing costs the depth over the line's
+  cosine at the layer, at most 41 times (the layer has a depth: a ray grazing a layer 15 km deep
+  runs 58 times its depth in it); the Earth-like preset has 0.030 /
+  0.028 / 0.004 at 25 km (about 300 Dobson units in the Chappuis band: physical). Without it the
+  zenith at sunset is grey (blue over red 1.5); with it 2.1. The outside view has no such layer.
+  (2) The haze's phase function per colour, in two lobes: `forward` (the broad lobe, a number or one
+  per colour) and `aureole` / `aureoleForward` (a narrow second lobe: its share of the haze's light
+  per colour and its forward throw). The Mars-like preset: broad 0.36 / 0.42 / 0.55, narrow 0.93
+  with shares 0.02 / 0.06 / 0.35 (chosen for the look, after the real dust's tight blue forward
+  peak: grains larger than the wave diffract a narrow cone, narrower in blue): a blue-white glow of
+  some 15 degrees round a low sun, falling into a tawny sky.
+- **Presets.** `earth` (the world's own air and the layer); `mars` (a dusty season: `air: {like:
+  "mars", density: 3, absorb: [0, 0.013, 0.031]}`, grey extinction 0.26, where the world's own air
+  seen from orbit has 0.09: the world's own is `air(renderer, {world: "mars"})`, and
+  `planet(renderer, "mars", {air: PRESETS.mars.air})` shows the dusty air from outside); `thin`
+  (invented: `AIRS.thin`, radius 2,400 km: a dark sky by day with stars in it) and `thick`
+  (invented: four times the Earth-like air with more haze, radius 7,400 km: a pale bright sky, a
+  yellowed sun). Another atmosphere is stated with scattering numbers, not gases: `air(renderer,
+  {air: {rayleigh: [r, g, b], haze: [r, g, b], absorb: [r, g, b], height: share, forward: g}, radius:
+  metres, forward: [r, g, b], ground: colour})`, or `{like: name, density: factor}`.
+- **The sums.** A unit of light is a white, matt ground square to the sun (as §122.7). Along a ray
+  the air's light is summed slab by slab with each slab's exact share (what the slab takes of the
+  light behind it, times the air's share of that, times the source at its middle): once-scattered
+  light (the sun's light after its own path, Rayleigh's and Henyey-Greenstein's phase functions),
+  and light scattered more often as one stated approximation (after Hillaire's 2020 method): a
+  point's second-hand light from all round (8 bearings x 14 elevations crowded towards the level,
+  where the twilight's light lies, each weighing its share of the sphere; 24 steps each; an
+  isotropic phase, the ground's bounce included) over one minus what such light passes on, i.e. every later bounce as a
+  geometric series. That term is a table over height (32 rows, spaced by the square root, 0 to 8
+  scale heights) and the sun's cosine (64 columns, -0.4 to 1), **baked once through `vidgen/baked`**
+  (`space-air/psi`, half float; inputs: the module's `VERSION`, the table's shape, every number of
+  the air and the ground's colour). The Earth-like zenith's light is 20 to 35 % second-hand.
+- **The sky table.** A frame does not march rays: `update` draws a small table of the whole sky for
+  this height and this sun (128 x 192 texels at `quality: "standard"`, 32 steps a texel; `fast` 96 x
+  96 with 16, `fine` 192 x 320 with 48), only when height or sun changed. Across: the bearing from
+  the sun over half the circle (the sky is the same left and right of it); along: the angle from the
+  horizon by its square root, rows above and below the horizon kept apart (so the ground's edge never
+  bleeds into the sky; seen from above the air the rows span only the shell). Left half: light
+  scattered once without its phase function (the picture multiplies it in per pixel, so the glow
+  round the sun stays sharp at any table size); right half: light scattered more often. A pixel
+  costs two reads, the air along its ray in closed form (for what passes from behind), and the
+  phase functions.
+- **The dome** (`sky.object`): a mesh that follows any camera (`frustumCulled = false`,
+  `renderOrder` -900: after a `vidgen/space-sky` sky, before the scene; in `vidgen/space-scale`'s sky
+  pass), premultiplied over what is behind: the stars pass by what the air leaves of them. Under the
+  horizon a plain matt ground of one colour (`ground`; a stand-in until ocean and terrain cover it;
+  `ground: false` for none), lit by the sun after the air and by the sky (a table of 64 entries made
+  in JavaScript), its edge a pixel soft. The sun's disc (`disc`, `sunSize` degrees): limb darkening
+  per colour, seen through the air on its ray; in `camera` and `auto` its true brightness (1 /
+  sin^2 of its radius, 46,000 whites) held at `BURN` 32 with its hue kept; in `film` between 1.6
+  and 32 whites by (what is left of it)^1.6, drawn in front of the sky's glow instead of added to it
+  (added, a low red sun washed out to the glow's pale orange), so a low sun is an orange-gold ball
+  with a darker, redder limb. Round the disc a soft bloom in its colour, at most 1.4 whites at the
+  rim (a lens's, not the air's; stated). The disc has the Sun's true size, 0.53 degrees across: 7 px
+  at 640 px width through a 50 degree lens, 19 px through a 22 degree lens; `sunSize` enlarges it
+  (a stated choice). Straight to the
+  canvas the dome applies ACES and sRGB itself and dithers by two display codes (one where the
+  picture is bright): with one code `vidgen motion check` found `banding` on 16 % of a dusk clip's
+  frame after the encoder; with two, none.
+- **Aerial perspective** (c): `sky.haze(material)` patches a three.js material (once; a list is
+  fine): each pixel becomes `colour x what passes + the air's light in front of it`. The air's light
+  in front of a point is the ray's whole light from the sky table times (1 - passes to the point) /
+  (1 - passes along the whole ray): exact where the source is the same along the ray, and at both
+  ends always, so a far thing ends in exactly the dome's colour and a ground plane meets the dome's
+  horizon without a seam. A `ShaderMaterial` includes `AIR_GLSL`, takes `sky.uniforms` and calls
+  `airThrough(colour, toPoint)` (or `airLight(mu, cosv, dist, through, hit)`). Not modelled:
+  shadows inside the haze (no light shafts).
+- **Light for things in the air** (d): `sky.light.sun` (a `DirectionalLight`: the sun after the
+  air at the camera's height, mean over the disc as it sinks, pi x its strength as `vidgen/space-light`'s
+  `light.directional`) and `sky.light.sky` (a `HemisphereLight`: the sky from above, the lit ground
+  from below); `scene: scene` adds them. `sky.state` holds `height`, `elevation`, `ev`, `gain`,
+  `stars`, `sunlight`, `ambient`, `inside`.
+- **Exposure**, as `vidgen/space-light` (§122.8). `"film"` (default; a convention): nothing changed
+  by day (a sunlit ground is 1, as in space); as the zenith darkens the exposure opens by
+  `filmExposure` = 0.93 x^2 / (x + 0.3) stops (x: the stops the zenith has lost against a sun 25
+  degrees up), at most 16, and not at all above the air; with it comes the **dusk curve**
+  (`duskCurve`: from half a stop of lift, fully from 4): the air's light over a twentieth of white
+  is drawn as knee x (light / knee)^0.5, its colour kept, as a negative's shoulder, because the
+  twilight arch is hundreds of times as bright as the zenith (true: measured skies say the same)
+  and no one exposure shows both. The sky 3 degrees up under the sun is never drawn over 1.6
+  whites after that curve: the lift stops there, and where a hazy air's glow round a low sun is
+  brighter by itself the exposure closes, by at most 3 stops (the Mars-like sunset: a dark tawny sky
+  round the glow, as a camera set for the glow shows it). A `stars` sky is shown from 5 stops
+  (first stars) to 11 (all), and wherever the zenith is drawn black (high up, thin air). Measured
+  on the Earth-like ground: 0.4 stops with the sun 10 degrees up, 2.5 at the horizon, 5.7 at -4,
+  8.4 at -6, 11.7 at -8, 16 from -12; the zenith is drawn 0.033 of white by day, 0.022 at sunset,
+  0.016 at -6, 0.013 at -8, 0.007 at -12, black by -18. `"camera"`: `ev` stops over a sunlit ground's, honest: the stars at
+  2^(ev - 20) of their look, the night glow at 2^(ev - 12). `"auto"`: metered on nine rays through
+  the frame (a pure function of the frame's inputs).
+- **Measured** (2 cores, SwiftShader, straight to the canvas; `vidgen still` adds the screenshot):
+
+  | | 320x180 | 1280x720 |
+  |---|---|---|
+  | the dome, sun and height unchanged | 0.013 s | 0.185 s |
+  | the dome, sun or height moving (the sky table drawn again): `standard` / `fast` / `fine` | 0.043 s | 0.22 / 0.20 / 0.30 s |
+  | with aerial perspective on small things (seven hills) | 0.018 s | 0.205 s |
+  | with aerial perspective on half the frame (a ground plane) | 0.027 s | 0.28 s |
+  | making the air (two tables in JavaScript, shaders, the baked table) | 0.30 s | 0.30 s; 0.21 s with the table from the cache |
+
+  The baked table is 64 x 32 half floats (24 KB stored): its bake is 0.1 s of the 0.3 s, so the cache
+  saves little here; the tables that cost are the JavaScript ones (the ground's ambient light, the
+  film exposure's meter: 0.1 s). `vidgen parts --kind air`: 10 tiles in 8 s.
+- **Agreement with the outside view** (stills `/home/claude/work/scratch/ao381/stills/09_*`): from
+  400 km, same camera, sun and 14 degree lens, the limb has the same heights and colour order (a blue
+  line over a pale band over the ground) as `planet(renderer, "earth")`; this module's blue line is
+  about twice as bright and more saturated, because the body sums the air in 4 slabs (`quality:
+  "fine"`, 8, comes closer) and has no ozone layer. For the descent of Step 391 two ways are open:
+  hand over above the air where both agree in shape (a brightness step would have to be cross-faded),
+  or draw the body with `air: false` and this module's dome over it (`ground: false, over: true`:
+  drawn once: the ground then takes this model's haze, bluer near the limb than the body's own).
+- **Where it is true and where not.** True: the geometry (a round world, the horizon's dip and the
+  shadow of the world in the air at dusk), single scattering, extinction, the ozone layer's
+  absorption, the sun's size and colour, the order of colours at sunset (red, orange, pale, blue-grey;
+  no green band). Approximate: later bounces (one isotropic term); the air between the camera and a
+  point (differences of the closed form: 4 to 15 % under the true column over 1.5 to 200 km at most
+  angles, up to 55 % over it on a short, exactly level path); no refraction (the sun is not flattened and sets when geometry says). A look:
+  the film exposure, the Mars-like forward throw, the invented airs, the plain ground. Weak: the Earth's shadow band
+  opposite the set sun is there but faint; the horizon seen from 10 km shows a pinkish line (long
+  red paths over a dark ground); from -13 to -16 degrees the last of the arch is a thin red line on
+  the horizon; the sunset disc is orange-gold rather than deep red (clear air).
+- **Twilight to night (Step 381.1).** At Step 381 the sky was black by -10 degrees and the arch a
+  detached band. The cause was the table of second-hand light: its sum took 8 x 8 directions evenly
+  over the sphere, the nearest 7 degrees from the level, and so never saw the twilight arch, which is
+  the only light a shadowed air gets (it lies within a few degrees of the horizon). With the
+  directions crowded towards the level the zenith's light now falls from sunset by 5 x at -3 degrees,
+  70 x at -6, 2,000 x at -9, 30,000 x at -12, 10^7 x at -18 (measured skies, from memory: about 150 x at -6,
+  10^5 x at -12): no cliff, no step over 30 x in two degrees (tested). The ozone layer's longest
+  slant path went from 16 to 41 crossings' worth, which makes the dusk blue (zenith blue over red
+  3.0 at -6, 3.4 at -9, 2.3 at -12; it was 1.6). Physical: both of these. A look: the film
+  exposure's lift to 16 stops, the dusk curve, the closing for a bright glow, the disc's film
+  brightness and its bloom, the Mars-like lobes. A strip of the sun at +4, 0, -3, -6, -9, -12,
+  -15, -18 degrees (`stills/11_twilight_strip.png`) and a 3 s clip from +4 to -18 through
+  `vidgen motion check`: no findings. The noon, 10 km and aerial perspective stills changed by at
+  most 3 display codes; the 100 km still only in the limb's rows (the longer ozone path: a touch
+  bluer). A frame costs 6 % more (0.228 → 0.242 s at 1280x720 in the same session, which ran slower
+  than Step 381's 0.185 s), making the air 0.43 s (0.36 s).
+- **Parts** (`data/web/parts/space-air.js`, a new kind `air` in `vidgen/parts` and
+  `vidgen.web.parts.KINDS`, after `light`): `air-earth-noon`, `air-earth-golden-hour`,
+  `air-earth-sunset`, `air-earth-twilight`, `air-mars-day`, `air-mars-sunset`, `air-thin`,
+  `air-thick`, `air-from-30-km`, `air-haze`.
+- **Exports.** `air`, `Air`, `airOf`, `AIR_GLSL`, `PRESETS`, `RADII`, `column`, `crossings`,
+  `opticalDepth`, `transmittance`, `phaseRayleigh`, `phaseHaze`, `psiTable`, `skyLight`, `sunlightAt`,
+  `skyAmbient`, `ambientTable`, `filmExposure`, `duskCurve`, `filmStars`, `sunDirection`, constants `TOP`,
+  `SUN_SIZE`, `BURN`, `SKY_STOPS`, `FILM_STOPS`, `FILM_CLOSE`, `ARCH_WHITE`, `DUSK_CURVE`, `DUSK_KNEE`, `LIMB`, `EXPOSURES`, `QUALITIES`,
+  `VIEW_TABLES`, `PSI_TABLE`, `VERSION`. The functions without a renderer are pure and run in Node:
+  they are the tests' reference and what the lights and the exposure are computed from.
+- **Cache keys.** No shipped module's bytes changed except `parts.js` (the kind; no film page
+  imports it): every existing scene keeps its key. The cache of baked maps keys on every module's
+  bytes (§123.2), so existing baked maps are baked once more after this step.
+- **Tests** (`tests/test_web_space_air.py`): the module and its imports; the parts and their kind;
+  in Node: the airs equal the bodies' numbers, a body's air handed over, errors with a did-you-mean;
+  the air along a ray (one column overhead, 33 to 40 at the horizon, 1 / e a scale height up, no
+  step at the level), the layer's crossings, the phase functions keep the light; a blue zenith under
+  a paler, brighter horizon, a red sunset with no green over red, the dusk above still blue, a
+  butterscotch Mars-like day and a blue glow round its setting sun, thin and thick air, black above
+  the air, twilight's ladder and arch, no more light on the ground than came in, the sun reddened
+  and gone under the horizon, the same numbers twice; the film exposure's curve, its cap by the
+  arch and an evening's stops; `slow`, in Chromium: the same properties as pixels, a far black box
+  lighter and bluer than a near one, a frame twice the same, a camera two stops under, the limb from
+  150 km, the baked table against JavaScript's (within a quarter), the lights' colours, and the
+  same pixels with the table baked, from the cache and without the cache.
+- **Added by Step 382** (for `vidgen/space-sea`, §123.4; nothing drawn before changes): `sky.skyAt(height)`
+  → `{texture, map}`, a second sky table as seen from another height over the same place under the
+  last update's sun (drawn again only when the height or the sun changes; one other height at a
+  time); in `AIR_GLSL` `airPlace(map, mu, cosv)` and `airRead(table, uv, cosv)` read any such table
+  (`airWhere` and `airFromTable` are those for the camera's own); `DISPLAY_GLSL` (`display(linear)`:
+  the dome's tone curve and encoding, `dither(pixel)`) for a shader that draws itself to the canvas
+  beside the dome; `sky.under(covered)`: something of the scene hides all that is under the horizon,
+  so the dome draws neither its plain ground nor anything else there; `sky.state.up` and
+  `sky.state.center`.
+
+### 123.4 Water to the horizon: `vidgen/space-sea` (Step 382)
+
+`const water = sea(renderer, sky, {state: "breeze", seed: 3}); scene.add(water.object);
+water.update(t, {camera})` after the air's own `update`. The module
+`data/web/modules/space-sea.js` (import name `vidgen/space-sea`, in `VIDGEN_MODULES`) imports
+`three`, `baked` of `vidgen/baked` and `AIR_GLSL`, `DISPLAY_GLSL`, `PSI_TABLE`, `SUN_SIZE`, `BURN` of
+`vidgen/space-air`. The sea lies under an air of §123.3: the air's radius is sea level, its sun,
+its light, its exposure and its table of the sky are the sea's. Scene units are the air's (metres
+by default), +y up at the anchor.
+
+- **The surface is the world's sphere.** No mesh in the world: a grid of the picture's own cells
+  (8 px at `standard`) is laid on the sphere along each cell's line of sight every frame, corners
+  over the horizon are put on the horizon, and the pixel works out its own place on the sphere. So
+  there is no edge, no tile and nothing to pop, the horizon is `acos(R / (R + h))` under the level
+  (0.227 degrees and 25.2 km away from 50 m, 1.44 degrees from 2 km, 4.53 from 20 km, 10.09 from
+  100 km on the Earth-like world) and curves in the frame when the height is large. The dome
+  stops drawing under the horizon (`sky.under(true)`); the horizon's pixel mixes sea and sky by
+  how far the pixel's middle is under it; far water is seen through the air (`airThrough`), so it
+  ends in the dome's own colour at the horizon: no seam. `water.horizon` = `{distance, dip,
+  height}` after every update. Away from the anchor the scene's y is not the height over the
+  water (the sphere drops d^2 / 2R: 3.45 m at 6.6 km): `water.pointAt(x, z)` is the surface in
+  scene units, `water.horizon.height` the camera's height.
+- **Waves** (`waveList(state, {seed, count, lifted})`, pure): a list of sine waves, the longest
+  first. The wind sea: wavelengths from twice the dominant one down to its 180th (0.25 m at
+  least), spaced evenly in the logarithm and jittered by the seed, amplitudes after Pierson and
+  Moskowitz' spectrum scaled so that four standard deviations are the stated significant height,
+  directions spread round the wind's (16 degrees for the long, 50 for the short). A swell beside
+  it: 5 to 8 waves within 17 % of its length and 13 degrees of its direction. Every wave moves at
+  the deep-water speed (omega^2 = g k) on vidgen's clock. Crests are sharpened by a second
+  harmonic where waves of about one length are steep together (`chop`). Three things keep a sum
+  of sines from looking like one: **bends** (three long slow fields; since Step 393 each wave's
+  phase wanders by its own share of each, `WOBBLE` 1.4 rad at most, less for a wave longer than an
+  eighth of the field (`WOBBLE_SPAN`): crests run roughly parallel yet vary along their length and
+  the waves drift in and out of step, short-crested and in groups; until Step 393 one shared warp
+  moved the whole pattern, which drew rings and whorls from 100 m to a few km up), **gusts** (six
+  long slow waves of 0.5 to 9 km in all directions, each moving the finer ones sideways by
+  `GUST_SHIFT` 0.03 of its length (0.13 until Step 393: it folded the patches into curved bands),
+  whose sum raises or lowers the waves
+  shorter than a third of the dominant one in patches) and more swell waves than a narrow band
+  needs. Measured against a baked spectrum only by reasoning, not by trial: a baked tile repeats
+  (the task forbids visible tiling) and needs its own filter chain; the sum costs 32 sines a near
+  pixel and nothing a far one, and its lookup on the JavaScript side is the same sum exactly.
+- **Sea states** (`STATES`, `seaState(what, extra)`): `calm` (1.5 m/s, a 0.25 m swell), `breeze`
+  (6 m/s, the default; 0.77 m, 30 m long, a 0.4 m swell), `swell` (4 m/s, a 2.2 m swell 190 m
+  long), `rough` (13 m/s, 3.2 m, 80 m), `storm` (22 m/s, 8 m, 170 m). Stated by numbers: `wind`
+  (m/s), `direction` (degrees, as `sunDirection`'s azimuth: where the waves run to), `height` and
+  `length` (default from the wind for a fully developed sea: 0.21 U^2 / g and 8.17 U^2 / g),
+  `swell` `{height, length, direction}` or `null`, `foam`, `chop`, `gusts`, `gravity`. A height
+  over a tenth of the length is refused. `rough` and `storm` are young seas, steeper than their
+  winds would raise given days, and the storm's foam is held back (`foam: 0.6`): looks, stated here.
+- **No shimmer.** A pixel's footprint on the water (across the line of sight, and along it: long
+  where the look is level) fades each wave by a Gaussian-like factor of wavenumber times footprint
+  (`filter`, 0.8 px, sets how early); the loop stops at the first wave finer than the footprint.
+  What is faded is kept as roughness: the lost slopes' covariance widens the glitter's
+  distribution and turns the mirror towards the eye. The slopes finer than the list are a
+  constant covariance: Cox and Munk's mean square slope for the wind (0.003 + 0.00512 U) less the
+  list's own. A 1.5 s clip at 1280x720, 50 m up at 60 m/s towards a glitter path: no findings in
+  `vidgen motion check`; frame-to-frame flicker of the 60 rows under the horizon 1.0 display code,
+  the same as the sky's own grain (0.9).
+- **Light** (linear, per pixel): `(1 - F) body + glitter + mirrored sky`, then foam, the film
+  look's dusk curve, the air between. **Mirror**: Fresnel's equations for the water's index
+  (1.34); the sky is the air's own table as seen from sea level (`sky.skyAt(0)`, read with
+  `airRead`), not a gradient of its own, so a sunset, a dusk and another world's sky are mirrored
+  as they are. A rough far sea is stood for by two faces, one hardly turned towards the eye (it
+  mirrors much, from low in the sky: the bright horizon, the twilight arch) and one well turned
+  (little, from higher up): at dusk the far sea carries the arch's glow and is not black; `fast`
+  uses one face between them. **Glitter**: the share of faces, resolved and not, that mirror the
+  sun to the eye (a Gaussian of the slope the half vector asks for, less the resolved slope, with
+  the kept covariance; Smith's shadowing), times the sun after the air, so the path's width
+  follows the sea state and the sun's height, and it turns gold and orange at sunset; as for the
+  sun's disc, the redder the air leaves the sun the less its mirror image may burn out
+  (2 to `BURN` whites: a look). The face's slope is taken in the water's own level there (the
+  world's roundness tilts far water against the sea's plane: 4.5 degrees at the horizon from
+  20 km). The model's glitter is brightest at the horizon under a sun up to about 35 degrees
+  (grazing faces mirror most) and the air of §123.3 lets much of it through from 20 km, so
+  the path ended at the horizon at full strength; since Step 382.1 a low haze over the water,
+  which the air's model does not have, dims the glitter along its way under the haze's top
+  (`LOW_HAZE`: optical depth 0.03 a km under 2,500 m): from high up the path is a tongue that
+  fades before the horizon; from under 2.5 km little changes (a look: only the glitter takes
+  it, the air's picture is not changed). **Dusk** (Step 382.1, a look, film exposure only: by
+  the air's dusk curve, once the sun is under the horizon): the water mirrors at least
+  `DUSK_MIRROR` (0.4) of the sky and from 0.4 of the mirror's height in the sky, so near water
+  carries the arch's and the low sky's colours and the waves stay readable to a sun about 9
+  degrees down (a true mirror shows 3 % of the dark zenith there: 2 to 5 display codes).
+  **Relief** (Step 382.1, a look, for seas steeper than `RELIEF`: height over length from 0.03,
+  full at 0.045: `rough`, `storm`): troughs are darker and crests lighter (up to 44 % at two
+  standard deviations of the height) and faces turned from the sun are shaded 2.5 times as
+  much as the light alone would. **Body**: the water's colour as a matt surface under the sun on
+  the resolved normal and the sky's light, more of it through a face turned to the eye (`glow`).
+- **Waters** (`WATERS`, `waterOf`): `ocean`, `green`, `tropical`, `grey` (looks of the Earth's
+  seas) and `methane` (an invented dark sea for an invented world: the index 1.27 is liquid
+  methane's, the colour is a guess: a look); or `{color, shallow, index, foam, glow}`.
+- **Foam** only when it blows: the cover is Monahan and O'Muircheartaigh's 3.84e-6 U^3.41 times
+  `foam`, at most `FOAM_MOST` (0.12): 0.00002 calm, 0.002 in a breeze (a rare speck), 0.02 rough,
+  0.09 in the storm state. Where: a measure of crests meeting (each wave's steepness times its
+  cosine, for the waves longer than a 25th of the dominant length, fading out to a 60th; unit variance) over the threshold a normal
+  value exceeds with the cover's probability, since Step 382.1 together with the steepness of
+  the front face along the wind: white along the steep front of a high crest, a broken line
+  across the wind with soft edges; the crest measure `FOAM_LAG` (2.2 s) ago draws thin streaks
+  along the wind behind it (at most 0.3 opaque). Both are varied by soft patches of the baked
+  pattern (`space-sea/lace`, 256 px, through `vidgen/baked`; its green channel only: no cell
+  walls are drawn any more). The storm state's foam factor is 0.6. Beyond where the waves are resolved the
+  foam is its mean cover. The drawn cover is not measured against the stated one.
+- **Depth** (optional, for a later coast): `depth: {glsl, uniforms}` with `float seaDepth(vec2
+  p)` (metres of water at p, metres along the sea's +x and +z): the water's colour goes to
+  `shallow` over `shoal` metres, and where the depth is under 0.25 m the sea is not drawn (the
+  scene's ground shows; the dome draws nothing there).
+- **Lookup** (for a hull, a low camera, a plane's shadow): `water.heightAt(x, z, t)` (metres
+  over sea level at the scene's x and z), `water.normalAt(x, z, t)`, `water.pointAt(x, z, t)`
+  (the surface point in scene units, on the sphere); pure: `heightAt(list, x, z, t)`,
+  `surfaceAt` (height and both slopes), `normalAt`, `gustAt`. It is the sum the picture draws,
+  bends and gusts included; every wave's phase at the camera is worked out in double precision
+  each frame, so the picture keeps its fine waves far from the origin (tested 6.6 km out). The
+  list depends on `quality` and `waves`: a `fast` preview is another, smoother sea than the
+  `standard` film. `LOWEST` (0.5 m): the lowest camera the sea is drawn for.
+- **Options** of `sea(renderer, sky, options)`: `state` and any of a state's keys beside it,
+  `seed`, `water`, `quality` (`fast`: 16 waves, a 16 px grid, one mirror face; `standard`: 32, 8
+  px, two; `fine`: 48, 4 px, two), `waves`, `anchor` (the unit vector from the world's middle to
+  where the waves' plane touches the sphere; default +y), `filter`, `depth`, `shoal`. Unknown
+  names are refused with the closest one.
+- **Cost** (2 cores, SwiftShader, to the canvas, with the dome; the dome alone 0.15 s at
+  1280x720, 0.011 s at 320x180):
+
+  | 1280x720 | 50 m | 20 km |
+  |---|---|---|
+  | `standard`, calm / rough | 1.08 / 1.13 s | 0.62 / 0.65 s |
+  | `fast`, calm / rough | 0.80 / 0.78 s | 0.54 s |
+  | `fine`, rough | 1.66 s | 0.83 s |
+
+  At 320x180: `standard` 0.069 (calm) / 0.078 (rough) s from 50 m, 0.049 s from 20 km; `fast`
+  0.056 s; `fine` 0.106 s. Making the sea 0.15 to 0.35 s. Where the time goes at 20 km (0.54 s
+  then): gusts and bends 0.10 s, the air between 0.05 s, the mirrored sky and the sun 0.02 s a
+  face; near the camera the 32 waves are the rest. After Step 382.1: 1.13 s for `standard`,
+  rough, 50 m (1.09 s before it in the same session).
+- **Honest notes.** The waves are a sum of sines with stated statistics, not a simulation: no
+  breaking shapes, no spray, no wakes, no shore waves, no shadows of things on the water and no
+  mirror image of things (only the sky and the sun). The waves lie on a plane touching the sphere
+  at the anchor: beyond some hundreds of kilometres from it their pattern is stretched (it is
+  filtered away long before from any height it could be seen at). A wave's crest turns by at most
+  3 x `WOBBLE` / `WOBBLE_SPAN` radians where its phase wanders (its speed is the deep-water one). No refraction at the horizon. No moon or
+  planet light on the water. The mirror does not see the sun's disc itself, only the glitter.
+- **Parts** (`data/web/parts/space-sea.js`, a new kind `sea` after `air` in `vidgen/parts` and
+  `vidgen.web.parts.KINDS`): `sea-calm`, `sea-breeze`, `sea-rough`, `sea-storm`, `sea-sunset`,
+  `sea-dusk`, `sea-from-20-km`, `sea-methane` (8 tiles in 9 s).
+- **Exports.** `sea`, `Sea`, `seaState`, `waveList`, `waterOf`, `surfaceAt`, `heightAt`, `normalAt`,
+  `gustAt`, `horizonDistance`, `horizonDip`, `fresnel`, `slopeVariance`, `whitecaps`, constants
+  `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_SHIFT`, `BEND`, `FOAM_MOST`, `FOAM_LAG`,
+  `LOWEST`, `LOW_HAZE`, `RELIEF`, `DUSK_MIRROR`, `VERSION`.
+- **Cache keys.** `space-air.js` changed (the additions above; the dome's pictures are the same),
+  so a page importing it draws once more; no page of Phase AN imports it. `parts.js` gained the
+  kind. Baked maps are baked once more (their key holds every module's bytes).
+- **Tests** (`tests/test_web_space_sea.py`): the module and its imports; the parts and their
+  kind; in Node: the horizon's dip and distance against the formula for four heights and a
+  smaller world, Fresnel's limits and rise, Cox and Munk's slopes, the whitecaps' cover by wind,
+  the states and waters with errors and a did-you-mean; the list twice the same and another for
+  another seed, deep-water speeds, the stated height in the heights' spread, the slopes against
+  central differences of the height, the normal, one wave alone travelling at its speed;
+  `slow`, in Chromium: the glitter towards the sun, blue water, the far sea at dusk carrying the
+  arch, foam in a storm and none in a breeze, the horizon's row from 50 m, 2 km, 20 km and 100 km
+  within a row of the formula at 720 rows, the picture's own heights against the lookup at 49
+  places (within 8 cm), the sphere's drop 6.6 km out, a frame twice the same, and the same pixels
+  with the foam's pattern baked, from the cache and without the cache.
+
+### 123.5 Cloud decks, towers, lightning and a giant's decks: `vidgen/space-clouds` (Step 383)
+
+`const weather = clouds(renderer, sky, {sky: "fair", seed: 4}); scene.add(weather.object);
+weather.update(t, {camera})` after the air's own `update`. The module
+`data/web/modules/space-clouds.js` (import name `vidgen/space-clouds`, in `VIDGEN_MODULES`)
+imports `three`, `AIR_GLSL`, `DISPLAY_GLSL`, `RADII`, `sunlightAt`, `skyAmbient` of
+`vidgen/space-air` and `resolveOptions`, `bandRamp`, `linearColor` of `vidgen/space-bodies`. The
+clouds stand in an air of §123.3: its radius is height 0, its sun, light and exposure are theirs.
+Scene units are the air's (metres by default), +y up at the anchor (as §123.4's sea: the same
+frame, so the two agree on the horizon and on places).
+
+- **Measured first** (2 cores, SwiftShader, 1280x720, the dome's 0.15 to 0.17 s included; the
+  `fair` sky from 150 m unless said): a march of 10 jittered steps a deck at half the picture's
+  size 1.6 s, at a third with 6 steps 0.68 s, at full size with 16 steps 7.8 s. Such a march
+  showed grain (jitter) or terraces (no jitter) on every cloud narrower than a step, at any
+  affordable count: a slanting ray crosses a 1.4 km deck in 4 to 10 km. Chosen instead, at about
+  the same cost: steps that are exact where they can be (below). Not built: shells with parallax
+  (the same code with one step a shell: it cannot be flown through), billboards for towers (a
+  tower costs only on the pixels its two cylinders cover, and a billboard cannot be flown round).
+- **A deck is a shell of the world's sphere** between `base` and `top` (metres). Each pixel's ray
+  is cut with every shell (`shellSpan`: the first stretch of the ray inside; closed form, the
+  sea's stable roots) and with every tower's two cylinders (trunk, anvil); the stretches are walked
+  nearest first, front to back, until 1.5 % of the light is left. So the camera may be under,
+  in, between or over the decks, and nothing changes kind when it crosses a deck's face: inside,
+  the stretch starts at the eye and the first steps are short (the stated simple fog: the same
+  cloud, read as coarsely as its steps).
+- **The cloud is a height field read from one tile of noise.** `noiseTile()`: 256 x 256, four
+  channels (soft noise in five sizes; round caps in three sizes; finer caps; a second soft noise),
+  made in JavaScript from integer hashes (the same numbers on every machine and in Node; 0.09 s a
+  page; not baked through `vidgen/baked`: its key would add nothing, and the tests and
+  `coverAt` read the same numbers). A deck reads it four times (`deckField`): the weather twice
+  (31 and 12.7 clouds' widths a tile, turned against each other, so no repeat can be seen to the
+  horizon), the clouds (4 widths a tile, stretched along the wind by `stretch`), the fine caps
+  (0.9). The pattern is `(soft (1 - puff) + caps puff) (1 - weather) + weather's share`; cloud is
+  where it stands over `level`, the value a share `cover` of 4096 places exceeds (so `cover` is
+  roughly the covered share of sky: within 0.06 in the pattern, tested). A cloud's top is
+  `floor + sqrt(rise (pattern - level) / span)` of the deck's depth (round tops: the caps are one
+  less a squared distance), its base flat but for `ragged`. Each reading has its own drift with
+  the wind (0.75 to 1.2 of it), so the field moves and slowly changes; a pure function of time.
+  Every reading uses the mip level of the larger of the pixel's footprint and the step, so far
+  cloud turns into its mean and the tile is never seen sharper than it is sampled.
+- **Steps that are exact where they can be.** `COARSE` steps a stretch (8 at `standard`) read the
+  pattern's mean; a step with no cloud near (with room for what the mean hides), or that passes
+  wholly over the highest possible top, is skipped. The others are walked in `FINE` steps (4):
+  the pattern is read at a fine step's two ends and taken as even between them, and so is the
+  height; the part of the step under the cloud's top is then a quadratic's roots (`cloudPart`),
+  so a face is found exactly and no step can straddle a cloud unseen. What a step shows is the
+  cloud a fifth into that part (what the ray meets first). A thin sheet (`floor` >= 1: cirrus)
+  takes three steps. A tower's step is a height and a stretch: its trunk (a round body whose
+  width takes the caps) and its anvil (a flat ball under the top) are cut with the step in closed
+  form.
+- **Light** (shaped to look right, not a simulation of scattering in cloud): the sun after the
+  air at each deck's own height (`sunlightAt`: a deck at 10 km is pink when one at 2 km is in the
+  world's shadow), dimmed by `exp(-tau)` where `tau` is the cloud over the place and over a place
+  0.3 depths sunward (one more reading: sunward sides bright, far sides grey), half of it thrown
+  onward by a forward lobe (g 0.76, at most 3.2: the silver lining at thin edges) and half
+  `exp(-0.22 tau)` (many bounces reach deeper); near a top the sun's share follows the top's
+  slope towards the sun (relief on a cloud sea, strong under a low sun); the sky's light from
+  above (`skyAmbient` at the top) on what is open to it, 1.3 times (a look: bluer shadows); the
+  light from below (the sky's at the base and the lit ground's); the fine caps' creases 2.2 x
+  `fray` darker; a thin sheet a third brighter (it passes the sky behind it on: a look). Decks
+  whose depth takes more than 1 optical depth cast a shadow on the decks under them
+  (`cloudShade`: the pattern where the sun's ray crosses the upper deck, read as softly as the
+  deck is deep) and, through `shade`, on §123.4's sea. Then the film look's dusk curve and the air
+  between the camera and the cloud's mean distance (`airLight`: once a stretch).
+  Densities are 0.0006 to 0.012 a metre, a tenth of real cloud's: edges stay soft at the steps
+  the picture can afford.
+- **Lightning.** `stormOf(lightning, {seed, towers, deck})`: the seed's own flashes
+  (`strikeTimes`: `rate` a minute, never two within 0.25 s) and those at stated `times` (seconds:
+  numbers, events with `time` such as `ctx.music`'s, or a track of `vidgen/music-time`'s
+  `trackArrays`, whose gains scale them), each at a seeded place inside a tower (or in the lowest
+  deck near the camera when there are none). A flash is a point of light inside the cloud for
+  `FLASH_SECONDS` (0.55): `flashLevel(age, strokes)`, one to four strokes 0.11 s apart, each
+  rising in 0.01 s and falling in 0.045 s; it adds `3 power level / (1 + (d / radius)^2)^2` of a
+  noon sun's light to the cloud round it, lifted with the film look's exposure to the power
+  `FLASH_LIFT` (0.8; a look: with all of it a flash at dusk turns every cloud white). At most
+  three at once.
+- **A giant of gas** has no ground. `giantAir(world)`: the world's own air of
+  `vidgen/space-bodies` made 8 times as deep (ice giants 8 / 3), so that height 0 has about as
+  much gas overhead as the Earth's sea level (a giant's one-bar level scatters about as much);
+  a stated choice: the limb from orbit is the thinner air, so the two views are not one air here.
+  `giantSky(world, {latitude, scale})`: three decks and towers at `GIANT`'s heights in units of
+  `scale` (the air's scale height, 112 km for the Jupiter-like world in this model): a deep deck
+  at 0.16 to 0.34 in the belts' mean colour, the main deck at 0.56 to 0.8 in the colour
+  `bandRamp` gives that latitude (the ramp the planet is painted with from outside: the same seed,
+  the same bands), changing to the neighbouring band's colour where the ramp says that band
+  begins north or south of the origin (`beyond`), a haze at 1.5, towers from 0.3 to 1.45, and
+  `floor`: the dark under the decks (0.06 of the belts' colour), drawn to the horizon of the
+  sphere, which the dome leaves out (`sky.under(true)`). The heights, the depths and the decks'
+  optical depths (10, 9, 0.3) are a look. The sphere the planet is drawn as from outside is
+  height 0 here: the decks float up to 170 km over it, 0.25 % of the radius.
+- **The picture.** The clouds are drawn into a half-float target of `QUALITIES`' share of the
+  picture (`standard` a half, `fast` a third, `fine` all) in `update`, with their light times
+  their share and the share itself, and laid over the dome and the sea by one full-screen pass
+  (`renderOrder` -800, no depth test), with the dome's tone curve and dither straight to the
+  canvas. So every thing of the scene stands in front of every cloud: a plane is not hidden in a
+  cloud (Step 387 or 390 may add depth).
+- **Options.** `sky` (`fair`, `overcast`, `layers`, `towers`, `storm`) or `decks` (names of
+  `DECKS`: `cumulus`, `stratus`, `cirrus`, or `{type, base, top, cover, size, stretch, density,
+  weather, rise, floor, soft, fray, ragged, puff, color, beyond, stripes}`; at most 4), `towers` (a number
+  or `{count, seed, spread, radius, base, top, anvil, density, color, at}`; at most 6),
+  `lightning`, `seed`, `wind`, `direction`, `quality`, `floor`, `anchor`. Unknown names fail with
+  the closest known one.
+- **The object.** `object`, `update(t, {camera})` (the camera the picture is drawn with: the
+  clouds' own picture is drawn here), `decks` (each `deckField`), `towers`, `flashes(t)`,
+  `coverAt(deck, x, z, t)`, `horizon(deck)`, `shade` (`{glsl, uniforms}` for the sea),
+  `uniforms`, `target`, `dispose()`.
+- **Changed in `vidgen/space-sea`**: a new option `shade: {glsl, uniforms}` defining
+  `float seaShade(vec2 p)`, the share of the sun's light that reaches the water p metres from the
+  camera; without it the shader multiplies by 1 (a still of a rough sea: byte-identical).
+- **Measured** (as above; clouds alone = less the dome's 0.17 s): `fair` from 150 m `fast`
+  0.80 s, `standard` 1.89 s, `fine` 8.3 s; `overcast` from 10 km 0.43 / 0.94 / 3.9 s; `towers`
+  from 4 km 1.43 s; `layers` between its decks 2.5 s (three decks and their shadows); a giant
+  1.87 s; `fair` over the sea from 3.5 km 2.75 s (the sea alone 1.12 s); at 320x180 `standard`
+  0.07 to 0.13 s, `fast` 0.05 s; making the clouds 0.1 s; 9 part tiles in 13 s.
+- **Checked.** Eleven stills (`/home/claude/work/scratch/ao383/stills/`); a 5 s clip at 640x360
+  (climbing out of a deck at 150 m/s; over a broken deck with towers at 220 m/s; under cumulus at
+  70 m/s) through `vidgen motion check`: no findings but the `web` scene's own fade-out.
+- **Honest notes.** A cloud is a height field: one top over one base, no overhangs, no cloud
+  over cloud within a deck; cumulus is soft-edged and smooth (no cauliflower detail under about
+  150 m), and blurs to its mean where steps are long (level looks through a deck far away). The
+  towers are a round trunk and a lens: they read as storm towers from afar and as mushrooms
+  close up; a tower casts no shadow and takes none. No rain, no virga, no fog on the ground, no
+  crepuscular rays, no rainbow or glory. The sea mirrors no cloud; the dome's plain ground takes
+  no shadow. The sun's light at a deck is the camera's place's (a deck 500 km away under another
+  sun is lit as here). The decks lie on a plane's coordinates touching the sphere at the anchor:
+  beyond a few thousand kilometres on a giant the pattern is stretched. A giant's rings are not
+  drawn in the sky (`vidgen/space-bodies`' rings are a mesh round a globe, not a function of a
+  direction: a later step may add the arc to the dome). Seen from orbit the same world's clouds
+  are `vidgen/space-bodies`' map: this module agrees with it in colour (`color`, a giant's band)
+  and in `cover` as a share, not in where the single clouds are (Step 391 may read the body's
+  map as the weather).
+- **Step 383.1** (a fix pass on four faults of the pictures; where this differs from the lines above, this holds):
+  - *Fine lumps.* Where a ray comes into a deck's cloud (a face), the fine caps of the tile (the
+    deck's fourth reading: green and blue, 0.55 and 0.45, stretched between 0.15 and 0.85) are read
+    as finely as the pixel shows them and the face is pushed in along the ray by
+    `3.4 fray depth (1 - lump) (0.25 + 0.75 y)` metres (up to 490 m for cumulus, 285 m for
+    stratus; less at a base than at a top); a cloud thinner than the push is a hole there. The
+    face's light is 0.8 + 0.2 lump times 0.7 + 0.6 lump. So the height field itself and its exact
+    solve are unchanged; the lumps are a displacement of the face as seen, not cloud modelled
+    inside (from another direction the same lump is pushed along another ray). Far away the
+    caps are their mean and the push is even: nothing to shimmer.
+  - *Edges.* Four neighbouring pixels of the clouds' picture walk their fine steps a quarter of
+    a step apart (a fixed pattern of four), and the pass that lays the picture over the scene
+    reads it four times half a texel apart: an edge drawn at half the picture's size is soft, not
+    stepped (checked at 1280x720 `standard` on a crop).
+  - *Towers.* A tower is a column of lumps round a middle that leans downwind (0.9 radii at the
+    top) and wanders across the wind (0.3 radii), 0.42 to 0.84 radii wide from foot to top times
+    0.6 to 1.4 by two readings of the caps, its face pushed in by the fine caps (0.22 radii); from
+    its seed it is still growing (4 in 10: a round top) or has an anvil: a flat ball 1.5 `anvil`
+    radii long downwind and 0.7 across, 0.065 of the tower's height thick, its middle 0.8 of its
+    length downwind of the top, its cloud thinning downwind and drawn out in streaks. The foot is
+    darker (0.5 at the base to 1 at 0.4 of the height). 24 steps (3 `COARSE`). Still closed forms.
+  - *A giant.* `giantSky` gives the main deck `stripes`: 64 colours of the planet's ramp from 12
+    scale heights south to 12 north of the place, the latitudes `squeeze` (40) times closer than on
+    the world (a stated look: a true band is wider than the view from inside reaches; `squeeze: 1`
+    is true and shows one colour), each with a lift of the pattern (up to 0.1: a bright band has
+    more and higher cloud, a dark one gaps); the stripes' edges wander with the puffs. The wind
+    blows east (`direction: 90`, 90 m/s) and the clouds are drawn out along it (`stretch` 4 and
+    5); the deep deck is darker (0.5 of the belts' colour), the floor 0.03; default latitude 22,
+    no towers unless asked for (`towers: n`). A deck may be given `stripes: {colors, span}`
+    itself. A page without stripes compiles none of it.
+  - *Cost* (same session, 1280x720 `standard`, with the dome): `fair` from below 1.95 s before,
+    1.95 s after; `overcast` from 10 km 1.03 / 1.05 to 1.11 s; `towers` 1.43 / 1.63 s; `layers`
+    2.50 / 2.72 s; a giant 1.90 / 2.42 s; `fair` over the sea 2.75 / 2.95 s; `fast` 0.84 and
+    0.52 s. (A deck's stripes behind a run-time switch cost every sky 20 %: SwiftShader read the
+    stripes for every deck; they are compiled in only when a deck has them.)
+- **Parts** (`data/web/parts/space-clouds.js`, a new kind `cloud` after `sea`): `clouds-fair`,
+  `clouds-sea-of-cloud`, `clouds-sunset`, `clouds-towers`, `clouds-between-decks`,
+  `clouds-lightning`, `clouds-over-sea`, `clouds-giant`, `clouds-ice-giant`.
+- **Exports.** `clouds`, `Clouds`, `deckOf`, `deckField`, `towerList`, `stormOf`, `strikeTimes`,
+  `flashLevel`, `giantSky`, `giantAir`, `noiseTile`, `shellSpan`, `deckHorizon`, constants
+  `DECKS`, `SKIES`, `QUALITIES`, `MOST`, `TILE`, `GIANT`, `FLASH_SECONDS`, `FLASH_LIFT`,
+  `VERSION`.
+- **Cache keys.** `space-sea.js` changed (the `shade` option; its pictures are the same), so a
+  page importing it draws once more; no film page imports it. `parts.js` gained the kind. Baked
+  maps are baked once more (their key holds every module's bytes).
+- **Tests** (`tests/test_web_space_clouds.py`): the module and its imports; the parts and their
+  kind; in Node: the tile (a fixed digest, it repeats), `shellSpan` against a walk along the ray
+  for ten rays, a deck's horizon and a ray just over and under it, decks and skies with errors
+  and a did-you-mean, the cover asked for against the pattern's (nine decks), drift with the
+  wind, towers and storms from a seed and from stated times, a giant's decks against `bandRamp`;
+  `slow`, in Chromium: tops brighter than bases, a sunset's tops warmer than noon's, more cover
+  hides more ground, a flash lights a tower, a giant's tawny decks, `fast` the same sky, a frame
+  twice the same, and the same pixels with the air's table baked, from the cache and without it.
+
+### 123.6 Ground with relief: `vidgen/space-land` (Step 384)
+
+`data/web/modules/space-land.js` (import name `vidgen/space-land`, in `VIDGEN_MODULES`)
+draws ground under a `vidgen/space-air` sky: `land(renderer, sky, options)` → `Land`. No
+forests and no plants.
+
+- **What the ground is.** A height over the world's sphere (the air's radius), a pure function
+  of the place (x east, z south of the place under the scene's origin, metres):
+  `heightOf(field, x, z) = reliefAt(recipe, macroAt(macro, x, z)[0], x, z)`.
+- **The tie to the globe (the macro).** The large forms are the same world's of
+  `vidgen/space-bodies`: `macroOf(renderer, world, at, radius)` runs that module's own bake code
+  (its GLSL through the new export `surfaceSource(type)`; `bakeInputs(o)` for the numbers of the
+  seed: the same continents, climates, placed craters, volcanoes, canyons, cracks) on a lattice
+  of 384 x 384 points a 400th of the radius apart (16 km on an Earth, 8.5 km on a Mars, 4.3 km
+  on a Moon) round the place `at` ([latitude, longitude]; +x east, -z north), and the type's
+  paint code for the colour there. Differences from the globe's own maps, stated: the slow
+  fields a globe reads from 128 px cube maps are summed directly; the octaves are a 1024 px
+  map's (7 and 6); an ocean world's clouds are left out. A cubic B-spline through the lattice
+  is the macro's height (`macroAt`), times `TYPES[type].relief` x radius metres a unit (ocean
+  0.001, desert 0.11, rocky and icy 0.2, lava 0.15: chosen so that the heights are plausible;
+  the globe itself only shades its relief). So forms wider than about two lattice cells (30 km
+  on an Earth) are the globe's, in the globe's places; everything finer is this module's. The
+  flat ground takes the globe's colour (`materials.ground`: its share; an ocean world's greens
+  are the globe's paint, damped to 0.55: nothing grows), the snow line of an ocean world is the
+  globe's climate (the height where its `warm` field falls to the globe's snow threshold, plus
+  `snowOver` 300 m because the finer peaks stand over the macro), rock, snow and sand are the
+  globe's palette colours (`TYPES[type].colors`). From high up (pixels wider than 150 m on the
+  ground) the macro's slopes are shaded `materials.wide` (8) times steeper, as the globe
+  exaggerates its relief (a look).
+- **The recipe** (`recipeOf(type, changes, seed)`; every number an option; `reliefAt`):
+  `mountains` (a ridged multifractal after Musgrave: up to 12 octaves from `length` down to
+  `FINEST` 16 m, each weighted by the one before to the power `erosion`, so ridges carry finer
+  ridges and valleys stay smooth; the first `ridged` octaves are ridges with a crest rounded
+  under 0.03, the rest plain; read through a warp of `warp` x `length`; `height` x
+  (sum^`sharp` - `mid`); grown where the macro stands between `from` and `to` metres, `base`
+  elsewhere), `strata` (the mountains' height cut into benches `step` metres apart with cliffs
+  between, `soft` the cliff's share of a step: mesas and scarps), `rough` (four octaves on the
+  plains), `dunes` (ridges `length` apart across the wind `direction`, a gentle windward side
+  and a steep lee, wandering, with a second finer set, in fields), `craters` (five classes of
+  bowls with rims, the largest `largest` metres across, at most one a lattice cell, `density`
+  the share of cells), `materials` (below). Noise: gradient noise on an integer lattice with a
+  32-bit hash, sixteen gradients, quintic fades (`hash2`, `noised`, `GRADIENTS`).
+- **Presets** (`PRESETS`: a world, a place, changes, the air that suits): `alpine` (the
+  Earth-like world at [-34.5, 20]), `mars` ("mars" at [-8, 40]), `canyon` (the invented "ochre"
+  at its long canyon, benches 600 m high), `dunes` ("ochre" at [-52, -150], dunes 90 m high),
+  `snow` (the ice world "boreas"), `volcanic` ("ember" under a thin air, its basalt lighter than
+  the globe's: a look), `airless` (the "moon"; `vacuum(radius)` is an air thin enough for a
+  black sky, since `vidgen/space-air` needs one; `RADII` has the airless worlds' radii).
+  `survey(renderer, world)` gives a world's heights all round the globe to choose a place by.
+- **Method, measured first** (2 cores, SwiftShader, 1280x720, the alpine range from 2,500 m, with
+  the dome's 0.17 s). Two candidates over the same height maps: (a) a camera-centred mesh of
+  rings lifted in the vertex shader: 512 x 384 vertices (edges 9 px long) 0.54 s with a plain
+  colour and 0.67 s with a simple light, 1024 x 512 (4.5 px) 1.0 s, 2048 x 768 (2.3 px) 2.1 s,
+  and 0.59 s at 320x180 (the cost is the vertices'); it would still need the full shading
+  (about 0.8 s) and its outline is a polygon whose vertices slide over the ground unless
+  snapped; (b) each pixel's ray walked through the maps: 1.35 s a frame at 1280x720 and 0.12 s
+  at 320x180 all in, the outline exact to the pixel. Shipped: (b).
+  - *The maps.* Up to 11 square maps of doubling width round the camera (`WIDTH` 4,096 m, then
+    8,192 m ... 4,194 km; never wider than 1.6 radii), each `cells` across (`QUALITIES`: `fast`
+    256 / 512, `standard` 512 / 1024, `fine` 1024, for a picture up to 400 rows / larger),
+    layers of one float texture. A map's middle moves in steps of a sixteenth of its width
+    (`mapMiddle`), so a cell stays where it is in the world and holds the same height in
+    whichever map it lies: a map is baked again only when the camera has moved that far,
+    and nothing pops. Each term of the recipe is faded in a map as it gets finer than two of
+    its cells (a wavelength of four cells is whole), an octave not shown standing at its mean.
+    A place is read from map k from 0.4 of map k - 1's width on (`mapFor`), blended into the
+    next over the last third, and from no finer a map than a pixel is wide on the ground.
+    Maps finer than the picture needs are not baked (from the camera's height over the ground
+    and the steepest ray of the picture).
+  - *The walk.* At half the picture's size (`fast`: a third) each ray is walked from where it
+    enters the shell the ground can lie in: steps of 0.7 of its height over the ground, at
+    least 1 % of the distance, up to 96 steps (`fast` 64, `fine` 144), then five halvings.
+  - *The picture.* Every pixel takes the nearest and the farthest of the four answers round it
+    and puts its own ray on the ground there (Newton's steps): an outline between two ridges
+    is exact; against the sky the pixel beside the ground is its soft edge (one pixel). Then
+    the slope from the maps, four octaves of grain finer than the maps' cells (shading only,
+    faded at the pixel's size, longer along a level look: no shimmer), materials, light, air,
+    and the depth (`gl_FragDepth`, 0.3 % nearer; ground under water behind everything).
+- **Materials** by height and slope: the flat ground (the globe's colour), scree and rock on
+  slopes from `steep[0]` to `steep[1]` (rock in two colours in beds about `band` metres high: Step
+  393 below), sand
+  (`sandy`), snow above the line and off faces steeper than `snowSteep`, an open crust's glow
+  (lava worlds).
+- **Light.** The sun after the air at the ground's height, the ground's own shadow (for each
+  cell of a map 32 steps towards the sun through the maps, the world's roundness counted, soft
+  over a tangent of 0.06; baked once a map and sun: a moving sun bakes every map's shadow
+  again), `shade` (clouds), the sky's light from the air's table dimmed in hollows, the light
+  lit ground throws back, the film look's dusk curve, the air between (`airThrough`).
+- **With the other parts.** Order: the dome, the ground (render order -860), the sea, the
+  clouds. `sea(renderer, sky, {depth: ground.depth})`: the sea ends where the ground rises out
+  of it, the shallows paler. `clouds(renderer, sky, {behind: ground.behind})` (new option of
+  `vidgen/space-clouds`: how far each ray may go): a cloud behind a mountain is hidden, a peak
+  stands in the deck; then `ground.shadedBy(weather.shade)` for the clouds' shadows. Meshes of
+  the scene are hidden by the ground in front of them (its depth).
+- **The lookups.** `ground.heightAt(x, z)` (scene coordinates; `heightOf` on the frame's
+  metres), `normalAt`, `pointAt(x, z)` (the scene's y falls with the world's roundness),
+  `above(position)` (a point's height over the ground under it), `cell(map, i, j)` (a baked
+  cell, for checks), `horizon` (`{distance, dip, height, over, finest}`), `definition()` (the
+  recipe and the macro's heights as plain data). The finest map agrees with `heightAt` to
+  0.1 to 0.5 m (cells of 4 to 16 m), a pixel's own place within 1,200 m to 0.4 m in the mean.
+- **For another program** (Step 385's paths): the height is `reliefAt` on `macroAt`, both in
+  the module's first 260 lines with no three.js: 32-bit wrapping integer products for the
+  hash, double arithmetic elsewhere. The macro's lattice comes from the page
+  (`ground.definition().macro.heights`: n x n values, rows along +z, times `scale`): it is the
+  one part made by the GPU.
+- **`LAND_GLSL`** with `ground.fieldUniforms` and `NL = ground.maps.length`:
+  `float landHeight(vec2 p, float foot)` for a shader of another module.
+- **Changed elsewhere.** `vidgen/space-bodies`: the export `surfaceSource(type)` (its pictures
+  are the same; its bytes changed, so a scene importing it has a new cache key and draws once
+  more with the same pixels). `vidgen/space-clouds`: the option `behind` (compiled in only
+  when given).
+- **Cost** (1280x720, with the dome): 1.35 s a frame (`fast` 1.25 s, `fine` 1.4 s: the shading
+  is most of it), with a sea 2.05 s, under cumulus 2.5 s, airless craters 1.45 s; 0.12 s at
+  320x180. The first frame bakes the maps and their shadows: 9 to 10 s at 1280x720 (1024
+  cells; a cratered world 19 s; from 30 km 7 s), 2.4 s at 320x180, `fast` 2.3 s at 1280x720;
+  the macro 1.0 s (0.45 s from the cache). A camera moving 150 m/s near the ground bakes the
+  finest map again every 1.7 s of film (about 1 s of work), each wider one half as often. A
+  moving sun costs 2.4 s a frame more (every shadow again).
+- **Parts** (`data/web/parts/space-land.js`, a new kind `land` after `cloud`): `land-alpine`,
+  `land-alpine-from-30-km`, `land-mars`, `land-canyon`, `land-dunes`, `land-snow`,
+  `land-volcanic`, `land-airless`, `land-coast`.
+- **Honest notes.** The mountains are soft in close-up: under about 400 m over the ground the
+  relief's finest forms (16 m) and the grain do not replace rocks and cliffs, and from 200 m
+  the ground reads as smooth slopes (the deserts and the crater fields hold up better than the
+  range). Ridges repeat one character (no rivers, no glacier valleys, no talus fans). `canyon`
+  gives scarps and benches on a plain rather than table mountains; `snow` and `volcanic` are
+  plain. Forms between the lattice's cells and the relief's longest wave (the globe's
+  mid-sized craters, 10 to 30 km) are not the globe's. Snow covers more of a range than the
+  globe shows there. Far relief is no finer than a map's cells (a 250th of the distance at
+  1024 cells): a far skyline is smoother than a near one. Outlines between two ridges are
+  hard-edged (one against the sky is soft). A camera inside the ground gets a plain colour.
+  The frame is flat (x and z are the scene's): usable within about half a radius of the place.
+- **Step 384.1** (a fix pass: canyon land, volcanoes, a sharper range, the start).
+  - *Canyons* (new recipe part `canyons: {depth, width, length, floor, steps, branches, wander}`,
+    used by `canyon` only): a canyon runs where a slow noise (cells of `length`, read through a
+    warp of `wander` x `length`) is zero, so the canyons are a network of winding loops with
+    mesas left between; finer ones (`length` / 3.1, 0.45 of the width, `branches` of the depth)
+    lie beside and across them. Across its width `d` (0 the middle, 1 the rim, half the width
+    `width` metres) the ground is cut by `depth` x (1 - wall): the floor flat to `floor`, then
+    `steps` benches with risers `RISER` (0.12) of a step wide, 15 % of the wall a plain slope
+    (talus). The rock's two colours alternate in bands (`materials.band`). The preset: the
+    world "ochre" at [49, -172] (was [-1, 74]), a nearly flat plateau (mountains 160 m, no
+    ridges, no strata, no craters), canyons 1,100 m deep and 2 x 2,200 m wide, four benches,
+    the floor half the width. Not a drainage tree: loops and crossings (stated).
+  - *Volcanoes* (new part `volcanoes: {height, radius, spacing, density, crater, ridges}`, used
+    by `volcanic` only): at most one cone in each cell of a lattice `spacing` wide (`density`
+    the share of cells), 0.6 to 1 of `height` and `radius`; the height (1 - d)^1.6 with nine
+    ridges down the flanks and a crater `crater` of the radius wide (`coneAt`). In the picture
+    (compiled in only with volcanoes): a lava lake in the crater, five channels winding down
+    each cone, fresh flows beside them darker and older ones lighter than the ash, the cone
+    bare rock; lake and channels glow (`materials.glow`; 2.5 whites, lifted with the exposure
+    to the power 0.8, so they carry a dusk picture) and light the ground beside them a little
+    (5 % of the glow: a look, no light is cast). `ground.setGlow(level)` changes the glow from
+    then on: call it every frame with a level of `ctx.music` for a pulse. The preset: cones
+    3,000 m high, 6.5 km in radius, 30 km apart, on ash plains (mountains 260 m, no craters).
+    A snow cap: `materials: {snowLine: 2200}`.
+  - *The range* (`alpine` and every ocean world): the mountains' `gain` 0.5 → 0.55 (finer
+    ridges 1.5 to 3 times higher), rock bands 55 m high at half strength, and on slopes over
+    0.25 the grain is ridges and gullies (`materials.gullies`), with snow lying in the gullies.
+    The finest map now differs from `heightAt` by up to 1.3 m at 8 m cells (was 0.5 m).
+  - *What Step 385 reads*: `definition().recipe` has two more parts (`canyons`, `volcanoes`) and
+    34 slots (29 before: the old ones keep their index, length, turn and seed); `reliefAt`
+    adds the cones and then cuts the canyons, after everything else. For `mars`, `dunes`,
+    `snow`, `airless` the heights are the same numbers as before (both parts are off there).
+  - *The start*: the height maps go through `vidgen/baked` (`space-land/map`; a map's own
+    float bits as four bytes a cell, so a map from the cache is the baked one bit for bit): all
+    maps of the first update of a page (a still, a camera at rest, a shot's start), later only
+    the maps from the fourth on (32 km wide and wider: they move every 2 km or more). A camera
+    that flies does not fill the cache with fine maps. Measured, the alpine range's first still:
+    1280x720 without the cache 11.8 s, cold 14.8 s (the maps are read back and stored), warm
+    8.0 s; 320x180 3.2 / 4.1 / 2.1 s; on disk 37 MB for the ten maps of 1024 cells, 9 MB for
+    512 cells (a place and a quality). Not kept: the shadows (2.3 s at 1280x720 for a sun).
+    The pictures are the same with, without and from the cache (compared byte for byte).
+  - *Cost*: the range from 2,500 m at 1280x720 1.375 s a frame before, 1.386 s after.
+- **Exports.** `land`, `Land`, `macroOf`, `survey`, `recipeOf`, `reliefAt`, `macroAt`,
+  `heightOf`, `normalOf`, `flatMacro`, `hash2`, `noised`, `bowl`, `coneAt`, `horizonDistance`,
+  `horizonDip`, `rayHeight`, `mapWidths`, `mapFor`, `mapMiddle`, `placeFrame`, `vacuum`,
+  constants `PRESETS`, `TYPES`, `QUALITIES`, `WIDTH`, `MAPS`, `FINEST`, `MACRO`, `OCTAVES`,
+  `GRADIENTS`, `CREST`, `RISER`, `CRATER_CELLS`, `RADII`, `LAND_GLSL`, `VERSION`.
+- **Tests** (`tests/test_web_space_land.py`): the module and its imports; the parts and their
+  kind; in Node: the noise and its slope, recipes with errors and a did-you-mean, the relief
+  from a seed within its bound, benches, craters and dunes only where asked, the spline, the
+  horizon's and the maps' geometry, the place's frame, `surfaceSource`; `slow`, in Chromium: a
+  frame twice the same, a low sun's dark ground, snow above its line only, the maps' cells and
+  the picture's places against `heightAt`, the horizon's row from 100 m to 100 km, a black
+  airless sky, a coast, clouds on and behind the ground, and the same pixels with the macro
+  baked, from the cache and without it.
+
+### 123.7 Flight paths: `vidgen.flight`, `flight_data:` → `ctx.flight` (Step 385)
+
+Python beside `vidgen.orbits` (`src/vidgen/flight/`, no manim) turns a flight told in words into
+float64 position, velocity and attitude for every frame of a `web` scene, checked never to come
+under the ground, and hands it to the page the way `orbit_data` does (§122.3).
+
+- **One bridge, not two.** The flights travel inside the orbit bridge's payload
+  (`orbits.flights`): the same `WebPage(orbits=)`, `make_web_clip`, `web_page_layouts`,
+  `clip_inputs` and `vidgen still` plumbing, untouched. The param is a sibling, `flight_data:`,
+  because a flight is not an orbit model (it needs no central body or span and is told in
+  another frame); its maker `vidgen/scenes/flight_data.py` and its cache
+  `vidgen/web/flights.py` (`build/flights/flight-data-<key>.json`) follow `orbit_data`'s files
+  one for one. A second init script, `data/web/flight.js`, is added only on pages whose payload
+  carries flights; it runs after `orbits.js`, takes the flights out and builds `ctx.flight`
+  (a page with flights and no orbit data then has no `ctx.orbits`). `orbits.js` and every
+  existing key are unchanged: the clip inputs gain `orbits.flight_helper` (the helper's
+  SHA-256) only when the payload carries flights.
+- **The frame (one definition, `vidgen.flight.frames`).** *Planet-fixed* (PF): origin the
+  world's centre, z the IAU north pole, x the prime meridian, y = z × x; a place at
+  planetocentric latitude φ, east longitude λ, height h over the sphere of radius R is
+  (R + h)(cos φ cos λ, cos φ sin λ, sin φ) (`vidgen/space-bodies`' `onGlobe` in three.js's
+  axes). *Local* (L, the scene's): metres, origin on the sphere under the anchor `at = [φ₀, λ₀]`,
+  x east, y up, z south (three.js's axes: −z north), the centre at (0, −R, 0) — the frame of
+  `vidgen/space-air`, `space-sea`, `space-clouds` and `space-land` at their defaults
+  (`unit: 1`, `center: null`). Its axes in PF are `space-land`'s `placeFrame(at)`:
+  east = (−sin λ₀, cos λ₀, 0), up = (cos φ₀ cos λ₀, cos φ₀ sin λ₀, sin φ₀),
+  south = (sin φ₀ cos λ₀, sin φ₀ sin λ₀, −cos φ₀); PF = R·up + M·L, L = Mᵀ(PF − R·up),
+  M = [east | up | south]. A height is always over the sphere, |L − (0, −R, 0)| − R; the land's
+  ground at (x, z) is the point (x, √((R + g)² − x² − z²) − R, z) with g = `heightAt(x, z)`, so
+  a craft at L is h − `heightAt(L.x, L.z)` over the ground (`Land.above`). *Ecliptic* (E, the
+  orbit bridge's): E = F(jd)·PF with F the body-fixed frame of `vidgen.orbits.rotation` on that
+  date; v_E = F·v_PF + ω × r_E (ω the spin rate along the pole; the pole's slow motion left out).
+  `LocalFrame.to_fixed / from_fixed / to_ecliptic / from_ecliptic / ecliptic_axes / place /
+  geodetic / chart / heading_vector / heading_of` (tests both ways: 1e-8 m, 1e-9 m/s). A flight's
+  velocity is over the ground; with no wind it is also the air speed. A flat world (`ground:
+  flat`) has no sphere: x, y, z with y the height, no latitudes, no re-entry.
+- **The worlds** (`vidgen.flight.worlds`): radius the page's air's (`space-air` `RADII`, the
+  airless worlds' of `space-land`), GM the body's (`vidgen.orbits.BODIES`; invented worlds the
+  Earth's mean density), turning from `vidgen.orbits.rotation`, and an **isothermal exponential
+  air**: scale height the page's (`AIRS[...].height` × radius: 8.9 km Earth-like, 10.8 km
+  Mars-like), sea-level density and γ this module's (1.225 kg/m³ and 1.40; 0.020 and 1.29;
+  invented `thin` 0.25, `thick` 4.9). Speed of sound a = √(γ g₀ H), the same at every height:
+  350 m/s Earth-like (the real air's falls to 295 m/s at 11 km), 228 m/s Mars-like. A land
+  preset's world is its air's (`canyon` and `dunes` lie on the Mars-like sphere, `snow` and
+  `volcanic` on `thin`'s, `airless` on the Moon's).
+- **Kinematics** (`vidgen.flight.plan`). Three channels of flight time: air speed V(t), height
+  h(t), turn rate ψ̇(t) (heading from north towards east, positive to the right). V_h =
+  √(V² − ḣ²); r = c + (R + h) n̂, ṙ = ḣ n̂ + V_h ê; the frame (n̂, ê, r̂ = ê × n̂) turns with body
+  rates (ψ̇, 0, V_h / (R + h)), integrated by the fourth-order Magnus method at steps of at most
+  0.05 s and composed by a parallel prefix product (log₂ N passes); a frame between grid points
+  takes one Magnus step from the point before. Acceleration analytic:
+  r̈ = (ḧ − k V_h²) n̂ + (V̇_h + k ḣ V_h) ê + V_h ψ̇ r̂, k = 1 / (R + h). Every change of V, ḣ, bank
+  or curvature goes through the septic smoothstep S(u) = 35u⁴ − 84u⁵ + 70u⁶ − 20u⁷ (first three
+  derivatives zero at its ends; peak slope 35/16 of the mean), so position is smooth to its third
+  derivative where legs meet and the attitude has no kink (tested at 30 fps). Integration step
+  0.05 s against 0.005 s: positions agree to 0.5 µm.
+- **Manoeuvres** (legs; `vidgen.flight.spec`). A leg holds at most one horizontal manoeuvre,
+  one vertical one and a speed change; it lasts `for` seconds, `until` a scene time (seconds or
+  'bar 9 beat 3', the `space` scene's `scene_time`), or as long as its manoeuvres need; what it
+  does not name is held (wings level, the vertical rate, the speed). `straight: s`. `turn: {to |
+  by, side, bank | radius, roll_rate}`: a coordinated turn, ψ̇ = g_eff tan φ / V_h with
+  g_eff = g(h) − V_h² / (R + h), radius V_h² / (g_eff tan φ) (v² / (g tan φ) within 0.1 % at
+  airliner speeds), bank rolled in and out at the roll rate (default 20°/s); the hold is solved
+  so the heading change is exact (aimed again after integration: the heading drifts on a
+  sphere). `climb` / `descend: {to | by, rate, accel}` (default 10 m/s, vertical acceleration
+  0.25 g at the ramps' peaks; a target too near for the rate lowers the rate), `{rate}` alone
+  climbs on; `level: true`. `speed: {to | mach, rate}` (mean 2 m/s²). `waypoints: [[x, z] |
+  {lat, lon}, ...]`: septic Hermite pieces in the tangent plane of the leg's start
+  (azimuthal-equidistant), tangents the bisectors, curvature that of the circle through three
+  places, its rate zero at the knots (geometric continuity of order 3), flown at ψ̇ = −κ ṡ
+  (ṡ = V_h R / (R + h)); the bank the sharpest point needs is checked against `bank_limit`
+  (default 60°: an error naming the waypoint). Passes 16 km of places within 1 m. `circle:
+  {around, radius, turns, side}`: a Hermite piece to the tangent point with the circle's
+  curvature, the arc, a roll-out; flown radius within 3 mm of 4,000 m. `follow: {clearance, rate,
+  push, smoothing}`: terrain following over a span of legs that follow one after another (turns
+  inside allowed): the lowest curve over the highest ground of each 0.25 s plus the clearance,
+  the margin and the sea's waves whose push-overs are at most (1 − push) g and slopes at most
+  `rate` (an envelope of parabolas turning into lines), plus the most a smoothing can lose
+  ((1 − push) g w² / 22), smoothed by the bump (1 − s²)⁴ of half-width `smoothing` (4 s): a
+  smooth function of time with all derivatives; blended in from the span's start state and out
+  into a steady rate; planned from the span's track in up to three passes. `land: {glide,
+  flare, touchdown, brake}`: speed to the touchdown speed, a descent at V tan(glide) whose last
+  ramp, 2 × flare / sink seconds long, takes the sink to zero exactly at the ground's height
+  under the touchdown point (found again after integration), then a roll-out to a stop.
+  `reentry`: below.
+- **Attitude and the numbers.** Nose along the velocity, raised by the angle of attack (a look:
+  `aoa` 3° per g of lift; a re-entry's own during the entry); bank from the specific force
+  (acceleration less gravity, with the turning world's Coriolis and centrifugal parts):
+  φ = atan(f_side / D), D = ½(f_up + √(f_up² + (0.1 g)²)), which is the force's own bank in
+  flight (to 0.07°), stays upright through push-overs and is 0 in free fall. Body axes x the left
+  wing, y up, z the nose (three.js's facing +z, `vidgen/space-craft`'s). Load factor: the
+  specific force across the path over g₀, negative when it points down. Per frame: position,
+  velocity (m, m/s, local frame), quaternion (x, y, z, w; w ≥ 0), speed, Mach number, height over
+  the sphere, height over the ground, load factor, bank, pitch (flight-path angle), heading, angle
+  of attack (rad), vertical rate, the heating indicator √(ρ / 10⁻⁴ kg/m³)(v / 7 km/s)³ (1 is about
+  a returning orbiter's peak; a 200 m/s plane at sea level 0.02), flight time (negative before
+  the flight's start: it waits there), the path (`path_samples` points) and the legs as planned
+  (kinds, flight and scene times, a curve's misses, a landing's touchdown).
+- **Never below ground.** The path is checked at 1/24 s wherever it is within 500 m of the
+  highest the ground can be (a land's macro maximum plus its recipe's bound; a level ground's
+  elevation; above that every 0.5 s) against the ground's height plus `margin` (default 20 m:
+  the land's finest map differs from `heightAt` by up to 1.3 m and far ground is drawn smoother —
+  valleys filled — by up to 100–180 m at 30 km, so a camera far from the craft can see it under
+  the drawn ground; keep it near or raise the margin) plus the sea's `waves`; a landing's
+  approach may come down to the touchdown level. Too low: a `VidgenError` naming the flight, the
+  time, the leg, the place (x, z and latitude, longitude), the clearance and the remedies (climb
+  before, follow the terrain, `lift: true`). With `lift: true` the shortfall is raised by a
+  smooth lift (the same envelope at 0.5 g and 30 m/s, the smoothing's margin added first,
+  smoothed over 4 s), the flight planned again with it, up to four times, and a warning said.
+  A load factor over `max_load` (3) is a warning naming the time.
+- **Ground heights** (`vidgen.flight.terrain`, `vidgen/web/land.py`). `LandGround` is
+  `space-land`'s height definition ported to numpy: `hash2` on unsigned 32-bit integers with
+  wrapping products, `noised`'s value, `reliefAt` with every part (mountains, strata, rough,
+  dunes, craters, volcanoes, canyons), `macroAt`'s B-spline, the operations in the same order.
+  The macro lattice is made on the GPU: `land_definition(options, air)` opens a 16x16 page once
+  (headless Chromium, `WebPage`, about 3 s), reads `ground.definition()` and keeps it in vidgen's
+  cache folder (`ground/land-<key>.json`, 0.8 MB, the heights as float32 bits; key: the options,
+  the air, `vidgen/baked`'s digest of vidgen's page modules and three.js, the layout's version;
+  `vidgen cache clear` removes them). Agreement: at 300 seeded places for each of the seven
+  presets the numpy heights equal the page's `heightAt` to 1.4 × 10⁻¹² m (slow test); in Node
+  with a lattice of one's own to 1.2 × 10⁻¹² m (default test; asserted under 10⁻⁹). A page's `ground.above(p)` at the flight's
+  position equals the data's height over the ground to 4 × 10⁻⁸ m (a still of the alpine range).
+  `SphereGround` (a level ground at `elevation`), `SeaGround` (height 0, `waves` added to the
+  margin) and `FlatGround` need no page.
+- **Re-entry** (`vidgen.flight.reentry`; `start: {orbit: Ship, at: 'bar 5'}` reads the orbit
+  data's body at that frame and turns it into the local frame by `from_ecliptic` on that frame's
+  date; or a start with height, speed, climb). *Physical*: the start is the orbit's own two-body
+  motion seen from the turning world (position, velocity and their next derivatives: tested
+  equal to 10⁻⁶ m, 10⁻⁶ m/s, and the Kepler path 2 s later to 1 cm); the glide is the equilibrium
+  glide in the exponential air — L = m g (1 − v²/v_c²), v_c = √(g₀ R), D = L / E (`lift_to_drag`,
+  1.2) — so dv/dt = −(g₀/E)(1 − v²/v_c²) and h_eq(v) = H ln(ρ₀ v² / (2 β g₀ (1 − v²/v_c²))),
+  β = m / (C_L S) (`loading`, 450 kg/m²); the speed has a closed form,
+  v = v_c tanh(atanh(v₀/v_c) − g₀ W(t) / (E v_c)), W the integral of the drag's weight; the
+  heating indicator ∝ √ρ v³. *A look*: over `blend` seconds (600) the orbit's height, speed and
+  turn rate turn into the glide's by S, the drag's weight growing with it (no deorbit burn, no
+  coast); S-turns between ±`bank` (60°) with `reversals` (3) of `reversal` seconds, the heading's
+  weave following the coordinated-turn relation (the glide's height does not answer to the bank;
+  the drawn bank during the entry is the S-turns', not the shaped descent's specific force); the
+  end: from where the glide's own sink, 2 H g₀ / (E v), is a tenth of the speed (or 1.5 × the end
+  speed), over `end` seconds the height turns into `to.height` and the drag's weight falls to
+  zero exactly as the speed reaches `to.speed`, level: the next leg goes on from that state with
+  three derivatives continuous. `aoa` (40°) falls to the cruise's over the end. The air is the
+  page's (8.9 km scale height): the glide is higher than a real entry's (about 90 km at 6.6 km/s
+  against 75 km). Measured from a 400 km orbit to 12 km and 250 m/s: 37 minutes of flight, peak
+  heating 0.66 between 6.8 and 6.2 km/s (90 to 85 km), pitch within −7°, planned in 0.7 s.
+- **YAML** (a `web` scene's `flight_data:`, `vidgen.scenes.flight_data.FlightData`): `flights`
+  (each `name`, `start`, `legs`, `roll_rate`, `accel`, `vertical_accel`, `bank_limit`,
+  `max_load`, `aoa`, `lift`), `ground` (`{land: alpine}` or `{land: {preset | world + at, seed,
+  mountains, ..., air}}`, `sea` / `{sea: {waves}}`, `sphere` / `{sphere: {elevation}}`, `flat`),
+  `world` (default the land's air's, else earth), `at` (default the land's place, else [0, 0]),
+  `start` (the scene time of flight time 0), `speedup` (flight seconds per scene second; default
+  1, with a start from orbit the orbit data's), `margin`, `path_samples`. Unknown keys get a
+  did-you-mean (pydantic models; a land's options and parts are checked against
+  `space-land.js`'s own names); bars need `music_data`, a start from orbit `orbit_data` with
+  that body.
+- **Python API.** `vidgen.flight` (in `vidgen.api` as `flight`): `Flight`, `Leg`, `Start`, …,
+  `FlightContext(world, frame, ground, margin, to_flight)`, `FlightRun(spec, context,
+  start_state)` with `sample(t)`, `position`, `state_at`, `path`, `legs`, `warnings`;
+  `LocalFrame`, `world`, `WORLDS`, the grounds, `height_of`, `relief_at`, `macro_at`, `hash2`,
+  `noise`, `entry_profile`, `heating`. `vidgen.api.web_scene_flights` (= `scene_flight_data`,
+  mirroring `web_scene_orbits`), `web_with_flights`, `web_land_definition`, `web_land_settings`.
+- **The page** (`ctx.flight`): `names`, `flights` (start, end, warnings, legs), `world`,
+  `anchor` (lat, lon, the local axes in the planet-fixed frame), `ground`, `frame`, `units`,
+  `approximations`, `warnings`, `index(t)`, `time(name, t)`, `active`, `position`, `velocity`,
+  `quaternion`, `speed`, `mach`, `height`, `aboveGround`, `load`, `bank`, `pitch`, `heading`,
+  `aoa`, `heating`, `climb`, `path(name)`, `legs(name)`, `series(name)` and
+  `place(object, name, t)` (sets a three.js object's position and quaternion). Every value is
+  the frame's own (round(t × fps)), never interpolated; the slow test reads three frames and gets
+  Python's float64 numbers exactly. `craft.fly(ctx.flight, {flight: "Plane"})`
+  (`vidgen/space-craft`, extended) places and turns a craft by the data every `update(t)`.
+- **Cache and keys.** `build/flights/flight-data-<key>.json`; key: the data version, vidgen's
+  version, the SHA-256 of the flight code (`vidgen/flight/`, `vidgen/orbits/`,
+  `scenes/flight_data.py`, `scenes/space_params.py`, `web/land.py`), the settings, the frame
+  rate, frames drawn and the scene's own, with a land the page code's digest, with bars the
+  score's bar and beat lengths and `t0`, with a start from orbit the orbit payload's digest.
+  Deterministic (the same settings give the same JSON: test). Existing clip keys are unchanged;
+  pages importing `vidgen/space-craft` are drawn again once (its bytes changed: `fly`).
+- **Measured** (2 cores): a sea flight of four legs over 1,802 frames 0.05 s (433 KB of JSON); the
+  alpine range with terrain following over a turn, 602 frames, 2.3 s (151 KB) after the ground's
+  page (3 s, once); the re-entry above 0.7 s to plan. Tests: `tests/test_flight.py` (21 default,
+  about 5 s; slow: the 400 km re-entry, the page's numbers and `craft.fly`, the seven presets'
+  heights against the page, 21 s).
+- **For later steps.** 386: `craft.fly(ctx.flight, {flight})` with the data's bank; a plane's
+  own control surfaces can read `bank`, `load`, `climb`. 387: `heating`, `mach`, `speed`,
+  `height`, `aboveGround` per frame. 390: `ctx.flight.position / velocity / quaternion` for chase
+  and fly-past moves; `path`. 391: `LocalFrame.to_ecliptic` / `ecliptic_axes` place the local
+  frame in the orbit bridge's; `start: {orbit}` hands an orbit over; the page must draw the land
+  and the air with the same `at` and world. 392: `FlightData` is a pydantic model a `space`
+  scene can hold as it is.
+
+### 123.8 Space plane parts: `vidgen/space-plane` (Step 386)
+
+`data/web/modules/space-plane.js` (import name `vidgen/space-plane`, in `VIDGEN_MODULES`)
+makes winged craft from parametrized parts: a lofted body, one wing function with presets,
+tails, engines, landing gear, moving surfaces, and six ready-made planes that differ by seed.
+The designs are invented; it is a look, not aerodynamics (nothing here says a plane would fly).
+
+- **Where it lives and why.** A sibling of `vidgen/space-craft`, not a part of it: that
+  module's bytes are in the cache key of every page that imports it (the `space` scenes of
+  Phase AN, `examples/outbound`), and it is 135 KB already. `space-plane` imports its `CraftKit`,
+  `Craft`, `GLARE`, `ACCENTS` and `platingMaps` and adds 97 KB only to pages that want a plane.
+  `PlaneKit` extends `CraftKit` (every part of the craft kit is there: `engine`, `thrusters`,
+  `light`, `radiator`, the surfaces), `Plane` extends `Craft` (`update`, `fly`, `shade`,
+  `occluders`, `shadows`, `size`, `info`, the far point of light). `space-craft.js` is unchanged.
+- **Axes** (the craft kit's): +z the nose, +y up, +x the LEFT wing; metres, true size. A plane's
+  origin is the middle of its body (not of its bounding box, so lowering the gear or opening the
+  bay does not move it). `craft.fly(ctx.flight, {flight})` (§123.7) puts the flight's attitude on
+  these axes: in a right turn the right wing (−x, the green light) is the lower one. Checked in
+  the Chromium test by projecting the wing tips (camera behind, level, in a right and a left
+  turn) and on a still.
+- **Body** (`kit.body(options)`, the numbers alone: `bodyShape(options)`): `length` (3 to 120 m),
+  `width`, `height` (or `diameter` for both), `nose` (`NOSES`: `ogive`, `blunt`, `pointed`,
+  `chined`: widened and flattened into a lens, `needle`: the slender body of least wave drag),
+  `noseLength` (a share of the length, 0.3), `droop` (how far under the middle line the tip sits,
+  in heights), `belly` (0 round .. 1 flat: the lower half's superellipse exponent 2 to 5.5),
+  `tail` (the end's size, a share) with `tailLength` and `upsweep` (0: it narrows evenly, 1: only
+  the underside rises: a boat tail), `hump` (`{from, to, height}`: a dorsal fairing or a cabin
+  hump), `bay` (`{from, to, width}`: a payload bay under two doors), `cap` (the dark nose cap's
+  share of the length), `waterline` (degrees under the widest line where the belly's surface
+  begins), `skins` (`{top, belly, cap}`). The surface is lofted from cross-sections (a
+  superellipse above the widest line and one below; 72 points round, about 44 stations, closer in
+  the nose) with the normals of the whole sheet, so a border between two surfaces has no crease.
+  `userData.shape` gives `point(s, angle, out)`, `normal`, `top`, `bottom`, `half`, `under(s, x)`,
+  `over(s, x)` (s: 0 the nose's tip .. 1 the tail's end; angle: 0 the left side, 90 the top).
+- **Wing: one function** (`kit.wing(options)`, the outline alone: `wingPlanform(options)` →
+  `{semi, le(eta), te(eta), chord(eta), sweepAt(eta), area, aspect, taper, mean}`): `preset`
+  (below), `span` (tip to tip), `rootChord` (or `chord`: a share of the span), `tipChord` (or
+  `taper`: a share of the root's), `sweep` (the leading edge's, degrees, −60 to 85), `crank` +
+  `sweepInner` (the leading edge runs at `sweepInner` to that share of the half span), `curve`
+  (0..1: an ogival leading edge), `dihedral`, `thickness` (a share of the chord), `airfoil`
+  (`round`: a rounded leading edge and a sharp trailing edge; `sharp`: a lens; `flat`: flat
+  underneath), `twist` (degrees at the tip), `fillet` (0..1: the root swells into the body) with
+  `inboard` (metres from the middle line to the body's side), `edge` (the dark leading edge's
+  share of the chord), `controls` (`[{name: elevon | flap, from, to, chord}]`), `tip`
+  (`{height, cant, sweep, taper}`: winglets or tip fins), `allMoving` (a canard), `skins`
+  (`{upper, lower, edge}`). Left and right are the same panel mirrored. The trailing edge is
+  straight. Presets (`WINGS`, parameter sets and nothing more): `delta`, `double-delta`,
+  `cranked-arrow`, `swept`, `straight`, `ogival`, `stub` (short, thick), `blended` (a lifting
+  body's: long root, full fillet), `long` (high aspect ratio for thin air).
+- **Tails** (`kit.fin(options)`): `type` `single`, `twin` (`spacing` apart, leaning out by
+  `cant`: 12°), `vee` (`cant` 42°: fin and tailplane in one); `height`, `rootChord`, `tipChord`,
+  `sweep`, `thickness`, `airfoil`, `rudder` (true, false or `{from, to, chord}`), `sink`. Tip fins
+  are the wing's `tip`; no tail: leave it out. A fin is the wing's panel stood up.
+- **Other parts**: `kit.nozzles({count, exit, kind, layout: row | block | ring})` (the craft
+  kit's bells and plumes for a tail's end, sunk into it), `kit.nacelle({length, radius, spike,
+  pylon, kind})` (an air-breathing pod), `kit.intake({width, height, length})` (a scoop under
+  the belly for engines inside the body), `kit.gear({length, wheel, wheels, fold})`,
+  `kit.patch(bins, body, {from, to, a0, a1, skin})` (a thin piece lying on a body: panes,
+  stripes, text).
+- **A plane from one description**: `planeFrom(spec, options)`; `spec` is plain numbers and
+  words: `body`, `wing`, `fins`, `canard`, `engines` (`{count, layout, exit, kind}`), `nacelles`
+  (`{count, mount: wing | body | tail, at, radius, length}`), `intakes` (`{count: 1 | 2, at,
+  width, height, length}`), `gear` (`{nose, main, track, clearance, wheel}`), `cockpit`
+  (`{style: panes | band, panes, at, width, length}` or false), `windows` (a number of portholes
+  a side), `markings` (`{stripes, numbers, registration, at}`), `brake`, `bodyFlap`, `rcs`,
+  `lights`; a wing, canard or tail is placed by `at` (a share of the length from the nose) and
+  `up` (−1 the belly .. 1 the back). Or with the kit: `kit.plane(body)` after `body.add(wing)`
+  at a position of one's own. `planeSpec(kind, {seed, ...})` returns a ready-made plane's
+  description to change.
+- **Moving parts** (`Plane`): `controls({elevon, roll, rudder, flap, brake, bodyFlap, canard})`
+  (degrees; elevon + is trailing edges down, roll + is a roll to the right, rudder + turns the
+  nose left; a vee tail also answers `elevon`), `gear(k)` (0..1: the doors open over the first
+  third, the legs swing down after; the wells and legs are not drawn when up), `bay(k)` (the
+  doors open to 112°, radiators inside them, a foil-lined trough with frames), `cabin(k)` (the
+  cockpit lit from inside; dark glass by day), and `update(t, {controls, gear, bay, cabin, auto,
+  ...a craft's})`. **On a flight the surfaces move by themselves** (a stated look,
+  `controlsFromRates`): roll = 0.9 × the bank's rate in degrees a second (within 18°), elevon =
+  −1.6 × the pitch's rate less a tenth of the bank's size (within 14°), rudder a quarter of the
+  roll, brake 9° for every m/s² of slowing (to 50°); `auto: false` or `controls: {...}` stops it.
+- **Places for effects** (`plane.anchors`, in the plane's axes; `plane.anchor(name)` in the
+  scene): `nose`, `tail`, `belly`, `cockpit`, `leadingEdges` and `finEdges` (lines of points),
+  `wingTips`, `finTips`, `nozzles` (with radius and kind), `intakes`, `gear`, `ground` (the
+  height the wheels stand on), `low` (the lowest part without gear). For Step 387.
+- **Surfaces** (computed, `SURFACES`, three 512 px maps made with the craft kit's
+  `platingMaps`, 0.18 s for all, once a page: not put through `vidgen/baked`): heat tiles (a
+  grid of tiles 0.35 m wide by default — larger than real ones, so that the grid reads —, every
+  other row moved half a tile, each of its own tone), quilted blankets with seams, panels with
+  lines and rivets; bare metal; a dark leading edge and nose cap. Schemes (`SCHEMES`): `tiles`
+  (white blankets over black tiles), `grey`, `metal` (bare), `dark` (tiles all over), `paint`
+  (white paint with panel lines over black tiles), `plain` (painted all round: no heat shield).
+  Colours: `color` (the back), `belly`, `accent` (stripes). `scorch` (0 factory fresh .. 1 many
+  flights): streaks behind the nose cap and the leading edges and greyed tiles, in the vertices'
+  colours (the request's "wear"; the craft kit's own `wear` is the depth of the surfaces'
+  relief). Markings: stripes round the body and across the wing tips, an invented registration
+  (two letters, a hyphen, three figures from the seed) in block letters on the sides and wings.
+  No flags, no names, no emblems.
+- **Ready-made planes** (`plane(kind, {seed, ...})`, `PLANES`; each seed another one of the
+  kind: proportions, sweep, wing preset or tail where the kind allows, scheme, scorch, stripes,
+  accent, registration): `glider` (a small crewed orbital glider, 22 to 30 m: chined nose, a
+  delta or ogival wing low on a flat belly, two fins leaning out, a bay, two bells),
+  `freighter` (a large cargo spaceplane, 56 to 74 m: a wide low body with a cabin hump, short
+  thick drooping wings, one or two fins, two air-breathing pods, four or five bells, a long
+  bay), `needle` (single-stage, 60 to 78 m: a pointed body with portholes, a cranked wing far
+  back, a vee tail, engines inside behind a belly intake), `lifter` (a lifting-body shuttle, 16
+  to 22 m: the body is most of the wing, short blended wings with tall tip fins), `scout` (an
+  atmospheric scout for other worlds, no crew, 9 to 13 m with a span of 17 to 32 m: long thin
+  wings, winglets, a vee tail, no heat shield), `skiff` (12 to 17 m: swept wings with winglets,
+  canards, two fins). `planeFleet(kind or kinds, {count, seed, spacing})` is a vee formation of
+  seeds seed, seed + 1, ... at the "far" detail.
+- **No look-alikes.** No ready-made plane has a double delta with one tall fin and three
+  bells; `problems()` says so if a description of one's own comes near that layout. No real or
+  invented vehicle, agency or company is named anywhere.
+- **`problems()`** (as `vidgen/space-scale`'s: sentences, an empty list when nothing is wrong):
+  a wing, canard or tail whose root does not touch the body or stands past its ends, a span that
+  hardly leaves the body or is over three times its length, a wing whose area sits in the first
+  30 % of the body or behind its tail, gear that does not reach below the lowest part, the
+  layout above. Every ready-made plane of seeds 1 to 12 has none (test: 1 to 5).
+- **In the air and in space.** The materials are `MeshStandardMaterial`s with the craft kit's
+  glare cap: lit by `sky.light.sun` and `sky.light.sky` when the air was given the scene;
+  `for (const m of Object.values(plane.materials)) sky.haze(m)` for the air between (the page's
+  call, as for any mesh). The land hides a plane behind a ridge (it writes depth: still 10); a
+  plane is drawn in front of every cloud (§123.5) and casts no shadow on the ground or the sea.
+  In space: a hard sun, `plane.shade(star)`, `scene.environment` from `craftEnvironment` or
+  `paintedEnvironment`. Self-shadows are the page's light's (`plane.shadows` gives the size).
+- **Parts** (`data/web/parts/space-plane.js`; no new kind): kind `craft`: `plane-glider`,
+  `plane-freighter`, `plane-needle`, `plane-lifter`, `plane-scout`, `plane-skiff`, `plane-open`,
+  `plane-landing`, `plane-fleet`; kind `craft-part`: `plane-part-bodies`, `plane-part-wings`,
+  `plane-part-tails`, `plane-part-engines`, `plane-part-gear`, `plane-surfaces`. 15 tiles in
+  24 to 26 s.
+- **Measured** (2 cores, SwiftShader): building the first plane of a page 1.0 s (the craft
+  kit's and the plane's surface maps), each later one 25 to 90 ms ("far" 7 to 25 ms); 21,000 to
+  60,000 triangles ("far" 5,000 to 14,000), 63 to 97 meshes (each moving surface is its own). A
+  frame at 1280x720: a plane a third of the frame wide over the sea at sunset 1.24 s against
+  1.12 s without it (+0.12 s, its shadows 0.03 to 0.05 s of that), at 320x180 0.15 against
+  0.13 s; a plane filling the frame over a world in space 0.63 s against 0.44 s (+0.19 s;
+  without shadows 0.60 s), at 320x180 0.13 against 0.05 s. A page's first frame is 1.0 to 1.3 s
+  longer with a plane.
+- **Honest notes.** Proportions are chosen to look right: wing areas, tail sizes, gear and
+  intake sizes follow no calculation, the heat shield's extent follows no heating, and a scout's
+  wing is not sized for any particular air. Tiles are larger than real ones. The auto controls
+  are a look. A plane has no interior beyond the bay's trough, no wheel wells behind the doors
+  (a dark patch), no flexing wing. The canopy does not show a cabin. Soot is a tint of the
+  vertices, so it is as fine as the mesh (about 0.5 m).
+- **Tests** (`tests/test_web_space_plane.py`): the module and its parts; in Node: outlines and
+  cross-sections as numbers, presets, did-you-mean (default); every kind for five seeds: sizes,
+  determinism, mirror symmetry, gear reach, triangles; surfaces, gear, bay, auto controls,
+  `problems()`, a plane from kit parts, a fleet (`slow`); in Chromium (`slow`): drawn on a
+  flight, banked the way it turns, twice the same picture.
+
+### 123.9 Re-entry and flight effects: `vidgen/space-effects` (Step 387)
+
+`data/web/modules/space-effects.js` (import name `vidgen/space-effects`, in `VIDGEN_MODULES`;
+imports `three` and `AIR_GLSL` / `DISPLAY_GLSL` / `sunlightAt` / `skyAmbient` of
+`vidgen/space-air`). What the air does to a craft and a craft to the air: the glow of a re-entry,
+vapour trails, engine exhaust in air, the vapour of a transonic pass and of a hard turn.
+
+- **A module of its own (decision).** Not inside `space-craft.js` (its bytes are in the cache key
+  of every Phase AN scene and of `examples/outbound`; it is byte-identical to Step 385's) and not
+  inside `space-plane.js`: the effects must also work on a lander and on Step 388's ships. The
+  module imports neither. It takes a craft as "anything with an `object`", a bounding ellipsoid
+  (`shape: {center, radii}`; default from a plane's anchors `nose` / `tail` / `belly` / `wingTips`,
+  else from the meshes' boxes) and named places (`anchors`: `nozzles`, `wingTips`, `tail`), and
+  finds a craft kit's engines through `craft.engines` when they are there.
+- **One call.** `effects(craft, {flight: ctx.flight, name, sky, seed, quality, shape, anchors,
+  scaleHeight, path, sun, light, ambient, reentry, contrails, exhaust, vapour})` → `Effects` with
+  `object` (what is laid in the world: add it to the scene), `attached` (what rides with the craft:
+  added to the craft's object by the call), `update(t, {...})` (after the craft's own update),
+  `state` (the numbers of the last update: `heat`, `air`, `wind`, `cone`, `wingVapour`, `plume`,
+  ...), `parts`, `shape`, `dispose()`. Each of the four groups is `true` or its options:
+  `reentry` {`full` 0.65, `level`, `shock`, `skin`, `wake`, `sparks`, `trail`, `head`, `thickness`
+  0.055, `length` 7, `persist` 5}, `contrails` {`from` nozzles | wingTips | tail | places, `band`
+  [8000, 9000], `always`, `life` 70, `size`, `level`, `color`}, `exhaust` {`nozzles`, `level`,
+  `air`}, `vapour` {`cone`, `wings`, `tips`, `level`}. `update` options (a number or a function of
+  t, each replacing the flight's): `velocity`, `heating`, `mach`, `load`, `height`, `aboveGround`,
+  `air`, `throttle`, `boost` (the afterburner), `pulse` (multiplies glow and exhaust: a level of
+  `ctx.music`), `sun`. Unknown names are refused with a did-you-mean.
+- **No state.** Every picture is a function of the `t` given to `update` and of the flight; the
+  seed feeds a whole-number hash (`hash`), flicker is a sum of fixed sines. The one thing kept is
+  the windward map (below), drawn again when the wind's direction in the craft's axes changes and
+  a function of that direction alone. Tested: a frame drawn after other frames is byte-identical
+  to the frame drawn first.
+- **Where the numbers come from.** With `flight`: `tracker(ctx.flight, name)` reads the frame of
+  `t` (`now`) and any flight second between frames by straight lines (`at`); before the scene's
+  first frame the path is taken straight back along that frame's velocity (the data holds the
+  scene's frames only: stated). Without a flight every number is given to `update`, and trails
+  follow `path(tau)` or a straight line. The air's density over sea level's is `exp(-height /
+  scaleHeight)` (the sky's scale height, the flight's own air), or `air` given.
+- **Re-entry** (strength `heat` 0..1: the flight's `heating` over `full`, or `heating` by hand).
+  - *Colour and brightness*: `heatColor(h)` runs through `HEAT_STOPS` (dull red, red, orange, a
+    pale orange, a white-pink), `heatLevel(h)` = `HEAT_WHITES` (3.2) x h^1.6, nothing under 0.02;
+    both rise with h and never fall (tested). A look: no spectrum of any gas.
+  - *The shock layer*: the craft's solid meshes are drawn once, seen from upwind through an
+    orthographic camera, into a small half-float map with mipmaps (192 px; `fast` 64, `fine` 256):
+    how far upwind the surface reaches and how squarely it faces the flow, premultiplied by cover.
+    A view ray sums a layer whose light falls off as exp(-distance upwind of that surface /
+    thickness): between two samples the distance is taken as a straight line, so the sum over a
+    step is closed-form and a layer much thinner than a step has no bands (14 samples; 8 / 24).
+    The sum is drawn twice: on the inside of a ball round the craft (the rays that miss the
+    craft: the ball's far side is hidden where the craft is), and on the craft's own surfaces
+    drawn once more ("hot surface" meshes sharing the geometry), each summing only as far as
+    its own surface. So the craft hides the glow behind it and nothing shines through a wing,
+    with no depth texture. The layer hugs nose, belly and leading edges of any craft because it
+    is made from the craft's own shape. Tried first and dropped: a glowing ellipsoid shell (a
+    blade standing off a flat belly, visible as an ellipse from below).
+  - *Hot surfaces*: the same extra meshes glow where their normal faces the flow (power 1.6),
+    mottled, and take a little light where they do not (the layer's spill): a look, no heat
+    conduction.
+  - *Bloom*: a ball of light round the windward side, summed in closed form.
+  - *The wake*: two streams behind the craft along the flow, as wide as the craft is across the
+    flow, each summed in closed form where the view ray passes nearest the stream's axis (no
+    steps), with streaks that run down it with the time; white-hot only close to the craft.
+  - *Sparks*: up to 36 points (14 / 72) born on the windward rim of the ellipsoid, carried back,
+    each living again and again from its own numbers (`sparkAt`); shown from heat 0.25.
+  - *From afar*: a head (a point at least 3.4 px in radius that keeps 45 % of its light when
+    shown larger than true: a marker, stated; it fades out when the craft is over 40 px) and the
+    train: a tube of light along the path flown, glowing `persist` flight seconds (5: a look; real
+    trains last from under a second to minutes), at least 1.2 px wide (30 % of its light kept).
+  - *Exposure*: light is multiplied by the air's exposure gain in `camera` and `auto` (honest: a
+    lifted night exposure burns the glow out) and by min(gain, 1) in `film` (never lifted). To the
+    canvas the glow is laid on as a screen blend of display values, so layers roll off towards
+    white instead of clipping; into a target (`vidgen/three-finish`) as linear light, added.
+- **Vapour trails.** A trail is a soft tube through rings at birth times that are fixed multiples
+  of a step (`trailTimes`: the newest 24 rings a 30th of a second apart, the next 24 a 15th, ...,
+  back to `life`), each ring where the trail's place on the craft was at its time, from the
+  flight. A piece of trail therefore stays where it was laid while the craft flies on (tested in
+  Node on the rings and in Chromium on the pixels); it widens (radius 1.2 + 2.2 age^0.75 m times
+  the craft's size) and thins, breaks into lumps along its length and, when old, snakes slowly
+  (`wave`). Laid only where the craft was above `band` at the time (8 to 9 km: where the air is
+  cold enough on an Earth-like world; chosen), or `always`. Engines nearer than 1.5 m join into
+  one trail; at most four. Lit by the sun after the air at the craft's height (`sunlightAt`) and
+  by the sky (`skyAmbient`): white by day, orange at dusk; the shaded side at 40 % (a cloud is
+  never black), a forward gleam at thin edges; hazed by `airThrough`. No wind, no shadow on or
+  from clouds.
+- **Exhaust in air** (Step 387.1; the first version, the craft kit's stepped plume with other
+  numbers, drew a pale fog with three blobs). Each bell has its own flame of three parts, all
+  summed in closed form where the view ray passes nearest the flame's axis (no steps, so the
+  core's edge stays sharp): a sharp-edged core leaving the bell (blue-white; orange-yellow with
+  the afterburner), a translucent outer flame that tapers to a point in dense air and opens to a
+  wide faint bell in thin air, and on the axis a row of shock diamonds: lozenges every `spacing`
+  exit radii, each 16 % smaller and a third dimmer than the one before, only from 45 % throttle.
+  `plumeShape(air, boost)` gives the numbers: half angle 0.045 + 0.6 e^2 with e = 1 - air^0.3
+  (2.6 degrees at sea level, 31 in a vacuum), length 9 exit radii to 1/e (x 1.55 with the
+  afterburner), diamonds x (1 - e)^2, spacing (1.7 + 2.6 e) exit radii (wider as the pressure
+  ratio grows), taper (1 - e)^2. The exponents and the angles are a look tied to the air's
+  density, not nozzle theory. Two bells side by side give two flames whose outer parts merge
+  downstream. Part throttle: a shorter flame, no diamonds. On a craft with kit engines the
+  module hides the kit's plume and draws its own in its place at the power the kit's has now
+  (so `ship.update(t, {throttle})` and burns still drive it). No heat shimmer (it would need the
+  picture behind as a texture). Seen along its axis the flame is an approximation (the sum is
+  taken at one place on the ray).
+- **Condensation** (Step 387.1; the first cone was a flared tube that read as a glass bell).
+  `coneLevel(mach, air)` = exp(-((mach - 0.97) / 0.026)^2), a tenth at 0.93 and 1.01, and only
+  in air denser than 0.4 to 0.8 of sea level's (low and humid). The cone is two balls of mist
+  summed in closed form: a dense thin disc across the flow just aft of the body's middle, opaque
+  at its core, and a longer, thinner one behind it; their density is made uneven by noise at the
+  place where the ray passes nearest (it drifts with the time), so it is not a perfect surface of
+  revolution; rim and back feather to nothing. `wingVapour(load, air)`: from 2.4 g, full at 5 g:
+  two flat patches of the same mist just over each wing half (a sheet, 0.5 m thick) and a thread
+  from each wing tip (a trail of 1.6 s, laid in the world). Looks; brief by construction (the
+  flight passes Mach 0.97 in seconds). The mist is summed along the whole ray: a wing or body
+  inside it does not cut it. No sonic-boom ring, by decision. No dust or spray from the ground
+  (not built).
+- **What is physical and what is a look.** Physical: the windward side from the velocity and the
+  attitude; when things show (heating, Mach number, load, height from the flight); a trail along
+  the path flown, ages in flight seconds; the plume widening as the air thins. Looks: every
+  shape, colour, brightness and lifetime above; the head's and the train's least size.
+- **Limits.** Everything is drawn in front of every cloud (Step 383's order) and is hidden by
+  ground only through the depth the land writes (trails and glows test it; a trail never fades
+  softly into a ridge). The windward map sees solid meshes only and ends half a texel inside the
+  craft's outline: in a frame-filling close-up from below, steps of a few pixels show at the
+  layer's edge behind a trailing edge, and on an unlit craft seen from the side the layer's
+  edge along the belly is toothed (Step 387.1 tried four reads of the map round each place:
+  no visible gain for four times the reads, not kept). The wake is straight (it does not follow a turn); the
+  train and trails do. The glow lights neither the air, the clouds nor the sea. A trail's lumps
+  come from value noise and can show faint cross lines. The ball of the layer is tested against
+  the craft only: another craft inside it would not hide its part of the glow.
+- **Parts** (`data/web/parts/space-effects.js`, kind `effect`): `effect-reentry`,
+  `effect-reentry-early`, `effect-reentry-lander`, `effect-reentry-far`, `effect-contrails`,
+  `effect-exhaust-air`, `effect-exhaust-thin`, `effect-vapour-cone`, `effect-wing-vapour`.
+- **Measured** (2 cores, SwiftShader, straight to the canvas, with the dome and the plane;
+  seconds a frame at 1280x720 / 320x180). A plane a third of the frame wide in a re-entry at
+  75 km: 0.46 / 0.08 without effects, 0.83 / 0.12 with all of `reentry` (+0.37 / +0.04), `fast`
+  0.76 / 0.11, without hot surfaces 0.78; the plane filling the frame from below 1.13 / 0.16. A
+  plane over the sea at 90 m: 1.39 / 0.15 without, 1.31 to 1.39 / 0.16 with exhaust, vapour,
+  trails or all three (their cost is inside the measurement's scatter of 0.05 s). The first
+  frame of a page is 0.5 s longer with `reentry` (shaders, the map).
+  The nine part tiles: 13 s. After Step 387.1 (same shots, another session): a re-entry 0.86,
+  the plane filling the frame 1.16 to 1.4, over the sea 1.45 without and 1.38 to 1.52 with
+  exhaust, vapour or all (inside the scatter; the exhaust no longer takes steps).
+- **Tests** (`tests/test_web_space_effects.py`): the module and its parts; in Node: heat to
+  colour and brightness (monotonic), the plume's shape by density, cone, wing vapour and
+  contrail levels, ring times, a flight read between frames and before the scene, sparks,
+  did-you-mean, a trail's rings the same after other frames and staying where laid; in Chromium
+  (`slow`): brighter at higher heating, brighter under the belly than over the back, a frame
+  after other frames identical, the windward map drawn once, the picture not burnt out, a
+  trail's middle line unmoved while the plane flies on.
+
+### 123.10 Giant ship hulls: `vidgen/space-hull` (Step 388)
+
+`data/web/modules/space-hull.js` (import name `vidgen/space-hull`, in `VIDGEN_MODULES`; imports
+`three`, `rng` of `vidgen/music-time`, `CraftKit` / `Craft` / `GLARE` / `ACCENTS` /
+`platingMaps` / `craft` of `vidgen/space-craft`). Hulls of ships 0.5 to 10 km long: the large
+forms only, with what Step 389 needs to hang the fine detail on.
+
+```js
+import {hull, hullFleet} from "vidgen/space-hull";
+const ship = hull("carrier", {seed: 4, length: 3000});   // a family of HULLS, another member for every seed
+ship.fly(space, {body: "Ship"});                         // a body of ctx.orbits: the bow along the path, the deck away from the world
+ship.update(t, {sun, throttle: 0.6});                    // the craft kit's update: bells fire, rings turn, lights blink
+ship.scaleRef("ship", {at: "hangar-1", gap: 120});       // a 50 m craft of the kit beside a named place
+ship.problems();                                         // [] or sentences
+```
+
+- **A sibling module (decision).** As `vidgen/space-plane`: `HullKit extends CraftKit`, `Hull
+  extends Craft`; `space-craft.js` is byte-identical to Step 387's, so no existing scene's cache
+  key changes. `fly`, `update`, `shade(star)`, `occluders`, `shadows`, `size`, `info`, `engines`
+  and `dispose` are the craft's. Axes: +z the bow, +y up (away from the world on a prograde
+  flight), +x port; the middle of the bounding box at the origin; metres.
+- **The design language** (ours; stated so that later hulls stay in it): (1) every function is
+  a mass of its own — crew, propellant, cargo, heat, drive — joined by visible structure, the
+  drive far from the crew; (2) one long axis, because thrust loads run along it; (3) radiators
+  are the largest surfaces: thin rectangular vanes, warm at the root; (4) nothing is streamlined,
+  because these ships never meet air: a bow is a blunt face, a frame, a shield or a ring, never a
+  point; edges are chamfers, not curves; rings are polygons; (5) a ship is lopsided where its work
+  asks for it (hangars on one side and radiators on the other, one hull set back, an array to
+  one side); (6) command sits inside the hull (an anchor, a band on a drum or a terrace front),
+  never on a tower; (7) two or three hull tones and one accent a ship.
+- **Shapes the kit must not make** (described as shapes only; no work is named anywhere in the
+  code, the tests or the documents): a hull whose plan narrows to a point at the bow, with or
+  without a raised tower at the stern; a ball with a dish sunk into it; a disc with a second
+  hull and engine pods on struts; a spine with a crew ball at its front and a ring behind it; a
+  cube; an organic body with arms; a wide head on a thin neck; a great flat triangle. The
+  families stay away by construction (a carrier's seed gives `taper` 0.84 to 1 and terraces
+  between 0.17 and 0.6 of the length from the bow; the ark's rock is always rough and cut; the
+  wheel has no ball; a lance's shield is a faceted cone or disc a fifth of its length wide).
+  `forbidden(profile, regions)` and `problems()` name the one layout a description can reach:
+  a plan that narrows steadily towards the bow to under 0.45 of its greatest width with a
+  `tower-N` in the aft 36 % ("too near a well-known fictional ship"), or to under 0.3 without one.
+- **Families** (`HULLS`; each an invented design; `hull(family, {seed, length, ...})`; every
+  number below can be given, within the range `hullSpec` checks):
+
+  | family | what it is | usual length | its numbers (shares of the length unless said) |
+  |---|---|---|---|
+  | `spine` | a long open truss: the drive behind a shadow disc, radiator vanes in one plane, clusters of tanks, crew drums far forward, a docking face as the bow, an array on a mast to one side | 1.2–2.8 km | `girth` (the truss), `drum`, `drums`, `tanks`, `tankCount`, `tank` (girths), `vanes` (2, 4), `vaneSpan`, `bells`, `side` |
+  | `carrier` | a thick block with a flat deck: a trench down its middle that opens into a gulf between two blunt prongs of unequal length, hangar slots along one side (or both), a gallery line, stepped terraces and low works on the deck, a keel block, a sponson with radiators on the side without hangars | 1.8–4.2 km | `beam`, `depth`, `taper` (the bow's width over the beam), `trench` (of the beam), `segments`, `hangars`, `side` (1 port, -1 starboard, 0 both), `keel` (of the depth), `vaneSpan`, `bells`, `towers` ([{at, side, len, wid, high}]) |
+  | `cluster` | an open frame carrying its load in plain sight: pressure balls, pairs of tanks, a tank lying across, container stacks, gaps; a crew block high on the bow; radiators up and down from the stern | 0.7–1.7 km | `girth`, `aspect`, `vaneSpan`, `bells`, `cells` (a list of `ball`, `pair`, `cross`, `cargo`, `gap`) |
+  | `lance` | a very long thin hull behind a faceted shield, the crew drum and tanks close behind it, a box girder with a gantry along its back, a hangar shed slung under it and open to port, a second ring of tanks, the drive far aft on a truss among long narrow radiators | 2.5–6 km | `body` (its width), `shield`, `shieldShape` (`cone`, `disc`), `drum` (body widths), `boom`, `vanes` (3, 4), `vaneSpan`, `bells` |
+  | `wheel` | a thick hub with two polygonal crew rings of unequal size turning against each other (1 g at the rim by default), a docking drum as the bow, tanks, a cross of radiators | 0.9–2.4 km | `hub`, `ring` (radius), `second` (the next ring's size), `rings`, `gap`, `at`, `sides`, `spokes`, `vaneSpan`, `bells`, `spin` (rad/s) |
+  | `ark` | a worked asteroid: cut flat at the bow, on top and at the stern; a hangar portal built out of the bow face, a polygonal collar with radiators, terraces (stepped piles of thin tiers with low annexes) and works on the mesa, the drive block sunk into the stern | 3–8 km | `girth`, `flat`, `rough`, `mouth`, `vaneSpan`, `bells`, `vaneAngles`, `towers` |
+  | `twin` | two unequal hulls side by side, one set back and higher: a drive hull with a trench, a raised crew block and radiators standing from it; a cargo hull with container racks and an open bay of ball tanks in its frame; a yoke round both near the stern, slanting bridges, a hangar pod | 1.2–3.2 km | `beam`, `depth`, `gap`, `stagger`, `second`, `rise` (depths), `bridges`, `vaneSpan`, `bells` |
+
+  Common: `seed`, `length` (200 to 20,000 m), `age` (0 new .. 1: soot towards the stern,
+  streaks along the hull), `palette` (`PALETTES`: `bone`, `slate`, `iron`, `sand`, `frost`),
+  `inset` (the bells sunk by a share of the length: a way to make a mistake); the kit's `accent`,
+  `detail` (`near` | `far`), `wear`, `tile` (metres one repeat of the plate map covers, 240),
+  `plate` (the big plates' size, 70 m); a craft's `name`, `camera`, `height`, `sun`, `lights`,
+  `marker`, `occlusion` (0 here). `hullSpec(family, options)` is the description as plain JSON,
+  `hullFrom(spec, options)` builds it, `hullFleet(families, {count, seed, spacing, detail:
+  "far", navy: true})` a formation (`navy`: one maker built it: every hull has the palette and
+  the accent the fleet's seed chooses; Step 389). Unknown names are refused with the closest word.
+- **How a hull is modelled** (`Shell`, from `hullKit(options).shell()`; a hull of one's own:
+  `kit.hull(shell.finish(), {anchors})`). Faces are collected by part (`part(name, {sparse,
+  spin})`: a mass; sparse ones give no shadow balls and are left out of the profile) and region
+  (`region(name, detail)`). Shapes: `loft` (a polygon carried through stations: prisms, tapers,
+  bevelled blocks; `sectionOf(W, H, c, {trench, slots})` gives a cross-section with a trench
+  and side slots, so recesses are real geometry that casts shadow), `block`, `lathe` / `drum`
+  (round or faceted), `capsule`, `rod`, `truss`, `vane` (a radiator with ribs and edge rails),
+  `dish`, `mouth` (a framed recess with depth: a hangar mouth as a dark void), `rock` (a ball
+  moved by four octaves of noise, dented by craters, cut flat by planes), `scatter` (low boxes
+  on a flat face: the 20 to 100 m break-up). Bells are the craft kit's (`bankPlan({w, h, count,
+  layout: grid | ring | row})`, `kit.bells`), at the kit's "far" detail from three bells up,
+  each with its plume; lamps are the kit's.
+- **Secondary break-up, kept cheap**: every face is cut into plates of `plate` metres, each of
+  its own tone (a tenth much lighter or darker); a tiling plate map (the craft kit's
+  `platingMaps`, 64 plates of 12 to 60 m a repeat of 240 m, grooves, a normal map); chamfers
+  and bevels; ribs at the joints of a carrier, a gallery line along its sides, accent lips over
+  the hangar slots; `scatter`ed works on decks; `age` darkens towards the stern. Surfaces
+  (`HULL_SKINS`): `hull-a`, `hull-b` (the two tones), `hull-c` (dark metal), `hull-accent`,
+  `hull-radiator`, `hull-tank`, `hull-truss`, `hull-rock`, `hull-void` (a recess: nearly black,
+  no map), `hull-glass`.
+- **Triangle budget** (stated and tested): `near` at most 60,000, `far` at most 20,000.
+  Measured, seed 1: spine 13,600 / 8,800, carrier 18,400 / 12,400, cluster 9,200 / 7,900,
+  lance 12,400 / 6,600, wheel 13,200 / 10,000, ark 31,300 / 12,900, twin 23,100 / 8,600; 26
+  to 37 meshes (one per surface, and per bell its glow and plume). `far`: no plates, half the
+  sides, no ribs, works or accents, a coarser rock.
+- **The contract for the fine detail (Step 389).** Everything is plain numbers in the hull's
+  axes, metres:
+  - `hull.regions`: `[{name, detail, surface: {material, expects, density}, skin, box: {min,
+    max}, centre, normal, area, charts: [ids], mouth?}]`. Names: `bow`, `midship`,
+    `engine-block` (`engine-block-1`, `-2` on a twin), `hangar-N`, `radiator-N`, `tower-N`,
+    `tank-N`, `habitat-N`, `ring-N`, `cargo-N`, `trench`, `keel`, `sponson`, `collar`, `rock`,
+    `port-hull`, `starboard-hull`, `truss`. `detail` is a key of `SURFACES` (`plating`,
+    `windows`, `hangar`, `trench`, `radiator`, `engine`, `tank`, `cargo`, `shield`, `rock`,
+    `dock`, `truss`), which says what the surface is made of, what detail belongs there and its
+    share of texels. `normal` is the area-weighted outward direction (zero for a region that
+    faces all round); `hull.region(name)`.
+  - `hull.anchors`: `bells` (`[{name: "bell-N", p, n, radius, kind, bank}]`: the exit's
+    middle), `nozzles` (the same as `vidgen/space-effects` reads them), `hangars` (`[{name, p,
+    n, width, height, depth}]`: the middle of the opening), `docks`, `lights` (`[{kind, p,
+    n}]`), `bridge` (the command place: `{p, n}`), `points` (every named place: `bow`, `stern`,
+    `top`, `bottom`, `port`, `starboard`, `bridge`, `hangar-N`, `dock-N`, `bell-N`, `ring-N`,
+    `collar`); `hull.anchor(name)`.
+  - Two sets of texture coordinates on every hull mesh. `uv`: metres along the face (u along
+    the face's width, v along the loft or the profile), continuous within a face, with an
+    offset per shape: for tiling detail (a window pattern at true size); the hull's own plate
+    map uses it. `uv1`: one atlas for the whole hull. `hull.charts`: `[{id, name:
+    "region/face", region, kind: "plane" | "round", size: [w, h] metres, rect: [u0, v0, u1,
+    v1], turned (its w runs along v), scale (atlas units per metre), origin, du, dv, normal |
+    axis, radius}]`: a point of a plane chart is `origin + du * cu + dv * cv` (cu, cv in metres
+    from the chart's corner; for a chart that runs over a bevel the frame is its largest
+    face's). Charts never overlap (2/1024 between them; the corner under 4/512 is spare: faces
+    without a chart — struts, ribs, scattered works, cargo boxes, faces narrower than 14 m —
+    read the texel at 2/512, 2/512). Density: `hull.texel(chart, size)` metres a texel;
+    charts share one scale times the region's `density` (windows 1.4, hangars 1.6, radiators
+    0.35, rock 0.45); a chart longer than the atlas is drawn smaller by itself. At 4096:
+    cluster 0.1–0.45 m, spine 0.27–1.1, wheel 0.38–1.5, twin 0.33–1.5, lance 0.5–2.1, carrier
+    0.63–2.9, ark 1.8–8.2 (seed 1). Windows by the thousand on a 3 km hull therefore want the
+    tiling `uv` (or a map per region); the atlas suits what is unique: grime, hangar light,
+    markings, trench runs. A map on the atlas: `texture.channel = 1` on any map of the hull's
+    materials (`hull.materials["hull-a"]`, ...: `MeshStandardMaterial`s shared by the hull).
+  - Scale: `hull.size`, `hull.shape.radii`, `hull.profile` (`[{z, x: [min, max], y: [min,
+    max]}]`, 40 slices of the solid masses from the stern), `hull.spec` (every number of the
+    design), `hull.scale` (atlas units per metre at density 1); `hull.scaleRef(craft, {at,
+    gap, seed, detail})` stands a craft of `vidgen/space-craft` (by kind: `ship` is 42 to 58 m)
+    or any craft or plane object beside a named anchor, as a child of the hull.
+  - The bells are the craft kit's engines (`hull.engines`: `{kind, plume, glow, exit}`;
+    `update(t, {throttle})`: a number, a list per bell or a function of t).
+- **`problems()`**: a length outside 500 to 10,000 m, a hull wider or higher than 0.85 of its
+  length, nearly a cube, a thread, a bell whose exit lies ahead of its block's aft face or
+  that fires into another region, two bells through each other, and the forbidden layout.
+- **Sense of size at this step** (stills in `/home/claude/work/scratch/ao388/stills/`): a
+  normal lens near the hull with a 50 m craft in the frame reads as largest; a long lens from
+  far with the world behind is second; a wide lens close along the hull needs fine detail and
+  is the weakest so far. Plates of 12 to 60 m read as masonry close up until Step 389 adds the
+  small scale.
+- **Measured** (2 cores, SwiftShader, straight to the canvas with ACES, in a `SpaceView` with a
+  sky, the Earth from a 1024 map and a star; seconds a frame at 1280x720 / 320x180). The sky and
+  star alone 0.36 / 0.08. A 3.2 km carrier filling the frame 0.69 / 0.20 (`far` 0.60; shadows
+  cost nothing measurable: 0.73 without), small in the frame 0.48 / 0.11; the ark filling it
+  0.85, the cluster 0.77; a bank of eight bells firing, seen from astern, 1.17. Building (Node,
+  the same code): the first hull of a page 1.0 s (the plate and rock maps), later ones 25 to
+  110 ms (`far` 10 to 40 ms). The 14 part tiles: 23 s.
+- **A trap found** (not changed here: `space-scale.js` is in the keys of existing scenes): a
+  world added to a `SpaceView` by `add(object, {at, size: metres})` instead of as a body of
+  the orbit data is drawn over nearer things when the camera is inside its bounding sphere's
+  depth range (its interval starts at the view's `near`, the nearest slice holds only the
+  world, and the world's shell is never clipped by the far plane). With `orbit_data` and
+  `planet(renderer, "Earth", {space})` a hull in front of the world is drawn correctly (the
+  Chromium test).
+- **Limits and honest notes.** Large forms only: no windows, no lit bays, no markings. The
+  hangar slots are black voids. Bevels are scale insets (a notched section's notch narrows with
+  them). A rock's facets are 40 to 130 m. Ring parts and vanes give the star's glare no shadow
+  balls. `profile` skips slices where only sparse parts are (a spine's truss). The plumes are
+  the kit's, summed per bell (a large bank filling the frame is slow, above). Nothing here is
+  physics: masses, tank sizes and radiator areas are looks.
+- **Parts** (`data/web/parts/space-hull.js`; kinds `craft` and `craft-part`, no new kind):
+  `hull-spine`, `hull-carrier`, `hull-cluster`, `hull-lance`, `hull-wheel`, `hull-ark`,
+  `hull-twin`, `hull-burn`, `hull-scale`, `hull-fleet`; `hull-part-shapes`, `hull-part-drive`,
+  `hull-surfaces`, `hull-charts` (the atlas drawn on a hull, each chart its own colour).
+- **Tests** (`tests/test_web_space_hull.py`): the module and its parts; in Node: the atlas
+  without overlap and with the stated scales, banks of bells inside their field, a
+  cross-section's area and edge names, a description the same for a seed, forty carrier seeds
+  clear of the forbidden layout, did-you-mean, the forbidden outlines on numbers; (`slow`)
+  every family for three seeds (length honoured to 0.2 %, no problems, regions and anchors
+  inside the bounds, charts non-overlapping with their texels, budgets, determinism, 9 km),
+  the constructed wedge with a stern tower and the dagger named, buried bells, a hull on orbit
+  data, the rings' turn, a fleet, a size reference; in Chromium (`slow`): a 3 km carrier in
+  orbit with a 50 m craft in a `SpaceView` over the Earth: in front of the world, the deck one
+  colour without speckle, the small craft where it was put, shadows that only darken, the same
+  picture from a second page.
+
+### 123.11 Giant ship detail and sense of size: `vidgen/space-hull-detail` (Step 389)
+
+`data/web/modules/space-hull-detail.js` (import name `vidgen/space-hull-detail`, in
+`VIDGEN_MODULES`; imports `three`, `rng` of `vidgen/music-time`, `baked` of `vidgen/baked`,
+`GLARE` / `PLUMES` / `flicker` / `craft` of `vidgen/space-craft`, `PALETTES` of
+`vidgen/space-hull`). It dresses a hull of §123.10 and answers one question in pictures: why does
+this ship read as three kilometres long?
+
+```js
+import {hull} from "vidgen/space-hull";
+import {dress} from "vidgen/space-hull-detail";
+const ship = hull("carrier", {seed: 4, length: 3000});
+const detail = dress(ship, renderer, {lights: 1});     // maps baked once, clutter, bays, lamps, plumes
+ship.update(t, {sun, throttle});                       // the hull's own update first
+detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light});   // light: the spaceLight (an honest exposure dims the lamps)
+```
+
+- **A sibling module (decision).** `space-hull.js` changes only where the detail needs it (below);
+  `space-craft.js`, `space-scale.js` and `space-light.js` are byte-identical. Nothing here is a
+  mesh per window; no weapons are modelled and no option adds any.
+- **What is drawn where, and what is baked.**
+
+  | what | how | kept by `vidgen/baked` |
+  |---|---|---|
+  | 5 to 20 m: panel seams inside the big plates, hatches, conduits with brackets, vents with their soot, ribs, hand lines; pipe bundles, gratings and machine boxes on dark metal; panel grid, feed pipes on radiators; straps, blankets, a feed line on tanks | a tiling map per kind of surface (`KINDS`: `plating`, `metal`, `radiator`, `tank`), 192 m a repeat, read with `uv` (metres) | `space-hull-detail/tile`, 8 maps of 1024 (512 at `far`), shared by every hull and page |
+  | 1 to 5 m: fine panel lines, rivet rows, stencil bars, pits, worn edges, small hatches; grating and bolts; radiator fins; quilting and frost | a second tiling map per kind, 32 m a repeat | the same entry |
+  | windows | in the surface shader, from the attribute `win` (metres along the row, metres across the decks, the region's share) and two 256 by 256 tiles of window light (`windowCells`: the night watch, the rest) | not kept (1 ms to make) |
+  | grime and soot, large marks, the light of bays, trenches and floodlights, the plumes' light on the stern | one map on the hull's atlas (`uv1`): R grime, G marks, B fixed light, A plume light (`uniqueMap`) | `space-hull-detail/unique`, 2048 a hull (1024 at `far`), keyed by the hull's charts, regions, anchors and description |
+  | deck and trench clutter (boxes in clusters, pipe runs, stacks, masts, small dishes) | instances that the hull's own surfaces draw (`clutterPlan`: one piece every 34 m, at most 5000) | — |
+  | parked craft and cargo in the bays | instances of the craft kit's `ship` and `tug` at `far` detail, lit by the bay | — |
+  | thrust structure (gimbal rings, actuators, shrouds, a frame round the bank) | instances | — |
+  | navigation, guide, flood and work lamps | one `THREE.Points` (`navLights`) | — |
+  | one long plume a bank of bells | a shell drawn twice (front and back), brightest where the view passes through its middle | — |
+
+  The maps are painted in JavaScript (`detailMap`, `uniqueMap`: pure, tested in Node) and copied
+  byte for byte into the render targets `vidgen/baked` keeps: a cached page never paints them.
+- **Fading by footprint.** Every scale fades with the metres one pixel covers (`fade(scale,
+  metres)`, the shader's rule; `SCALES`): the small scale between 0.35 and 1.4 m a pixel, the
+  middle scale between 2.5 and 9 m; the maps' mipmaps do the same underneath, so with
+  `antialias: "none"` nothing shimmers. A map's mean tone is 0.5 (unchanged), so a faded map
+  changes nothing. With the detail on, the hull's own big-plate map is drawn at 0.55 of its depth:
+  plates of 12 to 60 m with strong joints are what made a hull read as masonry.
+- **Windows.** Rows follow the decks: 3.5 m between floors, 3.2 m between windows, a window 1.25
+  by 0.95 m. On a flat wall decks are level (`windowCoords`: the hull's y across the decks, the
+  wall's horizontal direction along the row); a face that looks up or down has none; on a round
+  face (a drum, a ring) rows run round it and its end faces have none, so a ring's decks lie at
+  constant radius. Use decides how many (`WINDOWS`, by the region's `detail` of §123.10:
+  `windows` 0.82 of the banks, `dock` 0.3, `trench` 0.3, `plating` 0.24, `rock` and `cargo` 0.05;
+  `tank`, `radiator`, `engine`, `shield`, `hangar`, `truss` none; never on a radiator, tank,
+  truss, glass or void surface). A bank is 9 windows by 3 decks; in a bank some decks are blank.
+  The seed decides which windows exist (0.77) and which are lit (`lit` 0.36 of them, clustered by
+  rooms; `watch` 0.4 of those never go out); a run of windows shares its colour: warm (0.68),
+  cool (0.22), white. A window is filtered over the pixel (a box filter in the shader, the cells
+  through mipmaps): larger than a pixel it is a sharp rectangle with dark glass when unlit,
+  smaller it is a steady sparkle. `lights` (0..1) brings the other banks on one after another
+  (never all at once, never blinking); work lamps follow it.
+- **Exposure.** `detail.update(t, {light})` reads the spaceLight's gains. `film` (the default):
+  windows and lamps are drawn at a pleasing brightness, dimmed to 0.15 where the sun lights the
+  wall (so they come out as a face turns from the sun), and a window under a pixel is lifted 2.6
+  times so that the night side sparkles; this is a stated look. `camera` / `auto`: every lamp and
+  window is multiplied by the same gain as a world's city lights (2^(ev - 10), at most 1) with no
+  dimming and no lift: exposed for sunlight they cannot be seen, which is true.
+- **Hangar bays.** The `hull-void` back wall gets ribs, doors and strips of light drawn from its
+  place among the decks; every face inside a bay's box (floor, ceiling, walls) is lit through the
+  atlas, with pools under the strips, and the light spills on the hull round the mouth; the floor
+  carries a threshold line, landing boxes with dashed lead-in lines and the bay's figure; parked
+  craft (42 to 58 m and 19 to 32 m) and stacks of 14 m containers stand on it; amber lamps along
+  the sill, cool ones under the lintel, white pairs running into the bay on vidgen's clock;
+  `curtain` (0.25) is a faint blue glow across the mouth, strongest at its frame and at a grazing
+  view: a look, not physics; 0 removes it.
+- **Engine banks.** Round every bell a gimbal ring, three actuators, two machine boxes and a
+  heat-stained shroud; ties between neighbours and a frame round the bank; soot on the block in
+  the atlas. Firing: the craft kit's glow in the throats and its plume per bell, one long plume
+  per bank (24 bank radii at full throttle, a third of that idling; a disc of light seen from
+  astern), the block and whatever faces the bells lit through the atlas's A channel, all with
+  `throttle` (a number, a list, a function of t: `ctx.music` through the hull's `update`).
+  `plumes: "bank"` hides the kit's plumes (cheaper), `"bells"` the long one.
+- **Marks and lamps.** `markPlan`: the hull's number (two plain numerals, 12 m to 3 % of the
+  length high) on the largest wall of each side with a bar under it, pads with a cross and a
+  figure and a dashed line on the decks, the bays' floors. Numerals only: no alphabet, no emblem.
+  The tiling maps carry bars, never figures (a tile is seen from both sides). `floodPlan`: lamps
+  close over the larger walls whose light runs out along the plate. `navLights`: red along the
+  port side and green along the starboard (from `hull.profile`), white at bow and stern, two
+  strobes, a beacon on every tower and mast. A lamp is a point at least 2.4 pixels wide whose
+  light falls with the square of what it lacks, so a lamp too small to see fades instead of
+  flickering.
+- **A sense of size: which cues work.** Space has no haze, so distance says nothing. What works,
+  strongest first: (1) windows in rows — the eye knows a floor is three metres; eighty rows on a
+  wall is a city block; (2) a craft of known size against the hull, best flying into a bay
+  (`ship.scaleRef`, `detail.fly(craft, "hangar-2", u)`, `bayApproach`); (3) detail at several
+  scales at once — the finest thing in the frame sets the scale, so a close view must show 1 m
+  detail and a far one must not show 60 m plates as its finest; (4) overlap and depth — a
+  trench full of clutter, a bay with a back wall, a wide lens close along a wall so detail
+  streams past at several depths; (5) the planet behind with a long lens (it flattens the hull
+  on the world and says "in orbit"); (6) lamps: small steady points and pools of light on big
+  walls. What does not work: the hull alone on black from far (a model on a table, whatever the
+  detail); strong tone steps between big plates (masonry); large lamps and large glows (they
+  shrink the ship); a fleet seen from above with nothing small in frame; a wide lens from far.
+- **Changes to `vidgen/space-hull`** (its `VERSION` is 2): every hull mesh has the attribute
+  `chart` (the chart each corner lies in, -1 for none); `hullFleet` takes `navy` (above); the
+  lance, the twin and the ark's terraces have more character (the table in §123.10); the lance
+  has a hangar (`hangar-1`). `dress` adds the attributes `win` and `hullAtlas` (the same numbers
+  as `uv1`) to the hull's meshes and patches the hull's materials (`customProgramCacheKey`
+  `vidgen-hull-detail-<kind>`); it scales the kit's five lamp bodies to 0.3 (metres across on a
+  hull, they read as a toy's).
+- **Interface.** `dress(hull, renderer, options)` → `HullDetail` (`update(t, {lights, light |
+  gains, throttle})`, `fly(craft, hangar, u, options)`, `info` (`{windows, lit, lamps, clutter,
+  craft, bake: {ms}}`), `plan`, `maps`, `object`, `dispose()`); `dressFleet(fleet, renderer,
+  options)`. Options: `lights` (1), `windows` (false | `{lit, watch, warm, cool, floor, pitch,
+  gain, lift}`), `nav`, `hangars` (false | `{craft, cargo, curtain, light}`), `engines` (false |
+  `{structure, plume, light}`), `plumes` (`both` | `bank` | `bells`), `clutter` (false | a
+  density), `marks`, `atlas` (2048; 1024 at `far`), `maps` (1024; 512 at `far`). A hull at `far`
+  detail gets no clutter, parked craft or thrust structure unless asked. Pure, for tests and for
+  one's own use: `detailMap`, `windowCells`, `windowCoords`, `windowShare`, `fade`, `uniqueMap`,
+  `markPlan`, `floodPlan`, `navLights`, `clutterPlan`, `bayApproach`, `inBay`; constants
+  `SCALES`, `KINDS`, `WINDOWS`, `PLUME_MODES`, `VERSION`. Unknown options and names are refused
+  with the closest word.
+- **Measured** (2 cores, SwiftShader, in a `SpaceView` with a sky, the Earth and a star; a 3.2 km
+  carrier, `near`; seconds a frame at 1280x720 / 320x180, bare in brackets). Filling the frame
+  from 2.5 km: 1.0 / 0.30 (0.72 / 0.20). Small in the frame: 0.55 / 0.23 (0.48 / 0.11). A close
+  view where the hull covers every pixel: 2.0 (1.3); with the maps and windows only 1.6; the
+  night side close 1.7. Eight bells firing seen from astern: 1.33 (`plumes: "bank"` 0.86). Five
+  dressed hulls at `far`: 0.9. The first frame of a page costs about 3 s more (the surface
+  programs). Dressing (page ready, the hull alone): cache off 2.1 s, cold 4.2 s (painting and
+  storing), warm 0.9 s; a `far` hull 1.1 s cold, 0.4 s warm; the ark 2.1 s cold, 1.1 s warm.
+  Painting in Node: a 1024 tile 55 to 80 ms, a 2048 unique map 0.3 to 1.2 s. On disk: 4 MB for
+  the first hull (the eight tiles 1.5 MB, its unique map 2.5 MB), 1 to 3 MB for every further
+  hull, 0.2 MB at `far`.
+- **Two traps found, not changed** (their modules' bytes are in the keys of existing scenes;
+  for the review step): `vidgen/space-scale` draws every object with `frustumCulled = false` as
+  sky, behind everything (a lamp or a plume marked so vanishes in front of the hull);
+  `vidgen/space-light` does not hide a sun given as a direction behind a world further than 1e6
+  scene units (a ship in a `SpaceView` in metres is never in the Earth's shadow; with the sun as
+  a body it is). The cookbook's terminator recipe applies `sunVisibility` by hand.
+- **Limits and honest notes.** A round face's unique map knows no place in space: grime only, no
+  bay light or plume light on drums and rings. The plume's light on the stern ignores what stands
+  in between. Clutter does not cast shadows (pieces of 2 to 30 m under a 2048 shadow map over
+  3 km). Window rows on a tapered wall follow level decks and are cut by its edge. The rock of
+  the ark gets sparse lights and no marks. A round bay does not exist. `lights` moves banks, not
+  single rooms. The bank plume is a look (no flow, no shock structure).
+- **Parts** (`data/web/parts/space-hull-detail.js`): `hull-dressed`, `hull-windows`, `hull-bay`,
+  `hull-torch`, `hull-fleet-dressed` (kind `craft`), `hull-detail-maps` (`craft-part`).
+- **Tests** (`tests/test_web_space_hull_detail.py`): the module and its parts; in Node (`slow`):
+  rows a floor apart on any wall and none on decks and end faces, shares by use, the lit share
+  from the seed, the fades, the maps' mean tone and sameness, did-you-mean; on real hulls: the
+  unique map (a bay lit on every face, the stern lit by the plumes and a tower not, the spare
+  texel neutral, the same for a seed), marks, lamps and clutter the same for a seed and on the
+  hull, red to port, clutter clear of the bays, the way into a bay, no windows on tanks,
+  radiators and engines of any family, one livery a fleet, the `chart` attribute; in Chromium
+  (`slow`): the night side has the warm light the bare hull lacks, an honest exposure for
+  sunlight shows almost none, the lit hull differs from the bare one, a bay is brighter than the
+  void, the same picture from a second page and with the cache off, cold and warm (the nine maps
+  come from the cache).
+
+### 123.12 Camera moves in the air and beside giant ships: `vidgen/space-camera-air` (Step 390)
+
+`data/web/modules/space-camera-air.js` (import name `vidgen/space-camera-air`, in `VIDGEN_MODULES`;
+imports `clamp`, `mix`, `smoothstep`, `smootherstep`, `hash` of `vidgen/music-time`, the rig, the
+lenses and the vector helpers of `vidgen/space-camera`, `sceneTime` of `vidgen/space-scene`; no
+three.js: everything runs in Node). The first step of the phase whose subject is motion.
+
+```js
+import {airCamera} from "vidgen/space-camera-air";
+const cam = airCamera({camera, sky, ground, water, clouds: weather, flight: ctx.flight, music: ctx.music, crafts: {Plane: ship}});
+cam.apply(t, cam.skim(t, {over: [0, 8], from: [0, 0], heading: 284, speed: 90, clearance: 14, turn: 14}));
+const cam2 = airCamera({space, camera, ships: {Ship: hull}});               // beside a hull flown in a SpaceView
+cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side: "port", standoff: 60, speed: 40}));
+```
+
+- **A sibling module (decision).** `AirCamera extends SpaceCamera`: every option, move and check
+  of §122.11 works on the rig, and the new moves are its methods. `space-camera.js` is
+  byte-identical (its bytes are in the keys of Phase AN's `space` scenes and of
+  `examples/outbound`); nothing in it had to change: the new module builds its shots from
+  `shotAt`, `lens`, `distanceFor` and the vector helpers that module exports, and overrides only
+  `_common` (times in bars) and `problems` (its own notes).
+- **A move is a function of its time.** As in §122.11: `move(t, options)` returns a shot (`from`,
+  `right`, `up`, `forward`, `fov`, `aspect`, `focus`, plus numbers of its own and `notes`),
+  `cam.apply(t, shot)` places the camera. Nothing is kept between frames (tested in Node: seven
+  times in a shuffled order give the same shots; in Chromium: the same frames from two pages that
+  draw them in different orders). A damped follow is an exponentially weighted mean over the
+  flight's past (`lagged`), a shake is a sum of sines with phases from a seed (`shake`), a kick is
+  a closed-form spring (`pushBack`): no state anywhere.
+- **Times.** `over: [start, end]` in seconds of the scene, or `{bar, beat}` of the score
+  (`music: ctx.music`; `cam.seconds({bar: 9, beat: 3})`), also for `at` and `light`; or `progress`
+  with `seconds`. `ease`: 0 steady, 1 from rest to rest (the speed rises as a smoothstep over
+  half the move), or `[in, out]`: `[1, 0]` starts at rest and ends moving, so two moves cut
+  together on motion (`easedEnds`, `easedRate`). Passes (`skim`, `hullPass`) are steady by
+  default, reveals (`rise`, `intoBay`) eased. `speed` of a pass is its speed between the eased
+  ends.
+- **The local frame.** In the air the frame is the scene's (§123.7: x east, y up at the anchor,
+  z south, metres; the world's middle at `[0, -radius, 0]`). `localFrame({radius, center})` gives
+  `upAt(p)` (the local vertical), `heightOf(p)`, `at(x, z, h)` (the point over the scene's (x, z)
+  at a height over the sphere) and `compass(p, degrees)` (a level heading at p). Every air move
+  takes "up" from `upAt` at the camera, not from +y (tested 2,000 km from the anchor: 18.3 degrees
+  between them), and heights from the ground's own lookups: `ground.heightAt` / `ground.above`
+  (§123.6), `water.heightAt` (§123.4; for a plan the sum of the waves' amplitudes), or a function
+  `(x, z, t) -> metres`. `cam.surface(x, z, t)`, `cam.clearance(p, t)`, `cam.peakNear([x, z],
+  reach)`.
+- **Never under the ground.** A move plans over the surface (below) and then checks the place it
+  got: nearer than its `margin` (a move's own, else the rig's 3 m; a ground stand keeps its eye
+  height) the camera is lifted along
+  the local vertical and the shot's `notes` say by how much and where; `cam.problems(t, shot)`
+  returns the notes with §122.11's findings, `cam.check(move)` walks a whole move.
+- **No flips.** `lookFrame(up, heading, pitch, roll)` builds a frame from a level heading and a
+  pitch, defined straight down and straight up (the frame's top is then the heading); `skim`,
+  `climbThrough` and `rise` use it. Views locked to a plane (`wing`) use the plane's own axes and
+  no vertical at all (tested through a tumble). `chase`, `flyPast` and `orbitPeak` aim with
+  `shotAt` and stay far from the vertical by their geometry.
+- **Air moves.**
+
+  | move | what it does | options (defaults) |
+  |---|---|---|
+  | `skim` | a low pass on a ground track at a stated clearance, following the ground with look-ahead, banking into its turn | `from` [x, z], `heading`, `speed` (90), `clearance` (25), `lookAhead` (3 s), `turn` (degrees in all), `bank` (0.35 of a coordinated turn's, at most `maxBank` 20), `horizon` (`bank` / `level`), `pitch` (-4), `follow` (0.5 of the path's slope), `margin` (0.4 x clearance) |
+  | `climbThrough` / `descendThrough` | from under a deck through its fog out over its top, and back | `deck` (index, name or `{base, top}`), `below` (500), `above` (600), `at`, `heading`, `speed` (70), `pitch` ([10, -5]: up into the deck, then across its top), `adapt` (stops, 0), `settle` (500 m) |
+  | `chase` | behind and above a plane, following with a lag, rolling with part of its bank | `flight`, `distance` (60; a pair closes in), `height` (16), `side` (0), `lag` (0.7 s), `bank` (0.5), `place` ([0, -0.2]), `lead`, `climb` (0.5) |
+  | `wing` | locked to the plane's own frame | `flight`, `view` (`wingtip`, `tail`, `belly`, `nose`, or `{at, toward}`), `side`, `craft` or `length` / `span` |
+  | `flyPast` | a camera standing in the air or on the ground; the plane passes | `flight`, `at` (the pass), `closest` (120), `side`, `rise` (-12), `stand` (`air` / `ground`), `eye` (2), `place` ([0, 0.25]), `lag` (0.06 s) |
+  | `orbitPeak` | circling a mountain, a volcano or a tower of cloud | `around` ([x, z], `{near, reach}`, `{tower}`), `radius` (2500), `height` (0.12 x radius over the top), `start` (180), `sweep` (90), `aim`, `place`, `top`, `clearance` (150) |
+  | `rise` | a vertical crane from the surface to altitude | `at`, `from` (20), `to` (30000), `heading`, `horizon` (0.3), `lens` (one, or [from, to]), `drift`, `down` |
+
+  Terrain following (`skim`, the circle of `orbitPeak`): the ground under the track is sampled at
+  96 stations (72 round a circle); each value becomes the highest within the look-ahead
+  (`envelope`), then a smooth mean over the same reach, and the path is a monotone cubic through
+  the result (no overshoot), so it rises before a ridge and settles after it. A ridge narrower
+  than a station is caught by the last check (the lift and its note). The track itself is on the
+  scene's (x, z) plane (`trackPlan`): over hundreds of kilometres its speed over the sphere
+  differs by the cosine of the angle from the anchor (0.1 % at 280 km). The bank is a look:
+  `bankOf(speed, rate)` is a coordinated turn's bank at 9.81 m/s². `climbThrough`'s `adapt` is a
+  look too: the shot's `ev` falls as the camera nears the deck's top and recovers over `settle`
+  metres above it; the page hands it to the air (`air(..., {ev: (t) => now.ev})`). The chase's
+  camera stands behind the plane along the mean of the flight's direction over the last `lag`
+  seconds (ages up to four lags, 13 samples), so it has no start-up transient and swings wide in
+  a turn; `ctx.flight` gives a value a frame, so sub-frame times step. `flyPast`'s turn is
+  fastest at the pass: speed / closest radians a second (the shot's `pan`; 150 m/s at 100 m is 86
+  degrees a second). `rise` multiplies its height by a constant per step of eased progress and
+  tilts down by the horizon's dip so the horizon stays where `horizon` puts it.
+- **Ship moves.** Places are metres in the hull's own axes (+z the bow, +y up, +x port); the rig
+  turns them by the hull's object (`hull.object.quaternion`; with a `SpaceView` into the data's
+  frame at the body's place, in a plain scene by the object's place and scale): update the ship
+  for t before asking for the move. `ships: {name: hull}` lets a move name its ship.
+
+  | move | what it does | options (defaults) |
+  |---|---|---|
+  | `hullPass` | a slow pass along the hull, a wide lens, the path made from the hull's regions | `ship`, `side` (`port`, `starboard`, `dorsal`, `ventral`, degrees), `lane` (0), `standoff` (60), `reach` (3 stand-offs), `from` (0.1) / `to` or `speed` (40) and `toward`, `ahead`, `inward` (0.6), `yaw` (8), lens `ultra-wide` |
+  | `hullReveal` | `traverse`: the bow slides into the frame from behind the camera and the hull keeps coming; `limb`: from behind a world (`reveal` of §122.11 with the ship as subject) | `ship`, `at`, `side` (`under` / `over`), `lane`, `standoff` (0.03 x length), `speed` (length / 30), `tilt` (22), `escort` (`{after, speed, gap}`); `limb`: `behind`, `rate`, `distance`... |
+  | `intoBay` | an approach to a hangar's mouth at an angle, then inside | `ship`, `hangar`, `from` (4 widths), `along` (0.7 x from), `deep` (0.35), `rise` (-0.28), `out`, `clear` (25), lens `wide` |
+  | `sternBurn` | behind the bank as it lights; pushed back; a shake on request | `ship`, `light`, `distance` (3 bank radii), `off` ([0.45, 0.22]), `creep` (0.06), `push` (0.5 radius), `settle` (0.45 s), `shake` (`{amount 0.25, seed, rate 7, decay 1.6, hold 0.15}`), `rise` (0.35 s) |
+  | `scaleZoom` | powers of ten from a place on the hull to the whole ship to the ship as a speck by its world (`zoom` of §122.11) | `ship`, `window` (an anchor, a region, a place), `close` (60), `fill` (0.7), `world`, `far` ({radii: 4}), `lift` (20), `over` or `rate`, `hold` |
+
+  `passPlan(hull, {side, lane, standoff, reach})`: at 160 stations along the long axis, the
+  furthest reach on that side of every region whose box comes within a stand-off of the lane and
+  of the station; `envelope` with the look-ahead; the camera flies the stand-off outside it. So a
+  pass over the deck swings up over a tower before it meets it and a pass along a wall follows
+  its steps. It is as true as the regions' boxes (a box is never smaller than its region, so the
+  camera is never nearer than the stand-off: tested on a stand-in hull at 800 places; on all
+  seven families of seed 1 the nearest region is 60.0 m away along all four sides). A ring that turns keeps the box it was
+  built with. `hullClearance(regions, p)` names the nearest region; a pass faster than a twelfth
+  of the hull a second is noted (`TOY_SHARE`: a 3 km ship passed in 12 s is a model). The
+  traverse flies a straight line a stand-off clear of the hull's furthest reach in its lane and
+  times the moment the first station crosses the frame's edge (`at`); it is steady by design. Its
+  `escort` is where a small craft should be (the hull's axes: a craft of `ship.scaleRef` is a
+  child of the hull) to enter the frame after the stern. `intoBay` reads the anchor `{p, n, width,
+  height, depth}`: inside it keeps within the mouth, outside it notes a place nearer than `clear`
+  to another region. `sternBurn` returns `throttle` (0 before `light`, 1 after `rise` seconds):
+  hand it to `ship.update(t, {throttle})` so the picture and the push have one clock.
+- **A trap of `vidgen/space-scale`, met again and avoided from the page.** With the default
+  `near` (0.01 m) a `SpaceView` splits a hull the camera is inside the bounding sphere of into
+  several depth slices, and the world behind is drawn over the parts of the hull in the farther
+  slice (seen in `intoBay` and `scaleZoom`: the Earth over the bay's floor; a body of the orbit
+  data, not only an object added by hand as §123.10 says). `new SpaceView(ctx, {..., near: 4})`
+  (the camera is never nearer than that to anything) keeps the hull in one slice: the pictures of
+  this step use it. `space-scale.js` is unchanged (its bytes are in existing scenes' keys); the
+  fix belongs to the review step.
+- **Measured** (2 cores, SwiftShader; seconds a frame at 426x240 in a draft clip / at 1280x720 in
+  `vidgen still`, the first frame of a page left out).
+
+  | move | scene | 426x240 | 1280x720 |
+  |---|---|---|---|
+  | `skim` | air + breeze sea at sunset | 0.18 | 1.2 |
+  | `skim` | Mars-like air + desert | 0.25 to 0.39 | 1.5 (a frame that re-centres the maps 3.9) |
+  | `climbThrough` | air + sea + two decks | 0.31 | 2.0 |
+  | `chase` / `wing` | air + alpine land + a plane with shadows | 0.30 / 0.28 | 1.45 / 1.5 |
+  | `wing` (belly) | air + a plane + re-entry glow | 0.23 | 1.3 |
+  | `flyPast` | air + sea + a plane | 0.17 | 0.85 |
+  | `orbitPeak` | air + volcanic land | 0.32 | 1.6 |
+  | `rise` | air + sea + fair clouds | 0.32 | 2.1 |
+  | `hullPass` | dressed carrier, sky, Earth, 60 m off the wall | 0.43 | 1.55 |
+  | `hullReveal` | the same, under the hull | 0.20 | 0.45 (bow) to 1.1 (hull overhead) |
+  | `intoBay` | the same | 0.44 | 1.6 |
+  | `sternBurn` | the same, eight bells firing | 0.43 | 2.1 |
+  | `scaleZoom` | the same | 0.25 | 0.8 |
+
+  The moves' own arithmetic is 15 to 50 ms a frame of that where a ground is sampled (`skim` over
+  land: about 130 heights and the plan, three times a frame in the test page; `orbitPeak` 170 ms with its peak search each frame: give
+  `around: [x, z]` once the peak is known), under 1 ms otherwise. A page's first frame: 2 s (sea)
+  to 20 s (land at 1280x720). `vidgen motion check` on each of the 14 draft clips (3 to 8 s,
+  426x240, 12 fps): no findings, except a `rise` of 60 km in 5 s (one `strobe` warning: cloud and
+  wave patterns move half their repeat a frame at 12 fps); the same rise in 8 s is clean. The 12
+  part tiles: 21 s.
+- **What reads and what does not** (strips in the step's scratch folder; the moves were looked
+  at as strips of frames and checked by `vidgen motion check`, not watched as film). Strong:
+  `skim` over the sea at sunset, `chase`, `wing` (wingtip), `flyPast`, `rise`, `hullPass`,
+  `intoBay`, `sternBurn`. Fair: `orbitPeak` (correct, slow to show change: give it 12 s and 30
+  degrees), `climbThrough` (the story reads; the fog is flat grey), the traverse of `hullReveal`
+  (the idea works over 30 s; the underside is plain and only stars are under it), `scaleZoom`
+  (the ship is under a pixel long before the world is whole), `wing` on a re-entry (the glow
+  hides the tiles at full heating). Speeds: a `hullPass` at 40 m/s takes 80 s for the whole
+  3.2 km carrier: show a part of it; `rise` to 60 km in 8 s and a climb of 115 m/s are stylised
+  (a film's time), stated here.
+- **Limits and honest notes.** A ground track is planned on the scene's plane (above). The
+  look-ahead is symmetric: the path also stays high behind a ridge. `chase` does not look for
+  ground between the camera and the plane. `flyPast` on the ground stands on the surface as
+  planned (the waves' highest sum over a sea). `hullReveal` behind a nearer ship is not built
+  (mode `limb` takes a round world; a ship is a ball there). `intoBay` knows the mouth, not what
+  is parked inside. `sternBurn` does not know where the plume is: `off` keeps it out by default.
+  Nothing here knows about clouds between the camera and its subject, and (as §123.5 says)
+  everything in a scene is drawn in front of every cloud.
+- **Parts** (`data/web/parts/space-camera-air.js`, kind `camera`): `camera-skim`,
+  `camera-climb-through`, `camera-chase`, `camera-wing`, `camera-fly-past`, `camera-orbit-peak`,
+  `camera-rise`, `camera-hull-pass`, `camera-hull-reveal`, `camera-into-bay`,
+  `camera-stern-burn`, `camera-scale-zoom`.
+- **For Step 392 (YAML).** Options are plain numbers, words and names: flights and ships by name
+  (`flight: "Plane"`, `ship: "Ship"` with the rig's `flight`, `ships`, `crafts`), decks, towers,
+  hangars, anchors and regions by name or index, times as seconds or `{bar, beat}`. The lists for
+  validation: `AIR_MOVES`, `SHIP_MOVES`, `SIDES`, `WING_VIEWS`. No option needs a function.
+- **Tests** (`tests/test_web_space_camera_air.py`): the module and its parts; in Node: eased
+  ends, the envelope, the local frame far from the anchor, no flip straight down, bars; every air
+  move the same for the same time in any order; a skim over a hill and over a ridge narrower than
+  its samples (lifted, noted, never under its margin), its speed, bank and level horizon; up 2,000
+  km from the anchor; the deck's heights, fog and `ev`; the chase's lag, roll, frame and lift;
+  the plane's views through a tumble; the fly-past's standing camera and its fastest turn at the
+  pass; the circle round a peak and over high ground; the crane's heights, lens and horizon; on a
+  stand-in hull: the plan, the stand-off at 800 places, the swing round a tower, a turned and
+  scaled hull, the bow's entry at its bar, the escort, the bay's mouth, the bank's light, push
+  and seeded shake, the zoom's landing points; did-you-mean for options, views, flights, ships,
+  hangars. In Chromium (`slow`): a skim and a climb drawn at three times each in two orders give
+  the same frames (within 2 of 255), the camera over the swell in each.
+
+### 123.13 Orbit to ground in one shot: `vidgen/space-descent`, `descend` / `ascend` (Step 391)
+
+`data/web/modules/space-descent.js` (import name `vidgen/space-descent`, in `VIDGEN_MODULES`;
+imports `three`, `vidgen/space-air`, `-sea`, `-land`, `-clouds`, `-bodies`) and two moves on
+`vidgen/space-camera-air`'s rig.
+
+```js
+import {world} from "vidgen/space-descent";
+import {airCamera} from "vidgen/space-camera-air";
+const w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze"}, clouds: {sky: "fair"}, scene});
+scene.add(w.object);
+const cam = airCamera({camera, ...w.rig});
+function frame(t) {
+  const fall = {over: [0, 10], from: 400e3, to: 300, heading: 300, turn: 30};
+  const shot = t < 10 ? cam.descend(t, fall) : cam.skim(t, {over: [10, 14], ...cam.descend(10, fall).end, follow: 0});
+  cam.apply(t, shot); w.update(t, {camera}); renderer.render(scene, camera);
+}
+```
+
+**The split taken.** Built whole: a CAMERA's descent from orbit to a low pass, and back up, over
+an ocean world with decks and over bare ground (a Mars-like desert), in one frame of reference
+with one air. Not built (the list is in the tasklist): the plane version (a camera following a
+plane through the end of a `reentry` leg), re-anchoring the local frame along a long flight, the
+joined world inside a `SpaceView`, the decks' weather read from the globe's cloud map.
+
+**The audit of the seams** (stills before the work in `/home/claude/work/scratch/ao391/stills/before_*`:
+the same view from 400, 200, 100, 60, 30 and 10 km, the globe alone and the local parts alone).
+
+1. *Frames.* The globe's data are J2000 metres in a `SpaceView`; air, sea, decks and ground are
+   the scene's local frame (x east, y up, z south; the world's middle at [0, -radius, 0]). Every
+   local part already takes "up" and the height from the camera's place on the sphere and draws
+   each pixel on the sphere itself, so the local frame holds for a camera anywhere over the place:
+   drawn from 400 km before this step, the sea and the ground were right in shape. Decision: ONE
+   scene, the local frame; the globe is put into it (radius metres, middle [0, -radius, 0], turned
+   by `globeTurn(at)` = `placeFrame`'s east, up, south as rows, so the place `at` is under the
+   origin and the ground's map and the globe's agree). No `SpaceView`. A camera is free to come
+   down over the anchor, so nothing is re-anchored; a vehicle is not (a re-entry crosses
+   thousands of km): `world.problems(camera)` names a camera further than 0.3 radii along the
+   ground from the place (`REACH`; the ground's large-scale map ends at 0.48).
+2. *Globe and air.* From 400 km the air's limb (`vidgen/space-air`) is a thin bright blue line,
+   the body's own (`vidgen/space-bodies`) a softer, dimmer glow with a pink band; the Mars-like
+   preset is dusty where the body's own air is clear. Decision: one source. The dome of
+   `vidgen/space-air` is drawn at every height and the globe is made with `air: false`; its
+   surface is seen through the dome's own air (`airLight` to the distance of the sphere on the
+   pixel's ray) and lit as the dome's plain ground is (the sun after the air at that place plus
+   the sky's light over the sun's cosine, floor 0.2). No handover of the air exists, so none can
+   show. `space-bodies.js` is not changed; no Phase AN picture or key changes. The joined world's
+   limb is therefore `space-air`'s, not the Phase AN body's: a cut from a Phase AN shot of the same
+   world to a joined one shows the difference (the leftover of Step 381 stands for the review).
+3. *Surface.* Bare ground: `vidgen/space-land` draws well from orbit (craters, the limb), with
+   more detail than the globe's map, but its large-scale map ends 0.48 radii out and it costs
+   more. Sea: empty from high up. The globe: soft from low orbit (a 1024 px map has texels of
+   10 km on an Earth; from 100 km a pixel is 100 m). Decision: the globe's picture (drawn into a
+   half-float target with the page's camera) is laid over the local picture by a full-screen
+   pass at render order -790 (after the decks' -800, before the scene's own things) with the
+   weight `globeWeight(height, distance) = S(ln distance; near) x S(ln height; height)`: `distance`
+   to the sphere along the pixel's ray, `height` the camera's, S a smoothstep. Resolution does not
+   enter (a draft and the film hand over at the same heights). `HANDOVERS.low` (a sea or decks):
+   near 60 to 400 km, height 2.5 to 80 km (20 to 80 km and 2.5 to 14 km until Step 393, before the
+   decks had a broad weather); `HANDOVERS.high` (bare ground): near 150 to 600 km,
+   height 60 to 300 km. Above `near[1]` only the globe and the dome are updated and drawn; under
+   `height[0]` the globe is not drawn (`stageOf`, `world.state.stage`: `globe`, `handover`,
+   `local`).
+4. *Clouds.* The decks seen from 30 km and up show the noise tile as a lattice (before-still
+   `before_a_local_earth.png`), from 10 km still in the far half; the globe's cloud layer is soft
+   smears. Decision: no deck is shown further than `near[1]` from the camera (the lattice needs
+   many tiles in view), the globe's layer is all there is above; between, one dissolves into the
+   other (Step 393: the decks' broad weather breaks the lattice, so `near[1]` is 400 km and the
+   decks show from about 150 km). Single clouds are NOT in the same places. Decks beyond the globe's horizon stood over the
+   limb as a bright line that appeared at once when the local parts came on: where the far globe
+   has taken over, rays passing under 1.5 x the highest deck top show the air alone (weighted with
+   the height's weight). A world without `clouds` gets a globe without its cloud layer.
+5. *Depth and order.* No `SpaceView`, so none of its traps. The globe's picture is a pass without
+   depth, drawn before the scene's meshes: a craft is always in front of it, as of the decks. The
+   ground writes depth (meshes behind a ridge are hidden); the globe's picture does not.
+6. *Light and exposure.* One exposure: the air's (`film` by default: no lift above the air). The
+   sun, its colour after the air and the stars' share come from the one air at every height, so
+   nothing can jump at a handover. Stars: `stars: spaceSky(...)`, dimmed by the air as before.
+7. *Cost* (2 cores, SwiftShader, `standard`, 1280x720, warm): ocean with decks: 0.75 s a frame in
+   the globe stage, 3.1 s in the handover (everything is drawn), 1.8 s near the surface;
+   Mars-like ground: 1.6 / 1.5 / 1.7 s (the ground is drawn from 600 km down). First frame in
+   which the ground appears: 6.5 to 10.8 s more (its maps). Page ready: 10 s cold (the globe's
+   1024 px map), 2.5 to 5.6 s warm. A draft (426x240): 0.32 s a frame over the whole descent.
+
+**`world(renderer, options)` → `World`.** Options (plain, YAML-friendly; unknown keys refused with
+a did-you-mean): `planet` (a world of `vidgen/space-bodies`, name or options; default the
+ground's own, else `"earth"`), `at` ([latitude, longitude]; default the ground preset's), `sun`
+([elevation, azimuth] at the place, or a direction), `air` (name or options; default the ground
+preset's, else the planet's name), `sea` / `land` / `clouds` (false, true, a name: a sea state, a
+ground preset, a sky; or the part's options), `globe` (more planet options: `size`, `clouds`),
+`handover` (`"low"`, `"high"` or `{near, height}`; default by what lies under the air), `match`
+(the globe's brightness beside the local picture's, 1), `exposure`, `ev`, `quality`, `stars`,
+`scene`. Members: `object` (add to the scene), `update(t, {camera, sun})` (after the camera is
+placed), `heightOf(what)`, `up(what)` (a camera, an object, a point), `sun`, the parts `sky`,
+`water`, `ground`, `weather`, `body`, `rig` (for `airCamera({camera, ...w.rig})`), `light`,
+`stage(height)`, `state` (`height`, `stage`, `globe`, `local`, `below`, `far`, `up`),
+`problems(camera)`, `honest` (where the picture is not true, as sentences), `overlay`,
+`uniforms`, `dispose()`. Pure exports: `globeWeight`, `stageOf`, `handoverOf`,
+`surfaceDistance`, `globeTurn`, `sunOf`, `resolveWorld`, `HANDOVERS`, `STAGES`, `REACH`,
+`VERSION`. The globe's cube maps are 1024 px for a frame of 300 rows or more, else 512
+(`globe: {size}`).
+
+**`cam.descend(t, options)` / `cam.ascend(t, options)`** (`vidgen/space-camera-air`,
+`AIR_MOVES`). From `from` metres over the sphere (400 km) to `to` metres over the surface where
+the move ends (300): the logarithm of the height runs steadily (equal time for each power of ten),
+eased at the top and settled at the bottom (`ease: [0.3, 0.35]`: it ends with no sink). The view
+keeps the horizon `horizon` (0.3) of the half frame over the middle: down at the globe with the
+limb across the top from orbit, along the level at the end; `look` (degrees under the level)
+starts steeper. `turn` degrees in all, ending on `heading`; from `run` (0.45) of the move it
+gathers way to `speed` m/s (90); `lens` one or a pair; `at`, `margin`, the rig's timing (`over`
+in seconds or bars, `progress` + `seconds`). The shot adds `height`, `aboveGround`, `dip`, `pitch`,
+`heading`, `speed`, `sink`, `travelled` and `end` = `{from, heading, speed, clearance, pitch,
+lens}`: a `skim` given `...shot.end, follow: 0` starts at the same place, view, lens and speed
+(tested to 1e-6 m; a straight skim: one that starts turning rolls at once). `ascend` is the same
+path backwards. A function of t only.
+
+**True and not true** (`world.honest`). True: positions, the sphere, the horizon's dip at every
+height, the air's depth and colours at true scale heights, the sun's place, stars fading as the
+sky brightens, the ground's and the globe's great forms in the same places. Not true: the
+camera's speed (400 km in ten seconds: 100 km/s and more at the top; a vehicle's re-entry takes
+half an hour over thousands of km); where single clouds are (globe and decks agree in colour and
+roughly in cover only); the globe's 10 to 30 km craters and its snow are not the ground's; the
+globe is lit as a matt ground (no city lights at night in a joined world); no shadows of decks on
+the globe.
+
+**Measured on the draft clip** (ocean with decks, 400 km to 300 m in 10 s, then a 3 s skim;
+426x240, 10 fps; `vidgen motion check`: no findings). Mean change between consecutive frames
+(display codes): 3.4 to 4.4 from 140 km to 30 km; 5.0 to 5.9 from 27 to 22 km, where the decks
+come into view (1.5 x its neighbours: the largest ratio in the handover, 58 km to 2.9 km); rising
+evenly to 21 by 4 km (the clouds rushing up); 26 against 13 at 1.4 km and at 1.0 km (into the
+cumulus and out of its base: 2.0 and 2.3 x, a true event); 1.2 in the skim, no step at the join.
+In the Chromium test the surface's mean colour changes by under 32 codes and the sky's by under 40
+between heights a sixth of a power of ten apart from 100 km to 3.2 km.
+
+**Where the seams still show.** (1) From about 150 km to 25 km over an ocean the surface is soft
+and nearly featureless: the globe's map has nothing that fine and the decks cannot be shown that
+far; the picture does not pop, it goes blank and then clouds grow out of the haze. (2) The cloud
+pattern changes character in the handover (broad smears → puffs); it reads as resolving detail,
+not as the same clouds. (3) A thin cirrus deck is a white line across the horizon while the
+camera is level with it (about 10 km). (4) Passing through a deck at a kilometre a second is one
+or two grey frames. (5) Over bare ground the globe's albedo markings fade as the ground comes in
+(the ground under the dusty air is plainer). (6) The limb is `space-air`'s (harder and bluer than
+the Phase AN body's).
+
+- **Parts** (`data/web/parts/space-descent.js`): `joined-ocean-orbit`, `joined-ocean-handover`,
+  `joined-desert` (kind `air`), `camera-descend` (kind `camera`).
+- **Tests** (`tests/test_web_space_descent.py`): served by its import name; parts; in Node: the
+  weights (in 0..1, monotonic in distance and in height, steps under 0.12 between heights 8 %
+  apart, the ends), what is drawn at which height, the distance to the sphere without
+  cancellation, the globe's turn, options and did-you-mean, the descent's profile (equal time a
+  power of ten, no sink at the end), its end joined to a skim, `ascend` as the reverse; in
+  Chromium (`slow`): 16 heights from 400 km to 300 m draw, the stages are as stated, bounded steps
+  across the handover, a frame is the same after other frames, with the maps baked cold, from the
+  cache and without the cache (within 2 of 255).
+
+### 123.14 Reach from `video.yaml`: surface scenes, giant ships, planes (Step 392)
+
+The parts of Steps 381–391 written in `video.yaml` alone, in the `space` scene type (§122.12), with
+no JavaScript and with did-you-mean on every key and name.
+
+**Two kinds of `space` scene, chosen by one key.** Without `world:` a scene is **orbital** (§122.12
+as it was: a `SpaceView`, bodies from `orbits:` or standing at `at:`). With `world:` it is a
+**surface** scene: the joined world of `vidgen/space-descent` (§123.13), a plain three.js scene in
+the place's local frame (metres, x east, y up, z south, the origin on the sphere under `world.at`),
+the stars of `vidgen/space-sky` behind the air. A surface scene refuses `orbits`, `scale`, `bodies`,
+`phenomena`, `light` and `sun` (each message says where the job is done there: `world.at`,
+`world.planet`, `world.exposure`, `world.sun`), and an orbital scene refuses `flights` and the air
+moves. One key rather than a second scene type: the page, the clip, the cache, `vidgen still`,
+`vidgen space-page`, the lint and the music plan are the `space` scene's already; a key is what an
+agent adds to turn a scene into the other kind and the messages carry it between them.
+
+**The surface vocabulary** (`scenes/space_air_params.py`). `world: {planet, at, sun, air, sea, land,
+clouds, globe, handover, match, exposure, ev, quality}`: each part a name or the module's options
+(`sea: rough`, `land: {preset: alpine, seed: 3, mountains: {...}}`, `clouds: {decks: [...], towers:
+4, lightning: {times: [3.5, 'bar 9'], track: kick}}`). `sun`: `[elevation, azimuth]` in degrees at
+the place, or `{date, utc}`: the Earth's Sun from `vidgen.orbits.ephemeris` (JPL's approximate
+elements), the mean obliquity and Greenwich mean sidereal time, no refraction (Greenwich at midsummer
+noon: 62° up, due south; tested). `flights:` is the `flight_data` vocabulary (Step 385: a list, or
+`{flights, start, speedup, margin, path_samples}`) with `ground`, `world` and `at` taken from the
+world: its land (with the world's planet, place and air when they are stated), else its sea (the
+state's wave height added to the margin: `rough` 3.2 m, a wind sea 0.0246 x wind²), else its
+sphere. The same parser and cache as a `web` scene's (`web_scene_flights`; the key holds the
+settings, the frames, the code), so `vidgen space-page` hands over `flight_data` unchanged. A start
+from orbit is refused (a surface scene has no orbit data; a real re-entry ends thousands of km from
+its start, §123.13). `craft:` in a surface scene: `plane:`, `kind:` or `parts:`, each flying a
+flight (`fly:`), with `effects:` following it (`vidgen/space-effects` with `flight: ctx.flight`).
+
+**What an orbital scene gains.** A craft may be `plane:` (a `Plane` is a `Craft`: `fly(space,
+{body})` or standing at `at`), `hull:` (a family, `length`, `age`, `palette`, the family's numbers;
+`fleet: N` with a list of families: `hullFleet`), or `parts:` (the kit's own parts as a tree: `{part:
+hull, ..., attach: [{at: fore, part: dish}, {around: {count: 2}, part: solar-wing}]}`, written as
+`kit.hull(...)`, `attach(...)`, `around(...)`, `kit.craft(root)`). A hull is dressed by default
+(`dress: true`; `false` bare, or `vidgen/space-hull-detail`'s options) and may take `scale_ref` (a
+small craft of the kit for size, `hull.scaleRef`; `into: {hangar, over}` flies it into a bay along
+the detail's approach; `escort: true` puts it where a `hull-reveal` wants it). **The near plane**:
+with any hull in the scene the page makes the `SpaceView` with `near: 4` and says so in a comment
+(Step 390: the default 0.01 m slices a hull the camera is inside the bounding sphere of and draws the
+world over it); scenes without a hull keep their page. The moves beside a ship (`hull-pass`,
+`hull-reveal`, `into-bay`, `stern-burn`, `scale-zoom`) switch the rig to `airCamera({space, ...,
+ships})`; the ship's attitude at t is set before the camera (`space.update(t, {from: {body},
+to})` and the hull's update: a move reads it), and the hull's throttle follows a `stern-burn`
+shot's `throttle`. Effects on an orbital craft are `exhaust` only (the rest follow a flight through
+air). A warp may run across a cut (`cut: {at, seconds, split}`: `warpCut`), any scene may flash on
+cuts (`flash: [{at, amount, rise, fall}]`: `flashCut` through three-finish's `flash`, a function of
+t), and a move may be a match cut (`match: THING, cut: true`: `matchDisc` of THING's disc in the
+move before, worked out once).
+
+**Moves** are written kebab-case as the parts sheet names them (`climb-through`, `fly-past`,
+`hull-pass`); camelCase is accepted. Their options are each move's own `known(...)` list read from
+`vidgen/space-camera-air`; names in them (`flight`, `ship`, `deck`, `hangar`, `world`, `behind`,
+`craft`) are checked against the scene; lengths may be text with units; `at` of `fly-past` and
+`hull-reveal` and `light` of `stern-burn` are times (seconds or bars). A `skim` with `continues:
+true` after a `descend` spreads the descent's `end` into its options (the recipe of §123.13).
+
+**Pages** (`scenes/space_air_page.py` for a surface scene; `scenes/space_page.py` gains the hull,
+plane, parts, effects, ship moves, flash, warp cut and match). One line per part, options as exact
+JSON literals, everything in `S`: `S.world`, `S.craft`, `S.fx`, `S.cam`, `S.moves`. A surface page:
+`world(renderer, {..., stars: S.sky, scene})`, each plane `plane(kind, opts).fly(ctx.flight,
+{flight})` hazed by the air, effects, `airCamera({camera, ...S.world.rig, flight: ctx.flight,
+crafts, music: ctx.music})`, `S.step(t)`: the craft, the camera, `S.world.update(t, {camera})`, the
+effects; drawn straight to the canvas unless `finish:` is given (every measurement of Steps 381–391
+is straight to the canvas; three-finish over a joined world was never drawn). `checkMoves` samples a
+surface scene's moves 6 times a second (an air move may sample the ground: every frame would cost
+seconds when the page opens). `world.problems(camera)` becomes page notes. Lightning on a track's
+hits uses the new helper module `vidgen/space-scene-air` (`hitTimes`: song time less the scene's
+start; also `ramp` for gear and bay over time, `flashes`, `once`): a module of its own so that
+`space-scene.js`'s bytes, in the key of every Phase AN `space` scene, did not change.
+
+**Checks** (`scenes/space_checks.py`): beyond every key and name, a move that needs a flight, a deck,
+ground or water, land for a peak or cloud towers, a hull; a `fly:` naming no flight; a stand-off or a
+scale zoom's `close` under 10 m beside a hull, an orbital move closer to a hull's middle than half
+its length (the family's shortest usual length when none is given); `scale_ref.into` without
+`dress`; music targets (`lightning` needs clouds and is a `pulse`, `lava` volcanic ground, `boost` and
+`pulse` a craft with effects); `flash` needs a finish; times in bars need `music_data`. A flight under
+the ground or the sea is Step 385's error, raised when the frames are made, with the scene's name
+(`space scene 'x': flight Plane: at 19.92 s ... under the 20 m it must keep`).
+
+**One registry of names** (`web/space_names.py`, `air_names()`, `yaml_names()`): every list is read
+from the modules' own source (presets, states, waters, skies with their decks, deck types, land
+presets and recipe parts, the world's options, planes and their options, the effects' groups and keys,
+hull families with their numbers and usual lengths, palettes, dress options, each move's options,
+sides, wing views, the kit's parts from the class's methods); the reader learned one more literal
+form (`const A = [...], B = [...]`). Validation reads them; the guide lists them and a test compares
+the guide's lists with the registry; the parts sheet names its tiles with the same words
+(`plane-glider`, `hull-carrier`, `sea-rough`, `land-alpine`, `clouds-fair`, `camera-hull-pass`), tested.
+
+**Cost** (`scenes/space_costs.py`): one table of seconds a frame at 1280x720 from the measurements
+of Steps 381–391 (a sea 1.2, ground 1.4, fair clouds 1.9, a sea under cumulus 3.0, all three 3.5 —
+not measured, the sum less the dome —, a descent through the handover 3.1 (3.4 since Step 393), a dressed hull 1.0, the
+ship moves 0.8 to 2.1), combined for a scene (the dearest stretch, scaled by quality and motion
+blur); `vidgen lint`'s `space_scene` reports a scene from `seconds` (2) with the minutes its frames
+take; the space cookbook prints the same rows and a test reads both.
+
+**Music plan.** `--style space-air` (a new style name, so `--style space` keeps its output for every
+seed: hashed for the three film scores and seeds 1, 2, 7 before and after): by role, a skim at
+sunset, a descent, a plane chased over the alpine range, a pass along a dressed hull and a craft into
+a carrier's bay by turns; bar-locked, `fade: false`, deterministic from the score and the seed. MCP:
+`music_plan` gained `style` and `seed`; `space_page`'s text names both kinds.
+
+**What changed for existing scenes.** Nothing in their pages: the generated page text of
+`examples/outbound`'s five scenes and of Step 376's three demos is byte-identical (a test holds the
+hashes). No existing module's bytes changed (`space-scene.js` untouched: the helpers are a new
+module); `loaded.py` gains one import name; the new module file changes `code_digest()`, so baked
+maps and the ground heights kept for flights are made once more with the same pixels and numbers.
+
+**Not reached from YAML** (the modules have them; `script:` or `vidgen space-page`): the wormhole
+passage (`passage()` moves the camera itself in the scene's frame, outside a `SpaceView`'s floating
+origin and the moves' join check: it needs a move of its own in vidgen/space-camera), a re-entry
+from orbit into a surface scene, a sun that moves through a scene, the camera placed by hand in a
+ship's own axes, a fleet of planes (`planeFleet`), a hull in a surface scene, effects other than
+`exhaust` on an orbital craft, the terminator by `sunVisibility`, a plane's own shadows, a flight's
+re-anchoring along a long path.
+
+**Tests** (`tests/test_space_air_scene.py`): the five examples validate; 24 surface and 16 orbital
+mistakes named with the closest word; 28 cross-checks; the sun on a date; bars; the pages stable and
+saying what the params say; 17 params each changing the page; Outbound's and the demos' pages
+byte-identical; imports and `node --check`; a surface page (a chase, and a descent continued by a
+skim) run in Node with the real camera modules and stand-ins for three.js and the drawing modules;
+the helper module in Node; the flights' ground and key; a flight under the sea with the scene's name;
+`vidgen space-page` for both kinds; the registry against the parts sheet and the guide; the music
+plan; MCP; the lint's estimate; the cookbook's cost rows. `slow`: a skim and a hull pass drawn in
+Chromium at 160x90.
+
+### 123.15 Review of Steps 379–392 (Step 393)
+
+The coordinator's notes on every step's stills, each step's "still weak" and "not verified" items and
+the tasklist's leftovers were read; the default suite and the slow tests of the touched files were
+run. Each fix was checked on a before/after pair of stills (HANDOFF Step 393 names them).
+
+**Fixed.**
+
+| fault | cause | fix | module bytes (scene keys) |
+|---|---|---|---|
+| the sea showed concentric rings and whorls from about 100 m to a few km up | one warp of the whole wave pattern (the bends) and a strong warp folding the gusts' patches (`GUST_SHIFT` 0.13) | each wave's phase wanders by its own share of the three fields (`WOBBLE`, `WOBBLE_SPAN`; drawn last from the seed, so the waves keep their numbers); `GUST_SHIFT` 0.03 (§123.4) | `space-sea.js` |
+| the alpine range drew even horizontal stripes over whole slopes | rock bands were one sine of height over every rock-coloured slope | beds of uneven tone from a hash per bed, warped and broken by a 256 m noise, only from the material's steep slope, gone before a bed is four pixels thick; `bands` over 0.5 is layered rock (the canyon: light and dark beds in turn, flatter, on less steep faces) | `space-land.js` |
+| cloud decks showed their 256 px tile as a lattice from 30–60 km, so the descent hid them beyond 80 km | the pattern is one repeating tile at four sizes | a broad weather of three octaves of endless gradient noise (40, 15, 5 deck sizes; deck option `fronts`, default 0.8, 0 for giants): varying cover, clear lanes, closed fields; drawn to nothing round the place and the level calibrated without it, so the cover asked for is the one seen there (§123.5) | `space-clouds.js` |
+| the ocean descent nearly blank from 150 to 25 km | the decks were hidden beyond `near[1]` = 80 km | `HANDOVERS.low` near 60–400 km, height 2.5–80 km: decks from about 150 km (§123.13); the handover costs 3.4 s a frame | `space-descent.js` |
+| a world added with `at` and `size` drawn over nearer things; with the default `near` a world drawn over a hull's farther slices (inside a bay, at a zoom's start); the limb of an orbit-data world's air added two or three times | a world's shell holds its depth off the far plane, and every slice drew every thing; a thing inside its bounding sphere's depth range reached to `near` | a slice draws only what its depth reaches; a thing outside its bounding sphere begins at (distance - radius) x the corner cosines (§122.4) | `space-scale.js` |
+| anything with `frustumCulled = false` drawn as sky | the sky rule | sky: `userData.sky = true`, or `frustumCulled = false` with a negative `renderOrder`; `userData.sky = false` keeps one in the world | `space-scale.js` |
+| a ship never in a world's shadow with the sun given as a direction | the sun stood 1e6 units away; a SpaceView's worlds are millions of metres off | `SKY_SUN` 1e20 units | `space-light.js` |
+| the Milky Way bright beside a sunlit globe in the film look | `filmStars` showed all the stars wherever the zenith is drawn black | over the day side `DAY_STARS` (0.35) of them (a look) | `space-air.js` |
+| the glider read close to a familiar vehicle in side view | white over a black belly on a delta, two seeds in three | its seeds choose grey, dark, grey (`scheme: tiles` by name) | `space-plane.js` |
+| three slow guide tests failing | a duplicate alias (`planets`), the topic list, unmarked sketches, a chooser row | fixed | guide only |
+
+**What re-draws.** Scenes whose pages import a changed module draw once more (their key holds its
+bytes): Phase AN's `space` scenes and `examples/outbound` (space-scale, space-light), surface scenes
+(space-air, sea, land, clouds, descent, plane). Every baked map and kept ground-height file is made
+once more (their key holds every module's bytes), with the same pixels and numbers. Outbound at
+320x180, ten stills compared byte for byte: eight identical; `01_dawn` (3 s, 12 s) and `02_depart`
+(2 s) differ at the limb: the air's glow is now drawn once (a thinner, dimmer band, up to 67 codes
+there; mean 0.4 to 4 codes over the frame). The gallery's `space` entry, regenerated into another folder, is byte-identical
+(not touched); three showcases were added to the web gallery (`sunset_skim`, `orbit_to_sea`,
+`carrier_pass`), and a still may fall back to 128 colours before 64 (skies at dusk band less). The automatic `near: 4` beside a hull (§123.14) is no longer needed for
+correctness (default `near` draws the bay right, still 08); it is kept for depth precision.
+
+**Drawn for the first time** (320x180 stills, no error): a craft into a bay, `stern-burn`,
+`hull-reveal` with an escort, a hull fleet, a kit-built craft and a plane in an orbital scene, a warp
+across a cut, a match cut, lightning on a track, lava glowing on the music at dusk, a sun on a date,
+`finish:` over a surface scene, the `--style space-air` music-plan draft (three scenes). Four draft
+clips through `vidgen motion check` (a storm sea from 20 m, a turn over cumulus at 2,300 m, a needle's
+flame and vapour cone on a fly-past, the night side of a dressed carrier): no findings.
+
+**Left** (tasklist "Phase AO leftovers"): the two limbs (space-air's from orbit about twice the
+space-bodies body's in a plain scene; not changed: the body's look is Phase AN's pictures); the storm
+sea's woven finest waves and sparse foam; the glitter column's parallel sides from altitude; stubby
+towers; the canyon as loops; a faint repeat of the decks from about 60 km; the decks do not read the
+globe's cloud map (they agree in colour and roughly in cover, not in place); the shadows of a ground
+not kept between pages; no ground shadow under a plane; a whole hull on black reads as a model;
+`scaleZoom` loses the ship under a pixel; `hullReveal`'s traverse over black; the shock layer's
+stepped edge; everything listed as not reachable from YAML in §123.14.
+
+### 123.16 The orchestral Shorts as examples; projects that share a page (`web_root`) (Step 394)
+
+The owner's seven portrait orchestral music videos (published as YouTube Shorts) are
+`examples/orchestral-shorts/<film>/`, one project per film. "Polish" was only removing duplicate
+code; picture and sound stay as published.
+
+**One scene module.** The films carried `extensions/orch.js` in two versions. The newer one (Choir
+of the Void, Eclipse) differs from the older one (the other five) in one line of the `ribbon` mode:
+the ribbon's speed and gain read `D.ribbonSpeed ?? 2.6` and `D.ribbonGain ?? 3.6` where the older
+had the constants 2.6 and 3.6. No film sets either key, so the newer module draws the older films'
+pictures unchanged: 16 stills at 180x320 of the five older films (their ribbon shots included),
+own copy against the newer module, identical in every pixel. The newer module is
+`examples/orchestral-shorts/shared/orch.js`, the only copy.
+
+**One straight-cut type.** `web_cut` (the `web` scene without its 0.5 s fade-out) was copied into
+each film. vidgen has no built-in straight cut for `web` scenes (`space` has `fade: false`;
+`vidgen music plan --out` still writes `extensions/web_cut.py` into its draft), so one copy stays,
+`shared/web_cut.py`, loaded by each film with `extensions: [../shared]` (allowed before this step:
+the list's folders are relative to the project and may leave it, except under `vidgen mcp`'s root).
+
+**`web_root:` (new top-level key).** A `web` scene's page or script had to lie inside the project
+folder, because its page is served from that folder: `script: ../shared/orch.js` was refused, and
+a page's URL could not reach above the folder. `web_root` names the folder pages are served from:
+the project folder (default, unchanged) or a folder (relative to the project) that holds it.
+`vidgen.web.entry`: `served_root(project)` (that folder, or a `VidgenError` when it is missing or
+does not hold the project), `served_params(project, params)` (the `page:` / `script:`, written from
+the project folder as every path in `video.yaml`, made a path from the served folder:
+`../shared/orch.js` → `shared/orch.js`; the same object without `web_root`), `served_entry_problems`
+(validate: the file must lie inside the served folder) and `served_prefix` (the project's path on
+its pages, `first-light/`, put before the project's own font files' URLs). The `web` and `space`
+scenes, `vidgen still` and the render fingerprint take the root and the entry from these; the page
+server, the clip cache and the `loaded` records are unchanged (they already took a root and a path).
+`vidgen.api` exports three of them for scene types built on `Web` (built-ins use only the API):
+`web_served_root`, `web_served_params`, `web_served_entry_problems`.
+
+Safety: without the key nothing changes (same root, same entry, same clip keys). With it the page
+may load any file under the named folder, which the author chose; it must hold the project, so it
+is never a sibling or an unrelated folder; it is a path key (`PATH_KEYS`), so under `vidgen mcp`
+it must lie inside the server's root. A page or script outside the served folder is refused at
+validate (`script: must be a path inside the web_root folder (…), got …`) and at render.
+`web_root` is left out of the config part of the scene fingerprint: what it changes (the entry's
+path and the loaded files) is in the scene's `web` part.
+
+**The tools.** `tools/gen.py` (rewrites a film's `video.yaml` from its `shots.yaml` with `vidgen
+music plan --json`) is kept, without copying files into the project, and writes each committed
+`video.yaml` byte for byte (a test). The committed files differ from the published ones only in
+the script path, two header comments and the two keys `extensions:` and `web_root:`. The owner's
+`stems.py` and `balance.py` (per-group stems and per-section levels) and `sheet.py` (a contact
+sheet) were dropped: `vidgen music check` plays every track on its own and reports its share of the
+power, voice range, bass and highs (per track over the piece, not per section and group), and
+`vidgen still --sheet` writes a contact sheet.
+
+**Proof.** 20 stills at 180x320 (two or three per film) from the example folders are identical in
+every pixel to the published projects' stills; the audio-only render (`vidgen render --audio-only`,
+the video's soundtrack with its normalisation) of each of the seven films is byte-identical
+(MD5 of the WAV) between the published project and the example. Not rendered: no film, no
+draft.

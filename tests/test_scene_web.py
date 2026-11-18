@@ -86,6 +86,68 @@ def test_the_fingerprint_follows_the_named_file(tmp_path: Path) -> None:
     assert entry_digest(tmp_path, {"page": "gone.html"})["sha256"] is None
 
 
+# ----- web_root: projects side by side share a page (DESIGN.md §123.16) --------------------------
+
+
+def shared_project(make_project: Any, web_root: str | None, script: str) -> Project:
+    """``films/one``, a project with a script beside it in ``films/shared/s.js``."""
+    config = {"title": "W", "format": {"width": 160, "height": 90, "fps": 5},
+              "scenes": [{"id": "w", "type": "web", "params": {"script": script}, "duration": 1, "beats": []}]}
+    if web_root is not None:
+        config["web_root"] = web_root
+    root = make_project(config, folder="films/one")
+    (root.parent / "shared").mkdir()
+    (root.parent / "shared" / "s.js").write_text("export function frame() {}", encoding="utf-8")
+    (root.parent / "two").mkdir()
+    return Project.load(root)
+
+
+def test_without_web_root_the_page_is_served_from_the_project_folder(make_project: Any) -> None:
+    from vidgen.web.entry import served_params, served_prefix, served_root
+
+    project = shared_project(make_project, None, "../shared/s.js")
+    params = project.config.scenes[0].params
+    assert served_root(project) == project.root and served_prefix(project) == "" and served_params(project, params) is params
+    assert check_project(project) == ["scenes[0].params.script: must be a path inside the project folder, got ../shared/s.js"]
+
+
+def test_web_root_serves_a_folder_holding_the_project(make_project: Any) -> None:
+    from vidgen.scenes.web import Web
+    from vidgen.web.entry import served_params, served_prefix, served_root
+
+    project = shared_project(make_project, "..", "../shared/s.js")
+    assert check_project(project) == []
+    assert served_root(project) == project.root.parent.resolve() and served_prefix(project) == "one/"
+    params = project.config.scenes[0].params
+    assert served_params(project, params) == {"script": "shared/s.js"} and params == {"script": "../shared/s.js"}
+    model = served_params(project, Web.Params.model_validate(params))
+    assert model.script == "shared/s.js"
+    assert entry_digest(served_root(project), served_params(project, params))["path"] == "shared/s.js"
+
+
+def test_web_root_must_hold_the_project_and_the_page(make_project: Any, tmp_path: Path) -> None:
+    project = shared_project(make_project, "../two", "../shared/s.js")
+    assert check_project(project) == [f"scenes[0].params.script: web_root: ../two must be the project folder or a folder that holds it; "
+                                      f"{(tmp_path / 'films' / 'two').resolve()} does not hold {project.root.resolve()}"]
+    shutil.rmtree(tmp_path / "films")
+    project = shared_project(make_project, "../gone", "../shared/s.js")
+    assert check_project(project)[0].startswith("scenes[0].params.script: web_root: folder not found: ../gone")
+    shutil.rmtree(tmp_path / "films")
+    project = shared_project(make_project, "..", "../../outside.js")
+    (tmp_path / "outside.js").write_text("export function frame() {}", encoding="utf-8")
+    problem = f"scenes[0].params.script: must be a path inside the web_root folder ({(tmp_path / 'films').resolve()}), got ../../outside.js"
+    assert check_project(project) == [problem]
+
+
+def test_web_root_stays_inside_the_folder_vidgen_mcp_allows(tmp_path: Path) -> None:
+    from vidgen.project import confinement_problems
+
+    root = tmp_path / "videos" / "films" / "one"
+    assert confinement_problems({"web_root": ".."}, root, tmp_path / "videos") == []
+    assert confinement_problems({"web_root": "../../.."}, root, tmp_path / "videos") == [
+        f"web_root: '../../..' is outside the allowed folder {(tmp_path / 'videos').resolve()}"]
+
+
 # ----- serving and messages ---------------------------------------------------------------------
 
 

@@ -1,0 +1,173 @@
+# Eclipse: an original 32 s cue for vidgen's orchestra. No samples, no SoundFont.
+# 90 BPM, F minor turning to F major; one bar = 2.667 s = 80 frames at 30 fps.
+#   shadow    2  the first frame: low brass, taikos, a bass drum and the tam-tam; a low spiccato ostinato and a
+#                reed organ pedal
+#   totality  2  the women whisper, the men hum, violins in a glassy tremolo near the bridge, timpani
+#   corona    4  the horns' theme, the trumpet answering, the choir on "ooh", the full string engine
+#   dawn      2  a timpani roll, a snare roll and a cymbal swell into...
+#   sunrise   2  F major: the whole orchestra, the choir on "aah", crash and tam-tam
+version: 1
+title: Eclipse
+key: F minor
+tempo: 90
+seed: 7146
+loop: false
+sections:
+  - {name: shadow, bars: 2, progression: "Fm Db"}
+  - {name: totality, bars: 2, progression: "Bbm C"}
+  - {name: corona, bars: 4, progression: "Fm Db Ab C"}
+  - {name: dawn, bars: 2, progression: "Db Eb"}
+  - {name: sunrise, bars: 2, progression: "F F"}
+tracks:
+  organ:
+    instrument: organ
+    only: [shadow, totality, sunrise]
+    volume: -6
+    reverb: {size: 5, mix: 0.4, tone: 3000}
+    sections:
+      shadow:   {settings: {registration: reed}, octave: 1, steps: "F1+C2 - - - - - - - | Db1+Ab1 - - - - - - -"}
+      totality: {settings: {registration: flute}, steps: "Bb2+F3+Db4 - - - - - - - | C3+G3+E4 - - - - - - -"}
+      sunrise:  {settings: {registration: full}, steps: "F2+C3+F3+A3+C4 - - - - - - - | - - - - - - . ."}
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 4, mix: 0.32, tone: 4500}
+    sections:
+      shadow:   {settings: {stroke: spiccato}, steps: ". | [mp] F4 Ab4 C5 Ab4 F4 Ab4 C5 Ab4 F4 Ab4 Db5 Ab4 F4 Ab4 Db5 Ab4"}
+      totality: {settings: {stroke: tremolo, brightness: 1.0, attack: 0.3}, steps: "[mp] Db6+F6 - - - - - - - | [<] E6+G6 - - - - - - - [f]"}
+      corona:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] F5 Ab5 C6 F5 Ab5 C6 Ab5 F5 F5 Ab5 C6 F5 Ab5 C6 Ab5 F5 | F5 Ab5 Db6 F5 Ab5 Db6 Ab5 F5 F5 Ab5 Db6 F5 Ab5 Db6 Ab5 F5 | Eb5 Ab5 C6 Eb5 Ab5 C6 Ab5 Eb5 Eb5 Ab5 C6 Eb5 Ab5 C6 Ab5 Eb5 | E5 G5 C6 E5 G5 C6 G5 E5 E5 G5 C6 E5 G5 C6 G5 E5"}
+      dawn:     {settings: {attack: 0.1}, steps: "[f <] (Ab5 - - - F5 - Db6 - | Bb5 - - - G5 - Eb6 -) [ff]"}
+      sunrise:  {settings: {attack: 0.08, vibrato: 14}, steps: "[ff] (F6 - - - E6 - C6 - | A5 - - - - -) . ."}
+  violas:
+    instrument: violas
+    pan: -0.05
+    reverb: {size: 4, mix: 0.32, tone: 4500}
+    sections:
+      shadow:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf] F3 Ab3 C4 F3 Ab3 C4 Ab3 F3 F3 Ab3 C4 F3 Ab3 C4 Ab3 F3 | F3 Ab3 Db4 F3 Ab3 Db4 Ab3 F3 F3 Ab3 Db4 F3 Ab3 Db4 Ab3 F3"}
+      totality: {settings: {stroke: tremolo, brightness: 0.9}, steps: "[mp] Bb4+Db5 - - - - - - - | [<] C5+E5 - - - - - - - [f]"}
+      corona:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] F3 Ab3 C4 F3 Ab3 C4 Ab3 F3 F3 Ab3 C4 F3 Ab3 C4 Ab3 F3 | F3 Ab3 Db4 F3 Ab3 Db4 Ab3 F3 F3 Ab3 Db4 F3 Ab3 Db4 Ab3 F3 | Eb3 Ab3 C4 Eb3 Ab3 C4 Ab3 Eb3 Eb3 Ab3 C4 Eb3 Ab3 C4 Ab3 Eb3 | E3 G3 C4 E3 G3 C4 G3 E3 E3 G3 C4 E3 G3 C4 G3 E3"}
+      dawn:     {settings: {stroke: tremolo, brightness: 0.8}, steps: "[f <] Db4+F4 - - - - - - - | Eb4+G4 - - - - - - - [ff]"}
+      sunrise:  {steps: "[ff] A4+C5 - - - - - - - | - - - - - - . ."}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 4, mix: 0.3, tone: 4500}
+    sections:
+      shadow:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[sfz] F2 F2 C3 F2 Ab2 F2 C3 F2 [f] F2 F2 C3 F2 Ab2 F2 C3 F2 | Db2 Db2 Ab2 Db2 F2 Db2 Ab2 Db2 Db2 Db2 Ab2 Db2 F2 Db2 Ab2 Db2"}
+      totality: {settings: {attack: 0.8, brightness: 0.35}, steps: "[mp] Bb2 - - - - - - - | C3 - - - - - - -"}
+      corona:   {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] F2 F2 C3 F2 Ab2 F2 C3 F2 F2 F2 C3 F2 Ab2 F2 C3 F2 | Db2 Db2 Ab2 Db2 F2 Db2 Ab2 Db2 Db2 Db2 Ab2 Db2 F2 Db2 Ab2 Db2 | Ab2 Ab2 Eb3 Ab2 C3 Ab2 Eb3 Ab2 Ab2 Ab2 Eb3 Ab2 C3 Ab2 Eb3 Ab2 | C2 C2 G2 C2 E2 C2 G2 C2 C2 C2 G2 C2 E2 C2 G2 C2"}
+      dawn:     {settings: {stroke: spiccato}, steps: "[f <] Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 Db3 | Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 Eb3 [ff]"}
+      sunrise:  {steps: "[ff] F2 - - - - - - - | - - - - - - . ."}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 4, mix: 0.28, tone: 4000}
+    sections:
+      shadow:   {steps: "[sfz] F1 - - - - - - - | [f] Db1 - - - - - - -"}
+      totality: {settings: {stroke: pizzicato}, steps: "[mf] Bb1 . . . F1 . . . | C1 . . . G1 . . ."}
+      corona:   {steps: "[f] F1 - - - - - - - | Db1 - - - - - - - | Ab1 - - - - - - - | C1 - - - - - - -"}
+      dawn:     {steps: "[f <] Db1 - - - - - - - | Eb1 - - - - - - - [ff]"}
+      sunrise:  {steps: "[ff] F1 - - - - - - - | - - - - - - . ."}
+  horns:
+    instrument: horn
+    only: [shadow, corona, dawn, sunrise]
+    settings: {players: 4, attack: 0.12}
+    pan: 0.1
+    reverb: {size: 4.2, mix: 0.32, tone: 4500}
+    sections:
+      shadow:  {settings: {mute: 1}, steps: "[ff] F3+C4 - - - . . . . | ."}
+      corona:  {volume: 4, steps: "[f] (F3 - - - Ab3 - C4 - | Db4 - - - C4 - Ab3 - | Eb4 - - - C4 - Ab3 - | G3 - - - - - - -)"}
+      dawn:    {steps: "[fp <] Db4+F4 - - - - - - - | Eb4+G4 - - - - - - - [ff]"}
+      sunrise: {steps: "[ff] F4+A4 - - - - - - - | - - - - - - . ."}
+  trumpet:
+    instrument: trumpet
+    only: [corona, sunrise]
+    settings: {vibrato: 10, vibrato_delay: 0.35, attack: 0.04, players: 2}
+    pan: 0.2
+    reverb: {size: 4.2, mix: 0.3, tone: 4800}
+    sections:
+      corona:  {steps: ". | [mf] F4 . F4 . Ab4 - - . | . | [f] G4 . G4 . C5 - - ."}
+      sunrise: {steps: "[ff] (C5 - - - F5 - A5 - | C6 - - - - -) . ."}
+  low:
+    instrument: low_brass
+    settings: {tuba: 0.8, attack: 0.1}
+    reverb: {size: 4.2, mix: 0.3, tone: 4000}
+    sections:
+      shadow:   {steps: "[ff] F1+C2 - - - - - . . | [mf] Db2+Ab2 - - - - - - -"}
+      totality: {steps: "[p] Bb1 - - - - - - - | C2 - - - - - - -"}
+      corona:   {steps: "[mf] F1+C2 - - - - - - - | Db2+Ab2 - - - - - - - | Ab1+Eb2 - - - - - - - | C2+G2 - - - - - - -"}
+      dawn:     {settings: {attack: 0.3}, steps: ". | [pp <] Eb2+Bb2 - - - - - - - [ff]"}
+      sunrise:  {steps: "[ff] F1+C2 - - - - - - - | - - - - - - . ."}
+  women:
+    instrument: choir
+    only: [totality, corona, dawn, sunrise]
+    settings: {voices: women, vowel: ooh}
+    volume: 3
+    pan: -0.15
+    reverb: {size: 4.8, mix: 0.4, tone: 4500}
+    sections:
+      totality: {steps: "[mf] [whisper=0.7] F4+Bb4+Db5 - - - - - - - | [whisper=0.2] E4+G4+C5 - - - - - - -"}
+      corona:   {steps: "[mf] F4+Ab4+C5 - - - - - - - | F4+Ab4+Db5 - - - - - - - | Eb4+Ab4+C5 - - - - - - - | E4+G4+C5 - - - - - - -"}
+      dawn:     {settings: {vowel: aah}, steps: "[mf <] F4+Ab4+Db5 - - - - - - - | G4+Bb4+Eb5 - - - - - - - [ff]"}
+      sunrise:  {settings: {vowel: aah, brightness: 0.7, ring: 1.5}, volume: 6, steps: "[ff] F4+A4+C5 - - - - - - - | - - - - - - . ."}
+  men:
+    instrument: choir
+    only: [totality, corona, dawn, sunrise]
+    settings: {voices: men}
+    volume: 3
+    pan: 0.15
+    reverb: {size: 4.8, mix: 0.4, tone: 4500}
+    sections:
+      totality: {settings: {vowel: mm, morph: ooh}, steps: "[mp <] Bb2+F3 - - - - - - - | C3+G3 - - - - - - - [mf]"}
+      corona:   {settings: {vowel: ooh}, steps: "[mf] F2+C3 - - - - - - - | Db3+Ab3 - - - - - - - | Ab2+Eb3 - - - - - - - | C3+G3 - - - - - - -"}
+      dawn:     {settings: {vowel: aah}, steps: "[mf <] Db3+Ab3 - - - - - - - | Eb3+Bb3 - - - - - - - [ff]"}
+      sunrise:  {settings: {vowel: aah, brightness: 0.7, ring: 1.5}, volume: 6, steps: "[ff] F2+C3+A3 - - - - - - - | - - - - - - . ."}
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.6, mix: 0.28}
+    sections:
+      shadow:   {steps: "[ff] F2 . . . . . . . | [mf] Db3 . . . Ab2 . . ."}
+      totality: {steps: "[mp] Bb2 . . . . . . . | C3 . . . G2 . . ."}
+      corona:   {steps: "[f] F2 . . . C3 . . . | Db3 . . . Ab2 . . . | Ab2 . . . Eb2 . . . | C3 . . . G2 . C3 C3"}
+      dawn:     {settings: {mallet: 0.2, ring: 0.3}, steps: "[f] Db3 . . . Ab2 . Db3 . | [roll pp <] Eb2 - - - - - - - [ff]"}
+      sunrise:  {steps: "[ff] F2+C3 . . . . . . . | F2 . . . C3 . F2 F2"}
+  taiko:
+    instrument: taiko
+    only: [shadow, corona, dawn, sunrise]
+    settings: {players: 6, pitch: 58}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      shadow:  {volume: 1, steps: "X... .... .... .... | X... .... X... ...."}
+      corona:  {volume: -3, steps: "X... ..x. X... ..x. | X... ..x. X... ..x. | X... ..x. X... ..x. | X..x ..x. X.x. x.x."}
+      dawn:    {steps: "X... ..x. X..x ..x. | X..x ..x. X.x. xxxx"}
+      sunrise: {volume: 1, steps: "X... .... .... .... | X... .... .... ...."}
+  bass_drum:
+    instrument: bass_drum
+    only: [shadow, sunrise]
+    sections:
+      shadow:  {steps: "x . . . . . . . | ."}
+      sunrise: {steps: "x . . . . . . . | ."}
+  snares:
+    instrument: snare_drum
+    only: [dawn]
+    settings: {players: 4}
+    steps: ". | [roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [dawn]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [sunrise]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: "x . . . . . . . | ."
+  gong:
+    instrument: tam_tam
+    only: [shadow, sunrise]
+    reverb: {size: 4.8, mix: 0.4}
+    sections:
+      shadow:  {steps: "[f] x . . . . . . . | ."}
+      sunrise: {steps: "[f] x . . . . . . . | ."}

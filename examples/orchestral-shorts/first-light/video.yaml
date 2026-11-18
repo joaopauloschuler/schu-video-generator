@@ -1,0 +1,214 @@
+# First Light: a portrait orchestral music video.
+# Music: assets/music/first_light.yaml, an original score for vidgen's own orchestra (96.0 BPM, D major; one bar = 2.5000 s).
+# Pictures: ../shared/orch.js (vidgen/three-kit, music-time, three-finish, title-cards), one web_cut shot per 1-2 bars.
+# Written by ../tools/gen.py from shots.yaml.
+title: First Light
+output: first_light
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 360, height: 640, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}
+music: {source: first_light, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 256k}
+extensions: [../shared]
+web_root: ..
+scenes:
+- id: 01_drift
+  type: web_cut
+  duration: 5.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 100
+      colours: {base: '#ffb36b', accent: '#8fd0ff', deep: '#07050b'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [horns]
+        glow: [choir]
+      grade: {temperature: -0.15, saturation: 0.95}
+      lookY: -38
+      title: {title: FIRST LIGHT, subtitle: an orchestral short, made: true, hold: 3.4}
+      note: bars 1-2 (dawn, intro)
+    music_data: &id001
+      tracks: [bass_drum, choir, crash, gong, horns, snares, taiko, timpani, trumpet, violins]
+- id: 02_crystal
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 117
+      colours: {base: '#9fc4ff', accent: '#ffc98f', deep: '#05060d'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [horns]
+        glow: [choir]
+      grade: &id002 {temperature: 0.0, saturation: 1.05}
+      kind: octa
+      note: bars 3-3 (rise, build)
+    music_data: *id001
+- id: 03_tesseract
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tesseract
+      seed: 134
+      colours: {base: '#ffd08a', accent: '#7fb6ff', deep: '#07050a'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [horns]
+        glow: [choir]
+      grade: *id002
+      note: bars 4-4 (rise, build)
+    music_data: *id001
+- id: 04_portal
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 151
+      colours: {base: '#ffbf7a', accent: '#6fa8ff', deep: '#05050c'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [violins]
+      grade: &id003 {temperature: -0.05, saturation: 1.0}
+      note: bars 5-5 (theme, verse)
+    music_data: *id001
+- id: 05_swarm
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 168
+      colours: {base: '#ffcf8f', accent: '#a6d4ff', deep: '#08060a'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [violins]
+      grade: *id003
+      note: bars 6-6 (theme, verse)
+    music_data: *id001
+- id: 06_tunnel
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 185
+      colours: {base: '#ff9f5a', accent: '#ffd27a', deep: '#0a0505'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [choir]
+      grade: *id002
+      speed: 12
+      note: bars 7-7 (build, build)
+    music_data: *id001
+- id: 07_crystal
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 202
+      colours: {base: '#ffc27a', accent: '#ff8a6a', deep: '#0a0506'}
+      react:
+        pulse: [taiko, timpani, snares]
+        glow: [choir]
+      grade: *id002
+      kind: dodeca
+      size: 4.2
+      note: bars 8-8 (build, build)
+    music_data: *id001
+- id: 08_rings
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 219
+      colours: {base: '#ffb04f', accent: '#ffe2a8', deep: '#0b0604'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [choir]
+      grade: &id004 {temperature: 0.15, saturation: 1.15}
+      note: bars 9-9 (peak, climax)
+    music_data: *id001
+- id: 09_swarm
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 211
+      colours: {base: '#ffc46a', accent: '#ff8f6a', deep: '#0b0604'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [choir]
+      grade: *id004
+      note: bars 10-10 (peak, climax)
+    music_data: *id001
+- id: 10_portal
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 312
+      colours: {base: '#ffd27f', accent: '#ff9a5c', deep: '#0b0604'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [choir]
+      grade: *id004
+      note: bars 11-11 (peak, climax)
+    music_data: *id001
+- id: 11_rings
+  type: web_cut
+  duration: 2.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 413
+      colours: {base: '#ffe0a0', accent: '#ffa860', deep: '#0b0604'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [choir]
+      grade: *id004
+      note: bars 12-12 (peak, climax)
+    music_data: *id001
+- id: 12_ribbon
+  type: web_cut
+  duration: 6.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: ribbon
+      seed: 287
+      colours: {base: '#ffb86b', accent: '#ffe7b8', deep: '#07050a'}
+      react:
+        pulse: [timpani, gong]
+        glow: [choir]
+      grade: *id004
+      melody: trumpet
+      mid: 74
+      lookY: -10
+      end: {title: FIRST LIGHT, start: 0.5}
+      fadeOut: 1.8
+      note: bars 13-13 (peak, climax)
+    music_data: *id001

@@ -6,7 +6,11 @@ under 3 px, the camera inside a world, a jump between moves) are only known wher
 each time: the page reports them as warnings when it is drawn (``vidgen still``, the render).
 
 The scene's narration saying "to scale" while it enlarges bodies or compresses distances is
-``orbit_scale``'s (:mod:`vidgen.lint.orbit_rule`), which reads the scene's ``scale:``."""
+``orbit_scale``'s (:mod:`vidgen.lint.orbit_rule`), which reads the scene's ``scale:``.
+
+Also (Step 392, DESIGN.md §123.14): a scene whose combination of parts costs ``seconds`` a frame or more
+at 1280x720 by the one cost table (:mod:`vidgen.scenes.space_costs`, printed in the space cookbook): the
+estimate, the minutes its frames take, and what is cheaper."""
 
 from __future__ import annotations
 
@@ -57,6 +61,13 @@ def _vector(text: str, k: int = 0) -> np.ndarray:
     return np.frombuffer(base64.b64decode(text), dtype="<f8").reshape(-1, 3)[k]
 
 
+def frame_seconds(params: Any) -> float:
+    """The expected seconds a frame at 1280x720 of a space scene's params (:func:`vidgen.scenes.space_costs.frame_seconds`)."""
+    from vidgen.scenes.space_costs import frame_seconds as estimate
+
+    return estimate(params)
+
+
 def space_issues(project: Project, scene_id: str, rules: LintRules) -> list[ScienceIssue]:
     """Every ``space_scene`` finding of scene ``scene_id``."""
     spec = project.scene(scene_id)
@@ -71,6 +82,13 @@ def space_issues(project: Project, scene_id: str, rules: LintRules) -> list[Scie
     def add(message: str) -> None:
         out.append(ScienceIssue("space_scene", first, message))
 
+    seconds = frame_seconds(params)
+    if seconds >= rules.space_scene.seconds:
+        frames = round(float(spec.duration or 8.0) * fps)
+        cheaper = ("world.quality: fast, fewer of sea, land and clouds in one shot, a shorter scene" if params.world is not None
+                   else "dress: false or detail: far while the hull is small in the frame, dress: {plumes: bank}")
+        add(f"about {seconds:.1f} s a frame at 1280x720 on 2 cores (the cost table of docs/COOKBOOK-SPACE.md §4): {frames} frames take about "
+            f"{seconds * frames / 60:.0f} minutes to render; look with vidgen still and --draft first; cheaper: {cheaper}")
     shown = {b.name: b for b in params.bodies}
     for b in params.bodies:
         if isinstance(b.spin, (int, float)) and not isinstance(b.spin, bool) and b.spin != 0:
@@ -126,4 +144,4 @@ def space_scene(ctx: SceneContext, settings: Any) -> Iterator[Issue]:
     yield from _issues(ctx, "space_scene")
 
 
-__all__ = ["space_issues", "space_params", "space_picture"]
+__all__ = ["frame_seconds", "space_issues", "space_params", "space_picture"]

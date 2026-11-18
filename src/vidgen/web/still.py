@@ -299,7 +299,7 @@ def make_web_stills(
     sheet_cols = sheet_columns(len(numbers), columns) if sheet is not None else 0
     params = args["params"]
     entry = entry_of(params)
-    entry_path(project.root, entry, scene_id)
+    entry_path(args["root"], entry, scene_id)
     result = StillResult(scene=scene_id, type=scene_type, entry=entry.posix, size=size_name, width=width, height=height, fps=fps,
                          frames=frames, region=str(args["shape"]["region"]), exact=exact, transparent=transparent)
     tiles: list[tuple[np.ndarray, str]] = []
@@ -311,7 +311,7 @@ def make_web_stills(
         from vidgen.web.clip import scene_data
 
         started = time.monotonic()
-        opened = WebPage(project.root, entry, scene_id=scene_id, size=(width, height), fps=fps, frames=frames, theme=args["theme"],
+        opened = WebPage(args["root"], entry, scene_id=scene_id, size=(width, height), fps=fps, frames=frames, theme=args["theme"],
                          data=scene_data(params), beats=[dict(b) for b in args["beats"]], shape=args["shape"],
                          design_width=design_width_of(params), music=args.get("music"),
                          orbits=args.get("orbits")).__enter__()

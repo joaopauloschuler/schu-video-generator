@@ -1,0 +1,8 @@
+title: From orbit to the sea
+scenes:
+  - id: orbit_to_sea
+    type: space
+    duration: 8
+    params:
+      world: {planet: earth, at: [8, -150], sun: [38, 250], sea: {state: breeze, seed: 3}, clouds: {sky: fair, seed: 4}}
+      camera: {move: descend, from: 400 km, to: 4000, heading: 300, turn: 30, speed: 150, lens: [normal, wide]}   # one shot, no cut: the globe, the decks, the sea

@@ -631,7 +631,7 @@ def build_server(root: Path) -> Any:
     async def parts(
         ctx: Context,
         names: Annotated[list[str] | None, Field(description="only these parts (names or patterns such as 'star-*'); one part gets one large tile")] = None,
-        kind: Annotated[str | None, Field(description="only this kind: sky, body, light, craft, craft-part, phenomenon, camera, structure, effect, environment")] = None,
+        kind: Annotated[str | None, Field(description="only this kind: sky, body, light, air, sea, cloud, land, craft, craft-part, phenomenon, camera, structure, effect, environment")] = None,
         sheet: Annotated[bool, Field(description="draw the contact sheet (false: only the list, nothing drawn)")] = True,
         size: Annotated[str | None, Field(description="one tile's WIDTHxHEIGHT (default 320x180; 960x540 for a single part)")] = None,
         columns: Annotated[int | None, Field(ge=1, le=12, description="tiles per row")] = None,
@@ -642,9 +642,11 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["parts"], list(names or []), options), heavy=sheet)
         return paged(doc, [Path(doc["sheet"])] if doc.get("sheet") else [], 0, images if sheet else 0)
 
-    @tool("Write the page a space scene (type space: a sky, worlds, craft, phenomena and camera moves in YAML) draws as a web "
-          "scene's three.js script, to go on in code: the file (default extensions/<scene>.js) and the web scene to put in its "
-          "place in video.yaml (the same picture).", writes)
+    @tool("Write the page a space scene (type space in YAML: an orbital scene of a sky, worlds, craft, giant hulls, planes, "
+          "phenomena and camera moves, or a surface scene with world: (planet, place, sun, air, sea, land, clouds), flights:, "
+          "planes and effects and the moves in the air) draws as a web scene's three.js script, to go on in code: the file "
+          "(default extensions/<scene>.js) and the web scene to put in its place in video.yaml (the same picture; a surface "
+          "scene's flights become its flight_data).", writes)
     async def space_page(
         ctx: Context,
         scene: Annotated[str, Field(description="the space scene's id")],
@@ -750,8 +752,13 @@ def build_server(root: Path) -> Any:
         force: Annotated[bool, Field(description="overwrite the draft's files if they exist")] = False,
         max_scene: Annotated[float, Field(gt=0, description="split a section longer than this many seconds on a phrase line")] = 16.0,
         min_scene: Annotated[float, Field(gt=0, description="join a section shorter than this many seconds to the one before")] = 5.0,
+        style: Annotated[Literal["web", "space", "space-air"], Field(
+            description="the draft's scenes: web_cut scenes with starter pages (web), space scenes in YAML (space), or space scenes in the "
+                        "air and beside giant ships (space-air: a skim at sunset, a descent, a chase over a range, a hull pass, into a bay)")] = "web",
+        seed: Annotated[int | None, Field(ge=0, description="space and space-air: other choices of worlds, planes and hulls (default 1)")] = None,
     ) -> Any:
-        options = {"out": str(where(out, "out")) if out else None, "force": force, "max-scene": max_scene, "min-scene": min_scene}
+        options = {"out": str(where(out, "out")) if out else None, "force": force, "max-scene": max_scene, "min-scene": min_scene,
+                   "style": style if style != "web" else None, "seed": seed}
         return answer(await call(ctx, args_of(["music"], ["plan", piece(score, "score")], options)))
 
     @tool("Measure an audio file, or a project's audio-only render (render with audio_only=true), for agents that cannot "
@@ -1217,8 +1224,10 @@ def _add_resources(server: Any, policy: RootPolicy) -> None:
     )
     gallery = policy.root / "docs" / "gallery"
     if gallery.is_dir():
-        for page in sorted(gallery.glob("*.md")):
-            name = "index" if page.name == "README.md" else page.stem
+        # the web gallery's pages (docs/gallery/web, DESIGN.md §123.1) under their own names, its index as web-index
+        pages = [(p, "index" if p.name == "README.md" else p.stem) for p in sorted(gallery.glob("*.md"))]
+        pages += [(p, "web-index" if p.name == "README.md" else p.stem) for p in sorted((gallery / "web").glob("*.md"))]
+        for page, name in pages:
             text_resource(
                 f"vidgen://gallery/{name}", f"gallery-{name}", f"Scene gallery page: {name}", "text/markdown", _file_reader(page)
             )

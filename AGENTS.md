@@ -29,7 +29,8 @@ stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for
 pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lint), `science`
 (plots and worked calculations: plot or chart, fits, live models, units, significant figures,
 lint), `orbits` (orbital mechanics: views, scale honesty, panels, manoeuvres, three bodies,
-dates, pacing, lint), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
+dates, pacing, lint), `space-scenes` (space with no code: orbital scenes, surface scenes in the air,
+planes, giant ships, a descent from orbit), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
 stand-ins, guide passes, lint), `web` (scenes you write in HTML, CSS and JavaScript: when,
 how, theme, beats, three.js, lint, cost), `particle-physics` (particle-physics videos: planning, choosing the scene,
 natural units, simulated data, sources, significance, pacing, lint), `overlays` (overlays,
@@ -367,7 +368,8 @@ variants:
 
 Pick by **what the viewer should understand**, not by what the data looks like. To see what
 each type looks like at 16:9 and 9:16, open the scene gallery (`docs/gallery/README.md` in the
-schu-video-generator repository: a still, a GIF, the YAML, params and targets per type) or make it yourself:
+schu-video-generator repository: a still, a GIF, the YAML, params and targets per type; the types drawn
+in a web page, `3d`, `web` and `space`, in `docs/gallery/web/README.md`) or make it yourself:
 `vidgen gallery --output gallery --types pie,map` (any folder; in a project it also renders the
 project's own scene types, in its theme).
 
@@ -415,7 +417,7 @@ project's own scene types, in its theme).
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut), `match_previous` (no flash where a take continues the one before) |
 | simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a picture or animation no built-in draws, written yourself in HTML, CSS and JavaScript: a bespoke layout, CSS or SVG animation, a canvas drawing, your own three.js scene (`vidgen guide web`) | `web` | `page` (an HTML file of the project: any HTML, CSS, JavaScript) or `script` (a JavaScript module drawn on one canvas), `region` (bleed, body), `title`, `data` (values for the page); CSS animations, requestAnimationFrame, timers and the page's frame hook all follow the video's time; no internet while rendering |
-| space with no code: a sky, a sun, planets with rings and air, craft on a real transfer, a black hole, a jump to warp, camera moves on bar lines; true positions and timing from orbit data (`vidgen guide space-scenes`) | `space` | `sky`, `sun`, `bodies` (name, world or type, at, radius), `orbits` (the orbit scene's words), `scale`, `light`, `craft` (kind, fly), `phenomena` (kind), `camera` (move, subject, over in seconds or bars, cut), `finish`, `music` (track, pulse / glow / glint), `title`, `end_card`, `script` (your code) |
+| space with no code: a sky, a sun, planets with rings and air, craft on a real transfer, a black hole, a jump to warp, giant ships, planes over sea, ground and clouds, a descent from orbit, camera moves on bar lines; true positions and timing from orbit data (`vidgen guide space-scenes`) | `space` | `sky`, `sun`, `bodies` (name, world or type, at, radius), `orbits` (the orbit scene's words), `scale`, `light`, `craft` (kind, fly), `phenomena` (kind), `camera` (move, subject, over in seconds or bars, cut), `finish`, `music` (track, pulse / glow / glint), `title`, `end_card`, `script` (your code); a surface scene: `world` (planet, at, sun, air, sea, land, clouds), `flights`; `craft` (with plane, hull, parts, effects); `flash` |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -3203,7 +3205,7 @@ Run `vidgen lint` in 16:9 and 9:16.
       actions: [{burn: "burn:1", at: "@burn"}]
 ```
 
-<!-- topic: space-scenes (also: space-scene, space-yaml, declarative-space, planets, spacecraft) -->
+<!-- topic: space-scenes (also: space-scene, space-yaml, declarative-space, spacecraft, surface-scenes, giant-ships) -->
 ## Space scenes without code: the `space` scene
 
 A `space` scene is written in `video.yaml` alone: name a sky, a sun, worlds, craft, phenomena and
@@ -3277,7 +3279,76 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
   space scene per cut (a world by the scene's colour, a move by its role, sunrise on a section start).
 - **Cost** (2 cores, software GL, 720p): a world through the finish about 0.3 to 0.5 s a frame, a craft filling the
   frame up to 0.9 s, a black hole filling the frame about 1 s, each page 3 to 9 s to open (bakes its maps). Render
-  `--draft` first.
+  `--draft` first. vidgen keeps the baked maps of worlds and skies in its cache folder, so a later page with the
+  same world or sky (another scene, still or render) opens faster with the same pixels: `02_depart` of
+  `examples/outbound` 13.7 s, then 7.6 s (`vidgen cache` shows and clears it; `VIDGEN_BAKED_CACHE_MB=0` is off).
+
+### In the air and beside giant ships
+
+Two kinds of `space` scene. **Orbital** (no `world:`): the scene above, which also takes giant ships, planes and
+craft of the kit's own parts among `craft:`. **Surface** (`world:`): one world from orbit to the ground in the
+place's own frame (metres, x east, y up, z south): the air, the sea, the ground, cloud decks and the globe
+seen from high up, with `flights:` (the `flight_data` words of a `web` scene: the ground is the world's own) and
+planes flying them. Each kind refuses the other's words with a message saying where they belong.
+
+```yaml
+- id: chase                     # a surface scene: a plane chased over the alpine range under fair clouds
+  type: space
+  duration: 20
+  params:
+    world: {land: alpine, clouds: fair, sun: [24, 250]}   # sun: [elevation, azimuth] or {date: 2026-06-21, utc: "19:30"}
+    flights:
+      - name: Plane
+        start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
+        legs: [{follow: {clearance: 300}, for: 12}, {turn: {by: 60, bank: 35}, follow: {clearance: 300}}]
+    craft: [{name: Plane, plane: glider, seed: 7, fly: Plane, effects: {contrails: {always: true}}}]
+    camera: {move: chase, flight: Plane, lens: wide-normal}
+- id: carrier                   # an orbital scene: a dressed carrier, a pass along its hull, a craft into a bay
+  type: space
+  duration: 16
+  params:
+    orbits: {central: earth, speedup: 1, bodies: [{name: Carrier, altitude: 900 km}]}
+    bodies: [{name: Earth}]
+    craft:
+      - {name: Carrier, hull: carrier, seed: 1, length: 3200, dress: {plumes: bank},
+         scale_ref: {kind: ship, at: hangar-2, into: {hangar: hangar-2, over: [8, 16]}}}
+    camera:
+      - {move: hull-pass, ship: Carrier, over: [0, 8], side: port, standoff: 60, from: 0.3, speed: 40}
+      - {move: into-bay, ship: Carrier, hangar: hangar-2, over: [8, 16], cut: true}
+```
+
+- **The world** (`world:`): `planet` (a world of `bodies`), `at: [latitude, longitude]`, `sun`, `air` (earth, mars, thin, thick),
+  `sea` (a state: calm, breeze, swell, rough, storm; or `{state, water, seed}`; waters: ocean, green, tropical, grey, methane),
+  `land` (a preset: alpine, mars, canyon, dunes, snow, volcanic, airless; or `{preset, seed, mountains, ...}`), `clouds` (a sky:
+  fair, overcast, layers, towers, storm; or `{decks: [{type: cumulus, base, top, cover, fronts}], towers, lightning: {times, track, rate}}`;
+  a deck's cover is the one asked for round the place and varies tens of km away, `fronts: 0` keeps it even),
+  `globe`, `handover` (low, high), `exposure`, `ev`, `quality` (fast, standard, fine). The stars behind the air are `sky:`.
+- **Planes** (`craft: [{plane: glider, fly: FLIGHT}]`): glider, freighter, needle, lifter, scout, skiff; any part of the
+  description (`wing: {preset: swept, sweep: 42}`, `fins`, `body`, `scheme`, `scorch`), `gear`, `bay`, `cabin` (0..1, or
+  `{over: [10, 14], from: 0, to: 1}`), `controls`, `throttle`. A craft of the kit flies too (`kind: probe, fly: FLIGHT`), and
+  a craft of the kit's own parts: `parts: {part: hull, ..., attach: [{at: fore, part: dish}, {around: {count: 2}, part: solar-wing}]}`.
+- **Effects** (`effects:` on a craft): reentry, contrails, exhaust, vapour (each `true` or its options); in a surface scene they
+  follow the flight; an orbital scene's craft take `exhaust` only.
+- **Giant ships** (orbital, `craft: [{hull: carrier}]`): spine, carrier, cluster, lance, wheel, ark, twin; `length`, `age`,
+  `palette` (bone, slate, iron, sand, frost), the family's numbers; `dress` (windows, bays, lamps; `false` bare), `scale_ref` (a
+  small craft beside it: `{kind: ship, at: hangar-1, gap, into: {hangar, over}, escort: true}`), a fleet: `hull: [carrier, spine]`
+  with `fleet: 5`. With a hull in the scene vidgen sets the view's near plane to 4 m (depth precision; said in the page).
+- **Moves in the air**: skim, climb-through, descend-through, chase, wing, fly-past, orbit-peak, rise, descend, ascend
+  (`flight:` names a flight or the craft flying it; `deck:` a deck's index or name; `around: {near: [x, z], reach}` a peak;
+  wing views: wingtip, tail, belly, nose); a `skim` with `continues: true` after a `descend` takes over where it ends.
+  **Beside a ship**: hull-pass, hull-reveal, into-bay, stern-burn, scale-zoom (`ship:` the hull; sides of a pass: port,
+  dorsal, top, starboard, ventral, bottom; a stand-off under 10 m is refused). Times are seconds or bars, as above.
+- **Music**: `{track: kick, pulse: lightning}` (a strike on each hit), `{track: level, glow: lava}` (volcanic ground),
+  `{track: lead, glow: Plane, as: boost}` (the afterburner; also `lights`, `throttle`, `pulse`), `{track: pad, glow: Carrier,
+  as: lights}` (a hull's windows).
+- **Cuts**: `flash: [{at: 'bar 9', amount: 2}]` (the same `at` in the scenes on both sides of the cut), a warp across a cut
+  `phenomena: [{kind: warp, cut: {at: 'bar 9', seconds: 3}}]`, a match cut `{move: arc, subject: Moon, match: Earth, cut: true}`.
+- **Cost**: a surface scene is 1.2 to 3.5 s a frame at 720p (a sea, ground, clouds; all three are the dearest), a dressed hull
+  1 to 2 s; `vidgen lint` says so for a dear combination. A drafted film: `vidgen music plan SCORE --style space-air`
+  (a skim at sunset, a descent, a chase over a range, a hull pass, into a bay). Not reachable from YAML (use `script:` or
+  `vidgen space-page`): the wormhole passage, a re-entry from orbit, a sun that moves through a scene, the camera placed
+  by hand in a ship's own axes, a plane fleet, a hull in a surface scene. Recipes: COOKBOOK-SPACE.md (orbital
+  scenes, giant ships), COOKBOOK-AIR.md (surface scenes, planes, the descent).
 
 <!-- topic: three-d (also: 3d, threejs, three.js, 3d-scenes, stand-ins, standins, guide-passes) -->
 ## 3D: simple scenes with shapes and stand-ins
@@ -3430,6 +3501,7 @@ own code with it. `vidgen render` tells you instead (below, "Render cost").
 | `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
 | `music` | with `music_data:` only: the video's music ("Pictures that follow the music" below) |
 | `orbits` | with `orbit_data:` only: planets, moons and spacecraft on their orbits ("Orbits on a page" below) |
+| `flight` | with `flight_data:` only: planes and space planes through the air ("Flight paths" below) |
 
 **The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
 `--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
@@ -3578,7 +3650,8 @@ export function frame(t) {
   enlarged 50×; distances to scale"; `log`: "distances compressed (log) · sizes not to scale").
 - At true scale a whole system is sub-pixel: `space.pixels("Earth")` says how big a body is drawn.
   `space.problems()` warns when an enlarged planet swallows its moon.
-- Skies: `vidgen/space-sky` (below), `scene.background`, or a mesh with `frustumCulled = false`. With three-finish's depth of
+- Skies: `vidgen/space-sky` (below), `scene.background`, or a mesh marked `userData.sky = true` (or with
+  `frustumCulled = false` and a negative `renderOrder`). With three-finish's depth of
   field focused far away, give `dofFocus` the same focus. Reference: CONFIG.md `web`,
   "Astronomical scales".
 
@@ -3636,7 +3709,9 @@ const update = (t) => { space.update(t, view(t)); saturn.update(t); };
   `body.problems()`; choose `spin: "locked"` or `spin: 40` (seconds of film per turn) and say so
   in the film's notes; the default is the true turning.
 - A body takes 2 to 4 s to make and 0.05 to 0.2 s a frame at 720p; `size: 1024` for a close-up
-  (about 10 s to make), `size: 256` for bodies that stay small. No landing: close to the ground
+  (about 10 s to make; `size: 2048` about 30 s, then 6 s on later pages from vidgen's cache of
+  baked maps), `size: 256` for bodies that stay small. A bake of your own can use that cache too:
+  `baked(renderer, name, inputs, {targets, draw})` from `vidgen/baked` (CONFIG.md, "Baked maps"). No landing: close to the ground
   the surface is soft. Reference: CONFIG.md `web`, "Planets, moons and rings".
 
 **Suns and light: `vidgen/space-light`.** Do not light a space scene by hand, and do not draw a
@@ -3666,6 +3741,150 @@ const update = (t) => { earth.update(t); moon.update(t); sun.update(t); light.up
 - `falloff: 0` (default) lights every world alike, an artistic choice; `falloff: 2` is the true
   inverse-square light (Neptune 900 times dimmer than the Earth).
 - Look first: `vidgen parts --kind light`. Reference: CONFIG.md `web`, "Suns and light".
+
+**The sky from inside the air: `vidgen/space-air`.** For a shot within an atmosphere (a plane, a
+landing, a sunset) do not paint a gradient and do not use three.js fog: one object gives the sky
+for any sun, the sun's disc, the haze on far things and the light, from the same air the world
+shows from orbit.
+
+```js
+// sketch (parts of a page, not a whole file): the air round the camera
+import {air, sunDirection} from "vidgen/space-air";
+const sky = air(renderer, "earth", {sun: sunDirection(6, 20), stars: spaceSky(renderer, {seed: 7}), scene});   // also "mars", "thin", "thick"
+scene.add(sky.object);                       // the dome: sky, sun, a plain ground under the horizon
+sky.haze([hill.material, wing.material]);    // far things take the sky's colour
+const update = (t) => { sky.update(t, {camera, sun: sunDirection(6 - t, 20)}); };   // after the camera is placed, before the draw
+```
+
+- Metres, +y up, the origin on the ground; the camera's height is read from where it stands (0 to
+  space: from above the air the same object draws the limb's glow).
+- `sunDirection(elevation, azimuth)`: degrees over the horizon, and round from -z towards +x. Day
+  above 10, golden hour 3 to 10, sunset 0, twilight -2 to -8 (the stars come out), night below -12.
+- Exposure as `vidgen/space-light`: `"film"` (default) lifts dusk so the blue hour is seen and
+  shows the stars once the sky is dark, a convention; `exposure: "camera", ev: 0` is what a camera
+  set for a sunlit ground sees (dusk goes black); `"auto"` meters the frame.
+- `sky.light.sun` and `sky.light.sky` light ordinary meshes (`scene` in the options adds them).
+  Straight to the canvas set `renderer.toneMapping = THREE.ACESFilmicToneMapping` for meshes.
+- Say what is invented: `thin` and `thick` are invented worlds; `mars` is a dusty season, three
+  times the dust the same world shows from orbit by default.
+- 0.19 s a frame at 720p, 0.3 s to make. Look first: `vidgen parts --kind air`. Reference:
+  CONFIG.md `web`, "The sky from inside an atmosphere".
+
+**Water to the horizon: `vidgen/space-sea`.** For a sea under that sky do not tile a normal map
+on a plane: one object gives waves from a seed on vidgen's clock, the mirrored sky, the sun's
+glitter path, whitecaps when it blows and the horizon where the height puts it (curved from high
+up), and tells you the water's height anywhere.
+
+```js
+// sketch (parts of a page, not a whole file): a sea under the air
+import {sea} from "vidgen/space-sea";
+const water = sea(renderer, sky, {state: "breeze", seed: 3});   // sky: the air above; "calm", "swell", "rough", "storm"
+scene.add(water.object);
+const update = (t) => { sky.update(t, {camera}); water.update(t, {camera}); };   // the air first, then the sea
+const y = water.heightAt(x, z, t);           // metres over sea level; water.pointAt(x, z, t) is the point in the scene
+```
+
+- States by name or by numbers: `{wind: 9, direction: 40, swell: {height: 1.5, length: 160, direction: -20}}`
+  (m/s, degrees as `sunDirection`'s azimuth, metres). Foam appears from about 8 m/s.
+- `water: "ocean"` (default), `green`, `tropical`, `grey`; `methane` is an invented dark sea for
+  an invented world (say so).
+- Keep the camera over the crests: `water.heightAt` plus a margin; the sea is drawn for a camera
+  at least 0.5 m up. `water.horizon` gives the horizon's distance and dip.
+- The world is round: far from the origin take heights from `water.pointAt`, not from y.
+- 1.1 s a frame at 720p near the water, 0.65 s from 20 km, 0.07 s at 320x180; `quality: "fast"`
+  (a smoother sea) 0.8 s. Look first: `vidgen parts --kind sea`. Reference: CONFIG.md `web`,
+  "Water to the horizon".
+
+**Clouds: `vidgen/space-clouds`.** For cloud decks, cloud towers, lightning or a flight inside a
+giant of gas do not stack textured planes or billboards: one object draws decks on the world's
+sphere that the camera can be under, in, between and over.
+
+```js
+// sketch (parts of a page, not a whole file): clouds in the air, their shadows on a sea
+import {clouds, giantSky, giantAir} from "vidgen/space-clouds";
+const weather = clouds(renderer, sky, {sky: "fair", seed: 4});    // sky: the air; "overcast", "layers", "towers", "storm"
+const water = sea(renderer, sky, {shade: weather.shade});         // optional: the clouds' shadows on the water
+scene.add(water.object, weather.object);                          // the dome first, then the sea, then the clouds
+const update = (t) => { sky.update(t, {camera}); water.update(t, {camera}); weather.update(t, {camera}); };
+```
+
+- Your own decks: `decks: [{type: "stratus", base: 1800, top: 3000}, {type: "cirrus", base: 11000}]`
+  (`cumulus`, `stratus`, `cirrus`; metres; `cover` 0 to 1; at most 4), `towers: {count: 4}` or
+  `towers: {at: [[x, z], ...]}` (at most 6).
+- Lightning on the music: `lightning: {times: trackArrays(ctx.music, {hits: ["kick"]}).hits.kick}`
+  (or seconds, or `rate: 12` a minute from the seed). A flash's strength is a look.
+- A giant of gas: `const sky = air(renderer, giantAir("jupiter"));
+  clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H, latitude: 22}))`, the camera
+  about 1.1 x `sky.model.H` up. The decks have the bands of the same world in
+  `vidgen/space-bodies`; heights, air and the bands' width are a look (say so).
+- `weather.update(t, {camera})` needs the camera the picture is drawn with. Things in the scene
+  are always in front of the clouds.
+- 1.1 to 2.4 s a frame at 720p (three decks 2.7 s), 0.1 s at 320x180; `quality: "fast"` under half.
+  Look first: `vidgen parts --kind cloud`. Reference: CONFIG.md `web`, "Cloud decks, towers,
+  lightning, a giant's decks".
+
+**Ground: `vidgen/space-land`.** For mountains, deserts, dunes, canyon land or a crater field
+under the air do not build a mesh from noise: one object draws the ground of the same world
+`vidgen/space-bodies` shows from orbit, to the horizon, with its own shadows.
+
+```js
+// sketch (parts of a page, not a whole file): ground under the air
+import {land} from "vidgen/space-land";
+const ground = land(renderer, sky, {preset: "alpine"});          // sky: the air; "mars", "canyon", "dunes", "snow", "volcanic", "airless"
+scene.add(ground.object);                                         // after the dome, before a sea and clouds
+const update = (t) => { sky.update(t, {camera}); ground.update(t, {camera}); };
+camera.position.y = Math.max(camera.position.y, ground.heightAt(camera.position.x, camera.position.z) + 50);
+```
+
+- Another place or world: `{world: "mars", at: [latitude, longitude]}` (+x is east, -z north of
+  the place; `survey(renderer, world)` gives the heights round the globe).
+- A coast: `sea(renderer, sky, {depth: ground.depth})`. Clouds: `clouds(renderer, sky, {behind:
+  ground.behind})`, then `ground.shadedBy(weather.shade)`. No air: `air(renderer,
+  vacuum(RADII.moon), {exposure: "camera", ev: 1.3})`.
+- 1.35 s a frame at 720p and 7 to 19 s once for the maps (`quality: "fast"`: 2.3 s), 0.12 s a
+  frame at 320x180. High views are the strong ones; under about 400 m over the ground a range
+  looks soft. Look first: `vidgen parts --kind land`. Reference: CONFIG.md `web`, "Ground with
+  relief".
+
+**Flight paths: `flight_data:`.** A plane over the range, a glider round a peak, a space plane
+coming down from orbit: do not move a craft by hand in JavaScript. `flight_data:` in a `web`
+scene's `params` gives the page `ctx.flight`: each flight's position, velocity and attitude (bank in
+turns, nose up in climbs) for every frame, in the frame `vidgen/space-air` and `space-land` draw in,
+checked never to come under the ground.
+
+```yaml
+- id: pass
+  type: web
+  duration: 20
+  params:
+    script: extensions/fly.js
+    flight_data:
+      ground: {land: alpine}               # the same ground the page draws; or sea, sphere, flat
+      flights:
+        - name: Plane
+          start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
+          legs:
+            - {follow: {clearance: 300}, for: 12}                    # terrain following
+            - {turn: {by: 60, bank: 35}, follow: {clearance: 300}}
+            - {follow: {clearance: 300}, for: 30}
+            - {climb: {to: 5500, rate: 20}, speed: {to: 180}}
+            - {circle: {around: [25000, 19000], radius: 4000}}        # round a place; also waypoints: [[x, z], ...], land: {}
+```
+
+```js
+// sketch (parts of a page, not a whole file): a craft on a flight
+ship.fly(ctx.flight, {flight: "Plane"});          // ship = craft(...) of vidgen/space-craft; then ship.update(t) each frame
+ctx.flight.place(marker, "Plane", t);             // or any three.js object
+const above = ctx.flight.aboveGround("Plane", t), mach = ctx.flight.mach("Plane", t);
+```
+
+- Legs: `straight`, `turn` (to or by, bank or radius), `circle`, `waypoints`, `climb` / `descend`,
+  `level`, `follow`, `speed`, `land`, `reentry` (from `start: {orbit: Ship}` of the scene's
+  `orbit_data`); each lasts `for` seconds, `until` a time ('bar 9' with `music_data`) or as long
+  as it needs. Too near the ground is an error naming the time and place; `lift: true` raises the
+  path there instead.
+- Keep the page's `land(...)` options, air and place the same as `ground:` (the frame is the
+  land's). Reference: CONFIG.md `web`, "Flight data".
 
 **Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
 comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black
@@ -3741,6 +3960,91 @@ probe.update(t, {sun, camera, height: ctx.height});       // wings to the sun, l
 - Look first: `vidgen parts --kind craft` and `--kind craft-part`. Reference: CONFIG.md `web`,
   "Spacecraft".
 
+**Space planes: `vidgen/space-plane`.** For a winged craft — a glider coming home from orbit, a
+cargo spaceplane, a scout over another world — take a ready-made plane and fly it on a
+`flight_data:` path; do not model one from boxes.
+
+```js
+// sketch: parts of a page (not a whole file)
+import {plane} from "vidgen/space-plane";
+const ship = plane("glider", {seed: 7}).fly(ctx.flight, {flight: "Plane"});   // glider, freighter, needle, lifter, scout, skiff
+scene.add(ship.object);
+for (const m of Object.values(ship.materials)) sky.haze(m);                   // the air between
+// each frame: ship.update(t, {gear: 0, bay: 0});
+```
+
+- Every seed is another plane of the kind (proportions, wing, scheme, stripes); `scheme`,
+  `color`, `belly`, `accent`, `scorch` set the look by hand; `planeFleet("glider", {count: 6})`
+  is a formation.
+- On a flight the plane banks with the turn and its elevons, rudders and brakes move by the
+  flight's rates; `update(t, {gear: 1})` lowers the gear, `{bay: 1}` opens the payload bay in
+  orbit, `{controls: {flap: 25}}` sets a surface by hand, `{throttle: 1}` fires the bells.
+- A plane of your own: `planeFrom({body: {...}, wing: {preset: "swept", span: 14}, fins:
+  {type: "vee"}, engines: {count: 2}})`, then read `ship.problems()`: it names a wing that does
+  not touch the body or gear that does not reach the ground.
+- Designs are invented: never copy or name a real or film vehicle, and put no flags or agency
+  names on a plane (markings are stripes and an invented registration).
+- Budget (720p, software GL): 0.12 to 0.2 s a frame for a plane close up; it casts no shadow on
+  the ground and is drawn in front of every cloud.
+- Look first: `vidgen parts 'plane-*'`. Reference: CONFIG.md `web`, "Space planes".
+
+**Re-entry and flight effects: `vidgen/space-effects`.** A craft coming down through the air
+glows; a plane high up leaves a vapour trail; an engine in air has a short bright flame. One call
+adds them to a plane or any craft, and with `flight_data:` they follow the flight by themselves:
+
+```js
+// sketch: parts of a page (not a whole file)
+import {effects} from "vidgen/space-effects";
+const fx = effects(ship, {flight: ctx.flight, name: "Plane", sky, reentry: true, contrails: true, exhaust: true, vapour: true});
+scene.add(fx.object);                        // the trails are laid in the world, not tied to the craft
+// each frame, after ship.update(t):
+fx.update(t);
+```
+
+- `reentry`: a glowing layer on the windward side, hot tiles, a wake, sparks; from far away a
+  bright head with a train of light. Strength from the flight's `heating` (shown as full at
+  `reentry: {full: 0.65}`), or by hand: `fx.update(t, {heating: 0.8})`.
+- `contrails`: only above 8 to 9 km (`{always: true}` anywhere); `exhaust`: replaces the craft's
+  plumes with one shaped by the air's density, `fx.update(t, {boost: 1})` for the afterburner;
+  `vapour`: a cone near Mach 0.97 and wing vapour in turns over 2.4 g, low down only.
+- Without a flight give `velocity`, `height`, `heating`, `mach`, `load` to `update`. Unknown names
+  are refused with the closest word.
+- A re-entry costs about 0.4 s a frame at 1280x720 (`quality: "fast"` 0.3), the others next to
+  nothing. Look first: `vidgen parts --kind effect`. Reference: CONFIG.md `web`, "Re-entry and
+  flight effects".
+
+**Giant ships: `vidgen/space-hull`.** For a ship kilometres long. Seven invented families —
+`spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`, `twin` — each another ship for every
+seed. A hull is a craft of `vidgen/space-craft`: it flies a body of `orbit_data`, its bells fire
+with `throttle`, a star's glare hides behind it:
+
+```js
+// sketch: parts of a page (not a whole file)
+import {hull} from "vidgen/space-hull";
+const ship = hull("carrier", {seed: 4, length: 3000}).fly(space, {body: "Ship"});   // metres; +z the bow, +y up
+ship.scaleRef("ship", {at: "hangar-1", gap: 120});     // a 50 m craft beside a hangar slot: without it nothing says "3 km"
+// each frame, after space.update(t, view):
+ship.update(t, {sun, throttle: 0.5});
+```
+
+- These are the large forms: plates, trenches, hangar slots as dark voids, radiators, bells.
+  Dress the hull for anything nearer than a distant silhouette:
+  `const detail = dress(ship, renderer)` (`vidgen/space-hull-detail`) and, each frame after
+  `ship.update`, `detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light})`: seams and
+  pipe runs at two scales, windows in rows along the decks (they come out where the sun does not
+  reach), lit hangar bays with parked craft, deck clutter, marks, navigation lamps, one long
+  plume a bank of bells. `detail.fly(small, "hangar-1", u)` flies the small craft into a bay.
+  The maps are baked once (`vidgen cache`). Options and costs: `docs/CONFIG.md`.
+- What says "kilometres": rows of windows, a small craft in frame, a bay with depth, a wide lens
+  close along a wall, the world behind with a long lens. A hull alone on black from far reads as
+  a model whatever its detail.
+- Something drawn with `frustumCulled = false` and a negative `renderOrder` is sky in a `SpaceView`
+  (behind everything); give it `userData.sky = false` to keep it in the world.
+- `ship.problems()` names buried bells, absurd proportions and one layout the kit refuses to
+  look like. `hullFleet([...], {count, seed})` is a formation at `far` detail.
+- A hull filling a 1280x720 frame costs about 0.3 s. Look first: `vidgen parts 'hull-*'`.
+  Reference: CONFIG.md `web`, "Giant ship hulls".
+
 **Camera moves in space: `vidgen/space-camera`.** Do not write camera positions by hand: name
 the move. Every move is a function of time (same time, same frame; cuts and motion blur are
 safe) and never puts the subject in the dead middle unless you ask.
@@ -3784,6 +4088,69 @@ const view = (t) => cam.arc(t, {subject: "Earth", phase: {limb: 0.12}, distance:
   the objects (`subject: earth`) or `{at: [x, y, z], radius}`.
 - Look first: `vidgen parts --kind camera`. Reference: CONFIG.md `web`, "Camera moves for space
   scenes".
+
+**Camera moves in the air and beside giant ships: `vidgen/space-camera-air`.** The same rig with
+more moves; name the move, do not write camera positions:
+
+```js
+// sketch: parts of a page (not a whole file)
+import {airCamera} from "vidgen/space-camera-air";
+const cam = airCamera({camera, sky, ground, water, clouds: weather, flight: ctx.flight, music: ctx.music, crafts: {Plane: ship}});
+// each frame, first the plane, then the camera, then the air and what stands in it:
+ship.update(t); cam.apply(t, cam.chase(t, {flight: "Plane"})); sky.update(t, {camera}); ground.update(t, {camera});
+```
+
+- In the air: `skim` (a low pass at a stated `clearance` and `speed`, following the ground,
+  banking into its `turn`), `climbThrough` / `descendThrough` (a cloud deck's fog and out the
+  other side; `adapt: 1` gives an `ev` for the air so the break-out is not a white flash),
+  `chase` (behind a plane with a lag and half its bank), `wing` (locked to the plane: `view:
+  "wingtip" | "tail" | "belly" | "nose"`), `flyPast` (a standing camera, the plane passes at
+  `at`), `orbitPeak` (round a mountain or a cloud tower: `around: {near: [x, z], reach}` or
+  `{tower: 0}`), `rise` (a crane from the surface to tens of kilometres; `down: true` back).
+- Beside a ship (`airCamera({space, camera, ships: {Ship: hull}})`): `hullPass` (a slow pass a
+  `standoff` off a `side`, the path made from the hull's regions), `hullReveal` (the bow slides
+  in over the camera at `at` and the hull keeps coming; `mode: "limb"` from behind a world),
+  `intoBay` (into a `hangar`; `out: true` out of it), `sternBurn` (the bank lights at `light`; give
+  `shot.throttle` to `ship.update`; `shake: {amount: 0.3}` only if you want it), `scaleZoom` (a
+  place on the hull → the whole ship → a speck by its world).
+- Timing: `over: [start, end]` in seconds or `{bar, beat}` of the score (`music: ctx.music`);
+  `ease: [1, 0]` starts at rest and ends moving, `ease: 0` is steady: cut two moves together on
+  motion. Every move is a function of t: a still at t is frame t.
+- The camera is never under the ground or the water (it is lifted and the shot's `notes` say
+  so), never nearer a hull's regions than the stand-off; "up" is the local vertical. Read
+  `cam.check(view, {from, to})` while you develop.
+- Beside a ship: `ship.update(t)` before the move; `new SpaceView(ctx, {renderer, scene, camera,
+  near: 4})` gives the hull's depth more precision (the `space` scene does it for you).
+- Speeds that read: a pass along a 3 km hull at 40 m/s (show a part of it, not the whole ship in
+  ten seconds); a `rise` to 60 km in 8 s or more.
+- Cost: the scene's own, 0.8 to 2.1 s a frame at 1280x720. Look first: `vidgen parts 'camera-*'`.
+
+**Orbit to ground in one shot: `vidgen/space-descent`.** One call makes the globe, the air, the
+sea, the ground and the cloud decks of the same world for one place and one sun, and draws the
+right ones for the camera's height, cross-faded (DESIGN §123.13):
+
+```js
+// sketch: parts of a page (not a whole file)
+import {world} from "vidgen/space-descent";
+const w = world(renderer, {planet: "earth", at: [8, -150], sun: [38, 250], sea: {state: "breeze"}, clouds: {sky: "fair"}, scene});
+scene.add(w.object);
+const cam = airCamera({camera, ...w.rig});
+const fall = {over: [0, 10], from: 400e3, to: 300, heading: 300, turn: 30};
+// in frame(t): the descent, then a skim from where it ends, with no cut
+const shot = t < 10 ? cam.descend(t, fall) : cam.skim(t, {over: [10, 14], ...cam.descend(10, fall).end, follow: 0});
+cam.apply(t, shot); w.update(t, {camera}); renderer.render(scene, camera);
+```
+
+- `world(renderer, {land: "mars", sun: [30, 120]})` is a Mars-like desert (planet, place and air
+  are the ground's own). A plain scene in metres, not a `SpaceView`.
+- `cam.ascend` is the descent backwards. Give the descent a second for every third of a power of
+  ten of height or more (400 km to 300 m: 10 s).
+- Say in the film's notes what is not true (`w.honest`): the camera's speed; single clouds differ
+  between the globe and the decks; the decks' field shows a faint repeat from 60 km.
+- Cost at 1280x720: 0.75 s a frame from orbit, about 3.4 s in the handover (400 km to 2.5 km over a
+  sea), 1.5 to 1.8 s near the surface. Look first: `vidgen parts 'joined-*' camera-descend`.
+  Reference: CONFIG.md `web`, "Camera moves in the air and beside giant ships"; recipes in
+  `docs/COOKBOOK-SPACE.md`.
 
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
@@ -4359,6 +4726,7 @@ the text (here the video's background, since the canvas is transparent).
 |---|---|
 | `scenes[0].params: give exactly one of page: (an HTML file) or script: (a JavaScript module)` | both or neither given |
 | `page: file not found: extensions/hello.html (looked for …)` (validate) | the path is relative to the project folder (where `video.yaml` is) |
+| `script: must be a path inside the project folder, got ../shared/x.js` (validate) | a page or script outside the project folder: copy it in, or, to share one file between projects side by side, set `web_root: ..` (pages are then served from the folder that holds them; `examples/orchestral-shorts` does this) |
 | `scene 'x': JavaScript error in extensions/orbit.js line 7 in frame(t=0.500): TypeError: …` | your code threw; the file, line and time are given. At load: `… line 3 at load: …` |
 | `scene 'x': JavaScript error in extensions/x.js …: a module script did not load (a file it imports is missing or refused)` | an `import` names a missing file or a URL on the internet |
 | `scene 'x': the page imports the three.js add-on '…', which is not shipped with vidgen …` | an add-on vidgen does not ship (list above): copy the file into the project |

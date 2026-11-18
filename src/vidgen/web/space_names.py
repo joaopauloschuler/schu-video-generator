@@ -148,6 +148,8 @@ _DECLARED = "(?:export\\s+)?const\\s+{name}\\s*=\\s*"
 def constant_text(source: str, name: str, where: str = "the module") -> str:
     """The literal (object or array, without ``Object.freeze``) the constant ``name`` of ``source`` holds."""
     match = re.search(_DECLARED.format(name=re.escape(name)), source)
+    if match is None:   # a later declarator of one const: `const A = [...], B = [...]`
+        match = re.search(rf"^const [^\n]*?,\s*{re.escape(name)}\s*=\s*(?=[\[{{]|Object\.freeze\()", source, re.MULTILINE)
     if match is None:
         raise VidgenError(f"{where} has no constant {name} (a broken install, or the module renamed it)")
     i = match.end()
@@ -287,4 +289,131 @@ def space_names() -> dict[str, Any]:
     }
 
 
-__all__ = ["MODULES", "array_strings", "constant_entries", "constant_keys", "constant_strings", "constant_text", "module_source", "object_entries", "space_names"]
+def _class_methods(source: str, name: str, where: str) -> list[str]:
+    """The method names ``name(o = {})`` / ``name(options = {})`` of the class ``name`` of ``source`` (a kit's parts)."""
+    match = re.search(rf"export class {name}\b[^{{]*\{{", source)
+    if match is None:
+        raise VidgenError(f"{where} has no class {name} (a broken install, or the module renamed it)")
+    body = source[match.end() - 1:_matching(source, match.end() - 1) + 1]
+    return [m.group(1) for m in re.finditer(r"\n  ([a-z][A-Za-z]*)\((?:o|options) = \{\}\)", body) if m.group(1) != "constructor"]
+
+
+def _kebab(name: str) -> str:
+    """``climbThrough`` -> ``climb-through`` (the parts sheet's spelling)."""
+    return re.sub(r"(?<=[a-z0-9])([A-Z])", lambda m: "-" + m.group(1).lower(), name)
+
+
+@lru_cache(maxsize=1)
+def air_names() -> dict[str, Any]:
+    """The names and options of the Phase AO modules a ``space`` scene reaches (DESIGN.md §123.14), read
+    from their shipped source as :func:`space_names` reads Phase AN's:
+
+    ``air_presets``, ``air_options`` (vidgen/space-air); ``sea_states``, ``waters``, ``sea_options``,
+    ``state_options`` (vidgen/space-sea); ``skies`` (name -> its decks' types), ``deck_types``,
+    ``deck_options``, ``cloud_options``, ``tower_options``, ``lightning_options`` (vidgen/space-clouds);
+    ``land_presets``, ``land_options``, ``land_parts`` (vidgen/space-land); ``world_options``,
+    ``handovers`` (vidgen/space-descent); ``planes``, ``plane_options``, ``plane_update``, ``wings``,
+    ``schemes`` (vidgen/space-plane); ``effects`` (group -> its keys), ``effect_options``,
+    ``effect_update`` (vidgen/space-effects); ``hulls`` (family -> its numbers), ``hull_lengths``,
+    ``palettes``, ``hull_options``, ``dress_options``, ``dress_groups``, ``plume_modes``
+    (vidgen/space-hull, -hull-detail); ``air_moves`` / ``ship_moves`` (the module's names -> their
+    options), ``sides``, ``wing_views`` (vidgen/space-camera-air); ``kit_parts`` (the craft kit's
+    parts, vidgen/space-craft)."""
+    air, air_src = "vidgen/space-air", module_source("vidgen/space-air")
+    sea, clouds, land = "vidgen/space-sea", "vidgen/space-clouds", "vidgen/space-land"
+    clouds_src = module_source(clouds)
+    skies = {k: re.findall(r'type:\s*"(\w+)"', _field_object_or_empty(v, "decks")) for k, v in object_entries(constant_text(clouds_src, "SKIES", clouds), clouds_src, clouds).items()}
+    sky_towers = {k: bool(re.search(r"\btowers:", v)) for k, v in object_entries(constant_text(clouds_src, "SKIES", clouds), clouds_src, clouds).items()}
+    plane, plane_src = "vidgen/space-plane", module_source("vidgen/space-plane")
+    plane_options = list(dict.fromkeys(["seed", *constant_strings(plane, "SPEC_KEYS"), *constant_strings(plane, "KIT_KEYS"), *constant_keys(plane, "KIT"),
+                                        *constant_strings(plane, "PLANE_KEYS"), "bay"]))
+    fx = "vidgen/space-effects"
+    hull, hull_src = "vidgen/space-hull", module_source("vidgen/space-hull")
+    families = object_entries(constant_text(hull_src, "FAMILIES", hull), hull_src, hull)
+    hull_params = {k: list(object_entries(_field_object(v, "params"), hull_src, hull)) for k, v in families.items()}
+    lengths = {k: [float(x) for x in re.search(r"lengths:\s*\[([^\]]*)\]", v).group(1).split(",")] for k, v in families.items()}  # type: ignore[union-attr]
+    hull_kit = [k for k in constant_strings(hull, "KIT_KEYS") if k != "seed"] + ["tile", "plate"]
+    detail = "vidgen/space-hull-detail"
+    cam, cam_src = "vidgen/space-camera-air", module_source("vidgen/space-camera-air")
+    timing = constant_strings(cam, "TIMING")
+    calls = {m.group(1): m.group(2) for m in re.finditer(r'known\(`?"?(\w+) options"?`?, options, (\[[^\n]*?\]|\[\.\.\.TIMING[^\n]*?\]\))', cam_src)}
+    move_options: dict[str, list[str]] = {}
+    for move, text in calls.items():
+        text = text.rstrip(")")
+        own = [s for s in re.findall(r'"(\w+)"', text)]
+        move_options[move] = list(dict.fromkeys([*(timing if "...TIMING" in text else []), *own]))
+    through = re.search(r'known\(`\$\{who\} options`, options, (\[\.\.\.TIMING, [^\]]*\])\);\n    const c = this\._timing\(t, options, who, 0\.5\)', cam_src)
+    descent = re.search(r'known\(`\$\{who\} options`, options, (\[\.\.\.TIMING\.filter[^\n]*?"margin"\])\);\n    const pairOfLenses', cam_src)
+    for names_, found, lens in ((("climbThrough", "descendThrough"), through, True), (("descend", "ascend"), descent, False)):
+        if found is None:
+            raise VidgenError(f"{cam}: cannot read the options of {' and '.join(names_)} (a broken install, or the module changed)")
+        own = re.findall(r'"(\w+)"', found.group(1))
+        for move in names_:
+            move_options[move] = list(dict.fromkeys([*(t for t in timing if lens or t != "lens"), *own]))
+    rise = re.search(r'known\("rise options", options, (\[\.\.\.TIMING\.filter[^\n]*?\])\);', cam_src)
+    if rise is not None:
+        move_options["rise"] = list(dict.fromkeys([*(t for t in timing if t != "lens"), *re.findall(r'"(\w+)"', rise.group(1))]))
+    limb = re.search(r'known\("hullReveal options \(mode: \\"limb\\"\)", options, (\[[^\]]*\])\)', cam_src)
+    if limb is not None:
+        move_options["hullReveal"] = list(dict.fromkeys([*move_options.get("hullReveal", []), *re.findall(r'"(\w+)"', limb.group(1))]))
+    air_moves, ship_moves = constant_strings(cam, "AIR_MOVES"), constant_strings(cam, "SHIP_MOVES")
+    missing = [m for m in (*air_moves, *ship_moves) if m not in move_options]
+    if missing:
+        raise VidgenError(f"{cam}: cannot read the options of {', '.join(missing)} (a broken install, or the module changed)")
+    craft, craft_src = "vidgen/space-craft", module_source("vidgen/space-craft")
+    descent_mod = "vidgen/space-descent"
+    return {
+        "air_presets": constant_keys(air, "PRESETS"), "air_options": [*constant_strings(air, "AIR_OPTIONS")], "air_qualities": constant_strings(air, "QUALITIES"),
+        "exposures": constant_strings(air, "EXPOSURES"),
+        "sea_states": constant_keys(sea, "STATES"), "waters": constant_keys(sea, "WATERS"), "sea_options": constant_keys(sea, "OPTIONS"),
+        "state_options": [k for k in constant_strings(sea, "STATE_OPTIONS") if k != "name"],
+        "skies": skies, "sky_towers": sky_towers, "deck_types": constant_keys(clouds, "DECKS"), "deck_options": constant_strings(clouds, "DECK_OPTIONS"),
+        "cloud_options": constant_keys(clouds, "OPTIONS"), "tower_options": constant_strings(clouds, "TOWER_OPTIONS"),
+        "lightning_options": constant_strings(clouds, "LIGHTNING_OPTIONS"),
+        "land_presets": constant_keys(land, "PRESETS"), "land_options": constant_keys(land, "OPTIONS"), "land_parts": constant_strings(land, "RECIPE_KEYS"),
+        "world_options": constant_keys(descent_mod, "OPTIONS"), "handovers": constant_keys(descent_mod, "HANDOVERS"),
+        "planes": constant_keys(plane, "PLANES"), "plane_options": plane_options,
+        "plane_update": [*constant_strings(plane, "OWN_UPDATE"), *constant_strings(plane, "CRAFT_UPDATE")],
+        "wings": constant_keys(plane, "WINGS"), "schemes": constant_keys(plane, "SCHEMES"), "noses": constant_strings(plane, "NOSES"),
+        "effects": {"reentry": constant_strings(fx, "REENTRY_KEYS"), "contrails": constant_strings(fx, "CONTRAIL_KEYS"),
+                    "exhaust": constant_strings(fx, "EXHAUST_KEYS"), "vapour": constant_strings(fx, "VAPOUR_KEYS")},
+        "effect_options": constant_strings(fx, "OPTION_KEYS"), "effect_update": constant_strings(fx, "UPDATE_KEYS"),
+        "hulls": hull_params, "hull_lengths": lengths, "palettes": constant_keys(hull, "PALETTES"),
+        "hull_options": list(dict.fromkeys(["seed", "length", "age", "palette", "inset", *hull_kit, *constant_strings(hull, "HULL_KEYS")])),
+        "dress_options": [*constant_keys(detail, "DRESS"), "seed"], "plume_modes": constant_strings(detail, "PLUME_MODES"),
+        "dress_groups": {"windows": constant_strings(detail, "WINDOW_KEYS"), "hangars": constant_strings(detail, "HANGAR_KEYS"), "engines": constant_strings(detail, "ENGINE_KEYS")},
+        "air_moves": {m: move_options[m] for m in air_moves}, "ship_moves": {m: move_options[m] for m in ship_moves},
+        "sides": constant_keys(cam, "SIDES"), "wing_views": constant_keys(cam, "WING_VIEWS"),
+        "kit_parts": _class_methods(craft_src, "CraftKit", craft), "kit_options": constant_keys(craft, "KIT_DEFAULTS"),
+    }
+
+
+def _field_object_or_empty(text: str, field: str) -> str:
+    """The array or object ``field:`` holds in the object literal ``text`` ("" when it has none)."""
+    match = re.search(rf"\b{field}:\s*([\[{{])", text)
+    if match is None:
+        return ""
+    start = match.end() - 1
+    return text[start:_matching(text, start) + 1]
+
+
+#: The prefix of each kind of name on the parts sheet (``vidgen parts``): a tile named ``<prefix><name>`` shows it.
+PART_PREFIXES = {"planes": "plane-", "hulls": "hull-", "sea_states": "sea-", "land_presets": "land-", "skies": "clouds-", "moves": "camera-"}
+
+
+def yaml_names() -> dict[str, list[str]]:
+    """Every name a ``space`` scene's YAML accepts for the new pictures, spelled as the YAML writes it (the
+    one registry the validation, the guide and the parts sheet agree on; DESIGN.md §123.14): air presets,
+    sea states, waters, cloud skies, deck types, land presets, planes, hull families, palettes, camera
+    moves (kebab-case, as the parts sheet names them: ``climb-through``), sides, wing views, the effects'
+    groups and the craft kit's parts."""
+    a = air_names()
+    return {"air_presets": a["air_presets"], "sea_states": a["sea_states"], "waters": a["waters"], "skies": list(a["skies"]),
+            "deck_types": a["deck_types"], "land_presets": a["land_presets"], "planes": a["planes"], "hulls": list(a["hulls"]),
+            "palettes": a["palettes"], "air_moves": [_kebab(m) for m in a["air_moves"]], "ship_moves": [_kebab(m) for m in a["ship_moves"]],
+            "sides": a["sides"], "wing_views": a["wing_views"], "effects": list(a["effects"]), "kit_parts": a["kit_parts"],
+            "handovers": a["handovers"]}
+
+
+__all__ = ["MODULES", "PART_PREFIXES", "air_names", "array_strings", "constant_entries", "constant_keys", "constant_strings", "constant_text",
+           "module_source", "object_entries", "space_names", "yaml_names"]

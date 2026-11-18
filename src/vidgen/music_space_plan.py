@@ -21,6 +21,12 @@ the score and ``--seed`` (the same score and seed, the same draft):
   the first scene has an opening title, the last an end card (vidgen/title-cards).
 
 It is a starting point: look at each scene (``vidgen still``), then change worlds, moves and timing.
+
+``--style space-air`` (Step 392, DESIGN.md §123.14) makes the same plan into scenes in the air and beside
+giant ships, by role and from the same score and seed: quiet, a skim over the sea at sunset; build, a
+descent from orbit to the sea; verse, a plane chased over the alpine range (its afterburner on the glow
+track); drop and climax, a pass along a dressed giant hull or a craft into its bay, by turns (the hull's
+windows on the glow track). ``--style space`` is unchanged.
 """
 
 from __future__ import annotations
@@ -170,10 +176,89 @@ def _say(shot: dict[str, Any], world: str) -> str:
     return words[move]
 
 
-def space_plan_yaml(plan: MusicPlan, source: str, seed: int = 1) -> str:
-    """The draft's ``video.yaml``: the score as ``music:`` and a ``space`` scene per cut of the plan."""
+#: The templates of ``--style space-air`` by role (DESIGN.md §123.14).
+AIR_BY_ROLE = {"intro": "skim", "outro": "skim", "breakdown": "skim", "build": "descent", "verse": "chase", "drop": "ship", "climax": "ship"}
+#: Hull families a pass shows (the seed picks); a craft into a bay is always the carrier's (hangar slots along a side).
+PASS_HULLS = ("carrier", "ark", "spine", "cluster", "lance")
+AIR_WORDS = {"skim": "a skim over the sea at sunset", "descent": "a descent from orbit to the sea", "chase": "a {plane} chased over the alpine range",
+             "pass": "a pass along a {hull}", "bay": "a craft into a carrier's bay"}
+
+
+def air_shot(plan: MusicPlan, k: int, seed: int, bay_next: bool) -> dict[str, Any]:
+    """What scene ``k`` of ``plan`` shows with ``--style space-air``: {template, plane, hull, seed}."""
+    cut = plan.scenes[k]
+    key = _seed(f"{cut.id}:{seed}:air")
+    template = AIR_BY_ROLE[cut.role]
+    if template == "ship":
+        template = "bay" if bay_next else "pass"
+    return {"template": template, "plane": _pick(("glider", "skiff", "needle", "scout"), key // 3), "hull": _pick(PASS_HULLS, key // 11),
+            "seed": key % 40 + 1}
+
+
+def _air_say(shot: dict[str, Any]) -> str:
+    return AIR_WORDS[shot["template"]].format(plane=shot["plane"], hull=shot["hull"])
+
+
+def air_scene_lines(plan: MusicPlan, k: int, shot: dict[str, Any], seed: int) -> list[str]:
+    """The YAML lines of scene ``k`` with ``--style space-air`` (indented for ``scenes:``)."""
+    c: SceneCut = plan.scenes[k]
+    over = [f"bar {c.first_bar + 1}", f"bar {c.first_bar + c.bars + 1}"]
+    seconds = c.frames / plan.fps
+    grade = dict(zip(("temperature", "saturation"), ROLE_GRADES[c.role]))
+    music = f"{{tracks: {_flow(c.tracks)}}}" if c.tracks else "true"
+    glow = list(c.react.get("glow", ()))[:1]
+    t = shot["template"]
+    lines = [f"  # {_bars_text(c.first_bar, c.bars)} ({c.start:.2f} s): {c.section}, {c.role}: {_air_say(shot)}",
+             f"  - id: {c.id}", "    type: space", f"    duration: {round(c.frames / plan.fps, 7)}", "    params:", "      fade: false",
+             f"      music_data: {music}", f"      sky: {{seed: {seed}, look: {LOOK_BY_ROLE[c.role]}}}"]
+    if t == "skim":
+        lines += ["      world: {sea: {state: breeze, seed: " + str(shot["seed"]) + "}, sun: [4, 284]}",
+                  f"      camera: {_flow({'move': 'skim', 'over': over, 'heading': 284, 'speed': 90, 'clearance': 14, 'turn': 10, 'lens': 'wide'})}"]
+    elif t == "descent":
+        top = "400 km" if seconds >= 10 else "40 km"
+        lines += ["      world: {planet: earth, at: [8, -150], sun: [38, 250], sea: {state: breeze, seed: 3}, clouds: {sky: fair, seed: " + str(shot["seed"]) + "}}",
+                  f"      camera: {_flow({'move': 'descend', 'over': over, 'from': top, 'to': 300, 'heading': 300, 'turn': 30, 'speed': 90, 'lens': ['normal', 'wide']})}"]
+    elif t == "chase":
+        legs = [{"follow": {"clearance": 300}, "for": float(round(seconds + 2))}]
+        flight = {"name": "Plane", "start": {"x": -6000, "z": 2000, "above_ground": 600, "heading": 70, "speed": 140}, "legs": legs}
+        lines += ["      world: {land: alpine, clouds: fair, sun: [24, 250]}", f"      flights: [{_flow(flight)}]",
+                  f"      craft: [{{name: Plane, plane: {shot['plane']}, seed: {shot['seed']}, fly: Plane, effects: {{contrails: {{always: true}}, exhaust: true}}}}]",
+                  f"      camera: {_flow({'move': 'chase', 'flight': 'Plane', 'over': over, 'lens': 'wide-normal'})}"]
+        if glow:
+            lines.append(f"      music: {_flow([{'track': glow[0], 'glow': 'Plane', 'as': 'boost'}])}")
+    else:
+        hull = "carrier" if t == "bay" else shot["hull"]
+        ref = ", scale_ref: {kind: ship, at: hangar-1, into: {hangar: hangar-1, over: " + _flow(over) + "}}" if t == "bay" else ""
+        lines += ["      orbits: {central: earth, speedup: 1, bodies: [{name: Ship, altitude: 900 km}]}", "      bodies: [{name: Earth}]",
+                  f"      craft: [{{name: Ship, hull: {hull}, seed: {shot['seed']}, dress: {{plumes: bank}}{ref}}}]"]
+        move = ({"move": "into-bay", "ship": "Ship", "hangar": "hangar-1", "over": over} if t == "bay" else
+                {"move": "hull-pass", "ship": "Ship", "over": over, "side": "port", "standoff": 60, "from": 0.2, "speed": 40})
+        lines.append(f"      camera: {_flow(move)}")
+        if glow:
+            lines.append(f"      music: {_flow([{'track': glow[0], 'glow': 'Ship', 'as': 'lights'}])}")
+        lines.append(f"      finish: {{grade: {_flow(grade)}}}")
+    if k == 0:
+        lines.append(f"      title: {{title: {_yaml(plan.title)}, start: 1}}")
+    if k == len(plan.scenes) - 1:
+        lines.append(f"      end_card: {{title: {_yaml(plan.title)}}}")
+    return lines
+
+
+def _air_shots(plan: MusicPlan, seed: int) -> list[dict[str, Any]]:
+    out, bay = [], False
+    for k in range(len(plan.scenes)):
+        shot = air_shot(plan, k, seed, bay)
+        if shot["template"] in ("pass", "bay"):
+            bay = shot["template"] == "pass"
+        out.append(shot)
+    return out
+
+
+def space_plan_yaml(plan: MusicPlan, source: str, seed: int = 1, style: str = "space") -> str:
+    """The draft's ``video.yaml``: the score as ``music:`` and a ``space`` scene per cut of the plan (``style``:
+    ``space``, Phase AN's orbital scenes; ``space-air``, scenes in the air and beside giant ships)."""
     lines = [
-        f"# {plan.title}: a space film drafted by `vidgen music plan --style space` (seed {seed}) from {Path(source).name}.",
+        f"# {plan.title}: a space film drafted by `vidgen music plan --style {style}` (seed {seed}) from {Path(source).name}.",
         f"# Music: {plan.key}, {plan.tempo:g} BPM, {plan.time[0]}/{plan.time[1]}; one bar = {plan.bar_seconds:.4f} s. Form: "
         + " | ".join(f"{s.name} {s.bars}" for s in plan.sections) + f" = {plan.bars} bars.",
         "# Every scene is a space scene (no code): a world chosen by the scene's colour, a camera move by its role, its bars as",
@@ -188,6 +273,11 @@ def space_plan_yaml(plan: MusicPlan, source: str, seed: int = 1) -> str:
         "audio: {normalize: true, target_lufs: -14, true_peak: -1.5}",
         "scenes:",
     ]
+    if style == "space-air":
+        lines[2] = "# Every scene is a space scene (no code): in the air (a skim, a descent, a chase) or beside a giant ship, by its role; its bars as"
+        for k, shot in enumerate(_air_shots(plan, seed)):
+            lines += air_scene_lines(plan, k, shot, seed)
+        return "\n".join(lines) + "\n"
     warp_ready = True
     for k in range(len(plan.scenes)):
         shot = space_shot(plan, k, seed, warp_ready)
@@ -197,10 +287,15 @@ def space_plan_yaml(plan: MusicPlan, source: str, seed: int = 1) -> str:
     return "\n".join(lines) + "\n"
 
 
-def space_plan_text(plan: MusicPlan, seed: int = 1) -> str:
+def space_plan_text(plan: MusicPlan, seed: int = 1, style: str = "space") -> str:
     """One line per scene: what its space scene shows."""
-    out, warp_ready = [f"space scenes (seed {seed}):"], True
     width = max(len(c.id) for c in plan.scenes)
+    if style == "space-air":
+        out = [f"space scenes in the air and beside giant ships (seed {seed}):"]
+        for c, shot in zip(plan.scenes, _air_shots(plan, seed)):
+            out.append(f"  {c.id:<{width}}  {c.role:<9} {_air_say(shot)}")
+        return "\n".join(out)
+    out, warp_ready = [f"space scenes (seed {seed}):"], True
     for k, c in enumerate(plan.scenes):
         shot = space_shot(plan, k, seed, warp_ready)
         if c.role in LOUD:
@@ -209,18 +304,19 @@ def space_plan_text(plan: MusicPlan, seed: int = 1) -> str:
     return "\n".join(out)
 
 
-def write_space_video(plan: MusicPlan, output: Path, *, force: bool = False, seed: int = 1) -> DraftResult:
+def write_space_video(plan: MusicPlan, output: Path, *, force: bool = False, seed: int = 1, style: str = "space") -> DraftResult:
     """Write ``plan`` as a draft space film in the folder ``output`` (as :func:`write_music_video`, with
     ``space`` scenes and no pages: the scenes need no code)."""
     from vidgen.fileio import write_text_atomic
 
     source, files, created = place_score(plan, output, force=force)
     config = output / "video.yaml"
-    write_text_atomic(config, space_plan_yaml(plan, source, seed))
+    write_text_atomic(config, space_plan_yaml(plan, source, seed, style))
     gitignore = output / ".gitignore"
     if not gitignore.exists():
         write_text_atomic(gitignore, "build/\nexports/\n*.mp4\n")
     return DraftResult(output, config, tuple(files), created)
 
 
-__all__ = ["WORLD_COLOURS", "colour_family", "move_spec", "space_plan_text", "space_plan_yaml", "space_shot", "write_space_video"]
+__all__ = ["AIR_BY_ROLE", "PASS_HULLS", "WORLD_COLOURS", "air_scene_lines", "air_shot", "colour_family", "move_spec", "space_plan_text", "space_plan_yaml",
+           "space_shot", "write_space_video"]

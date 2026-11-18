@@ -1,0 +1,163 @@
+# First Light: an original 32.5 s cue for vidgen's orchestra. No samples, no SoundFont.
+# 96 BPM in D major; one bar = 2.5 s = 75 frames at 30 fps.
+#   dawn   2  a hit on the first frame (taikos, timpani, low brass, crash), then violins in tremolo and a choir
+#             opening from a hum to "ah"
+#   rise   2  cellos and violas turn to a spiccato ostinato, four horns sing the first phrase
+#   theme  2  the violins take the theme, the choir on "ooh", taikos underneath
+#   build  2  timpani roll, snare roll and a cymbal swell into...
+#   peak   4  the trumpet's theme over the whole orchestra and the choir on "aah"
+#   end    1  D major, tam-tam, everything ringing out
+version: 1
+title: First Light
+key: D major
+tempo: 96
+seed: 2611
+loop: false
+sections:
+  - {name: dawn, bars: 2, progression: "D D"}
+  - {name: rise, bars: 2, progression: "Bm G"}
+  - {name: theme, bars: 2, progression: "D A"}
+  - {name: build, bars: 2, progression: "Em A"}
+  - {name: peak, bars: 4, progression: "D A Bm G"}
+  - {name: end, bars: 1, progression: "D"}
+tracks:
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 3.8, mix: 0.32, tone: 4800}
+    sections:
+      dawn:  {settings: {stroke: tremolo, brightness: 0.75, attack: 0.05}, steps: "[f >] D5+A5 - - - - - - - | [mf <] F#5+A5 - - - - - - - [f]"}
+      rise:  {settings: {stroke: tremolo, brightness: 0.7}, steps: "[mf] F#5+B5 - - - - - - - | [<] G5+B5 - - - - - - - [f]"}
+      theme: {settings: {attack: 0.12, vibrato: 14}, steps: "[f] (F#5 - - - E5 - D5 - | C#5 - - - - - E5 -)"}
+      build: {settings: {stroke: spiccato}, steps: "[mf <] E5 G5 B5 G5 E5 G5 B5 G5 E5 G5 B5 G5 E5 G5 B5 G5 | E5 A5 C#6 A5 E5 A5 C#6 A5 E5 A5 C#6 A5 E5 A5 C#6 A5 [ff]"}
+      peak:  {settings: {attack: 0.1}, steps: "[ff] A5+D6 - - - - - - - | A5+C#6 - - - - - - - | B5+D6 - - - - - - - | B5+D6 - - - - - - -"}
+      end:   {steps: "[ff >] A5+D6 - - - - - - . [mp]"}
+  violas:
+    instrument: violas
+    pan: -0.05
+    reverb: {size: 3.8, mix: 0.32, tone: 4800}
+    sections:
+      dawn:  {settings: {stroke: tremolo, brightness: 0.7, attack: 0.05}, steps: "[f >] D4+F#4 - - - - - - - | [mf] D4+F#4 - - - - - - -"}
+      rise:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "B3 D4 F#4 B3 D4 F#4 D4 B3 B3 D4 F#4 B3 D4 F#4 D4 B3 | G3 B3 D4 G3 B3 D4 B3 G3 G3 B3 D4 G3 B3 D4 B3 G3"}
+      theme: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "D4 F#4 A4 D4 F#4 A4 F#4 D4 D4 F#4 A4 D4 F#4 A4 F#4 D4 | C#4 E4 A4 C#4 E4 A4 E4 C#4 C#4 E4 A4 C#4 E4 A4 E4 C#4"}
+      build: {settings: {stroke: tremolo, brightness: 0.8}, steps: "[mf <] G4+B4 - - - - - - - | A4+C#5 - - - - - - - [ff]"}
+      peak:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] D4 F#4 A4 D4 F#4 A4 F#4 D4 D4 F#4 A4 D4 F#4 A4 F#4 D4 | C#4 E4 A4 C#4 E4 A4 E4 C#4 C#4 E4 A4 C#4 E4 A4 E4 C#4 | B3 D4 F#4 B3 D4 F#4 D4 B3 B3 D4 F#4 B3 D4 F#4 D4 B3 | B3 D4 G4 B3 D4 G4 D4 B3 B3 D4 G4 B3 D4 G4 D4 B3"}
+      end:   {steps: "[ff >] F#4+A4 - - - - - - . [mp]"}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 3.8, mix: 0.3, tone: 4500}
+    sections:
+      dawn:  {steps: "[sfz] D2 - - - - - - - | [mf] D3 - - - - - - -"}
+      rise:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[mf <] B2 B2 F#3 B2 D3 B2 F#3 B2 B2 B2 F#3 B2 D3 B2 F#3 B2 | G2 G2 D3 G2 B2 G2 D3 G2 G2 G2 D3 G2 B2 G2 D3 G2 [f]"}
+      theme: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[f] D3 D3 A3 D3 F#3 D3 A3 D3 D3 D3 A3 D3 F#3 D3 A3 D3 | A2 A2 E3 A2 C#3 A2 E3 A2 A2 A2 E3 A2 C#3 A2 E3 A2"}
+      build: {settings: {stroke: spiccato}, steps: "[mf <] E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 E2 | A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 A2 [ff]"}
+      peak:  {settings: {stroke: spiccato}, accent: "3+3+2", steps: "[ff] D3 D3 A3 D3 F#3 D3 A3 D3 D3 D3 A3 D3 F#3 D3 A3 D3 | A2 A2 E3 A2 C#3 A2 E3 A2 A2 A2 E3 A2 C#3 A2 E3 A2 | B2 B2 F#3 B2 D3 B2 F#3 B2 B2 B2 F#3 B2 D3 B2 F#3 B2 | G2 G2 D3 G2 B2 G2 D3 G2 G2 G2 D3 G2 B2 G2 D3 G2"}
+      end:   {steps: "[ff >] D3 - - - - - - . [mp]"}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 3.8, mix: 0.28, tone: 4000}
+    sections:
+      dawn:  {steps: "[sfz] D1 - - - - - - - | [mf] D2 - - - - - - -"}
+      rise:  {steps: "[mf] B1 - - - - - - - | G1 - - - - - - -"}
+      theme: {steps: "[f] D2 - - - - - - - | A1 - - - - - - -"}
+      build: {steps: "[mf <] E1 - - - - - - - | A1 - - - - - - - [ff]"}
+      peak:  {steps: "[ff] D2 - - - - - - - | A1 - - - - - - - | B1 - - - - - - - | G1 - - - - - - -"}
+      end:   {steps: "[ff >] D2 - - - - - - . [mp]"}
+  horns:
+    instrument: horn
+    settings: {players: 4, attack: 0.12}
+    pan: 0.1
+    reverb: {size: 4, mix: 0.32, tone: 4500}
+    sections:
+      dawn:  {steps: "[ff] D4+A4 - - - . . . . | [fp <] D4+F#4 - - - - - - - [f]"}
+      rise:  {volume: 4, steps: "[mf] (B3 - - - D4 - F#4 - | G4 - - - F#4 - D4 -)"}
+      theme: {steps: "[mf] A3+D4 - - - - - - - | A3+C#4 - - - - - - -"}
+      build: {steps: "[fp <] E4+B4 - - - - - - - | C#4+A4 - - - - - - - [ff]"}
+      peak:  {steps: "[ff] D4+F#4 - - - - - - - | C#4+E4 - - - - - - - | D4+F#4 - - - - - - - | B3+D4 - - - - - - -"}
+      end:   {steps: "[ff >] D4+F#4 - - - - - - . [mp]"}
+  trumpet:
+    instrument: trumpet
+    only: [peak, end]
+    settings: {vibrato: 12, vibrato_delay: 0.35, attack: 0.04, players: 2}
+    pan: 0.2
+    reverb: {size: 4, mix: 0.3, tone: 4800}
+    sections:
+      peak: {steps: "[f <] (D5 - - - F#5 - A5 - | G5 - - - F#5 - E5 - | F#5 - - - D5 - B4 - | D5 - - - - - E5 -) [ff]"}
+      end:  {steps: "[ff >] F#5 - - - - - - . [mp]"}
+  low:
+    instrument: low_brass
+    only: [dawn, build, peak, end]
+    settings: {tuba: 0.6, attack: 0.1}
+    reverb: {size: 4, mix: 0.3, tone: 4000}
+    sections:
+      dawn:  {steps: "[ff] D2+A2 - - - - . . . | ."}
+      build: {settings: {attack: 0.3}, steps: ". | [pp <] A1+E2 - - - - - - - [ff]"}
+      peak:  {steps: "[f] D2+A2 - - - - - - - | A1+E2 - - - - - - - | B1+F#2 - - - - - - - | G1+D2 - - - - - - -"}
+      end:   {steps: "[ff >] D2+A2 - - - - - - . [mp]"}
+  choir:
+    instrument: choir
+    pan: 0
+    volume: 3
+    reverb: {size: 4.6, mix: 0.38, tone: 4500}
+    sections:
+      dawn:  {settings: {vowel: aah, attack: 0.4}, steps: "[mp <] [mm-ah] D3+A3+D4+F#4+A4 - - - - - - - | - - - - - - - - [f]"}
+      rise:  {settings: {vowel: ooh}, steps: "[mf] B2+F#3+B3+D4+F#4 - - - - - - - | G2+D3+B3+D4+G4 - - - - - - -"}
+      theme: {settings: {vowel: ooh}, steps: "[mf] D3+A3+D4+F#4 - - - - - - - | A2+E3+C#4+E4 - - - - - - -"}
+      build: {settings: {vowel: aah, brightness: 0.6}, steps: "[mf <] E3+B3+E4+G4 - - - - - - - | A2+E3+C#4+E4+A4 - - - - - - - [ff]"}
+      peak:  {settings: {vowel: aah, brightness: 0.7}, volume: 5, steps: "[ff] D3+A3+D4+F#4+A4 - - - - - - - | A2+E3+C#4+E4+A4 - - - - - - - | B2+F#3+B3+D4+F#4 - - - - - - - | G2+D3+B3+D4+G4 - - - - - - -"}
+      end:   {settings: {vowel: aah, brightness: 0.7, ring: 1.5}, volume: 5, steps: "[ff >] D3+A3+D4+F#4+A4 - - - - - - . [p]"}
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.6, mix: 0.28}
+    sections:
+      dawn:  {steps: "[ff] D2 . . . . . . . | [mp] D2 . . . A2 . . ."}
+      rise:  {steps: "[mf] B2 . . . . . F#2 . | G2 . . . . . D2 ."}
+      theme: {steps: "[f] D2 . . . A2 . . . | A2 . . . E2 . . ."}
+      build: {settings: {mallet: 0.2, ring: 0.3}, steps: "[f] E2 . . . E2 . E2 . | [roll pp <] A2 - - - - - - - [ff]"}
+      peak:  {steps: "[ff] D2 . . . A2 . . . | A2 . . . E2 . . . | B2 . . . F#2 . . . | G2 . . . D2 . G2 G2"}
+      end:   {steps: "[ff] D2+A2 . . . . . . ."}
+  taiko:
+    instrument: taiko
+    settings: {players: 6}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      dawn:  {volume: 1, steps: "X... .... .... .... | .... .... .... ...."}
+      rise:  {volume: -6, steps: "X... .... X... .... | X... .... X... ..x."}
+      theme: {volume: -3, steps: "X... ..x. X... .... | X... ..x. X... x.x."}
+      build: {volume: -2, steps: "X... ..x. X... ..x. | X..x ..x. X.x. xxxx"}
+      peak:  {steps: "X..x ..x. X..x .x.. | X..x ..x. X..x .x.. | X..x ..x. X..x .x.. | X..x ..x. X.x. xxxx"}
+      end:   {volume: 1, steps: "X... .... .... ...."}
+  bass_drum:
+    instrument: bass_drum
+    only: [dawn, peak, end]
+    sections:
+      dawn: {steps: "x . . . . . . . | ."}
+      peak: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end:  {steps: "x . . . . . . ."}
+  snares:
+    instrument: snare_drum
+    only: [build]
+    settings: {players: 4}
+    steps: ". | [roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [build]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [dawn, peak, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      dawn: {steps: "x . . . . . . . | ."}
+      peak: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end:  {steps: "x . . . . . . ."}
+  gong:
+    instrument: tam_tam
+    only: [end]
+    reverb: {size: 4.5, mix: 0.36}
+    steps: "[f] x . . . . . . ."

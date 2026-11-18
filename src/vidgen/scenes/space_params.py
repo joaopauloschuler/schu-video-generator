@@ -429,9 +429,43 @@ class CraftSpec(Open):
     """Not one craft but this many (seeds seed, seed + 1, ...) in a loose formation."""
     spacing: Any = None
     """The fleet's spacing (a length; default 2.5 times the first craft's radius)."""
+    plane: str | None = None
+    """Instead of kind: a space plane of vidgen/space-plane (glider, freighter, needle, lifter, scout, skiff); its parts' options (wing, fins, body, scheme, scorch...) as extra keys."""
+    hull: str | list[str] | None = None
+    """Instead of kind: a giant ship of vidgen/space-hull (spine, carrier, cluster, lance, wheel, ark, twin; a list with fleet), with length, age, palette and the family's numbers as extra keys."""
+    parts: dict[str, Any] | None = None
+    """Instead of kind: a craft of the kit's own parts (vidgen/space-craft): {part: hull, shape: prism, ..., attach: [{at: fore, part: dish, diameter: 3}, {around: {count: 2, along: 0.5}, part: solarWing}]}."""
+    effects: dict[str, Any] | None = None
+    """Effects of vidgen/space-effects on it: {reentry, contrails, exhaust, vapour} (a surface scene: they follow its flight; an orbital one: exhaust only)."""
+    gear: float | dict[str, Any] | None = None
+    """A plane's landing gear, 0 (up) to 1 (down), or {over: [start, end], from: 0, to: 1}."""
+    bay: float | dict[str, Any] | None = None
+    """A plane's payload bay doors, 0 to 1, or {over, from, to}."""
+    cabin: float | dict[str, Any] | None = None
+    """A plane's cabin lights, 0 to 1, or {over, from, to}."""
+    controls: dict[str, Any] | None = None
+    """A plane's control surfaces held at angles (elevon, roll, rudder, flap, brake, bodyFlap, canard; degrees); default they follow its flight."""
+    dress: bool | dict[str, Any] = True
+    """A hull's fine detail (vidgen/space-hull-detail): true (default), false (bare), or {windows, lights, nav, hangars, engines, clutter, marks, plumes, ...}."""
+    scale_ref: dict[str, Any] | None = None
+    """A hull's small craft for size: {kind: ship, at: hangar-1, gap: 120, into: {hangar: hangar-2, over: [0, 10]}, escort: true}."""
+
+    @property
+    def maker(self) -> str:
+        """What makes it: kit (a ready-made craft or a fleet), plane, hull or parts."""
+        return "plane" if self.plane is not None else "hull" if self.hull is not None else "parts" if self.parts is not None else "kit"
+
+    @property
+    def hull_kinds(self) -> list[str]:
+        return [] if self.hull is None else [self.hull] if isinstance(self.hull, str) else list(self.hull)
 
     @model_validator(mode="after")
     def _check(self) -> "CraftSpec":
+        if self.maker != "kit":
+            return self._check_other()
+        for key in ("gear", "bay", "cabin", "controls", "scale_ref"):
+            if getattr(self, key) is not None:
+                raise ValueError(f"craft {self.name}: {key} is a {'hull' if key == 'scale_ref' else 'plane'}'s (give {'hull' if key == 'scale_ref' else 'plane'}: ...)")
         n = names()
         kinds = [self.kind] if isinstance(self.kind, str) else list(self.kind)
         if not kinds:
@@ -451,10 +485,84 @@ class CraftSpec(Open):
             module_options(self.burn, ["seconds", "turn", "attitude"], f"craft {self.name}.burn")
         if self.spacing is not None:
             length(self.spacing, f"craft {self.name}.spacing")
+        if self.effects is not None:
+            self.effects_spec()
         self.craft_options()
         return self
 
+    def _check_other(self) -> "CraftSpec":
+        """A plane, a hull or a craft of the kit's parts."""
+        from .space_air_params import Ramp, ScaleRefSpec, air, check_dress, check_parts
+
+        a, n = air(), names()
+        given = [k for k in ("plane", "hull", "parts") if getattr(self, k) is not None]
+        if len(given) > 1:
+            raise ValueError(f"craft {self.name}: give one of plane, hull or parts, not {' and '.join(given)}")
+        if "kind" in self.model_fields_set:
+            raise ValueError(f"craft {self.name}: give kind (a craft of the kit) or {given[0]}, not both")
+        if self.plane is not None:
+            self.plane = one_of(self.plane, a["planes"], "plane")
+        if self.hull is not None:
+            kinds = [one_of(k, list(a["hulls"]), "hull family") for k in self.hull_kinds]
+            if not kinds:
+                raise ValueError(f"craft {self.name}: hull must name a family")
+            if isinstance(self.hull, list) and self.fleet is None:
+                raise ValueError(f"craft {self.name}: a list of hull families makes a fleet: give fleet: N (how many)")
+            self.hull = kinds[0] if isinstance(self.hull, str) else kinds
+        if self.parts is not None:
+            check_parts(self.parts)
+        if self.fleet is not None and self.maker != "hull":
+            raise ValueError(f"craft {self.name}: fleet is for craft of the kit (kind) and hulls (hull); a fleet of {self.maker} is not reached from YAML")
+        if self.maker != "plane":
+            for key in ("gear", "bay", "cabin", "controls"):
+                if getattr(self, key) is not None:
+                    raise ValueError(f"craft {self.name}: {key} is a plane's (give plane: glider, ...)")
+        for key in ("gear", "bay", "cabin"):
+            value = getattr(self, key)
+            if isinstance(value, dict):
+                Ramp.model_validate(value)
+            elif value is not None and not 0 <= value <= 1:
+                raise ValueError(f"craft {self.name}.{key}: from 0 to 1, got {value}")
+        if self.controls is not None:
+            module_options(self.controls, ["elevon", "roll", "rudder", "flap", "brake", "bodyFlap", "canard"], f"craft {self.name}.controls")
+        if self.maker == "hull":
+            if self.dress is not True:
+                check_dress(self.dress)
+            if self.scale_ref is not None:
+                ScaleRefSpec.model_validate(self.scale_ref)
+                if self.scale_ref.get("into") is not None and self.dress is False:
+                    raise ValueError(f"craft {self.name}: scale_ref.into flies the craft into a bay along the detail's approach: it needs dress (leave out dress: false)")
+        else:
+            if "dress" in self.model_fields_set:
+                raise ValueError(f"craft {self.name}: dress is a hull's (give hull: carrier, ...)")
+            if self.scale_ref is not None:
+                raise ValueError(f"craft {self.name}: scale_ref is a hull's (give hull: carrier, ...)")
+        if one_of(self.detail, n["details"], "detail") != self.detail:   # (an unset detail stays unset: a fleet of hulls keeps its own)
+            self.detail = one_of(self.detail, n["details"], "detail")
+        if isinstance(self.attitude, str):
+            self.attitude = one_of(self.attitude, n["attitudes"], "attitude")
+        if self.at is not None:
+            point(self.at, f"craft {self.name}.at")
+        if self.velocity is not None and not (len(self.velocity) == 3):
+            raise ValueError(f"craft {self.name}.velocity must be [x, y, z] m/s")
+        if isinstance(self.burn, dict):
+            module_options(self.burn, ["seconds", "turn", "attitude"], f"craft {self.name}.burn")
+        if self.spacing is not None:
+            length(self.spacing, f"craft {self.name}.spacing")
+        if self.effects is not None:
+            self.effects_spec()
+        self.craft_options()
+        return self
+
+    def effects_spec(self) -> Any:
+        """Its effects (:class:`~vidgen.scenes.space_air_params.EffectsSpec`)."""
+        from .space_air_params import EffectsSpec
+
+        return EffectsSpec.model_validate(self.effects)
+
     def craft_options(self) -> dict[str, Any]:
+        if self.maker != "kit":
+            return self._other_options()
         n = names()
         own = sorted({o for k in ([self.kind] if isinstance(self.kind, str) else self.kind) for o in n["craft"][k]})
         out = module_options(self.extras(), [*n["craft_options"], *own], f"craft {self.name}",
@@ -468,8 +576,47 @@ class CraftSpec(Open):
             out["lights"] = self.lights
         return out
 
+    def _other_options(self) -> dict[str, Any]:
+        """The options of plane(), hull() or the kit (parts), checked against the module's own lists."""
+        from .space_air_params import air
 
-PHENOMENA = ("black-hole", "wormhole", "warp", "asteroids", "asteroid", "comet", "aurora")
+        a = air()
+        leave = ("seed", "detail", "name", "camera", "height", "sun", "target", "lights", "marker", "gear", "bay")
+        if self.maker == "plane":
+            out = module_options(self.extras(), a["plane_options"], f"craft {self.name}", leave=leave)
+        elif self.maker == "hull":
+            params = sorted({p for k in self.hull_kinds for p in a["hulls"][k]})
+            out = module_options(self.extras(), [*a["hull_options"], *params], f"craft {self.name}", leave=leave)
+            if "length" in out:
+                metres = length(out["length"], f"craft {self.name}.length")
+                if not 200 <= metres <= 20000:
+                    raise ValueError(f"craft {self.name}.length: a hull is 200 m to 20 km long, got {metres:g} m")
+                out["length"] = metres
+            if "palette" in out:
+                out["palette"] = one_of(str(out["palette"]), a["palettes"], "palette")
+        else:
+            out = module_options(self.extras(), [k for k in a["kit_options"] if k not in ("seed", "detail")], f"craft {self.name}")
+        if not (self.maker == "hull" and self.fleet and "detail" not in self.model_fields_set):   # a fleet of hulls: hullFleet's own far
+            out["detail"] = self.detail
+        if self.seed is not None:
+            out["seed"] = self.seed
+        if self.marker:
+            out["marker"] = self.marker
+        if self.lights is not None:
+            out["lights"] = self.lights
+        return out
+
+    def hull_length(self) -> float:
+        """The hull's length in metres when it is stated, else the shortest of its family's usual lengths (a lower bound)."""
+        from .space_air_params import air
+
+        given = self.extras().get("length")
+        if given is not None:
+            return length(given, f"craft {self.name}.length")
+        return min(air()["hull_lengths"][k][0] for k in self.hull_kinds)
+
+
+PHENOMENA =("black-hole", "wormhole", "warp", "asteroids", "asteroid", "comet", "aurora")
 
 
 class PhenomenonSpec(Open):
@@ -493,6 +640,8 @@ class PhenomenonSpec(Open):
     """warp: [start, end] of the jump (seconds or 'bar 9'); default the whole scene."""
     other: dict[str, Any] | None = None
     """wormhole: the sky on the other side (sky options: {seed: 11, look: rich})."""
+    cut: dict[str, Any] | None = None
+    """warp: the jump as a cut between two scenes (vidgen/space-camera's warpCut): {at: 'bar 9', seconds: 3, split: 0.5}; the scene before the cut shows the jump up to split, the scene after it the rest."""
 
     @model_validator(mode="after")
     def _check(self) -> "PhenomenonSpec":
@@ -518,6 +667,17 @@ class PhenomenonSpec(Open):
             [scene_time(v, f"{where}.over[{i}]") for i, v in enumerate(self.over)]
         if self.other is not None:
             SkySpec.model_validate(self.other)
+        if self.cut is not None:
+            if self.kind != "warp":
+                raise ValueError(f"{where}: cut is a warp's (the jump as a cut between two scenes)")
+            if self.over is not None:
+                raise ValueError(f"{where}: give over (the jump inside the scene) or cut (the jump across a cut), not both")
+            module_options(self.cut, ["at", "seconds", "split"], f"{where}.cut")
+            if "at" not in self.cut:
+                raise ValueError(f"{where}.cut: give at: the time of the cut (seconds or 'bar 9')")
+            scene_time(self.cut["at"], f"{where}.cut.at")
+            if not 0 < float(self.cut.get("seconds", 3)) <= 60 or not 0 <= float(self.cut.get("split", 0.5)) <= 1:
+                raise ValueError(f"{where}.cut: seconds from 0 to 60, split from 0 to 1")
         self.module()
         return self
 
@@ -535,27 +695,41 @@ SUBJECT_KEYS = ("subject", "behind", "of", "target", "around", "level", "from", 
 
 
 class MoveSpec(Open):
-    """A move of ``camera:`` (vidgen/space-camera). Also the move's own options (``phase``, ``distance``, ``closest``, ``side``, ``view``, ``push``, ``rate``, ``place``, ``roll``, ``stops``...)."""
+    """A move of ``camera:`` (vidgen/space-camera, and in the air and beside giant ships vidgen/space-camera-air). Also the move's own options (``phase``, ``distance``, ``closest``, ``side``, ``view``, ``push``, ``rate``, ``place``, ``roll``, ``stops``, ``flight``, ``ship``, ``deck``, ``clearance``, ``standoff``...)."""
 
     move: str
-    """arc, fly-by, pass, arrive, reveal, follow, zoom or look."""
+    """arc, fly-by, pass, arrive, reveal, follow, zoom or look; in the air skim, climb-through, descend-through, chase, wing, fly-past, orbit-peak, rise, descend, ascend; beside a giant ship hull-pass, hull-reveal, into-bay, stern-burn, scale-zoom."""
     subject: str | None = None
     """What it looks at, flies by or follows: a body, craft or phenomenon by name."""
     over: list[Any] | None = None
     """[start, end] of the move: seconds of the scene, or places in the song ('bar 9', 'bar 13 beat 3') with music_data; default the whole scene for one move."""
-    lens: str | float | None = None
-    """A lens by name (ultra-wide 16 mm, wide 24, wide-normal 35, normal 50, portrait 85, long 135, tele 300, long-tele 600) or in mm."""
+    lens: str | float | list[Any] | None = None
+    """A lens by name (ultra-wide 16 mm, wide 24, wide-normal 35, normal 50, portrait 85, long 135, tele 300, long-tele 600) or in mm; rise, descend and ascend take a pair [from, to]."""
     cut: bool = False
     """A cut into this move: it need not start where the move before left the camera."""
+    match: str | None = None
+    """A match cut on a disc (vidgen/space-camera's matchDisc): the thing the move before shows at this move's start; this move's subject is placed and sized as that disc was (give it cut: true)."""
+    continues: bool = False
+    """A skim after a descend (or an ascend): it starts where that move leaves the camera (its place, heading, speed and height), with no cut."""
 
     @model_validator(mode="after")
     def _check(self) -> "MoveSpec":
         n = names()
-        self.move = one_of(MOVE_WORDS.get(self.move, self.move), list(n["moves"]), "camera move")
-        if isinstance(self.lens, str):
-            self.lens = one_of(self.lens, list(n["lenses"]), "lens")
-        elif self.lens is not None and not 4 <= self.lens <= 5000:
-            raise ValueError(f"camera {self.move}: lens {self.lens} mm: from 4 to 5000")
+        from .space_air_params import air_move_names, kebab, ship_move_names
+
+        word = MOVE_WORDS.get(self.move, self.move)
+        new = [*air_move_names(), *ship_move_names()]
+        self.move = one_of(kebab(word) if kebab(word) in new else word, [*n["moves"], *new], "camera move")
+        lenses = self.lens if isinstance(self.lens, list) else [self.lens]
+        if isinstance(self.lens, list) and (len(self.lens) != 2 or self.move not in ("rise", "descend", "ascend")):
+            raise ValueError(f"camera {self.move}: a lens pair [from, to] is for rise, descend and ascend; give one lens")
+        for i, value in enumerate(lenses):
+            if isinstance(value, str):
+                lenses[i] = one_of(value, list(n["lenses"]), "lens")
+            elif value is not None and not (isinstance(value, (int, float)) and 4 <= value <= 5000):
+                raise ValueError(f"camera {self.move}: lens {value} mm: from 4 to 5000")
+        if isinstance(self.lens, (str, list)):   # only a name is rewritten (an unset lens stays unset: the page's PARAMS)
+            self.lens = lenses if isinstance(self.lens, list) else lenses[0]
         if self.over is not None:
             if len(self.over) != 2:
                 raise ValueError(f"camera {self.move}.over must be [start, end]")
@@ -563,10 +737,40 @@ class MoveSpec(Open):
             if not uses_bars(a) and not uses_bars(b) and not b > a:  # type: ignore[operator]
                 raise ValueError(f"camera {self.move}.over: the end must come after the start, got {self.over}")
         extra = self.options()
-        move_lengths(extra, f"camera {self.move}")
-        if "at" in extra:
-            scene_time(extra["at"], f"camera {self.move}.at")
+        if self.air:
+            from .space_air_params import MOVE_LENGTHS, TIME_OPTIONS
+
+            for key in TIME_OPTIONS.get(self.move, ()):
+                if key in extra:
+                    scene_time(extra[key], f"camera {self.move}.{key}")
+            for key in MOVE_LENGTHS.get(self.move, ()):
+                if isinstance(extra.get(key), str):
+                    length(extra[key], f"camera {self.move}.{key}")
+        else:
+            move_lengths(extra, f"camera {self.move}")
+            if "at" in extra:
+                scene_time(extra["at"], f"camera {self.move}.at")
+        if self.continues and self.move != "skim":
+            raise ValueError(f"camera {self.move}: continues is a skim's (after a descend or an ascend: it starts where that move ends)")
+        if self.match is not None and not self.cut:
+            raise ValueError(f"camera {self.move}: a match cut is a cut: give it cut: true with match: {self.match}")
+        if self.match is not None and (self.air or "distance" not in names_of_move(self.move)):
+            raise ValueError(f"camera {self.move}: match places the subject by its distance; give it to a move that takes distance (arc, follow, look...)")
         return self
+
+    @property
+    def air(self) -> bool:
+        """A move of vidgen/space-camera-air (in the air or beside a giant ship)."""
+        from .space_air_params import move_option_list
+
+        return move_option_list(self.move) is not None
+
+    @property
+    def ship(self) -> bool:
+        """A move beside a giant ship."""
+        from .space_air_params import ship_move_names
+
+        return self.move in ship_move_names()
 
     @staticmethod
     def _phase(value: Any) -> Any:
@@ -574,6 +778,10 @@ class MoveSpec(Open):
 
     def options(self) -> dict[str, Any]:
         """The move's own options (camelCase; ``progress`` and ``time`` are the scene's to set)."""
+        if self.air:
+            from .space_air_params import move_option_list
+
+            return module_options(self.extras(), move_option_list(self.move) or [], f"camera {self.move}", leave=("over", "lens", "time", "progress", "seconds"))
         out = module_options(self.extras(), names()["moves"][self.move], f"camera {self.move}", leave=("subject", "over", "lens", "time", "progress"))
         if "phase" in out:
             out["phase"] = [self._phase(p) for p in out["phase"]] if isinstance(out["phase"], list) else self._phase(out["phase"])
@@ -583,11 +791,21 @@ class MoveSpec(Open):
 
     def named(self) -> list[tuple[str, str]]:
         """``(key, name)`` of every thing of the scene this move names (subject, behind, of, target, zoom stops...)."""
+        if self.air:
+            found = [(k, v) for k, v in (("subject", self.subject), ("world", self.options().get("world")), ("behind", self.options().get("behind"))) if isinstance(v, str)]
+            return found
         found = [(k, v) for k, v in [("subject", self.subject), *((k, self.options().get(k)) for k in SUBJECT_KEYS[1:])] if isinstance(v, str)]
         for i, stop in enumerate(self.options().get("stops") or []):
             if isinstance(stop, dict) and isinstance(stop.get("subject"), str):
                 found.append((f"stops[{i}].subject", stop["subject"]))
+        if self.match is not None:
+            found.append(("match", self.match))
         return found
+
+
+def names_of_move(move: str) -> list[str]:
+    """The options of a move of vidgen/space-camera."""
+    return names()["moves"].get(move, [])
 
 
 class FinishSpec(SceneParams):
@@ -644,8 +862,8 @@ class ReactionSpec(SceneParams):
     """A level that follows how strongly the track sounds, of this thing (a craft: its throttle)."""
     glint: str | None = None
     """A glint on each note, of this thing (a craft: its lights)."""
-    as_: Literal["lights", "throttle", "rcs"] | None = Field(default=None, alias="as")
-    """For a craft: what the reaction drives instead (lights, throttle or rcs)."""
+    as_: Literal["lights", "throttle", "rcs", "boost", "pulse"] | None = Field(default=None, alias="as")
+    """For a craft: what the reaction drives instead (lights, throttle or rcs; with effects boost: the afterburner, pulse: the glow's flicker)."""
     amount: float = Field(default=0.6, ge=0, le=8)
     """How strong: the share the brightness grows by at a full hit (0.6), or a craft's value at full."""
     decay: float = Field(default=0.18, gt=0, le=10)
@@ -694,5 +912,5 @@ class CardSpec(Open):
 
 
 __all__ = ["BAR", "DEFAULT_RADIUS", "LENGTH_KEYS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
-           "FinishSpec", "LightSpec", "MoveSpec", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
+           "FinishSpec", "LightSpec", "MoveSpec", "Open", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
            "camel", "direction", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]

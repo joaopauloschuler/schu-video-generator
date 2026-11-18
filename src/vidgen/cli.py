@@ -2033,12 +2033,12 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
     if found is None or found.suffix.lower() not in (".yaml", ".yml"):
         raise VidgenError(f"music plan: {args.project} is not a score file (.yaml): the plan reads a score's sections, tracks and notes")
     plan = plan_music_video(found, max_seconds=args.max_scene, min_seconds=args.min_scene)
-    space = args.style == "space"
+    space = args.style in ("space", "space-air")
     seed = args.seed if args.seed is not None else 1
     if space:
         from vidgen.music_space_plan import space_plan_text, write_space_video
 
-        draft = write_space_video(plan, Path(args.out), force=args.force, seed=seed) if args.out else None
+        draft = write_space_video(plan, Path(args.out), force=args.force, seed=seed, style=args.style) if args.out else None
     else:
         draft = write_music_video(plan, Path(args.out), force=args.force) if args.out else None
     problems: list[str] = []
@@ -2049,10 +2049,10 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
         return jsonout.music_plan_document(plan_dict(plan), draft, [str(p) for p in problems])
     print(plan_text(plan))
     if space:
-        print(space_plan_text(plan, seed))
+        print(space_plan_text(plan, seed, args.style))
     if draft is None:
         if space:
-            print(f"draft it: vidgen music plan {args.project} --style space --out my_film   (video.yaml with a space scene per cut, the score)")
+            print(f"draft it: vidgen music plan {args.project} --style {args.style} --out my_film   (video.yaml with a space scene per cut, the score)")
         else:
             print(f"draft it: vidgen music plan {args.project} --out my_video   (video.yaml, the score, a starter page per scene)")
         return 0
@@ -2129,6 +2129,41 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
         print(f"    suggested credit: {soundfont.CREDIT}")
     print(f"symusic: {synth.symusic_status()}")
     return 0
+
+
+def cmd_cache(args: argparse.Namespace) -> int:
+    """``info``: what vidgen's cache folder holds, the baked maps of web pages first (DESIGN.md
+    §123.2); ``clear``: remove the baked maps (pages bake them again when they need them) and the
+    ground heights flights read (§123.7; fetched again from a page when needed)."""
+    from vidgen.render.disk import size_text
+    from vidgen.soundfont import cache_dir
+    from vidgen.web.baked import FOLDER, LIMIT_ENV, BakedStore, baked_dir, limit_bytes
+
+    limit = limit_bytes()
+    store = BakedStore(baked_dir(), limit)
+    if args.action == "clear":
+        from vidgen.web.land import clear as clear_grounds
+
+        was = store.clear()
+        print(f"removed {was.entries} baked map{'s' if was.entries != 1 else ''} ({size_text(was.bytes)}) from {was.folder}")
+        count, size = clear_grounds()
+        if count:
+            print(f"removed {count} ground height definition{'s' if count != 1 else ''} ({size_text(size)})")
+        return 0
+    used = store.usage()
+    state = f"off ({LIMIT_ENV}=0)" if limit == 0 else f"limit {size_text(limit)} ({LIMIT_ENV}), least recently used removed first"
+    print(f"vidgen's cache folder: {cache_dir()}")
+    print(f"    baked maps: {used.entries} ({size_text(used.bytes)}), {state}; `vidgen cache clear` removes them")
+    for folder in sorted(p for p in (cache_dir().iterdir() if cache_dir().is_dir() else []) if p.is_dir() and p.name != FOLDER):
+        size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+        print(f"    {folder.name}/: {size_text(size)} (kept by {CACHE_OWNERS.get(folder.name, 'another command')})")
+    return 0
+
+
+#: Who keeps the other folders of vidgen's cache folder (``vidgen cache info`` names them).
+CACHE_OWNERS: dict[str, str] = {"soundfonts": "`vidgen soundfont`", "studio": "`vidgen studio`; `--clean` removes old renders",
+                                "ground": "flights over vidgen/space-land's ground (`flight_data`); `vidgen cache clear` removes them",
+                                "openrouter": "`vidgen generate models`: the list of video models"}
 
 
 def cmd_generate(args: argparse.Namespace) -> CommandResult:
@@ -2475,6 +2510,8 @@ def cmd_gallery(args: argparse.Namespace) -> CommandResult:
     reused = f", {len(result.reused)} reused" if result.reused else ""
     print(f"rendered {len(result.rendered)} sample(s){reused}")
     print(f"gallery: {result.index} ({result.bytes / 1e6:.1f} MB in {result.output})")
+    if result.web_index is not None:
+        print(f"web gallery: {result.web_index}")
     for t in result.types:
         if t.page is not None:
             print(f"  {t.name}: {t.page.name}, {len(t.stills)} still(s), {len(t.clips)} clip(s)")
@@ -2693,9 +2730,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--max-scene", type=float, default=16.0, metavar="SECONDS", help="plan: split a section longer than this on a phrase line (default: 16)")
     p.add_argument("--min-scene", type=float, default=5.0, metavar="SECONDS", help="plan: join a section shorter than this to the one before (default: 5)")
-    p.add_argument("--style", choices=["web", "space"], default="web",
+    p.add_argument("--style", choices=["web", "space", "space-air"], default="web",
                    help="plan: web (default): web_cut scenes with a starter page each; space: space scenes written in YAML alone "
-                   "(a world by the scene's colour, a camera move by its role, sunrise on a section start; --seed picks among the choices)")
+                   "(a world by the scene's colour, a camera move by its role, sunrise on a section start; --seed picks among the choices); "
+                   "space-air: space scenes in the air and beside giant ships (a skim at sunset, a descent, a chase over a range, a hull pass, into a bay)")
     p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with schu-video-generator)")
     p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists; plan: write the draft into a folder that is not empty")
@@ -2717,6 +2755,11 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--force", action="store_true", help="fetch: download it again even if the cached file is there")
     p.set_defaults(func=cmd_soundfont)
+
+    p = sub.add_parser("cache", help="vidgen's cache folder: info shows what it holds (the baked maps of web pages, with their limit), clear removes the baked maps and the ground heights of flights")
+    p.add_argument("action", nargs="?", choices=["info", "clear"], default="info",
+                   help="info (the default): the cache folder, the baked maps' count, size and limit, the other folders; clear: remove the baked maps")
+    p.set_defaults(func=cmd_cache)
 
     p = sub.add_parser("tts", help="generate narration audio (ElevenLabs, or OpenRouter with voice.provider: openrouter)")
     project_arg(p)
@@ -2975,7 +3018,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("parts", help="a labelled contact sheet (PNG) of the ready-made three.js parts (skies, bodies, structures, effects...) "
                        "with the line that uses each, so you can choose by looking; --list names them without drawing")
     p.add_argument("names", nargs="*", metavar="NAME", help="only these parts (a name or a pattern such as 'star-*'); one part gets one large tile")
-    p.add_argument("--kind", metavar="KIND", help="only parts of this kind (sky, body, light, craft, craft-part, phenomenon, camera, structure, effect, environment)")
+    p.add_argument("--kind", metavar="KIND", help="only parts of this kind (sky, body, light, air, sea, cloud, land, craft, craft-part, phenomenon, camera, structure, effect, environment)")
     p.add_argument("--list", action="store_true", help="print the parts (name, what it is, the import and the line that uses it); nothing drawn")
     p.add_argument("--out", "-o", metavar="FILE", help="the sheet (.png or .jpg; default: parts_sheet.png here)")
     p.add_argument("--size", metavar="WxH", help="one tile's size (default 320x180; 960x540 for a single part)")

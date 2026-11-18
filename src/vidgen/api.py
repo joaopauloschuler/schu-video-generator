@@ -673,6 +673,8 @@ from vidgen.three_d.spec import Camera3D, Floor3D, Light3D, Object3D, Scene3DPar
 from vidgen.browser.timing import clip_plan, planned_still_frames  # noqa: E402
 from vidgen.web.clip import make_web_clip, web_page_layouts  # noqa: E402
 from vidgen.web.entry import web_entry_problems  # noqa: E402
+from vidgen.web.entry import served_entry_problems as web_served_entry_problems, served_params as web_served_params  # noqa: E402
+from vidgen.web.entry import served_root as web_served_root  # noqa: E402
 from vidgen.web.inputs import json_problem as web_json_problem  # noqa: E402
 from vidgen.web.inputs import design_width_problem as web_design_width_problem  # noqa: E402
 from vidgen.web.inputs import page_shape as web_page_shape  # noqa: E402
@@ -680,7 +682,9 @@ from vidgen.web.inputs import page_viewport as web_page_viewport  # noqa: E402
 from vidgen.web.inputs import scene_page_inputs as web_page_inputs  # noqa: E402
 from vidgen.web.music import MusicDataSettings as WebMusicData, has_music as video_has_music, scene_music as web_scene_music  # noqa: E402
 from vidgen.web.orbits import scene_orbit_data as web_scene_orbits  # noqa: E402
-from vidgen.web.space_names import constant_entries as web_space_entries, space_names  # noqa: E402
+from vidgen.web.flights import scene_flight_data as web_scene_flights, with_flights as web_with_flights  # noqa: E402
+from vidgen.web.land import land_definition as web_land_definition, land_settings as web_land_settings  # noqa: E402
+from vidgen.web.space_names import air_names, constant_entries as web_space_entries, space_names, yaml_names as space_yaml_names  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
@@ -735,7 +739,7 @@ from vidgen.cellworld.captions import NoteMode as CellNoteMode, note_text as cel
 from vidgen.cellworld.names import gene_spans  # noqa: E402
 from vidgen import references as video_references  # noqa: E402
 from vidgen import genetics  # noqa: E402
-from vidgen import orbits, particle_physics, plot_draw, plotcore, quantities  # noqa: E402
+from vidgen import flight, orbits, particle_physics, plot_draw, plotcore, quantities  # noqa: E402
 from vidgen.plotcore import register_model  # noqa: E402
 from vidgen.genetics import MODES as INHERITANCE_MODES, PRESETS as GENETICS_PRESETS, CrossResult, GeneticSystem, parse_genotype  # noqa: E402
 from vidgen.genetics import build_system as build_genetic_system, cross as genetic_cross  # noqa: E402
@@ -1000,6 +1004,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "web_page_layouts",
     "planned_still_frames",
     "web_entry_problems",
+    "web_served_entry_problems",
+    "web_served_params",
+    "web_served_root",
     "web_json_problem",
     "web_page_inputs",
     "web_page_shape",
@@ -1009,8 +1016,14 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "video_has_music",
     "web_scene_music",
     "web_scene_orbits",
+    "web_scene_flights",
+    "web_with_flights",
+    "web_land_definition",
+    "web_land_settings",
     "web_space_entries",
     "space_names",
+    "air_names",
+    "space_yaml_names",
     "clip_plan",
     "make_guide_passes",
     "GUIDE_PASSES",
@@ -2008,6 +2021,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "plot_draw",
     "quantities",
     "orbits",
+    "flight",
     "particle_physics",
     "did_you_mean",
     "format_length",

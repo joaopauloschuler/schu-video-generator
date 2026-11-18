@@ -1,0 +1,167 @@
+# Gate of Stars: a portrait orchestral music video.
+# Music: assets/music/gate_of_stars.yaml, an original score for vidgen's own orchestra (80.0 BPM, Eb major; one bar = 3.0000 s).
+# Pictures: ../shared/orch.js (vidgen/three-kit, music-time, three-finish, title-cards), one web_cut shot per 1-2 bars.
+# Written by ../tools/gen.py from shots.yaml.
+title: Gate of Stars
+output: gate_of_stars
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 360, height: 640, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}
+music: {source: gate_of_stars, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 256k}
+extensions: [../shared]
+web_root: ..
+scenes:
+- id: 01_portal
+  type: web_cut
+  duration: 6.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 100
+      colours: {base: '#ffd27a', accent: '#5f8cff', deep: '#03040c'}
+      react:
+        pulse: [timpani, gong, taiko]
+        glow: [organ]
+      grade: &id001 {temperature: -0.05, saturation: 1.0}
+      lookY: -9
+      title: {title: GATE OF STARS, subtitle: an orchestral short, made: true, hold: 3.6}
+      note: bars 1-2 (gate, verse)
+    music_data: &id002
+      tracks: [bass_drum, choir, crash, gong, horns, organ, snares, sopranos, taiko, timpani, trumpet, violins]
+- id: 02_crystal
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: crystal
+      seed: 117
+      colours: {base: '#7f9fff', accent: '#ffd27a', deep: '#03040c'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [sopranos]
+        glow: [horns]
+      grade: *id001
+      kind: dodeca
+      note: bars 3-3 (procession, verse)
+    music_data: *id002
+- id: 03_tesseract
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tesseract
+      seed: 134
+      colours: {base: '#ffcf7a', accent: '#7f9fff', deep: '#04040b'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [sopranos]
+        glow: [horns]
+      grade: *id001
+      note: bars 4-4 (procession, verse)
+    music_data: *id002
+- id: 04_drift
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: drift
+      seed: 151
+      colours: {base: '#8fb0ff', accent: '#ffe1a0', deep: '#03040c'}
+      react:
+        pulse: [timpani, taiko]
+        glint: [sopranos]
+        glow: [horns]
+      grade: *id001
+      lookY: -10
+      note: bars 5-5 (procession, verse)
+    music_data: *id002
+- id: 05_tunnel
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: tunnel
+      seed: 168
+      colours: {base: '#5f8cff', accent: '#ffd27a', deep: '#03040c'}
+      react:
+        pulse: [timpani, snares]
+        glow: [violins]
+      grade: *id001
+      speed: 10
+      note: bars 6-6 (procession, verse)
+    music_data: *id002
+- id: 06_rings
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: rings
+      seed: 185
+      colours: {base: '#ffd27a', accent: '#6f9cff', deep: '#05040a'}
+      react:
+        pulse: [taiko, bass_drum]
+        ring: [crash]
+        glow: [organ]
+      grade: &id003 {temperature: 0.15, saturation: 1.15}
+      note: bars 7-7 (open, climax)
+    music_data: *id002
+- id: 07_swarm
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: swarm
+      seed: 202
+      colours: {base: '#ffdf9a', accent: '#7fa8ff', deep: '#05040a'}
+      react:
+        pulse: [taiko, timpani]
+        glint: [trumpet]
+        glow: [choir]
+      grade: *id003
+      note: bars 8-8 (open, climax)
+    music_data: *id002
+- id: 08_portal
+  type: web_cut
+  duration: 3.0
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: portal
+      seed: 321
+      colours: {base: '#ffe6b0', accent: '#ffb04f', deep: '#06040a'}
+      react:
+        pulse: [taiko, timpani]
+        glow: [choir]
+      grade: *id003
+      note: bars 9-9 (open, climax)
+    music_data: *id002
+- id: 09_ribbon
+  type: web_cut
+  duration: 6.5
+  params:
+    script: ../shared/orch.js
+    data:
+      mode: ribbon
+      seed: 236
+      colours: {base: '#ffd27a', accent: '#fff0c8', deep: '#04040b'}
+      react:
+        pulse: [timpani, gong]
+        glow: [organ]
+      grade: *id003
+      melody: trumpet
+      mid: 75
+      lookY: -10
+      end: {title: GATE OF STARS, start: 0.5}
+      fadeOut: 1.8
+      note: bars 10-10 (open, climax)
+    music_data: *id002

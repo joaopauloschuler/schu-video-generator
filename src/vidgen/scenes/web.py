@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from vidgen.api import *
 
+from .flight_data import FlightData
 from .orbit_data import OrbitData
 
 #: Extra frames drawn after the planned end (the last one holds if the scene runs longer).
@@ -49,6 +50,7 @@ class Web(NarratedScene):
 
     outro = 0.5
     target_patterns = ("view", "title")
+    drawn_in_browser = True
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
@@ -79,6 +81,9 @@ class Web(NarratedScene):
         orbit_data: OrbitData | None = None
         """Bodies on their orbits for the page as ``ctx.orbits`` (DESIGN.md §122.3), in the orbit scene's words: ``{bodies: [{preset: earth}, {preset: mars}], span: '1 yr', date: '2026-11-17'}``, or a transfer, a flyby, a system. Per frame of the scene: each body's position and velocity (m, m/s; the ecliptic and equinox of J2000, origin the central body), its rotation (quaternion, prime meridian) for the Sun, the planets, the Moon and the Galilean moons, its path and orbit as polylines, a ship's burns."""
 
+        flight_data: FlightData | None = None
+        """Flights through the air for the page as ``ctx.flight`` (DESIGN.md §123.7): ``{ground: {land: alpine}, flights: [{name: Plane, start: {x: -20000, z: 0, above_ground: 800, heading: 90, speed: 120}, legs: [{straight: 20}, {turn: {to: 180, bank: 30}}, {follow: {clearance: 300}, for: 60}]}]}``. Per frame of the scene: each flight's position, velocity and attitude (the scene's local frame: m, x east, y up, z south), speed, Mach number, heights over sea level and over the ground, load factor, bank, pitch, heading, angle of attack, a heating indicator; never under the ground (an error naming the time and place, or ``lift: true``); a start from ``orbit_data`` and a re-entry. See CONFIG "Flight data"."""
+
         design_width: int | None = None
         """For a page built in fixed pixels: the window width it was designed for, in CSS pixels (1280). The page is laid out in a window that wide (as high as its region's shape gives) and drawn at the video's size at every quality, so nothing in it needs rewriting; ``window.devicePixelRatio`` is output pixels per CSS pixel."""
 
@@ -102,13 +107,24 @@ class Web(NarratedScene):
         def _one_entry(self) -> "Web.Params":
             if (self.page is None) == (self.script is None):
                 raise ValueError("give exactly one of page: (an HTML file) or script: (a JavaScript module)")
+            if self.flight_data is not None:
+                if self.flight_data.uses_bars and not self.music_data:
+                    raise ValueError("flight_data: times in bars ('bar 9') need the score on the page: add music_data: true")
+                if self.flight_data.orbit_bodies:
+                    system = self.orbit_data.model(None, check_dates=False).system if self.orbit_data is not None else None
+                    names = [system.central.name, *system.names] if system is not None else []
+                    for name in self.flight_data.orbit_bodies:
+                        if self.orbit_data is None:
+                            raise ValueError(f"flight_data: a flight starts from the orbit of {name}: add orbit_data: with it")
+                        if name not in names:
+                            raise ValueError(f"flight_data: start.orbit: no body '{name}' in orbit_data{did_you_mean(name, names)} (bodies: {', '.join(names)})")
             return self
 
     @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
         """The page or script file exists in the project folder and has the right suffix; a
         scene with ``music_data:`` is in a video that plays music."""
-        problems = web_entry_problems(project.root, params)
+        problems = web_served_entry_problems(project, params)
         if getattr(params, "music_data", False) and not video_has_music(project.config):
             problems.append("music_data: the video plays no music; add music: (a score file, a bed or a music file) or turn music_data off")
         return problems
@@ -162,7 +178,7 @@ class Web(NarratedScene):
         """What the page's frames are drawn from, as the arguments of ``make_web_clip``: the
         project folder, the clip's folder, the size of ``box`` in pixels (default: the box the
         scene gives its page, :meth:`_page_box`), the frame rate, how many frames, the theme,
-        the beats, the video's shape and, with ``music_data:``, ``music`` (§120.8), with ``orbit_data:``, ``orbits`` (§122.3). ``vidgen still`` draws single frames from the same
+        the beats, the video's shape and, with ``music_data:``, ``music`` (§120.8), with ``orbit_data:``, ``orbits`` (§122.3; with ``flight_data:`` it carries ``flights``, §123.7). ``vidgen still`` draws single frames from the same
         arguments (DESIGN.md §120.3)."""
         if box is None:
             box = self._page_box(self._title())
@@ -178,9 +194,13 @@ class Web(NarratedScene):
             extra["music"] = web_scene_music(self.project, self.spec.id, int(config.frame_rate), settings)
         if self.params.orbit_data is not None:
             extra["orbits"] = web_scene_orbits(self.project, self.params.orbit_data, int(config.frame_rate), frames, frames - SPARE_FRAMES)
+        if self.params.flight_data is not None:
+            flights = web_scene_flights(self.project, self.params.flight_data, int(config.frame_rate), frames, frames - SPARE_FRAMES,
+                                        music=extra.get("music"), orbits=extra.get("orbits"))
+            extra["orbits"] = web_with_flights(extra.get("orbits"), flights)
         return {**extra,
-            "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
-            "params": self.params, "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,
+            "root": web_served_root(self.project), "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
+            "params": web_served_params(self.project, self.params), "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,
             "beats": beats, "shape": web_page_shape(frame, self.params.region),
         }
 

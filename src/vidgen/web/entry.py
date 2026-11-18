@@ -64,6 +64,55 @@ def web_entry_problems(root: Path, params: Any) -> list[str]:
     return entry_problems(root, entry_of(params))
 
 
+def served_root(project: Any) -> Path:
+    """The folder a ``web`` scene's page is served from (DESIGN.md §123.16): the project folder,
+    or the folder ``web_root:`` names (relative to the project), which must hold the project folder.
+    A wrong ``web_root`` is a :class:`VidgenError`."""
+    rel = project.config.web_root
+    if rel is None:
+        return project.root
+    folder = (project.root / rel).resolve()
+    if not folder.is_dir():
+        raise VidgenError(f"web_root: folder not found: {rel} (looked for {folder})")
+    if not project.root.resolve().is_relative_to(folder):
+        raise VidgenError(f"web_root: {rel} must be the project folder or a folder that holds it; {folder} does not hold {project.root.resolve()}")
+    return folder
+
+
+def served_params(project: Any, params: Any) -> Any:
+    """``params`` (a model or a mapping) with its ``page:`` or ``script:``, written from the project
+    folder, made a path from :func:`served_root`; ``params`` itself without ``web_root:``. A path
+    that leaves the served folder becomes absolute, which :func:`entry_problems` refuses."""
+    if project.config.web_root is None:
+        return params
+    entry = entry_of(params)
+    target = (project.root / entry.path).resolve()
+    served = served_root(project)
+    rel = target.relative_to(served).as_posix() if target.is_relative_to(served) else str(target)
+    return params.model_copy(update={entry.kind: rel}) if hasattr(params, "model_copy") else {**params, entry.kind: rel}
+
+
+def served_entry_problems(project: Any, params: Any) -> list[str]:
+    """:func:`web_entry_problems` of a ``web`` scene in ``project``: with ``web_root:``, the page or
+    script (written from the project folder) must lie inside the folder it names."""
+    if project.config.web_root is None:
+        return web_entry_problems(project.root, params)
+    entry = entry_of(params)
+    try:
+        served = served_root(project)
+    except VidgenError as exc:
+        return [f"{entry.kind}: {exc}"]
+    if Path(entry.path).is_absolute() or not (project.root / entry.path).resolve().is_relative_to(served):
+        return [f"{entry.kind}: must be a path inside the web_root folder ({served}), got {entry.path}"]
+    return entry_problems(served, entry_of(served_params(project, params)))
+
+
+def served_prefix(project: Any) -> str:
+    """The project folder's URL path on its pages (``first-light/``; empty without ``web_root:``)."""
+    rel = project.root.resolve().relative_to(served_root(project).resolve()).as_posix()
+    return "" if rel == "." else rel + "/"
+
+
 def entry_path(root: Path, entry: WebEntry, scene_id: str) -> Path:
     """The entry's file, or a :class:`VidgenError` naming the scene and the problem."""
     problems = entry_problems(root, entry)
@@ -102,4 +151,5 @@ def is_web_type(name: str) -> bool:
     return any(base.__module__ == "vidgen.scenes.web" and base.__name__ == "Web" for base in entry.cls.__mro__)
 
 
-__all__ = ["SUFFIXES", "WebEntry", "entry_digest", "entry_of", "entry_path", "entry_problems", "inside", "is_web_type", "web_entry_problems"]
+__all__ = ["SUFFIXES", "WebEntry", "entry_digest", "entry_of", "entry_path", "entry_problems", "inside", "is_web_type", "served_entry_problems",
+           "served_params", "served_prefix", "served_root", "web_entry_problems"]

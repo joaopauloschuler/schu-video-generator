@@ -1,5 +1,5 @@
 """Planets, moons and rings, ``vidgen/space-bodies`` (Step 371, DESIGN.md §122.7): the module is
-served by its import name and imports only ``three`` and ``vidgen/music-time``; its parts are
+served by its import name and imports only ``three``, ``vidgen/music-time`` and ``vidgen/baked``; its parts are
 registered; in Node (when it is installed): every ready-made world's options resolve, a wrong
 name gets a did-you-mean, palettes, air and rings are checked, a seed gives the same bands, rings
 and placed things every time; in Chromium (``slow``): a body is a round disc of the right size
@@ -42,7 +42,7 @@ def test_the_module_is_served_by_its_import_name() -> None:
     assert vidgen_file("modules/space-bodies.js") == MODULE
     assert len(current_loaded(Path("."), ["__vidgen__/modules/space-bodies.js"])["__vidgen__/modules/space-bodies.js"] or "") == 64
     source = MODULE.read_text(encoding="utf-8")
-    assert STATIC_IMPORT.findall(source) == ["three", "vidgen/music-time"]
+    assert STATIC_IMPORT.findall(source) == ["three", "vidgen/music-time", "vidgen/baked"]
     assert "Math.random" not in source and "Date.now" not in source and "performance.now" not in source and "globalThis" not in source
     assert MODULE not in INIT_FILES and "space-bodies" not in engine_id()
 
@@ -67,7 +67,7 @@ def _run_in_node(tmp_path: Path, body: str) -> list:
     (three / "package.json").write_text(json.dumps({"name": "three", "type": "module", "exports": {".": "./three.module.js"}}), encoding="utf-8")
     ours = tmp_path / "node_modules" / "vidgen"
     ours.mkdir()
-    names = ("music-time", "space-bodies")
+    names = ("music-time", "baked", "space-bodies")
     for name in names:
         (ours / f"{name}.js").symlink_to(MODULES / f"{name}.js")
     (ours / "package.json").write_text(json.dumps({"name": "vidgen", "type": "module", "exports": {f"./{n}": f"./{n}.js" for n in names}}), encoding="utf-8")

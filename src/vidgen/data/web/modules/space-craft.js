@@ -1086,7 +1086,7 @@ export const aimAngles = (target, limit = 1.75) => { const d = target.clone().no
 export const GLINT = Object.freeze({sharpness: 500, gain: 300});
 const CRAFT_DEFAULTS = Object.freeze({fore: "fore", name: "craft", occlusion: 0.55, camera: null, height: 720, sun: null, target: null, lights: 1, marker: 0, kind: null, seed: null});
 const UPDATE_KEYS = ["sun", "target", "velocity", "radial", "thrust", "attitude", "throttle", "rcs", "lights", "camera", "height", "deploy", "spin"];
-const FLY_KEYS = ["body", "attitude", "burn", "target", "sun", "parent", "camera", "height", "throttle", "marker"];
+const FLY_KEYS = ["body", "attitude", "burn", "target", "sun", "parent", "camera", "height", "throttle", "marker", "flight"];
 const W1 = V3(), W2 = V3(), W3 = V3(), WQ = new THREE.Quaternion();
 
 /** A craft: `object` (a THREE.Group in metres: +z the nose, +y the top, its middle at the origin), update(t,
@@ -1203,9 +1203,20 @@ export class Craft {
    * list with times; default "prograde"), burn ({seconds: 2, turn: 3, attitude: "thrust"} or false: how the
    * data's burns are shown: the craft turns its nose along each burn, the engines fire for `seconds` centred on
    * it, and it turns back), target (a body's name: for "target" and the dishes), sun (default the data's Sun),
-   * parent (the body its velocity is measured against; default the data's), camera, height}. Returns the craft. */
+   * parent (the body its velocity is measured against; default the data's), camera, height}. Or fly a flight of
+   * ctx.flight (a web scene's flight_data, DESIGN.md §123.7): fly(ctx.flight, {flight: "Plane"}) — every frame
+   * the craft stands where the flight is and turns as it does (nose, bank, angle of attack: the data's
+   * attitude), in the scene's own axes. Returns the craft. */
   fly(space, options = {}) {
     known("fly options", options, FLY_KEYS);
+    if (options.flight !== undefined) {
+      const data = space;
+      if (!data || typeof data.place !== "function" || !Array.isArray(data.names)) throw fail("fly(ctx.flight, {flight}) needs the flight data of the page (ctx.flight, a web scene with flight_data:)");
+      if (!data.names.includes(options.flight)) throw fail(`fly: flight "${options.flight}"${hint(options.flight, data.names)}; flights of the data: ${data.names.join(", ")}`);
+      this.flight = {air: data, name: options.flight};
+      for (const k of ["camera", "height", "throttle", "marker"]) if (options[k] !== undefined) this.options[k] = options[k];
+      return this;
+    }
     if (!space || !space.orbits || typeof space.add !== "function") throw fail("fly needs a SpaceView of vidgen/space-scale with orbit data (ctx.orbits)");
     const orbits = space.orbits, names = orbits.names, name = (key, v) => { if (!names.includes(v)) throw fail(`fly: ${key} "${v}"${hint(v, names)}; bodies of the data: ${names.join(", ")}`); return v; };
     if (typeof options.body !== "string") throw fail(`fly needs {body}: a name of the orbit data (${names.join(", ")})`);
@@ -1258,8 +1269,9 @@ export class Craft {
     known("update options", options, UPDATE_KEYS);
     const o = {...this.options, ...options}, fl = this.flight, state = {velocity: options.velocity, radial: options.radial, thrust: options.thrust};
     let spec = options.attitude ?? null, turning = 0;
+    if (fl && fl.air) fl.air.place(this.object, fl.name, t);
     this.object.updateMatrixWorld(true);
-    if (fl) {
+    if (fl && !fl.air) {
       const ob = fl.orbits, p = ob.position(fl.body, t), v = ob.velocity(fl.body, t), pp = fl.parent ? ob.position(fl.parent, t) : [0, 0, 0], pv = fl.parent ? ob.velocity(fl.parent, t) : [0, 0, 0];
       const y = (a, b) => V3(a[0] - b[0], a[2] - b[2], -(a[1] - b[1]));
       state.velocity = y(v, pv); state.radial = y(p, pp);
@@ -1273,7 +1285,7 @@ export class Craft {
     if (spec) {
       const q = attitudeAt(t, spec, state, this.object.quaternion);
       for (const e of schedule(spec).slice(1)) { const u = (t - e.at) / Math.max(e.turn, 1e-6); if (u > 0 && u < 1) turning = Math.max(turning, u < 0.14 ? 1 : u > 0.86 ? -1 : 0); }
-      if (fl && fl.burn) for (const w of this.burns) {
+      if (fl && fl.burn && !fl.air) for (const w of this.burns) {
         const k = burnWeight(t, w, fl.burn.turn);
         if (k > 0) q.slerp(attitudeQuaternion(fl.burn.attitude, {...state, thrust: this._thrustAt(w, state)}, Q2), k);
         const a = (t - (w.start - fl.burn.turn * 1.15)) / fl.burn.turn, b = (t - w.end - fl.burn.turn * 0.15) / fl.burn.turn;
