@@ -3942,6 +3942,29 @@ fx.update(t);
   nothing. Look first: `vidgen parts --kind effect`. Reference: CONFIG.md `web`, "Re-entry and
   flight effects".
 
+**Giant ships: `vidgen/space-hull`.** For a ship kilometres long. Seven invented families —
+`spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`, `twin` — each another ship for every
+seed. A hull is a craft of `vidgen/space-craft`: it flies a body of `orbit_data`, its bells fire
+with `throttle`, a star's glare hides behind it:
+
+```js
+import {hull} from "vidgen/space-hull";
+const ship = hull("carrier", {seed: 4, length: 3000}).fly(space, {body: "Ship"});   // metres; +z the bow, +y up
+ship.scaleRef("ship", {at: "hangar-1", gap: 120});     // a 50 m craft beside a hangar slot: without it nothing says "3 km"
+// each frame, after space.update(t, view):
+ship.update(t, {sun, throttle: 0.5});
+```
+
+- These are the large forms: plates, trenches, hangar slots as dark voids, radiators, bells.
+  Fine detail (windows, lit bays) is not there yet; keep the camera far enough that plates of
+  12 to 60 m do not fill the frame, or show a small craft for size.
+- The world must be a body of `orbit_data` (`planet(renderer, "Earth", {space})`), not an object
+  placed by hand, or it is drawn over the ship.
+- `ship.problems()` names buried bells, absurd proportions and one layout the kit refuses to
+  look like. `hullFleet([...], {count, seed})` is a formation at `far` detail.
+- A hull filling a 1280x720 frame costs about 0.3 s. Look first: `vidgen parts 'hull-*'`.
+  Reference: CONFIG.md `web`, "Giant ship hulls".
+
 **Camera moves in space: `vidgen/space-camera`.** Do not write camera positions by hand: name
 the move. Every move is a function of time (same time, same frame; cuts and motion blur are
 safe) and never puts the subject in the dead middle unless you ask.

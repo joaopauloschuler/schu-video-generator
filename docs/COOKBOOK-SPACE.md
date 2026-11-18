@@ -471,6 +471,38 @@ air. Music: `fx.update(t, {boost: level, pulse: 1 + 0.3 * level})`. The same cal
 and lifetimes are looks; where and when things show follows the flight. Everything is drawn in
 front of every cloud. Look first: `vidgen parts --kind effect`.
 
+**A giant ship in orbit, with something to measure it by** (`vidgen/space-hull`; a `web` scene
+with `orbit_data: {central: earth, speedup: 1, bodies: [{name: Ship, altitude: 900 km}]}`). Seven
+invented families (`spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`, `twin`), another ship
+for every seed. A kilometre of hull says nothing by itself: put a 50 m craft beside a hangar
+slot, or the world behind it.
+
+```js
+import {SpaceView} from "vidgen/space-scale";
+import {planet} from "vidgen/space-bodies";
+import {star, spaceLight} from "vidgen/space-light";
+import {hull} from "vidgen/space-hull";
+const space = new SpaceView(ctx, {renderer, scene, camera});
+const ship = hull("carrier", {seed: 1, length: 3000}).fly(space, {body: "Ship"});   // bow along the path, deck away from the world
+const small = ship.scaleRef("ship", {at: "hangar-1", gap: 120});                    // a 50 m ship of the craft kit, riding along
+const earth = planet(renderer, "Earth", {space});                                   // a body of the orbit data (not an object placed by hand)
+const sun = star(renderer, "sun", {direction: [1, 0.3, 0.2]}); scene.add(sun.object);
+const light = spaceLight({scene, camera, renderer, sun, bodies: [earth], at: ship.object, shadows: ship.shadows});
+ship.shade(sun);
+// frame(t): the camera's place in the ship's own axes (x port, y up, z the bow), turned into the data's
+const own = (a) => { const v = new THREE.Vector3(...a).applyQuaternion(ship.object.quaternion); return [v.x, -v.z, v.y]; };
+space.update(t, {from: {body: "Ship", offset: [0, 0, 1000]}, to: "Ship"}); ship.update(t, {sun});   // first the attitude, then the view
+space.update(t, {from: {body: "Ship", offset: own([900, 60, 900])}, to: {body: "Ship", offset: own([520, -40, 200])}, up: own([0, 1, 0])});
+earth.update(t); ship.update(t, {sun, throttle: 0}); small.update(t, {sun}); sun.update(t); light.update(t);
+```
+
+Lenses that read as large: a normal lens (30 degrees) a few hundred metres off the hull with the
+small craft in frame; a long lens (12 to 18 degrees) from 10 to 45 km with the world behind
+(`own([9000, 6000, 3500])`). A wide lens close along the hull needs fine detail the hulls do not
+have yet. `ship.anchor("hangar-1")`, `"bridge"`, `"bow"`, `"bell-1"` are places to aim at;
+`ship.problems()` names what looks wrong; `hullFleet(["carrier", "spine", "twin"], {count: 5,
+seed: 3})` is a formation at `far` detail. Look first: `vidgen parts 'hull-*'`.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -509,6 +541,7 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | a space plane (`vidgen/space-plane`) on top of the air and the sea / of a world in space: a third of the frame wide / filling it | +0.12 / +0.19 (+0.02 / +0.07 at 320x180; its shadows 0.03 to 0.05 of that) | 1.0–1.3 s for the first plane, under 0.1 s for each later one |
 | effects (`vidgen/space-effects`) on top of a plane a third of the frame wide: a re-entry (shock layer, hot surfaces, wake, sparks, train) / the same at `quality: fast` / without hot surfaces / the plane filling the frame | +0.37 / +0.30 / +0.32 / about +0.7 (+0.04 at 320x180) | 0.5 s (shaders, the windward map) |
 | exhaust in air, a vapour cone and wing vapour, vapour trails: each, or all three, on a plane over the sea | under +0.05 (inside the scatter; +0.01 at 320x180) | |
+| a giant hull (`vidgen/space-hull`) on top of a sky, a world and a star in a `SpaceView`: filling the frame / small in it / `far` detail filling it / a bank of eight bells firing seen from astern | +0.33 / +0.12 / +0.24 / +0.8 (+0.12 / +0.03 at 320x180; its shadows are inside the scatter) | 1.0 s for the first hull, 25 to 110 ms for each more |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 

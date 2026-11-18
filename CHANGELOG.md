@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–387
+## Steps 193–388
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -120,6 +120,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   error naming the time and the place (or, with `lift: true`, it is raised there). Python:
   `vidgen.api.flight`, `web_scene_flights`; `vidgen cache clear` also removes the ground heights
   kept for flights.
+- **Giant ship hulls** (Step 388): `vidgen/space-hull` builds hulls of ships 0.5 to 10 km long
+  on the spacecraft kit, in seven invented families, each another ship for every seed: `spine`
+  (a long truss with drums, tank clusters and great radiator vanes), `carrier` (a thick block
+  with a deck trench, a forked blunt bow, hangar slots, terraces), `cluster` (an open frame with
+  pressure balls, tanks and container stacks), `lance` (a very long thin hull behind a faceted
+  shield), `wheel` (two polygonal crew rings turning against each other on a hub), `ark` (a
+  worked asteroid with a hangar portal and a collar) and `twin` (two unequal hulls joined by
+  bridges). Large forms that hold as lit masses: chamfered blocks, trenches and hangar mouths
+  as real recesses, banks of the kit's bells, radiators, plates of their own tone, five
+  palettes. A hull is a craft: it flies a body of `orbit_data`, fires its bells, hides a star's
+  glare; `scaleRef` stands a 50 m craft beside it; `problems()` names buried bells and absurd
+  proportions. For later fine detail every hull carries named regions, anchors (bells, hangars,
+  docks, lights, the command place) and one atlas of non-overlapping charts with their metres
+  per texel. Fourteen parts under `vidgen parts 'hull-*'`.
 - **Re-entry and flight effects** (Step 387): `vidgen/space-effects` adds to a plane, a craft or
   any object: the glow of a re-entry (a layer on the windward side made from the craft's own shape,
   hot surfaces, a wake, sparks, and from far away a bright head with a train of light along the

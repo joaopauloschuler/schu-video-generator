@@ -380,7 +380,8 @@ src/vidgen/
                           # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5); space-land.js
                           # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6); space-plane.js
                           # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8); space-effects.js
-                          # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9)
+                          # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9); space-hull.js
+                          # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -29488,3 +29489,176 @@ vapour trails, engine exhaust in air, the vapour of a transonic pass and of a ha
   (`slow`): brighter at higher heating, brighter under the belly than over the back, a frame
   after other frames identical, the windward map drawn once, the picture not burnt out, a
   trail's middle line unmoved while the plane flies on.
+
+### 123.10 Giant ship hulls: `vidgen/space-hull` (Step 388)
+
+`data/web/modules/space-hull.js` (import name `vidgen/space-hull`, in `VIDGEN_MODULES`; imports
+`three`, `rng` of `vidgen/music-time`, `CraftKit` / `Craft` / `GLARE` / `ACCENTS` /
+`platingMaps` / `craft` of `vidgen/space-craft`). Hulls of ships 0.5 to 10 km long: the large
+forms only, with what Step 389 needs to hang the fine detail on.
+
+```js
+import {hull, hullFleet} from "vidgen/space-hull";
+const ship = hull("carrier", {seed: 4, length: 3000});   // a family of HULLS, another member for every seed
+ship.fly(space, {body: "Ship"});                         // a body of ctx.orbits: the bow along the path, the deck away from the world
+ship.update(t, {sun, throttle: 0.6});                    // the craft kit's update: bells fire, rings turn, lights blink
+ship.scaleRef("ship", {at: "hangar-1", gap: 120});       // a 50 m craft of the kit beside a named place
+ship.problems();                                         // [] or sentences
+```
+
+- **A sibling module (decision).** As `vidgen/space-plane`: `HullKit extends CraftKit`, `Hull
+  extends Craft`; `space-craft.js` is byte-identical to Step 387's, so no existing scene's cache
+  key changes. `fly`, `update`, `shade(star)`, `occluders`, `shadows`, `size`, `info`, `engines`
+  and `dispose` are the craft's. Axes: +z the bow, +y up (away from the world on a prograde
+  flight), +x port; the middle of the bounding box at the origin; metres.
+- **The design language** (ours; stated so that later hulls stay in it): (1) every function is
+  a mass of its own — crew, propellant, cargo, heat, drive — joined by visible structure, the
+  drive far from the crew; (2) one long axis, because thrust loads run along it; (3) radiators
+  are the largest surfaces: thin rectangular vanes, warm at the root; (4) nothing is streamlined,
+  because these ships never meet air: a bow is a blunt face, a frame, a shield or a ring, never a
+  point; edges are chamfers, not curves; rings are polygons; (5) a ship is lopsided where its work
+  asks for it (hangars on one side and radiators on the other, one hull set back, an array to
+  one side); (6) command sits inside the hull (an anchor, a band on a drum or a terrace front),
+  never on a tower; (7) two or three hull tones and one accent a ship.
+- **Shapes the kit must not make** (described as shapes only; no work is named anywhere in the
+  code, the tests or the documents): a hull whose plan narrows to a point at the bow, with or
+  without a raised tower at the stern; a ball with a dish sunk into it; a disc with a second
+  hull and engine pods on struts; a spine with a crew ball at its front and a ring behind it; a
+  cube; an organic body with arms; a wide head on a thin neck; a great flat triangle. The
+  families stay away by construction (a carrier's seed gives `taper` 0.84 to 1 and terraces
+  between 0.17 and 0.6 of the length from the bow; the ark's rock is always rough and cut; the
+  wheel has no ball; a lance's shield is a faceted cone or disc a fifth of its length wide).
+  `forbidden(profile, regions)` and `problems()` name the one layout a description can reach:
+  a plan that narrows steadily towards the bow to under 0.45 of its greatest width with a
+  `tower-N` in the aft 36 % ("too near a well-known fictional ship"), or to under 0.3 without one.
+- **Families** (`HULLS`; each an invented design; `hull(family, {seed, length, ...})`; every
+  number below can be given, within the range `hullSpec` checks):
+
+  | family | what it is | usual length | its numbers (shares of the length unless said) |
+  |---|---|---|---|
+  | `spine` | a long open truss: the drive behind a shadow disc, radiator vanes in one plane, clusters of tanks, crew drums far forward, a docking face as the bow, an array on a mast to one side | 1.2–2.8 km | `girth` (the truss), `drum`, `drums`, `tanks`, `tankCount`, `tank` (girths), `vanes` (2, 4), `vaneSpan`, `bells`, `side` |
+  | `carrier` | a thick block with a flat deck: a trench down its middle that opens into a gulf between two blunt prongs of unequal length, hangar slots along one side (or both), a gallery line, stepped terraces and low works on the deck, a keel block, a sponson with radiators on the side without hangars | 1.8–4.2 km | `beam`, `depth`, `taper` (the bow's width over the beam), `trench` (of the beam), `segments`, `hangars`, `side` (1 port, -1 starboard, 0 both), `keel` (of the depth), `vaneSpan`, `bells`, `towers` ([{at, side, len, wid, high}]) |
+  | `cluster` | an open frame carrying its load in plain sight: pressure balls, pairs of tanks, a tank lying across, container stacks, gaps; a crew block high on the bow; radiators up and down from the stern | 0.7–1.7 km | `girth`, `aspect`, `vaneSpan`, `bells`, `cells` (a list of `ball`, `pair`, `cross`, `cargo`, `gap`) |
+  | `lance` | a very long thin hull behind a faceted shield, the crew drum and tanks close behind it, the drive far aft on a truss among long narrow radiators | 2.5–6 km | `body` (its width), `shield`, `shieldShape` (`cone`, `disc`), `drum` (body widths), `boom`, `vanes` (3, 4), `vaneSpan`, `bells` |
+  | `wheel` | a thick hub with two polygonal crew rings of unequal size turning against each other (1 g at the rim by default), a docking drum as the bow, tanks, a cross of radiators | 0.9–2.4 km | `hub`, `ring` (radius), `second` (the next ring's size), `rings`, `gap`, `at`, `sides`, `spokes`, `vaneSpan`, `bells`, `spin` (rad/s) |
+  | `ark` | a worked asteroid: cut flat at the bow, on top and at the stern; a hangar portal built out of the bow face, a polygonal collar with radiators, terraces and works on the mesa, the drive block sunk into the stern | 3–8 km | `girth`, `flat`, `rough`, `mouth`, `vaneSpan`, `bells`, `vaneAngles`, `towers` |
+  | `twin` | two unequal hulls side by side, one set back and higher: a drive hull with a trench and radiators standing from it, a cargo hull with container racks; slanting bridges, a hangar pod | 1.2–3.2 km | `beam`, `depth`, `gap`, `stagger`, `second`, `rise` (depths), `bridges`, `vaneSpan`, `bells` |
+
+  Common: `seed`, `length` (200 to 20,000 m), `age` (0 new .. 1: soot towards the stern,
+  streaks along the hull), `palette` (`PALETTES`: `bone`, `slate`, `iron`, `sand`, `frost`),
+  `inset` (the bells sunk by a share of the length: a way to make a mistake); the kit's `accent`,
+  `detail` (`near` | `far`), `wear`, `tile` (metres one repeat of the plate map covers, 240),
+  `plate` (the big plates' size, 70 m); a craft's `name`, `camera`, `height`, `sun`, `lights`,
+  `marker`, `occlusion` (0 here). `hullSpec(family, options)` is the description as plain JSON,
+  `hullFrom(spec, options)` builds it, `hullFleet(families, {count, seed, spacing, detail:
+  "far"})` a formation. Unknown names are refused with the closest word.
+- **How a hull is modelled** (`Shell`, from `hullKit(options).shell()`; a hull of one's own:
+  `kit.hull(shell.finish(), {anchors})`). Faces are collected by part (`part(name, {sparse,
+  spin})`: a mass; sparse ones give no shadow balls and are left out of the profile) and region
+  (`region(name, detail)`). Shapes: `loft` (a polygon carried through stations: prisms, tapers,
+  bevelled blocks; `sectionOf(W, H, c, {trench, slots})` gives a cross-section with a trench
+  and side slots, so recesses are real geometry that casts shadow), `block`, `lathe` / `drum`
+  (round or faceted), `capsule`, `rod`, `truss`, `vane` (a radiator with ribs and edge rails),
+  `dish`, `mouth` (a framed recess with depth: a hangar mouth as a dark void), `rock` (a ball
+  moved by four octaves of noise, dented by craters, cut flat by planes), `scatter` (low boxes
+  on a flat face: the 20 to 100 m break-up). Bells are the craft kit's (`bankPlan({w, h, count,
+  layout: grid | ring | row})`, `kit.bells`), at the kit's "far" detail from three bells up,
+  each with its plume; lamps are the kit's.
+- **Secondary break-up, kept cheap**: every face is cut into plates of `plate` metres, each of
+  its own tone (a tenth much lighter or darker); a tiling plate map (the craft kit's
+  `platingMaps`, 64 plates of 12 to 60 m a repeat of 240 m, grooves, a normal map); chamfers
+  and bevels; ribs at the joints of a carrier, a gallery line along its sides, accent lips over
+  the hangar slots; `scatter`ed works on decks; `age` darkens towards the stern. Surfaces
+  (`HULL_SKINS`): `hull-a`, `hull-b` (the two tones), `hull-c` (dark metal), `hull-accent`,
+  `hull-radiator`, `hull-tank`, `hull-truss`, `hull-rock`, `hull-void` (a recess: nearly black,
+  no map), `hull-glass`.
+- **Triangle budget** (stated and tested): `near` at most 60,000, `far` at most 20,000.
+  Measured, seed 1: spine 13,600 / 8,800, carrier 18,400 / 12,400, cluster 9,200 / 7,900,
+  lance 12,400 / 6,600, wheel 13,200 / 10,000, ark 31,300 / 12,900, twin 23,100 / 8,600; 26
+  to 37 meshes (one per surface, and per bell its glow and plume). `far`: no plates, half the
+  sides, no ribs, works or accents, a coarser rock.
+- **The contract for the fine detail (Step 389).** Everything is plain numbers in the hull's
+  axes, metres:
+  - `hull.regions`: `[{name, detail, surface: {material, expects, density}, skin, box: {min,
+    max}, centre, normal, area, charts: [ids], mouth?}]`. Names: `bow`, `midship`,
+    `engine-block` (`engine-block-1`, `-2` on a twin), `hangar-N`, `radiator-N`, `tower-N`,
+    `tank-N`, `habitat-N`, `ring-N`, `cargo-N`, `trench`, `keel`, `sponson`, `collar`, `rock`,
+    `port-hull`, `starboard-hull`, `truss`. `detail` is a key of `SURFACES` (`plating`,
+    `windows`, `hangar`, `trench`, `radiator`, `engine`, `tank`, `cargo`, `shield`, `rock`,
+    `dock`, `truss`), which says what the surface is made of, what detail belongs there and its
+    share of texels. `normal` is the area-weighted outward direction (zero for a region that
+    faces all round); `hull.region(name)`.
+  - `hull.anchors`: `bells` (`[{name: "bell-N", p, n, radius, kind, bank}]`: the exit's
+    middle), `nozzles` (the same as `vidgen/space-effects` reads them), `hangars` (`[{name, p,
+    n, width, height, depth}]`: the middle of the opening), `docks`, `lights` (`[{kind, p,
+    n}]`), `bridge` (the command place: `{p, n}`), `points` (every named place: `bow`, `stern`,
+    `top`, `bottom`, `port`, `starboard`, `bridge`, `hangar-N`, `dock-N`, `bell-N`, `ring-N`,
+    `collar`); `hull.anchor(name)`.
+  - Two sets of texture coordinates on every hull mesh. `uv`: metres along the face (u along
+    the face's width, v along the loft or the profile), continuous within a face, with an
+    offset per shape: for tiling detail (a window pattern at true size); the hull's own plate
+    map uses it. `uv1`: one atlas for the whole hull. `hull.charts`: `[{id, name:
+    "region/face", region, kind: "plane" | "round", size: [w, h] metres, rect: [u0, v0, u1,
+    v1], turned (its w runs along v), scale (atlas units per metre), origin, du, dv, normal |
+    axis, radius}]`: a point of a plane chart is `origin + du * cu + dv * cv` (cu, cv in metres
+    from the chart's corner; for a chart that runs over a bevel the frame is its largest
+    face's). Charts never overlap (2/1024 between them; the corner under 4/512 is spare: faces
+    without a chart — struts, ribs, scattered works, cargo boxes, faces narrower than 14 m —
+    read the texel at 2/512, 2/512). Density: `hull.texel(chart, size)` metres a texel;
+    charts share one scale times the region's `density` (windows 1.4, hangars 1.6, radiators
+    0.35, rock 0.45); a chart longer than the atlas is drawn smaller by itself. At 4096:
+    cluster 0.1–0.45 m, spine 0.27–1.1, wheel 0.38–1.5, twin 0.33–1.5, lance 0.5–2.1, carrier
+    0.63–2.9, ark 1.8–8.2 (seed 1). Windows by the thousand on a 3 km hull therefore want the
+    tiling `uv` (or a map per region); the atlas suits what is unique: grime, hangar light,
+    markings, trench runs. A map on the atlas: `texture.channel = 1` on any map of the hull's
+    materials (`hull.materials["hull-a"]`, ...: `MeshStandardMaterial`s shared by the hull).
+  - Scale: `hull.size`, `hull.shape.radii`, `hull.profile` (`[{z, x: [min, max], y: [min,
+    max]}]`, 40 slices of the solid masses from the stern), `hull.spec` (every number of the
+    design), `hull.scale` (atlas units per metre at density 1); `hull.scaleRef(craft, {at,
+    gap, seed, detail})` stands a craft of `vidgen/space-craft` (by kind: `ship` is 42 to 58 m)
+    or any craft or plane object beside a named anchor, as a child of the hull.
+  - The bells are the craft kit's engines (`hull.engines`: `{kind, plume, glow, exit}`;
+    `update(t, {throttle})`: a number, a list per bell or a function of t).
+- **`problems()`**: a length outside 500 to 10,000 m, a hull wider or higher than 0.85 of its
+  length, nearly a cube, a thread, a bell whose exit lies ahead of its block's aft face or
+  that fires into another region, two bells through each other, and the forbidden layout.
+- **Sense of size at this step** (stills in `/home/claude/work/scratch/ao388/stills/`): a
+  normal lens near the hull with a 50 m craft in the frame reads as largest; a long lens from
+  far with the world behind is second; a wide lens close along the hull needs fine detail and
+  is the weakest so far. Plates of 12 to 60 m read as masonry close up until Step 389 adds the
+  small scale.
+- **Measured** (2 cores, SwiftShader, straight to the canvas with ACES, in a `SpaceView` with a
+  sky, the Earth from a 1024 map and a star; seconds a frame at 1280x720 / 320x180). The sky and
+  star alone 0.36 / 0.08. A 3.2 km carrier filling the frame 0.69 / 0.20 (`far` 0.60; shadows
+  cost nothing measurable: 0.73 without), small in the frame 0.48 / 0.11; the ark filling it
+  0.85, the cluster 0.77; a bank of eight bells firing, seen from astern, 1.17. Building (Node,
+  the same code): the first hull of a page 1.0 s (the plate and rock maps), later ones 25 to
+  110 ms (`far` 10 to 40 ms). The 14 part tiles: 23 s.
+- **A trap found** (not changed here: `space-scale.js` is in the keys of existing scenes): a
+  world added to a `SpaceView` by `add(object, {at, size: metres})` instead of as a body of
+  the orbit data is drawn over nearer things when the camera is inside its bounding sphere's
+  depth range (its interval starts at the view's `near`, the nearest slice holds only the
+  world, and the world's shell is never clipped by the far plane). With `orbit_data` and
+  `planet(renderer, "Earth", {space})` a hull in front of the world is drawn correctly (the
+  Chromium test).
+- **Limits and honest notes.** Large forms only: no windows, no lit bays, no markings. The
+  hangar slots are black voids. Bevels are scale insets (a notched section's notch narrows with
+  them). A rock's facets are 40 to 130 m. Ring parts and vanes give the star's glare no shadow
+  balls. `profile` skips slices where only sparse parts are (a spine's truss). The plumes are
+  the kit's, summed per bell (a large bank filling the frame is slow, above). Nothing here is
+  physics: masses, tank sizes and radiator areas are looks.
+- **Parts** (`data/web/parts/space-hull.js`; kinds `craft` and `craft-part`, no new kind):
+  `hull-spine`, `hull-carrier`, `hull-cluster`, `hull-lance`, `hull-wheel`, `hull-ark`,
+  `hull-twin`, `hull-burn`, `hull-scale`, `hull-fleet`; `hull-part-shapes`, `hull-part-drive`,
+  `hull-surfaces`, `hull-charts` (the atlas drawn on a hull, each chart its own colour).
+- **Tests** (`tests/test_web_space_hull.py`): the module and its parts; in Node: the atlas
+  without overlap and with the stated scales, banks of bells inside their field, a
+  cross-section's area and edge names, a description the same for a seed, forty carrier seeds
+  clear of the forbidden layout, did-you-mean, the forbidden outlines on numbers; (`slow`)
+  every family for three seeds (length honoured to 0.2 %, no problems, regions and anchors
+  inside the bounds, charts non-overlapping with their texels, budgets, determinism, 9 km),
+  the constructed wedge with a stern tower and the dagger named, buried bells, a hull on orbit
+  data, the rings' turn, a fleet, a size reference; in Chromium (`slow`): a 3 km carrier in
+  orbit with a 50 m craft in a `SpaceView` over the Earth: in front of the world, the deck one
+  colour without speckle, the small craft where it was put, shadows that only darken, the same
+  picture from a second page.

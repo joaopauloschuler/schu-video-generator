@@ -7901,6 +7901,43 @@ ship.update(t, {gear: 0, bay: 0});                       // on a flight the elev
   ones so that the grid reads. Unknown names stop the page with a did-you-mean.
 - Look first: `vidgen parts 'plane-*'`.
 
+**Giant ship hulls: `vidgen/space-hull`** (Step 388, DESIGN §123.10). Hulls of ships 0.5 to
+10 km long, built on the craft kit: large forms with named regions, anchors and an atlas for
+later fine detail. `import {hull, hullSpec, hullFrom, hullFleet, hullKit} from "vidgen/space-hull"`.
+
+- `const ship = hull(family, options)`; `scene.add(ship.object)` or `ship.fly(space, {body})`;
+  each frame `ship.update(t, {sun, throttle})` (the craft kit's `update`). Metres; +z the bow,
+  +y up, +x port.
+
+| option | default | meaning |
+|---|---|---|
+| `family` (first argument) | — | `spine`, `carrier`, `cluster`, `lance`, `wheel`, `ark`, `twin` |
+| `seed` | 1 | another member of the family: proportions, counts, palette, age |
+| `length` | by the seed, within the family's usual lengths | metres, 200 to 20,000 (`problems()` speaks outside 500 to 10,000) |
+| `age` | by the seed, 0.15 to 0.6 | 0 new .. 1: soot towards the stern, streaks |
+| `palette` | by the seed | `bone`, `slate`, `iron`, `sand`, `frost`: two hull tones and a dark metal |
+| `accent` | by the seed and family | the one accent colour |
+| `detail` | `near` | `far`: no plates, fewer sides, no small works (a fleet, the distance) |
+| `wear` | 1 | how deep the plate lines are drawn (0 to 2) |
+| `tile`, `plate` | 240, 70 | metres one repeat of the plate map covers; the size of the big plates of their own tone |
+| the family's numbers | by the seed | DESIGN §123.10's table (`beam`, `taper`, `hangars`, `towers`, `ring`, `cells`, `bells`, ...) |
+| `name`, `camera`, `height`, `sun`, `lights`, `marker`, `occlusion` | the craft's (occlusion 0) | as `craft(...)` of `vidgen/space-craft` |
+
+- On a hull: `regions` / `region(name)`, `anchors` / `anchor(name)`, `charts` / `texel(chart,
+  size)`, `profile`, `shape`, `spec`, `family`, `problems()`, `scaleRef(craft or kind, {at, gap,
+  seed, detail})`; the craft's `size`, `info`, `engines`, `shadows`, `occluders`, `shade(star)`,
+  `fly`, `update`, `dispose`.
+- `hullFleet(family or list, {count: 5, seed: 1, spacing, detail: "far", ...})` →
+  `{object, hulls, update, dispose}`. `hullSpec(family, options)` → plain JSON;
+  `hullFrom(spec, options)`.
+- A hull of one's own: `const kit = hullKit({seed, palette, accent, detail, wear, tile, plate}),
+  sh = kit.shell()`; `sh.part(name, {sparse, spin}).region(name, detail)`; `loft`, `block`,
+  `lathe`, `drum`, `capsule`, `rod`, `truss`, `vane`, `dish`, `mouth`, `rock`, `scatter`;
+  `kit.bells(sh, bankPlan({w, h, count, rows, layout, kind}), [x, y, z])`; `kit.hull(sh.finish(),
+  {anchors})`.
+- Cost at 1280x720 in software GL: about 0.3 s a frame for a hull filling the frame (0.1 s
+  small in it); a bank of eight bells firing and filling a third of the frame 0.5 s more.
+
 **Re-entry and flight effects: `vidgen/space-effects`** (Step 387, DESIGN §123.9). The glow of a
 re-entry, vapour trails, engine exhaust in air and condensation, for a plane, a craft of
 `vidgen/space-craft` or any object. `import {effects} from "vidgen/space-effects"`.
@@ -17962,7 +17999,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s, the 14 of `vidgen/space-hull` 23 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.
