@@ -13,8 +13,10 @@
 // vidgen/space-sea's water), so its horizon lies where the heights put it and it curves from high up. Each
 // pixel's ray is cut with every shell and with the towers' cylinders, the nearest first, and a few steps are
 // taken through each: the cloud there is a height field read from one small tile of noise at several sizes,
-// turns and drifts (the weather's, the clouds', the puffs': no size is fine enough to show the tile, and
-// each fades to its mean where a pixel or a step is coarser than it). Light: the sun after the air at the
+// turns and drifts (the weather's, the clouds', the puffs': each fades to its mean where a pixel or a step is
+// coarser than it), every reading cut into cells that read the tile at their own offsets and turns, and the
+// clouds' warped by endless noise besides (untiled(): the pattern never repeats), over an endless broad weather
+// that has more say seen from high up (aloft()). Light: the sun after the air at the
 // deck's own height (so a high deck is still pink when a low one is in the world's shadow), dimmed by the
 // cloud the light crossed on its way (one more reading towards the sun: bright tops and sunward sides, grey
 // bases), thrown onward at thin edges (the silver lining), the sky's light from above and what comes up
@@ -26,7 +28,7 @@ import {AIR_GLSL, DISPLAY_GLSL, RADII, sunlightAt, skyAmbient} from "vidgen/spac
 import {resolveOptions as resolveWorld, bandRamp, linearColor} from "vidgen/space-bodies";
 
 /** Bumped when the pictures change. */
-export const VERSION = 1;
+export const VERSION = 2;
 const PREFIX = "vidgen/space-clouds";
 const RAD = Math.PI / 180;
 /** By quality: the share of the picture's width and height the clouds are drawn at, the steps through a deck or a tower. */
@@ -74,17 +76,33 @@ export function broadHash(ix, iz, seed) {
   h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D); h ^= h >>> 12; h = Math.imul(h, 0x297A2D39); h ^= h >>> 15;
   return h >>> 0;
 }
-/** Gradient noise at (qx, qz), one lattice cell a unit, about -1 to 1; it never repeats (the lattice has no period). */
-export function broadNoise(qx, qz, seed) {
-  const cx = Math.floor(qx), cz = Math.floor(qz), fx = qx - cx, fz = qz - cz, g = (i, j) => { const a = ((broadHash(i, j, seed) & 15) + 0.5) * Math.PI / 8; return [Math.cos(a), Math.sin(a)]; };
+// gradient noise whose gradients' angles are four bits of the lattice points' hashes from bit `shift` on
+function gradientNoise(qx, qz, seed, shift) {
+  const cx = Math.floor(qx), cz = Math.floor(qz), fx = qx - cx, fz = qz - cz, g = (i, j) => { const a = (((broadHash(i, j, seed) >>> shift) & 15) + 0.5) * Math.PI / 8; return [Math.cos(a), Math.sin(a)]; };
   const a = g(cx, cz), b = g(cx + 1, cz), c = g(cx, cz + 1), d = g(cx + 1, cz + 1);
   const va = a[0] * fx + a[1] * fz, vb = b[0] * (fx - 1) + b[1] * fz, vc = c[0] * fx + c[1] * (fz - 1), vd = d[0] * (fx - 1) + d[1] * (fz - 1);
   const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10), uz = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
   return Math.SQRT2 * (va + ux * (vb - va) + uz * (vc - va) + ux * uz * (va - vb - vc + vd));
 }
+/** Gradient noise at (qx, qz), one lattice cell a unit, about -1 to 1; it never repeats (the lattice has no period). */
+export function broadNoise(qx, qz, seed) { return gradientNoise(qx, qz, seed, 0); }
+/** Two gradient noises at (qx, qz) from one lattice's hashes (the gradients from the hash's lowest four bits and the
+ * next four): a shift [x, z], each about -1 to 1, that never repeats (the shader's own arithmetic). */
+export function warpNoise(qx, qz, seed) { return [gradientNoise(qx, qz, seed, 0), gradientNoise(qx, qz, seed, 4)]; }
 /** The sizes of the broad weather's octaves, in deck sizes (the last about the tile's own repeat, so its rhythm
  * never shows), their weights, and the reach round the place where it is drawn to nothing (in the second's sizes). */
 export const FRONTS = Object.freeze({sizes: Object.freeze([40, 15, 5]), weights: Object.freeze([0.7, 0.45, 0.35]), middle: 0.5});
+/** How a deck's weather, clouds and fine puffs are kept from repeating although they are read from one tile (Step 395), in
+ * repeats of the tile: the clouds' place is first shifted by endless noise (`warp`: how far, at most about; `warpSize`:
+ * the noise's cell; the others' is not: the cells below are enough where the pattern weighs less or is fine), then the plane is cut into cells one repeat wide on an endless lattice, each reading the tile at
+ * its own offset and turn, the neighbours blended within `blend` of a cell's edge (keeping the pattern's contrast). */
+export const UNTILE = Object.freeze({warp: 0.5, warpSize: 3, blend: 0.15});
+/** How much more say the broad weather has seen from high up: none while the camera is less than `from` clouds' widths
+ * over a deck's top, `boost` times more from `to` on (bands and clear patches from orbit); less for a deck nearly closed
+ * or nearly empty, none for one closed or empty (an overcast stays an overcast). */
+export const ALOFT = Object.freeze({from: 3, to: 15, boost: 2});
+/** How much the broad weather of `deck` (deckOf()'s numbers) is multiplied by for a camera `height` metres up (ALOFT). Pure. */
+export function aloft(deck, height) { return 1 + ALOFT.boost * Math.min(1, 5 * deck.cover * (1 - deck.cover)) * smooth(ALOFT.from, ALOFT.to, (height - deck.top) / deck.size); }
 
 // ---------- the noise tile: one small picture that repeats, read at many sizes (pure) ----------
 function cellHash(x, y, period, salt) {
@@ -108,7 +126,7 @@ function puffs(u, v, period, salt) {
   return Math.max(0, 1 - best);
 }
 let tileKept = null;
-/** The noise tile: {size, data (Uint8Array, four numbers a texel), at(u, v) → [r, g, b, a] from 0 to 1}. Red: soft
+/** The noise tile: {size, data (Uint8Array, four numbers a texel), at(u, v) → [r, g, b, a] from 0 to 1, mean (each channel's)}. Red: soft
  * noise in five sizes (a cloud field's shape); green: round puffs in three sizes; blue: finer puffs (what frays
  * an edge); alpha: another soft noise (streaks, the second weather). It repeats in both directions. The same
  * numbers on every machine: made in JavaScript, not by the graphics card. */
@@ -134,8 +152,30 @@ export function noiseTile() {
     for (let c = 0; c < 4; c++) out[c] = ((data[(w(j) * n + w(i)) * 4 + c] * (1 - a) + data[(w(j) * n + w(i + 1)) * 4 + c] * a) * (1 - b) + (data[(w(j + 1) * n + w(i)) * 4 + c] * (1 - a) + data[(w(j + 1) * n + w(i + 1)) * 4 + c] * a) * b) / 255;
     return out;
   };
-  tileKept = Object.freeze({size: n, data, at});
+  const mean = [0, 1, 2, 3].map((c) => { let sum = 0; for (let k = c; k < data.length; k += 4) sum += data[k]; return sum / (n * n * 255); });
+  tileKept = Object.freeze({size: n, data, at, mean: Object.freeze(mean)});
   return tileKept;
+}
+
+/** The tile read at (u, v) (in repeats) so that it never repeats (UNTILE): the place shifted by warpNoise() (when `warp`), then each
+ * cell of the endless lattice (one repeat wide) reads the tile at its own offset and turn, from `salt`'s hashes;
+ * near a cell's edge the neighbours are blended, their departures from the tile's mean summed over the root of the
+ * sum of the weights' squares (so the blend is as varied as one reading). Returns [r, g, b, a] (about 0 to 1). The
+ * shader's own arithmetic. Pure. */
+export function untiled(u, v, salt, warp = true) {
+  const tile = noiseTile(), w = warp ? warpNoise(u / UNTILE.warpSize, v / UNTILE.warpSize, salt) : [0, 0], b = UNTILE.blend;
+  const U = u + UNTILE.warp * w[0], V = v + UNTILE.warp * w[1], su = U - 0.5, sv = V - 0.5, iu = Math.floor(su), iv = Math.floor(sv);
+  const ku = smooth(0.5 - b, 0.5 + b, su - iu), kv = smooth(0.5 - b, 0.5 + b, sv - iv), sum = [0, 0, 0, 0];
+  let squares = 0;
+  for (let j = 0; j < 4; j++) {
+    const du = j & 1, dv = j >> 1, weight = (du ? ku : 1 - ku) * (dv ? kv : 1 - kv);
+    if (weight <= 0) continue;
+    const cu = iu + du, cv = iv + dv, h = broadHash(cu, cv, salt + 1), a = ((h & 15) + 0.5) * Math.PI / 8, c = Math.cos(a), s = Math.sin(a);
+    const lu = U - cu - 0.5, lv = V - cv - 0.5, got = tile.at(c * lu - s * lv + ((h >>> 8) & 1023) / 1024, s * lu + c * lv + ((h >>> 18) & 1023) / 1024);
+    for (let k = 0; k < 4; k++) sum[k] += weight * (got[k] - tile.mean[k]);
+    squares += weight * weight;
+  }
+  return sum.map((x, k) => tile.mean[k] + x / Math.sqrt(squares));
 }
 
 // ---------- the geometry of a shell: pure ----------
@@ -254,21 +294,24 @@ export function towerList(options = {}, seed = 1) {
 /** A deck's pattern from a seed: the deck (deckOf()'s numbers; `d` a name or options) with `reads` (its four readings
  * of the tile: the weather twice, at two sizes and turns that never fall in step, the clouds, the fine puffs; each {u, v
  * (the rows of the matrix from metres to the tile's coordinates), at (its offset), drift (metres a second), texels (a
- * metre)}), `level` (the pattern's value where cloud begins: a share `cover` of 4096 places stands over it), `span` (how far
- * over the level the thickest stand), `depth` (metres), `valueAt(x, z, t)` (the pattern at a place, metres along +x and +z,
- * and a time: what the picture reads at full sharpness, the fine puffs left out) and `coverAt(x, z, t)` (0 where the sky is
+ * metre), salt (untiled()'s: no reading repeats; the clouds' is warped)}), `level` (the pattern's value where cloud begins: a share `cover` of 4096 places stands over it), `span` (how far
+ * over the level the thickest stand), `depth` (metres), `valueAt(x, z, t, height)` (the pattern at a place, metres along +x and +z,
+ * and a time, for a camera `height` metres up (aloft()): what the picture reads at full sharpness, the fine puffs left out) and `coverAt(x, z, t, height)` (0 where the sky is
  * open, towards 1 in a cloud's middle). `wind` (m/s) towards `direction` (degrees) moves the readings at their own speeds,
  * so the pattern drifts and changes; `index`: the deck's place in its sky. Pure. */
 export function deckField(d, {seed = 1, wind = 12, direction = 70, index = 0} = {}) {
-  const deck = d !== null && typeof d === "object" && Object.isFrozen(d) && "beyond" in d ? d : deckOf(d), tile = noiseTile(), rand = seeded(seed * 2654435 + 17 + index * 7001);
+  const deck = d !== null && typeof d === "object" && Object.isFrozen(d) && "beyond" in d ? d : deckOf(d), rand = seeded(seed * 2654435 + 17 + index * 7001);
   const to = [Math.sin(direction * RAD), -Math.cos(direction * RAD)];
   const reading = (metres, turn, stretch, speed) => {
     const a = turn + direction * RAD, c = Math.cos(a), s = Math.sin(a), along = 1 / (metres * stretch), across = 1 / metres;
     // the first row along the wind (stretched), the second across it
     return Object.freeze({u: [s * along, -c * along], v: [c * across, s * across], at: [rand(), rand()], drift: [to[0] * wind * speed, to[1] * wind * speed], texels: TILE / metres});
   };
-  const reads = [reading(deck.size * 31, 0.4 + 0.3 * rand(), 1, 0.9), reading(deck.size * 12.7, 1.3 + 0.4 * rand(), 1, 0.75), reading(deck.size * 4, 0.06 * (rand() - 0.5), deck.stretch, 1), reading(deck.size * 0.9, 0.5, Math.sqrt(deck.stretch), 1.2)];
-  const read = (r, x, z, t) => { const px = x - r.drift[0] * t, pz = z - r.drift[1] * t; return tile.at(r.u[0] * px + r.u[1] * pz + r.at[0], r.v[0] * px + r.v[1] * pz + r.at[1]); };
+  // no reading repeats (untiled(), each with its own salt; the clouds' warped too)
+  const salt = (k) => Math.imul((seed * 7919 + index * 104729 + 1013 * (k + 1)) | 0, 0x9E3779B1) >>> 8;
+  const reads = [reading(deck.size * 31, 0.4 + 0.3 * rand(), 1, 0.9), reading(deck.size * 12.7, 1.3 + 0.4 * rand(), 1, 0.75), reading(deck.size * 4, 0.06 * (rand() - 0.5), deck.stretch, 1), reading(deck.size * 0.9, 0.5, Math.sqrt(deck.stretch), 1.2)]
+    .map((r, k) => Object.freeze({...r, salt: salt(k)}));
+  const read = (r, x, z, t) => { const px = x - r.drift[0] * t, pz = z - r.drift[1] * t, u = r.u[0] * px + r.u[1] * pz + r.at[0], v = r.v[0] * px + r.v[1] * pz + r.at[1]; return untiled(u, v, r.salt, r === reads[2]); };
   // the broad weather: two octaves of endless noise tens of km across (drawn last, so the tile's readings keep the seed's numbers)
   const fronts = FRONTS.sizes.map((k, j) => ({...reading(deck.size * k, 2 * Math.PI * rand(), 1.6, 0.6), seed: (((seed * 7919 + index * 104729) & 0xffffff) + j * 7919) & 0xffffff}));
   const sum = (x, z, t) => fronts.reduce((acc, r, j) => { const px = x - r.drift[0] * t, pz = z - r.drift[1] * t;
@@ -280,12 +323,12 @@ export function deckField(d, {seed = 1, wind = 12, direction = 70, index = 0} = 
     const weather = 0.5 * (read(reads[0], x, z, t)[0] + read(reads[1], x, z, t)[3]), c = read(reads[2], x, z, t);
     return (c[0] * (1 - deck.puff) + c[1] * deck.puff) * (1 - deck.weather) + weather * deck.weather;
   };
-  const valueAt = (x, z, t = 0) => local(x, z, t) + (deck.fronts > 0 ? deck.weather * deck.fronts * broad(x, z, t) : 0);
+  const valueAt = (x, z, t = 0, height = 0) => local(x, z, t) + (deck.fronts > 0 ? deck.weather * deck.fronts * aloft(deck, height) * broad(x, z, t) : 0);
   // the level and the span from the deck's own pattern: where the broad weather is nothing, the cover is the one asked for
   const values = Array.from({length: 4096}, (_, k) => local((part(k * 0.6180339887) - 0.5) * deck.size * 900, (part(k * 0.7548776662) - 0.5) * deck.size * 900, 0)).sort((p, q) => p - q);
   const level = deck.cover >= 1 ? values[0] - 0.06 : deck.cover <= 0 ? values[values.length - 1] + 0.06 : values[Math.floor((1 - deck.cover) * values.length)];
   return Object.freeze({...deck, reads: Object.freeze(reads), broad: Object.freeze(fronts.map((r) => Object.freeze(r))), middle, reach, broadAt: broad, depth: deck.top - deck.base, level, span: Math.max(values[Math.floor(0.985 * values.length)] - level, 0.02),
-    valueAt, coverAt: (x, z, t = 0) => smooth(0, deck.soft, valueAt(x, z, t) - level)});
+    valueAt, coverAt: (x, z, t = 0, height = 0) => smooth(0, deck.soft, valueAt(x, z, t, height) - level)});
 }
 
 // ---------- lightning: pure ----------
@@ -413,19 +456,58 @@ uniform vec4 uDeckC[ND];      // ragged, the weather's share, the puffs' share, 
 uniform vec4 uDeckR[ND * 8];  // four readings of the tile a deck: two rows of each one's place (x, y, the camera's offset, texels a metre)
 uniform vec4 uDeckF[ND * NB];  // the broad weather's octaves a deck: the matrix from metres to lattice cells (u.x, u.y, v.x, v.y)
 uniform vec4 uDeckO[ND * NB];  // and the camera's place in them: the share of its cell, the whole cells
-uniform vec4 uDeckG[ND];      // the broad weather's strength (fronts), its first octave's seed (the next: + 7919 each), (free), its value at the place (drawn to nothing round it)
+uniform vec4 uDeckG[ND];      // the broad weather's strength (fronts, times aloft()), its first octave's seed (the next: + 7919 each), (free), its value at the place (drawn to nothing round it)
 uniform vec4 uDeckH[ND];      // the camera's place (m along +x and +z from the place), one over the square of the reach of that
 uniform vec4 uCloudSun;       // the sun's direction along +x and +z, its sine and cosine over the level
-vec4 cloudRead(int r, vec2 p, float foot) {
-  vec4 A = uDeckR[r], B = uDeckR[r + 1];
-  return textureLod(uCloudNoise, vec2(dot(A.xy, p) + A.z, dot(B.xy, p) + B.z), log2(max(foot * A.w, 1.0)));
-}
+uniform vec4 uDeckI[ND * 4];  // each reading's whole repeats at the camera (x, y), its salt
+uniform vec4 uCloudMean;      // the tile's mean
 uint cloudHash(ivec2 c, uint s) {
   uint h = (uint(c.x) * 0x9E3779B1u) ^ (uint(c.y) * 0x85EBCA77u) ^ (s * 0xC2B2AE3Du);
   h ^= h >> 15; h *= 0x2C1B3C6Du; h ^= h >> 12; h *= 0x297A2D39u; h ^= h >> 15;
   return h;
 }
 vec2 cloudGrad(ivec2 c, uint s) { float a = (float(cloudHash(c, s) & 15u) + 0.5) * 0.39269908; return vec2(cos(a), sin(a)); }
+// the sixteen directions (k + 0.5) x 22.5 degrees: the gradients' and the cells' turns
+const vec2 CLOUD_DIRS[16] = vec2[16](${Array.from({length: 16}, (_, k) => `vec2(${Math.cos((k + 0.5) * Math.PI / 8).toFixed(8)}, ${Math.sin((k + 0.5) * Math.PI / 8).toFixed(8)})`).join(", ")});
+vec2 gradAt(uint h, uint shift) { return CLOUD_DIRS[(h >> shift) & 15u]; }
+// warpNoise(): two gradient noises from one lattice's hashes
+vec2 cloudWarp(vec2 q, uint s) {
+  vec2 c = floor(q), f = q - c, g = f - 1.0, u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); ivec2 ic = ivec2(c);
+  uint ha = cloudHash(ic, s), hb = cloudHash(ic + ivec2(1, 0), s), hc = cloudHash(ic + ivec2(0, 1), s), hd = cloudHash(ic + ivec2(1, 1), s);
+  vec2 out2;
+  for (int k = 0; k < 2; k++) {
+    uint sh = uint(k * 4);
+    float va = dot(gradAt(ha, sh), f), vb = dot(gradAt(hb, sh), vec2(g.x, f.y)), vc = dot(gradAt(hc, sh), vec2(f.x, g.y)), vd = dot(gradAt(hd, sh), g);
+    out2[k] = 1.41421356 * (va + u.x * (vb - va) + u.y * (vc - va) + u.x * u.y * (va - vb - vc + vd));
+  }
+  return out2;
+}
+// untiled(): the tile at w (repeats from the lattice's origin, already shifted by the warp), each cell at its own offset and turn
+vec4 cloudUntiled(vec2 w, uint salt, float lod) {
+  vec2 sw = w - 0.5, base = floor(sw), k = smoothstep(vec2(${(0.5 - UNTILE.blend).toFixed(4)}), vec2(${(0.5 + UNTILE.blend).toFixed(4)}), sw - base);
+  vec4 sum = vec4(0.0); float squares = 0.0;
+  for (int j = 0; j < 4; j++) {
+    ivec2 d = ivec2(j & 1, j >> 1);
+    float weight = (d.x == 1 ? k.x : 1.0 - k.x) * (d.y == 1 ? k.y : 1.0 - k.y);
+    if (weight <= 0.0) continue;
+    vec2 cell = base + vec2(d);
+    uint h = cloudHash(ivec2(cell), salt + 1u);
+    vec2 turn = CLOUD_DIRS[h & 15u], l = w - cell - 0.5;
+    sum += weight * (textureLod(uCloudNoise, vec2(turn.x * l.x - turn.y * l.y, turn.y * l.x + turn.x * l.y) + vec2(float((h >> 8) & 1023u), float((h >> 18) & 1023u)) / 1024.0, lod) - uCloudMean);
+    squares += weight * weight;
+  }
+  return uCloudMean + sum * inversesqrt(squares);
+}
+// the warp's shift of reading r at p, in repeats
+vec2 cloudShift(int r, vec2 p) {
+  vec4 A = uDeckR[r], B = uDeckR[r + 1], I = uDeckI[r / 2];
+  return ${UNTILE.warp.toFixed(4)} * cloudWarp((vec2(dot(A.xy, p) + A.z, dot(B.xy, p) + B.z) + I.xy) * ${(1 / UNTILE.warpSize).toFixed(8)}, uint(I.z));
+}
+// reading r of the tile at p (metres from the camera), a step foot metres wide, shifted by shift (the clouds' by the warp's there, the others' by none): it never repeats
+vec4 cloudReadAt(int r, vec2 p, float foot, vec2 shift) {
+  vec4 A = uDeckR[r], B = uDeckR[r + 1], I = uDeckI[r / 2];
+  return cloudUntiled(vec2(dot(A.xy, p) + A.z, dot(B.xy, p) + B.z) + I.xy + shift, uint(I.z), log2(max(foot * A.w, 1.0)));
+}
 float cloudBroad(int i, vec2 p) {
   float sum = 0.0;
   for (int k = 0; k < NB; k++) {
@@ -439,10 +521,10 @@ float cloudBroad(int i, vec2 p) {
   vec2 w = p + uDeckH[i].xy;
   return sum - uDeckG[i].w * exp(-dot(w, w) * uDeckH[i].z);
 }
-float cloudWeather(int i, vec2 p, float foot) { return 0.5 * (cloudRead(i * 8, p, foot).r + cloudRead(i * 8 + 2, p, foot).a) + (uDeckG[i].x > 0.0 ? uDeckG[i].x * cloudBroad(i, p) : 0.0); }
+float cloudWeather(int i, vec2 p, float foot) { return 0.5 * (cloudReadAt(i * 8, p, foot, vec2(0.0)).r + cloudReadAt(i * 8 + 2, p, foot, vec2(0.0)).a) + (uDeckG[i].x > 0.0 ? uDeckG[i].x * cloudBroad(i, p) : 0.0); }
 // how far the pattern stands over the level where cloud begins (x), and the puffs there (y)
-vec2 cloudLevel(int i, vec2 p, float foot, float weather) {
-  vec4 c = cloudRead(i * 8 + 4, p, foot);
+vec2 cloudLevel(int i, vec2 p, float foot, float weather, vec2 shift) {
+  vec4 c = cloudReadAt(i * 8 + 4, p, foot, shift);
   return vec2(mix(mix(c.r, c.g, uDeckC[i].z), weather, uDeckC[i].y) - uDeckA[i].w, c.g);
 }
 // a cloud's top (0 the deck's base, 1 its top) where the pattern stands v over its level
@@ -455,7 +537,7 @@ float cloudShade(vec2 p, float height) {
     if (uDeckC[j].w < 0.5 || A.x < height) continue;
     float up = A.x + 0.5 * A.y - height, foot = 0.2 * A.y / uCloudSun.z + 0.02 * up;
     vec2 q = p + uCloudSun.xy * (up * uCloudSun.w / uCloudSun.z);
-    vec2 lv = cloudLevel(j, q, foot, cloudWeather(j, q, foot));
+    vec2 lv = cloudLevel(j, q, foot, cloudWeather(j, q, foot), cloudShift(j * 8 + 4, q));
     float depth = A.z * A.y * cloudTop(j, lv.x) * smoothstep(0.0, uDeckB[j].z, lv.x);
     lit *= exp(-0.5 * depth / max(uCloudSun.z, 0.25));
   }
@@ -508,10 +590,12 @@ float towerWidth(float y, bool grows) { return (0.42 + 0.42 * pow(max(y, 0.0), 0
 // the anvil: where its middle is from the tower's foot (xy, m), half its length along the wind (z) and across it (w)
 vec4 towerAnvil(vec4 A) { float along = 1.5 * A.w * A.z; return vec4(uCloudWind * (0.75 * A.z + 0.8 * along), along, 0.7 * A.w * A.z); }
 // the ray and the stretch of it now walked: its level direction, its cosine to the vertical, a pixel's angle, the stretch, the weather along it
-vec2 gDh; float gMu, gCosv, gPix, gT0, gLen, gH, gPhase; vec3 gWx;
+vec2 gDh; float gMu, gCosv, gPix, gT0, gLen, gH, gPhase; vec3 gWx; vec2 gSh[3];
 // what the ray has gathered: the share of light still passing, and of the thing now walked its light and its distance (each times its share)
 float gT, gWay; vec3 gGot;
 float deckWeather(float t) { float u = (t - gT0) / max(gLen, 1e-3) * 2.0; return u < 1.0 ? mix(gWx.x, gWx.y, u) : mix(gWx.y, gWx.z, u - 1.0); }
+// the clouds' warp changes slowly too (over a few repeats): read with the weather and taken as even between
+vec2 deckShift(float t) { float u = (t - gT0) / max(gLen, 1e-3) * 2.0; return u < 1.0 ? mix(gSh[0], gSh[1], u) : mix(gSh[1], gSh[2], u - 1.0); }
 // a bit of cloud t metres along the ray taking the share dens x ds of the light, sending its light and the flashes' near it
 void gather(float dens, float ds, float t, vec3 light) {
   vec2 p = gDh * t; float alt = heightAt(gMu, t) - gH;
@@ -571,7 +655,7 @@ void walkDeck(int it, float t0, float len) {
 #ifdef STRIPES
       if (striped) lift = cloudStripe(it, gDh * tm, 0.5).a;      // a stripe's lift changes slowly: read once a coarse step
 #endif
-      float most = cloudLevel(it, gDh * tm, wide, deckWeather(tm)).x + 0.45 * min(wide * texels, 1.0) + lift;
+      float most = cloudLevel(it, gDh * tm, wide, deckWeather(tm), deckShift(tm)).x + 0.45 * min(wide * texels, 1.0) + lift;
       // no cloud near, or the whole step passes over the highest top there may be
       if (most <= 0.0 || (min(heightAt(gMu, Ta), heightAt(gMu, Ta + D)) - A.x) / A.y > cloudTop(it, most)) { have = false; inside = false; continue; }
     }
@@ -581,13 +665,13 @@ void walkDeck(int it, float t0, float len) {
       float ta = Ta + D * float(s) / float(fine), tb = Ta + D * float(s + 1) / float(fine), ds = tb - ta, foot = max(tb * gPix, ds);
       // where a step is coarser than the clouds, the pattern is their mean there and its edge is as much softer: a share of cloud, not a cloud
       float blur = 0.16 * min(foot * texels, 1.0), weather = deckWeather(tb);
-      vec2 l0 = have ? last : cloudLevel(it, gDh * ta, foot, deckWeather(ta)) + vec2(blur, 0.0), l1 = cloudLevel(it, gDh * tb, foot, weather) + vec2(blur, 0.0);
+      vec2 shift = deckShift(tb), l0 = have ? last : cloudLevel(it, gDh * ta, foot, deckWeather(ta), deckShift(ta)) + vec2(blur, 0.0), l1 = cloudLevel(it, gDh * tb, foot, weather, shift) + vec2(blur, 0.0);
       if (!have) l0.x += lift;
       l1.x += lift;
       last = l1; have = true;
       if (max(l0.x, l1.x) <= 0.0) { inside = false; continue; }
       float y0 = (heightAt(gMu, ta) - A.x) / A.y, y1 = (heightAt(gMu, tb) - A.x) / A.y;
-      float fray = B.w * (1.0 - cloudRead(it * 8 + 6, gDh * (ta + 0.5 * ds) + (0.3 * (y0 + y1) * A.y) * vec2(0.8, -0.6), foot).b) * (0.35 + 0.65 * clamp(0.5 * (y0 + y1), 0.0, 1.0));
+      float fray = B.w * (1.0 - cloudReadAt(it * 8 + 6, gDh * (ta + 0.5 * ds) + (0.3 * (y0 + y1) * A.y) * vec2(0.8, -0.6), foot, vec2(0.0)).b) * (0.35 + 0.65 * clamp(0.5 * (y0 + y1), 0.0, 1.0));
       vec2 part = cloudPart(it, l0.x - fray, l1.x - fray, y0, y1);
       if (part.y <= part.x) { inside = false; continue; }
       // what is seen of the cloud is what the ray meets first
@@ -598,7 +682,7 @@ void walkDeck(int it, float t0, float len) {
       if (!sheet && (part.x > 0.0 || !inside)) {
         float te = ta + ds * part.x, ye = mix(y0, y1, part.x), wide = te * gPix;
         vec2 pe = gDh * te + (ye * A.y) * vec2(0.5, -0.4);
-        vec4 caps = cloudRead(it * 8 + 6, pe, wide);
+        vec4 caps = cloudReadAt(it * 8 + 6, pe, wide, vec2(0.0));
         lump = smoothstep(0.15, 0.85, 0.55 * caps.g + 0.45 * caps.b);
         // a lump's crest is lit, the crease between two lumps is not
         lit = lump;
@@ -612,7 +696,7 @@ void walkDeck(int it, float t0, float len) {
       if (dens <= 0.0) continue;
       // towards the sun: the cloud over this place, and over a place a little way along the light's path
       float reach = 0.3 * A.y, ys = y + reach * uCloudSun.z / A.y;
-      vec2 ls = cloudLevel(it, p + uCloudSun.xy * (reach * uCloudSun.w), max(foot, 0.25 * reach), weather);
+      vec2 ls = cloudLevel(it, p + uCloudSun.xy * (reach * uCloudSun.w), max(foot, 0.25 * reach), weather, shift);
       float topS = cloudTop(it, ls.x) * smoothstep(0.0, B.z, ls.x);
       float tau = A.z * A.y * (0.35 * max(top - y, 0.0) + 0.65 * max(topS - ys, 0.0)) / max(uCloudSun.z, 0.22);
       float open = exp(-0.35 * A.z * A.y * max(top - y, 0.0)) * (0.55 + 0.45 * top);
@@ -727,9 +811,9 @@ void main() {
     float len = to[it] - t0, before = gT;
     gGot = vec3(0.0); gWay = 0.0;
     if (it < ND) {
-      // the weather changes slowly: read at three places along the stretch
+      // the weather and the clouds' warp change slowly: read at three places along the stretch
       gT0 = t0; gLen = len;
-      for (int k = 0; k < 3; k++) { float t = t0 + 0.5 * float(k) * len; gWx[k] = cloudWeather(it, dh * t, max(t * pix, 0.2 * len)); }
+      for (int k = 0; k < 3; k++) { float t = t0 + 0.5 * float(k) * len; gWx[k] = cloudWeather(it, dh * t, max(t * pix, 0.2 * len)); gSh[k] = cloudShift(it * 8 + 4, dh * t); }
       walkDeck(it, t0, len);
     } else walkTower(it - ND, t0, len);
     float w = before - gT;
@@ -819,9 +903,9 @@ export class Clouds {
     this.noise = new THREE.DataTexture(noiseTile().data, TILE, TILE, THREE.RGBAFormat, THREE.UnsignedByteType);
     Object.assign(this.noise, {wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true, needsUpdate: true});
     // what the decks' pattern needs: the clouds' own shader's and a shadow's on something else
-    this.fieldUniforms = {uCloudNoise: {value: this.noise}, uCloudSun: {value: v4()},
+    this.fieldUniforms = {uCloudNoise: {value: this.noise}, uCloudMean: {value: new THREE.Vector4(...noiseTile().mean)}, uCloudSun: {value: v4()},
       uDeckA: {value: this.decks.map((d) => new THREE.Vector4(d.base, d.depth, d.density, d.level))}, uDeckB: {value: this.decks.map((d) => new THREE.Vector4(d.rise / d.span, d.floor, d.soft, d.fray))},
-      uDeckC: {value: this.decks.map((d) => new THREE.Vector4(d.ragged, d.weather, d.puff, d.density * d.depth > 1 ? 1 : 0))}, uDeckR: {value: Array.from({length: nd * 8}, v4)},
+      uDeckC: {value: this.decks.map((d) => new THREE.Vector4(d.ragged, d.weather, d.puff, d.density * d.depth > 1 ? 1 : 0))}, uDeckR: {value: Array.from({length: nd * 8}, v4)}, uDeckI: {value: Array.from({length: nd * 4}, v4)},
       uDeckF: {value: this.decks.flatMap((d) => d.broad.map((r) => new THREE.Vector4(r.u[0], r.u[1], r.v[0], r.v[1])))}, uDeckO: {value: Array.from({length: nd * FRONTS.sizes.length}, v4)},
       uDeckG: {value: this.decks.map((d) => new THREE.Vector4(d.fronts, d.broad[0].seed, 0, d.middle))}, uDeckH: {value: this.decks.map((d) => new THREE.Vector4(0, 0, d.reach, 0))}};
     this.uniforms = {...sky.uniforms, ...this.fieldUniforms, uCloudGeo: {value: new THREE.Vector4(sky.model.radius, 10, sky.options.unit, 0.002)},
@@ -861,15 +945,15 @@ export class Clouds {
     if (floor) sky.under(true);
     this._lights = "";
     this.material.addEventListener("dispose", () => { this.noise.dispose(); this.stripes.dispose(); this.target.dispose(); this._pass.material.dispose(); });
-    this.t = 0;
+    this.t = 0; this.height = 0;
   }
 
-  /** How much cloud a deck has over the scene's (x, z) at time `t` (seconds; default the last update's): 0 where
-   * the sky is open, towards 1 in a cloud's middle. `deck`: its place in `decks` or its name. */
+  /** How much cloud a deck has over the scene's (x, z) at time `t` (seconds; default the last update's), as seen from
+   * the last update's camera height (aloft()): 0 where the sky is open, towards 1 in a cloud's middle. `deck`: its place in `decks` or its name. */
   coverAt(deck, x, z, t = this.t) {
     const d = typeof deck === "number" ? this.decks[deck] : this.decks.find((q) => q.name === deck);
     if (!d) throw fail(`coverAt: no deck ${JSON.stringify(deck)}; there are: ${this.decks.map((q) => q.name).join(", ")}`);
-    return d.coverAt(x, z, t);
+    return d.coverAt(x, z, t, this.height);
   }
   /** A deck's horizon for the camera of the last update: {distance (m), dip (degrees)} to its top. */
   horizon(deck = 0) { return deckHorizon(this.sky.model.radius, this.sky.state.height, this.decks[deck].top); }
@@ -904,7 +988,11 @@ export class Clouds {
       const px = x - rd.drift[0] * t, pz = z - rd.drift[1] * t;
       u.uDeckR.value[i * 8 + k * 2].set(rd.u[0], rd.u[1], part(rd.u[0] * px + rd.u[1] * pz + rd.at[0]), rd.texels);
       u.uDeckR.value[i * 8 + k * 2 + 1].set(rd.v[0], rd.v[1], part(rd.v[0] * px + rd.v[1] * pz + rd.at[1]), 0);
+      u.uDeckI.value[i * 4 + k].set(Math.floor(rd.u[0] * px + rd.u[1] * pz + rd.at[0]), Math.floor(rd.v[0] * px + rd.v[1] * pz + rd.at[1]), rd.salt, 0);
     }));
+    // seen from high up the broad weather has more say (aloft())
+    this.decks.forEach((deck, i) => { u.uDeckG.value[i].x = deck.fronts * aloft(deck, h); });
+    this.height = h;
     this.decks.forEach((deck, i) => deck.broad.forEach((rd, k) => {
       const px = x - rd.drift[0] * t, pz = z - rd.drift[1] * t, qx = rd.u[0] * px + rd.u[1] * pz + rd.at[0] * 1000, qz = rd.v[0] * px + rd.v[1] * pz + rd.at[1] * 1000;
       u.uDeckO.value[i * FRONTS.sizes.length + k].set(part(qx), part(qz), Math.floor(qx), Math.floor(qz));

@@ -28829,6 +28829,56 @@ frame, so the two agree on the horizon and on places).
   `slow`, in Chromium: tops brighter than bases, a sunset's tops warmer than noon's, more cover
   hides more ground, a flash lights a tower, a giant's tawny decks, `fast` the same sky, a frame
   twice the same, and the same pixels with the air's table baked, from the cache and without it.
+- **The pattern never repeats (Step 395).** From 20 km up the decks still showed the same cloud
+  shapes in rows (still 390 `09_rise`, 6.7 and 8 s): the shapes came from the clouds' reading of
+  the tile (4 clouds' widths a repeat, turned 3°), and the broad weather (Step 393) changed their
+  strength, never their shape. Now every reading of the tile goes through `untiled(u, v, salt,
+  warp)` (`UNTILE`), in the shader and in the CPU twin alike:
+  - *Cells.* The plane is cut into cells one repeat wide on an endless lattice; each cell reads
+    the tile at its own offset (two 10-bit numbers of its hash) and turn (one of the sixteen
+    directions (k + 0.5) x 22.5°, the gradients' table); within `blend` (0.15 of a cell) of an
+    edge the neighbours are blended, their departures from the tile's mean (`noiseTile().mean`,
+    uniform `uCloudMean`) summed over the root of the sum of the weights' squares, so the blend
+    keeps the tile's mean and contrast (a plain mix would thin the cloud along every edge: a
+    grid). The turn is in the tile's own coordinates, so `stretch` still draws cloud out along
+    the wind. The mip level is the un-offset reading's (offset and turn do not change a texel's
+    size).
+  - *Warp.* The clouds' reading (not the weather's two or the fine caps': cells are enough
+    where the pattern weighs less or is fine) is first shifted by `warpNoise()`: two gradient
+    noises from one lattice's hashes (the gradients from the hash's lowest four bits and the
+    next four), `warpSize` 3 repeats a cell, `warp` 0.5 repeat at most about; the cells' edges
+    wander with it. The shader reads the warp with the weather, at three places along a deck's
+    stretch of the ray, and takes it as even between them (it changes over 30 km for cumulus);
+    the cloud shadow (`cloudShade`) reads it at the place.
+  - Each reading's whole repeats at the camera reach the shader as `uDeckI` (x, y, the reading's
+    salt) beside the share of a repeat in `uDeckR`, so the lattice is the same far from the
+    origin; salts from the seed and the deck's index (the seed's other numbers unchanged).
+  - *From high up.* `aloft(deck, height)` multiplies the broad weather: 1 until the camera is
+    `ALOFT.from` (3) clouds' widths over a deck's top, 1 + `boost` (2) from `to` (15) on (cumulus:
+    9 to 38 km; cirrus: 37 to 145 km), the boost times `min(1, 5 cover (1 - cover))` (a closed or
+    empty deck stays so: an overcast from orbit is still closed). From 20–400 km the decks read
+    as bands and clear patches. Round the place the broad weather is still drawn to nothing, so
+    the cover asked for is the one seen there. The camera's height reaches the shader through
+    `uDeckG.x`; `deckField(...).valueAt` / `coverAt` take it as a fourth argument (default 0),
+    `Clouds.coverAt` uses the last update's (`clouds.height`).
+  - `level` is calibrated on the new pattern, so `cover` is still the covered share (tested
+    within 0.06). Measured on the CPU twin (Step 395 stills, `autocorrelation.txt`): the
+    clouds' pattern alone correlated 0.81 / 0.70 / 0.75 with itself one, two and three repeats
+    away before, 0.06 / 0.01 / -0.02 after; cloud-or-not of `fair` 0.62 / 0.49 / 0.46 before,
+    0.25 / 0.19 / 0.15 after (falling with distance: the broad weather, no peak at a repeat).
+  - *Cost* (one session, 1280x720 `standard`, the Step 390 rise over a breeze sea under `fair`):
+    15–100 m over the sea 2.6 → 3.3 s a frame; 20–60 km up 3.55 → 5.0 s; 426x240 0.63 → 0.80 s
+    a still. The blend's loop is the dearer part in SwiftShader (one cell without a blend costs
+    nearly nothing; a blend written out as four or as three readings costs more than the loop);
+    the warp, read three times a stretch, nearly nothing. Seen from high up the cost depends on
+    how much of the view is cloud (the boosted weather leaves more open sea to skip).
+  - *Pictures that change.* Every page that draws cloud decks or their shadow: the clouds parts
+    (`clouds-*`), the descent's and the air camera's parts, surface scenes with `clouds:`, the
+    descents (`descend`/`ascend`) over decks, a sea or ground shaded by decks. Towers, lightning
+    and a giant's stripes are drawn as before; a giant's decks (`fronts: 0`) change by the cells
+    and the warp only. `VERSION` 2; the module's bytes change the scene keys of pages importing
+    it, and baked maps are baked once more.
+  - Exports added: `untiled`, `warpNoise`, `aloft`, `UNTILE`, `ALOFT`; `noiseTile()` has `mean`.
 
 ### 123.6 Ground with relief: `vidgen/space-land` (Step 384)
 

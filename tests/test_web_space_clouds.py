@@ -179,6 +179,34 @@ out.push([storm.map((f) => [f.time, f.power, f.follows, f.strokes, tw.list.some(
     assert [row[0] for row in events] == [1.5, 3] and all(row[1] is True and 1800 < row[2] < 3000 for row in events) and default_storm == pytest.approx(100, rel=0.3)
 
 
+def test_the_pattern_never_repeats_and_the_weather_has_more_say_from_high_up(tmp_path: Path) -> None:
+    """Step 395: the tile is read through untiled() (a warp and cells at their own offsets and turns), so a deck's
+    pattern is no longer like itself one repeat away; the blend keeps the tile's mean and contrast and has no jumps
+    at the cells' edges; seen from high up the broad weather has more say, but not over a closed deck."""
+    out = _run_in_node(tmp_path, """
+const tile = C.noiseTile(), N = 20000, mean = [0, 0, 0, 0], sq = [0, 0, 0, 0], plainSq = [0, 0, 0, 0];
+for (let i = 0; i < N; i++) { const u = (i * 0.6180339887) % 1 * 97 - 40, v = (i * 0.7548776662) % 1 * 89 - 31, a = C.untiled(u, v, 77), b = tile.at(u, v);
+  for (let k = 0; k < 4; k++) { mean[k] += a[k] / N; sq[k] += (a[k] - tile.mean[k]) ** 2 / N; plainSq[k] += (b[k] - tile.mean[k]) ** 2 / N; } }
+// across a cell's edge (u a whole number) and in a cell's middle: steps of a thousandth of a repeat
+const jump = (u0) => Math.max(...[0, 1, 2, 3].map((k) => Math.abs(C.untiled(u0 + 5e-4, 3.37, 9, false)[k] - C.untiled(u0 - 5e-4, 3.37, 9, false)[k])));
+const f = C.deckField({type: "cumulus", fronts: 0}, {seed: 5}), r = f.reads[2], det = r.u[0] * r.v[1] - r.u[1] * r.v[0], rep = [r.v[1] / det, -r.v[0] / det];
+const a = [], b = [], c = [];
+for (let i = 0; i < 4000; i++) { const x = (i * 7919.3) % 4e5 - 2e5, z = (i * 104729.7) % 3e5 - 1.5e5; a.push(f.valueAt(x, z)); b.push(f.valueAt(x + rep[0], z + rep[1])); c.push(f.valueAt(x + 2 * rep[0], z + 2 * rep[1])); }
+const corr = (p, q) => { const m = (s) => s.reduce((x, y) => x + y, 0) / s.length, mp = m(p), mq = m(q); let pq = 0, pp = 0, qq = 0; p.forEach((x, i) => { pq += (x - mp) * (q[i] - mq); pp += (x - mp) ** 2; qq += (q[i] - mq) ** 2; }); return pq / Math.sqrt(pp * qq); };
+const cu = C.deckOf("cumulus"), closed = C.deckOf("stratus"), fair = C.deckField("cumulus", {seed: 5});
+out.push([mean, tile.mean, sq, plainSq, [1, 2, 3].map(jump), [1.5, 2.5].map(jump), corr(a, b), corr(a, c), f.reads.map((q) => q.salt), C.warpNoise(1.3, 2.7, 4), C.broadNoise(1.3, 2.7, 4),
+  [0, cu.top + 2 * cu.size, cu.top + 9 * cu.size, cu.top + 15 * cu.size, 4e5].map((h) => C.aloft(cu, h)), C.aloft(closed, 4e5), fair.valueAt(3e5, 2e5, 0) === fair.valueAt(3e5, 2e5, 0, 0), fair.valueAt(3e5, 2e5, 0) !== fair.valueAt(3e5, 2e5, 0, 4e5), fair.valueAt(0, 0, 0, 4e5) - fair.valueAt(0, 0, 0)]);
+""")
+    mean, tile_mean, sq, plain_sq, edges, middles, one, two, salts, warp, broad, aloft, closed, same, changed, centre = out[0]
+    assert mean == pytest.approx(tile_mean, abs=0.02)                                                       # the tile's mean kept
+    assert all(0.75 * p < s < 1.25 * p for s, p in zip(sq, plain_sq))                                       # and its contrast (the blend's weights)
+    assert max(edges) < 0.04 and max(middles) < 0.04                                                        # no jump at a cell's edge (no more change than in a middle)
+    assert abs(one) < 0.15 and abs(two) < 0.15                                                              # one and two repeats away: unlike (0.8 before Step 395)
+    assert len(set(salts)) == 4 and warp[0] == pytest.approx(broad) and warp[1] != warp[0]
+    assert aloft[0] == aloft[1] == 1 and 1 < aloft[2] < 3 and aloft[3] == aloft[4] == 3 and closed == 1
+    assert same and changed and abs(centre) < 1e-9                                                          # round the place still the cover asked for
+
+
 def test_a_giants_decks_take_its_bands_colours(tmp_path: Path) -> None:
     out = _run_in_node(tmp_path, """
 const g = C.giantSky("jupiter", {latitude: 24, scale: 112000}), again = C.giantSky("jupiter", {latitude: 24, scale: 112000}), o = resolveOptions("jupiter");

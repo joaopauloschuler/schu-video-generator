@@ -5,7 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–394
+## Steps 193–395
+
+### Breaking repeating patterns (Step 395)
+
+- **Clouds that never repeat** (Step 395): seen from high up, the cloud decks of
+  `vidgen/space-clouds` no longer show the same shapes in rows. Each reading of the noise tile is
+  cut into cells that read it at their own offsets and turns, blended softly at their edges, and
+  the clouds are warped by endless noise besides; from about 10 km over a deck the broad weather
+  has more say, so from 20–400 km the decks read as bands and clear patches (a closed deck stays
+  closed). The cover asked for is still the cover seen round the place. Every picture with cloud
+  decks or their shadows changes; such frames cost about a quarter more near the sea and two
+  fifths more from 20–60 km up. New exports `untiled`, `warpNoise`, `aloft`, `UNTILE`, `ALOFT`.
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
