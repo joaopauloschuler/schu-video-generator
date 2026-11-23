@@ -205,6 +205,201 @@ export function shake(t, {amount = 0.25, seed = 1, rate = 7} = {}) {
  * without overshoot (a critically damped spring of time constant `settle`) to `distance`. */
 export const pushBack = (age, distance = 1, settle = 0.45) => (age <= 0 ? 0 : distance * (1 - (1 + age / settle) * Math.exp(-age / settle)));
 
+// ---------- the operator (Step 399, DESIGN.md §124.3) ----------
+/** The operator's defaults. `handheld`: slow drift (`drift` degrees at `rate` Hz) that the operator corrects late
+ * (`delay` seconds, then a second-order response at `correct` Hz with `damping` < 1: a little overshoot), a
+ * reframe now and then (one in most spans of `reframe` seconds: the frame slips `size` degrees off over a second
+ * and a half and is put back quickly, overshooting), a hand's tremor and breathing (degrees). `mounted`: only a
+ * mount's vibration (`vibration` degrees at about `rate` Hz) and a slow `sway`. `mm`: the focal length the hand is
+ * scaled by (default the shot's own). `exposure`: an automatic exposure: a share `strength` of each change of
+ * the metered brightness taken back after `delay` seconds by a second-order response at `speed` Hz, `hunt` 0..1
+ * (0: no overshoot, 1: it swings round twice), at most `most` stops, read at `samples` past times. `horizon`:
+ * the horizon `degrees` off (a seeded side) at the start of every shot, held `hold` seconds, levelled in about
+ * `settle` seconds with `damping` (a little overshoot). */
+export const OPERATOR = Object.freeze({
+  handheld: Object.freeze({amount: 1, seed: 1, drift: 1.1, rate: 0.12, delay: 0.3, correct: 0.5, damping: 0.5, tremor: 0.03, breath: 0.05, reframe: 6, size: 0.9, mm: null}),
+  mounted: Object.freeze({amount: 1, seed: 1, vibration: 0.12, rate: 9, sway: 0.06, mm: null}),
+  exposure: Object.freeze({strength: 0.7, delay: 0.2, speed: 0.45, hunt: 0.6, most: 2, samples: 24}),
+  horizon: Object.freeze({degrees: 1, seed: 1, hold: 2.5, settle: 1.2, damping: 0.6}),
+});
+/** What the operator's meter counts as bright (shares of a white ground in full sun): the clear sky, the sea and the
+ * land in the sun, a deck's grey base seen from under it, fog just under a deck's top (darker by exp(-`deep` x the
+ * share of the deck above the camera) further in), sunlit cloud tops, the sun in the frame (with its glare) and the
+ * sun's glitter on the sea. A stated estimate fitted to the rendered mean of two views (DESIGN.md §124.3). */
+export const METER = Object.freeze({sky: 0.3, sea: 0.03, land: 0.12, base: 0.7, fog: 1.5, deep: 6, tops: 1.2, sun: 0.15, glint: 0.5});
+const OPERATOR_KEYS = ["hand", "exposure", "horizon", "seed", "start", "cuts"];
+const fade5 = (u) => u * u * u * (u * (u * 6 - 15) + 10);
+/** Smooth endless noise of x (gradient noise, knots one apart, gradients from `seed`): about -1..1, mean 0, never
+ * repeating. Pure. */
+export function smoothNoise(x, seed = 1) {
+  const i = Math.floor(x), u = x - i, g = (k) => 2 * hash(seed * 17.31 + 0.37, k) - 1;
+  return 2 * mix(g(i) * u, g(i + 1) * (u - 1), fade5(u));
+}
+// a second-order system of natural frequency f Hz and damping z (under 1: it overshoots; 1 or more: critically damped)
+const omegas = (f, z) => { const w = 2 * Math.PI * f; return z < 1 ? [w, w * Math.sqrt(1 - z * z)] : [w, 0]; };
+/** Its answer `age` seconds after a unit step: 0 before, rising to 1 (overshooting by exp(-zπ/√(1-z²)) when z < 1). */
+export function stepResponse(age, f, z) {
+  if (!(age > 0)) return 0;
+  const [w, wd] = omegas(f, z);
+  if (z >= 1) return 1 - (1 + w * age) * Math.exp(-w * age);
+  return 1 - Math.exp(-z * w * age) * (Math.cos(wd * age) + z / Math.sqrt(1 - z * z) * Math.sin(wd * age));
+}
+/** Its answer `age` seconds after a unit impulse (the weights of `responded`). */
+export function impulseResponse(age, f, z) {
+  if (!(age > 0)) return 0;
+  const [w, wd] = omegas(f, z);
+  return z >= 1 ? w * w * age * Math.exp(-w * age) : (w / Math.sqrt(1 - z * z)) * Math.exp(-z * w * age) * Math.sin(wd * age);
+}
+/** How a second-order follower (`rate` Hz, `damping`) `delay` seconds late answers f at time t: the weighted mean of
+ * f at `n` + 1 past times over `window` seconds (default 5 / (damping x 2π rate)), weights the impulse response's;
+ * no time before `since` is read (f held there: a follower settled at `since`). A function of t alone. */
+export function responded(f, t, {delay = 0, rate = 1, damping = 0.6, window = null, n = 32, since = -Infinity} = {}) {
+  const W = window ?? 5 / (Math.min(damping, 1) * 2 * Math.PI * rate);
+  let sum = 0, total = 0;
+  for (let k = 1; k <= n; k++) {
+    const a = W * k / n, w = impulseResponse(a, rate, damping) * (k === n ? 0.5 : 1);
+    sum += w * f(Math.max(t - delay - a, since)); total += w;
+  }
+  return sum / total;
+}
+/** How much of a hand's angles a lens of `mm` (36 x 24 mm frame) shows: a long lens is held a little steadier
+ * ((50 / mm)^0.3, 0.5..1.6), but by far less than it magnifies, so it shakes more on the screen. */
+export const handShare = (mm) => (isNum(mm) && mm > 0 ? clamp(Math.pow(50 / mm, 0.3), 0.5, 1.6) : 1);
+/** The occasional reframe of a handheld camera at time t: {yaw, pitch} in degrees. Spans of `reframe` seconds,
+ * most with one at a seeded time: the frame slips `size` degrees off (in a seeded direction, mostly sideways)
+ * over 1.6 s, then the operator, `delay` late, puts it back with a quick second-order move (1.1 Hz, damping
+ * 0.45: an overshoot of a fifth). Pure. */
+export function reframeAt(t, {reframe = OPERATOR.handheld.reframe, size = OPERATOR.handheld.size, seed = 1, delay = OPERATOR.handheld.delay} = {}) {
+  const out = {yaw: 0, pitch: 0};
+  if (!(reframe > 0) || !size) return out;
+  const h = (j, k) => hash(seed * 7.7 + 0.11 * k, j);
+  for (let j = Math.floor((t - 6) / reframe) - 1; j <= Math.floor((t + 2) / reframe) + 1; j++) {
+    if (h(j, 1) > 0.7) continue;
+    const at = (j + 0.25 + 0.5 * h(j, 2)) * reframe, s = size * (0.6 + 0.4 * h(j, 3)), a = 2 * Math.PI * h(j, 4);
+    const v = s * (smoothstep(at - 1.6, at, t) - stepResponse(t - at - delay, 1.1, 0.45));
+    out.yaw += v * Math.cos(a); out.pitch += 0.5 * v * Math.sin(a);
+  }
+  return out;
+}
+/** A handheld camera's error at time t: {yaw, pitch, roll} in degrees (OPERATOR.handheld's options): the drift less
+ * the operator's late correction of it, a reframe now and then, tremor and breath, times `amount` and the lens's
+ * handShare (`mm`, the focal length). A function of t and the seed: nothing is kept between frames. */
+export function handheld(t, options = {}) {
+  const o = {...OPERATOR.handheld, ...options}, s = o.seed, k = o.amount * handShare(o.mm);
+  const drift = (ch) => (x) => o.drift * (0.75 * smoothNoise(o.rate * x, s * 13 + ch) + 0.4 * smoothNoise(2.3 * o.rate * x + 5.1, s * 13 + ch + 0.5));
+  const held = (ch) => { const d = drift(ch); return d(t) - responded(d, t, {delay: o.delay, rate: o.correct, damping: o.damping}); };
+  const tremor = (ch) => o.tremor * (0.7 * smoothNoise(5.3 * t, s * 13 + ch + 0.25) + 0.5 * smoothNoise(8.9 * t + 2.7, s * 13 + ch + 0.75));
+  const breath = o.breath * Math.sin(2 * Math.PI * (0.23 * t + hash(s, 9) + 0.3 * smoothNoise(0.07 * t, s * 13 + 9)));
+  const r = reframeAt(t, o);
+  return {yaw: k * (held(1) + tremor(1) + r.yaw), pitch: k * (held(2) + tremor(2) + breath + r.pitch), roll: k * (0.4 * held(3) + 0.5 * tremor(3))};
+}
+/** A mounted camera's error at time t: {yaw, pitch, roll} in degrees: vibration about `rate` Hz and a slow sway,
+ * times `amount` (the same angles at every lens: a long lens shows them larger). Pure. */
+export function mounted(t, options = {}) {
+  const o = {...OPERATOR.mounted, ...options}, s = o.seed;
+  const buzz = (ch) => o.vibration * (0.6 * smoothNoise(o.rate * t, s * 29 + ch) + 0.5 * smoothNoise(1.9 * o.rate * t + 3.3, s * 29 + ch + 0.5)) + o.sway * smoothNoise(0.6 * t, s * 29 + ch + 0.25);
+  return {yaw: o.amount * buzz(1), pitch: o.amount * buzz(2), roll: o.amount * 0.5 * buzz(3)};
+}
+/** The horizon's error `age` seconds into a shot (degrees of roll): `degrees` to a seeded side, held `hold` seconds,
+ * then levelled in about `settle` seconds with `damping` (a little overshoot). Pure. */
+export function horizonRoll(age, {degrees = 1, seed = 1, hold = 2.5, settle = 1.2, damping = 0.6} = {}) {
+  const z = Math.min(damping, 0.99), f = (Math.PI - Math.acos(z)) / (Math.sqrt(1 - z * z) * settle) / (2 * Math.PI);
+  return (hash(seed * 5.3 + 0.7, 1) < 0.5 ? -1 : 1) * degrees * (1 - stepResponse(age - hold, f, z));
+}
+/** How bright the scene looks in a shot, in stops (log2 of a share of a white ground in full sun; METER's
+ * values): the share of the frame over the horizon (from the view's pitch, the horizon's dip and the field of view)
+ * as sky darkening with height (`scale`: the air's scale height), the rest as sea or land lit by the sun; decks
+ * (lowest first, {base, top, cover, density}) put their grey base over the sky and shade what is under them, fog
+ * all round inside, sunlit tops in place of the ground above them; the sun in or near the frame (its glare) and its
+ * glitter on the sea. `up`: the vertical at the camera, `height` over the sphere, `sun`: towards the sun. Pure. */
+export function meterStops(shot, {up = [0, 1, 0], height = 0, sun = null, radius = 6.371e6, scale = 8500, water = false, decks = []} = {}, values = METER) {
+  const M = values;
+  const U = unit(up), f = unit(shot.forward), v = 0.5 * shot.fov, S = sun ? unit(sun) : null;
+  const mus = S ? dot(U, S) : 0.6, day = smoothstep(-0.1, 0.2, mus), lit = Math.max(mus, 0);
+  const dip = horizonDip(radius, height), skyShare = clamp(0.5 + (Math.asin(clamp(dot(f, U), -1, 1)) / RAD + dip) / (2 * v));
+  let sky = M.sky * day * (0.1 + 0.9 * Math.exp(-Math.max(height, 0) / scale)), ground = (water ? M.sea : M.land) * (lit + 0.25 * day), direct = 1;
+  for (const d of decks) {
+    const u = (height - d.base) / Math.max(d.top - d.base, 1), o = clamp(d.cover ?? 1) * Math.min(1, (d.density ?? 0.006) / 0.004);
+    const under = 1 - smoothstep(-0.12, 0.12, u), over = smoothstep(0.88, 1.12, u), inside = Math.max(0, 1 - under - over), fog = M.fog * day * (0.4 + 0.6 * lit) * (Math.exp(-M.deep * (1 - clamp(u))) + 0.04);
+    ground = mix(ground, M.tops * (lit + 0.2 * day), o * over);
+    sky = mix(sky, M.base * day * (0.3 + 0.7 * lit), o * under);
+    ground *= 1 - 0.6 * o * under;
+    sky = mix(sky, fog, o * inside); ground = mix(ground, fog, o * inside);
+    direct *= clamp(1 - o * (0.85 * under + inside));
+  }
+  let glare = 0;
+  if (S) {
+    const theta = Math.atan2(len(cross(f, S)), dot(f, S)) / RAD, half = Math.atan(Math.tan(v * RAD) * Math.hypot(1, shot.aspect ?? 16 / 9)) / RAD;
+    glare = M.sun * direct * smoothstep(-dip - 0.5, -dip + 0.5, Math.asin(mus) / RAD) * (1 - smoothstep(0.5 * half, half + 8, theta));
+    if (water) { const R = along(S, U, -2 * dot(S, U)); glare += M.glint * direct * day * (1 - skyShare) * Math.max(0, dot(f, R)) ** 6; }
+  }
+  return Math.log2(Math.max(skyShare * sky + (1 - skyShare) * ground + glare, 1e-4));
+}
+/** The automatic exposure's correction at time t (stops, added to the scene's): `meter(x)` the metered stops at
+ * time x; a share `strength` of the change since `since` (the shot's start, when the camera was settled) taken
+ * back late: `delay`, then a second-order response at `speed` Hz whose damping falls with `hunt` (1 - 0.8 hunt),
+ * held within +-`most` stops by a soft limit. OPERATOR.exposure's options. A function of t alone. */
+export function autoExposure(t, meter, options = {}, since = 0) {
+  const o = {...OPERATOR.exposure, ...options}, ref = meter(since);
+  const seen = responded(meter, t, {delay: o.delay, rate: o.speed, damping: 1 - 0.8 * clamp(o.hunt), n: o.samples, since});
+  return o.most * Math.tanh(-o.strength * (seen - ref) / o.most);
+}
+// an operator group: off (absent, false, null, 0), true, a number (its main value) or an object, checked
+function operatorGroup(name, value, defaults, main) {
+  if (value === undefined || value === null || value === false || value === 0) return null;
+  if (value === true) return {...defaults};
+  if (isNum(value)) return {...defaults, [main]: value};
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw fail(`operator ${name} must be true, a number (${main}) or {${Object.keys(defaults).join(", ")}}, got ${JSON.stringify(value)}`);
+  known(`operator ${name}`, value, Object.keys(defaults));
+  return {...defaults, ...value};
+}
+function handGroup(value, seed) {
+  if (value === undefined || value === null || value === false) return null;
+  const style = value === true ? "handheld" : typeof value === "string" ? value : value && typeof value === "object" && !Array.isArray(value) ? value.style ?? "handheld" : null;
+  if (style === null) throw fail(`operator hand must be "handheld", "mounted", true or {style, ...}, got ${JSON.stringify(value)}`);
+  oneOf("operator hand", style, ["handheld", "mounted"]);
+  const defaults = {...OPERATOR[style], seed}, o = typeof value === "object" ? value : {};
+  known(`operator hand (${style})`, o, ["style", ...Object.keys(defaults)]);
+  const out = {...defaults, ...o, style};
+  for (const [k, x] of Object.entries(out)) if (k !== "style" && k !== "mm" && k !== "seed") num(`operator hand.${k}`, x, 0, k === "reframe" ? 600 : 100);
+  if (out.style === "handheld" && out.reframe > 0 && out.reframe < 2) throw fail(`operator hand.reframe must be 0 (none) or at least 2 seconds, got ${out.reframe}`);
+  if (out.mm !== null) num("operator hand.mm", out.mm, 4, 5000);
+  return out;
+}
+/** A camera operator over `view` (a function of t giving shots, such as moveTrack's): returns the view as the
+ * operator frames it, a function of t alone. `hand`: "handheld" or "mounted" (or true, or {style, ...}:
+ * OPERATOR's), `exposure` (true, a strength or {...}; needs `meter(shot, t)`: the metered stops, as AirCamera's
+ * `operator` gives), `horizon` (true, degrees or {...}); `seed` (1) for all three unless a group gives its own;
+ * `start` (seconds: the first shot's start, 0) and `cuts` (the times of the cuts: each starts a shot with its own
+ * horizon error, and the exposure, settled at the cut, reads nothing before it). The shot comes back turned by
+ * the hand and the horizon, with `ev` (the shot's own, plus the exposure's) and `operator`: {yaw, pitch, roll,
+ * horizon, ev}. */
+export function operate(view, options = {}, meter = null) {
+  known("operator", options, OPERATOR_KEYS);
+  if (typeof view !== "function") throw fail("operate needs a view: a function of t giving shots (moveTrack's)");
+  const seed = num("operator seed", options.seed ?? 1, 0), hand = handGroup(options.hand, seed);
+  const exposure = operatorGroup("exposure", options.exposure, OPERATOR.exposure, "strength"), horizon = operatorGroup("horizon", options.horizon, {...OPERATOR.horizon, seed}, "degrees");
+  if (exposure) {
+    for (const [k, x] of Object.entries(exposure)) num(`operator exposure.${k}`, x, k === "speed" ? 0.01 : 0, {strength: 1, hunt: 1, most: 8, samples: 96}[k] ?? 30);
+    exposure.samples = Math.max(4, Math.round(exposure.samples));
+    if (typeof meter !== "function") throw fail("operator exposure needs a meter: airCamera's operator(view, options), which meters the scene's sun, decks and ground");
+  }
+  if (horizon) for (const [k, x] of Object.entries(horizon)) num(`operator horizon.${k}`, x, k === "degrees" ? -20 : k === "settle" ? 0.05 : 0, k === "degrees" ? 20 : 600);
+  const start = num("operator start", options.start ?? 0), cuts = (options.cuts ?? []).map((c, i) => num(`operator cuts[${i}]`, c)).sort((a, b) => a - b);
+  if (!hand && !exposure && !horizon) return view;
+  return (t) => {
+    const shot = view(t);
+    let from = start, index = 0;
+    for (const c of cuts) if (c <= t + 1e-9 && c > from) { from = c; index++; }
+    const mm = 12 / Math.tan(shot.fov * RAD / 2);
+    const h = !hand ? {yaw: 0, pitch: 0, roll: 0} : hand.style === "mounted" ? mounted(t, hand) : handheld(t, {...hand, mm: hand.mm ?? mm});
+    const level = horizon ? horizonRoll(t - from, {...horizon, seed: horizon.seed + 101 * index}) : 0;
+    const ev = exposure ? autoExposure(t, (x) => meter(view(x), x), exposure, from) : 0;
+    const f = turn(turn(shot.forward, shot.up, h.yaw * RAD), shot.right, h.pitch * RAD), frame = frameOf(f, shot.up, h.roll + level);
+    return {...shot, ...frame, ev: (isNum(shot.ev) ? shot.ev : 0) + ev, operator: {yaw: h.yaw, pitch: h.pitch, roll: h.roll + level, horizon: level, ev}};
+  };
+}
+
 // ---------- hulls as boxes ----------
 const corners = (b) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i & 1 ? b.max[0] : b.min[0], i & 2 ? b.max[1] : b.min[1], i & 4 ? b.max[2] : b.min[2]]);
 const span = (b, axis) => { let lo = Infinity, hi = -Infinity; for (const c of corners(b)) { const v = dot(c, axis); lo = Math.min(lo, v); hi = Math.max(hi, v); } return [lo, hi]; };
@@ -756,6 +951,20 @@ export class AirCamera extends SpaceCamera {
     const shot = this.zoom(t, {...rest, ...(over ? {over: [this.seconds(over[0]), this.seconds(over[1])]} : {}), stops, direction: H.dir(dirOwn), up: H.dir([0, 1, 0])});
     return {...shot, move: "scaleZoom", notes: []};
   }
+
+  // ----- the operator -----
+  /** How bright the scene looks in `shot` (stops, meterStops): the vertical and the height at the camera, the
+   * sun (the rig's sky's, else the rig's `sun`), the air's scale height, the water and the rig's cloud decks. */
+  meter(shot, t = 0) {
+    if (this.space) throw fail("meter is for scenes in the air (airCamera({camera, sky, ...})), not beside a ship in a SpaceView");
+    const L = this.local, s = this.sky && this.sky.sun ? [this.sky.sun.x, this.sky.sun.y, this.sky.sun.z] : this.toSun(shot.from, t);
+    const decks = this.clouds && Array.isArray(this.clouds.decks) ? this.clouds.decks : [];
+    return meterStops(shot, {up: L.upAt(shot.from), height: L.heightOf(shot.from), sun: s, radius: L.radius, scale: this.sky && this.sky.model && this.sky.model.H ? this.sky.model.H : 8500,
+      water: !!this.water, decks});
+  }
+  /** `operate(view, options, meter)` with this rig's meter: the view as a camera operator frames it (hand,
+   * exposure, horizon). Give the shot's `ev` to the air (`air(..., {ev: () => shot.ev})`) for the exposure. */
+  operator(view, options = {}) { return operate(view, options, (shot, t) => this.meter(shot, t)); }
 
   // ----- checks -----
   /** What is wrong with `shot` at t, as sentences: everything vidgen/space-camera's `problems` finds, the

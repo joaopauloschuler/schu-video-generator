@@ -120,6 +120,10 @@ def test_the_examples_validate(space: Any) -> None:
     ({"camera": {"move": "wing", "flight": "Plane", "view": "wingtp"}}, "did you mean 'wingtip'"),
     ({"camera": {"move": "climb-through", "deck": "cumulos"}}, "did you mean 'cumulus'"),
     ({"camera": {"move": "climb-through", "deck": 5}}, "the clouds have 2 deck(s)"),
+    ({"operator": {"hand": "handhled"}}, "did you mean 'handheld'"),
+    ({"operator": {"hand": {"style": "mounted", "vibraton": 0.1}}}, "did you mean 'vibration'"),
+    ({"operator": {"exposure": {"hunts": 1}}}, "did you mean 'hunt'"),
+    ({"operator": {"horizn": True}}, "did you mean 'horizon'"),
 ])
 def test_surface_mistakes_are_named_with_the_closest_word(space: Any, change: dict[str, Any], words: str) -> None:
     raw = copy.deepcopy(CHASE)
@@ -230,6 +234,8 @@ def test_the_pages_are_stable_and_say_what_the_params_say(space: Any) -> None:
     (CHASE, ("flights", 0, "start", "speed"), 150), (CHASE, ("seed",), 3), (CHASE, ("sky", "seed"), 9),
     (CARRIER, ("craft", 0, "seed"), 2), (CARRIER, ("craft", 0, "dress"), {"plumes": "both"}), (CARRIER, ("camera", 0, "standoff"), 80),
     (CARRIER, ("craft", 0, "scale_ref", "kind"), "tug"), (CARRIER, ("flash",), [{"at": 8}]),
+    (SKIM, ("operator",), {"hand": "handheld"}), (SKIM, ("operator",), {"exposure": 0.5}), (SKIM, ("operator",), {"horizon": {"degrees": 2}}),
+    (CARRIER, ("operator",), {"hand": "mounted"}),
 ])
 def test_every_new_param_changes_the_page(space: Any, raw: dict[str, Any], path: tuple[Any, ...], value: Any) -> None:
     changed = copy.deepcopy(raw)
@@ -350,6 +356,24 @@ def test_a_surface_page_runs_in_node_with_stand_ins(space: Any, tmp_path: Path) 
     x0, x1 = got["shots"][0]["from"][0], got["shots"][2]["from"][0]
     assert x1 - x0 == pytest.approx(140 * 4.5, rel=0.05)                     # the camera follows the flight east at 140 m/s
     assert got["shots"][0]["from"][0] < -6000 + 140 * 0                         # behind the plane
+
+
+def test_the_camera_operator_is_off_unless_given(space: Any, tmp_path: Path) -> None:
+    """operator: (Step 399) reaches the page only when given (a page without it is unchanged: no operate line, the
+    air's ev a number); on a surface scene the rig's meter drives the air's exposure through the shot's ev; every cut
+    starts a shot; an orbital scene takes the hand and the horizon but not the exposure; the page runs in Node."""
+    plain = page(space, SKIM)
+    assert "operator" not in plain.split("export const PARAMS")[1].split("\n", 1)[1] and "operate" not in plain and '"ev": 0,' in plain
+    given = page(space, {**SKIM, "operator": {"hand": "mounted", "exposure": True, "horizon": 1.5, "seed": 3}})
+    assert 'S.view = S.cam.operator(S.view, {"hand": "mounted", "exposure": true, "horizon": 1.5, "seed": 3});' in given
+    assert '"ev": () => (S.shot && Number.isFinite(S.shot.ev) ? S.shot.ev : 0) + 0,' in given
+    hand = page(space, {**SKIM, "operator": {"hand": {"style": "handheld", "amount": 0.5}}})
+    assert '"hand": {"style": "handheld", "amount": 0.5}' in hand and '"ev": 0,' in hand                  # no exposure: the air's ev untouched
+    carrier = page(space, {**CARRIER, "operator": {"hand": True, "horizon": True}})
+    assert 'import {airCamera, operate} from "vidgen/space-camera-air";' in carrier and 'S.view = operate(S.view, {"hand": true, "horizon": true, "cuts": [8]});' in carrier
+    assert "operator.exposure is a surface scene's" in problem(space, {**CARRIER, "operator": {"exposure": True}})
+    got, bare = _node_page(tmp_path / "a", given), _node_page(tmp_path / "b", plain)
+    assert [s["from"] for s in got["shots"]] == [s["from"] for s in bare["shots"]] and [s["fov"] for s in got["shots"]] == [s["fov"] for s in bare["shots"]]
 
 
 def test_a_descent_with_a_skim_runs_in_node(space: Any, tmp_path: Path) -> None:

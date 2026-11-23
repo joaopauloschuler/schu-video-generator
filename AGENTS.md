@@ -3273,6 +3273,11 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
   `finish: {distort: true, edges: true, halation: true}` (barrel distortion from the camera's lens at each
   moment: strong at ultra-wide, none from 50 mm, the corners kept so no border shows; softer, fringed edges; a
   warm glow round bright edges; about +0.06 s a frame at 1280x720).
+- **Operator**: the person holding the camera, off unless given: `operator: {hand: handheld, exposure: true,
+  horizon: true}` (slow drift with late corrections and a reframe now and then, larger on the screen with a long
+  lens; `hand: mounted` only vibrates; an automatic exposure that lags and hunts after the camera breaks out of
+  a deck or turns into the sun, surface scenes only; a horizon a degree off at each cut, levelled after 2.5 s).
+  Give a climb's `adapt` or `exposure`, not both. Costs nothing measurable a frame.
 - **Look before you render**: `vidgen still . --scene rings --at 4 --size 640x360`. The page prints as warnings
   what only it can know (a subject under 3 px, the camera inside a world, a jump in a move, a craft in a world's shadow or
   seen from its unlit side); `vidgen lint` reports
@@ -4118,6 +4123,9 @@ ship.update(t); cam.apply(t, cam.chase(t, {flight: "Plane"})); sky.update(t, {ca
   `intoBay` (into a `hangar`; `out: true` out of it), `sternBurn` (the bank lights at `light`; give
   `shot.throttle` to `ship.update`; `shake: {amount: 0.3}` only if you want it), `scaleZoom` (a
   place on the hull → the whole ship → a speck by its world).
+- The operator over any view: `const view = cam.operator(moveTrack(moves), {hand: "handheld", exposure: true,
+  horizon: true, cuts: [8]})`; hand `shot.ev` to the air (`air(..., {ev: () => shot.ev})`); `operate(view,
+  {hand, horizon})` without a rig. A function of t: a still at t is frame t.
 - Timing: `over: [start, end]` in seconds or `{bar, beat}` of the score (`music: ctx.music`);
   `ease: [1, 0]` starts at rest and ends moving, `ease: 0` is steady: cut two moves together on
   motion. Every move is a function of t: a still at t is frame t.

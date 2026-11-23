@@ -317,7 +317,7 @@ def air_names() -> dict[str, Any]:
     ``effect_update`` (vidgen/space-effects); ``hulls`` (family -> its numbers), ``hull_lengths``,
     ``palettes``, ``hull_options``, ``dress_options``, ``dress_groups``, ``plume_modes``
     (vidgen/space-hull, -hull-detail); ``air_moves`` / ``ship_moves`` (the module's names -> their
-    options), ``sides``, ``wing_views`` (vidgen/space-camera-air); ``kit_parts`` (the craft kit's
+    options), ``sides``, ``wing_views``, ``operator`` (group -> its keys), ``operator_keys`` (vidgen/space-camera-air); ``kit_parts`` (the craft kit's
     parts, vidgen/space-craft)."""
     air, air_src = "vidgen/space-air", module_source("vidgen/space-air")
     sea, clouds, land = "vidgen/space-sea", "vidgen/space-clouds", "vidgen/space-land"
@@ -384,6 +384,8 @@ def air_names() -> dict[str, Any]:
         "dress_groups": {"windows": constant_strings(detail, "WINDOW_KEYS"), "hangars": constant_strings(detail, "HANGAR_KEYS"), "engines": constant_strings(detail, "ENGINE_KEYS")},
         "air_moves": {m: move_options[m] for m in air_moves}, "ship_moves": {m: move_options[m] for m in ship_moves},
         "sides": constant_keys(cam, "SIDES"), "wing_views": constant_keys(cam, "WING_VIEWS"),
+        "operator": {k: list(object_entries(v, cam_src, cam)) for k, v in object_entries(constant_text(cam_src, "OPERATOR", cam), cam_src, cam).items()},
+        "operator_keys": constant_strings(cam, "OPERATOR_KEYS"),
         "kit_parts": _class_methods(craft_src, "CraftKit", craft), "kit_options": constant_keys(craft, "KIT_DEFAULTS"),
     }
 

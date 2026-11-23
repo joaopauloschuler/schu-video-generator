@@ -145,6 +145,8 @@ def test_the_demonstrations_validate(space: Any) -> None:
     ({"finish": {"range": {"stop": 2}}}, "did you mean 'stops'"),
     ({"finish": {"edges": {"sfot": 2}}}, "did you mean 'soft'"),
     ({"finish": {"halation": {"colour": [1, 0.5, 0.2]}}}, "did you mean 'color'"),
+    ({"operator": {"hand": "handhled"}}, "did you mean 'handheld'"),
+    ({"operator": {"exposure": True}}, "operator.exposure is a surface scene's"),
     ({"title": {"title": "T", "sied": "left"}}, "'side'?"),
     ({"scale": 50}, "scale: goes with orbits"),
     ({"camera": [{"move": "arc", "subject": "Saturn"}, {"move": "arc", "subject": "Titan"}]}, "with several moves each gives over"),
@@ -218,6 +220,7 @@ def test_review_fixes_of_the_page(space: Any) -> None:
     (("camera", "distance", "radii"), 7), (("camera", "lens"), "wide"), (("finish",), False), (("finish",), {"grain": 0.05}),
     (("finish",), {"noise": 0.01}), (("finish",), {"range": {"stops": 2, "black": 0.01}}), (("finish",), {"sharpen": True}),
     (("finish",), {"distort": True}), (("finish",), {"edges": {"soft": 2}}), (("finish",), {"halation": 0.3}),
+    (("operator",), {"hand": True}), (("operator",), {"horizon": 2}),
     (("title",), "Saturn"), (("end_card",), {"title": "End", "link": "x"}), (("data",), {"a": 1}),
 ])
 def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: Any) -> None:

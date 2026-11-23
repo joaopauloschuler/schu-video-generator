@@ -30629,3 +30629,106 @@ tone mapping: the lens's geometry and its fringes act on light, not on the encod
   faint warm cast on the brightest cloud fields at 8 s and nothing on the 4 s glitter (it peaks
   near 0.4 linear here) — a sun in the frame or brighter exposure shows it. Step 400's looks pick
   their own values.
+
+### 124.3 The operator: `operator:` and `operate` in `vidgen/space-camera-air` (Step 399)
+
+**What.** The person holding the camera, as a wrapper over a view (any function of t giving shots,
+such as `moveTrack`'s): `operate(view, {hand, exposure, horizon, seed, start, cuts}, meter)` and the
+rig's `cam.operator(view, options)` (the same with the rig's own meter) return the view as the
+operator frames it. Off unless given: with no group on, `operate` returns `view` itself. Every value
+is a function of t and the seed; nothing is carried from frame to frame. Whatever "lags" is a
+weighted sum over the past it needs, read again at every frame: `responded(f, t, {delay, rate,
+damping, window, n, since})` is a second-order follower (natural frequency `rate` Hz, `damping`
+under 1 overshoots) written as the weighted mean of f at n past times, the weights the follower's
+impulse response, over a window of 5 / (damping × 2π rate) seconds; `since` holds f there (a
+follower settled at that moment). The shot comes back turned (yaw about its up, pitch about its
+right, then rolled; the frame re-squared as `sternBurn`'s shake does), its place, field of view and
+focus unchanged, with `ev` (the move's own plus the exposure's) and `operator: {yaw, pitch, roll,
+horizon, ev}`.
+
+- **`hand: handheld`** (`handheld(t, o)`, degrees): the drift is smooth endless noise
+  (`smoothNoise`: 1D gradient noise, knots one apart, gradients from the seed, two octaves at
+  `rate` 0.12 Hz and 2.3 times that, `drift` 1.1°); the operator sees it `delay` 0.3 s late and
+  corrects it with a second-order response (`correct` 0.5 Hz, `damping` 0.5: a 16 % overshoot); what
+  the frame shows is the drift less the correction, so the frame is held on average and every slow
+  wander ends in a small late swing back past the mark. A reframe now and then (`reframeAt`): in
+  most spans of `reframe` 6 s (seeded: 7 in 10) the frame slips `size` 0.9° (× 0.6–1, a seeded
+  direction, pitch half of yaw) over 1.6 s and is put back `delay` late by a quick move (1.1 Hz,
+  damping 0.45: a fifth too far, then settled), so it ends where it started. Tremor (two octaves
+  about 5 and 9 Hz, 0.03°) and breath (0.05° of pitch at about 0.23 Hz, its phase wandering).
+  Roll is 0.4 of the drift and half the tremor. RMS at 50 mm, 120 s: yaw 0.21°, pitch 0.15°, roll
+  0.03°. **The lens.** The angles are a hand's, so on the screen they grow with the focal length;
+  a heavier long lens is held a little steadier: `handShare(mm)` = (50 / mm)^0.3 within 0.5–1.6, mm
+  from the shot's own field of view at that moment (12 / tan(fov / 2), the convention of `LENSES`,
+  so a widening `rise` calms as it widens). Yaw RMS 0.30° at 16 mm, 0.21° at 50, 0.12° at 300: 1 %,
+  0.8 % and 2.7 % of the frame's height; `mm` fixes it.
+- **`hand: mounted`** (`mounted(t, o)`): vibration only, `vibration` 0.12° at about `rate` 9 Hz (two
+  octaves) and a slow `sway` 0.06° at 0.6 Hz: RMS about 0.04°, the same angles at every lens (a
+  mount's rotation does not know the lens), so about a pixel at 720p on a normal lens.
+- **`horizon`** (`horizonRoll(age, o)`): `degrees` 1 of roll to a seeded side at the start of every
+  shot (the start, and each of `cuts`: the seed plus 101 × the shot's index, so the side changes from
+  shot to shot), held `hold` 2.5 s, then levelled in about `settle` 1.2 s with `damping` 0.6 (a 9 %
+  overshoot). The natural frequency is chosen so the first crossing of level comes `settle` after
+  the hold.
+- **`exposure`** (`autoExposure(t, meter, o, since)`): `meter(x)` is the metered stops at time x.
+  The camera takes back `strength` 0.7 of every change of the metered brightness since the shot's
+  start (`since`: the start or the last cut: a camera that has been running is settled there; across
+  a cut the new camera does not hunt for the old one's light), `delay` 0.2 s late, as a second-order
+  response at `speed` 0.45 Hz with damping 1 − 0.8 × `hunt` (`hunt` 0.6: 0.52, a 15 % overshoot;
+  0: none; 1: it swings round twice), held within ±`most` 2 stops by a soft limit (most × tanh(x /
+  most)); read at `samples` 24 past times. The stops go into the shot's `ev`; the page hands it to
+  the air (`air(..., {ev})`, as `adapt` does), so the sky, sea, ground, clouds and every lit thing
+  move together. With the exposure off the air's `ev` is the number it was.
+- **How the exposure sees the past: an estimate from the camera's path and the scene's state**
+  (`meterStops(shot, scene)`, the rig's `meter(shot, t)`), not a metering render. Two ways were
+  open: (a) a tiny low-resolution metering render at a few past times, or (b) an estimate from the
+  shot and the scene's state at those times. (a) would draw the whole scene again 20–30 times a
+  frame (a past time needs the air, sea, clouds and ship updated to it, their uniforms restored
+  after, and the sky table redrawn when the height or sun changes: seconds a frame in software GL
+  at any size, and state carried in the objects); fewer samples would make the hunt step rather
+  than glide. (b) costs a move's arithmetic per sample (under 0.02 ms for `rise` and
+  `climbThrough`, about 0.4 ms for `skim`, which samples the sea) and is a pure function. The
+  estimate, in shares of a white ground in full sun (`METER`): the frame's share over the horizon
+  from the view's pitch, the horizon's dip and the field of view; the sky (0.3) darkening with
+  height (× (0.1 + 0.9 e^(−h/H)), H the air's scale height), the sea (0.03) or land (0.12) lit by the
+  sun's height (and a quarter of a day's sky); each deck (cover × density / 0.004, at most 1): under
+  it its grey base (0.7) over the sky part and the ground shaded, inside fog (1.5 × the light, darker
+  by e^(−6 × the share of the deck above the camera) further down: the middle of a thick stratus is
+  dark), above it sunlit tops (1.2) in place of the ground, the edges smoothed over 12 % of the
+  deck's depth; the sun in or near the frame (0.15, glare fading from half the half-diagonal to 8°
+  outside it, dimmed by the decks over the camera), and its glitter on the sea. The values were fitted
+  (a grid search) to the mean linear luminance of 18 drawn frames of the 09_rise view and the
+  climb through a stratus deck (adapt 0); differences between frames agree within about a stop
+  (residuals −0.2 to +1.4 stops: deep in the deck the picture is darker than the meter thinks, the
+  meter overstates the break-out over the deck by about a stop and understates the rise above the
+  cumulus tops by about 0.7 stop). It is a stated estimate, like the film
+  exposure; it knows nothing of a ship or a plane in the frame, and reads the sun's direction once
+  (a sun moving through the scene is not followed).
+- **The scripted `adapt` (Step 390) stays as it was.** `adapt` on a move through a deck is a look:
+  the shot's `ev` falls before the top (as a director would grade it, ahead of the event), a
+  function of height. The operator's exposure is a camera's: it answers after the event, so the
+  break-out flashes white for a moment and then settles darker with a small overshoot, and it opens
+  up in the dark middle of the deck. They add when both are given; give one. `shake` (the
+  sum-of-sines tremble of `sternBurn`) is unchanged.
+- **`space` scenes.** `operator: {hand, exposure, horizon, seed}` at the scene's top level, over all
+  its moves (`OperatorSpec`; sub-keys checked against the module's `OPERATOR` with did-you-mean, read
+  by `air_names()["operator"]`), not on each move: one person holds the camera through the scene,
+  and a per-move hand would make the frame jump at every join that is not a cut (`moveTrack`
+  refuses a turn over a degree there). The page writes `S.view = S.cam.operator(S.view, {...,
+  cuts})` (a surface scene: the rig's meter) or `S.view = operate(S.view, {...})` (an orbital
+  scene: hand and horizon only; `exposure` there is refused, since the orbital film exposure has
+  no stops to move); `cuts` are the moves given `cut: true`. Written only when given: a page without
+  it is byte for byte as before (the existing pages' hashes are checked by a test).
+- **Off is exact.** The page of the 09_rise view (the scratch page of Step 390 with the space finish
+  defaults) draws the same pixels with the Step 398 module and this one at 4 s and 8 s, 1280x720 (0
+  pixels differ); pages that import the module get a new module hash in their cache key (frames
+  drawn again, the same).
+- **Cost** (2 cores, SwiftShader, 1280x720, the 09_rise frame, wall time of `page.frame`, median of
+  9): 7.43 s without, 7.26 and 7.45 s with hand, exposure and horizon on (two runs; 7.59 s for the
+  baseline at the step's start): nothing measurable against the frame's ±0.6 s spread. In Node the
+  operator with all three costs 0.3–0.4 ms a frame on `rise` and `climbThrough`, 12 ms on `skim`.
+- **Looks** (stills and plots in the step's scratch folder). The horizon's degree shows at the
+  start of a shot as a tilt one notices on a level sea; the hand reads in motion and not in a still;
+  the exposure of the rise closes by about 0.75 stop by 6 s as the cumulus tops fill the
+  frame (greyer cloud tops than without: true to a camera on auto, not the nicer picture), and in the climb it opens about 1.4 stops in the deck's dark
+  middle, lets the break-out flash, then settles a stop down. Step 400's looks pick their own values.

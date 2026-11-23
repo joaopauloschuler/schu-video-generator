@@ -865,6 +865,52 @@ class FinishSpec(SceneParams):
         return out
 
 
+class OperatorSpec(SceneParams):
+    """``operator:``: the person holding the camera (vidgen/space-camera-air's ``operate``, DESIGN.md §124.3), off
+    unless given: a hand, the camera's automatic exposure and a horizon set level late, over all the camera's moves."""
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
+    header_synonyms = False
+    hand: bool | str | dict[str, Any] | None = None
+    """handheld (slow drift, late corrections with a little overshoot, a reframe now and then), mounted (vibration only), true (handheld), or {style, amount, seed, ...}."""
+    exposure: bool | float | dict[str, Any] | None = None
+    """An automatic exposure that lags and hunts after big changes of brightness (surface scenes): true, a strength (0.7), or {strength, delay, speed, hunt, most, samples}."""
+    horizon: bool | float | dict[str, Any] | None = None
+    """The horizon a degree off at the start of every shot, levelled late: true, degrees (1), or {degrees, seed, hold, settle, damping}."""
+    seed: int | None = Field(default=None, ge=0)
+    """The seed of the hand and the horizon (default 1)."""
+
+    @model_validator(mode="after")
+    def _check(self) -> "OperatorSpec":
+        self.options()
+        return self
+
+    def options(self) -> dict[str, Any]:
+        """``operate``'s options (camelCase), every key checked against the module's own lists (did-you-mean)."""
+        groups = air_names()["operator"]
+        module_options(dict(self.model_extra or {}), ["hand", "exposure", "horizon", "seed"], "operator")
+        out: dict[str, Any] = {}
+        hand = self.hand
+        if isinstance(hand, str):
+            hand = one_of(hand, ["handheld", "mounted"], "operator hand")
+        elif isinstance(hand, dict):
+            style = one_of(str(hand.get("style", "handheld")), ["handheld", "mounted"], "operator hand style")
+            hand = {**module_options(hand, ["style", *groups[style]], f"operator.hand ({style})"), "style": style}
+        for key, value in (("hand", hand), ("exposure", self.exposure), ("horizon", self.horizon)):
+            if isinstance(value, dict) and key != "hand":
+                value = module_options(value, groups[key], f"operator.{key}")
+            if value is not None:
+                out[key] = value
+        if self.seed is not None:
+            out["seed"] = self.seed
+        return out
+
+    @property
+    def metered(self) -> bool:
+        """The automatic exposure is on."""
+        return self.exposure not in (None, False, 0)
+
+
 class ReactionSpec(SceneParams):
     """A reaction of ``music:``: ``{track: kick, pulse: Sun}``, ``{track: level, glow: Ship}``, ``{track: hook, glint: Station}``."""
 
@@ -927,5 +973,5 @@ class CardSpec(Open):
 
 
 __all__ = ["BAR", "DEFAULT_RADIUS", "LENGTH_KEYS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
-           "FinishSpec", "LightSpec", "MoveSpec", "Open", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
+           "FinishSpec", "LightSpec", "MoveSpec", "Open", "OperatorSpec", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
            "camel", "direction", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]

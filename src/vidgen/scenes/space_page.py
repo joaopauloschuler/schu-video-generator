@@ -400,6 +400,25 @@ class _Page:
             self.out(f"{{name: {js(name)}, start: {js(start)}, cut: {js(m.cut)}, shot: (t) => S.cam.{MOVE_CALLS[m.move]}(t, {js(opts)})}},", 2)
         self.out("];")
         self.out("S.view = moveTrack(S.moves);")
+        self.operator(metered=False)
+
+    def operator(self, metered: bool) -> None:
+        """The person holding the camera (``operator:``, DESIGN.md §124.3) over the moves' view: written only when
+        given, so a page without it is the same. Every cut starts a shot with its own horizon and a settled exposure;
+        ``metered``: the rig's own meter (a surface scene's airCamera) for the exposure."""
+        o = self.p.operator
+        if o is None:
+            return
+        opts = o.options()
+        cuts = [when(m.over[0]) for m in self.p.camera if m.cut and m.over]
+        if cuts:
+            opts["cuts"] = cuts
+        self.out("// the camera operator (vidgen/space-camera-air): a hand on the camera, its automatic exposure, a horizon set level late")
+        if metered:
+            self.out(f"S.view = S.cam.operator(S.view, {js(opts)});")
+        else:
+            self.use("vidgen/space-camera-air", "operate")
+            self.out(f"S.view = operate(S.view, {js(opts)});")
 
     def _craft_update(self, c: Any, sets: dict[str, str], burns: set[str] | frozenset[str] = frozenset()) -> dict[str, Any]:
         """The options of a plane's, a hull's or a kit-built craft's update(t, ...) at scene time t."""

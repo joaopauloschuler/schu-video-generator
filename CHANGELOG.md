@@ -5,9 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–398
+## Steps 193–399
 
-### Footage, not a render (Steps 397–398)
+### Footage, not a render (Steps 397–399)
+
+- **A camera operator** (Step 399): a `space` scene's `operator:` (and `operate` /
+  `cam.operator` of `vidgen/space-camera-air` in code) puts a person behind the camera, over all
+  its moves, off unless given. `hand: handheld` drifts slowly and is corrected late with a little
+  overshoot, slips off now and then and is put back, with a hand's tremor and breath; it shows more
+  on a long lens. `hand: mounted` only vibrates. `exposure: true` (surface scenes) is a camera's
+  automatic exposure that lags and hunts after big changes of brightness: it opens up inside a
+  cloud deck, flashes on the break-out into the sun and settles a stop down; it meters an estimate
+  of the frame from the camera's view, the sun, the decks and the ground. `horizon: true` starts
+  every shot with the horizon a degree off and levels it after a couple of seconds. Each is a
+  function of the time and a seed, so stills are frames; did-you-mean on every key; scenes that do
+  not ask draw exactly the same pixels, at no measurable cost a frame. The sum-of-sines `shake`
+  and a climb's `adapt` stay as they were.
 
 - **A camera's lens in `vidgen/three-finish`** (Step 398): three more finishing options, off
   unless given, also under a `space` scene's `finish:`. `distort` bends the picture as a wide

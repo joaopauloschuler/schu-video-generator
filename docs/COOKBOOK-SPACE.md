@@ -386,7 +386,10 @@ place's own frame, with its air, sea, ground and cloud decks, flights planned in
 flying them, and the air moves above. Its recipes (a dusk at sea, a skim, a volcano, a climb through
 a deck, a chase, a wingtip view, a fly-past, the descent from orbit), what is true and what is a
 look there, and the two pages that still need code are in [COOKBOOK-AIR.md](COOKBOOK-AIR.md). Its
-costs are in the one table below.
+costs are in the one table below. Any `space` scene can add a camera operator over its moves,
+off unless given: `operator: {hand: handheld, horizon: true}` (a person's drift, late corrections and a
+horizon a degree off at each cut; `hand: mounted` only vibrates), and in a surface scene `exposure: true`
+(an automatic exposure that lags and hunts).
 
 ## 7. What YAML does not reach
 

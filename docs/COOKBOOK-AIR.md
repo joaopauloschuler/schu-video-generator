@@ -80,7 +80,9 @@ rises over ground that stands too near. Over ground give a skim a clearance the 
 **A climb through an overcast, lightning on the kick drum** (2.0 s a frame with a sea and two
 decks). Under a closed deck the day is grey with a bright line at the horizon; inside it is fog; over
 it the deck is a white sea to its own horizon. `adapt: 1` pulls the exposure down a stop as the
-camera nears the top (a look) so the break-out is not a white flash. Decks: `fair`, `overcast`,
+camera nears the top (a look) so the break-out is not a white flash; `operator: {exposure: true}` instead
+(and no `adapt`) is a camera's automatic exposure: it opens up in the dark fog, the break-out flashes white
+and the picture settles a stop darker after a small overshoot. Decks: `fair`, `overcast`,
 `layers`, `towers`, `storm` ready-made, or your own; `deck:` names one by index or name.
 
 ```yaml
@@ -226,6 +228,10 @@ DESIGN §123 where it is made:
 - the clouds: densities a tenth of real cloud's; fine lumps in the shading, not in the shape; a deck's
   cover varying with a broad weather of its own, tens of km across; `adapt` pulling the exposure down
   near a deck's top;
+- the operator (`operator:`, off unless given): the hand's drift, corrections, reframes and vibration are
+  seeded noise shaped like a person's, not measured; the automatic exposure meters an estimate of the frame's
+  brightness from the camera's view, the sun, the decks and the ground (within about a stop of the drawn
+  picture's mean on the views it was fitted to), not the picture itself;
 - the ground: rock beds on steep faces (layered rock in a canyon); the lava's glow lighting the ground
   beside it; the globe's relief shading from very high up;
 - the descent: the camera falls far faster than any vehicle; the globe's clouds and the decks' are not

@@ -17,7 +17,7 @@ from .space_air_page import page_source as surface_page_source
 from .space_page import orbit_names, page_source as orbital_page_source
 from .space_air_params import FlashSpec, FlightsSpec, WorldSpec
 from .space_checks import check_orbital_air, check_surface
-from .space_params import (BodySpec, CardSpec, CraftSpec, FinishSpec, LightSpec, MoveSpec, PhenomenonSpec, ReactionSpec, ScaleSpec,
+from .space_params import (BodySpec, CardSpec, CraftSpec, FinishSpec, LightSpec, MoveSpec, OperatorSpec, PhenomenonSpec, ReactionSpec, ScaleSpec,
                            SkySpec, SunSpec, scene_time, uses_bars)
 from .web import SPARE_FRAMES, Web
 
@@ -35,7 +35,8 @@ class Space(Web):
     enlarged, log), ``light`` (exposure, eclipses), ``craft`` (invented spacecraft, flying a body of
     the orbit data with its burns), ``phenomena`` (black hole, wormhole, warp, asteroids, comet,
     aurora), ``camera`` (moves of vidgen/space-camera, one after another, in seconds or bars),
-    ``finish`` (space-safe: no FXAA), ``music`` (pulses, glows and glints; never the camera),
+    ``finish`` (space-safe: no FXAA), ``operator`` (a hand on the camera, its automatic exposure, a horizon
+    levelled late; off unless given), ``music`` (pulses, glows and glints; never the camera),
     ``title`` and ``end_card``; ``script`` adds your own code. vidgen writes the page and draws it
     in headless Chromium as a ``web`` scene, full-bleed; ``vidgen space-page`` writes it out as a
     ``web`` scene to go on in code.
@@ -81,6 +82,8 @@ class Space(Web):
         """Camera moves (vidgen/space-camera), one after another: [{move: arc, subject: Saturn, over: [0, 8], phase: [three-quarter, crescent]}]; one move takes the whole scene."""
         finish: FinishSpec | bool = Field(default_factory=FinishSpec)
         """Finishing (vidgen/three-finish): {bloom, grade, grain, vignette, motion_blur, depth_of_field, antialias: none, noise, range, sharpen, distort, edges, halation}, or false (straight to the canvas)."""
+        operator: OperatorSpec | None = None
+        """The person holding the camera, over all its moves (off unless given): {hand: handheld | mounted, exposure (surface scenes), horizon, seed}."""
         music: list[ReactionSpec] = Field(default_factory=list)
         """Reactions to the score: [{track: kick, pulse: Sun}, {track: level, glow: Ship}, {track: hook, glint: Station}] (needs music_data)."""
         music_data: bool | WebMusicData = False
@@ -202,6 +205,9 @@ def check_scene(p: Any) -> None:
     if p.world is not None:
         check_surface(p)
         return
+    if p.operator is not None and p.operator.metered:
+        raise ValueError("operator.exposure is a surface scene's (world:): its meter reads the air, the decks and the ground; "
+                         "an orbital scene's film exposure has no stops to move (give light: {exposure: camera, ev} by hand)")
     if p.flights is not None:
         raise ValueError("flights: are a surface scene's (the flight_data vocabulary over a world's ground): give the scene world: {planet, at, land | sea, ...}")
     orbit = p.orbits is not None

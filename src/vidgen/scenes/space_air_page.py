@@ -73,9 +73,13 @@ class _AirPage(_Page):
             o["match"] = w.match
         o.update({"exposure": w.exposure, "ev": w.ev, "quality": w.quality})
         adapt = [m for m in p.camera if m.move in ("climb-through", "descend-through") and m.options().get("adapt")]
-        if adapt:
+        metered = p.operator is not None and p.operator.metered
+        if adapt or metered:
             o["ev"] = Ref(f"() => (S.shot && Number.isFinite(S.shot.ev) ? S.shot.ev : 0) + {js(w.ev)}")
-            self.out("// eye adaptation of the move through the deck: the air's exposure follows the shot's ev (a look)")
+            if adapt:
+                self.out("// eye adaptation of the move through the deck: the air's exposure follows the shot's ev (a look)")
+            if metered:
+                self.out("// the operator's automatic exposure: the air's exposure follows the shot's ev (vidgen/space-camera-air's meter)")
         self.out("// one world from orbit to the ground, in the place's own frame: x east, y up, z south, metres (vidgen/space-descent)")
         self.out(f"S.world = world(renderer, {{{pairs(o)}{'stars: S.sky, ' if p.sky is not False else ''}scene}}); scene.add(S.world.object);")
 
@@ -175,6 +179,7 @@ class _AirPage(_Page):
             self.out(f"{{name: {js(name)}, start: {js(start)}, cut: {js(m.cut)}, shot: (t) => {call}}},", 2)
         self.out("];")
         self.out("S.view = moveTrack(S.moves);")
+        self.operator(metered=True)
 
     def reactions(self) -> None:
         live = [(i, r) for i, r in enumerate(self.p.music) if r.target.lower() != "lightning"]
