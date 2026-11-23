@@ -98,7 +98,7 @@ rises over ground that stands too near. Over ground give a skim a clearance the 
 ```
 
 **A climb through an overcast, lightning on the kick drum** (2.0 s a frame with a sea and two
-decks). Under a closed deck the day is grey with a bright line at the horizon; inside it is fog; over
+decks). Under a closed deck the day is grey and dim, the haze in the deck's shadow; inside it is fog; over
 it the deck is a white sea to its own horizon. `adapt: 1` pulls the exposure down a stop as the
 camera nears the top (a look) so the break-out is not a white flash; `operator: {exposure: true}` instead
 (and no `adapt`) is a camera's automatic exposure: it opens up in the dark fog, the break-out flashes white
@@ -120,6 +120,26 @@ and the picture settles a stop darker after a small overshoot. Decks: `fair`, `o
         towers: 4
         lightning: {track: kick}
     camera: {move: climb-through, deck: 0, heading: 40, adapt: 1}
+```
+
+**A low sun behind a broken deck in haze** (about 3.2 s a frame at 1280x720 with the shadows in the
+air, 2.8 s without). The decks' shadows lie in the air and on the sea (on by default since Step 403): the
+haze under the deck is dim, the sun's glow is held in the gaps, the glitter shows only where the sun
+reaches the water. They show most in a hazy air with a low sun; the Earth-like air's own haze is thin, so
+in clear air the change is mostly a darker horizon under the deck. `shadows: false` gives the picture of
+before. Mountains cast theirs into the haze the same way (a darker band across a valley before a far range).
+
+```yaml
+- id: gaps
+  type: space
+  duration: 6
+  params:
+    world:
+      sea: breeze
+      sun: [8, 250]
+      air: {air: {like: earth, haze: [0.25, 0.25, 0.25]}, forward: 0.8}
+      clouds: {decks: [{type: cumulus, cover: 0.45, base: 1000, top: 2000}], seed: 7}
+    camera: {move: skim, heading: 250, speed: 60, clearance: 40, turn: 0, lens: wide}
 ```
 
 ## 3. Planes and flights
@@ -247,7 +267,8 @@ DESIGN §123 where it is made:
   their length (short-crested: no closed rings);
 - the clouds: densities a tenth of real cloud's; fine lumps in the shading, not in the shape; a deck's
   cover varying with a broad weather of its own, tens of km across; `adapt` pulling the exposure down
-  near a deck's top;
+  near a deck's top; under a deck the sky's light dimmed by a set share and the light a cloud passes on all
+  round one number (the shadows in the air: soft and broad, no sharp beams; towers cast none into the air);
 - the operator (`operator:`, off unless given): the hand's drift, corrections, reframes and vibration are
   seeded noise shaped like a person's, not measured; the automatic exposure meters an estimate of the frame's
   brightness from the camera's view, the sun, the decks and the ground (within about a stop of the drawn

@@ -2332,6 +2332,12 @@ Make web scenes read as real camera footage with ordinary image processing, no A
 - [~] **Step 402 (Opus 5.5) — the finished render to a video model.** (Built and tested; the paid clip is not made yet: OpenRouter's HTTP 402 with $3.57 of credits, see HANDOFF.) The owner's test: send 5 s of a web scene as rendered, with the film's sound, the prompt and a reference picture, to Seedance 2.0 and ask for real footage. `guide: final` (the beat's finished render: full size and look, no overlays, no placed takes; the film's own scene render when nothing is drawn over it, else `build/final_source`) and `audio: mix` (the film's sound over the shot); prompt wording; freshness records; one paid clip of a plane chase over the sea, judged in HANDOFF.
 - Later, not planned yet: flare ghosts and veiling glare with the sun near the frame; lens dirt and window reflections / double panes; rolling shutter; focus breathing and hunting; compression character (blocks in flat sky, crawl in detail); frame rate and shutter angle per look.
 
+### Shadows in the air (owner's request, 2026-11-23)
+
+The sky (`space-air.js`) already follows the sun's light by scattering, but the light crosses the air as if nothing cast a shadow.
+- [x] **Step 403 (Opus 5.5) — shadows in the air.** Light shafts through gaps in cloud decks (crepuscular rays) and the shadowed air under a closed deck; mountains' shadows reaching across the haze; the planet's own shadow rising opposite the sun at dusk with the pink band above it (check first whether the model already has it). On by default where it shows; cost measured and kept small; the CPU twins and the limb from orbit kept consistent.
+- Later, not planned yet: sharp light shafts (a haze layer with its own, lower scale height; a finer shadow picture); towers' shadows in the air; the sea's reflection and the exposure knowing about the decks; a cloud's diffuse light coloured by the cloud.
+
 
 ---
 

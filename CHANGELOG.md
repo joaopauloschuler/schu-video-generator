@@ -5,7 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–402
+## Steps 193–403
+
+### Shadows in the air (Step 403)
+
+- **Shadows in the air** (Step 403): **surface scenes and pages with `vidgen/space-air` and cloud decks
+  or ground look different.** What casts a shadow now darkens the air in it: the haze under a cloud
+  deck is in the deck's shadow (dim and grey under a closed deck, the glow round a low sun held in the
+  gaps of a broken one), mountains' shadows lie across the haze in front of them, and in a surface scene
+  the decks now shade the sea and the ground too (before, the sun hidden by a cloud still lit the sea's
+  glitter). On by default; `world: {shadows: false}` in a surface scene, or `air(renderer, what,
+  {shadows: false})` in code, gives the picture of before; `{reach, share, steps}` tunes it. It costs
+  about +0.4 s a frame at 1280x720 under a deck, nothing where nothing casts a shadow. The Earth's
+  shadow rising opposite the sun at dusk, with the pink band above it, was already in the sky model
+  and is unchanged. Light shafts are soft and broad, not sharp beams; they show most in a hazy air
+  with a low sun. In code: `sky.addCaster` for shadows of your own, `sky.shadowsInto(material)` for
+  shaders of your own, `clouds.mapShade` (the decks' shadow from the same map).
 
 ### The finished render to a video model (Step 402)
 

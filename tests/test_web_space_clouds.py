@@ -235,6 +235,26 @@ out.push([air.world, air.air.rayleigh, own.rayleigh, air.air.height, own.height,
     assert equator != belt
 
 
+
+def test_the_decks_shadow_map_for_the_air(tmp_path: Path) -> None:
+    # Step 403: what a deck lets through of the sun's light along its slant path (the map's arithmetic) and the map's places
+    out = _run_in_node(tmp_path, """
+const clear = () => 0, full = () => 1, low = Math.sin(6 * Math.PI / 180), c = C.deckOf("cumulus"), d = {depth: c.top - c.base, density: c.density};
+out.push([C.deckLetThrough(clear, d.depth, d.density, 0.5), C.deckLetThrough(full, d.depth, d.density, 0.5), C.deckLetThrough(full, d.depth, d.density, low), C.deckLetThrough(full, d.depth, d.density, 0), C.deckLetThrough(full, d.depth, d.density, -0.2)]);
+// a cloud whose rounded top reaches half the deck: the sun's ray over it gets through, the one through its foot does not
+const dome = (offset, y) => (y < 0.5 ? 1 : 0);
+out.push([C.deckLetThrough(dome, d.depth, d.density, 0.5), C.SHADOW_PATH]);
+// the offsets read along the path: towards the sun where the ray enters high, away from it where it leaves low
+const seen = []; C.deckLetThrough((o, y) => { seen.push([o, y]); return 0; }, 1000, 0.006, Math.sin(Math.PI / 4)); out.push(seen);
+out.push([[0, 0.25, 0.5, 0.75, 1].map((u) => C.shadowMapPlace(u)), [-60000, -15000, 0, 15000, 60000, 1e6].map((x) => C.shadowMapAt(x)), [0.1, 0.3, 0.7, 0.93].map((u) => C.shadowMapAt(C.shadowMapPlace(u))), C.AIR_SHADOW]);
+""")
+    (none, full, low, flat, under), (dome, path), seen, (places, at, back, consts) = out
+    assert none == 1 and full < 1e-3 and low < full + 1e-12 and flat == 1 and under == 1                # clear sky passes all; a full deck nothing, less still for a low sun; no shadows for a sun on the level or under it
+    assert 0.003 < dome < 0.2 and path == [0.15, 0.5, 0.85]                                            # under a cloud reaching half the deck, two of the three readings blocked
+    assert [y for _, y in seen] == path and seen[0][0] == pytest.approx(-350) and seen[1][0] == 0 and seen[2][0] == pytest.approx(350)
+    assert places == [-60000, -15000, 0, 15000, 60000] and at == [0, 0.25, 0.5, 0.75, 1, 1] and back == pytest.approx([0.1, 0.3, 0.7, 0.93])
+    assert consts["size"] == 256 and consts["reach"] == 60000 and 0 < consts["sky"] < 1 and 0 < consts["diffuse"] < 1
+
 PAGE = """
 import * as THREE from "three";
 import {air, sunDirection} from "vidgen/space-air";
@@ -320,3 +340,67 @@ def test_the_clouds_draw_in_chromium(tmp_path: Path) -> None:
     warm_frames, log = draw(store)
     assert log == [("hit", "space-air/psi")]
     assert all(np.array_equal(a, b) and np.array_equal(a, w) for a, b, w in zip(frames, cold, warm_frames))
+
+
+SHADE_PAGE = """
+import * as THREE from "three";
+import {air, sunDirection} from "vidgen/space-air";
+import {clouds} from "vidgen/space-clouds";
+let renderer, scene, camera, c, made = [];
+export function load(ctx) {
+  c = ctx.data;
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
+  renderer.setSize(ctx.width, ctx.height, false);
+  renderer.debug.onShaderError = (gl, program, vs, fs) => { window.shaderError = (gl.getShaderInfoLog(fs) || "") + (gl.getShaderInfoLog(vs) || "") + (gl.getProgramInfoLog(program) || ""); };
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
+  camera = new THREE.PerspectiveCamera(60, ctx.width / ctx.height, 1, 1e8);
+  for (const shot of c.shots) {
+    const sky = air(renderer, "earth", {shadows: shot.shadows});
+    const weather = shot.clouds ? clouds(renderer, sky, {seed: 4, ...shot.clouds}) : null;
+    sky.object.visible = false; scene.add(sky.object); if (weather) { weather.object.visible = false; scene.add(weather.object); }
+    made.push([sky, weather]);
+  }
+  window.on = [];
+}
+export function frame(t, ctx) {
+  const n = Math.round(t * ctx.fps), shot = c.shots[n], [sky, weather] = made[n];
+  made.forEach(([s, w], i) => { s.object.visible = i === n; if (w) w.object.visible = i === n; });
+  camera.position.set(0, 30, 0); camera.lookAt(0, 30 + Math.sin(0.05) * 1000, -1000); camera.updateMatrixWorld();
+  sky.update(t, {camera, sun: sunDirection(shot.elevation, 150)}); if (weather) weather.update(0, {camera});
+  renderer.setRenderTarget(null); renderer.render(scene, camera);
+  window.on[n] = [sky.uniforms.uAirShade.value.x, sky.casters.map((x) => x.name)];
+}
+"""
+SHADE_SHOTS = [
+    {"clouds": {"sky": "overcast"}, "elevation": 25, "shadows": True},              # 0 under a closed deck, shadows in the air
+    {"clouds": {"sky": "overcast"}, "elevation": 25, "shadows": False},             # 1 the same without them
+    {"elevation": 25, "shadows": True},                                             # 2 the sky alone: nothing casts a shadow
+    {"elevation": 25, "shadows": False},                                            # 3 the same, shadows off
+    {"clouds": {"sky": "overcast"}, "elevation": 25, "shadows": {"steps": 8, "share": 0.5}},   # 4 other settings
+]
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_air_under_a_closed_deck_lies_in_its_shadow_in_chromium(tmp_path: Path) -> None:
+    pytest.importorskip("playwright.sync_api")
+    from vidgen.browser import chromium
+    from vidgen.web.entry import WebEntry
+    from vidgen.web.page import WebPage
+
+    if chromium.missing_dependency() is not None:
+        pytest.skip("Chromium for Playwright is not available")
+    (tmp_path / "shade.js").write_text(SHADE_PAGE, encoding="utf-8")
+    with WebPage(tmp_path, WebEntry("script", "shade.js"), scene_id="s", size=(160, 90), fps=10, frames=len(SHADE_SHOTS), data={"shots": SHADE_SHOTS}, baked=False) as page:
+        frames = [page.frame(n)[..., :3].astype(int) for n in range(len(SHADE_SHOTS))]
+        again = page.frame(0)[..., :3].astype(int)
+        error = page._page.evaluate("window.shaderError ?? null")
+        on = page._page.evaluate("window.on")
+    assert error is None, error
+    shaded, plain, alone, alone_off, other = frames
+    assert on[0] == [1, ["clouds"]] and on[1] == [0, []] and on[2] == [0, []]                                   # the deck casts; off: nothing; the sky alone: nothing to draw
+    assert np.array_equal(alone, alone_off)                                                                    # nothing casting: the sky as without shadows, to the pixel
+    band = slice(38, 46)                                                                                       # the air under the deck towards the horizon
+    assert shaded[band].mean() < 0.8 * plain[band].mean() and shaded[band].mean() > 5                         # dimmer under a closed deck, not black
+    assert np.array_equal(shaded, again)                                                                       # a frame is a function of its inputs
+    assert abs(other[band].mean() - shaded[band].mean()) < 0.15 * shaded[band].mean()                          # fewer steps, a finer picture: nearly the same

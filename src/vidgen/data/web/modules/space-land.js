@@ -560,32 +560,58 @@ void main() {
   }
   gl_FragColor = vec4(t, 0.0, 0.0, 1.0);
 }`;
-// a map's shadow: from each cell towards the sun through the maps, the share of the sun's light that arrives
+// a map's shadow: from each cell towards the sun through the maps, the share of the sun's light that arrives (r), and
+// for the air's shadows how high over the cell the ground's shadow reaches (g: the square root of the height over the
+// cell's ground over the ground's whole range; the sun's ray from any point under it meets the ground)
 const SHADOW_FRAG = /* glsl */`
 ${LAND_GLSL}
 uniform vec4 uShadeSun;     // the sun's direction in the frame (+x, up, +z), one over the world's radius
 uniform vec4 uShadeAt;      // the camera's place in the frame (m), the map's cell (m), the map
-uniform vec4 uShadeSet;     // the penumbra's width (a tangent), the highest ground (m)
+uniform vec4 uShadeSet;     // the penumbra's width (a tangent), the highest ground (m), the ground's whole range (m)
 void main() {
   float k = uShadeAt.w, s = uShadeAt.z; vec4 C = uLandC[int(k)];
   vec2 p = C.xy + gl_FragCoord.xy * s - 0.5 / C.z, X = (uShadeAt.xy + p) * uShadeSun.w;
   float sinE = uShadeSun.x * X.x + uShadeSun.z * X.y + uShadeSun.y * sqrt(max(1.0 - dot(X, X), 0.0));
-  if (sinE < -0.03) { gl_FragColor = vec4(0.0); return; }
+  if (sinE < -0.03) { gl_FragColor = vec4(0.0, 1.0, 0.0, 0.0); return; }
   float tanE = sinE * inversesqrt(max(1.0 - sinE * sinE, 1e-6)), flat_ = length(uShadeSun.xz);
-  if (flat_ < 1e-4) { gl_FragColor = vec4(1.0); return; }
+  if (flat_ < 1e-4) { gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); return; }
   vec2 dir = uShadeSun.xz / flat_;
-  float h0 = landRead(p, k), lit = 1.0, d = 1.5 * s;
+  float h0 = landRead(p, k), lit = 1.0, d = 1.5 * s, over = 0.0;
   for (int i = 0; i < 32; i++) {
     vec2 q = p + dir * d;
     float l = max(k, max(log2(max(max(abs(q.x), abs(q.y)), 1e-3) / uLandLv.z) + 1.0, log2(d / (10.0 * uLandLv.w))));
     if (l > uLandLv.y + 0.45) break;
-    float up = h0 + d * tanE + 0.5 * d * d * uShadeSun.w;
-    lit = min(lit, 0.5 + (up - landRead(q, floor(l + 0.55))) / (d * uShadeSet.x));
-    if (lit <= 0.0 || up > uShadeSet.y) break;
+    float up = h0 + d * tanE + 0.5 * d * d * uShadeSun.w, g = landRead(q, floor(l + 0.55));
+    lit = min(lit, 0.5 + (up - g) / (d * uShadeSet.x));
+    over = max(over, g - up);
+    if (up > uShadeSet.y) break;
     d *= 1.3;
   }
-  gl_FragColor = vec4(clamp(lit, 0.0, 1.0));
+  gl_FragColor = vec4(clamp(lit, 0.0, 1.0), sqrt(clamp(over / uShadeSet.z, 0.0, 1.0)), 0.0, 1.0);
 }`;
+/** The ground's shadows in the air (vidgen/space-air's `shadows`): a point is in shadow under the height the shadow map keeps
+ * (see SHADOW_FRAG's g), softened over `soft` metres plus `cells` of the map's cells each side. */
+export const AIR_SHADOW = Object.freeze({soft: 30, cells: 1.5});
+/** How high over a place's ground the ground's shadow reaches, as the shadow map keeps it (g, 0 to 1) for a ground
+ * whose heights span `range` metres, and back. Pure. */
+export const shadowKeep = (over, range) => Math.sqrt(clamp(over / range, 0, 1));
+export const shadowReach = (g, range) => range * g * g;
+// what the air's shadow pass reads (vidgen/space-air's addCaster): under the ground's shadow, no sunlight
+const AIR_CASTER = (nl) => /* glsl */`
+#define NL ${nl}
+${LAND_GLSL}
+uniform highp sampler2DArray uLandS;
+uniform vec3 uLandAirE1, uLandAirE2;
+uniform vec4 uLandAir;      // the ground's whole range (m), the softness (m), the softness in cells
+float landSun(vec3 w, float h) {
+  vec2 p = vec2(dot(w, uLandAirE1), dot(w, uLandAirE2));
+  float k = floor(landLevel(p, 0.0));
+  vec4 C = uLandC[int(k)];
+  vec3 at = vec3((p - C.xy) * C.z + 0.5, k);
+  float g = texture(uLandS, at).g, top = texture(uLandH, at).r + uLandAir.x * g * g, soft = uLandAir.y + uLandAir.z * C.w;
+  return smoothstep(top - soft, top + soft, h);
+}
+float landSky(vec3 w, float h) { return 1.0; }`;
 const NONE = "float landShade(vec2 p, float height) { return 1.0; }";
 // the picture: each pixel's own place on the ground from its neighbours' answers, the materials, the light, the air between
 const LAND_FRAG = (shade) => /* glsl */`
@@ -898,7 +924,7 @@ export class Land {
     const nl = this.maps.length, cell0 = WIDTH / this.cells, v4 = () => new THREE.Vector4(), v3 = () => new THREE.Vector3();
     const kind = {format: THREE.RedFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, depthBuffer: false, generateMipmaps: false};
     this.heights = new THREE.WebGLArrayRenderTarget(this.cells, this.cells, nl, {...kind, type: THREE.FloatType});
-    this.shadows = new THREE.WebGLArrayRenderTarget(this.cells, this.cells, nl, {...kind, type: THREE.UnsignedByteType});
+    this.shadows = new THREE.WebGLArrayRenderTarget(this.cells, this.cells, nl, {...kind, format: THREE.RGFormat, type: THREE.UnsignedByteType});
     this.walk = new THREE.WebGLRenderTarget(4, 4, {...kind, type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter});
     this._made = this.macro.targets ? null : macroTextures(this.macro, [0.2, 0.19, 0.18]);
     const maps = this.macro.targets ?? this._made;
@@ -944,12 +970,17 @@ export class Land {
       this.uniforms.uLandTSize.value.z = this.walk.height / view.w;
       this.material.uniformsNeedUpdate = true;
     };
+    if (typeof sky.shadowsInto === "function") sky.shadowsInto(this.material);      // the air's shadows in front of the ground (vidgen/space-air)
     if (o.shade !== null) this.shadedBy(o.shade);
     /** The water's depth for vidgen/space-sea: `sea(renderer, sky, {depth: ground.depth})` (a coast: the sea ends where the ground rises out of it). */
     this.depth = {glsl: `#define NL ${nl}\n${LAND_GLSL}\nuniform vec4 uLandAt;\nfloat seaDepth(vec2 p) { return -landHeight(p - uLandAt.xy, 8.0); }`, uniforms: this.fieldUniforms};
     /** How far the ground is on each ray of the walk's picture, for vidgen/space-clouds: `clouds(renderer, sky, {behind: ground.behind})` (a cloud behind a mountain is hidden by it). */
     this.behind = {texture: this.walk.texture};
     sky.under(true);
+    // shadows in the air: the ground's shadow reaches over the ground as high as the shadow map's g says
+    this._air = sky.shadowsOn && typeof sky.addCaster === "function" && !sky.casters.some((c) => c.name === "land");
+    if (this._air) sky.addCaster({name: "land", glsl: AIR_CASTER(nl), top: this.uniforms.uLandRange.value.y,
+      uniforms: {...this.fieldUniforms, uLandS: this.uniforms.uLandS, uLandAirE1: this.uniforms.uLandE1, uLandAirE2: this.uniforms.uLandE2, uLandAir: {value: new THREE.Vector4(this.uniforms.uLandRange.value.y - this.uniforms.uLandRange.value.x, AIR_SHADOW.soft, AIR_SHADOW.cells, 0)}}});
     /** What the last update found: the horizon's `distance` (metres) and `dip` (degrees) for a smooth world, the camera's `height` over the sphere and `over` the ground under it (metres), `finest` (the finest map in use). */
     this.horizon = {distance: 0, dip: 0, height: 0, over: 0, finest: 0};
     this._middles = this.maps.map(() => null); this._shaded = this.maps.map(() => null); this._sun = "";
@@ -1088,7 +1119,7 @@ export class Land {
     u.uLandAt.value.set(x, z, 0, 0);
     // the shadows: for the sun now, of every map baked or moved
     const sun = sky.sun, f = [sun.x, sun.y, sun.z], sunKey = f.map((v) => v.toFixed(5)).join("|"), sh = this._shade.material.uniforms;
-    sh.uShadeSun.value.set(f[0], f[1], f[2], 1 / R); sh.uShadeSet.value.set(0.06, u.uLandRange.value.y, 0, 0);
+    sh.uShadeSun.value.set(f[0], f[1], f[2], 1 / R); sh.uShadeSet.value.set(0.06, u.uLandRange.value.y, u.uLandRange.value.y - u.uLandRange.value.x, 0);
     for (let k = nl - 1; k >= finest; k--) {
       if (this._shaded[k] === sunKey) continue;
       sh.uShadeAt.value.set(x, z, this.maps[k] / this.cells, k);
@@ -1112,6 +1143,7 @@ export class Land {
     u.uLandLit.value.w = sky.state.gain;
     r.setRenderTarget(before); r.autoClear = auto; r.setClearColor(colour, alpha);
     Object.assign(this.horizon, {distance: horizonDistance(R, hc), dip: horizonDip(R, hc), height: hc, over, finest});
+    if (this._air) sky.shadowsChanged();
     this.t = t;
     return this;
   }

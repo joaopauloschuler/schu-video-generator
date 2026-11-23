@@ -19,6 +19,7 @@
 // this sun, drawn again only when either changes), so a frame costs a few texture reads a pixel.
 // Two things only the inside view has, both stated: a thin absorbing layer (the Earth-like air's ozone,
 // which keeps the dusk blue) and the haze's forward throw per colour (the Mars-like air's blue glow).
+// Shadows in the air (Step 403): what casts a shadow (cloud decks, ground: addCaster) darkens the air in it.
 // Exposure as vidgen/space-light: "film" (a convention: nothing changed by day, dusk lifted, the stars
 // shown once the sky is dark), "camera" (stops over a sunlit ground's: honest) and "auto" (metered).
 // Scene units are metres by default, +y up, the origin on the ground (`center` and `unit` say otherwise).
@@ -363,6 +364,10 @@ uniform vec4 uAirOzone;    // a thin absorbing layer: its zenith optical depth p
 uniform vec4 uAirAureole;  // the haze's second, narrow lobe: its share per colour, its forward throw
 uniform vec2 uAirDusk;     // the film look's dusk curve: its strength, its knee
 uniform sampler2D uAirView, uAirPsi;
+uniform vec4 uAirShade;    // shadows in the air: 1 when on, the casters' top and the reach (scale heights)
+uniform mat4 uAirShadeView; // a direction to its place in the picture of the shadows (the camera's projection and turn)
+uniform sampler2D uAirShadow;   // that picture: of a ray's whole light, the share made in the casters' shadows half and all the way along the stretch they reach (xy: the rays into the sky, zw: those to the ground)
+vec3 airRay = vec3(0.0);   // the ray airLight is asked about, in the scene's axes (airThrough and the dome set it; zero: no shadows)
 float airCol(float h, float c) {
   float X = uAirGeo.x + h, k = sqrt(1.5708 * X), up = k / (k * abs(c) + 1.0) * exp(-h);
   float s = sqrt(max(1.0 - c * c, 0.0)), ht = h * s - uAirGeo.x * c * c / (1.0 + s);
@@ -407,21 +412,47 @@ vec2 airPlace(vec4 map, float mu, float cosv) {
 }
 vec2 airWhere(float mu, float cosv) { return airPlace(uAirMap, mu, cosv); }
 // a sky table's light at a place in it, for a ray whose cosine to the sun is cosv
-vec3 airRead(sampler2D table, vec2 uv, float cosv) {
-  vec3 once = texture2D(table, vec2(uv.x * 0.5, uv.y)).rgb, more = texture2D(table, vec2(0.5 + uv.x * 0.5, uv.y)).rgb;
-  // Henyey-Greenstein's lobes: x^-1.5 as the cube of 1 / sqrt(x)
+// the haze's phase function per colour: Henyey-Greenstein's lobes (x^-1.5 as the cube of 1 / sqrt(x))
+vec3 airHaze(float cosv) {
   vec3 g = uAirG, wide = inversesqrt(1.0 + g * g - 2.0 * g * cosv), haze = 0.25 * (1.0 - g * g) * wide * wide * wide;
   float n = uAirAureole.w, thin = inversesqrt(1.0 + n * n - 2.0 * n * cosv);
-  haze = mix(haze, vec3(0.25 * (1.0 - n * n) * thin * thin * thin), uAirAureole.rgb);
-  return uAirLight * (once * (uAirScatR * 0.1875 * (1.0 + cosv * cosv) + uAirScatM * haze) + more * (uAirScatR + uAirScatM));
+  return mix(haze, vec3(0.25 * (1.0 - n * n) * thin * thin * thin), uAirAureole.rgb);
+}
+vec3 airRead(sampler2D table, vec2 uv, float cosv) {
+  vec3 once = texture2D(table, vec2(uv.x * 0.5, uv.y)).rgb, more = texture2D(table, vec2(0.5 + uv.x * 0.5, uv.y)).rgb;
+  return uAirLight * (once * (uAirScatR * 0.1875 * (1.0 + cosv * cosv) + uAirScatM * airHaze(cosv)) + more * (uAirScatR + uAirScatM));
 }
 vec3 airFromTable(vec2 uv, float cosv) { return airRead(uAirView, uv, cosv); }
 // the film look's dusk curve (nothing by day, and nothing in the other exposures)
 float airDusked;           // what the last airLight's dusk curve left of the ray's light
 vec3 airDusk(vec3 light) { airDusked = pow(max(dot(light, vec3(0.2126, 0.7152, 0.0722)) / uAirDusk.y, 1.0), -uAirDusk.x); return light * airDusked; }
 vec2 airUv;                // where the last airLight read the table
+// the stretch of a ray from height hc (cosine mu to the vertical) where something may cast a shadow: under the
+// casters' top and within the reach, from x to y scale heights along it (none when y <= x); end: where the ray's air ends
+vec2 airShadeSpan(float hc, float mu, float end) {
+  float X0 = uAirGeo.x, top = uAirShade.y, m = (X0 + hc) * mu, c = (hc - top) * (2.0 * X0 + hc + top), d = m * m - c;
+  if (hc >= top && (mu >= 0.0 || d <= 0.0)) return vec2(0.0, -1.0);
+  float ta = hc >= top ? c / (-m + sqrt(d)) : 0.0, tb = c < 0.0 && m > 0.0 ? c / (-m - sqrt(d)) : -m + sqrt(max(d, 0.0));
+  return vec2(ta, min(min(tb, end), ta + uAirShade.z));
+}
+// what passes along a ray from its start (c0, the air from there to space) to t
+vec3 airPass(float hc, float mu, float cosv, float t, vec3 c0, float up) { return exp(-max((up > 0.5 ? 1.0 : -1.0) * (c0 - airAlong(airAt(hc, mu, cosv, uAirMap.w, t), up)), 0.0)); }
+// of the whole light of airRay (cosine mu to the vertical, its air ending at end, on the ground when hit), the share made
+// in the casters' shadows between the camera and e (all scale heights): kept half and all the way along the stretch
+// they reach (in the square root of the distance), none at its start; rays into the sky and to the ground kept apart
+float airShadowed(float hc, float mu, float end, float hit, float e) {
+  vec2 s = airShadeSpan(hc, mu, end);
+  vec4 c = uAirShadeView * vec4(airRay, 0.0);
+  if (s.y <= s.x || e <= s.x || c.w <= 1e-6) return 0.0;
+  vec4 S = texture2D(uAirShadow, clamp(c.xy / c.w * 0.5 + 0.5, 0.0, 1.0));
+  vec2 kept = hit > 0.5 ? S.zw : S.xy;
+  float u = 2.0 * sqrt((min(e, s.y) - s.x) / (s.y - s.x));
+  return u < 1.0 ? kept.x * u : mix(kept.x, kept.y, u - 1.0);
+}
 // the air's light towards the camera along a ray (mu its cosine to the vertical, cosv to the sun) as far as
-// dist (scale heights; negative: to the ground or to space); through: what passes; hit: it ends on the ground
+// dist (scale heights; negative: to the ground or to space); through: what passes; hit: it ends on the ground.
+// With shadows in the air (compiled in by AIR_SHADOWS: Air.shadowsInto; on by uAirShade.x) and airRay set, the light
+// made in the casters' shadows is taken away.
 vec3 airLight(float mu, float cosv, float dist, out vec3 through, out float hit) {
   float hc = uAirGeo.y, mus = uAirMap.w;
   vec3 sp = airSpan(hc, mu);
@@ -431,7 +462,7 @@ vec3 airLight(float mu, float cosv, float dist, out vec3 through, out float hit)
   float up = step(0.0, p0.y); vec3 c0 = airAlong(p0, up);
   vec3 whole = exp(-max((up > 0.5 ? 1.0 : -1.0) * (c0 - airAlong(p1, up)), 0.0));
   airUv = airWhere(mu, cosv);
-  vec3 light = airDusk(airFromTable(airUv, cosv)) + uAirGlow * (1.0 - whole);
+  vec3 sky = airDusk(airFromTable(airUv, cosv)), light = sky + uAirGlow * (1.0 - whole);
   through = whole;
   if (dist >= 0.0 && dist < sp.y) {
     vec3 p = airAt(hc, mu, cosv, mus, max(dist, sp.x));
@@ -439,11 +470,20 @@ vec3 airLight(float mu, float cosv, float dist, out vec3 through, out float hit)
     light *= (1.0 - through) / max(1.0 - whole, 1e-6);       // the share of the ray's light made in front of the point
     hit = 0.0;
   }
+#ifdef AIR_SHADOWS
+  // of the light made in front of the point (all of the ray's for the sky), the share in shadow; the colour kept
+  if (uAirShade.x > 0.5 && dot(airRay, airRay) > 0.5) {
+    bool near = dist >= 0.0 && dist < sp.y;
+    float made = near ? (1.0 - through.g) / max(1.0 - whole.g, 1e-6) : 1.0;
+    light *= 1.0 - min(airShadowed(hc, mu, sp.y, sp.z, near ? max(dist, sp.x) : sp.y) / max(made, 1e-6), 1.0);
+  }
+#endif
   return light;
 }
 // aerial perspective: a thing's colour seen through the air between the camera and it
 vec3 airThrough(vec3 colour, vec3 toPoint) {
   float d = length(toPoint), hit; vec3 through, rd = toPoint / max(d, 1e-9);
+  airRay = rd;
   vec3 light = airLight(dot(rd, uAirUp), dot(rd, uAirSun), d * uAirGeo.w, through, hit);
   return colour * through + light;
 }
@@ -533,6 +573,7 @@ void main() {
   vec3 rd = normalize(vD), through; float hit;
   float mu = dot(rd, uAirUp), cosv = dot(rd, uAirSun), mus = uAirMap.w, hc = uAirGeo.y;
   if (uCovered > 0.5 && asin(clamp(mu, -1.0, 1.0)) + uAirMap.x < -3.0 * uPix) discard;      // something of the scene hides all that is under the horizon
+  airRay = rd;
   vec3 col = airLight(mu, cosv, -1.0, through, hit);
   float alpha = 1.0 - dot(through, vec3(0.3333));
   // the ground: a matt ball of one colour under the sun after the air and under the sky; its edge a pixel soft
@@ -569,9 +610,135 @@ void main() {
 /** How much darker the sun's limb is than its middle, per colour (red least). */
 export const LIMB = Object.freeze([0.5, 0.62, 0.76]);
 
+// ---------- shadows in the air ----------
+/** Shadows in the air (`shadows` option): `reach` (metres along a ray from the camera, or from where it comes under the
+ * casters' top), `share` (the picture of the shadows' size against the canvas's), `steps` along each of its rays (a
+ * multiple of four). `quality` "fast" halves the steps. */
+export const SHADOWS = Object.freeze({reach: 200000, share: 0.25, steps: 24});
+const SHADOW_KEYS = Object.keys(SHADOWS);
+/** The stretch of a ray where casters reach (the GLSL's airShadeSpan): from `height` metres, cosine `mu` to the vertical,
+ * under `top` metres and within `reach` metres, ending at `end` metres (the ground, the top of the air). [from, to] in
+ * metres; none when to <= from. Pure. */
+export function shadeSpan(radius, height, mu, top, reach, end = Infinity) {
+  const m = (radius + height) * mu, c = (height - top) * (2 * radius + height + top), d = m * m - c;
+  if (height >= top && (mu >= 0 || d <= 0)) return [0, -1];
+  const ta = height >= top ? c / (-m + Math.sqrt(d)) : 0, tb = c < 0 && m > 0 ? c / (-m - Math.sqrt(d)) : -m + Math.sqrt(Math.max(d, 0));
+  return [ta, Math.min(tb, end, ta + reach)];
+}
+/** The share in shadow read from the two kept along a stretch (the GLSL's airShadowed): `S` [half way, all the way],
+ * `f` how far along the stretch (0 to 1, in distance); none at its start. Pure. */
+export function shadeShareAt(S, f) {
+  const u = 2 * Math.sqrt(clamp(f, 0, 1));
+  return u < 1 ? S[0] * u : S[0] + (S[1] - S[0]) * (u - 1);
+}
+/** The shadow pass's sum for one ray, in JavaScript (its twin and the tests' reference): the air's light (green) made in
+ * the shadows along the stretch the casters reach, by `sun(w, h)` and `sky(w, h)` (the share of the sun's light and of
+ * the sky's that reaches a point `w` metres from the camera, [x, up, z] by the vertical at the camera, `h` metres up), as
+ * a share of the ray's whole light (skyLight's), at half and all of the stretch (half in the square root of the
+ * distance). `ray`: {height (metres), mu, cosv, mus}; `top`, `reach` metres; `steps`; `jitter` 0 to 1; `diffuse`: the
+ * share of the sun's light a shadow's caster passes on all round (a cloud's); `dir`: the ray's direction [x, up, z]
+ * (default in the plane of the vertical); `psi`: a psiTable. Returns [half way, all the way]. Pure. */
+export function shadowShares(model, {height, mu, cosv, mus}, {top, reach = SHADOWS.reach, steps = SHADOWS.steps, jitter = 0.5, sun = () => 1, sky = () => 1, diffuse = 0, dir = null, psi = null} = {}) {
+  const X0 = model.X0, H = model.H, hc = height / H, sp = span(X0, hc, mu), out = [0, 0];
+  if (sp.t1 <= sp.t0) return out;
+  const [a, b] = shadeSpan(X0, hc, mu, top / H, reach / H, sp.t1);
+  if (b <= a) return out;
+  const table = psi ?? psiOf(model), p0 = at(X0, hc, mu, cosv, mus, sp.t0), up = p0[1] >= 0, c0 = along(model, p0, up);
+  const pass = (t) => Math.exp(-Math.max((up ? 1 : -1) * (c0[1] - along(model, at(X0, hc, mu, cosv, mus, t), up)[1]), 0));
+  const g = model.forward[1], n = model.aureoleForward, A = model.aureole[1], e = model.ext[1];
+  const once = (model.rayleigh[1] * phaseRayleigh(cosv) + model.haze[1] * ((1 - A) * phaseHaze(g, cosv) + A * phaseHaze(n, cosv))) / e, more = (model.rayleigh[1] + model.haze[1]) / e;
+  const d = dir ?? [Math.sqrt(Math.max(1 - mu * mu, 0)), mu, 0], L = b - a;
+  const whole = Math.max(skyLight(model, height, mu, cosv, mus, {steps: 32, psi: table}).light[1], 1e-30);
+  let prev = pass(a), lost = 0;
+  for (let i = 0; i < steps; i++) {
+    const u1 = (i + 1) / steps, us = (i + jitter) / steps, t1 = a + L * u1 * u1, ts = a + L * us * us, T1 = pass(t1), p = at(X0, hc, mu, cosv, mus, ts), hh = Math.max(p[0], 0);
+    const dT = Math.max(prev - T1, 0); prev = T1;
+    const sunT = Math.exp(-tau(model, hh, p[2])[1]), x = dT * once * sunT, y = dT * more * table.at(hh, p[2])[1];
+    const w = d.map((v) => v * ts * H), vs = sun(w, hh * H), va = sky(w, hh * H);
+    lost += (1 - vs) * x - diffuse * (1 - vs) * 0.25 * dT * more * sunT + (1 - va) * y;
+    if (i + 1 === steps / 2) out[0] = Math.max(lost, 0) / whole;
+    if (i + 1 === steps) out[1] = Math.max(lost, 0) / whole;
+  }
+  return out;
+}
+const SHADE_VERT = /* glsl */`
+uniform mat4 uShadeCam; uniform vec4 uShadeProj;
+varying vec3 vDir;
+void main() {
+  vDir = mat3(uShadeCam) * vec3((position.x + uShadeProj.z) * uShadeProj.x, (position.y + uShadeProj.w) * uShadeProj.y, -1.0);
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}`;
+// the shadows' picture: along each of its rays, the light made in the casters' shadows in the stretch they reach, as a
+// share of the ray's whole light, kept half and all the way along (in the square root of the distance).
+// Four neighbouring pixels walk their steps a quarter of a step apart (the blur after it takes their mean)
+const SHADE_FRAG = (casters) => /* glsl */`
+${AIR_GLSL}
+${casters.map((c) => c.glsl).join("\n")}
+// the share of the sun's light that reaches a point (x), and of the sun's light that a caster's shadow passes on to it all round (y: a cloud's diffuse light, unless something else hides the sun)
+vec2 airCastSun(vec3 w, float h) {
+${casters.map((c) => `  float s_${c.name} = ${c.name}Sun(w, h);`).join("\n")}
+  float all_ = 1.0${casters.map((c) => ` * s_${c.name}`).join("")};
+  return vec2(all_, 0.0${casters.filter((c) => c.diffuse > 0).map((c) => ` + ${c.diffuse.toFixed(4)} * (1.0 - s_${c.name})${casters.filter((x) => x !== c).map((x) => ` * s_${x.name}`).join("")}`).join("")});
+}
+float airCastSky(vec3 w, float h) { return 1.0${casters.map((c) => ` * ${c.name}Sky(w, h)`).join("")}; }
+uniform float uShadeH;      // metres a scale height
+varying vec3 vDir;
+void main() {
+  vec3 rd = normalize(vDir);
+  float mu = dot(rd, uAirUp), cosv = dot(rd, uAirSun), hc = uAirGeo.y, mus = uAirMap.w;
+  vec3 sp = airSpan(hc, mu);
+  vec2 s = airShadeSpan(hc, mu, sp.y);
+  if (sp.y <= sp.x || s.y <= s.x) { gl_FragColor = vec4(0.0, 0.0, sp.z, 1.0); return; }
+  vec3 p0 = airAt(hc, mu, cosv, mus, sp.x);
+  float up = step(0.0, p0.y); vec3 c0 = airAlong(p0, up);
+  // the phase functions (green): once-scattered light, and light scattered more often (even all round)
+  float g = uAirG.g, wide = inversesqrt(1.0 + g * g - 2.0 * g * cosv), n = uAirAureole.w, thin = inversesqrt(1.0 + n * n - 2.0 * n * cosv);
+  float haze = mix(0.25 * (1.0 - g * g) * wide * wide * wide, 0.25 * (1.0 - n * n) * thin * thin * thin, uAirAureole.g);
+  float once = uAirScatR.g * 0.1875 * (1.0 + cosv * cosv) + uAirScatM.g * haze, more = uAirScatR.g + uAirScatM.g;
+  vec2 cell = mod(floor(gl_FragCoord.xy), 2.0);
+  // the whole ray's light (green, for a unit of sunlight) as the sky table has it
+  float whole = max(airFromTable(airWhere(mu, cosv), cosv).g / max(uAirLight.g, 1e-30), 1e-30);
+  float j = mod(2.0 * cell.x + 3.0 * cell.y, 4.0) / 4.0 + 0.125, L = s.y - s.x, prev = airPass(hc, mu, cosv, s.x, c0, up).g, lost = 0.0;
+  vec2 kept = vec2(0.0);
+  for (int i = 0; i < STEPS; i++) {
+    float u1 = float(i + 1) / float(STEPS), us = (float(i) + j) / float(STEPS), ts = s.x + L * us * us;
+    float T1 = airPass(hc, mu, cosv, s.x + L * u1 * u1, c0, up).g, dT = max(prev - T1, 0.0);
+    prev = T1;
+    vec3 p = airAt(hc, mu, cosv, mus, ts);
+    float hh = max(p.x, 0.0), sunT = exp(-airTau(hh, p.z).g), a = dT * once * sunT, b = dT * more * airPsi(hh, p.z).g;
+    vec3 w = rd * (ts * uShadeH);
+    float hm = hh * uShadeH;
+    vec2 v = airCastSun(w, hm);
+    lost += (1.0 - v.x) * a - v.y * 0.25 * dT * more * sunT + (1.0 - airCastSky(w, hm)) * b;
+    if (i + 1 == STEPS / 2) kept.x = max(lost, 0.0) / whole;
+  }
+  kept.y = max(lost, 0.0) / whole;
+  // z: the ray ends on the ground (the blur keeps such rays apart from those into the sky)
+  gl_FragColor = vec4(kept, sp.z, 1.0);
+}`;
+// the mean of each pixel's 3 x 3 neighbours, weighted 1-2-1 (the four walks' phases even), of the rays into the sky (xy)
+// and of those to the ground (zw) apart: a pixel next to the horizon also keeps the other side's, so the picture read
+// between pixels never mixes the two
+const BLUR_FRAG = /* glsl */`
+uniform sampler2D uShadeRaw;
+void main() {
+  ivec2 at = ivec2(gl_FragCoord.xy), most = textureSize(uShadeRaw, 0) - 1;
+  vec4 own = texelFetch(uShadeRaw, at, 0), sum = vec4(0.0); vec2 w = vec2(0.0);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec4 v = texelFetch(uShadeRaw, clamp(at + ivec2(i, j), ivec2(0), most), 0);
+    float k = float((2 - abs(i)) * (2 - abs(j))), g = step(0.5, v.z);
+    sum += k * vec4(v.xy * (1.0 - g), v.xy * g); w += k * vec2(1.0 - g, g);
+  }
+  vec2 sky = w.x > 0.0 ? sum.xy / w.x : own.xy, ground = w.y > 0.0 ? sum.zw / w.y : own.xy;
+  gl_FragColor = vec4(sky, ground);
+}`;
+
 const OPTIONS = Object.freeze({sun: Object.freeze([0.35, 0.5, -0.79]), color: Object.freeze([1, 1, 1]), light: 1, sunSize: SUN_SIZE, disc: true, ground: true, exposure: "film", ev: 0,
-  quality: "standard", unit: 1, center: null, stars: null, scene: null, over: false});
+  quality: "standard", unit: 1, center: null, stars: null, scene: null, over: false, shadows: true});
 const half = (data) => Uint16Array.from(data, (x) => THREE.DataUtils.toHalfFloat(x));
+// the shadows' picture when there are none: nothing in shadow
+const NO_SHADOW = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
+NO_SHADOW.needsUpdate = true;
 // a sky table's rows for a height (scale heights): the horizon's dip, the span from the horizon up to the zenith (or
 // only to the top of the air when the height is over it) and down to the nadir, and whether the height is in the air
 function rowSpans(m, hc) {
@@ -590,7 +757,10 @@ export class Air {
    * `exposure` ("film", "camera", "auto") with `ev`, `quality`, `unit` (metres a scene unit), `center` (the
    * world's middle in the scene: [x, y, z], a Vector3 or an Object3D read at every update; default the
    * radius under the origin), `stars` (a vidgen/space-sky sky: dimmed by day), `scene` (the lights are
-   * added to it), `over` (draw the dome after everything, as vidgen/space-scale's overlays). */
+   * added to it), `over` (draw the dome after everything, as vidgen/space-scale's overlays), `shadows` (true: what
+   * casts a shadow into the air (vidgen/space-clouds' decks, vidgen/space-land's ground; `addCaster`) darkens the air
+   * in its shadow (light shafts, the dim air under a closed deck, mountains' shadows in the haze); false: none;
+   * or {reach, share, steps}: see SHADOWS). */
   constructor(renderer, what = "earth", extra = {}) {
     if (!renderer || !renderer.isWebGLRenderer) throw fail("air(renderer, what, options): the first argument must be the page's THREE.WebGLRenderer");
     known("the third argument", extra, [...AIR_OPTIONS, ...Object.keys(OPTIONS)]);
@@ -600,6 +770,12 @@ export class Air {
     choice("exposure", o.exposure, EXPOSURES); choice("quality", o.quality, QUALITIES);
     number("light", o.light, 0, 100); number("sunSize", o.sunSize, 0.01, 20); number("unit", o.unit, 1e-9, 1e9);
     if (typeof o.ev !== "function") number("ev", o.ev, -30, 30);
+    if (o.shadows !== true && o.shadows !== false) {
+      known("shadows", o.shadows, SHADOW_KEYS);
+      const sh = {...SHADOWS, ...o.shadows};
+      number("shadows.reach (metres)", sh.reach, 100, 1e7); number("shadows.share", sh.share, 0.05, 1);
+      if (!Number.isInteger(sh.steps) || sh.steps < 4 || sh.steps > 128 || sh.steps % 4 !== 0) throw fail(`shadows.steps must be a multiple of 4 from 4 to 128, got ${JSON.stringify(sh.steps)}`);
+    }
     o.color = linearColor("color", o.color);
     this.renderer = renderer;
     this.ambient = ambientTable(m);
@@ -616,7 +792,8 @@ export class Air {
       uAirTable: {value: new THREE.Vector4(0.25 / across, 0.25 / rows, 0.5 / PSI_TABLE.suns, 0.5 / PSI_TABLE.heights)},
       uAirUp: {value: new THREE.Vector3(0, 1, 0)}, uAirSun: {value: new THREE.Vector3(0, 1, 0)}, uAirExt: {value: v3(m.ext)}, uAirScatR: {value: scat(m.rayleigh)}, uAirScatM: {value: scat(m.haze)},
       uAirG: {value: v3(m.forward)}, uAirLight: {value: new THREE.Vector3(1, 1, 1)}, uAirGlow: {value: v3(m.glow)}, uAirOzone: {value: new THREE.Vector4(...m.ozone, m.hz)},
-      uAirAureole: {value: new THREE.Vector4(...m.aureole, m.aureoleForward)}, uAirDusk: {value: new THREE.Vector2(0, DUSK_KNEE)}, uAirView: {value: this.view.texture}, uAirPsi: {value: this.psi.texture}};
+      uAirAureole: {value: new THREE.Vector4(...m.aureole, m.aureoleForward)}, uAirDusk: {value: new THREE.Vector2(0, DUSK_KNEE)}, uAirView: {value: this.view.texture}, uAirPsi: {value: this.psi.texture},
+      uAirShade: {value: new THREE.Vector4(0, 0, 0, 0)}, uAirShadeView: {value: new THREE.Matrix4()}, uAirShadow: {value: NO_SHADOW}};
     this._quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: {...this.uniforms, uSize: {value: new THREE.Vector2(across * 2, rows * 2)}, uSpread: {value: 0.5}},
       defines: {STEPS: steps}, vertexShader: QUAD_VERT, fragmentShader: VIEW_FRAG, depthTest: false, depthWrite: false, toneMapped: false}));
     this._quad.frustumCulled = false;
@@ -638,6 +815,7 @@ export class Air {
       u.uDisplay.value = r.getRenderTarget() === null ? 1 : 0;
       u.uSun.value.x = Math.max(o.sunSize * RAD, 0.8 * u.uPix.value) * (o.disc ? 1 : 0);
       this.material.uniformsNeedUpdate = true;
+      this.drawShadows();
     };
     /** Lights for ordinary meshes: `sun` (a THREE.DirectionalLight: the sun after the air) and `sky` (a THREE.HemisphereLight: the sky from above, the lit ground from below). */
     this.light = {sun: new THREE.DirectionalLight(0xffffff, Math.PI), sky: new THREE.HemisphereLight(0xffffff, 0x000000, Math.PI)};
@@ -646,9 +824,12 @@ export class Air {
     this.stars = o.stars;
     this._starBase = this.stars && this.stars.skyMaterial ? this.stars.skyMaterial.uniforms.uGain.value : 1;
     this._drawn = null; this._hazed = new Set();
+    /** What casts shadows into the air (see addCaster). */
+    this.casters = []; this._shade = null; this._shadeDirty = true; this._eye = null; this._into = new Set();
+    this.shadowsInto(this.material);
     /** What the last update found: `height` (m), `elevation` (the sun's, degrees over the level), `ev`, `gain`, `stars` (their share), `sunlight` and `ambient` (the sun's and the sky's light on a thing at the camera, linear colours times the gain), `inside` (the camera is in the air), `up` (the vertical at the camera) and `center` (the world's middle, scene units). */
     this.state = {height: 0, elevation: 0, ev: 0, gain: 1, stars: 1, sunlight: [1, 1, 1], ambient: [0, 0, 0], inside: true, up: [0, 1, 0], center: [0, 0, 0]};
-    this.material.addEventListener("dispose", () => { this.view.dispose(); this.psi.dispose(); this.ambientTexture.dispose(); this._quad.material.dispose(); this._quad.geometry.dispose(); });
+    this.material.addEventListener("dispose", () => { this.view.dispose(); this.psi.dispose(); this.ambientTexture.dispose(); this._quad.material.dispose(); this._quad.geometry.dispose(); this._freeShade(); });
     this.update(0);
   }
 
@@ -680,6 +861,7 @@ export class Air {
     if (material.isShaderMaterial) throw fail("haze(material): a ShaderMaterial of your own includes AIR_GLSL, takes air.uniforms and calls airThrough(colour, toPoint) itself");
     if (this._hazed.has(material)) return material;
     this._hazed.add(material);
+    this.shadowsInto(material);
     const earlier = material.onBeforeCompile, key = material.customProgramCacheKey.bind(material);
     material.onBeforeCompile = (shader, renderer) => {
       if (earlier) earlier.call(material, shader, renderer);
@@ -692,6 +874,93 @@ export class Air {
     material.customProgramCacheKey = () => `${key()}|vidgen-air`;
     material.needsUpdate = true;
     return material;
+  }
+
+  /** Let something cast shadows into the air: `caster` is {name (a GLSL name, unique), glsl (defines `float <name>Sun(vec3 w,
+   * float h)` and `float <name>Sky(vec3 w, float h)`: the share of the sun's light and of the sky's that reaches a point `w`
+   * metres from the camera along the scene's axes, `h` metres over the world's sphere), uniforms, top (metres: nothing
+   * casts a shadow on air above it), diffuse (the share of the sun's light it hides that it passes on all round, as a
+   * cloud does: 0 to 1, default 0)}. vidgen/space-clouds and vidgen/space-land add themselves (unless `shadows: false`).
+   * Returns the air. */
+  addCaster(caster) {
+    known("addCaster", caster, ["name", "glsl", "uniforms", "top", "diffuse"]);
+    if (typeof caster.name !== "string" || !/^[a-z][A-Za-z0-9]*$/.test(caster.name) || this.casters.some((c) => c.name === caster.name)) throw fail(`addCaster: name must be a new GLSL name (letters and digits, a small letter first), got ${JSON.stringify(caster.name)}`);
+    if (typeof caster.glsl !== "string" || !caster.glsl.includes(`${caster.name}Sun(`) || !caster.glsl.includes(`${caster.name}Sky(`)) throw fail(`addCaster: glsl must define float ${caster.name}Sun(vec3 w, float h) and float ${caster.name}Sky(vec3 w, float h)`);
+    number("addCaster: top (metres)", caster.top, -1e5, 1e7); number("addCaster: diffuse", caster.diffuse ?? 0, 0, 1);
+    this.casters.push({name: caster.name, glsl: caster.glsl, uniforms: caster.uniforms ?? {}, top: caster.top, diffuse: caster.diffuse ?? 0});
+    this._freeShade(); this._shadeDirty = true;
+    for (const material of this._into) material.needsUpdate = true;
+    return this;
+  }
+  /** Whether the air draws shadows (the option `shadows` is not false). */
+  get shadowsOn() { return this.options.shadows !== false; }
+  /** Let the shadows in the air reach a ShaderMaterial of your own that includes AIR_GLSL and calls airThrough or
+   * airLight (vidgen's modules call it for theirs; `haze` does it for you): the shadows' code is compiled into its
+   * shader only while the air has shadows and something casting them (a shader without it costs nothing more).
+   * Returns the material. */
+  shadowsInto(material) {
+    if (!material || !material.isMaterial) throw fail("shadowsInto(material): a THREE.Material");
+    if (this._into.has(material)) return material;
+    this._into.add(material);
+    const earlier = material.onBeforeCompile, key = material.customProgramCacheKey.bind(material);
+    material.onBeforeCompile = (shader, renderer) => {
+      if (earlier) earlier.call(material, shader, renderer);
+      if (this._live()) shader.fragmentShader = `#define AIR_SHADOWS 1\n${shader.fragmentShader}`;
+    };
+    material.customProgramCacheKey = () => `${key()}|vidgen-air-shadows-${this._live() ? 1 : 0}`;
+    material.needsUpdate = true;
+    return material;
+  }
+  _live() { return this.shadowsOn && this.casters.length > 0; }
+  /** Say that a caster has changed (its map moved with the wind or the camera): the shadows are drawn again before the next picture. */
+  shadowsChanged() { this._shadeDirty = true; return this; }
+
+  _freeShade() {
+    if (!this._shade) return;
+    for (const x of [this._shade.raw, this._shade.out]) x.dispose();
+    for (const q of [this._shade.march, this._shade.blur]) q.material.dispose();
+    this._shade.plane.dispose(); this._shade = null;
+    this.uniforms.uAirShadow.value = NO_SHADOW;
+  }
+  _makeShade() {
+    const sh = this.options.shadows === true ? SHADOWS : {...SHADOWS, ...this.options.shadows}, size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const w = Math.max(2, Math.ceil(size.x * sh.share)), h = Math.max(2, Math.ceil(size.y * sh.share)), steps = this.options.quality === "fast" ? Math.max(4, 4 * Math.round(sh.steps / 8)) : sh.steps;
+    const kind = {type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping};
+    const raw = new THREE.WebGLRenderTarget(w, h, {...kind, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter}), out = new THREE.WebGLRenderTarget(w, h, kind), plane = new THREE.PlaneGeometry(2, 2);
+    const quad = (material) => { const mesh = new THREE.Mesh(plane, material), scene = new THREE.Scene(); mesh.frustumCulled = false; scene.add(mesh); return {scene, material}; };
+    const uniforms = {...this.uniforms, uShadeCam: {value: new THREE.Matrix4()}, uShadeProj: {value: new THREE.Vector4()}, uShadeH: {value: this.model.H}};
+    for (const c of this.casters) Object.assign(uniforms, c.uniforms);
+    const march = quad(new THREE.ShaderMaterial({uniforms, defines: {STEPS: steps}, vertexShader: SHADE_VERT, fragmentShader: SHADE_FRAG(this.casters), depthTest: false, depthWrite: false, toneMapped: false}));
+    const blur = quad(new THREE.ShaderMaterial({uniforms: {uShadeRaw: {value: raw.texture}}, vertexShader: QUAD_VERT, fragmentShader: BLUR_FRAG, depthTest: false, depthWrite: false, toneMapped: false}));
+    this._shade = {raw, out, plane, march, blur, size: [size.x, size.y], reach: sh.reach};
+  }
+  /** Draw the shadows in the air for the last update's camera, if anything changed since they were last drawn (the
+   * casters' maps must be up to date: vidgen/space-clouds calls it before drawing its own picture; the dome calls it
+   * before it is drawn). Returns the air. */
+  drawShadows() {
+    const u = this.uniforms.uAirShade.value;
+    if (!this._shadeDirty) return this;
+    this._shadeDirty = false;
+    if (!this.shadowsOn || !this.casters.length || !this._eye) { u.x = 0; return this; }
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    if (this._shade && (this._shade.size[0] !== size.x || this._shade.size[1] !== size.y)) this._freeShade();
+    if (!this._shade) this._makeShade();
+    const m = this.model, top = Math.max(...this.casters.map((c) => c.top)), sh = this._shade, cam = this._eye, height = this.state.height;
+    // nothing to do: the camera far over every caster's reach, or the sun well under the horizon (the air is in the world's own shadow)
+    if (height > top + sh.reach || this.uniforms.uAirMap.value.w < -0.2) { u.x = 0; return this; }
+    u.set(1, Math.max(top, 0) / m.H, sh.reach / m.H, 0);
+    const p = cam.projectionMatrix.elements, mu = sh.march.material.uniforms;
+    mu.uShadeCam.value.copy(cam.matrixWorld); mu.uShadeProj.value.set(1 / p[0], 1 / p[5], p[8], p[9]);
+    this.uniforms.uAirShadeView.value.copy(cam.projectionMatrix).multiply(new THREE.Matrix4().extractRotation(cam.matrixWorldInverse));
+    this.uniforms.uAirShadow.value = NO_SHADOW;
+    const r = this.renderer, before = r.getRenderTarget(), auto = r.autoClear;
+    sh.march.material.uniformsNeedUpdate = true;
+    r.autoClear = true;
+    r.setRenderTarget(sh.raw); r.render(sh.march.scene, this._camera);
+    r.setRenderTarget(sh.out); r.render(sh.blur.scene, this._camera);
+    r.setRenderTarget(before); r.autoClear = auto;
+    this.uniforms.uAirShadow.value = sh.out.texture;
+    return this;
   }
 
   /** Say that something of the scene hides everything under the horizon (water to the horizon, a ground of
@@ -729,6 +998,7 @@ export class Air {
     const up = d.map((x) => x / r), height = Math.max((r - R) * o.unit, 0), hc = height / m.H, mus = clamp(up[0] * this.sun.x + up[1] * this.sun.y + up[2] * this.sun.z, -1, 1);
     const [across, rows] = VIEW_TABLES[o.quality];
     const [dip, upSpan, downSpan, inside] = rowSpans(m, hc);
+    this._eye = camera && camera.isCamera ? camera : null; this._shadeDirty = true;
     u.uAirGeo.value.set(m.X0, hc, TOP, o.unit / m.H); u.uAirMap.value.set(dip, upSpan, downSpan, mus);
     u.uAirUp.value.set(...up); u.uAirSun.value.copy(this.sun);
     u.uAirTable.value.set(0.25 / across, 0.25 / rows, 0.5 / PSI_TABLE.suns, 0.5 / PSI_TABLE.heights);

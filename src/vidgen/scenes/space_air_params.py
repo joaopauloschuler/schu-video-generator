@@ -355,10 +355,15 @@ class WorldSpec(SceneParams):
     """Stops over a sunlit ground's exposure (camera, auto)."""
     quality: str = "standard"
     """fast, standard or fine (the air's, sea's, ground's and clouds' own)."""
+    shadows: bool | dict[str, Any] | None = None
+    """Shadows in the air (default on): light shafts through gaps in the decks, the dim air under a closed deck, mountains'
+    shadows in the haze, and the decks' shadows on the ground and the sea; false: none; or {reach, share, steps}."""
 
     @model_validator(mode="after")
     def _check(self) -> "WorldSpec":
         a, n = air(), space_names()
+        if isinstance(self.shadows, dict):
+            module_options(self.shadows, a["air_shadows"], "world.shadows")
         if self.planet is not None:
             self.planet = one_of(self.planet, n["worlds"], "world")
         if self.at is not None and (len(self.at) != 2 or abs(self.at[0]) > 90):

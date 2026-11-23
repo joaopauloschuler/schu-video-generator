@@ -28418,8 +28418,8 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   (1 - passes along the whole ray): exact where the source is the same along the ray, and at both
   ends always, so a far thing ends in exactly the dome's colour and a ground plane meets the dome's
   horizon without a seam. A `ShaderMaterial` includes `AIR_GLSL`, takes `sky.uniforms` and calls
-  `airThrough(colour, toPoint)` (or `airLight(mu, cosv, dist, through, hit)`). Not modelled:
-  shadows inside the haze (no light shafts).
+  `airThrough(colour, toPoint)` (or `airLight(mu, cosv, dist, through, hit)`). Shadows inside the
+  haze (light shafts, the dim air under a deck, mountains' shadows): Step 403, §123.17.
 - **Light for things in the air** (d): `sky.light.sun` (a `DirectionalLight`: the sun after the
   air at the camera's height, mean over the disc as it sinks, pi x its strength as `vidgen/space-light`'s
   `light.directional`) and `sky.light.sky` (a `HemisphereLight`: the sky from above, the lit ground
@@ -28470,7 +28470,7 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   point (differences of the closed form: 4 to 15 % under the true column over 1.5 to 200 km at most
   angles, up to 55 % over it on a short, exactly level path); no refraction (the sun is not flattened and sets when geometry says). A look:
   the film exposure, the Mars-like forward throw, the invented airs, the plain ground. Weak: the Earth's shadow band
-  opposite the set sun is there but faint; the horizon seen from 10 km shows a pinkish line (long
+  opposite the set sun is there but faint (checked again in Step 403, §123.17); the horizon seen from 10 km shows a pinkish line (long
   red paths over a dark ground); from -13 to -16 degrees the last of the arch is a thin red line on
   the horizon; the sunset disc is orange-gold rather than deep red (clear air).
 - **Twilight to night (Step 381.1).** At Step 381 the sky was black by -10 degrees and the arch a
@@ -30537,6 +30537,90 @@ the video's soundtrack with its normalisation) of each of the seven films is byt
 (MD5 of the WAV) between the published project and the example. Not rendered: no film, no
 draft.
 
+
+### 123.17 Shadows in the air (Step 403)
+
+Light crossed the air as if nothing cast a shadow: a deck hid the sun but the haze under it shone, and the
+decks shaded nothing in a surface scene. Now what casts a shadow darkens the air in its shadow, on by default.
+
+- **The model.** A ray's air light is the sky table's (§123.3); what changes is the share of it made in a
+  caster's shadow. A small pass (`sky.drawShadows()`) draws, for every direction of the frame, a picture a
+  quarter of its size (`shadows.share` 0.25): along each ray, over the stretch under the casters' top
+  (from the camera, or from where the ray comes under it; at most `reach`, 200 km), `steps` (24) steps
+  spaced by the square of their number (fine near the camera), with a quarter step's jitter between the
+  four pixels of a square, it sums the green light each slab makes once scattered (its phase functions,
+  the sun's light at the slab after the air) and more often (the table of §123.3), and of that what lies in
+  shadow: `(1 - sun share) x once + (1 - sky share) x more - diffuse x (1 - sun share) x the sun's light
+  thrown evenly`. Kept: that over the ray's whole light (the sky table's, green), half way and all the way
+  along the stretch (in the square root of the distance). A second pass takes the 1-2-1 mean of each
+  pixel's 3 x 3 neighbours (the four jitter phases even), rays into the sky and rays to the ground apart
+  (channels xy and zw), so the picture read between pixels never mixes the two at the horizon.
+- **Reading it.** `airLight` (so `airThrough`, `haze`, the dome, the sea, the ground, the clouds' picture,
+  the contrails) finds its ray's place in that picture (`uAirShadeView`: the camera's projection and turn),
+  reads the share up to the point (linear from none at the stretch's start), divides it by the share of the
+  ray's light made in front of the point (green), and scales the air's light by one less that, every colour
+  alike (the hue kept: a first version took the near air's colour off and left cyan casts). The code is
+  compiled in only while the air has shadows and something casts them (`AIR_SHADOWS`, set by
+  `sky.shadowsInto(material)` from `onBeforeCompile`, which `haze` and vidgen's modules call): SwiftShader
+  runs the body of a branch even when the condition is false for every pixel (0.15 s a frame here), so
+  "off" is a define, not a uniform. `airRay` (a global the caller sets) is the ray's direction; `airLight`
+  with `airRay` zero (the descent's globe) is unshadowed.
+- **Casters** (`sky.addCaster({name, glsl, uniforms, top, diffuse})`: `<name>Sun(w, h)` and `<name>Sky(w,
+  h)` give the share of the sun's light and of the sky's that reaches a point `w` metres from the camera at
+  `h` metres up; `top`: no shadow over it; `diffuse`: the share of the hidden sunlight it passes on all round).
+  - **The decks** (`vidgen/space-clouds`, when the air's `shadows` is on and a deck casts a shadow, as for
+    `shade`: density x depth over 1; at most four decks; one clouds an air): a map 256 x 256 (`fast` 128,
+    `fine` 384) of what each deck lets through of the sun's light (a channel a deck), 60 km each side of the
+    point where the camera's own ray to the sun crosses that deck's middle, a place x along kept at
+    sqrt(x / 60 km) (fine near the camera), drawn every update (the wind moves the decks), with mipmaps.
+    What a deck lets through (`deckLetThrough`): the sun's slant path through it read at three heights (0.15,
+    0.5, 0.85 of the deck, each (y - 0.5) x depth / tan(elevation) along the sun's bearing), how much each
+    is under a cloud's rounded top (`cloudTop`), the light passing the deck's density over a third of the
+    slant path at each: a low sun's ray crosses kilometres of a deck and meets the tops of more clouds; a
+    ray over a dome passes. Under twice 0.02 of the sun's sine the shadows fade out. The air reads a deck's
+    channel where the sun's ray from the point crosses the deck's middle; inside the deck the shadow fades
+    to none at its top; beyond the map, the map's mean (its last mipmap). Under a deck the sky's light is
+    one less 0.7 x what the deck takes (a mean over some kilometres: the map's third mipmap); `diffuse` 0.25
+    (`AIR_SHADOW`). The same map gives `clouds.mapShade` ({glsl, uniforms}: `cloudShade(p, height)` and
+    `seaShade(p)` read from it), which `vidgen/space-descent`'s world gives the ground and the sea: a
+    surface scene's decks now shade them too (`clouds.shade` still reads the pattern itself).
+  - **The ground** (`vidgen/space-land`): its shadow maps (§123.6) are now two bytes a cell (`RGFormat`):
+    the share of the sun's light on the ground as before (the same values), and how high over the cell the
+    ground's shadow reaches (the highest ground on the way to the sun less the sun's ray's rise to it), kept
+    as sqrt(over / the ground's whole range) (`shadowKeep`, `shadowReach`; under 2 m steps near the ground,
+    16 m at 1 km for a 4 km range). The walk towards the sun no longer stops once the cell is dark (only
+    bakes cost more). The air reads the map for a point's distance and is in shadow under that height,
+    softened over 30 m and 1.5 cells each side (`AIR_SHADOW`).
+- **The planet's own shadow at dusk** is in the model already: the sun's light at each scattering point is
+  `exp(-tau)` along the closed form of §123.3, which goes to nothing under the planet's horizon. Opposite a
+  sun at -2 degrees the once-scattered light is nothing below 4 degrees, brightest a band higher, red over
+  blue 1.17 there against 0.70 in the shadow and 0.59 at 45 degrees; the band rises as the sun sinks (tested
+  in Node). No table changed, so the limb from orbit (`vidgen/space-bodies`) is unchanged and still agrees.
+  In the film look the band is faint at -2 degrees and barely seen at -4 (stills `ao402/stills/08`, `09`).
+- **Options.** `air(renderer, what, {shadows})`: `true` (default), `false` (none: the pixels of before), or
+  `{reach, share, steps}` (`SHADOWS`; `steps` a multiple of four; `quality: "fast"` halves them). The world
+  of `vidgen/space-descent` takes `shadows` and gives it to its air; a surface scene's `world: {shadows}`.
+- **Measured** (1280x720, SwiftShader, two cores, median of 9 frames, same session): a fixed view over the
+  sea under a cumulus deck 2.82 → 3.21 s (+0.38 s, 14 %), with `shadows: false` 2.84 s; Step 390's rise
+  (frames 115-124) median 2.54 → 2.79 s, mean 4.03 → 4.38 s. The pass about 7 ms a step; the map and the
+  reads about 0.2 s together.
+- **Where it is true and where not.** True: the shadow volumes of the decks and the ground in the air, along
+  the sun's direction, and the shadowed share of light scattered once and more often. Approximate: a deck as
+  three readings of a slant path, a cloud's diffuse light one number, the air's light per ray scaled in all
+  colours alike (the near air's own colour not separated), the shadow picture soft (a quarter size, a 3 x 3
+  mean: broad shafts, no fine edges). Not done: towers cast no shadow into the air (only the decks' map);
+  the sea's reflection of the sky knows nothing of the decks; the exposure knows nothing of clouds (a frame
+  under a deck is darker). A look: the decks' sky share 0.7, diffuse 0.25. Weak: crepuscular rays hardly
+  show in the picture: the model's haze has the gas's scale height (8.9 km), so the lowest kilometres, where
+  the shafts are, hold little of a ray's light; in a hazier air (`haze` ten times the Earth preset's) they
+  show as darker and lighter air round a low sun, not as sharp beams.
+- **Tests** (Node): `test_the_shadows_in_the_air_in_node` (the stretch, the reading, the sum's properties,
+  the options' did-you-mean), `test_the_earths_shadow_rises_opposite_the_sun_at_dusk`,
+  `test_the_decks_shadow_map_for_the_air`, `test_the_grounds_shadow_in_the_air_is_kept_in_a_byte`; YAML
+  `test_shadows_in_the_air_are_on_unless_the_world_says_so`; Chromium (slow):
+  `test_the_air_under_a_closed_deck_lies_in_its_shadow_in_chromium` (dimmer under an overcast, the sky alone
+  the same to the pixel with or without shadows, a frame a function of its inputs). The descent's test
+  allows 40 levels (was 32) between two heights: the decks' shadows on the sea change the ground's mean.
 
 ## 124. Footage, not a render (Steps 397–401)
 

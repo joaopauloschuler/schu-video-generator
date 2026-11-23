@@ -72,6 +72,8 @@ class _AirPage(_Page):
         if w.match != 1:
             o["match"] = w.match
         o.update({"exposure": w.exposure, "ev": w.ev, "quality": w.quality})
+        if w.shadows is not None:
+            o["shadows"] = w.shadows
         adapt = [m for m in p.camera if m.move in ("climb-through", "descend-through") and m.options().get("adapt")]
         metered = p.operator is not None and p.operator.metered
         if adapt or metered:
