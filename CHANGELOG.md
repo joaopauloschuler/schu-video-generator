@@ -5,7 +5,20 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–396
+## Steps 193–397
+
+### Footage, not a render (Step 397)
+
+- **A camera's sensor in `vidgen/three-finish`** (Step 397): three new finishing options, off
+  unless given, also under a `space` scene's `finish:`. `noise` is a camera sensor's noise in
+  place of the film grain: stronger in the shadows than in the highlights, none where the picture
+  clips, coloured, at the sensor's pixel size, new each frame (`noise: true` or an amount, or
+  `{amount, color, size, floor}`). `range` limits the dynamic range: highlights clip to white
+  with a short shoulder, `black` crushes the shadows (`range: true`, a number of stops above mid
+  grey, or `{stops, shoulder, black}`). `sharpen` adds in-camera sharpening with faint halos
+  (`sharpen: true` or an amount, or `{amount, radius, limit}`). Scenes that do not ask draw
+  exactly the same pixels; all three cost about 0.05 s a frame at 1280x720. New exports
+  `rangeWhite`, `rangeCurve`, `noiseSpread`, `noiseSigma`.
 
 ### Breaking repeating patterns (Steps 395–396)
 

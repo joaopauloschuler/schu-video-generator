@@ -107,6 +107,50 @@ out.push(F.shutterTimes(1, 30, 5, 180), F.shutterTimes(1, 30, 4, 360), F.shutter
     assert closed == [1] and one == [1]
 
 
+def test_the_sensor_is_off_unless_asked_and_on_when_given(tmp_path: Path) -> None:
+    out = _run_in_node(tmp_path, """
+const off = F.resolveOptions({});
+out.push([off.noise.amount, off.range.stops, off.sharpen.amount]);
+const on = F.resolveOptions({noise: true, range: true, sharpen: true});
+out.push([on.noise, on.range, on.sharpen]);
+out.push([F.resolveOptions({noise: {size: 2}}).noise.amount, F.resolveOptions({range: {black: 0.01}}).range.stops, F.resolveOptions({sharpen: 0.3}).sharpen.amount]);
+out.push([F.resolveOptions({noise: false}).noise.amount, F.resolveOptions({range: 0}).range.stops, F.resolveOptions({noise: {amount: 0}}).noise.amount]);
+out.push(err(() => F.resolveOptions({noise: {colour: 1}})), err(() => F.resolveOptions({range: 0.5})), err(() => F.resolveOptions({sharpen: {radius: 9}})));
+""")
+    assert out[0] == [0, 0, 0]
+    assert out[1] == [{"amount": 0.012, "color": 0.5, "size": 1, "floor": 0.05}, {"stops": 2.5, "shoulder": 0.05, "black": 0},
+                      {"amount": 0.5, "radius": 1, "limit": 0.06}]
+    assert out[2] == [0.012, 2.5, 0.3] and out[3] == [0, 0, 0]
+    assert 'unknown option noise."colour" (did you mean "color"?)' in out[4]
+    assert "range.stops must be a number from 1 to 16, got 0.5" in out[5] and "sharpen.radius must be a number from 0.5 to 4, got 9" in out[6]
+
+
+def test_the_sensor_curves(tmp_path: Path) -> None:
+    """The JavaScript twins of the shaders' curves: the range keeps the shadows and mid tones, stretches the highlights
+    to clip at the white with a soft shoulder, crushes the blacks; the noise is `amount` at mid grey once encoded,
+    larger in the shadows than in the highlights, none where the picture clips, `floor` of it at black."""
+    out = _run_in_node(tmp_path, """
+const top = 0.77, vs = Array.from({length: 201}, (_, i) => i / 200);
+out.push(vs.map((v) => F.rangeCurve(v, top, {shoulder: 0.05})), vs.map((v) => F.rangeCurve(v, top, {shoulder: 0.05, black: 0.02})));
+out.push([F.rangeWhite(2.5), F.rangeCurve(0.5, 1, {shoulder: 0}), F.rangeCurve(1.2, 0.8, {shoulder: 0})]);
+const enc = (x) => x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055, h = 1e-4;
+const encoded = (v) => F.noiseSigma(v, 0.012, 0.05) * (enc(v + h) - enc(Math.max(v - h, 0))) / (v + h - Math.max(v - h, 0));
+out.push([0.18, 0.02, 0.05, 0.5, 0.8, 0.95, 1].map(encoded));
+out.push([F.noiseSigma(0, 0.012, 0.05) / Math.sqrt(F.noiseSigma(0.18, 0.012, 0.05) ** 2 / (1 - 0.18 ** 2) ** 2), F.noiseSpread(0.012, 0.05, "gamma2.2").scale]);
+""")
+    curve, crushed, (white, flat, clipped), noise, (floor, gamma) = out[0], out[1], out[2], out[3], out[4]
+    assert all(b >= a for a, b in zip(curve, curve[1:])) and all(b >= a for a, b in zip(crushed, crushed[1:]))
+    assert curve[:78] == pytest.approx([i / 200 for i in range(78)])          # below half the white: unchanged
+    assert 0.98 < curve[154] < 1 and set(curve[162:]) == {1}                    # the white (0.77) at the shoulder; 5 % above it, clipped
+    assert 0.95 < curve[150] < curve[154] and crushed[-1] == pytest.approx(1)
+    assert crushed[2] < curve[2] * 0.5 and crushed[100] == pytest.approx(curve[100] ** 2 / (curve[100] + 0.02) * 1.02)
+    assert white == pytest.approx(0.18 * 2 ** 2.5) and flat == 0.5 and clipped == 1
+    mid, *rest, at_white = noise
+    assert mid == pytest.approx(0.012, rel=1e-3) and at_white == 0
+    assert rest[0] > rest[1] > mid > rest[2] > rest[3] > rest[4] > 0               # more in the shadows than in the highlights
+    assert floor == pytest.approx(0.05) and gamma > 0
+
+
 PAGE = """import * as THREE from "three";
 import {Finish, studioEnvironment} from "vidgen/three-finish";
 let renderer, scene, camera, finish, spin;
@@ -167,6 +211,36 @@ def test_the_chain_draws_the_same_frames_every_time(tmp_path: Path) -> None:
     plain, plain_loaded = _frames(tmp_path, {"mode": "plain"})
     assert np.abs(chain[0].astype(int) - plain[0].astype(int)).max() <= 1
     assert URL_PATH in plain_loaded   # imported by the page, so in its record
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_sensor_draws_the_same_frames_and_off_changes_nothing(tmp_path: Path) -> None:
+    """Sensor noise, range and sharpening: two pages draw the same frames, the noise is new each frame, each
+    effect changes the picture, and each one given as off draws exactly the picture without it."""
+    _chromium_or_skip()
+    (tmp_path / "finish.js").write_text(PAGE, encoding="utf-8")
+    sensor = {**OFF, "noise": True, "range": {"stops": 1.5, "black": 0.02}, "sharpen": 1}
+    first, _ = _frames(tmp_path, {"finish": sensor}, (3, 4))
+    again, _ = _frames(tmp_path, {"finish": sensor}, (3, 4))
+    assert np.array_equal(first[0], again[0]) and np.array_equal(first[1], again[1])
+    plain, _ = _frames(tmp_path, {"finish": OFF}, (3, 4))
+    assert not np.array_equal(first[0], plain[0])
+    # the noise alone: new each frame (seeded by the frame number), the background the same on average
+    noisy, _ = _frames(tmp_path, {"finish": {**OFF, "noise": 0.03}}, (3, 4))
+    corner = (slice(0, 20), slice(0, 30), slice(0, 3))
+    assert not np.array_equal(noisy[0][corner], noisy[1][corner]) and np.array_equal(plain[0][corner], plain[1][corner])
+    # (noise added in linear light and encoded after darkens a dark background a little on average, as in a camera)
+    assert abs(noisy[0][corner].astype(float).mean() - plain[0][corner].astype(float).mean()) < 3
+    for look in ({"range": True}, {"sharpen": True}):
+        changed, _ = _frames(tmp_path, {"finish": {**OFF, **look}})
+        assert not np.array_equal(changed[0], plain[0]), look
+    given_off, _ = _frames(tmp_path, {"finish": {**OFF, "noise": 0, "range": 0, "sharpen": 0}}, (3, 4))
+    assert np.array_equal(given_off[0], plain[0]) and np.array_equal(given_off[1], plain[1])
+    # with grain, FXAA, bloom and tone mapping on (the defaults), the sensor given as off changes nothing either
+    defaults, _ = _frames(tmp_path, {"finish": {}})
+    defaults_off, _ = _frames(tmp_path, {"finish": {"noise": False, "range": False, "sharpen": False}})
+    assert np.array_equal(defaults[0], defaults_off[0])
 
 
 @pytest.mark.slow

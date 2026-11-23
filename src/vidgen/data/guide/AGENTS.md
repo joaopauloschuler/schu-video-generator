@@ -3267,7 +3267,9 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
 - **Music**: `music: [{track: kick, pulse: Sun}, {track: pad, glow: Ship}]`: pulses of brightness and glints, a
   craft's throttle; never the camera. Worlds do not pulse.
 - **Finish**: no FXAA by default (it breaks stars and thin rings); `depth_of_field: true` focuses on the move's
-  subject; `motion_blur: 3` costs three times a frame.
+  subject; `motion_blur: 3` costs three times a frame. A camera's sensor, off unless given:
+  `finish: {noise: true, range: true, sharpen: true}` (sensor noise instead of the grain, highlights that
+  clip, faint sharpening halos; about +0.05 s a frame at 1280x720).
 - **Look before you render**: `vidgen still . --scene rings --at 4 --size 640x360`. The page prints as warnings
   what only it can know (a subject under 3 px, the camera inside a world, a jump in a move, a craft in a world's shadow or
   seen from its unlit side); `vidgen lint` reports
@@ -4350,6 +4352,9 @@ export function frame(t) {
 | `vignette` | `0.3` | a number (amount) or `{amount, inner, outer}` |
 | `grain` | `0.02` | film grain, seeded by the frame number |
 | `fringe` | `0` | chromatic fringe towards the corners (try 0.3–1) |
+| `noise` | off | a camera sensor's noise in place of the grain: `true`, an amount (0.012) or `{amount, color, size, floor}`; more in the shadows than in the highlights, none where the picture clips, coloured, new each frame |
+| `range` | off | a camera's limited dynamic range: `true`, stops above mid grey (2.5) or `{stops, shoulder, black}`; highlights clip to white with a short shoulder, `black` crushes the shadows |
+| `sharpen` | off | in-camera sharpening with faint halos: `true`, an amount (0.5) or `{amount, radius, limit}` |
 | `antialias` | `"fxaa"` | `"fxaa"` or `"none"` |
 | `dof` | off | `{focus, fStop, unit, maxBlur, quality}`: `focus` a distance, an object or a point; a thin lens of the camera's focal length (`camera.fov`, `filmGauge`) at `fStop`, scene units of `unit` metres; or `blur` (pixels at 720p far behind the focus) instead of `fStop`; `maxBlur` 10 px at 720p; `quality` `"low"`, `"medium"`, `"high"` |
 | `motionBlur` | off | `{samples, shutter}`: `update(t)` at `samples` times across `shutter` degrees of a frame (180 = half the frame time), centred on `t`, averaged; shutter 0 is exactly no motion blur |

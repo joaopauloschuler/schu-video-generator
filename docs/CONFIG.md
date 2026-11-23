@@ -7047,7 +7047,8 @@ from `frame`; `finish.dispose()`. The chain: the scene into a linear half-float 
 texture (at `renderScale`; motion blur averages `samples` drawings) → depth of field → bloom (in
 place) → fringe, exposure × filter × white balance, flash, vignette (linear) → tone mapping →
 saturation → encoding (sRGB, once) → contrast, lift, gamma, gain → fade → FXAA → grain → the
-canvas. three.js applies no tone mapping or colour-space conversion inside render targets, so the
+canvas. A camera's sensor (Step 397, DESIGN §124.1), off unless given: `range` right after tone
+mapping, `sharpen` after FXAA, `noise` in place of the grain. three.js applies no tone mapping or colour-space conversion inside render targets, so the
 page's `renderer.toneMapping` and `outputColorSpace` play no part; with every effect off the chain
 draws what `renderer.render` draws within one level (a scene with fog differs: three.js mixes fog
 after the encoding when drawing to the canvas). The picture is opaque (alpha 1): give the scene a
@@ -7065,6 +7066,9 @@ background.
 | `vignette` | `{amount: 0.3, inner: 0.3, outer: 1.2}` | a number (the amount) or the object; radii as fractions of the centre-to-corner distance |
 | `grain` | `0.02` | 0–0.5; seeded by the frame number (`round(t × fps)`), not `Math.random` |
 | `fringe` | `0` | 0–10: red and blue pulled apart towards the corners |
+| `noise` | off | a camera sensor's noise in place of `grain` (Step 397): `true`, a number (the amount) or `{amount: 0.012, color: 0.5, size: 1, floor: 0.05}` (what `true` gives; an object turns it on at these unless it says otherwise); added in linear light to the encoded picture: shot noise growing as √signal over a read-noise floor, none where a channel clips (σ = `scale` × √(v + `read`) × (1 − v²), `noiseSpread`); `amount` (0–0.5) its spread in the encoded picture at mid grey, `floor` (0–0.9) the noise at black against the noise at mid grey, `size` (1–8) the sensor's pixel in frame pixels at 720p (above 1 spread smoothly), `color` (0–1) the share of colour noise (on cells twice as wide); blue noisiest, green least; seeded by the frame number; `false` or `0` off |
+| `range` | off | a camera's limited dynamic range (Step 397): `true`, a number (the stops) or `{stops: 2.5, shoulder: 0.05, black: 0}`; per channel after tone mapping: highlights from half the white up stretched so the tone curve's value of `0.18 × 2^stops` (the white, after exposure) reaches 1, clipped with a soft shoulder `shoulder` (0–0.5) wide either side; shadows crushed as v² / (v + `black`) (0–0.2), white kept (`rangeCurve`); `stops` 1–16, `0` off |
+| `sharpen` | off | in-camera sharpening (Step 397): `true`, a number (the amount) or `{amount: 0.5, radius: 1, limit: 0.06}`; on the encoded picture's luma against 4 samples `radius` pixels away (at 720p; 0.5–4), the change held to `limit` (0–1) so the halos stay faint; `amount` 0–4, `0` off |
 | `antialias` | `"fxaa"` | `"none"` |
 | `fade` | `1` | 0 (black) to 1 |
 | `flash` | `{amount: 0, color: 1}` | light added before tone mapping |
@@ -7082,7 +7086,10 @@ across, size: [half-width, half-height], softness, gradient, color, intensity}`)
 anisotropy})` → `{normalMap, roughnessMap}` (`brushed`, `geneva`, `perlage`, `circular`, `sunray`),
 `softShadows(renderer, light, {type: "pcf" | "vsm", radius, mapSize, blurSamples, bias,
 normalBias})`, `focusDistance(camera, target)`, `blurAtInfinity(camera, focus, fStop, unit,
-height)`, `shutterTimes(t, fps, samples, shutter)`, `resolveOptions(options, t)`. three.js 0.186
+height)`, `shutterTimes(t, fps, samples, shutter)`, `resolveOptions(options, t)`; the sensor's
+curves in JavaScript (what the shaders compute): `rangeWhite(stops)`, `rangeCurve(v, top,
+{shoulder, black})`, `noiseSpread(amount, floor, encoding)` → `{scale, read}`, `noiseSigma(v,
+amount, floor, encoding)`. three.js 0.186
 has no `PCFSoftShadowMap` (it falls back to `PCFShadowMap` with a warning); `"pcf"` with `radius`
 2–4 is the recommendation, `"vsm"` cost +0.75 s a frame at a 2048 map on 2 cores. Costs per effect:
 DESIGN §120.11. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
@@ -8634,7 +8641,7 @@ timed in bars, a burn and a fly-by from `orbits:`, a warp, a black hole, title a
 | `craft` | list | `[]` | craft ([`vidgen/space-craft`](#web)), each `{name, kind, seed, detail, fly, attitude, burn, target, throttle, rcs, lights, marker, at, velocity, fleet, spacing}` and the kit's and its kind's options (`accent`, `foil`, `wear`, `lit`, `panels`, `engines`, `ring`...). `kind`: `probe`, `satellite`, `station`, `ship`, `lander`, `tug` (a list of kinds with `fleet: N` for a fleet); `fly`: the body of the orbit data it flies (default its name), with its burns shown as `burn: {seconds: 2, turn: 3}` of thrust in seconds of the scene (a stated choice: the orbit keeps its impulsive Δv; the nose keeps the burn's direction in the flight's own axes, so a prograde burn stays prograde at any speed-up; `false`: none); without orbits `at` and `velocity` (m/s) |
 | `phenomena` | list | `[]` | [`vidgen/space-phenomena`](#web), each `{kind, name, at, size, ...}` and its kind's options: `black-hole` (`size` the horizon's radius, default 10 km; `disc`, `inner`, `outer`, `tilt`, `quality`...), `wormhole` (`size` the throat; `other`: the sky beyond), `warp` (`over: [start, end]`, default the scene), `asteroids` (a field round the camera, metres; `layout: belt` with `around: WORLD`), `asteroid` (one rock), `comet` (`body:` of the orbit data, or `at`), `aurora` (`world:` a world of `bodies`) |
 | `camera` | list \| mapping | — | the camera's moves ([`vidgen/space-camera`](#web)), one after another: each `{move, subject, over, lens, cut}` and the move's own options (`phase`, `distance`, `closest`, `side`, `view`, `push`, `behind`, `of`, `at`, `rate`, `stops`, `place`, `roll`, `level`...). `move`: `arc`, `fly-by`, `pass`, `arrive`, `reveal`, `follow`, `zoom`, `look`; `subject` and the other names (`behind`, `of`, `target`, `around`, zoom `stops`) are bodies, craft or phenomena by name; `over: [start, end]`: seconds of the scene, or places in the song (`'bar 9'`, `'bar 13 beat 3'`, with `music_data`); one move takes the whole scene; with several each gives `over` |
-| `finish` | mapping \| bool | `{bloom: 0.3, grain: 0.02, vignette: 0.3, antialias: none}` | [`vidgen/three-finish`](#web): `bloom`, `grain`, `vignette`, `grade` (`{temperature, saturation, ...}`), `motion_blur` (samples), `depth_of_field` (`true` or `{f_stop, max_blur, quality}`: focused on the move's subject every frame), `antialias` (`none`: FXAA breaks stars and thin rings), and its other options; `false` draws straight to the canvas |
+| `finish` | mapping \| bool | `{bloom: 0.3, grain: 0.02, vignette: 0.3, antialias: none}` | [`vidgen/three-finish`](#web): `bloom`, `grain`, `vignette`, `grade` (`{temperature, saturation, ...}`), `motion_blur` (samples), `depth_of_field` (`true` or `{f_stop, max_blur, quality}`: focused on the move's subject every frame), `antialias` (`none`: FXAA breaks stars and thin rings), the camera's sensor (off unless given): `noise` (an amount, `true` or `{amount, color, size, floor}`; in place of the grain), `range` (stops, `true` or `{stops, shoulder, black}`), `sharpen` (an amount, `true` or `{amount, radius, limit}`), and its other options; `false` draws straight to the canvas |
 | `music` | list | `[]` | reactions to the score, each `{track, pulse \| glow \| glint: THING, as, amount, decay}` (see below); needs `music_data` |
 | `music_data` | bool \| mapping | `false` | the video's music on the page (`ctx.music`), as on a `web` scene: needed by `music:` and by times in bars |
 | `title` | str \| mapping | — | an opening title ([`vidgen/title-cards`](#web)): text, or `{title, subtitle, side, start, hold, fade_in, fade_out, size, ...}` |

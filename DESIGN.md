@@ -30493,3 +30493,73 @@ every pixel to the published projects' stills; the audio-only render (`vidgen re
 the video's soundtrack with its normalisation) of each of the seven films is byte-identical
 (MD5 of the WAV) between the published project and the example. Not rendered: no film, no
 draft.
+
+
+## 124. Footage, not a render (Steps 397–400)
+
+The owner's request (2026-11-23): web scenes that read as real camera footage, by ordinary image
+processing (no AI): the camera's own flaws and the person holding it. Every effect is a function
+of `t` and the options (no state carried from frame to frame), off by default (no existing
+scene's pixels change unless it asks), cheap (measured at 1280x720 on the 09_rise view of Step
+390), and has a JavaScript twin of its curves tested without rendering. Steps: 397 the sensor,
+398 the lens, 399 the operator, 400 camera looks.
+
+### 124.1 The sensor: `noise`, `range`, `sharpen` in `vidgen/three-finish` (Step 397)
+
+**What.** Three option groups of `Finish` (§120.11), each off unless given; `true` turns one on at
+`SENSOR_ON` (`noise` 0.012, `range` 2.5 stops, `sharpen` 0.5), a number sets its main value, an
+object turns it on at those unless it says otherwise (`noise: {size: 2}` is on at 0.012), `false`
+or `0` keeps it off. `resolveOptions` checks them like the other groups (did-you-mean, ranges).
+
+- **`range` — a limited dynamic range** (in the grade pass, right after tone mapping, per
+  channel, before saturation and encoding; define `RANGE`). The white is `rangeWhite(stops)` =
+  0.18 × 2^stops (linear, after exposure: 2.5 stops is about where Rec. 709 white sits over mid
+  grey); `top` is the tone curve's value of that grey. From `top / 2` up, a value is stretched by
+  up to `1 / top` (a smoothstep), so `top` lands at 1 and what is above clips; the clip has a soft
+  quadratic shoulder `shoulder` wide either side of 1; shadows crush as v² / (v + `black`) × (1 +
+  `black`) (white kept). Below half the white nothing changes (with `black` 0), so mid tones and
+  the page's exposure stay put; ACES' long shoulder becomes a camera's short one and sunlit cloud
+  tops, glitter and the sun go flat white channel by channel. `rangeCurve(v, top, {shoulder,
+  black})` is the same curve in JavaScript.
+- **`sharpen` — in-camera sharpening** (in the output pass, after FXAA, before the noise; define
+  `SHARPEN`). An unsharp mask on the encoded picture's luma: the centre against 4 samples
+  `radius` × height / 720 pixels away, times `amount`, the change clamped to ±`limit` (the halos
+  stay faint), added to all three channels. Four samples, not eight: half the cost in software
+  GL with the same look at radius 1.
+- **`noise` — sensor noise** in place of the grain (in the output pass; define `NOISE`; the grain
+  is not drawn while it is on). The encoded value is decoded (sRGB or gamma 2.2, as `encoding`),
+  noise is added in linear light and the sum encoded again, as a camera's noise sits under its
+  output curve: σ(v) = `scale` × √(v + `read`) × (1 − v²) — shot noise growing as √signal, a
+  read-noise floor, none where a channel clips (a saturated photosite has no noise). `noiseSpread`
+  gives `scale` so the encoded picture's spread at mid grey is `amount`, and `read` = 0.18 f² /
+  (1 − f²) so the noise at black is `floor` (f) of the noise at mid grey; `noiseSigma` is σ. Once
+  encoded, the noise is larger in the shadows than in the highlights (sRGB's steep toe) and
+  crushed blacks stay noisy (half the noise survives the clamp at 0, lifting black by about a
+  level at the default). The luma noise sits on the sensor's pixels (`size` × height / 720 frame
+  pixels; at 1 or below one value a frame pixel, two hashes, define `NOISE_PIXEL`; above,
+  bilinear from the cells' corners with the spread kept by dividing by the weights' length), the
+  colour noise on cells twice as wide (demosaicing smears it), mixed by `color` with the total
+  spread kept; channel gains 1.15, 0.85, 1.3 (blue noisiest, green least, as white-balance gains
+  make it). Seeded by the frame number (`round(t × fps) % 4096`, as the grain), so two renders
+  of a frame agree and every frame has new noise; multiplied by `fade`. Not sharpened (the
+  camera sharpens its noise too; drawing that would need the noise at the ring's samples).
+- **Off is exact.** With none of them on, the shaders compile from the same text as before (the
+  new code sits behind defines; the tone curves moved into `toneCurve`, the same arithmetic) and
+  the passes are the same: the 09_rise view under the `space` finish defaults is identical in
+  every pixel to Step 396's module at 4 s and 8 s, and the Chromium test draws the same frames
+  with the sensor given as off as without it. A page that imports the module has a new module
+  hash in its cache key (as with every edit of a module), so its frames are drawn again, the same.
+- **`space` scenes.** `finish: {noise, range, sharpen}` (`FinishSpec.noise`, `range_` with the
+  alias `range`, `sharpen`: a bool, a number or a mapping; sub-keys checked against the module's
+  `DEFAULTS` with did-you-mean, as `bloom`). They reach the page only when given, so a page
+  without them is written byte for byte as before.
+- **Cost** (2 cores, SwiftShader, 1280x720; `finish.render` drawn 20 times a frame on a cheap
+  scene): the `space` finish defaults 0.116 s; `noise` +0.018 s, `range` +0.002 s, `sharpen`
+  +0.020 s, `noise` at `size: 2` +0.022 s, all three +0.045 s. The 09_rise frame (sea, clouds,
+  air; wall time of a frame, median of 9): 7.42–7.55 s before, 7.61–7.73 s with all three — the
+  frame-to-frame spread (±0.6 s) is larger than the chain's cost.
+- **Looks** (stills in the step's scratch folder): at the defaults the effect is felt rather
+  than noticed (whiter cloud tops, crisper cloud edges, a fine living noise floor in the dark
+  sea); a scene exposed so its clouds sit well below the white clips little at 2.5 stops — 2
+  stops or more exposure gives the blown cloud tops of orbital footage. Step 400's camera looks
+  choose per-look values.

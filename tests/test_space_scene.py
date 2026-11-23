@@ -79,6 +79,8 @@ def test_names_come_from_the_shipped_modules() -> None:
     assert "clouds" in n["world_options"]["ocean"] and "bands" in n["world_options"]["gas"] and "clouds" not in n["world_options"]["gas"]
     assert "disc" in n["phenomena"]["black-hole"] and "latitude" in n["phenomena"]["aurora"]
     assert n["finish_options"]["bloom"] == ["strength", "radius", "threshold", "scale"] and "fStop" in n["finish_options"]["dof"]
+    assert n["finish_options"]["noise"] == ["amount", "color", "size", "floor"] and n["finish_options"]["range"] == ["stops", "shoulder", "black"]
+    assert n["finish_options"]["sharpen"] == ["amount", "radius", "limit"]
     assert "link" in n["end_options"] and "link" not in n["title_options"]
 
 
@@ -137,6 +139,8 @@ def test_the_demonstrations_validate(space: Any) -> None:
     ({"phenomena": [{"kind": "black-hole", "disk": False}]}, "did you mean 'disc'"),
     ({"finish": {"bloom": {"strenght": 1}}}, "did you mean 'strength'"),
     ({"finish": {"depth_of_field": {"f_stp": 2}}}, "did you mean 'f_stop'"),
+    ({"finish": {"noise": {"colour": 0.5}}}, "did you mean 'color'"),
+    ({"finish": {"range": {"stop": 2}}}, "did you mean 'stops'"),
     ({"title": {"title": "T", "sied": "left"}}, "'side'?"),
     ({"scale": 50}, "scale: goes with orbits"),
     ({"camera": [{"move": "arc", "subject": "Saturn"}, {"move": "arc", "subject": "Titan"}]}, "with several moves each gives over"),
@@ -208,6 +212,7 @@ def test_review_fixes_of_the_page(space: Any) -> None:
     (("seed",), 2), (("sky", "seed"), 5), (("sky", "look"), "sparse"), (("sun", "direction"), [1, 0, 0]), (("sun", "glare"), 0.5),
     (("bodies", 0, "seed"), 3), (("bodies", 0, "rings"), False), (("bodies", 1, "at", 0), "1300000 km"), (("light", "exposure"), "camera"),
     (("camera", "distance", "radii"), 7), (("camera", "lens"), "wide"), (("finish",), False), (("finish",), {"grain": 0.05}),
+    (("finish",), {"noise": 0.01}), (("finish",), {"range": {"stops": 2, "black": 0.01}}), (("finish",), {"sharpen": True}),
     (("title",), "Saturn"), (("end_card",), {"title": "End", "link": "x"}), (("data",), {"a": 1}),
 ])
 def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: Any) -> None:
@@ -217,6 +222,14 @@ def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: 
         target = target.setdefault(key, {}) if isinstance(key, str) else target[key]
     target[path[-1]] = value
     assert page(space, raw) != page(space, RINGS)
+
+
+def test_the_camera_sensor_is_off_unless_given(space: Any) -> None:
+    """finish.noise, range and sharpen (Step 397) reach the page only when given: a page without them is unchanged."""
+    line = next(x for x in page(space, RINGS).splitlines() if "new Finish(" in x)
+    assert all(k not in line for k in ('"noise"', '"range"', '"sharpen"'))
+    line = next(x for x in page(space, {**RINGS, "finish": {"noise": True, "range": {"stops": 2}, "sharpen": 0.4}}).splitlines() if "new Finish(" in x)
+    assert '"noise": true' in line and '"range": {"stops": 2}' in line and '"sharpen": 0.4' in line
 
 
 def test_floats_are_written_exactly() -> None:

@@ -827,6 +827,12 @@ class FinishSpec(SceneParams):
     """true, or {f_stop, max_blur, quality}: focused on the camera move's subject (shot.focus), every frame."""
     antialias: Literal["none", "fxaa"] = "none"
     """none (space-safe default: FXAA makes small crosses of stars and dots of thin rings) or fxaa."""
+    noise: bool | float | dict[str, Any] | None = None
+    """A camera sensor's noise in place of the grain (off unless given): an amount (0.012 at mid grey), true, or {amount, color, size, floor}."""
+    range_: bool | float | dict[str, Any] | None = Field(default=None, alias="range")
+    """A camera's limited dynamic range (off unless given): stops above mid grey where it clips (2.5), true, or {stops, shoulder, black}."""
+    sharpen: bool | float | dict[str, Any] | None = None
+    """In-camera sharpening with faint halos (off unless given): an amount (0.5), true, or {amount, radius, limit}."""
 
     @model_validator(mode="after")
     def _check(self) -> "FinishSpec":
@@ -837,7 +843,8 @@ class FinishSpec(SceneParams):
         """Three-finish's options (camelCase), every key checked against its own lists."""
         known = names()["finish_options"]
         out: dict[str, Any] = {"antialias": self.antialias, "grain": self.grain}
-        for key, value in (("bloom", self.bloom), ("vignette", self.vignette), ("grade", self.grade), ("motionBlur", self.motion_blur)):
+        sensor = [(k, v) for k, v in (("noise", self.noise), ("range", self.range_), ("sharpen", self.sharpen)) if v is not None]
+        for key, value in (("bloom", self.bloom), ("vignette", self.vignette), ("grade", self.grade), ("motionBlur", self.motion_blur), *sensor):
             if isinstance(value, dict):
                 value = module_options(value, known[key], f"finish.{snake(key)}")
             if isinstance(value, int) and not isinstance(value, bool) and key == "motionBlur":
@@ -846,7 +853,7 @@ class FinishSpec(SceneParams):
                 out[key] = value
         if self.depth_of_field:
             out["dof"] = module_options(self.depth_of_field, known["dof"], "finish.depth_of_field", leave=("focus",)) if isinstance(self.depth_of_field, dict) else {}
-        out.update(module_options(dict(self.model_extra or {}), list(known), "finish", leave=("update", "bloom", "vignette", "grade", "motionBlur", "dof", "antialias", "grain")))
+        out.update(module_options(dict(self.model_extra or {}), list(known), "finish", leave=("update", "bloom", "vignette", "grade", "motionBlur", "dof", "antialias", "grain", "noise", "range", "sharpen")))
         return out
 
 

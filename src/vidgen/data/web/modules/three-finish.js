@@ -1,4 +1,4 @@
-// vidgen/three-finish: ready-made finishing for three.js `web` scenes (DESIGN.md §120.11).
+// vidgen/three-finish: ready-made finishing for three.js `web` scenes (DESIGN.md §120.11; the sensor: §124.1).
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/three-finish".
 //
 //   const finish = new Finish(renderer, scene, camera, ctx, {update: (t) => {...}, dof: {...}, ...});
@@ -9,7 +9,10 @@
 // by calling `update` at sub-frame times and averages them) -> depth of field from the depth buffer
 // -> bloom on the highlights (linear values above `threshold`) -> chromatic fringe, exposure, white
 // balance, vignette -> tone mapping -> saturation -> sRGB encoding (once) -> contrast, lift, gamma,
-// gain -> FXAA -> film grain seeded by the frame number. Everything is a function of `t` and the
+// gain -> FXAA -> film grain seeded by the frame number. Off by default, a camera's sensor (Step 397): a
+// limited dynamic range right after tone mapping (`range`: highlights clip with a short shoulder, shadows
+// crush), in-camera sharpening after FXAA (`sharpen`: faint halos) and sensor noise in place of the grain
+// (`noise`: signal-dependent, coloured, at the sensor's scale). Everything is a function of `t` and the
 // options, so two renders of a frame are the same. Intermediate pictures are linear half floats;
 // the scene's own render targets get no tone mapping or colour-space conversion from three.js.
 import * as THREE from "three";
@@ -29,13 +32,19 @@ const DEFAULTS = {
   grade: {temperature: 0, tint: 0, saturation: 1, contrast: 1, lift: 0, gamma: 1, gain: 1, filter: 1},
   vignette: {amount: 0.3, inner: 0.3, outer: 1.2},
   flash: {amount: 0, color: 1},
+  noise: {amount: 0, color: 0.5, size: 1, floor: 0.05},
+  range: {stops: 0, shoulder: 0.05, black: 0},
+  sharpen: {amount: 0, radius: 1, limit: 0.06},
   dof: false, motionBlur: false,
 };
+// the camera's sensor (Step 397): off by default; `true`, a number or an object turns it on with these
+const SENSOR_ON = {noise: 0.012, range: 2.5, sharpen: 0.5};
 const DOF_DEFAULTS = {focus: 10, fStop: 2.8, unit: 1, blur: null, maxBlur: 10, quality: "medium"};
 const MOTION_DEFAULTS = {samples: 5, shutter: 180};
 // options that take a sub-object (true = its defaults; false = off where allowed)
-const GROUPS = {bloom: DEFAULTS.bloom, grade: DEFAULTS.grade, vignette: DEFAULTS.vignette, flash: DEFAULTS.flash, dof: DOF_DEFAULTS, motionBlur: MOTION_DEFAULTS};
-const SCALAR_GROUP = {vignette: "amount", flash: "amount", bloom: "strength"};
+const GROUPS = {bloom: DEFAULTS.bloom, grade: DEFAULTS.grade, vignette: DEFAULTS.vignette, flash: DEFAULTS.flash, dof: DOF_DEFAULTS, motionBlur: MOTION_DEFAULTS,
+  noise: DEFAULTS.noise, range: DEFAULTS.range, sharpen: DEFAULTS.sharpen};
+const SCALAR_GROUP = {vignette: "amount", flash: "amount", bloom: "strength", noise: "amount", range: "stops", sharpen: "amount"};
 
 // ---------- options ----------
 function distance(a, b) {
@@ -70,6 +79,10 @@ function triple(where, v) {
 }
 function group(name, value) {
   const defaults = GROUPS[name];
+  if (name in SENSOR_ON) {   // not given: off; given (true or an object): on at SENSOR_ON unless it says otherwise
+    if (value === true) value = {};
+    if (value && typeof value === "object" && !Array.isArray(value)) value = {[SCALAR_GROUP[name]]: SENSOR_ON[name], ...value};
+  }
   if (value === false || value === null) {
     if (name === "dof" || name === "motionBlur" || name === "bloom") return false;
     return {...defaults, [SCALAR_GROUP[name] ?? "amount"]: 0};
@@ -88,7 +101,7 @@ export function resolveOptions(options = {}, t = 0) {
   const known = Object.keys(DEFAULTS);
   for (const k of Object.keys(options)) if (!known.includes(k)) throw unknown("", k, known);
   const at = (k) => { const v = options[k]; return typeof v === "function" && k !== "update" ? v(t) : v; };
-  const part = (k) => group(k, at(k) === undefined ? DEFAULTS[k] : at(k));
+  const part = (k) => group(k, at(k) === undefined ? (k in SENSOR_ON ? undefined : DEFAULTS[k]) : at(k));
   const o = {};
   o.update = options.update ?? null;
   if (o.update !== null && typeof o.update !== "function") throw fail(`update must be a function update(t) that sets the scene to time t, got ${typeof o.update}`);
@@ -116,6 +129,14 @@ export function resolveOptions(options = {}, t = 0) {
   if (o.vignette.outer <= o.vignette.inner) throw fail(`vignette.outer (${o.vignette.outer}) must be larger than vignette.inner (${o.vignette.inner})`);
   o.flash = part("flash");
   number("flash.amount", o.flash.amount, 0, 100); o.flash.color = triple("flash.color", o.flash.color);
+  o.noise = part("noise");
+  number("noise.amount", o.noise.amount, 0, 0.5); number("noise.color", o.noise.color, 0, 1);
+  number("noise.size", o.noise.size, 1, 8); number("noise.floor", o.noise.floor, 0, 0.9);
+  o.range = part("range");
+  if (o.range.stops !== 0) number("range.stops", o.range.stops, 1, 16);
+  number("range.shoulder", o.range.shoulder, 0, 0.5); number("range.black", o.range.black, 0, 0.2);
+  o.sharpen = part("sharpen");
+  number("sharpen.amount", o.sharpen.amount, 0, 4); number("sharpen.radius", o.sharpen.radius, 0.5, 4); number("sharpen.limit", o.sharpen.limit, 0, 1);
   o.dof = part("dof");
   if (o.dof) {
     const d = o.dof;
@@ -157,6 +178,37 @@ export function focusDistance(camera, target) {
 export function blurAtInfinity(camera, focus, fStop, unit, height) {
   const f = camera.getFocalLength(), zf = Math.max(focus * unit * 1000, f * 1.001);
   return (f * f / (fStop * (zf - f))) / 2 / camera.getFilmHeight() * height;
+}
+
+// ---------- the sensor (Step 397): the shaders' curves, in JavaScript too ----------
+const srgbEncode = (x) => x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055;
+/** The linear value the sensor clips at: `stops` above mid grey (0.18), after exposure. */
+export function rangeWhite(stops) { return 0.18 * 2 ** stops; }
+/** The limited dynamic range on one channel `v` of the tone-mapped picture (display-linear, 0..1), where `top`
+ * is the tone curve's value of `rangeWhite(stops)`: from half of `top` the highlights are stretched so `top`
+ * reaches 1, then clip with a soft shoulder `shoulder` wide; shadows crush as v² / (v + black), white kept. */
+export function rangeCurve(v, top, {shoulder = 0.05, black = 0} = {}) {
+  const a = top < 1 ? 1 / top - 1 : 0, k = 0.5 * top;
+  const u = Math.min(1, Math.max(0, (v - k) / Math.max(top - k, 1e-6))), x = v * (1 + a * u * u * (3 - 2 * u));
+  const q = Math.min(2 * shoulder, Math.max(0, x - 1 + shoulder));
+  let y = shoulder > 0 ? Math.min(x, 1 + shoulder) - q * q / (4 * shoulder) : Math.min(x, 1);
+  if (black > 0) y = y * y / (y + black) * (1 + black);
+  return y;
+}
+/** The sensor noise's spread (a standard deviation, linear light) at the display-linear value `v` (0..1): shot
+ * noise growing as √v over a read-noise floor, pressed by the tone curve's shoulder (× (1 − v²): a clipped
+ * pixel has none), scaled so the encoded picture's noise at mid grey (0.18) is `amount` and the noise at black
+ * is `floor` of the shot and read noise at mid grey. `noiseSpread(amount, floor, encoding)` gives
+ * {scale, read} for sigma(v) = scale × √(v + read) × (1 − v²); `noiseSigma` that sigma. */
+export function noiseSpread(amount, floor, encoding = "srgb") {
+  const read = 0.18 * floor * floor / (1 - floor * floor), h = 1e-4;
+  const encode = encoding === "srgb" ? srgbEncode : (x) => x ** (1 / 2.2);
+  const slope = (encode(0.18 + h) - encode(0.18 - h)) / (2 * h);
+  return {scale: amount / (slope * Math.sqrt(0.18 + read) * (1 - 0.18 * 0.18)), read};
+}
+export function noiseSigma(v, amount, floor, encoding = "srgb") {
+  const {scale, read} = noiseSpread(amount, floor, encoding);
+  return scale * Math.sqrt(Math.max(v, 0) + read) * (1 - Math.min(Math.max(v, 0), 1) ** 2);
 }
 
 // ---------- shaders ----------
@@ -203,6 +255,30 @@ const GRADE = `${TONE}
 varying vec2 vUv; uniform sampler2D tColor; uniform vec2 uAspect; uniform float uFringe, uVigAmount, uVigInner, uVigOuter, uSat, uContrast, uFade;
 uniform vec3 uLinear, uFlash, uLift, uGamma, uGain;
 vec3 narkowicz(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+vec3 toneCurve(vec3 c) {
+#if TONE_MAP == 1
+  return ACESFilmicToneMapping(c);
+#elif TONE_MAP == 2
+  return AgXToneMapping(c);
+#elif TONE_MAP == 3
+  return NeutralToneMapping(c);
+#elif TONE_MAP == 4
+  return narkowicz(c);
+#else
+  return c;
+#endif
+}
+#ifdef RANGE
+uniform float uWhite, uShoulder, uBlack;
+// rangeCurve of the module, per channel
+vec3 range(vec3 v) {
+  float top = clamp(toneCurve(vec3(uWhite)).g, 1e-3, 1.0), a = 1.0 / top - 1.0;
+  vec3 x = v * (1.0 + a * smoothstep(vec3(0.5 * top), vec3(top), v));
+  vec3 q = clamp(x - 1.0 + uShoulder, 0.0, 2.0 * uShoulder);
+  vec3 y = uShoulder > 0.0 ? min(x, 1.0 + uShoulder) - q * q / (4.0 * uShoulder) : min(x, 1.0);
+  return uBlack > 0.0 ? y * y / (y + uBlack) * (1.0 + uBlack) : y;
+}
+#endif
 vec3 encode(vec3 c) {
 #ifdef GAMMA22
   return pow(c, vec3(1.0 / 2.2));
@@ -218,16 +294,11 @@ void main() {
   else c = texture2D(tColor, vUv).rgb;
   c = max(c, 0.0) * uLinear + uFlash;
   c *= mix(1.0, smoothstep(uVigOuter, uVigInner, r), uVigAmount);
-#if TONE_MAP == 1
-  c = ACESFilmicToneMapping(c);
-#elif TONE_MAP == 2
-  c = AgXToneMapping(c);
-#elif TONE_MAP == 3
-  c = NeutralToneMapping(c);
-#elif TONE_MAP == 4
-  c = narkowicz(c);
-#endif
+  c = toneCurve(c);
   c = clamp(c, 0.0, 1.0);
+#ifdef RANGE
+  c = range(c);
+#endif
   c = max(mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, uSat), 0.0);
   c = encode(clamp(c, 0.0, 1.0));
   c = (c - 0.5) * uContrast + 0.5;
@@ -235,10 +306,35 @@ void main() {
   c = pow(max(c, 0.0), 1.0 / uGamma);
   gl_FragColor = vec4(clamp(c, 0.0, 1.0) * uFade, 1.0);
 }`;
-// last: FXAA on the encoded picture, then the film grain (two hashes of the pixel and the frame number)
+// last: FXAA on the encoded picture, then the film grain (two hashes of the pixel and the frame number); with the
+// sensor: sharpening after FXAA, then the sensor's noise in place of the grain
 const OUTPUT = `varying vec2 vUv; uniform sampler2D tColor; uniform vec2 uPixel; uniform float uGrain, uSeed;
 float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+#ifdef SHARPEN
+uniform float uSharpen, uSharpRadius, uSharpLimit;
+#endif
+#ifdef NOISE
+uniform float uNoiseScale, uNoiseRead, uNoiseColor, uNoiseSize, uFade;
+vec3 hash3(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yxz + 33.33); return fract((p3.xxy + p3.yzz) * p3.zyx); }
+// three noises of unit spread (one hash) for a cell of a grid \`size\` pixels wide
+vec3 corner(vec2 cell, float salt) { return (hash3(cell + uSeed * vec2(13.7, 7.3) + salt) - 0.5) * 3.464; }
+// the sensor's pixels larger than the frame's: one noise a cell, spread bilinearly over the frame's pixels from the
+// cells' corners, its spread kept (divided by the weights' length)
+vec3 cells(vec2 frag, float size, float salt) {
+  vec2 p = frag / size - 0.5, i = floor(p), f = p - i;
+  vec4 w = vec4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
+  vec3 n = corner(i, salt) * w.x + corner(i + vec2(1.0, 0.0), salt) * w.y + corner(i + vec2(0.0, 1.0), salt) * w.z + corner(i + 1.0, salt) * w.w;
+  return n / length(w);
+}
+#ifdef GAMMA22
+vec3 decode(vec3 c) { return pow(c, vec3(2.2)); }
+vec3 encode(vec3 c) { return pow(c, vec3(1.0 / 2.2)); }
+#else
+vec3 decode(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
+vec3 encode(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+#endif
+#endif
 void main() {
   vec3 c = texture2D(tColor, vUv).rgb;
 #ifdef FXAA
@@ -254,10 +350,32 @@ void main() {
     float lB = luma(b); c = (lB < lMin || lB > lMax) ? a : b;
   }
 #endif
+#ifdef SHARPEN
+  // in-camera sharpening: the luma's detail against 4 samples \`radius\` pixels away, its halo held to \`limit\`
+  vec2 r = uSharpRadius * uPixel;
+  vec3 ring = texture2D(tColor, vUv + vec2(r.x, 0.0)).rgb + texture2D(tColor, vUv - vec2(r.x, 0.0)).rgb
+            + texture2D(tColor, vUv + vec2(0.0, r.y)).rgb + texture2D(tColor, vUv - vec2(0.0, r.y)).rgb;
+  float detail = luma(texture2D(tColor, vUv).rgb) - luma(ring) * 0.25;
+  c = clamp(c + clamp(detail * uSharpen, -uSharpLimit, uSharpLimit), 0.0, 1.0);
+#endif
+#ifdef NOISE
+  // the sensor's noise in linear light (noiseSigma): shot noise (√signal) over a read-noise floor, none where it clips; luma at the sensor's
+  // pixels, colour on cells twice as wide (demosaicing smears it); blue noisiest, green least (white balance gains)
+#ifdef NOISE_PIXEL
+  float y = (corner(floor(gl_FragCoord.xy), 0.0).x + corner(floor(gl_FragCoord.xy) * 1.31, 57.0).x) * 0.7071;   // the sensor's pixels are the frame's
+#else
+  float y = cells(gl_FragCoord.xy, uNoiseSize, 0.0).x;
+#endif
+  vec3 lin = decode(c), n = mix(vec3(y), cells(gl_FragCoord.xy, 2.0 * uNoiseSize, 101.0), uNoiseColor);
+  n *= vec3(1.15, 0.85, 1.3) / sqrt(uNoiseColor * uNoiseColor + (1.0 - uNoiseColor) * (1.0 - uNoiseColor));
+  vec3 v = clamp(lin, 0.0, 1.0);
+  c = encode(max(lin + n * uNoiseScale * sqrt(v + uNoiseRead) * (1.0 - v * v) * uFade, 0.0));
+#else
   if (uGrain > 0.0) {
     float l = luma(c), n = hash(gl_FragCoord.xy + uSeed * 7.31) + hash(gl_FragCoord.xy * 1.7 + uSeed * 3.17 + 91.0) - 1.0;
     c += n * uGrain * (0.5 + 0.8 * (1.0 - l)) * smoothstep(0.0, 0.04, l + 0.02);
   }
+#endif
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -372,7 +490,8 @@ export class Finish {
       bloom.render(r, null, hdr, 0, false);
     }
     // grade, then FXAA and grain to the canvas
-    const grade = this._grade(o.toneMapping, o.encoding), u = grade.uniforms, g = o.grade;
+    const range = o.range.stops > 0, noise = o.noise.amount > 0, sharpen = o.sharpen.amount > 0;
+    const grade = this._grade(o.toneMapping, o.encoding, range), u = grade.uniforms, g = o.grade;
     const wb = [1 + 0.25 * g.temperature, 1 - 0.2 * g.tint, 1 - 0.25 * g.temperature];
     const lum = 0.2126 * wb[0] + 0.7152 * wb[1] + 0.0722 * wb[2];
     u.tColor.value = hdr.texture; u.uAspect.value.set(W / H, 1); u.uFringe.value = o.fringe;
@@ -381,14 +500,21 @@ export class Finish {
     u.uVigAmount.value = o.vignette.amount; u.uVigInner.value = o.vignette.inner; u.uVigOuter.value = o.vignette.outer;
     u.uSat.value = g.saturation; u.uContrast.value = g.contrast; u.uFade.value = o.fade;
     u.uLift.value.set(...g.lift); u.uGamma.value.set(...g.gamma); u.uGain.value.set(...g.gain);
-    if (o.antialias === "none" && o.grain === 0) {
+    if (range) { u.uWhite.value = rangeWhite(o.range.stops); u.uShoulder.value = o.range.shoulder; u.uBlack.value = o.range.black; }
+    if (o.antialias === "none" && o.grain === 0 && !noise && !sharpen) {
       this._pass(grade, null);
     } else {
       const ldr = this._target("display", W, H, {type: THREE.UnsignedByteType});
       this._pass(grade, ldr);
-      const out = this._output(o.antialias === "fxaa"), ou = out.uniforms;
+      const out = this._output(o.antialias === "fxaa", noise ? o.encoding : null, sharpen, noise && o.noise.size * H / 720 <= 1), ou = out.uniforms;
       ou.tColor.value = ldr.texture; ou.uPixel.value.set(1 / W, 1 / H); ou.uGrain.value = o.grain * o.fade;
       ou.uSeed.value = Math.round(t * this.fps) % 4096;
+      if (sharpen) { ou.uSharpen.value = o.sharpen.amount; ou.uSharpRadius.value = o.sharpen.radius * H / 720; ou.uSharpLimit.value = o.sharpen.limit; }
+      if (noise) {
+        const spread = noiseSpread(o.noise.amount, o.noise.floor, o.encoding);
+        ou.uNoiseScale.value = spread.scale; ou.uNoiseRead.value = spread.read; ou.uNoiseColor.value = o.noise.color;
+        ou.uNoiseSize.value = o.noise.size * H / 720; ou.uFade.value = o.fade;
+      }
       this._pass(out, null);
     }
     r.autoClear = autoClear;
@@ -421,15 +547,22 @@ export class Finish {
       uNear: {value: 1}, uFar: {value: 100}, uFocus: {value: 10}, uK: {value: 0}, uMaxR: {value: 10}},
       this.camera.isOrthographicCamera ? {TAPS: taps, ORTHOGRAPHIC: 1} : {TAPS: taps});
   }
-  _grade(tone, encoding) {
-    return this.gradeMaterials[`${tone} ${encoding}`] ??= quad(GRADE, {tColor: {value: null}, uAspect: {value: new THREE.Vector2(1, 1)}, uFringe: {value: 0},
+  _grade(tone, encoding, range) {
+    const defines = {TONE_MAP: TONE_INDEX[tone], ...(encoding === "gamma2.2" ? {GAMMA22: 1} : {}), ...(range ? {RANGE: 1} : {})};
+    return this.gradeMaterials[`${tone} ${encoding}${range ? " range" : ""}`] ??= quad(GRADE, {tColor: {value: null}, uAspect: {value: new THREE.Vector2(1, 1)}, uFringe: {value: 0},
       uVigAmount: {value: 0}, uVigInner: {value: 0.3}, uVigOuter: {value: 1.2}, uSat: {value: 1}, uContrast: {value: 1}, uFade: {value: 1},
       uLinear: {value: new THREE.Vector3(1, 1, 1)}, uFlash: {value: new THREE.Vector3()}, uLift: {value: new THREE.Vector3()},
-      uGamma: {value: new THREE.Vector3(1, 1, 1)}, uGain: {value: new THREE.Vector3(1, 1, 1)}}, encoding === "gamma2.2" ? {TONE_MAP: TONE_INDEX[tone], GAMMA22: 1} : {TONE_MAP: TONE_INDEX[tone]});
+      uGamma: {value: new THREE.Vector3(1, 1, 1)}, uGain: {value: new THREE.Vector3(1, 1, 1)},
+      uWhite: {value: 1}, uShoulder: {value: 0}, uBlack: {value: 0}}, defines);
   }
-  _output(fxaa) {
-    return this.outputMaterials[fxaa] ??= quad(OUTPUT, {tColor: {value: null}, uPixel: {value: new THREE.Vector2()}, uGrain: {value: 0}, uSeed: {value: 0}},
-      fxaa ? {FXAA: 1} : {});
+  /** The last pass: FXAA or not; `noiseEncoding` the picture's encoding when the sensor's noise is on (else null);
+   * sharpening or not; `pixel`: the noise's cells are the frame's pixels (no spreading). */
+  _output(fxaa, noiseEncoding, sharpen, pixel) {
+    const defines = {...(fxaa ? {FXAA: 1} : {}), ...(noiseEncoding ? {NOISE: 1} : {}), ...(noiseEncoding === "gamma2.2" ? {GAMMA22: 1} : {}),
+      ...(sharpen ? {SHARPEN: 1} : {}), ...(pixel ? {NOISE_PIXEL: 1} : {})};
+    return this.outputMaterials[`${fxaa} ${noiseEncoding} ${sharpen} ${pixel}`] ??= quad(OUTPUT, {tColor: {value: null}, uPixel: {value: new THREE.Vector2()}, uGrain: {value: 0}, uSeed: {value: 0},
+      uSharpen: {value: 0}, uSharpRadius: {value: 1}, uSharpLimit: {value: 0},
+      uNoiseScale: {value: 0}, uNoiseRead: {value: 0}, uNoiseColor: {value: 0}, uNoiseSize: {value: 1}, uFade: {value: 1}}, defines);
   }
   _bloom(w, h) {
     if (this.bloomPass && (this.bloomPass.resolution.x !== w || this.bloomPass.resolution.y !== h)) { this.bloomPass.dispose(); this.bloomPass = null; }
