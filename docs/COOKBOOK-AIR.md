@@ -62,6 +62,24 @@ troughs and foam streaks; at dusk the near water keeps the sky's colours (looks,
     camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}
 ```
 
+**The same skim as drone footage.** `camera_look: drone` turns on a small camera on a gimbal (DESIGN
+§124.4): its noise, a short dynamic range, sharpening, the wide lens's bend and soft fringed corners,
+vibration and an automatic exposure. Into a low sun its 2.4 stops blow the glitter path flat and
+yellow-white, as a small camera does; the scene's own `finish:` goes over the look, and `range: 3`
+keeps a little more of it. The other
+looks: `window_handheld`, `broadcast_long_lens`, `phone`, `chase_mount` (what each sets: CONFIG.md, `space`).
+
+```yaml
+- id: skim_drone
+  type: space
+  duration: 8
+  params:
+    world: {sea: {state: breeze, seed: 3}, sun: [5, 300]}
+    camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}
+    camera_look: drone
+    finish: {range: 3}
+```
+
 **Round a volcano** (1.6 s a frame). The ground (`vidgen/space-land`) is the same world's as the
 globe from orbit; `around: {near: [x, z], reach}` finds the highest ground within reach; the circle
 rises over ground that stands too near. Over ground give a skim a clearance the ground holds up at
@@ -232,6 +250,9 @@ DESIGN §123 where it is made:
   seeded noise shaped like a person's, not measured; the automatic exposure meters an estimate of the frame's
   brightness from the camera's view, the sun, the decks and the ground (within about a stop of the drawn
   picture's mean on the views it was fitted to), not the picture itself;
+- the camera looks (`camera_look:`): matched sets of the finish's and the operator's options chosen by eye on
+  four views (a rise to 60 km, a skim into the sun, a pass beside a hull, a sunrise over a limb), not
+  measured from real cameras;
 - the ground: rock beds on steep faces (layered rock in a canyon); the lava's glow lighting the ground
   beside it; the globe's relief shading from very high up;
 - the descent: the camera falls far faster than any vehicle; the globe's clouds and the decks' are not

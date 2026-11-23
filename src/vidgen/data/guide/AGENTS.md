@@ -3278,6 +3278,11 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
   lens; `hand: mounted` only vibrates; an automatic exposure that lags and hunts after the camera breaks out of
   a deck or turns into the sun, surface scenes only; a horizon a degree off at each cut, levelled after 2.5 s).
   Give a climb's `adapt` or `exposure`, not both. Costs nothing measurable a frame.
+- **Camera look**: one word for a matched finish and operator, off unless given: `camera_look: window_handheld`
+  (handheld through a spacecraft's window), `drone`, `broadcast_long_lens` (give the moves a long lens),
+  `phone`, `chase_mount` (bolted to the craft). Your own `finish:` and `operator:` go over it key by key
+  (`finish: {noise: 0.006, range: 3}`, `operator: {horizon: false}`); an orbital scene leaves its automatic
+  exposure out. What each sets: docs/CONFIG.md (`space`). No measurable cost a frame at 1280x720.
 - **Look before you render**: `vidgen still . --scene rings --at 4 --size 640x360`. The page prints as warnings
   what only it can know (a subject under 3 px, the camera inside a world, a jump in a move, a craft in a world's shadow or
   seen from its unlit side); `vidgen lint` reports
@@ -4126,6 +4131,8 @@ ship.update(t); cam.apply(t, cam.chase(t, {flight: "Plane"})); sky.update(t, {ca
 - The operator over any view: `const view = cam.operator(moveTrack(moves), {hand: "handheld", exposure: true,
   horizon: true, cuts: [8]})`; hand `shot.ev` to the air (`air(..., {ev: () => shot.ev})`); `operate(view,
   {hand, horizon})` without a rig. A function of t: a still at t is frame t.
+- A camera look in code: `const look = cameraLook("drone", {finish: {noise: 0.006}})` (`vidgen/camera-looks`),
+  then `new Finish(renderer, scene, camera, ctx, look.finish)` and `cam.operator(view, look.operator)`.
 - Timing: `over: [start, end]` in seconds or `{bar, beat}` of the score (`music: ctx.music`);
   `ease: [1, 0]` starts at rest and ends moving, `ease: 0` is steady: cut two moves together on
   motion. Every move is a function of t: a still at t is frame t.

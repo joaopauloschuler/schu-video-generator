@@ -575,6 +575,8 @@ class _Page:
             self.use("vidgen/space-scene-air", "flashes")
             cuts = [{"at": when(f.at), "amount": f.amount, "rise": f.rise, "fall": f.fall} for f in self.p.flash]
             extra += f", flash: (t) => flashes(t, {js(cuts)})"
+        if self.p.camera_look is not None:
+            self.out(f"// camera look {self.p.camera_look} (vidgen/camera-looks): its finish and operator, this scene's own options over them")
         self.out("// finishing (vidgen/three-finish): no FXAA by default (it breaks stars and thin rings)")
         self.out(f"S.finish = new Finish(renderer, scene, camera, ctx, {{{pairs(opts)}update: (t) => S.step(t){extra}}});")
 

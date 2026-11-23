@@ -16,6 +16,7 @@ naming the file (a broken install or a module that renamed it; a test reads ever
 
 from __future__ import annotations
 
+import json
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -417,5 +418,18 @@ def yaml_names() -> dict[str, list[str]]:
             "handovers": a["handovers"]}
 
 
-__all__ = ["MODULES", "PART_PREFIXES", "air_names", "array_strings", "constant_entries", "constant_keys", "constant_strings", "constant_text",
+@lru_cache(maxsize=1)
+def camera_looks() -> dict[str, Any]:
+    """The camera looks of ``vidgen/camera-looks`` (DESIGN.md §124.4), read from its JSON-written constants:
+    ``looks`` (name -> {finish, operator}: the options each sets) and ``main`` (section -> group -> the key a
+    number sets: ``noise: 0.006`` is the look's noise at amount 0.006)."""
+    where, source = "vidgen/camera-looks", module_source("vidgen/camera-looks")
+    try:
+        return {"looks": json.loads(_strip_comments(constant_text(source, "CAMERA_LOOKS", where))),
+                "main": json.loads(_strip_comments(constant_text(source, "LOOK_MAIN", where)))}
+    except json.JSONDecodeError as error:
+        raise VidgenError(f"{where}: CAMERA_LOOKS and LOOK_MAIN must be written as JSON ({error})") from None
+
+
+__all__ = ["MODULES", "PART_PREFIXES", "air_names", "array_strings", "camera_looks", "constant_entries", "constant_keys", "constant_strings", "constant_text",
            "module_source", "object_entries", "space_names", "yaml_names"]

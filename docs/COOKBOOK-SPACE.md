@@ -96,6 +96,24 @@ that holds the first light back (degrees); `rate` is how fast the camera rides (
     camera: {move: reveal, behind: Earth, at: 4, rate: 1.0, air: 0.1, lens: wide-normal}
 ```
 
+**The same sunrise through a spacecraft's window.** `camera_look: window_handheld` (Step 400) is
+handheld footage through glass: a calm braced hand and a horizon a degree off at the start, the
+camera's noise, a short dynamic range (the sun clips into a round white core), a warm halation and
+a wide bloom round it, the glass's veil lifting the black a little, darker corners, the lens's bend.
+An orbital scene has no meter, so the look's automatic exposure is left out here. Any of its options
+can be given over it: `finish: {vignette: 0.2}`, `operator: {horizon: false}`.
+
+```yaml
+- id: sunrise_window
+  type: space
+  duration: 8
+  params:
+    sky: {seed: 7, look: rich}
+    bodies: [{name: Earth}]
+    camera: {move: reveal, behind: Earth, at: 4, rate: 1.0, air: 0.1, lens: wide-normal}
+    camera_look: window_handheld
+```
+
 **A ringed planet as a crescent.** `arc` goes round the subject from one phase to another; the
 sun stands where `sun.direction` says (free-standing worlds) or where it really is (with orbits
 on a date).
@@ -390,6 +408,23 @@ costs are in the one table below. Any `space` scene can add a camera operator ov
 off unless given: `operator: {hand: handheld, horizon: true}` (a person's drift, late corrections and a
 horizon a degree off at each cut; `hand: mounted` only vibrates), and in a surface scene `exposure: true`
 (an automatic exposure that lags and hunts).
+
+**Camera looks** (`camera_look:`, Step 400, DESIGN §124.4), off unless given: one word for a matched
+finish and operator, the scene's own `finish:` and `operator:` over it key by key (a number sets a
+group's main value: `finish: {noise: 0.006}`; `false` turns a group off).
+
+| look | for | what it adds |
+|---|---|---|
+| `window_handheld` | the view from a cabin | a braced hand, a gentle meter, the horizon 0.8° off; noise, 2 stops of range, the glass's veil, wide bloom, warm halation, heavy corners, the lens's bend |
+| `drone` | a sweep over sea or ground | gimbal vibration, a smooth meter; fine noise, 2.4 stops, crisp, a little saturated, the wide lens's bend and fringes |
+| `broadcast_long_lens` | a launch or a ship seen from far away (give the moves `lens: long` or `tele`) | a heavy head's slow sway, the iris ridden slowly; a big sensor's fine noise, 2.8 stops with a soft knee, strong detail halos, long-lens colour fringes |
+| `phone` | someone filming by hand | a light hand, a quick meter that hunts, the horizon 1.5° off; blotchy noise, heavy sharpening, punchy colour, lifted blacks |
+| `chase_mount` | a camera bolted to the craft or a chase plane | the engine's vibration, an automatic exposure; the ultra-wide bend with soft fringed corners, contrasty, 2 stops |
+
+The full settings are in CONFIG.md (`space`). Orbital scenes leave the looks' automatic exposure out;
+motion blur stays the scene's (`finish: {motion_blur: 3}`). Before and after on four views: the
+cloud tops of a rise clip near white with every look, the glitter into a low sun blows out wide
+with `drone` (`range: 3` keeps a little more), and `phone` is the loudest (turn its noise down if it shows).
 
 ## 7. What YAML does not reach
 

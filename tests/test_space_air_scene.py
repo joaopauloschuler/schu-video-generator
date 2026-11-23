@@ -376,6 +376,17 @@ def test_the_camera_operator_is_off_unless_given(space: Any, tmp_path: Path) -> 
     assert [s["from"] for s in got["shots"]] == [s["from"] for s in bare["shots"]] and [s["fov"] for s in got["shots"]] == [s["fov"] for s in bare["shots"]]
 
 
+def test_a_camera_look_turns_the_finish_on_and_meters_a_surface_scene(space: Any) -> None:
+    """camera_look: (Step 400) on a surface scene: the finish is drawn (a surface scene without finish: is drawn straight
+    to the canvas), the look's automatic exposure drives the air's ev, the scene's own operator wins."""
+    plain = page(space, SKIM)
+    assert "new Finish(" not in plain
+    text = page(space, {**SKIM, "camera_look": "drone", "operator": {"exposure": {"hunt": 0}}})
+    assert "new Finish(" in text and "// camera look drone (vidgen/camera-looks)" in text
+    assert 'S.view = S.cam.operator(S.view, {"hand": {"style": "mounted", "amount": 0.5}, "exposure": {"strength": 0.35, "hunt": 0, "speed": 0.35, "most": 1}});' in text
+    assert '"ev": () => (S.shot && Number.isFinite(S.shot.ev) ? S.shot.ev : 0) + 0,' in text
+
+
 def test_a_descent_with_a_skim_runs_in_node(space: Any, tmp_path: Path) -> None:
     got = _node_page(tmp_path, page(space, {**DESCENT, "camera": [{**DESCENT["camera"][0], "over": [0, 4]}, {"move": "skim", "over": [4, 8], "continues": True}]}))
     moves = [s["move"] for s in got["shots"]]

@@ -684,7 +684,7 @@ from vidgen.web.music import MusicDataSettings as WebMusicData, has_music as vid
 from vidgen.web.orbits import scene_orbit_data as web_scene_orbits  # noqa: E402
 from vidgen.web.flights import scene_flight_data as web_scene_flights, with_flights as web_with_flights  # noqa: E402
 from vidgen.web.land import land_definition as web_land_definition, land_settings as web_land_settings  # noqa: E402
-from vidgen.web.space_names import air_names, constant_entries as web_space_entries, space_names, yaml_names as space_yaml_names  # noqa: E402
+from vidgen.web.space_names import air_names, camera_looks, constant_entries as web_space_entries, space_names, yaml_names as space_yaml_names  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
@@ -1023,6 +1023,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "web_space_entries",
     "space_names",
     "air_names",
+    "camera_looks",
     "space_yaml_names",
     "clip_plan",
     "make_guide_passes",

@@ -911,6 +911,62 @@ class OperatorSpec(SceneParams):
         return self.exposure not in (None, False, 0)
 
 
+def _snake_keys(value: Any) -> Any:
+    """``value`` with the keys of its mappings, at every depth, snake_case (as the YAML writes them)."""
+    if isinstance(value, dict):
+        return {snake(str(k)): _snake_keys(v) for k, v in value.items()}
+    return value
+
+
+def look_merge(base: dict[str, Any], own: dict[str, Any] | None, main: dict[str, str] | None = None) -> dict[str, Any]:
+    """``own`` over ``base`` (a section of a camera look: its finish or its operator), as vidgen/camera-looks'
+    ``lookMerge`` (DESIGN.md §124.4): a mapping merges into the look's mapping key by key, at every depth; ``true``
+    keeps the look's group; a number (not 0) sets the group's main value (``main``); the hand's style named again
+    keeps the look's hand, another style replaces it; anything else (false, 0, null, text, a list) replaces it."""
+    main = main or {}
+    out = dict(base)
+    for key, value in (own or {}).items():
+        b = out.get(key)
+        if not isinstance(b, dict):
+            out[key] = value
+        elif value is True:
+            out[key] = b
+        elif isinstance(value, (int, float)) and not isinstance(value, bool) and value != 0 and key in main:
+            out[key] = {**b, main[key]: value}
+        elif key == "hand" and isinstance(value, str):
+            out[key] = b if value == b.get("style") else value
+        elif isinstance(value, dict):
+            out[key] = value if key == "hand" and "style" in value and value["style"] != b.get("style") else look_merge(b, value)
+        else:
+            out[key] = value
+    return out
+
+
+def camera_look(name: str, finish: Any, operator: Any, surface: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The ``finish:`` and ``operator:`` a scene with ``camera_look: name`` gets (DESIGN.md §124.4): the look's
+    options (vidgen/camera-looks' ``CAMERA_LOOKS``) with the scene's own ``finish`` and ``operator`` over them
+    (:func:`look_merge`: the scene's win, key by key; the space finish's defaults fill in what neither gives).
+    ``surface``: a surface scene (``world:``); an orbital scene has no meter, so the look's automatic exposure is
+    left out there. Keys come back snake_case. A ValueError for an unknown look (did-you-mean) or ``finish: false``."""
+    table = camera_looks()
+    looks = list(table["looks"])
+    name = name.strip().lower().replace("-", "_") if isinstance(name, str) else name
+    if not isinstance(name, str) or name not in looks:
+        raise ValueError(f"unknown camera_look {name!r}{did_you_mean(str(name).lower().replace('-', '_'), looks)} (looks: {', '.join(looks)})")
+    if finish is False:
+        raise ValueError(f"camera_look: {name} sets the finish (vidgen/three-finish's sensor, lens, bloom and grade); leave out finish: false")
+    for what, value in (("finish", finish), ("operator", operator)):
+        if value is not None and value is not True and not isinstance(value, dict):
+            raise ValueError(f"camera_look: {name}: {what}: must be a mapping of {what} options over the look's, got {value!r}")
+    look = _snake_keys(table["looks"][name])
+    mains = {k: {snake(g): m for g, m in v.items()} for k, v in table["main"].items()}
+    lens_and_sensor = look_merge(look["finish"], _snake_keys(finish) if isinstance(finish, dict) else None, mains["finish"])
+    hand = dict(look["operator"])
+    if not surface:
+        hand.pop("exposure", None)
+    return lens_and_sensor, look_merge(hand, _snake_keys(operator) if isinstance(operator, dict) else None, mains["operator"])
+
+
 class ReactionSpec(SceneParams):
     """A reaction of ``music:``: ``{track: kick, pulse: Sun}``, ``{track: level, glow: Ship}``, ``{track: hook, glint: Station}``."""
 
@@ -974,4 +1030,4 @@ class CardSpec(Open):
 
 __all__ = ["BAR", "DEFAULT_RADIUS", "LENGTH_KEYS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
            "FinishSpec", "LightSpec", "MoveSpec", "Open", "OperatorSpec", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
-           "camel", "direction", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]
+           "camel", "camera_look", "direction", "look_merge", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]

@@ -147,6 +147,10 @@ def test_the_demonstrations_validate(space: Any) -> None:
     ({"finish": {"halation": {"colour": [1, 0.5, 0.2]}}}, "did you mean 'color'"),
     ({"operator": {"hand": "handhled"}}, "did you mean 'handheld'"),
     ({"operator": {"exposure": True}}, "operator.exposure is a surface scene's"),
+    ({"camera_look": "windw_handheld"}, "did you mean 'window_handheld'"),
+    ({"camera_look": "drone", "finish": False}, "leave out finish: false"),
+    ({"camera_look": "phone", "operator": {"exposure": True}}, "operator.exposure is a surface scene's"),
+    ({"camera_look": "drone", "finish": {"noise": {"colour": 1}}}, "did you mean 'color'"),
     ({"title": {"title": "T", "sied": "left"}}, "'side'?"),
     ({"scale": 50}, "scale: goes with orbits"),
     ({"camera": [{"move": "arc", "subject": "Saturn"}, {"move": "arc", "subject": "Titan"}]}, "with several moves each gives over"),
@@ -220,7 +224,7 @@ def test_review_fixes_of_the_page(space: Any) -> None:
     (("camera", "distance", "radii"), 7), (("camera", "lens"), "wide"), (("finish",), False), (("finish",), {"grain": 0.05}),
     (("finish",), {"noise": 0.01}), (("finish",), {"range": {"stops": 2, "black": 0.01}}), (("finish",), {"sharpen": True}),
     (("finish",), {"distort": True}), (("finish",), {"edges": {"soft": 2}}), (("finish",), {"halation": 0.3}),
-    (("operator",), {"hand": True}), (("operator",), {"horizon": 2}),
+    (("operator",), {"hand": True}), (("operator",), {"horizon": 2}), (("camera_look",), "drone"),
     (("title",), "Saturn"), (("end_card",), {"title": "End", "link": "x"}), (("data",), {"a": 1}),
 ])
 def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: Any) -> None:
@@ -230,6 +234,27 @@ def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: 
         target = target.setdefault(key, {}) if isinstance(key, str) else target[key]
     target[path[-1]] = value
     assert page(space, raw) != page(space, RINGS)
+
+
+def test_a_camera_look_sets_the_finish_and_the_operator_and_the_scene_wins(space: Any) -> None:
+    """camera_look: (Step 400) writes the look's finish and operator into the page, the scene's own finish and operator
+    over them key by key (the space finish's defaults under both); an orbital scene leaves the look's automatic
+    exposure out (no meter there); without it the page is the same as before (no look line)."""
+    from vidgen.web.space_names import camera_looks
+
+    assert "camera look" not in page(space, RINGS) and "vidgen/camera-looks" not in page(space, RINGS)
+    look = camera_looks()["looks"]["window_handheld"]
+    p = params(space, {**RINGS, "camera_look": "window-handheld", "finish": {"noise": 0.02, "grain": 0.05, "grade": {"saturation": 1.2}},
+                       "operator": {"horizon": False, "seed": 4}})
+    o = p.finish.options()
+    assert p.camera_look == "window_handheld"
+    assert o["noise"] == {**look["finish"]["noise"], "amount": 0.02} and o["grain"] == 0.05 and o["antialias"] == "none"
+    assert o["grade"] == {**look["finish"]["grade"], "saturation": 1.2} and o["halation"] == look["finish"]["halation"]
+    assert p.operator.options() == {"hand": look["operator"]["hand"], "horizon": False, "seed": 4}       # no exposure: an orbital scene
+    text = page(space, {**RINGS, "camera_look": "window_handheld"})
+    assert "// camera look window_handheld (vidgen/camera-looks)" in text and 'S.view = operate(S.view, {"hand": {"style": "handheld", "amount": 0.6}' in text
+    line = next(x for x in text.splitlines() if "new Finish(" in x)
+    assert '"noise": {"amount": 0.01}' in line and '"range": {"stops": 2, "shoulder": 0.08}' in line and '"antialias": "none"' in line
 
 
 def test_the_camera_sensor_is_off_unless_given(space: Any) -> None:

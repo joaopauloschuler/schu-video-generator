@@ -5,10 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–399
+## Steps 193–400
 
-### Footage, not a render (Steps 397–399)
+### Footage, not a render (Steps 397–400)
 
+- **Camera looks** (Step 400): `camera_look:` of a `space` scene turns on a matched set of the
+  sensor, the lens, the operator and the finishing for one kind of camera: `window_handheld`
+  (handheld through a spacecraft's window), `drone`, `broadcast_long_lens`, `phone`, `chase_mount`.
+  The scene's own `finish:` and `operator:` go over the look key by key (`finish: {noise: 0.006}`
+  keeps the rest of the look's noise); an unknown name gets a did-you-mean; orbital scenes leave the
+  look's automatic exposure out. The meters are gentle and the range short, so sunlit cloud tops
+  still clip near white. In code: `cameraLook(name, {finish, operator})` of the new module
+  `vidgen/camera-looks`. Without a look nothing changes.
 - **A camera operator** (Step 399): a `space` scene's `operator:` (and `operate` /
   `cam.operator` of `vidgen/space-camera-air` in code) puts a person behind the camera, over all
   its moves, off unless given. `hand: handheld` drifts slowly and is corrected late with a little

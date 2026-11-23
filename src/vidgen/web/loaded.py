@@ -69,7 +69,8 @@ MODULES_FOLDER = "modules"
 #: ``vidgen/space-camera-air``: camera moves in the air and beside giant ships, on ``vidgen/space-camera``'s rig,
 #: DESIGN.md §123.12; ``vidgen/space-descent``: one world from orbit to the ground (globe, air, sea, ground and
 #: decks joined), DESIGN.md §123.13; ``vidgen/space-scene-air``: the helpers of a declarative space scene in the air
-#: or beside a giant ship, DESIGN.md §123.14).
+#: or beside a giant ship, DESIGN.md §123.14; ``vidgen/camera-looks``: camera looks, matched sets of the finish's and
+#: the camera operator's options, DESIGN.md §124.4).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
                                   "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
                                   "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js",
@@ -84,7 +85,7 @@ VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vid
                                   "vidgen/space-hull-detail": "space-hull-detail.js",
                                   "vidgen/space-camera-air": "space-camera-air.js",
                                   "vidgen/space-descent": "space-descent.js",
-                                  "vidgen/space-scene-air": "space-scene-air.js"}
+                                  "vidgen/space-scene-air": "space-scene-air.js", "vidgen/camera-looks": "camera-looks.js"}
 #: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
 #: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
 PARTS_FOLDER = "parts"

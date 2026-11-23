@@ -30732,3 +30732,66 @@ horizon, ev}`.
   the exposure of the rise closes by about 0.75 stop by 6 s as the cumulus tops fill the
   frame (greyer cloud tops than without: true to a camera on auto, not the nicer picture), and in the climb it opens about 1.4 stops in the deck's dark
   middle, lets the break-out flash, then settles a stop down. Step 400's looks pick their own values.
+
+### 124.4 Camera looks: `camera_look:` and `vidgen/camera-looks` (Step 400)
+
+**What.** One word for a matched set of Steps 397–399 and the existing finishing: the sensor, the lens, the
+person or mount holding the camera, the bloom, vignette and grade of one kind of camera. Off unless given.
+
+- **The table** is `CAMERA_LOOKS` of a new module `vidgen/camera-looks` (plain JavaScript, no imports):
+  `window_handheld` (handheld through a spacecraft's window: a calm braced hand, a gentle meter, the
+  horizon 0.8° off; noise, 2 stops of range, the glass's veil as a lift of 0.012, a wide bloom, warm
+  halation at a low threshold, heavy corners, the lens's own bend), `drone` (gimbal vibration, a smooth
+  meter; fine noise, 2.4 stops, crisp, a little saturated, bend and fringes), `broadcast_long_lens` (a
+  heavy head's sway, the iris ridden slowly with no hunting; a big sensor's fine noise, 2.8 stops with a
+  soft knee, strong detail halos, long-lens fringes, no distortion), `phone` (a light hand, a quick meter
+  that hunts, 1.5° of horizon; blotchy colour noise, heavy sharpening, punchy colour, lifted blacks, the
+  lens corrected in software to half its bend), `chase_mount` (strong vibration, an automatic exposure, no
+  horizon error; the ultra-wide bend with soft fringed corners, contrast). The full values: CONFIG
+  (`space`). It is written as JSON inside the module (quoted keys, numbers, strings) so Python reads the
+  same table (`camera_looks()` of `vidgen.web.space_names`, exported by `vidgen.api`: `json.loads` of the
+  constant's text, comments stripped); `LOOK_MAIN` names the key a number sets per group (the finish's
+  are three-finish's own `SCALAR_GROUP`, checked by a test).
+- **Why a module of its own** and not inside `vidgen/three-finish`: the looks set the operator's options
+  too (not three-finish's), three-finish stays under its size budget, and three-finish's text is unchanged,
+  so no page that imports it gets a new module hash (nothing is drawn again).
+- **The merge** (`lookMerge` in JavaScript, `look_merge` in Python, the same rules, checked against each
+  other in Node): the scene's own options go over the look's key by key, at every depth: a mapping merges
+  into the look's mapping; `true` keeps the look's group as it is; a number (not 0) sets the group's main
+  value (`noise: 0.006` is the look's noise at amount 0.006; `exposure: 0.5` its strength); a hand style
+  named again keeps the look's hand, another style replaces it; anything else (`false`, `0`, text, a list)
+  replaces the look's value. **Precedence**: the scene's own `finish:` / `operator:` values, then the
+  look's, then the `finish` defaults of a `space` scene (bloom 0.3, grain 0.02, vignette 0.3, antialias
+  none) and the modules' own defaults.
+- **`space` scenes.** `camera_look:` at the scene's top level, beside `finish:` and `operator:` (it sets
+  both, so it belongs to neither). A `mode="before"` validator of `Space.Params` replaces `finish` and
+  `operator` with the merged mappings before they are checked, so every sub-key is checked as before
+  (did-you-mean) and the page writers need no change; the name is checked against the table with a
+  did-you-mean (`-` for `_` accepted). An orbital scene (no `world:`) has no meter: the look's automatic
+  exposure is left out there (the scene's own `operator: {exposure}` is still refused, §124.3), so every
+  look works on orbital scenes with its hand and horizon. A surface scene with a look is drawn through
+  the finish (without `finish:` it is drawn straight to the canvas). `finish: false` with a look is
+  refused. The page notes the look in a comment line. Without `camera_look` the page is written byte for
+  byte as before.
+- **Other scene types.** Only `space` scenes write three-finish's options from YAML; `web` scenes and the
+  music-video pages (`vidgen music plan`) call `Finish` in their own code, so they take the look in code:
+  `cameraLook(name, {finish, operator}, {metered})` → `{finish, operator}` for `new Finish(...)` and
+  `cam.operator(...)` / `operate(...)`. The `3d` scene type does not use three-finish. No YAML key there.
+- **Motion blur** is left to the scene in every look: it multiplies a frame's cost by its samples (about
+  five times at the default 5), against the step's rule of cheap effects.
+- **Tuning** (stills of the 09_rise view at 4 and 8 s, a skim into the sun, a pass beside a hull, a
+  sunrise over a limb). The operator's default meter (strength 0.7, ±2 stops) took the rise's cloud tops
+  about 0.6 stop greyer by 8 s; the looks' meters take 0.3–0.45 within ±1 stop, and their ranges are 2–2.8
+  stops, so at 8 s the rise's sunlit tops clip (0.6–1.5 % of the frame at 250 or more, none without a
+  look; the 99.5th percentile of luma 229–244 against 215) while the picture is 0.1–0.3 stop darker on
+  average. The sensor noise is 0.006–0.01 (not 397's strong set; the phone's is blotchy at size 2).
+  Halation 0.08–0.3 with thresholds 0.35–0.5: visible as a warm glow round the glitter in every look,
+  strongest through the window. Into a low sun (the skim) the drone's 2.4 stops blow the glitter path
+  flat (14 % of the frame clipped, 3 % without), louder than "felt"; `range: 3` over it keeps a little
+  more (10 %).
+- **Off is exact.** The 09_rise view with no look drew 0 differing pixels at 4 s and 8 s (1280x720)
+  before and after the step; three-finish and space-camera-air are unchanged; the tests check that a page
+  without `camera_look` has no look line and none of the look's options.
+- **Cost** (2 cores, SwiftShader, 1280x720, the 09_rise frames 121–129, wall time of `page.frame`,
+  median): no look 8.56 / 7.74 s, `window_handheld` 7.97 / 7.83 s (two runs each): nothing measurable
+  against the ±0.6 s spread (Steps 397–399 measured each part at +0.045, +0.063 and 0 s).
