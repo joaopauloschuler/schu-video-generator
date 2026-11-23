@@ -62,7 +62,7 @@ def stub_render(root: Path, seconds: float = 8.0, beats: dict[str, float] | None
     """A ``render=`` hook: a small clip for the scene (and lossless ones for ``passes``)."""
     video = write_clip(root / "fake" / "scene.mp4", seconds=seconds, size="32x18", fps=5, audio=False)
     lossless = {p: lossless_clip(root / "fake" / f"{p}.mkv", seconds, "32x18", 5) for p in passes}
-    return lambda _project, _scene, _passes: SceneRender(video, beats or {"a": 0.0, "b": 2.0, "act": 1.0}, lossless)
+    return lambda _project, _scene, _passes, _kind="render": SceneRender(video, beats or {"a": 0.0, "b": 2.0, "act": 1.0}, lossless)
 
 
 def plan_of(root: Path, shot: str | None = None) -> ShotPlan:

@@ -43,7 +43,7 @@ from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, IRIS_TRANSITIONS, Be
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
-from vidgen.references import has_citations
+from vidgen.references import draws_overlays
 from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, repeated, stereo, write_wav
 from vidgen.speech import audio_duration
 from vidgen.staging import VoiceStaging, beat_staging, cue_room, repeat_pans, stage_voice
@@ -412,7 +412,7 @@ class NarratedScene(MovingCameraScene):
         wipe overlapping its end gets none there: the next scene's render draws them once over
         the moving pictures (DESIGN.md §50)."""
         cfg = self.project.config
-        if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes) and not has_citations(cfg.scenes):
+        if not draws_overlays(cfg):
             return [], []
         plan = self._video_plan or VideoPlan(self.project, int(config.frame_rate))
         own = scene_overlays(self.project, self.spec, self.theme, plan)

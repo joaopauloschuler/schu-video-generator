@@ -237,6 +237,9 @@ class Project:
         self._voices: dict[str | None, VoiceConfig] = {}
         #: True for :meth:`without_overlays` copies: their renders go to ``build/..._bare``.
         self.bare = False
+        #: False for :meth:`without_takes` copies: no generated take is laid over a beat (a
+        #: shot's ``guide: final``, DESIGN.md §113.18); their renders go to ``build/..._source``.
+        self.takes_shown = True
         #: True for a draft (``vidgen render --draft``, DESIGN.md §74): every render of it goes to
         #: ``build/draft...`` in the draft format, every output name ends in ``_draft``, whatever
         #: ``preview`` the path methods are given.
@@ -312,14 +315,29 @@ class Project:
         frame thumbnail without overlays, DESIGN.md §53); the render worker's ``--bare``."""
         scenes = [scene.model_copy(update={"overlays": False}) for scene in self.config.scenes]
         config = self.config.model_copy(update={"overlays": [], "scenes": scenes})
-        bare = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
-        bare.included_files, bare.files_named_by_includes, bare.origins = self.included_files, self.files_named_by_includes, self.origins
+        bare = self._copy(config)
         bare.bare = True
-        bare.draft = self.draft
-        bare.output_dir_override = self.output_dir_override
-        bare.from_sections = self.from_sections
-        bare.section_sources = self.section_sources
         return bare
+
+    def without_takes(self) -> Project:
+        """This project as vidgen draws it, without overlays and without the generated takes
+        picked for its beats, rendering into ``build/<final|preview>[_<variant>]_source``: the
+        finished render a shot's ``guide: final`` sends (DESIGN.md §113.18); the worker's
+        ``--source``."""
+        source = self.without_overlays()
+        source.bare = False
+        source.takes_shown = False
+        return source
+
+    def _copy(self, config: VideoConfig) -> Project:
+        """A copy of this project (its flags and folders) with ``config``."""
+        copy = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
+        copy.included_files, copy.files_named_by_includes, copy.origins = self.included_files, self.files_named_by_includes, self.origins
+        copy.bare, copy.takes_shown, copy.draft = self.bare, self.takes_shown, self.draft
+        copy.output_dir_override = self.output_dir_override
+        copy.from_sections = self.from_sections
+        copy.section_sources = self.section_sources
+        return copy
 
     @property
     def included_labels(self) -> list[str]:
@@ -471,12 +489,15 @@ class Project:
 
     def render_dir(self, preview: bool) -> Path:
         """Per-quality build folder: ``build/<final|preview|draft>[_<variant>]`` (``draft`` for a
-        :attr:`draft`; ``..._bare`` for a project :meth:`without_overlays`)."""
+        :attr:`draft`; ``..._bare`` for a project :meth:`without_overlays`, ``..._source`` for one
+        :meth:`without_takes`)."""
         name = "draft" if self.draft else "preview" if preview else "final"
         if self.variant:
             name += f"_{self.variant}"
         if self.bare:
             name += "_bare"
+        if not self.takes_shown:
+            name += "_source"
         return self.build_dir / name
 
     def render_format(self, preview: bool) -> FormatConfig:

@@ -9,8 +9,9 @@ dry-run plan of ``vidgen generate plan``.
   parts (``<beat>_p2``...). A model without lengths (heygen/avatar-iv) follows its audio: the
   beat's length is sent as nothing and priced in whole seconds.
 - **Inputs** (made by :mod:`vidgen.videogen.inputs` into ``build/videogen/<shot>/``): the
-  beat's voice cut to the part (``audio.mp3``), a silent low-resolution render of the part
-  (``guide.mp4``) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
+  beat's voice cut to the part (``audio.mp3``; ``audio: mix``: the film's sound over the part), a
+  silent low-resolution render of the part (``guide.mp4``; ``guide: final``: the finished render,
+  ``guide.final.mp4``, DESIGN.md §113.18) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
   of the part (``guide.<pass>.mp4``, DESIGN.md §113.8), the render's first frame
   (``first_frame.png``); pictures of approved reference sheets
   (:mod:`vidgen.videogen.sheets`) and your own pictures. The first frame goes in as a frame image
@@ -113,12 +114,19 @@ GUIDE_PROMPTS: dict[str, str] = {
     "depth": "The guide video is a depth map (near is white, far is dark): follow its layout and camera motion",
     "outline": "The guide video is an outline drawing (white edges on black): follow its shapes, layout and camera motion",
     "mask": "The guide video is a colour mask (each object one flat colour on black): follow its layout and motion",
+    "final": (
+        "The guide video is the finished computer render of this shot: keep its layout, framing, camera motion and timing, "
+        "and remake it as real camera footage, with real light, surfaces and detail instead of a computer-graphics look"
+    ),
 }
+#: What the prompt says of the film's sound sent with ``audio: mix`` (DESIGN.md §113.18).
+MIX_PROMPT = "The reference audio is the shot's soundtrack (narration and music): time the movement to it"
 #: A mask guide's prompt lists the stand-ins' colours when the scene has at most this many.
 MASK_NAMES_MAX = 4
 #: What the plan says each guide is.
 GUIDE_WHAT: dict[str, str] = {
     "render": "silent draft render",
+    "final": "silent finished render of the beat",
     "depth": "depth pass of the beat's 3D scene",
     "outline": "outline pass of the beat's 3D scene",
     "mask": "mask pass of the beat's 3D scene",
@@ -407,6 +415,8 @@ def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], 
         parts.append(GUIDE_PROMPTS[guide])
         if guide == "mask":
             parts += _mask_names(project, shot.scene_id)
+    if spec.audio_source == "mix" and shot.first_frame_in != "guide":   # in a guide, the role sentence says it
+        parts.append(MIX_PROMPT)
     style = project.config.style_sheet
     if style is not None and style.words():
         parts.append(f"Style: {style.words()}")
@@ -443,11 +453,14 @@ def _guide_opening_sentences(shot: Shot) -> list[str]:
             audio = audio or template.audio_token.format(n=audios)
     if in_guide and not video:
         return []
-    sentences = [template.opens.format(video=video)] if in_guide else []
+    opens = template.opens_final if shot.spec.guide_source == "final" else template.opens
+    sentences = [opens.format(video=video)] if in_guide else []
     shows = [template.shows.format(pictures=_joined(found), s="s" if len(found) == 1 else "", who=who) for who, found in tokens.items()]
     if shows:
         sentences.append(", ".join(shows))
-    if audio and in_guide:
+    if audio and in_guide and shot.spec.audio_source == "mix":
+        sentences.append(template.soundtrack.format(audio=audio))
+    elif audio and in_guide:
         who = display_name(shot.speaker) if shot.speaker else "the narrator"
         sentences.append(template.voice.format(audio=audio, who=who))
     return sentences
@@ -622,7 +635,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
         if source == "none":
             shot.problems.append(f"{where}: first_frame_in: guide needs a starting picture (first_frame: a picture file, render or sheet)")
         if spec.guide_source is None:
-            shot.problems.append(f"{where}: first_frame_in: guide needs a guide video to put the picture in (guide: true, depth, outline or mask)")
+            shot.problems.append(f"{where}: first_frame_in: guide needs a guide video to put the picture in (guide: true, final, depth, outline or mask)")
     elif first is not None:
         role = "first_frame" if frame_ok else "portrait" if spec.kind == "talking" else "first_frame"
         shot.inputs.append(ShotInput(role, "image", first, what, frame=frame_ok))
@@ -631,7 +644,8 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             shot.notes.append(f"{shot.model.id} lists no first-frame images: the {role.replace('_', ' ')} goes in as a picture reference")
     shot.inputs += reference_inputs(project, shot.spec.refs if shot.spec.refs is not None else _default_refs(project, shot), sheets, used, needs, f"{where}.refs", shot.problems)
     if spec.wants_audio:
-        shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"the beat's voice, {shot.length:.2f} s"))
+        heard = "the film's sound (voice, music, effects)" if spec.audio_source == "mix" else "the beat's voice"
+        shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"{heard}, {shot.length:.2f} s"))
     guide = spec.guide_source
     if guide is not None:
         opening = shot.opening_picture is not None

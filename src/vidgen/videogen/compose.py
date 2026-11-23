@@ -10,7 +10,8 @@ between two takes that meet; the scene's last beat keeps its take through the sc
 and hold, so vidgen's picture never flashes between takes). The scene's renderer draws them
 (:class:`vidgen.generated_layer.GeneratedLayer`) under the overlays and captions; the scene's
 fingerprint holds them, so a new pick renders the scene again. Drafts (``--draft``, and the guide
-renders of ``vidgen generate inputs``) show vidgen's own picture.
+renders of ``vidgen generate inputs``) and a project :meth:`~vidgen.project.Project.without_takes`
+(the finished render of ``guide: final``) show vidgen's own picture.
 
 A beat split into parts (longer than the model's longest clip) has a take folder per part
 (``takes/<beat>_p<n>``); the parts share the beat's window equally, as planned.
@@ -51,7 +52,7 @@ class Placement:
 
 
 def _wants_placing(project: Project) -> bool:
-    if getattr(project, "draft", False):
+    if getattr(project, "draft", False) or not getattr(project, "takes_shown", True):
         return False
     if not (project.root / TAKES_DIR).is_dir():
         return False

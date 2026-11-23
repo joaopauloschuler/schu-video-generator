@@ -22343,6 +22343,49 @@ frame image made the provider download voice and guide ($0.191), the clip opened
 - **Orphaned MP3s**: a config without any beat (a `film.yaml` of clips) reports none.
 - `narration.pad` and `pause:`: a beat lasts its voice plus `pause:`, or plus `narration.pad` when there is no `pause:`; the pad is not added on top of a pause.
 
+### 113.18 The finished render and the film's sound as references (Step 402)
+
+The owner's test: give a video model five seconds of a `space` / `web` scene **as rendered** (not
+a layout guide), with the film's sound, the prompt and the sheets, and ask for the same shot as
+real footage. Two shot options, any scene type:
+
+- **`guide: final`** (`GuideChoice` gains `final`; `GUIDES_OF_ANY_SCENE` = none, `render`,
+  `final`). The guide is cut from the scene's finished render at the video's size and frame rate
+  (`guide.final.mp4`), never from the draft (a draft draws less: flat cartoons, no texture). The
+  render must not show what vidgen draws over the scene (overlays, citations: the model would
+  repaint text) nor a placed take (the guide would show the model's own earlier clip):
+  `Project.without_takes()` is a copy without overlays and with `takes_shown` false
+  (`compose._wants_placing` is false for it, so neither the frames nor the fingerprint hold takes),
+  rendering into `build/<final|preview>[_<variant>]_source` (worker `--source`).
+  `inputs.render_project(project, "final", scene)` uses the film's own project instead when
+  `references.draws_overlays(config)` is false and no take is placed in the scene: the same pixels,
+  so `vidgen render` and `generate inputs --guide` share one render (a web scene on a one-CPU
+  machine draws 19 s a frame at 1280x720; two renders would double that). The choice flips when a
+  take is placed in the scene: the fingerprint then differs, the guide is reported changed, and a
+  re-cut renders `_source` once.
+- **`audio: mix`** (`GeneratedShot.audio_source`: `beat`, `mix`, `none`; `wants_audio` is "not
+  none"). `audio.mp3` is cut from the rendered film (`project.output_path(False)`) at the beat's
+  start in `build/final/timings.json` plus the part's offset, for the part's length (the same
+  `cut_audio`: mono MP3). Cut from the film rather than mixed again: the film's mix is the sound the
+  shot will be heard with, whatever music, ducking, effects and normalisation the video has. A
+  talking shot refuses `mix` (lip-sync wants the voice alone). Its record (`freshness.mix_source`) is
+  the film's name, size and modification time, the start and the length: rendering the film again
+  marks it changed (cutting again is free).
+- **Prompt.** `GUIDE_PROMPTS["final"]`: keep the render's layout, framing, camera motion and timing,
+  remake it as real camera footage, real light, surfaces and detail instead of a computer-graphics
+  look. `MIX_PROMPT` names the reference audio as the soundtrack. With `first_frame_in: guide` the
+  Seedance template's `opens_final` and `soundtrack` sentences take their place.
+- **Freshness.** `InputSources.render(shot, "final")` takes the fingerprint and size of
+  `render_project(..., "final", scene)` (under the record's `draft` key); the first frame of a
+  `final` shot is recorded as `final`.
+- **Render hook** (tests): `render(project, scene, passes, kind)`; `kind` is `render` or `final`.
+
+Rule of the cookbook (a 3D guide for every shot) is not changed: `final` is an experiment on what a
+model makes of a finished picture. The first clip was not made: OpenRouter answered HTTP 402 ("This
+request's maximum cost exceeds your available credits") for Seedance 2.0 and 2.0-fast at 480p, 6 s,
+with $3.57 of credits against vidgen's estimates of $0.50 and $0.38. OpenRouter checks a worst case
+of its own before accepting the job; it is not in the model list, so vidgen cannot predict it.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

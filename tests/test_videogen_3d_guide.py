@@ -63,7 +63,7 @@ def test_guide_values(make_project, value: Any, source: str | None) -> None:
 
 
 def test_unknown_guide_is_refused_with_did_you_mean(make_project) -> None:
-    with pytest.raises(VidgenError, match=r"'dpeth' is not true, false, render, depth, outline, mask \(did you mean depth\?\)"):
+    with pytest.raises(VidgenError, match=r"'dpeth' is not true, false, render, final, depth, outline, mask \(did you mean depth\?\)"):
         Project.load(make_project(guide_config("dpeth")))
 
 
@@ -147,7 +147,7 @@ def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
     depth = lossless_clip(root / "fake" / "plaza.depth.mkv", 6.0, "54x96", 5)
     asked: list[tuple[str, tuple[str, ...]]] = []
 
-    def render(_project: Project, scene_id: str, passes: tuple[str, ...]) -> SceneRender:
+    def render(_project: Project, scene_id: str, passes: tuple[str, ...], _kind: str = "render") -> SceneRender:
         asked.append((scene_id, passes))
         return SceneRender(video, {"act": 1.0}, {"depth": depth})
 
@@ -169,7 +169,7 @@ def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
     frame = np.asarray(Image.open(folder / "first_frame.png").convert("RGB"))
     assert abs(int(frame[..., 1].mean()) - int(frame[..., 0].mean())) < 3   # the grey render, not the green pass
     with pytest.raises(VidgenError, match="drew no depth pass"):
-        make_inputs(project, [shot], guide=True, out=lambda line: None, render=lambda p, s, m: SceneRender(video, {"act": 1.0}))
+        make_inputs(project, [shot], guide=True, out=lambda line: None, render=lambda p, s, m, k="render": SceneRender(video, {"act": 1.0}))
 
 
 # ----- a real render (Chromium) ----------------------------------------------------------------------

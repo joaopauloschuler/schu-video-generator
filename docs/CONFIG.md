@@ -2915,8 +2915,9 @@ scenes:
           setting: the ferry quay in the fog
           characters: [mara, theo]          # default: the speaker (talking, action), nobody (establishing)
           refs: [mara, theo, style]         # sheets by name, style, picture files, or {file: path, shows: mara} (file: required; shows: a character or your own words, for the role sentence; default none); default: characters + style
-          audio: beat                       # beat | none; default beat for talking shots
+          audio: beat                       # beat | mix (the film's sound: voice, music, effects) | none; default beat for talking shots
           guide: true                       # a silent draft render of the beat as a video reference (true = render);
+                                            # final: the beat's finished render instead, to remake as real footage;
                                             # on a 3d scene also depth | outline | mask: that guide pass instead
           first_frame: none                 # sheet | render | none | a picture file | painted (made by generate frames) | last_of:<shot id> (last frame of that shot's take); default sheet for talking
           paint_first_frame: null           # null (default); {prompt, refs, seed, model, resolution}: how `vidgen generate frames` paints the starting picture
@@ -2960,6 +2961,19 @@ scenes:
   ..."); a mask guide also lists the stand-ins' colours by name (up to four stand-ins). The pass
   is part of the request, so changing it is a new clip (never the cached one). Walkthrough:
   [COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
+- **The finished render and the film's sound** (DESIGN.md §113.18): `guide: final` (any scene
+  type) sends the part of the beat from the scene's **finished** render instead of the draft:
+  `guide.final.mp4`, the video's own size and frame rate, the scene's full look (a `space` scene's
+  camera look too), silent, with no overlays and no placed take. When nothing is drawn over the scene
+  (no `overlays:`, no citations, no take placed in it) it is cut from the film's own scene render
+  (`vidgen render` and `vidgen generate inputs --guide` share it: one render); else the scene is
+  rendered once more without them into `build/final_source/`. `first_frame: render` is then its first
+  frame. The prompt asks the model to keep the render's layout, framing, camera motion and timing and
+  to remake it as real camera footage. `audio: mix` sends the film's own sound over the shot (voice,
+  music and effects) as the audio reference: `audio.mp3` cut from the rendered film at the beat's
+  start in it (`vidgen render` first; a talking shot keeps `audio: beat`); the prompt calls it the
+  shot's soundtrack. A film rendered again (also only to show a new take) marks it as changed: cut it
+  again (free). Both are video / audio inputs, so they need the quick tunnel.
 - **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was
   cut from. A shot whose inputs no longer match (scene, beat text or timing, narration MP3, draft
   size, or no record yet) is blocked in `vidgen generate plan` with the free command to cut them

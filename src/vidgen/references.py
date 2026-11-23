@@ -229,6 +229,12 @@ def has_citations(scenes: Sequence[Any]) -> bool:
     return any(getattr(s, "references", None) or getattr(s, "figure_credit", None) is not None for s in scenes)
 
 
+def draws_overlays(config: Any) -> bool:
+    """Whether a video ``config`` draws overlays on its scenes: the video's ``overlays:``, a
+    scene's own ``overlays:`` mapping, or the citations (references, figure credits)."""
+    return bool(config.overlays) or any(isinstance(s.overlays, dict) for s in config.scenes) or has_citations(config.scenes)
+
+
 __all__ = [
     "DOI_RE", "IDENTIFIERS", "Numbered", "beat_numbers", "cite_index", "credit_line", "credit_text", "description_text", "has_citations",
     "identifier_text", "marker", "normal_doi", "normal_isbn", "normal_pmid", "normal_url", "reference_key", "reference_line",

@@ -1,7 +1,7 @@
 """Render one scene in its own process (DESIGN.md §5.2)::
 
     python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview|draft
-        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare] [--guide-passes LIST]
+        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare] [--source] [--guide-passes LIST]
         [--intermediate lossless|compact]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
@@ -223,6 +223,7 @@ def render_scene(
     draft: bool = False,
     guide_passes: tuple[str, ...] = (),
     intermediate: str | None = None,
+    source: bool = False,
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
@@ -230,6 +231,8 @@ def render_scene(
     their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
     ``bare``: render the project :meth:`~vidgen.project.Project.without_overlays` (into its
     ``_bare`` folders; a frame thumbnail without overlays, DESIGN.md §53).
+    ``source``: render the project :meth:`~vidgen.project.Project.without_takes` (into its
+    ``_source`` folders; the finished render of a shot's ``guide: final``, DESIGN.md §113.18).
     ``draft``: render a draft (DESIGN.md §74): the project loaded as a draft (its folders and
     format), the scene with :attr:`~vidgen.scene.NarratedScene.is_draft` (and ``is_preview``).
     ``guide_passes``: the guide passes a ``3d`` scene draws besides its own (DESIGN.md §114.14).
@@ -254,6 +257,8 @@ def render_scene(
     preview = preview or draft
     if bare:
         project = project.without_overlays()
+    if source:
+        project = project.without_takes()
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
@@ -358,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
     parser.add_argument("--frames", type=int, default=0, metavar="N", help="save N PNG stills per beat (default: 0)")
     parser.add_argument("--bare", action="store_true", help="render without overlays into build/..._bare")
+    parser.add_argument("--source", action="store_true", help="render without overlays or generated takes into build/..._source")
     parser.add_argument("--guide-passes", default="", metavar="LIST", help="a 3d scene also draws these guide passes (depth,outline,mask)")
     parser.add_argument("--intermediate", choices=("lossless", "compact"), help="how a web or 3d scene keeps its drawn frames (default: the config's)")
     return parser
@@ -384,7 +390,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         render_scene(
             args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,
-            args.bare, args.quality == "draft", parse_passes(args.guide_passes), args.intermediate,
+            args.bare, args.quality == "draft", parse_passes(args.guide_passes), args.intermediate, args.source,
         )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -5,7 +5,17 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–401
+## Steps 193–402
+
+### The finished render to a video model (Step 402)
+
+- **`guide: final`** on a generated shot (any scene type): the beat's finished render (the video's
+  size and frame rate, the scene's full look, silent, no overlays and no placed take) goes to the
+  video model as its video reference, and the prompt asks for the same shot as real camera footage.
+  It reuses the film's own scene render when nothing is drawn over the scene; otherwise the scene is
+  rendered once more without overlays and takes into `build/final_source/`.
+- **`audio: mix`**: the film's own sound over the shot (voice, music and effects), cut from the
+  rendered film, goes in as the audio reference (`vidgen render` first). Talking shots keep `audio: beat`.
 
 ### Footage, not a render (Steps 397–401)
 

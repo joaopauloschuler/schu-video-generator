@@ -5708,6 +5708,14 @@ scenes:
   (the plan's `note:` quotes them; a clause that also describes clothes or hair stays whole). The sheet
   pictures are unchanged. A guided shot paid for under the earlier wording is blocked, not paid
   again; `seed:` or `prompt:` on the shot asks for a new take with the new wording.
+- **The finished render as the guide** (`guide: final`, any scene type): the beat's finished
+  render (full size, the scene's own look, no overlays or placed takes) for the model to remake as
+  real camera footage, keeping its layout, motion and timing; `audio: mix` adds the film's own sound
+  over the shot (voice and music) as the audio reference. `vidgen render` first, then `vidgen generate
+  inputs --guide`. Not yet tried with a real model: make one cheap clip and look at it before more.
+  OpenRouter refuses a Seedance job with a reference video (HTTP 402) when the account's credits are
+  under its own worst-case cost, even when vidgen's estimate is far lower: $3.57 was not enough for a
+  $0.38 clip.
 
 ### Your content and third-party services
 

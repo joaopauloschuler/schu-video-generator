@@ -205,10 +205,14 @@ def known_first_frame_with_references(model: str) -> bool | None:
 @dataclass(frozen=True)
 class GuideOpeningTemplate:
     """How a ``first_frame_in: guide`` prompt names its inputs for one kind of model: ``opens``
-    takes ``{video}``, ``shows`` takes ``{pictures}``, ``{s}`` and ``{who}``, ``voice`` takes
-    ``{audio}`` and ``{who}``; the token fields take the input's number ``{n}`` of its kind."""
+    (``opens_final`` for a ``guide: final``) takes ``{video}``, ``shows`` takes ``{pictures}``,
+    ``{s}`` and ``{who}``, ``voice`` takes ``{audio}`` and ``{who}``, ``soundtrack`` (the film's
+    sound, ``audio: mix``) takes ``{audio}``; the token fields take the input's number ``{n}`` of
+    its kind."""
 
     opens: str
+    opens_final: str = "{video} opens on the exact starting picture of this scene and then shows the finished render of the shot"
+    soundtrack: str = "{audio} is the shot's soundtrack (narration and music): time the movement to it"
     shows: str = "{pictures} show{s} {who}"
     voice: str = "{audio} is {who}'s voice"
     image_token: str = "@image{n}"
@@ -221,6 +225,8 @@ GUIDE_OPENING_TEMPLATES: dict[str, GuideOpeningTemplate] = {
     "bytedance/seedance-": GuideOpeningTemplate(
         "{video} opens on the exact starting picture of this scene and then shows the movement as a plain 3D layout: "
         "begin the clip on that picture and follow the layout's positions and movement",
+        "{video} opens on the exact starting picture of this scene and then shows the finished computer render of the shot: "
+        "begin the clip on that picture and follow the render's positions, movement and timing",
     ),
 }
 

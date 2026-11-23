@@ -3302,10 +3302,12 @@ def strip_emphasis(text: str) -> str:
 
 #: Kinds of generated video shots (DESIGN.md §113.3).
 ShotKind = Literal["talking", "action", "establishing"]
-#: What a generated shot's ``guide:`` sends (DESIGN.md §113.8): the beat's draft render, or one of
-#: the guide passes of its ``3d`` scene.
-GuideChoice = Literal["render", "depth", "outline", "mask"]
-GUIDE_CHOICES: tuple[str, ...] = ("render", "depth", "outline", "mask")
+#: What a generated shot's ``guide:`` sends (DESIGN.md §113.8): the beat's draft render, its
+#: finished render (``final``, §113.18), or one of the guide passes of its ``3d`` scene.
+GuideChoice = Literal["render", "final", "depth", "outline", "mask"]
+GUIDE_CHOICES: tuple[str, ...] = ("render", "final", "depth", "outline", "mask")
+#: The guides any scene type can send (the others are guide passes of a ``3d`` scene).
+GUIDES_OF_ANY_SCENE: tuple[str | None, ...] = (None, "render", "final")
 #: Strings pydantic reads as booleans (``guide: yes`` stays ``true``).
 _BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "true", "y", "yes"})
 
@@ -3361,10 +3363,10 @@ class GeneratedShot(_Strict):
     """Who is in the shot (names from characters:); default: the beat's speaker for talking and action shots, nobody for establishing shots."""
     refs: list[Annotated[str, Field(min_length=1)] | FileRef] | None = None
     """Reference pictures: a character's name (its reference sheet), style (the style sheet's frames and references), a picture file (relative to the project) or {file: path, shows: morag}: a picture file with what it shows, so the prompt's role sentence names it; default: the shot's characters and style."""
-    audio: Literal["beat", "none"] | None = None
-    """beat: the beat's own voice, cut to the beat's exact length, goes in as an audio reference (lip-sync); none: no audio; default beat for talking shots, none otherwise."""
+    audio: Literal["beat", "mix", "none"] | None = None
+    """beat: the beat's own voice, cut to the beat's exact length, goes in as an audio reference (lip-sync); mix: the film's own sound over the shot (voice, music and effects, cut from the rendered film: `vidgen render` first); none: no audio; default beat for talking shots, none otherwise."""
     guide: bool | GuideChoice = False
-    """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
+    """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); final: the beat's finished render (the video's own size and look, without overlays, captions or placed takes), silent, for the model to remake as real footage; depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
     first_frame: str | None = Field(default=None, min_length=1)
     """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, a picture file, painted (the picture `vidgen generate frames` painted from paint_first_frame:), or last_of:<shot id> (the last frame of the take that shot shows; made by `vidgen generate inputs`); default sheet for talking shots, none otherwise."""
     seed: int | None = Field(default=None, ge=0)
@@ -3394,7 +3396,7 @@ class GeneratedShot(_Strict):
         if isinstance(v, str) and v not in GUIDE_CHOICES and v.strip().lower() not in _BOOL_WORDS:
             close = difflib.get_close_matches(v.lower(), GUIDE_CHOICES, n=1)
             hint = f" (did you mean {close[0]}?)" if close else ""
-            raise ValueError(f"{v!r} is not true, false, {', '.join(GUIDE_CHOICES)}{hint}; depth, outline and mask are guide passes of a 3d scene")
+            raise ValueError(f"{v!r} is not true, false, {', '.join(GUIDE_CHOICES)}{hint}; final is the finished render; depth, outline and mask are guide passes of a 3d scene")
         return v
 
     @property
@@ -3409,8 +3411,8 @@ class GeneratedShot(_Strict):
     def _check_shot(self) -> GeneratedShot:
         if "/" not in self.model.strip("/"):
             raise ValueError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}")
-        if self.kind == "talking" and self.audio == "none":
-            raise ValueError("a talking shot is lip-synced to the beat's voice: leave audio out (or audio: beat), or make it an action shot")
+        if self.kind == "talking" and self.audio in ("none", "mix"):
+            raise ValueError("a talking shot is lip-synced to the beat's voice alone: leave audio out (or audio: beat), or make it an action shot")
         if self.first_frame is not None and self.first_frame.startswith(LAST_OF_PREFIX) and self.last_of_shot is None:
             raise ValueError(f"first_frame: {LAST_OF_PREFIX} needs a shot id, e.g. {LAST_OF_PREFIX}intro_b1")
         if self.first_frame == PAINTED_FIRST_FRAME and self.paint_first_frame is None:
@@ -3421,8 +3423,14 @@ class GeneratedShot(_Strict):
 
     @property
     def wants_audio(self) -> bool:
-        """Whether the beat's voice goes in (``audio``, by default for talking shots)."""
-        return (self.audio or ("beat" if self.kind == "talking" else "none")) == "beat"
+        """Whether an audio reference goes in (:attr:`audio_source` is not ``none``)."""
+        return self.audio_source != "none"
+
+    @property
+    def audio_source(self) -> str:
+        """What goes in as the audio reference: ``beat`` (the beat's voice; by default for talking
+        shots), ``mix`` (the film's sound over the shot) or ``none``."""
+        return self.audio or ("beat" if self.kind == "talking" else "none")
 
     @property
     def first_frame_source(self) -> str:
@@ -3667,10 +3675,10 @@ class SceneConfig(_Strict):
                 cite_index(self, cite)
         for j, beat in enumerate(self.beats):
             guide = beat.generated_shot.guide_source if beat.generated_shot is not None else None
-            if guide not in (None, "render") and self.type != "3d":
+            if guide not in GUIDES_OF_ANY_SCENE and self.type != "3d":
                 raise ValueError(
                     f"beats[{j}].generated_shot.guide: {guide} is a guide pass of a 3d scene, but scene '{self.id}' is a "
-                    f"{self.type} scene; use guide: true (its draft render), or make the scene type: 3d"
+                    f"{self.type} scene; use guide: true (its draft render) or final (its finished render), or make the scene type: 3d"
                 )
         return self
 

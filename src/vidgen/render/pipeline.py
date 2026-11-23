@@ -300,6 +300,8 @@ def _run_worker(
     cmd += ["--intermediate", project.config.render.intermediate]   # also when the command line chose it (§120.9)
     if project.bare:
         cmd.append("--bare")
+    if not project.takes_shown:
+        cmd.append("--source")
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
     env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
     env.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")

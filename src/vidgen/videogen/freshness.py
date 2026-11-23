@@ -7,6 +7,12 @@ the cut inputs: per file its SHA-256 and what it was made from. The plan
 
 - the voice (``audio.mp3``): the SHA-256 of the beat's narration MP3 and the part's offset and
   length;
+- the film's sound (``audio.mp3`` with ``audio: mix``): the rendered film's size and modification
+  time, and the part's start in it and length (a film rendered again, also only to show a new
+  take, means a new cut: free);
+- a ``guide: final`` input (``guide.final.mp4`` and its ``first_frame.png``): the same as a render
+  input below, of the finished project without overlays or takes (its size and frame rate under
+  ``draft``);
 - a render input (``guide*.mp4``, ``first_frame.png``): the draft project's
   :func:`~vidgen.render.fingerprint.scene_fingerprint` (a draft ignores picked takes,
   :mod:`vidgen.videogen.compose`, so a pick never marks an input as changed), the draft's size and
@@ -28,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
 from vidgen.project import Project
 from vidgen.soundfont import file_sha256
@@ -44,6 +51,8 @@ _CHANGE_REASONS: tuple[tuple[str, str], ...] = (
     ("last_of_take", "the take of the shot it starts from changed"),
     ("last_of_take_sha256", "the take it was cut from changed"),
     ("narration_sha256", "the beat's narration MP3 changed"),
+    ("film", "the rendered film changed (rendered again, or removed)"),
+    ("film_start", "the shot's part of the film moved"),
     ("scene_fingerprint", "the scene changed (its config, a beat's text, voice or timing, assets, or vidgen)"),
     ("draft", "the draft's size or frame rate changed"),
     ("offset", "the shot's part of the beat moved"),
@@ -59,6 +68,16 @@ def _part(shot: Shot) -> dict[str, float]:
 def voice_source(mp3: Path, shot: Shot) -> dict[str, Any]:
     """What ``shot``'s voice is cut from: the narration MP3 ``mp3`` and the part."""
     return {"narration_sha256": file_sha256(mp3), **_part(shot)}
+
+
+def mix_source(project: Project, shot: Shot) -> dict[str, Any]:
+    """What ``shot``'s ``audio: mix`` is cut from: the rendered film (size and modification time)
+    and the part's start in it (the film and its timings must exist)."""
+    from vidgen.videogen.inputs import film_sound
+
+    film, start = film_sound(project, shot)
+    st = film.stat()
+    return {"film": [film.name, st.st_size, st.st_mtime_ns], "film_start": round(start, 6), "length": round(shot.length, 6)}
 
 
 def opening_source(shot: Shot) -> dict[str, Any]:
@@ -123,8 +142,7 @@ class InputSources:
     fingerprints (once per scene) and the narration MP3s."""
 
     project: Project
-    _draft: Project | None = None
-    _renders: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _renders: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
     _outdated_voices: set[str] | None = None
 
     def _mp3(self, shot: Shot) -> Path:
@@ -132,22 +150,23 @@ class InputSources:
 
     def render(self, shot: Shot, kind: str, fingerprint: str | None = None) -> dict[str, Any]:
         """The current source of a render input of ``shot``: a guide of ``kind`` or the first frame
-        (``render``). ``fingerprint``: the render's own record, when known (else computed)."""
-        scene = self._render_of(shot.scene_id)
+        (``render``; ``final``: of the finished render). ``fingerprint``: the render's own record,
+        when known (else computed)."""
+        scene = self._render_of(shot.scene_id, "final" if kind == "final" else "render")
         return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot)}
 
-    def _render_of(self, scene_id: str) -> dict[str, Any]:
-        if scene_id not in self._renders:
+    def _render_of(self, scene_id: str, made: str) -> dict[str, Any]:
+        if (scene_id, made) not in self._renders:
             from vidgen import extensions
             from vidgen.render.fingerprint import scene_fingerprint
+            from vidgen.videogen.inputs import render_project
 
-            if self._draft is None:
-                self._draft = Project.load(self.project.config_file, variant=self.project.variant, draft=True)
-            size = self._draft.render_format(False)
-            with extensions.project_session(self._draft):   # as the render's own fingerprint is taken
-                digest = scene_fingerprint(self._draft, scene_id)
-            self._renders[scene_id] = {"scene_fingerprint": digest, "draft": [size.width, size.height, size.fps]}
-        return self._renders[scene_id]
+            source = render_project(self.project, made, scene_id)
+            size = source.render_format(False)
+            with extensions.project_session(source):   # as the render's own fingerprint is taken
+                digest = scene_fingerprint(source, scene_id)
+            self._renders[scene_id, made] = {"scene_fingerprint": digest, "draft": [size.width, size.height, size.fps]}
+        return self._renders[scene_id, made]
 
     def voice_is_outdated(self, beat_id: str) -> bool:
         """Whether the beat's ``.hash`` says its MP3 was made for another text or voice (an MP3
@@ -176,7 +195,7 @@ class InputSources:
             if reason is not None:
                 reasons.append(f"{item.path.name}: {reason}")
                 guide = guide or item.role != "audio"
-            if item.role != "audio":
+            if item.role != "audio" or shot.spec.audio_source == "mix":
                 continue
             outdated = self.voice_is_outdated(shot.beat.id)
             needs_tts = needs_tts or outdated or not self._mp3(shot).is_file()
@@ -199,14 +218,20 @@ class InputSources:
         """Why ``item`` no longer matches its ``record``, else ``None``."""
         if not isinstance(record, dict):
             return "no record of what it was cut from (cut by an older vidgen, or the cut did not finish)"
-        if item.role == "audio":
+        if item.role == "audio" and shot.spec.audio_source == "mix":
+            try:
+                source = mix_source(self.project, shot)
+            except VidgenError:
+                return "the rendered film or its timings are missing or older than the config"
+        elif item.role == "audio":
             if not self._mp3(shot).is_file():
                 return "the beat has no narration MP3 any more"
             source = voice_source(self._mp3(shot), shot)
         elif item.path == shot.last_of_picture:
             source = last_of_source(shot)
         else:
-            source = self.render(shot, (shot.spec.guide_source or "render") if item.role == "guide" else "render")
+            frame_kind = "final" if shot.spec.guide_source == "final" else "render"   # the first frame is cut with the guide
+            source = self.render(shot, (shot.spec.guide_source or "render") if item.role == "guide" else frame_kind)
             if item.role == "guide" and shot.opening_picture is not None:
                 if not shot.opening_picture.is_file():
                     return "the starting picture is missing"
@@ -218,4 +243,4 @@ class InputSources:
         return None if record.get("sha256") == file_sha256(item.path) else "the file was changed after it was cut"
 
 
-__all__ = ["RECORD_NAME", "InputSources", "StaleInputs", "last_of_source", "opening_source", "record_input", "voice_source"]
+__all__ = ["RECORD_NAME", "InputSources", "StaleInputs", "last_of_source", "mix_source", "opening_source", "record_input", "voice_source"]
