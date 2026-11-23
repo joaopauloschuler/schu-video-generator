@@ -5,9 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–397
+## Steps 193–398
 
-### Footage, not a render (Step 397)
+### Footage, not a render (Steps 397–398)
+
+- **A camera's lens in `vidgen/three-finish`** (Step 398): three more finishing options, off
+  unless given, also under a `space` scene's `finish:`. `distort` bends the picture as a wide
+  lens does, from the camera's own lens at every frame: strong at ultra-wide (the corners pulled
+  in by 4.7 % at 16 mm), none from 50 mm, so a camera that widens over a move bends more as it
+  widens; the picture is scaled in so the corners stay put and no border shows (`distort: true`,
+  a factor, or `{amount, mm}`). `edges` softens the frame and splits red from blue more and more
+  towards the edges (`edges: true`, a softness, or `{soft, fringe, power}`). `halation` adds a
+  warm glow bleeding round the brightest parts (`halation: true` or an amount, or
+  `{amount, radius, threshold, color}`). Scenes that do not ask draw exactly the same pixels; all
+  three cost about 0.06 s a frame at 1280x720. New exports `focalLength`, `lensDistortion`,
+  `distortSource`, `edgeShare`.
 
 - **A camera's sensor in `vidgen/three-finish`** (Step 397): three new finishing options, off
   unless given, also under a `space` scene's `finish:`. `noise` is a camera sensor's noise in

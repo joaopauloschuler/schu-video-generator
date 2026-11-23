@@ -30563,3 +30563,69 @@ or `0` keeps it off. `resolveOptions` checks them like the other groups (did-you
   sea); a scene exposed so its clouds sit well below the white clips little at 2.5 stops — 2
   stops or more exposure gives the blown cloud tops of orbital footage. Step 400's camera looks
   choose per-look values.
+
+### 124.2 The lens: `distort`, `edges`, `halation` in `vidgen/three-finish` (Step 398)
+
+**What.** Three more option groups of `Finish`, off unless given, with the sensor's rules (§124.1):
+`true` turns one on at `LENS_ON` (`distort` amount 1, `edges` `{soft: 1.2, fringe: 0.8}`,
+`halation` 0.25), a number sets its main value (`amount`, `soft`, `amount`; `edges: 2` keeps the
+fringe of `true`), an object turns it on at those unless it says otherwise, `false` or `0` keeps
+it off; `resolveOptions` checks them (did-you-mean, ranges). All three sit in linear light before
+tone mapping: the lens's geometry and its fringes act on light, not on the encoded picture.
+
+- **`distort` — barrel distortion from the lens** (in the grade pass, where the fringe was read;
+  define `LENS`). The share by which the corner is pulled in is `lensDistortion(mm)` = `amount` ×
+  0.022 × (50 / mm − 1), at most 0.3: 4.7 % at 16 mm ("ultra-wide"), 2.4 % at 24, 0.9 % at 35,
+  none from 50 mm ("normal" and every longer lens are drawn straight), about what rectilinear
+  wide lenses measure. `mm` is the camera's focal length on a 36 x 24 mm frame from its vertical
+  field of view, `focalLength(fov)` = 12 / tan(fov / 2), the convention of `vidgen/space-camera`'s
+  `LENSES`, read from `camera.fov` (and `zoom`) at every `render(t)` after `update(t)` has set the
+  scene: the space cameras' moves set `camera.fov` from their lens at `t`, so a move that widens
+  (`rise` with `lens: [normal, ultra-wide]`) bends more as it widens, and nothing is carried from
+  frame to frame. `distort.mm` fixes the focal length instead (needed for a camera that is not a
+  `PerspectiveCamera`). **The border.** A barrel lens draws the edges' light from farther in; read
+  straight, the frame's corners would want light from outside the picture (a black or smeared
+  border). The mapping is `distortSource`: radially s = (1 + c r²) / (1 + c), c = d / (1 − d), r the
+  distance from the middle over the half diagonal, so the corners read exactly the corners and
+  everything else reads inside the picture: the picture is scaled in rather than rendered wider.
+  The diagonal field of view is the camera's; the middle is magnified by 1 + c (5 % at 16 mm),
+  bilinearly, so the middle is that much softer; rendering wider would keep it sharp but change the
+  camera every page sets, and `renderScale` stops at 1.
+- **`edges` — softness and colour fringes towards the edges** (same pass). `soft` and `fringe` are
+  pixels at 720p at the corner, growing as r^`power` (`edgeShare`): the fringe pushes red out and
+  pulls blue in along the radius (lateral colour, as a wide lens has); the softness is a smear
+  along the radius (two reads a channel; none under a quarter pixel, so the middle reads once).
+  The older `fringe` option (§120.11, a stylised r³ split in frame units) adds to the fringe, read
+  at the undistorted point; with `edges` and `distort` off it is drawn exactly as before.
+- **`halation` — a warm glow bleeding round bright edges** (two passes at a quarter of the
+  frame's size before the grade; define `HALATION`). The luma above `threshold` (linear, after
+  exposure and white balance, held to 8 so the sun does not flood the frame), picked over 4 x 4
+  pixels a cell, blurred across and down with 9 binomial taps (`radius` pixels at 720p, a
+  Gaussian's spread), read in the grade at the distorted point and added as `color` × `amount`
+  before the vignette and tone mapping: a red-orange rim round the sun's glitter on the sea and
+  lit cloud edges against dark water or sky, as light scattered back through film or a sensor's
+  cover glass. The threshold is 0.4, not bloom's 1: the space scenes expose their bright clouds
+  around 0.5–1 linear, and a threshold of 1 left the 09_rise view untouched.
+- **Off is exact.** With none of them on, the grade compiles from the same text as before (the
+  new code sits behind `LENS` / `HALATION`) and no halation pass runs: the 09_rise view under the
+  `space` finish defaults is identical in every pixel to Step 397's module at 4 s and 8 s; the
+  Chromium test draws the same frames with the lens given as off as without it, and with the
+  focal length at 50 mm within one level of no distortion.
+- **`space` scenes.** `finish: {distort, edges, halation}` (`FinishSpec`, sub-keys checked against
+  the module's `DEFAULTS` with did-you-mean); written to the page only when given, so a page
+  without them is byte for byte as before. The page's `camera` is the one the moves set, so
+  `distort: true` follows the camera's lens.
+- **Cost** (2 cores, SwiftShader, 1280x720; `finish.render` 20 times a frame on a cheap scene):
+  the `space` defaults 0.121 s; `distort` +0.013 s, `edges` +0.052 s, `halation` +0.030 s, all three
+  +0.063 s. A first `edges` with a 4-tap disc (12 reads a pixel) cost +0.126 s; the radial smear
+  and the quarter-pixel cut-off halved it. The 09_rise frame (wall time of a frame, median of 9):
+  7.12 and 7.25 s before (two runs), 7.52 s with all three; the frame-to-frame spread (±0.6 s) is
+  as large as the chain's cost.
+- **Looks** (stills in the step's scratch folder). Measured on the 09_rise view by matching
+  column profiles: at 8 s (16 mm) the limb's middle is drawn 5.5 px higher and its ends 1.5–2 px,
+  so a line 120 px above the middle bows by about 4 px more than the planet's own curve; at 4 s
+  (about 28 mm) about 1.5 px; at `distort: 1.5` 6 px and 2.5 px. The edges' softness hardly shows
+  on this view (its clouds are already soft and motion-blurred); halation at the defaults is a
+  faint warm cast on the brightest cloud fields at 8 s and nothing on the 4 s glitter (it peaks
+  near 0.4 linear here) — a sun in the frame or brighter exposure shows it. Step 400's looks pick
+  their own values.

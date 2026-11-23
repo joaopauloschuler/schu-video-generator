@@ -3269,7 +3269,10 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
 - **Finish**: no FXAA by default (it breaks stars and thin rings); `depth_of_field: true` focuses on the move's
   subject; `motion_blur: 3` costs three times a frame. A camera's sensor, off unless given:
   `finish: {noise: true, range: true, sharpen: true}` (sensor noise instead of the grain, highlights that
-  clip, faint sharpening halos; about +0.05 s a frame at 1280x720).
+  clip, faint sharpening halos; about +0.05 s a frame at 1280x720). The lens, off unless given:
+  `finish: {distort: true, edges: true, halation: true}` (barrel distortion from the camera's lens at each
+  moment: strong at ultra-wide, none from 50 mm, the corners kept so no border shows; softer, fringed edges; a
+  warm glow round bright edges; about +0.06 s a frame at 1280x720).
 - **Look before you render**: `vidgen still . --scene rings --at 4 --size 640x360`. The page prints as warnings
   what only it can know (a subject under 3 px, the camera inside a world, a jump in a move, a craft in a world's shadow or
   seen from its unlit side); `vidgen lint` reports
@@ -4355,6 +4358,9 @@ export function frame(t) {
 | `noise` | off | a camera sensor's noise in place of the grain: `true`, an amount (0.012) or `{amount, color, size, floor}`; more in the shadows than in the highlights, none where the picture clips, coloured, new each frame |
 | `range` | off | a camera's limited dynamic range: `true`, stops above mid grey (2.5) or `{stops, shoulder, black}`; highlights clip to white with a short shoulder, `black` crushes the shadows |
 | `sharpen` | off | in-camera sharpening with faint halos: `true`, an amount (0.5) or `{amount, radius, limit}` |
+| `distort` | off | the lens's barrel distortion, from `camera.fov` at every frame (4.7 % at the corner at 16 mm, none from 50 mm): `true`, a factor on it (1) or `{amount, mm}` (a fixed focal length); the corners stay put, the middle is magnified a little |
+| `edges` | off | softness and a colour fringe growing towards the edges: `true` (1.2 and 0.8 pixels at 720p at the corner), the softness or `{soft, fringe, power}` |
+| `halation` | off | a warm glow bleeding round the brightest parts: `true`, an amount (0.25) or `{amount, radius, threshold, color}` |
 | `antialias` | `"fxaa"` | `"fxaa"` or `"none"` |
 | `dof` | off | `{focus, fStop, unit, maxBlur, quality}`: `focus` a distance, an object or a point; a thin lens of the camera's focal length (`camera.fov`, `filmGauge`) at `fStop`, scene units of `unit` metres; or `blur` (pixels at 720p far behind the focus) instead of `fStop`; `maxBlur` 10 px at 720p; `quality` `"low"`, `"medium"`, `"high"` |
 | `motionBlur` | off | `{samples, shutter}`: `update(t)` at `samples` times across `shutter` degrees of a frame (180 = half the frame time), centred on `t`, averaged; shutter 0 is exactly no motion blur |

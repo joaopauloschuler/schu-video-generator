@@ -80,7 +80,7 @@ class Space(Web):
         camera: list[MoveSpec] = Field(default_factory=list)
         """Camera moves (vidgen/space-camera), one after another: [{move: arc, subject: Saturn, over: [0, 8], phase: [three-quarter, crescent]}]; one move takes the whole scene."""
         finish: FinishSpec | bool = Field(default_factory=FinishSpec)
-        """Finishing (vidgen/three-finish): {bloom, grade, grain, vignette, motion_blur, depth_of_field, antialias: none, noise, range, sharpen}, or false (straight to the canvas)."""
+        """Finishing (vidgen/three-finish): {bloom, grade, grain, vignette, motion_blur, depth_of_field, antialias: none, noise, range, sharpen, distort, edges, halation}, or false (straight to the canvas)."""
         music: list[ReactionSpec] = Field(default_factory=list)
         """Reactions to the score: [{track: kick, pulse: Sun}, {track: level, glow: Ship}, {track: hook, glint: Station}] (needs music_data)."""
         music_data: bool | WebMusicData = False

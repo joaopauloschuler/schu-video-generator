@@ -1,4 +1,4 @@
-// vidgen/three-finish: ready-made finishing for three.js `web` scenes (DESIGN.md §120.11; the sensor: §124.1).
+// vidgen/three-finish: ready-made finishing for three.js `web` scenes (DESIGN.md §120.11; the sensor: §124.1; the lens: §124.2).
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/three-finish".
 //
 //   const finish = new Finish(renderer, scene, camera, ctx, {update: (t) => {...}, dof: {...}, ...});
@@ -12,7 +12,10 @@
 // gain -> FXAA -> film grain seeded by the frame number. Off by default, a camera's sensor (Step 397): a
 // limited dynamic range right after tone mapping (`range`: highlights clip with a short shoulder, shadows
 // crush), in-camera sharpening after FXAA (`sharpen`: faint halos) and sensor noise in place of the grain
-// (`noise`: signal-dependent, coloured, at the sensor's scale). Everything is a function of `t` and the
+// (`noise`: signal-dependent, coloured, at the sensor's scale). Off by default too, the lens (Step 398), in
+// the grade pass in linear light before tone mapping: barrel distortion from the camera's focal length at `t`
+// (`distort`), softness and a colour fringe growing towards the edges (`edges`), halation (a warm glow round
+// the highlights, picked and blurred at a quarter size). Everything is a function of `t` and the
 // options, so two renders of a frame are the same. Intermediate pictures are linear half floats;
 // the scene's own render targets get no tone mapping or colour-space conversion from three.js.
 import * as THREE from "three";
@@ -35,16 +38,22 @@ const DEFAULTS = {
   noise: {amount: 0, color: 0.5, size: 1, floor: 0.05},
   range: {stops: 0, shoulder: 0.05, black: 0},
   sharpen: {amount: 0, radius: 1, limit: 0.06},
+  distort: {amount: 0, mm: null},
+  edges: {soft: 0, fringe: 0, power: 2},
+  halation: {amount: 0, radius: 6, threshold: 0.4, color: [1, 0.32, 0.1]},
   dof: false, motionBlur: false,
 };
 // the camera's sensor (Step 397): off by default; `true`, a number or an object turns it on with these
 const SENSOR_ON = {noise: 0.012, range: 2.5, sharpen: 0.5};
+// the lens (Step 398): off by default as well; `distort: true` is the lens's own barrel distortion (amount 1)
+const LENS_ON = {distort: 1, edges: {soft: 1.2, fringe: 0.8}, halation: 0.25};
+const OFF_UNLESS_GIVEN = {...SENSOR_ON, ...LENS_ON};
 const DOF_DEFAULTS = {focus: 10, fStop: 2.8, unit: 1, blur: null, maxBlur: 10, quality: "medium"};
 const MOTION_DEFAULTS = {samples: 5, shutter: 180};
 // options that take a sub-object (true = its defaults; false = off where allowed)
 const GROUPS = {bloom: DEFAULTS.bloom, grade: DEFAULTS.grade, vignette: DEFAULTS.vignette, flash: DEFAULTS.flash, dof: DOF_DEFAULTS, motionBlur: MOTION_DEFAULTS,
-  noise: DEFAULTS.noise, range: DEFAULTS.range, sharpen: DEFAULTS.sharpen};
-const SCALAR_GROUP = {vignette: "amount", flash: "amount", bloom: "strength", noise: "amount", range: "stops", sharpen: "amount"};
+  noise: DEFAULTS.noise, range: DEFAULTS.range, sharpen: DEFAULTS.sharpen, distort: DEFAULTS.distort, edges: DEFAULTS.edges, halation: DEFAULTS.halation};
+const SCALAR_GROUP = {vignette: "amount", flash: "amount", bloom: "strength", noise: "amount", range: "stops", sharpen: "amount", distort: "amount", edges: "soft", halation: "amount"};
 
 // ---------- options ----------
 function distance(a, b) {
@@ -79,9 +88,11 @@ function triple(where, v) {
 }
 function group(name, value) {
   const defaults = GROUPS[name];
-  if (name in SENSOR_ON) {   // not given: off; given (true or an object): on at SENSOR_ON unless it says otherwise
+  if (name in OFF_UNLESS_GIVEN) {   // not given: off; given (true or an object): on at SENSOR_ON / LENS_ON unless it says otherwise
+    const on = OFF_UNLESS_GIVEN[name], first = typeof on === "object" ? on : {[SCALAR_GROUP[name]]: on};
     if (value === true) value = {};
-    if (value && typeof value === "object" && !Array.isArray(value)) value = {[SCALAR_GROUP[name]]: SENSOR_ON[name], ...value};
+    if (typeof value === "number" && value > 0) value = {...first, [SCALAR_GROUP[name]]: value};
+    if (value && typeof value === "object" && !Array.isArray(value)) value = {...first, ...value};
   }
   if (value === false || value === null) {
     if (name === "dof" || name === "motionBlur" || name === "bloom") return false;
@@ -101,7 +112,7 @@ export function resolveOptions(options = {}, t = 0) {
   const known = Object.keys(DEFAULTS);
   for (const k of Object.keys(options)) if (!known.includes(k)) throw unknown("", k, known);
   const at = (k) => { const v = options[k]; return typeof v === "function" && k !== "update" ? v(t) : v; };
-  const part = (k) => group(k, at(k) === undefined ? (k in SENSOR_ON ? undefined : DEFAULTS[k]) : at(k));
+  const part = (k) => group(k, at(k) === undefined ? (k in OFF_UNLESS_GIVEN ? undefined : DEFAULTS[k]) : at(k));
   const o = {};
   o.update = options.update ?? null;
   if (o.update !== null && typeof o.update !== "function") throw fail(`update must be a function update(t) that sets the scene to time t, got ${typeof o.update}`);
@@ -137,6 +148,14 @@ export function resolveOptions(options = {}, t = 0) {
   number("range.shoulder", o.range.shoulder, 0, 0.5); number("range.black", o.range.black, 0, 0.2);
   o.sharpen = part("sharpen");
   number("sharpen.amount", o.sharpen.amount, 0, 4); number("sharpen.radius", o.sharpen.radius, 0.5, 4); number("sharpen.limit", o.sharpen.limit, 0, 1);
+  o.distort = part("distort");
+  number("distort.amount", o.distort.amount, 0, 4);
+  if (o.distort.mm !== null) number("distort.mm", o.distort.mm, 4, 5000);
+  o.edges = part("edges");
+  number("edges.soft", o.edges.soft, 0, 8); number("edges.fringe", o.edges.fringe, 0, 8); number("edges.power", o.edges.power, 1, 4);
+  o.halation = part("halation");
+  number("halation.amount", o.halation.amount, 0, 4); number("halation.radius", o.halation.radius, 1, 16); number("halation.threshold", o.halation.threshold, 0, 64);
+  o.halation.color = triple("halation.color", o.halation.color);
   o.dof = part("dof");
   if (o.dof) {
     const d = o.dof;
@@ -210,6 +229,27 @@ export function noiseSigma(v, amount, floor, encoding = "srgb") {
   const {scale, read} = noiseSpread(amount, floor, encoding);
   return scale * Math.sqrt(Math.max(v, 0) + read) * (1 - Math.min(Math.max(v, 0), 1) ** 2);
 }
+
+// ---------- the lens (Step 398): the shaders' geometry, in JavaScript too ----------
+/** The focal length (mm, on a 36 x 24 mm frame, as vidgen/space-camera's LENSES) of a vertical field of view of `fov` degrees. */
+export function focalLength(fov) { return 12 / Math.tan(fov * Math.PI / 360); }
+/** The barrel distortion of a rectilinear lens of `mm`: the share by which the frame's corner is pulled in towards the
+ * middle, against a lens without distortion of the same magnification in the middle. 0.022 × (50 / mm − 1): 4.7 % at
+ * 16 mm, 2.4 % at 24 mm, 0.9 % at 35 mm, none from 50 mm on (long lenses are drawn straight); at most 0.3. */
+export function lensDistortion(mm, amount = 1) { return Math.min(0.3, amount * 0.022 * Math.max(0, 50 / mm - 1)); }
+/** Where the distorted frame's point (`x`, `y`: 0..1 across and up) takes its light from in the undistorted picture,
+ * for a corner distortion `d` (lensDistortion) on a frame `aspect` wide: radially, s = (1 + c r²) / (1 + c) with
+ * c = d / (1 − d) and r the distance from the middle over the half diagonal. The corners stay where they are (the
+ * picture is scaled in by 1 + c so nothing outside it is ever read: no black or smeared border); the middle is
+ * magnified by 1 + c and the edges' middles drawn in, so straight lines off the middle bow outwards. */
+export function distortSource(x, y, d, aspect) {
+  const c = d / (1 - d), qx = x - 0.5, qy = y - 0.5, r2 = (qx * qx * aspect * aspect + qy * qy) / (0.25 * aspect * aspect + 0.25);
+  const s = (1 + c * r2) / (1 + c);
+  return [0.5 + qx * s, 0.5 + qy * s];
+}
+/** How much of the edges' softness and colour fringe (`edges.soft` / `edges.fringe` pixels at the corner) a point at
+ * `r` (its distance from the middle over the half diagonal) gets: r^power. */
+export function edgeShare(r, power = 2) { return Math.min(1, Math.max(0, r)) ** power; }
 
 // ---------- shaders ----------
 const VERT = "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
@@ -286,13 +326,42 @@ vec3 encode(vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 #endif
 }
+#ifdef LENS
+uniform vec2 uPixel; uniform float uDistort, uSoft, uEdgeFringe, uEdgePower;
+// one read a channel: red pushed out by o, blue pulled in (lateral colour)
+vec3 split(vec2 uv, vec2 o) { return vec3(texture2D(tColor, uv + o).r, texture2D(tColor, uv).g, texture2D(tColor, uv - o).b); }
+#endif
+#ifdef HALATION
+uniform sampler2D tHalo; uniform vec3 uHalo;
+#endif
 void main() {
   vec2 q = vUv - 0.5, qa = q * uAspect;
   float r = length(qa) / length(0.5 * uAspect);
   vec3 c;
+#ifdef LENS
+  // the lens (distortSource, edgeShare): barrel distortion with the corners kept, then softness and a colour fringe
+  // growing towards the edges (pixels at the corner); the old \`fringe\` adds to the fringe, at the undistorted point.
+  // The softness is a smear along the radius (two reads a channel), as a wide lens's corners smear; none under 1/4 pixel
+  vec2 uv = 0.5 + q * (1.0 + uDistort * r * r) / (1.0 + uDistort), d = uv - 0.5, da = d * uAspect;
+  float e = pow(min(r, 1.0), uEdgePower), b = uSoft * e;
+  vec2 radial = qa / max(length(qa), 1e-6) * uPixel;
+  vec2 o = d * dot(da, da) * uFringe * 0.02 + radial * (0.5 * uEdgeFringe * e);
+  if (b > 0.25) { vec2 k = radial * (0.5 * b); c = 0.5 * (split(uv + k, o) + split(uv - k, o)); }
+  else if (uFringe > 0.0 || uEdgeFringe > 0.0) c = split(uv, o);
+  else c = texture2D(tColor, uv).rgb;
+#else
   if (uFringe > 0.0) { vec2 o = q * dot(qa, qa) * uFringe * 0.02; c = vec3(texture2D(tColor, vUv + o).r, texture2D(tColor, vUv).g, texture2D(tColor, vUv - o).b); }
   else c = texture2D(tColor, vUv).rgb;
+#endif
   c = max(c, 0.0) * uLinear + uFlash;
+#ifdef HALATION
+  // halation: the highlights' warm glow (tHalo: their luma above the threshold, after exposure, blurred), in linear light
+#ifdef LENS
+  c += texture2D(tHalo, uv).r * uHalo;
+#else
+  c += texture2D(tHalo, vUv).r * uHalo;
+#endif
+#endif
   c *= mix(1.0, smoothstep(uVigOuter, uVigInner, r), uVigAmount);
   c = toneCurve(c);
   c = clamp(c, 0.0, 1.0);
@@ -306,6 +375,18 @@ void main() {
   c = pow(max(c, 0.0), 1.0 / uGamma);
   gl_FragColor = vec4(clamp(c, 0.0, 1.0) * uFade, 1.0);
 }`;
+// Halation (Step 398), at a quarter of the frame's size: the highlights' luma above `threshold` (linear light after
+// exposure and white balance, held to 8 so the sun does not flood the frame), 4 x 4 pixels a cell (four bilinear reads)
+const HALO_PICK = `varying vec2 vUv; uniform sampler2D tColor; uniform vec2 uPixel; uniform vec3 uLinear; uniform float uThreshold;
+float bright(vec2 uv) { vec3 v = max(texture2D(tColor, uv).rgb, 0.0) * uLinear; return min(max(dot(v, vec3(0.2126, 0.7152, 0.0722)) - uThreshold, 0.0), 8.0); }
+void main() {
+  gl_FragColor = vec4(0.25 * (bright(vUv - uPixel) + bright(vUv + uPixel) + bright(vUv + vec2(uPixel.x, -uPixel.y)) + bright(vUv + vec2(-uPixel.x, uPixel.y))), 0.0, 0.0, 1.0);
+}`;
+// then blurred across and down: 9 binomial taps (a Gaussian of 2 taps' spread) `uStep` apart
+const HALO_BLUR = `varying vec2 vUv; uniform sampler2D tColor; uniform vec2 uStep;
+float at(float i) { return texture2D(tColor, vUv + uStep * i).r + texture2D(tColor, vUv - uStep * i).r; }
+void main() { gl_FragColor = vec4(texture2D(tColor, vUv).r * 0.2734375 + at(1.0) * 0.21875 + at(2.0) * 0.109375 + at(3.0) * 0.03125 + at(4.0) * 0.00390625, 0.0, 0.0, 1.0); }`;
+
 // last: FXAA on the encoded picture, then the film grain (two hashes of the pixel and the frame number); with the
 // sensor: sharpening after FXAA, then the sensor's noise in place of the grain
 const OUTPUT = `varying vec2 vUv; uniform sampler2D tColor; uniform vec2 uPixel; uniform float uGrain, uSeed;
@@ -491,11 +572,21 @@ export class Finish {
     }
     // grade, then FXAA and grain to the canvas
     const range = o.range.stops > 0, noise = o.noise.amount > 0, sharpen = o.sharpen.amount > 0;
-    const grade = this._grade(o.toneMapping, o.encoding, range), u = grade.uniforms, g = o.grade;
+    const lens = o.distort.amount > 0 || o.edges.soft > 0 || o.edges.fringe > 0, halation = o.halation.amount > 0;
+    const grade = this._grade(o.toneMapping, o.encoding, range, lens, halation), u = grade.uniforms, g = o.grade;
     const wb = [1 + 0.25 * g.temperature, 1 - 0.2 * g.tint, 1 - 0.25 * g.temperature];
     const lum = 0.2126 * wb[0] + 0.7152 * wb[1] + 0.0722 * wb[2];
     u.tColor.value = hdr.texture; u.uAspect.value.set(W / H, 1); u.uFringe.value = o.fringe;
     u.uLinear.value.set(o.exposure * g.filter[0] * wb[0] / lum, o.exposure * g.filter[1] * wb[1] / lum, o.exposure * g.filter[2] * wb[2] / lum);
+    if (lens) {
+      const d = o.distort.amount > 0 ? lensDistortion(o.distort.mm ?? this._focalLength(), o.distort.amount) : 0;
+      u.uPixel.value.set(1 / W, 1 / H); u.uDistort.value = d / (1 - d);
+      u.uSoft.value = o.edges.soft * H / 720; u.uEdgeFringe.value = o.edges.fringe * H / 720; u.uEdgePower.value = o.edges.power;
+    }
+    if (halation) {
+      u.tHalo.value = this._halation(hdr, u.uLinear.value, o.halation, W, H).texture;
+      u.uHalo.value.set(...o.halation.color).multiplyScalar(o.halation.amount);
+    }
     u.uFlash.value.set(...o.flash.color).multiplyScalar(o.flash.amount);
     u.uVigAmount.value = o.vignette.amount; u.uVigInner.value = o.vignette.inner; u.uVigOuter.value = o.vignette.outer;
     u.uSat.value = g.saturation; u.uContrast.value = g.contrast; u.uFade.value = o.fade;
@@ -547,13 +638,35 @@ export class Finish {
       uNear: {value: 1}, uFar: {value: 100}, uFocus: {value: 10}, uK: {value: 0}, uMaxR: {value: 10}},
       this.camera.isOrthographicCamera ? {TAPS: taps, ORTHOGRAPHIC: 1} : {TAPS: taps});
   }
-  _grade(tone, encoding, range) {
-    const defines = {TONE_MAP: TONE_INDEX[tone], ...(encoding === "gamma2.2" ? {GAMMA22: 1} : {}), ...(range ? {RANGE: 1} : {})};
-    return this.gradeMaterials[`${tone} ${encoding}${range ? " range" : ""}`] ??= quad(GRADE, {tColor: {value: null}, uAspect: {value: new THREE.Vector2(1, 1)}, uFringe: {value: 0},
+  /** The lens's focal length (mm, 36 x 24 mm frame) from the camera's field of view now, for `distort`. */
+  _focalLength() {
+    if (!this.camera.isPerspectiveCamera) throw fail("distort needs a PerspectiveCamera (its field of view gives the lens); give distort.mm for another camera");
+    const c = this.camera;
+    return focalLength(c.zoom === 1 ? c.fov : 2 * Math.atan(Math.tan(c.fov * Math.PI / 360) / c.zoom) * 360 / Math.PI);
+  }
+  /** Halation's glow at a quarter of the frame's size: the bright parts picked, then blurred across and down. */
+  _halation(hdr, linear, h, W, H) {
+    const qw = Math.max(1, Math.round(W / 4)), qh = Math.max(1, Math.round(H / 4));
+    const a = this._target("haloA", qw, qh), b = this._target("haloB", qw, qh);
+    this.haloPick ??= quad(HALO_PICK, {tColor: {value: null}, uPixel: {value: new THREE.Vector2()}, uLinear: {value: new THREE.Vector3()}, uThreshold: {value: 1}});
+    this.haloBlur ??= quad(HALO_BLUR, {tColor: {value: null}, uStep: {value: new THREE.Vector2()}});
+    const pick = this.haloPick.uniforms, blur = this.haloBlur.uniforms, step = h.radius * H / 720 / 4 / 2;
+    pick.tColor.value = hdr.texture; pick.uPixel.value.set(1 / W, 1 / H); pick.uLinear.value.copy(linear); pick.uThreshold.value = h.threshold;
+    this._pass(this.haloPick, a);
+    blur.tColor.value = a.texture; blur.uStep.value.set(step / qw, 0);
+    this._pass(this.haloBlur, b);
+    blur.tColor.value = b.texture; blur.uStep.value.set(0, step / qh);
+    this._pass(this.haloBlur, a);
+    return a;
+  }
+  _grade(tone, encoding, range, lens = false, halation = false) {
+    const defines = {TONE_MAP: TONE_INDEX[tone], ...(encoding === "gamma2.2" ? {GAMMA22: 1} : {}), ...(range ? {RANGE: 1} : {}), ...(lens ? {LENS: 1} : {}), ...(halation ? {HALATION: 1} : {})};
+    return this.gradeMaterials[`${tone} ${encoding}${range ? " range" : ""}${lens ? " lens" : ""}${halation ? " halation" : ""}`] ??= quad(GRADE, {tColor: {value: null}, uAspect: {value: new THREE.Vector2(1, 1)}, uFringe: {value: 0},
       uVigAmount: {value: 0}, uVigInner: {value: 0.3}, uVigOuter: {value: 1.2}, uSat: {value: 1}, uContrast: {value: 1}, uFade: {value: 1},
       uLinear: {value: new THREE.Vector3(1, 1, 1)}, uFlash: {value: new THREE.Vector3()}, uLift: {value: new THREE.Vector3()},
       uGamma: {value: new THREE.Vector3(1, 1, 1)}, uGain: {value: new THREE.Vector3(1, 1, 1)},
-      uWhite: {value: 1}, uShoulder: {value: 0}, uBlack: {value: 0}}, defines);
+      uWhite: {value: 1}, uShoulder: {value: 0}, uBlack: {value: 0},
+      uPixel: {value: new THREE.Vector2()}, uDistort: {value: 0}, uSoft: {value: 0}, uEdgeFringe: {value: 0}, uEdgePower: {value: 2}, tHalo: {value: null}, uHalo: {value: new THREE.Vector3()}}, defines);
   }
   /** The last pass: FXAA or not; `noiseEncoding` the picture's encoding when the sensor's noise is on (else null);
    * sharpening or not; `pixel`: the noise's cells are the frame's pixels (no spreading). */
@@ -572,7 +685,7 @@ export class Finish {
   /** Free the render targets and materials. */
   dispose() {
     for (const rt of Object.values(this.targets)) rt.dispose();
-    for (const m of [this.copy, this.add, this.mix, ...Object.values(this.gradeMaterials), ...Object.values(this.gatherMaterials), ...Object.values(this.outputMaterials)]) m.dispose();
+    for (const m of [this.copy, this.add, this.mix, ...(this.haloPick ? [this.haloPick, this.haloBlur] : []), ...Object.values(this.gradeMaterials), ...Object.values(this.gatherMaterials), ...Object.values(this.outputMaterials)]) m.dispose();
     if (this.bloomPass) this.bloomPass.dispose();
     this.fsq.dispose();
   }

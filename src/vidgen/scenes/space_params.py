@@ -833,6 +833,12 @@ class FinishSpec(SceneParams):
     """A camera's limited dynamic range (off unless given): stops above mid grey where it clips (2.5), true, or {stops, shoulder, black}."""
     sharpen: bool | float | dict[str, Any] | None = None
     """In-camera sharpening with faint halos (off unless given): an amount (0.5), true, or {amount, radius, limit}."""
+    distort: bool | float | dict[str, Any] | None = None
+    """The lens's barrel distortion (off unless given), from the camera's lens at each moment (strong at ultra-wide, none from 50 mm): true, a share of it (1), or {amount, mm}."""
+    edges: bool | float | dict[str, Any] | None = None
+    """Softness and a colour fringe growing towards the frame's edges (off unless given): true (1.2 and 0.8 pixels at the corner), the softness, or {soft, fringe, power}."""
+    halation: bool | float | dict[str, Any] | None = None
+    """A warm glow bleeding round the brightest edges (off unless given): an amount (0.15), true, or {amount, radius, threshold, color}."""
 
     @model_validator(mode="after")
     def _check(self) -> "FinishSpec":
@@ -843,7 +849,8 @@ class FinishSpec(SceneParams):
         """Three-finish's options (camelCase), every key checked against its own lists."""
         known = names()["finish_options"]
         out: dict[str, Any] = {"antialias": self.antialias, "grain": self.grain}
-        sensor = [(k, v) for k, v in (("noise", self.noise), ("range", self.range_), ("sharpen", self.sharpen)) if v is not None]
+        sensor = [(k, v) for k, v in (("noise", self.noise), ("range", self.range_), ("sharpen", self.sharpen),
+                                      ("distort", self.distort), ("edges", self.edges), ("halation", self.halation)) if v is not None]
         for key, value in (("bloom", self.bloom), ("vignette", self.vignette), ("grade", self.grade), ("motionBlur", self.motion_blur), *sensor):
             if isinstance(value, dict):
                 value = module_options(value, known[key], f"finish.{snake(key)}")
@@ -853,7 +860,8 @@ class FinishSpec(SceneParams):
                 out[key] = value
         if self.depth_of_field:
             out["dof"] = module_options(self.depth_of_field, known["dof"], "finish.depth_of_field", leave=("focus",)) if isinstance(self.depth_of_field, dict) else {}
-        out.update(module_options(dict(self.model_extra or {}), list(known), "finish", leave=("update", "bloom", "vignette", "grade", "motionBlur", "dof", "antialias", "grain", "noise", "range", "sharpen")))
+        out.update(module_options(dict(self.model_extra or {}), list(known), "finish", leave=("update", "bloom", "vignette", "grade", "motionBlur", "dof", "antialias", "grain", "noise", "range", "sharpen",
+                                                                                         "distort", "edges", "halation")))
         return out
 
 
