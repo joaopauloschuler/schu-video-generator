@@ -15,19 +15,22 @@
 // (a spectrum for the wind, a swell beside it), a pure function of place and time; each wave's phase wanders
 // by its own share of three long slow fields, so crests run roughly parallel yet vary along their length and
 // no lattice and no closed ring forms (one shared warp of the whole pattern drew whorls from 100 m to a few
-// km up): the longest lift the grid near the camera, all of them tilt
+// km up), and the short waves' phases are shifted besides by endless noise near their own sizes (the shared
+// noise of vidgen/space-clouds), so their crests bend and no weave shows close up; the gusts that ruffle them
+// in patches are endless noise too (no grid from high up): the longest lift the grid near the camera, all of them tilt
 // the picture's normals, each faded as it gets finer than a pixel; what is faded is not lost but widens the
 // sun's glitter (the slopes a pixel no longer shows are counted as roughness), so far water does not shimmer
 // and the glitter path has the width the sea state gives it.
 // Light: the sun after the air (golden when low), the sky's own table mirrored with Fresnel's share, the
 // water's body colour under it, foam where crests break (white now, a thinning lace where one broke a moment
-// ago), and the air between (airThrough).
+// ago, its pattern read so it never repeats), and the air between (airThrough).
 import * as THREE from "three";
 import {baked} from "vidgen/baked";
 import {AIR_GLSL, DISPLAY_GLSL, PSI_TABLE, SUN_SIZE, BURN} from "vidgen/space-air";
+import {broadHash, latticeNoise, NOISE_GLSL} from "vidgen/space-clouds";
 
 /** Bumped when the pictures change: part of the baked foam pattern's key. */
-export const VERSION = 1;
+export const VERSION = 2;
 const PREFIX = "vidgen/space-sea";
 const RAD = Math.PI / 180, TAU = 2 * Math.PI;
 export const QUALITIES = Object.freeze(["fast", "standard", "fine"]);
@@ -47,10 +50,23 @@ export const RELIEF = Object.freeze([0.03, 0.045]);
 export const DUSK_MIRROR = 0.4;
 /** How long ago a crest broke where its foam is still seen as a thinning lace, seconds. */
 export const FOAM_LAG = 2.2;
-/** The lengths of the gusts' patches, metres (each varied by the seed). */
+/** The sizes of the gusts' patches, metres (each varied by the seed): octaves of endless gradient noise (no lattice of
+ * sines, which showed as a fine grid on the glitter from 20 to 60 km up), each turned its own way, drifting with half the wind. */
 export const GUSTS = Object.freeze([500, 900, 1600, 2900, 5200, 9300]);
-/** How far a gust's wave moves the finer gusts' pattern sideways, as a share of its own length (so no patch is a ruled stripe). */
-export const GUST_SHIFT = 0.03;
+/** Each gust octave's weight (equal: the spread of six sines of weight 0.24 that the octaves replaced). */
+export const GUST_WEIGHT = 0.556;
+/** How the short waves are kept from weaving (Step 396): their phases are shifted by endless noise, `fields` fields of it whose
+ * cells are `size` times their reference wave's length (the first an eighth of the dominant length, each next `ratio` times
+ * shorter), shifting the place by up to about `amount` of a cell (the crests turn by about that many radians); each short wave
+ * takes its share from the one or two fields nearest its length (none for the long waves and the swell). */
+export const FINE_WARP = Object.freeze({fields: 3, size: 6, ratio: 4.5, amount: 0.25});
+// the noise's cells are counted modulo this (so a camera far out keeps exact integers in the shader: noiseHashes)
+const WRAP = 65536;
+// gradient noise at a place (q along the noise's two axes, in its cells): [value, d/dqx, d/dqz] (the shader's noiseFrom)
+function noiseAt(qx, qz, salt, shift) {
+  const cx = Math.floor(qx), cz = Math.floor(qz);
+  return latticeNoise(cx, cz, qx - cx, qz - cz, salt, shift, WRAP);
+}
 /** How far a wave's phase wanders with each of the three long fields, radians at most (each wave its own share, from
  * the seed), and how many of the wave's own lengths a field must span for the full share (a longer wave wanders less, so
  * its crests stay roughly straight: the phase's slope stays under WOBBLE / WOBBLE_SPAN of the wave's own). */
@@ -170,8 +186,10 @@ export function seaState(what = "breeze", extra = {}) {
  * troughs), ruffled (how much the gusts change it, 0 to 1), crest (its part in the measure of where crests
  * meet), lag (the cosine and sine of its turn in FOAM_LAG seconds), swell}; `lifted`: how many of them may lift the picture's grid; `base`: the slopes finer than the
  * list, as a covariance [xx, xz, zz] (what Cox and Munk's mean square slope leaves after the list's own);
- * `gusts`: six long slow waves in all directions, the longest first, whose sum ruffles the short ones in patches
- * ({kx, kz, omega, phase, weight, shift}); `bends`: three long slow fields ({kx, kz, omega, phase, size}); a wave's
+ * `gusts`: six octaves of endless noise, the largest first, whose sum ruffles the short ones in patches ({size, dir (its
+ * axes' turn: cosine, sine), drift (m/s along +x and +z), weight, salt}); `warps`: FINE_WARP's fields of endless noise that
+ * shift the short waves' phases ({size (m), dir, drift, amount, salt}; a wave's `band`: where its length lies among them, 0 to
+ * fields - 1); `bends`: three long slow fields ({kx, kz, omega, phase, size}); a wave's
  * phase wanders by `wobble[j]` radians times the sine of field j (each wave its own shares: crests of different waves
  * drift apart, so the sum is short-crested and in groups, never one bent pattern). The wind sea: wavelengths from twice the dominant
  * one down to its 180th (0.25 m at least), amplitudes after Pierson and Moskowitz' spectrum scaled to the
@@ -213,8 +231,8 @@ export function waveList(state, {seed = 1, count = 32, lifted = 10} = {}) {
   const fine = Math.max(st.slopes - slopes, 0.25 * st.slopes), d = to(st.direction), along = 0.6 * fine, across = 0.4 * fine;
   const base = [along * d[0] * d[0] + across * d[1] * d[1], (along - across) * d[0] * d[1], along * d[1] * d[1] + across * d[0] * d[0]];
   const gusts = GUSTS.map((length) => {
-    const size = length * (0.8 + 0.4 * rand()), e = to(360 * rand()), k = TAU / size;
-    return {kx: k * e[0], kz: k * e[1], omega: k * 0.5 * st.wind * (e[0] * d[0] + e[1] * d[1]), phase: rand() * TAU, weight: 0.24, shift: GUST_SHIFT * size};
+    const size = length * (0.8 + 0.4 * rand()), e = to(360 * rand());
+    return {size, dir: e, drift: [0.5 * st.wind * d[0], 0.5 * st.wind * d[1]], weight: GUST_WEIGHT, salt: Math.floor(rand() * 2 ** 24)};
   }).reverse();
   // the bends: three long slow fields; every wave's phase wanders with its own share of each, so crests are not
   // ruled lines, no lattice of sines shows, and (unlike one warp of the whole pattern) no crest closes into a ring
@@ -225,30 +243,52 @@ export function waveList(state, {seed = 1, count = 32, lifted = 10} = {}) {
   });
   // each wave's own share of each field (drawn last, so the waves, gusts and fields are the seed's as before)
   for (const w of waves) w.wobble = bends.map((b) => WOBBLE * (2 * rand() - 1) * Math.min(1, b.size / (WOBBLE_SPAN * w.length)));
+  // the short waves' warp: fields of endless noise from an eighth of the dominant length down (drawn after the rest)
+  const top = st.length / 8, warps = Array.from({length: FINE_WARP.fields}, (_, j) => {
+    const reference = top / FINE_WARP.ratio ** j, e = to(360 * rand()), speed = Math.sqrt(g * reference / TAU);
+    return Object.freeze({size: FINE_WARP.size * reference, dir: e, drift: [speed * d[0], speed * d[1]], amount: FINE_WARP.amount, salt: Math.floor(rand() * 2 ** 24)});
+  });
+  for (const w of waves) w.band = clamp(Math.log(top / w.length) / Math.log(FINE_WARP.ratio), 0, FINE_WARP.fields - 1);
   let n = 0;
   while (n < waves.length && n < lifted && waves[n].ruffled === 0) n++;
-  return Object.freeze({waves: Object.freeze(waves.map((w) => Object.freeze(w))), lifted: n, base: Object.freeze(base), gusts: Object.freeze(gusts), bends: Object.freeze(bends), state: st, seed});
+  return Object.freeze({waves: Object.freeze(waves.map((w) => Object.freeze(w))), lifted: n, base: Object.freeze(base), gusts: Object.freeze(gusts), warps: Object.freeze(warps), bends: Object.freeze(bends), state: st, seed});
 }
 
 /** How strongly the gusts ruffle the short waves at a place and time (1: the mean). */
 export function gustAt(list, x, z, t) {
-  const first = list.gusts[1], lead = 2 * first.shift * Math.sin(first.kx * x + first.kz * z - first.omega * t + first.phase + 1.7) / Math.hypot(first.kx, first.kz);
-  let sum = 0, px = x - first.kz * lead, pz = z + first.kx * lead;
-  for (const g of list.gusts) {       // the longest first: each moves the place the finer ones are read at, across its own direction
-    const v = Math.sin(g.kx * px + g.kz * pz - g.omega * t + g.phase), k = Math.hypot(g.kx, g.kz);
-    sum += g.weight * v; px -= g.kz / k * g.shift * v; pz += g.kx / k * g.shift * v;
-  }
+  let sum = 0;
+  for (const g of list.gusts) sum += g.weight * noiseAt(...fieldPlace(g, x, z, t), g.salt, 0)[0];
   return Math.max(0.2, 1 + list.state.gusts * 2.2 * sum);
+}
+// a noise field's place (its cells along its own turned axes) for the sea's (x, z) at time t
+function fieldPlace(f, x, z, t) {
+  const px = x - f.drift[0] * t, pz = z - f.drift[1] * t;
+  return [(f.dir[0] * px + f.dir[1] * pz) / f.size, (f.dir[0] * pz - f.dir[1] * px) / f.size];
+}
+// a wave's shares of the warp's fields: from the one or two nearest its length, as much as the gusts ruffle it (none for the long waves)
+const warpShares = (w) => Array.from({length: FINE_WARP.fields}, (_, j) => w.ruffled * Math.max(0, 1 - Math.abs(j - w.band)));
+// the short waves' warp fields at a place: each [shift x, shift z, and its derivatives (d shift x / dx, d shift z / dx, d shift x / dz, d shift z / dz)]
+function warpsAt(list, x, z, t) {
+  return (list.warps ?? []).map((f) => {
+    const [qx, qz] = fieldPlace(f, x, z, t), a = noiseAt(qx, qz, f.salt, 0), b = noiseAt(qx, qz, f.salt, 4), m = f.amount, c = f.dir[0], s = f.dir[1];
+    // d q / d(x, z) = [[c, s], [-s, c]] / size, so d shift / d(x, z) = amount (dn/dq) [[c, s], [-s, c]]
+    return [m * f.size * a[0], m * f.size * b[0], m * (a[1] * c - a[2] * s), m * (b[1] * c - b[2] * s), m * (a[1] * s + a[2] * c), m * (b[1] * s + b[2] * c)];
+  });
 }
 /** The water's surface at a place (metres along +x and +z from the sea's origin) and time (seconds): [height over
  * sea level (metres), the slope along +x, the slope along +z] (the gusts' own slow change of the height is left out of the slopes). A pure function of the list, the place and the time. */
 export function surfaceAt(list, x, z, t) {
   const gust = gustAt(list, x, z, t), turned = list.bends.map((b) => b.kx * x + b.kz * z - b.omega * t + b.phase);
-  const bs = turned.map(Math.sin), bc = turned.map(Math.cos);
+  const bs = turned.map(Math.sin), bc = turned.map(Math.cos), fields = warpsAt(list, x, z, t);
   let h = 0, sx = 0, sz = 0;
   for (const w of list.waves) {
     let th = w.kx * x + w.kz * z - w.omega * t + w.phase, kx = w.kx, kz = w.kz;
     list.bends.forEach((b, j) => { const m = w.wobble ? w.wobble[j] : 0; th += m * bs[j]; kx += m * bc[j] * b.kx; kz += m * bc[j] * b.kz; });
+    const shares = warpShares(w);
+    fields.forEach((f, j) => {        // the warp: the phase shifted by k . shift, its slope by the shift's derivatives
+      const share = shares[j];
+      if (share > 0) { th += share * (w.kx * f[0] + w.kz * f[1]); kx += share * (w.kx * f[2] + w.kz * f[3]); kz += share * (w.kx * f[4] + w.kz * f[5]); }
+    });
     const s = Math.sin(th), c = Math.cos(th), a = w.amplitude * (1 + w.ruffled * (gust - 1));
     h += a * (c + w.sharp * (c * c - s * s));
     const d = -a * s * (1 + 4 * w.sharp * c);
@@ -294,14 +334,34 @@ export function waterOf(what = "ocean", extra = {}) {
 }
 
 // ---------- the picture ----------
+// the short waves' warp (FINE_WARP): a field (uWarp, uWarpI) at p, kept by a share `keep` (it fades where the waves that take from it
+// are finer than a pixel, or its cells than the grid's): its shift of the place (m) and the shift's derivatives (d/dx, d/dz)
+const WARP_GLSL = /* glsl */`
+uniform vec4 uWarp[${FINE_WARP.fields}];     // a field's axes over its size (cosine, sine), the camera's place in its cell
+uniform vec4 uWarpI[${FINE_WARP.fields}];    // its whole cells (modulo 65536), its salt, how far it shifts (amount x size, m)
+void seaWarp(vec4 F, vec4 I, vec2 p, float keep, out vec2 d, out vec4 J) {
+  d = vec2(0.0); J = vec4(0.0);
+  if (keep <= 0.0) return;
+  vec2 q = vec2(dot(F.xy, p), dot(vec2(-F.y, F.x), p)) + F.zw, c = floor(q);
+  uvec4 h = noiseHashes(ivec2(c) + ivec2(I.xy), uint(I.z));
+  vec3 a = noiseFrom(h, q - c, 0u), b = noiseFrom(h, q - c, 4u);
+  d = keep * I.w * vec2(a.x, b.x);
+  J = keep * I.w * vec4(a.y * F.x - a.z * F.y, b.y * F.x - b.z * F.y, a.y * F.y + a.z * F.x, b.y * F.y + b.z * F.x);
+}`;
 // the grid: a cell of the picture, laid on the world's sphere along its own line of sight, lifted by the long waves
 const SEA_VERT = /* glsl */`
 uniform vec4 uWaveA[NW], uWaveB[NW], uWaveE[NW];
 uniform vec4 uBendA[3];
 uniform vec4 uSeaGeo, uSeaFar, uSeaGrid;
 uniform vec3 uSeaE1, uSeaE2, uSeaAhead, uAirUp;
+uniform vec4 uGust[6];             // a gust octave's axes over its size (cosine, sine), the camera's place in its cell
+uniform vec4 uGustI[6];            // and its whole cells (modulo 65536), its weight, its salt
 varying vec3 vRel;
-varying float vClamp;
+varying float vClamp, vGust;
+varying vec2 vWarp0, vWarp1;        // the coarser two warp fields (worked out at the grid's corners: their cells span many)
+varying vec4 vWarpJ0, vWarpJ1;
+${NOISE_GLSL}
+${WARP_GLSL}
 void main() {
   vec3 dv = normalize(vec3((position.x + projectionMatrix[2][0]) / projectionMatrix[0][0], (position.y + projectionMatrix[2][1]) / projectionMatrix[1][1], -1.0));
   vec3 rd = normalize(dv * mat3(viewMatrix));
@@ -315,10 +375,26 @@ void main() {
   float disc = r0 * r0 * mu * mu - cc, t = mu < 0.0 && disc > 0.0 ? cc / (-r0 * mu + sqrt(disc)) : uSeaFar.y;
   vec3 P = rd * t, upL = normalize(P + uAirUp * r0);
   float fade = 1.0 - smoothstep(0.6 * uSeaFar.x, uSeaFar.x, t);
+  vec2 p = vec2(dot(P, uSeaE1), dot(P, uSeaE2));
+  float sc = t * uSeaGrid.x, sa = sc / max(-dot(rd, upL), 1e-3);
+  // the gusts: long slow patches where the short waves stand higher or lower, octaves of endless noise each faded as half the grid's
+  // cell outgrows it (worked out at the grid's corners: the patches are larger than a cell wherever they show)
+  vGust = 0.0;
+  for (int j = 0; j < 6; j++) {
+    vec4 G = uGust[j], I = uGustI[j];
+    vec2 q = vec2(dot(G.xy, p), dot(vec2(-G.y, G.x), p)) + G.zw, c = floor(q);
+    // what is left of an octave seen through half a cell (sc across, sa along the line of sight): the noise's patches lie every way, so
+    // those across a footprint long along the sight keep some strength (a ring of wave vectors through a long Gaussian)
+    float across = 9.8696044 * sc * sc * dot(G.xy, G.xy), along = 9.8696044 * max(sa * sa - sc * sc, 0.0) * dot(G.xy, G.xy);
+    vGust += I.z * exp(-0.5 * across) * pow(1.0 + 3.14159265 * along, -0.25) * noiseFrom(noiseHashes(ivec2(c) + ivec2(I.xy), uint(I.w)), q - c, 0u).x;
+  }
+  // the coarser two fields of the short waves' warp, where the grid's cell is under a quarter to a half of theirs
+  seaWarp(uWarp[0], uWarpI[0], p, 1.0 - smoothstep(0.25, 0.5, sc * length(uWarp[0].xy)), vWarp0, vWarpJ0);
+  seaWarp(uWarp[1], uWarpI[1], p, 1.0 - smoothstep(0.25, 0.5, sc * length(uWarp[1].xy)), vWarp1, vWarpJ1);
   if (fade > 0.0) {
-    vec2 p = vec2(dot(P, uSeaE1), dot(P, uSeaE2)), ah = vec2(dot(rd, uSeaE1), dot(rd, uSeaE2));
+    vec2 ah = vec2(dot(rd, uSeaE1), dot(rd, uSeaE2));
     float al = length(ah); ah = al > 1e-5 ? ah / al : vec2(1.0, 0.0);
-    float sc = t * uSeaGrid.x, sa = sc / max(-dot(rd, upL), 1e-3), h = 0.0;
+    float h = 0.0;
     vec3 bs = vec3(sin(dot(uBendA[0].xy, p) + uBendA[0].z), sin(dot(uBendA[1].xy, p) + uBendA[1].z), sin(dot(uBendA[2].xy, p) + uBendA[2].z));
     for (int i = 0; i < NG; i++) {
       vec4 A = uWaveA[i];
@@ -336,22 +412,27 @@ ${AIR_GLSL}
 ${DISPLAY_GLSL}
 uniform vec4 uWaveA[NW], uWaveB[NW], uWaveC[NW], uWaveE[NW];
 uniform vec2 uWaveD[NW];          // the cosine and sine of each wave's turn in the foam's lag
-uniform vec4 uGust[6];             // a gust's wave vector, its phase at the camera, its weight
+uniform vec3 uWaveF[NW];          // each wave's shares of the three fields of the short waves' warp (none for the long waves)
 uniform vec4 uBendA[3];          // a long field's wave vector, its phase at the camera (each wave's phase wanders by its own share of it: uWaveE)
 uniform vec4 uSeaGeo;       // the world's radius (m), the camera's height (m), metres a scene unit, a pixel's angle
 uniform vec4 uSeaFar;       // how far the grid is lifted (m), the horizon's distance (m), height x (2 radius + height), radius + height
 uniform vec4 uSeaBase;      // the slopes finer than the list (xx, xz, zz), the gusts' strength
 uniform vec4 uSeaMap;       // the sea-level sky table's rows
-uniform vec4 uSeaFoam;      // the crest measure foam begins at, the whitecaps' mean cover, (free), the filter (pixels)
-uniform vec4 uSeaLaceAt;    // where the camera stands in the foam's two layers of soft patches
+uniform vec4 uSeaFoam;      // the crest measure foam begins at, the whitecaps' mean cover, the foam pattern's salt, the filter (pixels)
+uniform vec4 uSeaLaceAt;    // where the camera stands in the foam's two readings of its pattern (the share of a repeat)
+uniform vec4 uSeaLaceI;     // and their whole repeats
 uniform vec4 uSeaOptic;     // the refractive index, the glow of faces turned to the eye, the sun's angular radius (its sine), the sky's light at the camera's place
 uniform vec4 uSeaRelief;    // how much steep waves' bodies are shaded (0 to 1), one over the heights' spread (1/m), one over the spread of the slope along the wind
 uniform vec4 uSeaWind;      // the wind's direction (x, z), the camera's place in the sea's frame (m)
 uniform vec3 uSeaE1, uSeaE2, uSeaBody, uSeaShallow, uSeaFoamColor;
 uniform sampler2D uSeaSky, uSeaAmbient, uSeaLace;
-uniform float uDisplay, uGrain, uSeaShoal, uSeaShow, uSeaGust;   // uSeaShow 1: no picture, but each pixel's place (metres from the camera along the sea's +x and +z) and the water's height there, as numbers (the tests' check of the lookup)
+uniform float uDisplay, uGrain, uSeaShoal, uSeaShow;   // uSeaShow 1: no picture, but each pixel's place (metres from the camera along the sea's +x and +z) and the water's height there, as numbers (the tests' check of the lookup)
 varying vec3 vRel;
-varying float vClamp;
+varying float vClamp, vGust;
+varying vec2 vWarp0, vWarp1;
+varying vec4 vWarpJ0, vWarpJ1;
+${NOISE_GLSL}
+${WARP_GLSL}
 ${depth}
 ${shade}
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -378,18 +459,17 @@ void main() {
   vec2 ch = vec2(-ah.y, ah.x);
   // a pixel's footprint on the water: across the line of sight, and along it (long where the look is level)
   float muv = max(dot(v, upL), 1e-4), sc = t * pix * uSeaFoam.w, sa = sc / muv, sc2 = sc * sc, sa2 = sa * sa;
-  // the gusts: long slow patches where the short waves stand higher or lower
-  float gust = 0.0;
-  vec2 gp = p + vec2(-uGust[1].y, uGust[1].x) * (2.0 * uSeaGust * sin(dot(uGust[1].xy, p) + uGust[1].z + 1.7) / dot(uGust[1].xy, uGust[1].xy));
-  for (int j = 0; j < 6; j++) {
-    vec4 G = uGust[j]; float ga = dot(G.xy, ah), gc = dot(G.xy, ch), gv = sin(dot(G.xy, gp) + G.z);
-    gust += G.w * exp(-0.5 * (sa2 * ga * ga + sc2 * gc * gc)) * gv; gp += vec2(-G.y, G.x) * (uSeaGust * gv / dot(G.xy, G.xy));
-  }
+  // the gusts (the grid's, vGust)
+  float gust = vGust;
   // from very high the patches are drawn fainter: a pixel hundreds of metres wide shows their mean, not each one
   gust = max(0.2, 1.0 + uSeaBase.w * 2.2 * gust / (1.0 + sc2 / 4e4));
   // the long fields each wave's phase wanders with (its own share of each)
   vec3 bs, bc;
   for (int j = 0; j < 3; j++) { float th = dot(uBendA[j].xy, p) + uBendA[j].z; bs[j] = sin(th); bc[j] = cos(th); }
+  // the short waves' warp (FINE_WARP): each field's shift of the place (m) and its derivatives (d shift / dx, d shift / dz);
+  // (the finest field here, faded where every wave that takes from it is finer than the pixel; the coarser two the grid's)
+  vec2 wd0 = vWarp0, wd1 = vWarp1, wd2; vec4 wj0 = vWarpJ0, wj1 = vWarpJ1, wj2;
+  seaWarp(uWarp[2], uWarpI[2], p, 1.0 - smoothstep(${(0.275 * FINE_WARP.ratio / FINE_WARP.size).toFixed(4)}, ${(0.55 * FINE_WARP.ratio / FINE_WARP.size).toFixed(4)}, sc * length(uWarp[2].xy)), wd2, wj2);
   // the waves: each fades as it gets finer than the footprint; what fades is kept as roughness
   vec2 slope = vec2(0.0); vec3 cov = uSeaBase.xyz * gust * gust; float crest = 0.0, before = 0.0, kept = 1.0, high = 0.0;
   for (int i = 0; i < NW; i++) {
@@ -398,8 +478,12 @@ void main() {
     if (dot(A.xy, A.xy) * sc2 > 12.0) { cov += C.xyz * mix(1.0, gust * gust, B.z); kept -= C.w; break; }
     float ka = dot(A.xy, ah), kc = dot(A.xy, ch), e = 0.5 * (sa2 * ka * ka + sc2 * kc * kc), g = 1.0 / (1.0 + e * (1.0 + e * (0.5 + 0.25 * e)));
     vec3 E = uWaveE[i].xyz, Ec = E * bc;
-    float th = dot(A.xy, p) + A.w + dot(E, bs), s = sin(th), c = cos(th);
+    float th = dot(A.xy, p) + A.w + dot(E, bs);
     vec2 kw = A.xy + Ec.x * uBendA[0].xy + Ec.y * uBendA[1].xy + Ec.z * uBendA[2].xy;
+    vec3 share = uWaveF[i];
+    vec2 shift = share.x * wd0 + share.y * wd1 + share.z * wd2; vec4 turn = share.x * wj0 + share.y * wj1 + share.z * wj2;
+    th += dot(A.xy, shift); kw += vec2(dot(A.xy, turn.xy), dot(A.xy, turn.zw));
+    float s = sin(th), c = cos(th);
     high += amp * g * (c + B.x * (c * c - s * s));
     slope += kw * (-amp * g * s * (1.0 + 4.0 * B.x * c));
     float lost = 0.5 * amp * amp * (1.0 - g * g);
@@ -455,16 +539,25 @@ void main() {
   vec3 body = mix(uSeaBody, uSeaShallow, shoal) * relief * (Tsun * max(sunUp + (dot(n, uAirSun) - sunUp) * (1.0 + 1.5 * uSeaRelief.x), 0.0) * (1.0 - seaFresnel(sunUp)) + amb) * (1.0 + uSeaOptic.y * clamp(2.5 * dot(slope, ah), -0.4, 1.5));
   vec3 col = uAirLight * ((1.0 - F) * body + glitter) + sky * relief;
   // foam: where the crests of many waves meet, broken up by a fine pattern, streaked along the wind
-  vec2 w = vec2(dot(p, uSeaWind.xy), dot(p, vec2(-uSeaWind.y, uSeaWind.x)));
-  float fine = texture2D(uSeaLace, vec2(w.x / 28.0, w.y / 7.0) + uSeaLaceAt.xy).g, wide = texture2D(uSeaLace, vec2(w.x / 30.0, w.y / 110.0) + uSeaLaceAt.zw).g;
+  // (read where the short waves' warp moves the place, so its streaks bend with the crests and do not stand in rows)
+  vec2 pw = p + wd0 + wd1 + wd2, w = vec2(dot(pw, uSeaWind.xy), dot(pw, vec2(-uSeaWind.y, uSeaWind.x)));
+  // the pattern read untiled (each cell of it at its own offset and turn: no repeat shows), with the derivatives of the place
+  // (taken here: the readings are skipped where no crest is near breaking, whatever the pattern, and far off where no crest is resolved)
+  vec2 lf = vec2(w.x / 28.0, w.y / 7.0) + uSeaLaceAt.xy, lw = vec2(w.x / 30.0, w.y / 110.0) + uSeaLaceAt.zw;
+  vec2 lfx = dFdx(lf), lfy = dFdy(lf), lwx = dFdx(lw), lwy = dFdy(lw);
   kept = clamp(kept, 0.0, 1.0);
-  // a crest breaking now: white along the steep front of a high crest, a broken line across the wind; where one broke a
-  // moment ago: thin streaks drawn out along the wind. Soft patches vary both (long across the wind for the one, along it
-  // for the other); no pattern of cells
-  float front = -dot(slope, uSeaWind.xy) * uSeaRelief.z;
-  float fresh = smoothstep(uSeaFoam.x, uSeaFoam.x + 0.8, 0.55 * crest + 0.75 * front + 0.7 * (wide - 0.5)) * (0.75 + 0.25 * fine);
-  float old = smoothstep(uSeaFoam.x - 0.7, uSeaFoam.x + 0.5, before) * smoothstep(0.25, 0.9, fine) * 0.3;
-  float broken = max(fresh, old);
+  float broken = 0.0, front = -dot(slope, uSeaWind.xy) * uSeaRelief.z;
+  if (kept > 0.002 && max(0.55 * crest + 0.75 * front + 0.35 - uSeaFoam.x, before - uSeaFoam.x + 0.7) > 0.0) {
+    vec4 laceMean = textureLod(uSeaLace, vec2(0.5), ${Math.log2(LACE_SIZE).toFixed(1)});
+    float fine = untiledGrad(uSeaLace, lf, uSeaLaceI.xy, uint(uSeaFoam.z), laceMean, lfx, lfy).g;
+    float wide = untiledGrad(uSeaLace, lw, uSeaLaceI.zw, uint(uSeaFoam.z) + 7u, laceMean, lwx, lwy).g;
+    // a crest breaking now: white along the steep front of a high crest, a broken line across the wind; where one broke a
+    // moment ago: thin streaks drawn out along the wind. Soft patches vary both (long across the wind for the one, along it
+    // for the other); no pattern of cells
+    float fresh = smoothstep(uSeaFoam.x, uSeaFoam.x + 0.8, 0.55 * crest + 0.75 * front + 0.7 * (wide - 0.5)) * (0.75 + 0.25 * fine);
+    float old = smoothstep(uSeaFoam.x - 0.7, uSeaFoam.x + 0.5, before) * smoothstep(0.25, 0.9, fine) * 0.3;
+    broken = max(fresh, old);
+  }
   float foam = (broken * kept + uSeaFoam.y * (1.0 - kept)) * step(1e-6, uSeaFoam.y);
   col = mix(col, uAirLight * uSeaFoamColor * (Tsun * sunUp + amb), clamp(foam, 0.0, 1.0));
   // the film look's dusk curve, as the sky's own light gets it
@@ -557,13 +650,15 @@ export class Sea {
     }
     this._lace = this._bakeLace();
     const at = sky.skyAt(0);
-    this.uniforms = {...sky.uniforms, uWaveA: {value: A}, uWaveB: {value: B}, uWaveC: {value: C}, uWaveD: {value: D}, uGust: {value: this.list.gusts.map(v4)},
-      uWaveE: {value: this.list.waves.map((w) => new THREE.Vector4(...w.wobble, 0))}, uBendA: {value: [v4(), v4(), v4()]}, uSeaShow: {value: 0}, uSeaRelief: {value: new THREE.Vector4(smooth(RELIEF[0], RELIEF[1], this.state.height / this.state.length), 4 / Math.hypot(this.state.height, this.state.swell ? this.state.swell.height : 0),
-        1 / Math.sqrt(Math.max(this.list.waves.reduce((sum, w) => sum + (w.kx * wind[0] + w.kz * wind[1]) ** 2 * w.amplitude ** 2 / 2, 0), 1e-12)), 0)}, uSeaGust: {value: GUST_SHIFT * TAU},
+    this.uniforms = {...sky.uniforms, uWaveA: {value: A}, uWaveB: {value: B}, uWaveC: {value: C}, uWaveD: {value: D}, uGust: {value: this.list.gusts.map(v4)}, uGustI: {value: this.list.gusts.map(v4)},
+      uWarp: {value: this.list.warps.map(v4)}, uWarpI: {value: this.list.warps.map(v4)},
+      uWaveE: {value: this.list.waves.map((w) => new THREE.Vector4(...w.wobble, 0))},
+      uWaveF: {value: this.list.waves.map((w) => new THREE.Vector3(...warpShares(w)))}, uBendA: {value: [v4(), v4(), v4()]}, uSeaShow: {value: 0}, uSeaRelief: {value: new THREE.Vector4(smooth(RELIEF[0], RELIEF[1], this.state.height / this.state.length), 4 / Math.hypot(this.state.height, this.state.swell ? this.state.swell.height : 0),
+        1 / Math.sqrt(Math.max(this.list.waves.reduce((sum, w) => sum + (w.kx * wind[0] + w.kz * wind[1]) ** 2 * w.amplitude ** 2 / 2, 0), 1e-12)), 0)},
       uSeaGeo: {value: new THREE.Vector4(sky.model.radius, 10, sky.options.unit, 0.002)}, uSeaFar: {value: v4()}, uSeaGrid: {value: v4()},
       uSeaBase: {value: new THREE.Vector4(...this.list.base, this.state.gusts)}, uSeaMap: {value: v4()},
-      uSeaFoam: {value: new THREE.Vector4(exceeded(Math.max(this.state.cover, 1e-9)), this.state.cover, 0, o.filter)},
-      uSeaLaceAt: {value: v4()}, uSeaOptic: {value: new THREE.Vector4(this.water.index, this.water.glow, Math.sin(sky.options.sunSize * RAD), 1)}, uSeaWind: {value: new THREE.Vector4(wind[0], wind[1], 0, 0)},
+      uSeaFoam: {value: new THREE.Vector4(exceeded(Math.max(this.state.cover, 1e-9)), this.state.cover, broadHash(o.seed, 396, 7) & 0xffff, o.filter)},
+      uSeaLaceAt: {value: v4()}, uSeaLaceI: {value: v4()}, uSeaOptic: {value: new THREE.Vector4(this.water.index, this.water.glow, Math.sin(sky.options.sunSize * RAD), 1)}, uSeaWind: {value: new THREE.Vector4(wind[0], wind[1], 0, 0)},
       uSeaE1: {value: this.frame.e1}, uSeaE2: {value: this.frame.e2}, uSeaAhead: {value: new THREE.Vector3(1, 0, 0)},
       uSeaBody: {value: new THREE.Vector3(...this.water.color)}, uSeaShallow: {value: new THREE.Vector3(...this.water.shallow)}, uSeaFoamColor: {value: new THREE.Vector3(...this.water.foam)},
       uSeaSky: {value: at.texture}, uSeaAmbient: {value: sky.ambientTexture}, uSeaLace: {value: this._lace.texture},
@@ -645,10 +740,17 @@ export class Sea {
     // fine waves however far from the origin the camera flies
     const turn = (x_) => x_ - TAU * Math.floor(x_ / TAU);
     this.list.waves.forEach((w, i) => u.uWaveA.value[i].set(w.kx, w.kz, w.amplitude, turn(w.kx * x + w.kz * z - w.omega * t + w.phase)));
-    this.list.gusts.forEach((g, i) => u.uGust.value[i].set(g.kx, g.kz, turn(g.kx * x + g.kz * z - g.omega * t + g.phase), g.weight));
+    // each noise field's place at the camera: the share of its cell, and its whole cells modulo 65536 (exact in the shader)
+    const field = (f, at, whole, w) => {
+      const [qx, qz] = fieldPlace(f, x, z, t), cx = Math.floor(qx), cz = Math.floor(qz);
+      at.set(f.dir[0] / f.size, f.dir[1] / f.size, qx - cx, qz - cz); whole.set(cx & 0xffff, cz & 0xffff, ...w);
+    };
+    this.list.gusts.forEach((g, i) => field(g, u.uGust.value[i], u.uGustI.value[i], [g.weight, g.salt]));
+    this.list.warps.forEach((f, i) => field(f, u.uWarp.value[i], u.uWarpI.value[i], [f.salt, f.amount * f.size]));
     this.list.bends.forEach((b, i) => u.uBendA.value[i].set(b.kx, b.kz, turn(b.kx * x + b.kz * z - b.omega * t + b.phase), 0));
     const wx = u.uSeaWind.value.x, wz = u.uSeaWind.value.y, along = x * wx + z * wz, across = -x * wz + z * wx, part = (x_) => x_ - Math.floor(x_);
     u.uSeaLaceAt.value.set(part(along / 28), part(across / 7), part(along / 30), part(across / 110));
+    u.uSeaLaceI.value.set(Math.floor(along / 28), Math.floor(across / 7), Math.floor(along / 30), Math.floor(across / 110));
     u.uSeaWind.value.z = x; u.uSeaWind.value.w = z;
     const at = sky.skyAt(0), ambient = sky.ambient.at(u.uAirMap.value.w);
     u.uSeaSky.value = at.texture; u.uSeaMap.value.copy(at.map);

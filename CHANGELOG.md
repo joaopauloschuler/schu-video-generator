@@ -5,9 +5,19 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–395
+## Steps 193–396
 
-### Breaking repeating patterns (Step 395)
+### Breaking repeating patterns (Steps 395–396)
+
+- **A sea that does not weave** (Step 396): close up, the finest waves of a steep sea in
+  `vidgen/space-sea` no longer read as a woven texture: each short wave's crests are bent by
+  endless noise of about its own size, and the normals follow them. The foam's streaks are read
+  so the pattern never repeats and bend with the crests. The gusts' patches are endless noise
+  instead of six crossed sines, so the glitter seen from 20–60 km up shows no fine grid. Calm seas
+  look the same; the glitter's patches are other ones and softer. Every picture with a sea
+  changes; frames cost up to about a fifth more close to a rough sea, a tenth more from 20 km.
+  New exports `FINE_WARP`, `GUST_WEIGHT` (`GUST_SHIFT` removed) of `vidgen/space-sea`;
+  `latticeNoise`, `NOISE_GLSL` of `vidgen/space-clouds`.
 
 - **Clouds that never repeat** (Step 395): seen from high up, the cloud decks of
   `vidgen/space-clouds` no longer show the same shapes in rows. Each reading of the noise tile is

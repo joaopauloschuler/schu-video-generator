@@ -471,7 +471,7 @@ minutes. A draft (`--draft`, 426x240) costs about a fifth.
 | hull-reveal (the hull overhead) | 1.1 |
 | scale-zoom | 0.8 |
 
-Since Step 395 (cloud decks that never repeat) a frame with decks costs about a quarter more than its row near the sea and two fifths more from 20–60 km up (measured on one rise over a sea under `fair`; the rows are older). `quality: fast` saves about a quarter (the clouds' `fine` is four times dearer); motion blur
+Since Step 395 (cloud decks that never repeat) a frame with decks costs about a quarter more than its row near the sea and two fifths more from 20–60 km up (measured on one rise over a sea under `fair`; the rows are older). Since Step 396 (a sea that does not weave) a frame with a sea costs up to about a fifth more close to a rough or stormy sea, a tenth more over a calm one or from 20 km. `quality: fast` saves about a quarter (the clouds' `fine` is four times dearer); motion blur
 (`finish: {motion_blur: 3}`) multiplies a frame by its samples; depth of field adds about a tenth.
 
 **Opening a page** bakes its maps once; vidgen keeps them in the [cache of baked

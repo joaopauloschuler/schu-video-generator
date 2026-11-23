@@ -40,7 +40,7 @@ def test_the_module_is_served_by_its_import_name() -> None:
     assert vidgen_file("modules/space-sea.js") == MODULE
     assert len(current_loaded(Path("."), ["__vidgen__/modules/space-sea.js"])["__vidgen__/modules/space-sea.js"] or "") == 64
     source = MODULE.read_text(encoding="utf-8")
-    assert STATIC_IMPORT.findall(source) == ["three", "vidgen/baked", "vidgen/space-air"]
+    assert STATIC_IMPORT.findall(source) == ["three", "vidgen/baked", "vidgen/space-air", "vidgen/space-clouds"]   # the endless noise (Step 396)
     assert "Math.random" not in source and "Date.now" not in source and "performance.now" not in source and "globalThis" not in source
     assert MODULE not in INIT_FILES and "space-sea" not in engine_id()
 
@@ -68,7 +68,7 @@ def _run_in_node(tmp_path: Path, body: str) -> list:
     (three / "package.json").write_text(json.dumps({"name": "three", "type": "module", "exports": {".": "./three.module.js"}}), encoding="utf-8")
     ours = tmp_path / "node_modules" / "vidgen"
     ours.mkdir()
-    names = ("music-time", "baked", "space-bodies", "space-air", "space-sea")
+    names = ("music-time", "baked", "space-bodies", "space-air", "space-clouds", "space-sea")
     for name in names:
         (ours / f"{name}.js").symlink_to(MODULES / f"{name}.js")
     (ours / "package.json").write_text(json.dumps({"name": "vidgen", "type": "module", "exports": {f"./{n}": f"./{n}.js" for n in names}}), encoding="utf-8")
@@ -162,6 +162,37 @@ out.push(Object.keys(S.STATES).map((n) => { const l = S.waveList(n, {seed: 3});
     assert crest == pytest.approx(amplitude) and moved == pytest.approx(amplitude, rel=1e-9) and trough == pytest.approx(-amplitude, rel=1e-9)
     for turn, kinds, most in out[6]:     # the crests turn by under 3 x WOBBLE / WOBBLE_SPAN radians, the waves wander apart
         assert turn <= 3 * 1.4 / 8 + 1e-9 and kinds >= 5 and 0.5 < most <= 1.4
+
+
+
+@pytest.mark.slow
+def test_the_short_waves_do_not_weave_and_the_gusts_do_not_repeat(tmp_path: Path) -> None:
+    """Step 396: the short waves' phases are warped by endless noise and the gusts are endless noise (no lattice of sines)."""
+    out = _run_in_node(tmp_path, """
+const corr = (a, b) => { const n = a.length, ma = a.reduce((s, x) => s + x, 0) / n, mb = b.reduce((s, x) => s + x, 0) / n;
+  let ab = 0, aa = 0, bb = 0; for (let i = 0; i < n; i++) { const da = a[i] - ma, db = b[i] - mb; ab += da * db; aa += da * da; bb += db * db; } return ab / Math.sqrt(aa * bb); };
+// the largest correlation after it first fell under zero, along a direction, over lags (a lattice comes back to itself)
+const back = (f, dir, lags, step) => { let fell = false, best = -1;
+  for (const lag of lags) { const a = [], b = [];
+    for (let l = 0; l < 12; l++) for (let i = 0; i < 160; i++) { const x = 37.1 * l + i * step * dir[0], z = 91.7 * l + i * step * dir[1]; a.push(f(x, z)); b.push(f(x + lag * dir[0], z + lag * dir[1])); }
+    const c = corr(a, b); if (c < 0) fell = true; else if (fell) best = Math.max(best, c); }
+  return best; };
+const l = S.waveList("rough", {seed: 3}), cut = l.state.length / 8, d = [Math.sin(l.state.direction * Math.PI / 180), -Math.cos(l.state.direction * Math.PI / 180)];
+const short = {...l, waves: l.waves.filter((w) => w.length < cut)}, flat = {...short, warps: []};
+const along = (list) => (x, z) => { const s = S.surfaceAt(list, x, z, 1); return s[1] * d[0] + s[2] * d[1]; };
+const lags = Array.from({length: 24}, (_, i) => cut / 16 * (i + 1));
+out.push([back(along(flat), d, lags, cut / 28), back(along(short), d, lags, cut / 28)]);
+out.push([l.warps.length, l.warps.map((f) => f.size), l.waves.map((w) => [w.ruffled, w.band]), S.FINE_WARP]);
+const g = S.waveList("breeze", {seed: 3}), gl = Array.from({length: 16}, (_, i) => 250 * (i + 1));
+out.push([[[1, 0], [0, 1], [0.7071, 0.7071]].map((dir) => back((x, z) => S.gustAt(g, x, z, 0), dir, gl, 97)), g.gusts.map((q) => q.size)]);
+""")
+    flat, warped = out[0]
+    assert flat > 0.3 and warped < 0.15                       # the unwarped short waves come back to themselves (a weave); warped, they do not
+    count, sizes, waves, warp = out[1]
+    assert count == warp["fields"] == 3 and sizes == pytest.approx([warp["size"] * 80 / 8 / warp["ratio"] ** j for j in range(3)])
+    assert all(0 <= band <= 2 for _, band in waves) and any(r > 0 for r, _ in waves) and waves[0][0] == 0   # the long waves keep their crests (no share)
+    returns, gust_sizes = out[2]
+    assert all(r < 0.15 for r in returns) and len(gust_sizes) == 6 and gust_sizes[0] > gust_sizes[-1]       # the gusts' patches never come back in rows
 
 
 PAGE = """

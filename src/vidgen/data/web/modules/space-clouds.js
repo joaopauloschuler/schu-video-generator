@@ -76,13 +76,25 @@ export function broadHash(ix, iz, seed) {
   h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D); h ^= h >>> 12; h = Math.imul(h, 0x297A2D39); h ^= h >>> 15;
   return h >>> 0;
 }
-// gradient noise whose gradients' angles are four bits of the lattice points' hashes from bit `shift` on
-function gradientNoise(qx, qz, seed, shift) {
-  const cx = Math.floor(qx), cz = Math.floor(qz), fx = qx - cx, fz = qz - cz, g = (i, j) => { const a = (((broadHash(i, j, seed) >>> shift) & 15) + 0.5) * Math.PI / 8; return [Math.cos(a), Math.sin(a)]; };
+/** Gradient noise in lattice cell (cx, cz) (integers) at (fx, fz) in it (0 to 1), its gradients' angles four bits of the
+ * lattice points' hashes from bit `shift` on: [value (about -1 to 1), its derivative along x, along z] (per lattice
+ * cell). With `wrap` (a power of two) the lattice points are counted modulo it, as the shader's `noiseHashes` and
+ * `noiseFrom` (NOISE_GLSL, wrap 65536) count them. Pure. */
+export function latticeNoise(cx, cz, fx, fz, seed, shift, wrap = 0) {
+  const at = wrap ? (i) => i & (wrap - 1) : (i) => i;
+  const g = (i, j) => { const a = (((broadHash(at(i), at(j), seed) >>> shift) & 15) + 0.5) * Math.PI / 8; return [Math.cos(a), Math.sin(a)]; };
   const a = g(cx, cz), b = g(cx + 1, cz), c = g(cx, cz + 1), d = g(cx + 1, cz + 1);
   const va = a[0] * fx + a[1] * fz, vb = b[0] * (fx - 1) + b[1] * fz, vc = c[0] * fx + c[1] * (fz - 1), vd = d[0] * (fx - 1) + d[1] * (fz - 1);
   const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10), uz = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
-  return Math.SQRT2 * (va + ux * (vb - va) + uz * (vc - va) + ux * uz * (va - vb - vc + vd));
+  const dux = 30 * fx * fx * (fx - 1) * (fx - 1), duz = 30 * fz * fz * (fz - 1) * (fz - 1), m = va - vb - vc + vd;
+  return [Math.SQRT2 * (va + ux * (vb - va) + uz * (vc - va) + ux * uz * m),
+    Math.SQRT2 * (a[0] + ux * (b[0] - a[0]) + uz * (c[0] - a[0]) + ux * uz * (a[0] - b[0] - c[0] + d[0]) + dux * (vb - va + uz * m)),
+    Math.SQRT2 * (a[1] + ux * (b[1] - a[1]) + uz * (c[1] - a[1]) + ux * uz * (a[1] - b[1] - c[1] + d[1]) + duz * (vc - va + ux * m))];
+}
+// gradient noise whose gradients' angles are four bits of the lattice points' hashes from bit `shift` on
+function gradientNoise(qx, qz, seed, shift) {
+  const cx = Math.floor(qx), cz = Math.floor(qz);
+  return latticeNoise(cx, cz, qx - cx, qz - cz, seed, shift)[0];
 }
 /** Gradient noise at (qx, qz), one lattice cell a unit, about -1 to 1; it never repeats (the lattice has no period). */
 export function broadNoise(qx, qz, seed) { return gradientNoise(qx, qz, seed, 0); }
@@ -444,23 +456,13 @@ void main() {
   vDir = mat3(uCloudView) * vec3((position.x + uCloudProj.z) * uCloudProj.x, (position.y + uCloudProj.w) * uCloudProj.y, -1.0);
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`;
-/** The deck's pattern in GLSL, as the clouds' own shader and a shadow on something else (vidgen/space-sea's
- * `shade`) read it: `float cloudShade(vec2 p, float height)`: the share of the sun's light that reaches the
- * place `p` (metres from the camera along the scene's +x and +z) at `height` metres through the decks above. */
-const FIELD_GLSL = /* glsl */`
-#define NB ${FRONTS.sizes.length}
-uniform sampler2D uCloudNoise;
-uniform vec4 uDeckA[ND];      // base (m), depth (m), the share of light a metre takes, the pattern's level where cloud begins
-uniform vec4 uDeckB[ND];      // rise, floor, soft, fray
-uniform vec4 uDeckC[ND];      // ragged, the weather's share, the puffs' share, 1: it casts a shadow
-uniform vec4 uDeckR[ND * 8];  // four readings of the tile a deck: two rows of each one's place (x, y, the camera's offset, texels a metre)
-uniform vec4 uDeckF[ND * NB];  // the broad weather's octaves a deck: the matrix from metres to lattice cells (u.x, u.y, v.x, v.y)
-uniform vec4 uDeckO[ND * NB];  // and the camera's place in them: the share of its cell, the whole cells
-uniform vec4 uDeckG[ND];      // the broad weather's strength (fronts, times aloft()), its first octave's seed (the next: + 7919 each), (free), its value at the place (drawn to nothing round it)
-uniform vec4 uDeckH[ND];      // the camera's place (m along +x and +z from the place), one over the square of the reach of that
-uniform vec4 uCloudSun;       // the sun's direction along +x and +z, its sine and cosine over the level
-uniform vec4 uDeckI[ND * 4];  // each reading's whole repeats at the camera (x, y), its salt
-uniform vec4 uCloudMean;      // the tile's mean
+/** Endless noise and untiled readings in GLSL, shared with vidgen/space-sea (written once into a shader, however
+ * often included): `cloudHash` (broadHash()), `CLOUD_DIRS` and `gradAt` (sixteen directions; one from four bits of a hash), `cloudWarp` (warpNoise()),
+ * `noiseHashes(c, s)` and `noiseFrom(h, f, shift)` (latticeNoise(): value and derivatives), `untiledGrad` (untiled()
+ * for any tile, read with the derivatives of the untouched place so no seam is mipmapped). */
+export const NOISE_GLSL = /* glsl */`
+#ifndef VIDGEN_NOISE
+#define VIDGEN_NOISE
 uint cloudHash(ivec2 c, uint s) {
   uint h = (uint(c.x) * 0x9E3779B1u) ^ (uint(c.y) * 0x85EBCA77u) ^ (s * 0xC2B2AE3Du);
   h ^= h >> 15; h *= 0x2C1B3C6Du; h ^= h >> 12; h *= 0x297A2D39u; h ^= h >> 15;
@@ -482,6 +484,51 @@ vec2 cloudWarp(vec2 q, uint s) {
   }
   return out2;
 }
+// latticeNoise() with wrap 65536: the hashes of cell c's four corners (counted modulo 65536), then the noise from four of their bits (from shift on) at f: (value, d/dx, d/dy)
+uvec4 noiseHashes(ivec2 c, uint s) { return uvec4(cloudHash(c & 0xffff, s), cloudHash((c + ivec2(1, 0)) & 0xffff, s), cloudHash((c + ivec2(0, 1)) & 0xffff, s), cloudHash((c + ivec2(1, 1)) & 0xffff, s)); }
+vec3 noiseFrom(uvec4 h, vec2 f, uint shift) {
+  vec2 g = f - 1.0, u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0), du = 30.0 * f * f * g * g;
+  vec2 ga = gradAt(h.x, shift), gb = gradAt(h.y, shift), gc = gradAt(h.z, shift), gd = gradAt(h.w, shift);
+  float va = dot(ga, f), vb = dot(gb, vec2(g.x, f.y)), vc = dot(gc, vec2(f.x, g.y)), vd = dot(gd, g), m = va - vb - vc + vd;
+  vec2 d = ga + u.x * (gb - ga) + u.y * (gc - ga) + u.x * u.y * (ga - gb - gc + gd) + du * vec2(vb - va + u.y * m, vc - va + u.x * m);
+  return 1.41421356 * vec3(va + u.x * (vb - va) + u.y * (vc - va) + u.x * u.y * m, d);
+}
+// untiled() of any tile: w in repeats past the whole repeats 'whole', cells one repeat wide each at its own offset and turn, blended
+// near their edges about the tile's mean; read with the derivatives gx, gy of the untouched place, turned with the cell
+vec4 untiledGrad(sampler2D tile, vec2 w, vec2 whole, uint salt, vec4 mean, vec2 gx, vec2 gy) {
+  vec2 sw = w - 0.5, base = floor(sw), k = smoothstep(vec2(${(0.5 - UNTILE.blend).toFixed(4)}), vec2(${(0.5 + UNTILE.blend).toFixed(4)}), sw - base);
+  vec4 sum = vec4(0.0); float squares = 0.0, lod = 0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)) * float(textureSize(tile, 0).x * textureSize(tile, 0).x), 1.0));
+  for (int j = 0; j < 4; j++) {
+    ivec2 d = ivec2(j & 1, j >> 1);
+    float weight = (d.x == 1 ? k.x : 1.0 - k.x) * (d.y == 1 ? k.y : 1.0 - k.y);
+    if (weight <= 0.0) continue;
+    vec2 cell = base + vec2(d);
+    uint h = cloudHash(ivec2(cell + whole), salt + 1u);
+    vec2 turn = CLOUD_DIRS[h & 15u]; mat2 R = mat2(turn.x, turn.y, -turn.y, turn.x);
+    sum += weight * (textureLod(tile, R * (w - cell - 0.5) + vec2(float((h >> 8) & 1023u), float((h >> 18) & 1023u)) / 1024.0, lod) - mean);
+    squares += weight * weight;
+  }
+  return mean + sum * inversesqrt(squares);
+}
+#endif`;
+/** The deck's pattern in GLSL, as the clouds' own shader and a shadow on something else (vidgen/space-sea's
+ * `shade`) read it: `float cloudShade(vec2 p, float height)`: the share of the sun's light that reaches the
+ * place `p` (metres from the camera along the scene's +x and +z) at `height` metres through the decks above. */
+const FIELD_GLSL = /* glsl */`
+#define NB ${FRONTS.sizes.length}
+uniform sampler2D uCloudNoise;
+uniform vec4 uDeckA[ND];      // base (m), depth (m), the share of light a metre takes, the pattern's level where cloud begins
+uniform vec4 uDeckB[ND];      // rise, floor, soft, fray
+uniform vec4 uDeckC[ND];      // ragged, the weather's share, the puffs' share, 1: it casts a shadow
+uniform vec4 uDeckR[ND * 8];  // four readings of the tile a deck: two rows of each one's place (x, y, the camera's offset, texels a metre)
+uniform vec4 uDeckF[ND * NB];  // the broad weather's octaves a deck: the matrix from metres to lattice cells (u.x, u.y, v.x, v.y)
+uniform vec4 uDeckO[ND * NB];  // and the camera's place in them: the share of its cell, the whole cells
+uniform vec4 uDeckG[ND];      // the broad weather's strength (fronts, times aloft()), its first octave's seed (the next: + 7919 each), (free), its value at the place (drawn to nothing round it)
+uniform vec4 uDeckH[ND];      // the camera's place (m along +x and +z from the place), one over the square of the reach of that
+uniform vec4 uCloudSun;       // the sun's direction along +x and +z, its sine and cosine over the level
+uniform vec4 uDeckI[ND * 4];  // each reading's whole repeats at the camera (x, y), its salt
+uniform vec4 uCloudMean;      // the tile's mean
+${NOISE_GLSL}
 // untiled(): the tile at w (repeats from the lattice's origin, already shifted by the warp), each cell at its own offset and turn
 vec4 cloudUntiled(vec2 w, uint salt, float lod) {
   vec2 sw = w - 0.5, base = floor(sw), k = smoothstep(vec2(${(0.5 - UNTILE.blend).toFixed(4)}), vec2(${(0.5 + UNTILE.blend).toFixed(4)}), sw - base);

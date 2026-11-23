@@ -28515,12 +28515,19 @@ by default), +y up at the anchor.
   phase wanders by its own share of each, `WOBBLE` 1.4 rad at most, less for a wave longer than an
   eighth of the field (`WOBBLE_SPAN`): crests run roughly parallel yet vary along their length and
   the waves drift in and out of step, short-crested and in groups; until Step 393 one shared warp
-  moved the whole pattern, which drew rings and whorls from 100 m to a few km up), **gusts** (six
-  long slow waves of 0.5 to 9 km in all directions, each moving the finer ones sideways by
-  `GUST_SHIFT` 0.03 of its length (0.13 until Step 393: it folded the patches into curved bands),
-  whose sum raises or lowers the waves
-  shorter than a third of the dominant one in patches) and more swell waves than a narrow band
-  needs. Measured against a baked spectrum only by reasoning, not by trial: a baked tile repeats
+  moved the whole pattern, which drew rings and whorls from 100 m to a few km up), **gusts**
+  (since Step 396 six octaves of endless gradient noise, 0.5 to 9 km, each turned its own way
+  and drifting with half the wind, `GUSTS`, weight `GUST_WEIGHT` 0.556 each: the spread of the six
+  sines they replaced, whose crossed lattice showed as a fine grid on the glitter from 20 to 60 km
+  up; their sum raises or lowers the waves shorter than a third of the dominant one in patches),
+  **the short waves' warp** (Step 396, `FINE_WARP`: close up the finest waves of a steep sea read
+  as a woven texture, a lattice of a few straight-crested trains; now each wave shorter than a
+  third of the dominant one has its phase shifted by k . D(p), D the shift of three fields of
+  endless noise whose cells are 6 times an eighth of the dominant length, a 4.5th of that and a
+  20th of it, D up to about 0.25 of a cell, drifting along the wind at their waves' speed; a wave
+  takes from the one or two fields nearest its length, as much as the gusts ruffle it, so the long
+  waves and the swell keep their crests; its slope takes the shift's derivatives, so the normals
+  follow the bent crests) and more swell waves than a narrow band needs. Measured against a baked spectrum only by reasoning, not by trial: a baked tile repeats
   (the task forbids visible tiling) and needs its own filter chain; the sum costs 32 sines a near
   pixel and nothing a far one, and its lookup on the JavaScript side is the same sum exactly.
 - **Sea states** (`STATES`, `seaState(what, extra)`): `calm` (1.5 m/s, a 0.25 m swell), `breeze`
@@ -28582,7 +28589,12 @@ by default), +y up at the anchor.
   across the wind with soft edges; the crest measure `FOAM_LAG` (2.2 s) ago draws thin streaks
   along the wind behind it (at most 0.3 opaque). Both are varied by soft patches of the baked
   pattern (`space-sea/lace`, 256 px, through `vidgen/baked`; its green channel only: no cell
-  walls are drawn any more). The storm state's foam factor is 0.6. Beyond where the waves are resolved the
+  walls are drawn any more). Since Step 396 the pattern never repeats: both readings go through
+  `untiledGrad` (NOISE_GLSL of `vidgen/space-clouds`: cells one repeat wide on an endless lattice, each
+  at its own offset and turn, blended within `UNTILE.blend` of an edge about the pattern's mean,
+  read at the level of detail of the untouched place), at the place the short waves' warp moves
+  it to (so the streaks bend with the crests and do not stand in rows), and only where a crest is
+  near breaking (elsewhere neither reading can show). The storm state's foam factor is 0.6. Beyond where the waves are resolved the
   foam is its mean cover. The drawn cover is not measured against the stated one.
 - **Depth** (optional, for a later coast): `depth: {glsl, uniforms}` with `float seaDepth(vec2
   p)` (metres of water at p, metres along the sea's +x and +z): the water's colour goes to
@@ -28627,7 +28639,7 @@ by default), +y up at the anchor.
   `sea-dusk`, `sea-from-20-km`, `sea-methane` (8 tiles in 9 s).
 - **Exports.** `sea`, `Sea`, `seaState`, `waveList`, `waterOf`, `surfaceAt`, `heightAt`, `normalAt`,
   `gustAt`, `horizonDistance`, `horizonDip`, `fresnel`, `slopeVariance`, `whitecaps`, constants
-  `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_SHIFT`, `BEND`, `FOAM_MOST`, `FOAM_LAG`,
+  `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_WEIGHT` and `FINE_WARP` (Step 396; `GUST_SHIFT` until then), `BEND`, `FOAM_MOST`, `FOAM_LAG`,
   `LOWEST`, `LOW_HAZE`, `RELIEF`, `DUSK_MIRROR`, `VERSION`.
 - **Cache keys.** `space-air.js` changed (the additions above; the dome's pictures are the same),
   so a page importing it draws once more; no page of Phase AN imports it. `parts.js` gained the
@@ -28643,6 +28655,32 @@ by default), +y up at the anchor.
   within a row of the formula at 720 rows, the picture's own heights against the lookup at 49
   places (within 8 cm), the sphere's drop 6.6 km out, a frame twice the same, and the same pixels
   with the foam's pattern baked, from the cache and without the cache.
+- **The sea does not weave (Step 396).** Close up a steep sea's finest waves read as a woven
+  texture, the foam's pattern was a repeating tile, and from 20 to 60 km up the glitter showed a
+  fine grid (the gusts' crossed sines). Now: the short waves' warp and the endless gusts (above),
+  the foam read untiled (above). The endless noise is `vidgen/space-clouds`' (`latticeNoise`, with
+  derivatives, and `NOISE_GLSL`, written once into a shader however often included; the sea
+  imports it): cells counted modulo 65536, so the shader gets each field's whole cells at the
+  camera exactly and the JavaScript lookup is the same sum. Where it is worked out: the gusts and
+  the coarser two warp fields at the grid's corners (`vGust`, `vWarp0/1`: their cells span many of
+  the grid's; the gusts each faded as half a cell outgrows them, a ring of wave vectors through a
+  long footprint keeping some strength across the line of sight; the fields faded where the grid's
+  cell passes a quarter to a half of theirs), the finest field per pixel (faded where every wave
+  that takes from it is finer than the pixel). Measured (CPU twin, `tests` and
+  /home/claude/work/scratch/ao396/node/acf.mjs): the slope along the wind of the waves shorter
+  than an eighth of the dominant length came back to 0.47 (rough) and 0.43 (storm) of itself a few
+  wavelengths on (a lattice); now 0.08 and 0.06; the gusts came back to 0.30 along a diagonal, now
+  never. Cost (1280x720, the page's own timing, SwiftShader; before three runs of Step 395's module):
+  50 m over a rough sea 1.23–1.34 → 1.55 s a frame, 20 m over a storm 1.26–1.50 → 1.53 s, 50 m
+  over a calm sea 1.23–1.30 → 1.39 s, 20 km 0.59–0.61 → 0.69 s. Tried and dropped: a constant
+  array or arithmetic for the sixteen directions (no difference), the foam's cells without a
+  blend (cheaper by about 0.1 s close up, hard seams through the streaks), the gusts per pixel
+  (about 0.3 s more), skipping the warp's turn of the normals (about 0.08 s, the normals no longer
+  follow the bent crests). The pictures change for every page with a sea (intended): close up the
+  finest crests bend (a combed look rather than a weave), the foam's streaks curve, the glitter's
+  patches are other ones and soft (from 2 km the feathered bands of the old sines are gone; at sunset
+  the path near the camera is wider or narrower where the patch is another), from 20 to 60 km no grid;
+  calm seas look the same. `VERSION` 2 (the foam's baked key).
 
 ### 123.5 Cloud decks, towers, lightning and a giant's decks: `vidgen/space-clouds` (Step 383)
 
