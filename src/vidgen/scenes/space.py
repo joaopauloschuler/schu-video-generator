@@ -18,7 +18,7 @@ from .space_page import orbit_names, page_source as orbital_page_source
 from .space_air_params import FlashSpec, FlightsSpec, WorldSpec
 from .space_checks import check_orbital_air, check_surface
 from .space_params import (BodySpec, CardSpec, CraftSpec, FinishSpec, LightSpec, MoveSpec, OperatorSpec, PhenomenonSpec, ReactionSpec, ScaleSpec,
-                           SkySpec, SunSpec, camera_look, scene_time, uses_bars)
+                           SkySpec, SunSpec, DEFAULT_CAMERA_LOOK, NO_CAMERA_LOOK, camera_look, scene_time, uses_bars)
 from .web import SPARE_FRAMES, Web
 
 #: Where the pages of space scenes are written, under the project folder (served from there).
@@ -36,8 +36,8 @@ class Space(Web):
     the orbit data with its burns), ``phenomena`` (black hole, wormhole, warp, asteroids, comet,
     aurora), ``camera`` (moves of vidgen/space-camera, one after another, in seconds or bars),
     ``finish`` (space-safe: no FXAA), ``operator`` (a hand on the camera, its automatic exposure, a horizon
-    levelled late; off unless given), ``camera_look`` (a matched finish and operator of one kind of camera; off
-    unless given), ``music`` (pulses, glows and glints; never the camera),
+    levelled late; off unless given), ``camera_look`` (a matched finish and operator of one kind of camera;
+    ``camera`` unless given: the sensor and the lens with nobody holding it; ``none``: the clean render), ``music`` (pulses, glows and glints; never the camera),
     ``title`` and ``end_card``; ``script`` adds your own code. vidgen writes the page and draws it
     in headless Chromium as a ``web`` scene, full-bleed; ``vidgen space-page`` writes it out as a
     ``web`` scene to go on in code.
@@ -86,7 +86,7 @@ class Space(Web):
         operator: OperatorSpec | None = None
         """The person holding the camera, over all its moves (off unless given): {hand: handheld | mounted, exposure (surface scenes), horizon, seed}."""
         camera_look: str | None = None
-        """A camera look (vidgen/camera-looks, off unless given): window_handheld, drone, broadcast_long_lens, phone or chase_mount; a matched finish and operator, with this scene's own finish: and operator: over them, key by key."""
+        """A camera look (vidgen/camera-looks): camera (the default: the sensor and the lens, nobody holding it), window_handheld, drone, broadcast_long_lens, phone, chase_mount, or none (the clean render); a matched finish and operator, with this scene's own finish: and operator: over them, key by key."""
         music: list[ReactionSpec] = Field(default_factory=list)
         """Reactions to the score: [{track: kick, pulse: Sun}, {track: level, glow: Ship}, {track: hook, glint: Station}] (needs music_data)."""
         music_data: bool | WebMusicData = False
@@ -111,11 +111,17 @@ class Space(Web):
         @model_validator(mode="before")
         @classmethod
         def _look(cls, value: Any) -> Any:
-            """``camera_look:`` -> the look's finish and operator with the scene's own over them (DESIGN.md §124.4)."""
-            if not isinstance(value, dict) or value.get("camera_look") is None:
+            """``camera_look:`` -> the look's finish and operator with the scene's own over them (DESIGN.md §124.4);
+            without it the ``camera`` look (§124.5), unless ``finish: false`` (straight to the canvas, no camera);
+            ``none`` (or null) -> no look, the clean render."""
+            if not isinstance(value, dict):
                 return value
-            name = value["camera_look"]
+            if "camera_look" not in value and value.get("finish") is False:
+                return value
+            name = value.get("camera_look", DEFAULT_CAMERA_LOOK)
             name = name.strip().lower().replace("-", "_") if isinstance(name, str) else name
+            if name is None or name == NO_CAMERA_LOOK:
+                return {**value, "camera_look": None}
             finish, operator = camera_look(name, value.get("finish"), value.get("operator"), surface=value.get("world") is not None)
             return {**value, "camera_look": name, "finish": finish, "operator": operator}
 

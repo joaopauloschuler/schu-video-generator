@@ -5,10 +5,19 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–400
+## Steps 193–401
 
-### Footage, not a render (Steps 397–400)
+### Footage, not a render (Steps 397–401)
 
+- **A camera by default** (Step 401): **space scenes now look different.** Every `space` scene
+  (orbital and surface) that gives no `camera_look:` is filmed by the new look `camera`: the sensor
+  and the lens of a good small camera with nobody holding it (fine noise, 2.8 stops of dynamic range,
+  light sharpening, the lens's own barrel distortion, faint fringes towards the corners, a faint warm
+  halation, a vignette of 0.2 in place of 0.3); no hand, no horizon error, no automatic exposure, no
+  motion blur. `camera_look: none` restores the clean render of before, pixel for pixel; the named
+  looks still add their operator; the scene's own `finish:` and `operator:` still win; `finish: false`
+  still draws straight to the canvas. A surface scene is now drawn through the finish (about +0.3 to
+  +0.7 s a frame at 1280x720). Pages of your own and `vidgen/three-finish`'s defaults are unchanged.
 - **Camera looks** (Step 400): `camera_look:` of a `space` scene turns on a matched set of the
   sensor, the lens, the operator and the finishing for one kind of camera: `window_handheld`
   (handheld through a spacecraft's window), `drone`, `broadcast_long_lens`, `phone`, `chase_mount`.

@@ -942,17 +942,26 @@ def look_merge(base: dict[str, Any], own: dict[str, Any] | None, main: dict[str,
     return out
 
 
-def camera_look(name: str, finish: Any, operator: Any, surface: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+#: The camera look a ``space`` scene gets when it gives no ``camera_look:`` (Step 401, DESIGN.md §124.5): the sensor
+#: and the lens, nobody holding the camera.
+DEFAULT_CAMERA_LOOK = "camera"
+#: ``camera_look: none``: no look, the clean render (as every ``space`` scene was drawn before Step 401).
+NO_CAMERA_LOOK = "none"
+
+
+def camera_look(name: str, finish: Any, operator: Any, surface: bool) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """The ``finish:`` and ``operator:`` a scene with ``camera_look: name`` gets (DESIGN.md §124.4): the look's
     options (vidgen/camera-looks' ``CAMERA_LOOKS``) with the scene's own ``finish`` and ``operator`` over them
     (:func:`look_merge`: the scene's win, key by key; the space finish's defaults fill in what neither gives).
     ``surface``: a surface scene (``world:``); an orbital scene has no meter, so the look's automatic exposure is
-    left out there. Keys come back snake_case. A ValueError for an unknown look (did-you-mean) or ``finish: false``."""
+    left out there. Keys come back snake_case; the operator is None when neither the look nor the scene gives one
+    (``camera``, the default look). A ValueError for an unknown look (did-you-mean) or ``finish: false``."""
     table = camera_looks()
     looks = list(table["looks"])
     name = name.strip().lower().replace("-", "_") if isinstance(name, str) else name
     if not isinstance(name, str) or name not in looks:
-        raise ValueError(f"unknown camera_look {name!r}{did_you_mean(str(name).lower().replace('-', '_'), looks)} (looks: {', '.join(looks)})")
+        known = [*looks, NO_CAMERA_LOOK]
+        raise ValueError(f"unknown camera_look {name!r}{did_you_mean(str(name).lower().replace('-', '_'), known)} (looks: {', '.join(known)})")
     if finish is False:
         raise ValueError(f"camera_look: {name} sets the finish (vidgen/three-finish's sensor, lens, bloom and grade); leave out finish: false")
     for what, value in (("finish", finish), ("operator", operator)):
@@ -964,7 +973,8 @@ def camera_look(name: str, finish: Any, operator: Any, surface: bool) -> tuple[d
     hand = dict(look["operator"])
     if not surface:
         hand.pop("exposure", None)
-    return lens_and_sensor, look_merge(hand, _snake_keys(operator) if isinstance(operator, dict) else None, mains["operator"])
+    held = look_merge(hand, _snake_keys(operator) if isinstance(operator, dict) else None, mains["operator"])
+    return lens_and_sensor, held or None
 
 
 class ReactionSpec(SceneParams):
@@ -1030,4 +1040,4 @@ class CardSpec(Open):
 
 __all__ = ["BAR", "DEFAULT_RADIUS", "LENGTH_KEYS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
            "FinishSpec", "LightSpec", "MoveSpec", "Open", "OperatorSpec", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
-           "camel", "camera_look", "direction", "look_merge", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]
+           "DEFAULT_CAMERA_LOOK", "NO_CAMERA_LOOK", "camel", "camera_look", "direction", "look_merge", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]

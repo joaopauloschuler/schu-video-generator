@@ -252,7 +252,7 @@ def check_surface(p: Any) -> None:
                 bars = bars or any(uses_bars(scene_time(v, "over")) for v in Ramp.model_validate(value).over)
     bars = _flash_bars(p) or bars
     if p.flash and "finish" not in p.model_fields_set:
-        raise ValueError("flash: is drawn by the finish, and a surface scene is drawn straight to the canvas unless it gives one: add finish: {} (or finish options)")
+        raise ValueError("flash: is drawn by the finish, and a surface scene with camera_look: none is drawn straight to the canvas unless it gives one: add finish: {} (or finish options)")
     for r in p.music:
         if not p.music_data:
             raise ValueError("music: reactions need the music on the page: add music_data: true (or {tracks: [kick, hook]})")

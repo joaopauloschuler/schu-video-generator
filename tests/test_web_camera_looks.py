@@ -1,9 +1,10 @@
-"""Camera looks, ``vidgen/camera-looks`` (Step 400, DESIGN.md §124.4): the module is served by its import name and
+"""Camera looks, ``vidgen/camera-looks`` (Steps 400–401, DESIGN.md §124.4–124.5): the module is served by its import name and
 imports nothing; Python reads the same table (``camera_looks``) and merges a scene's own options over a look the
 same way as the module's ``lookMerge``; in Node (when it is installed): every look's finish passes
 vidgen/three-finish's checks and turns on the sensor and the lens, every look's operator passes
 vidgen/space-camera-air's ``operate``; the main values agree with three-finish's own; unknown names get a
-did-you-mean; ``metered: false`` leaves the automatic exposure out."""
+did-you-mean; ``metered: false`` leaves the automatic exposure out; ``camera`` (the space scenes' default) has the
+sensor and the lens and no operator; ``none`` is no look."""
 
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "src" / "vidgen" / "data"
 MODULES = DATA / "web" / "modules"
 MODULE = MODULES / "camera-looks.js"
-LOOKS = ["window_handheld", "drone", "broadcast_long_lens", "phone", "chase_mount"]
+LOOKS = ["camera", "window_handheld", "drone", "broadcast_long_lens", "phone", "chase_mount"]
 #: own options over a look, as a scene gives them: (section, base, own) with a variety of the merge's rules
 CASES = [
     ("finish", {"noise": {"amount": 0.01, "size": 1.4}, "grade": {"lift": 0.01, "saturation": 1.1}}, {"noise": 0.004, "grade": {"saturation": 1.3}}),
@@ -53,8 +54,8 @@ def test_the_module_is_served_by_its_import_name_and_imports_nothing() -> None:
 def test_python_reads_the_table_and_the_main_values_are_the_finishs_own() -> None:
     table = camera_looks()
     assert list(table["looks"]) == LOOKS
-    for look in table["looks"].values():
-        assert set(look) == {"finish", "operator"} and look["finish"] and look["operator"]
+    for name, look in table["looks"].items():
+        assert set(look) == {"finish", "operator"} and look["finish"] and bool(look["operator"]) == (name != "camera")
         assert "motionBlur" not in look["finish"] and "antialias" not in look["finish"]      # cost and stars stay the scene's
     scalar = {k: v.strip('"') for k, v in constant_entries("vidgen/three-finish", "SCALAR_GROUP").items()}
     assert table["main"]["finish"] == scalar
@@ -70,6 +71,9 @@ def test_the_python_merge_and_the_scenes_own_options_win() -> None:
     _, orbital = camera_look("drone", None, None, surface=False)
     assert "exposure" not in orbital and orbital["hand"] == look["operator"]["hand"]
     assert camera_look("phone", {"sharpen": False}, {"hand": False}, surface=True)[0]["sharpen"] is False
+    finish, operator = camera_look("camera", {"sharpen": 0.6}, None, surface=True)
+    assert operator is None and finish == {**camera_looks()["looks"]["camera"]["finish"], "sharpen": 0.6}     # nobody holds the camera
+    assert camera_look("camera", None, {"hand": "mounted"}, surface=False)[1] == {"hand": "mounted"}
     with pytest.raises(ValueError, match="unknown camera_look 'dron'; did you mean 'drone'"):
         camera_look("dron", None, None, surface=True)
     with pytest.raises(ValueError, match="leave out finish: false"):
@@ -108,25 +112,28 @@ def _run_in_node(tmp_path: Path, body: str) -> list:
 
 def test_every_look_is_a_valid_finish_and_operator_and_the_merges_agree_in_node(tmp_path: Path) -> None:
     cases = json.dumps(CASES)
-    table, main, checked, merged, unknown, other, metered = _run_in_node(tmp_path, f"""
+    table, main, checked, merged, unknown, other, metered, none = _run_in_node(tmp_path, f"""
 out.push(L.CAMERA_LOOKS, L.LOOK_MAIN);
 const shot = (t) => ({{from: [0, 100, 0], forward: [0, 0, -1], up: [0, 1, 0], right: [1, 0, 0], fov: 40, ev: 0}});
 out.push(Object.fromEntries(Object.keys(L.CAMERA_LOOKS).map((name) => {{
   const look = L.cameraLook(name), o = F.resolveOptions(look.finish), view = A.operate(shot, look.operator, (s, t) => Math.sin(t));
   return [name, {{noise: o.noise.amount, range: o.range.stops, sharpen: o.sharpen.amount, halation: o.halation.amount, edges: o.edges.soft,
-    turned: view(3.3).operator !== undefined, moved: Math.abs(view(3.3).operator.yaw) + Math.abs(view(3.3).operator.pitch) > 0}}];
+    turned: view(3.3).operator !== undefined, moved: view === shot ? false : Math.abs(view(3.3).operator.yaw) + Math.abs(view(3.3).operator.pitch) > 0}}];
 }})));
 out.push({cases}.map(([section, base, own]) => L.lookMerge(base, own, L.LOOK_MAIN[section])));
 out.push([err(() => L.cameraLook("phon")), err(() => L.cameraLook("drone", {{finsh: {{}}}}))]);
 out.push(L.cameraLook("drone", {{finish: {{noise: 0.004}}, operator: {{hand: {{amount: 0.2}}}}}}));
 out.push(L.cameraLook("drone", {{}}, {{metered: false}}).operator);
+out.push([L.cameraLook("none", {{finish: {{noise: 0.01}}}}), L.cameraLook("none"), err(() => L.cameraLook("nnoe"))]);
 """)
     assert table == camera_looks()["looks"] and main == camera_looks()["main"]
     for name, o in checked.items():
         assert o["noise"] > 0 and o["range"] >= 1 and o["sharpen"] > 0 and o["halation"] > 0 and o["edges"] > 0, name
-        assert o["turned"] and o["moved"], name
+        assert (o["turned"] and o["moved"]) == (name != "camera"), name        # camera: nobody holding it, the view itself
     assert merged == [look_merge(base, own, camera_looks()["main"][section]) for section, base, own in CASES]
     assert 'no camera look "phon" (did you mean "phone"?)' in unknown[0] and 'unknown option "finsh" (did you mean "finish"?)' in unknown[1]
     finish, operator = camera_look("drone", {"noise": 0.004}, {"hand": {"amount": 0.2}}, surface=True)
     assert other == {"finish": finish, "operator": operator}
     assert "exposure" not in metered and "hand" in metered
+    assert none[0] == {"finish": {"noise": 0.01}, "operator": {}} and none[1] == {"finish": {}, "operator": {}}
+    assert 'no camera look "nnoe" (did you mean "none"?)' in none[2]

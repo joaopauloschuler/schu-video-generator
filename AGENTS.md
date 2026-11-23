@@ -3267,9 +3267,9 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
 - **Music**: `music: [{track: kick, pulse: Sun}, {track: pad, glow: Ship}]`: pulses of brightness and glints, a
   craft's throttle; never the camera. Worlds do not pulse.
 - **Finish**: no FXAA by default (it breaks stars and thin rings); `depth_of_field: true` focuses on the move's
-  subject; `motion_blur: 3` costs three times a frame. A camera's sensor, off unless given:
-  `finish: {noise: true, range: true, sharpen: true}` (sensor noise instead of the grain, highlights that
-  clip, faint sharpening halos; about +0.05 s a frame at 1280x720). The lens, off unless given:
+  subject; `motion_blur: 3` costs three times a frame. A camera's sensor (on by default through the `camera`
+  look, below; with `camera_look: none` off unless given): `finish: {noise: true, range: true, sharpen: true}` (sensor noise instead of the grain, highlights that
+  clip, faint sharpening halos; about +0.05 s a frame at 1280x720). The lens (the same):
   `finish: {distort: true, edges: true, halation: true}` (barrel distortion from the camera's lens at each
   moment: strong at ultra-wide, none from 50 mm, the corners kept so no border shows; softer, fringed edges; a
   warm glow round bright edges; about +0.06 s a frame at 1280x720).
@@ -3278,11 +3278,15 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
   lens; `hand: mounted` only vibrates; an automatic exposure that lags and hunts after the camera breaks out of
   a deck or turns into the sun, surface scenes only; a horizon a degree off at each cut, levelled after 2.5 s).
   Give a climb's `adapt` or `exposure`, not both. Costs nothing measurable a frame.
-- **Camera look**: one word for a matched finish and operator, off unless given: `camera_look: window_handheld`
+- **Camera look**: one word for a matched finish and operator. Every `space` scene gets `camera` unless it says
+  otherwise (since Step 401 space scenes look different: fine sensor noise, 2.8 stops of range, light
+  sharpening, the lens's bend, faint edge fringes and halation, a light vignette; nobody holding the camera);
+  `camera_look: none` restores the clean render of before. Named looks add their operator: `window_handheld`
   (handheld through a spacecraft's window), `drone`, `broadcast_long_lens` (give the moves a long lens),
   `phone`, `chase_mount` (bolted to the craft). Your own `finish:` and `operator:` go over it key by key
   (`finish: {noise: 0.006, range: 3}`, `operator: {horizon: false}`); an orbital scene leaves its automatic
-  exposure out. What each sets: docs/CONFIG.md (`space`). No measurable cost a frame at 1280x720.
+  exposure out. What each sets: docs/CONFIG.md (`space`). `camera` costs about +0.3 to +0.7 s a frame on a
+  sea-and-cloud view at 1280x720 (7.3 against 7.7–8.0 s).
 - **Look before you render**: `vidgen still . --scene rings --at 4 --size 640x360`. The page prints as warnings
   what only it can know (a subject under 3 px, the camera inside a world, a jump in a move, a craft in a world's shadow or
   seen from its unlit side); `vidgen lint` reports

@@ -80,7 +80,10 @@ into the same star file, every naked-eye star at its place.
 Each recipe is a whole scene for `scenes:` and validates as it stands (`tests/test_docs.py`); the
 numbers are the ones drawn for this cookbook (stills at 480x270 and 1280x720). Times are seconds of
 the scene unless they are bars. An orbital scene has no `world:`; it may have `orbits:` (true
-positions and timing), `bodies:`, `craft:`, `phenomena:`.
+positions and timing), `bodies:`, `craft:`, `phenomena:`. Every `space` scene is filmed by the
+default camera look `camera` (Step 401: sensor noise, a short dynamic range, light sharpening, the
+lens's bend, faint fringes and halation; nobody holding it), so space scenes look different from
+before; `camera_look: none` gives the clean render of before.
 
 **A sunrise over a limb.** The camera rides round the world so that the sun's upper edge meets
 the limb exactly at `at` (here 4 s; `at: 'bar 4'` with `music_data`); `air` allows for the air
@@ -409,12 +412,14 @@ off unless given: `operator: {hand: handheld, horizon: true}` (a person's drift,
 horizon a degree off at each cut; `hand: mounted` only vibrates), and in a surface scene `exposure: true`
 (an automatic exposure that lags and hunts).
 
-**Camera looks** (`camera_look:`, Step 400, DESIGN §124.4), off unless given: one word for a matched
+**Camera looks** (`camera_look:`, Steps 400–401, DESIGN §124.4–124.5): one word for a matched
 finish and operator, the scene's own `finish:` and `operator:` over it key by key (a number sets a
-group's main value: `finish: {noise: 0.006}`; `false` turns a group off).
+group's main value: `finish: {noise: 0.006}`; `false` turns a group off). Without `camera_look:` a scene
+gets `camera`; `camera_look: none` is the clean render (as before Step 401).
 
 | look | for | what it adds |
 |---|---|---|
+| `camera` (the default) | every scene that names none | the sensor and the lens only: fine noise, 2.8 stops of range, light sharpening, the lens's own bend, faint fringes towards the corners, a faint warm halation, a light vignette (0.2); no hand, no horizon error, no automatic exposure |
 | `window_handheld` | the view from a cabin | a braced hand, a gentle meter, the horizon 0.8° off; noise, 2 stops of range, the glass's veil, wide bloom, warm halation, heavy corners, the lens's bend |
 | `drone` | a sweep over sea or ground | gimbal vibration, a smooth meter; fine noise, 2.4 stops, crisp, a little saturated, the wide lens's bend and fringes |
 | `broadcast_long_lens` | a launch or a ship seen from far away (give the moves `lens: long` or `tele`) | a heavy head's slow sway, the iris ridden slowly; a big sensor's fine noise, 2.8 stops with a soft knee, strong detail halos, long-lens colour fringes |
@@ -463,7 +468,8 @@ the sun; no code of your own).
 One table (`vidgen/scenes/space_costs.py` holds it; `vidgen lint` estimates a surface or hull
 scene from its rows, a test compares the two). Seconds a frame at 1280x720 on 2 cores in headless
 Chromium with software GL (SwiftShader); orbital rows through `vidgen/three-finish` with a bloom (the
-`space` scene's default), air rows straight to the canvas (a surface scene's default). A render
+`space` scene's finish), air rows straight to the canvas (`camera_look: none`); the default camera
+look (Step 401) adds the finish's passes, about +0.3 to +0.7 s a frame on a sea-and-cloud view. A render
 adds the screenshot and the encoder (about 0.2 s a frame at 720p). Budget a film by adding its
 shots: a 60 s film at 30 fps is 1,800 frames, so 0.5 s a frame is 15 minutes, 1.2 s a frame 36
 minutes. A draft (`--draft`, 426x240) costs about a fifth.

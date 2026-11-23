@@ -1,4 +1,4 @@
-// vidgen/camera-looks: camera looks for three.js `web` scenes and `space` scenes (Step 400, DESIGN.md §124.4).
+// vidgen/camera-looks: camera looks for three.js `web` scenes and `space` scenes (Steps 400–401, DESIGN.md §124.4–124.5).
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/camera-looks".
 //
 //   import {cameraLook} from "vidgen/camera-looks";
@@ -10,12 +10,21 @@
 // vignette and grade) and the camera operator's of vidgen/space-camera-air (the hand, the automatic exposure and
 // the horizon of §124.3): one kind of camera and the person or mount holding it. The table is written as JSON
 // (quoted keys, numbers, strings; no functions) so vidgen reads the same table in Python for `camera_look:` of
-// `space` scenes. Motion blur is left to the scene: it multiplies a frame's cost by its samples. Data and two pure
-// functions; nothing is drawn here.
+// `space` scenes. `camera` (the sensor and the lens, nobody holding it) is what a `space` scene gets unless it gives
+// `camera_look:` (`none`: the clean render); a page of your own gets nothing unless it asks. Motion blur is left to
+// the scene: it multiplies a frame's cost by its samples. Data and two pure functions; nothing is drawn here.
 
 const PREFIX = "vidgen/camera-looks";
 
 export const CAMERA_LOOKS = Object.freeze({
+  // the camera every `space` scene gets unless it says otherwise (Step 401): the sensor and the lens of a good small
+  // camera and nobody holding it: a fine noise, a short dynamic range, light sharpening, the lens's own bend, faint
+  // fringes and a lighter vignette towards the corners and a faint warm halation; no hand, no horizon error, no automatic exposure
+  "camera": {
+    "finish": {"noise": {"amount": 0.006}, "range": {"stops": 2.8, "shoulder": 0.1}, "sharpen": 0.3, "distort": 1,
+               "edges": {"soft": 1, "fringe": 0.6}, "halation": {"amount": 0.15, "threshold": 0.45}, "vignette": 0.2},
+    "operator": {}
+  },
   // handheld through a spacecraft's window: braced against the frame (a calm hand), the window's glass veils the
   // shadows and spreads the highlights, its frame darkens the corners; a small camera's noise; cloud tops clip
   "window_handheld": {
@@ -102,18 +111,20 @@ export function lookMerge(base, own, main = {}) {
   return out;
 }
 
-/** The options of camera look `name` (a key of CAMERA_LOOKS) with `own` = {finish, operator} over them
- * (lookMerge: yours win, key by key). Returns new objects {finish, operator}: `finish` for vidgen/three-finish's
+/** The options of camera look `name` (a key of CAMERA_LOOKS, or "none": no look, your own options alone) with
+ * `own` = {finish, operator} over them (lookMerge: yours win, key by key). Returns new objects {finish, operator}: `finish` for vidgen/three-finish's
  * `Finish`, `operator` for vidgen/space-camera-air's `operate` or `airCamera(...).operator`. `metered: false`
  * leaves the look's automatic exposure out (a page with no meter, such as an orbital space scene's). */
 export function cameraLook(name, own = {}, {metered = true} = {}) {
-  if (typeof name !== "string" || !(name in CAMERA_LOOKS)) {
-    const looks = Object.keys(CAMERA_LOOKS);
+  if (typeof name !== "string" || !(name in CAMERA_LOOKS || name === "none")) {
+    const looks = [...Object.keys(CAMERA_LOOKS), "none"];
     throw fail(`no camera look ${JSON.stringify(name)}${hint(String(name), looks)}; looks: ${looks.join(", ")}`);
   }
   if (own === null || typeof own !== "object" || Array.isArray(own)) throw fail(`a camera look's own options are {finish, operator}, got ${JSON.stringify(own)}`);
   for (const k of Object.keys(own)) if (k !== "finish" && k !== "operator") throw fail(`unknown option "${k}"${hint(k, ["finish", "operator"])}; a camera look's own options are finish and operator`);
-  const copy = (v) => JSON.parse(JSON.stringify(v)), operator = copy(CAMERA_LOOKS[name].operator);
+  const copy = (v) => JSON.parse(JSON.stringify(v));
+  if (name === "none") return {finish: copy(own.finish ?? {}), operator: copy(own.operator ?? {})};
+  const operator = copy(CAMERA_LOOKS[name].operator);
   if (!metered) delete operator.exposure;
   return {finish: lookMerge(copy(CAMERA_LOOKS[name].finish), own.finish, LOOK_MAIN.finish), operator: lookMerge(operator, own.operator, LOOK_MAIN.operator)};
 }

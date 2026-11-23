@@ -10,8 +10,9 @@ from vidgen.api import *
 
 #: name -> (seconds a frame at 1280x720, the row of the cookbook's table that states it). The one table of
 #: costs: the cookbook prints exactly these rows (a test compares them). An orbital row is drawn through
-#: three-finish with a bloom (the `space` default), an air row straight to the canvas (a surface scene's
-#: default); a range's upper end is the number. The lint estimate reads the air and hull rows.
+#: three-finish with a bloom (the `space` finish), an air row straight to the canvas (`camera_look: none`;
+#: the default camera look of Step 401 adds about 0.3–0.7 s a frame, not in the rows); a range's upper end is
+#: the number. The lint estimate reads the air and hull rows.
 COSTS: dict[str, tuple[float, str]] = {
     "sky": (0.3, "| the sky alone (stars and the Milky Way) | 0.24–0.30 |"),
     "world": (0.59, "| a world filling the frame, or a close limb | 0.47–0.59 |"),

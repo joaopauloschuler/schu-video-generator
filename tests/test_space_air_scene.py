@@ -177,7 +177,7 @@ def test_orbital_mistakes_are_named_with_the_closest_word(space: Any, change: di
     ({**CARRIER, "craft": [{"name": "Carrier", "kind": "ship"}], "camera": {"move": "hull-pass"}}, "needs a hull among craft"),
     ({**CARRIER, "craft": [{"name": "Carrier", "hull": "carrier", "dress": False, "scale_ref": {"into": {"hangar": "hangar-2", "over": [0, 4]}}}]}, "it needs dress"),
     ({**SKIM, "camera": {"move": "skim", "over": ["bar 1", "bar 5"]}}, "need the score on the page"),
-    ({**CHASE, "flash": [{"at": 4}]}, "add finish"),
+    ({**CHASE, "camera_look": "none", "flash": [{"at": 4}]}, "add finish"),
     ({**CHASE, "music_data": True, "music": [{"track": "kick", "pulse": "lightnin"}]}, "did you mean 'lightning'"),
     ({**SKIM, "music_data": True, "music": [{"track": "kick", "pulse": "lightning"}]}, "lightning needs clouds"),
     ({**CHASE, "music_data": True, "music": [{"track": "level", "glow": "lava"}]}, "lava glows on volcanic ground"),
@@ -246,9 +246,11 @@ def test_every_new_param_changes_the_page(space: Any, raw: dict[str, Any], path:
     assert page(space, changed) != page(space, raw)
 
 
-def test_existing_space_scenes_write_the_same_pages(space: Any) -> None:
-    """Outbound's five scenes and Step 376's demos: the generated page text is byte-identical to Step 391's (hashes
-    taken at commit 1d1f7fb before this step's change)."""
+def test_existing_space_scenes_write_the_same_pages_with_camera_look_none(space: Any) -> None:
+    """Outbound's five scenes and Step 376's demos with camera_look: none: the generated page text is byte-identical
+    to Step 391's (hashes taken at commit 1d1f7fb) but for the scene's own camera_look in PARAMS, so `none` is the
+    clean render of before; without it (Step 401)
+    the same scenes get the camera look's lines and nothing else changes."""
     from test_space_scene import HOLE, RINGS, TRANSFER
 
     before = {"01_dawn": "4ed80c6ff2621a06627dc640e5bbcb882f18009d125605247ab383933e7530a5",
@@ -260,10 +262,16 @@ def test_existing_space_scenes_write_the_same_pages(space: Any) -> None:
               "TRANSFER": "4264d7035b4d9e646bb8815f4fd1f3e71d0bea7c998acfd32e1d515f6913ce58",
               "HOLE": "27c741d74b9c08737f5622135bff1a04077e74efd3034adecfd3640852433a5d"}
     project = Project.load(ROOT / "examples" / "outbound")
-    got = {s.id: hashlib.sha256(page(space, s.params, s.id).encode("utf-8")).hexdigest() for s in project.config.scenes if s.type == "space"}
-    for name, raw in (("RINGS", RINGS), ("TRANSFER", TRANSFER), ("HOLE", HOLE)):
-        got[name] = hashlib.sha256(page(space, raw).encode("utf-8")).hexdigest()
+    raws = {s.id: (s.params, s.id) for s in project.config.scenes if s.type == "space"}
+    raws.update({"RINGS": (RINGS, "s"), "TRANSFER": (TRANSFER, "s"), "HOLE": (HOLE, "s")})
+    nones = {name: page(space, {**raw, "camera_look": "none"}, sid) for name, (raw, sid) in raws.items()}
+    assert all(text.count('"camera_look": null, ') == 1 for text in nones.values())     # the scene's own params, as given
+    got = {name: hashlib.sha256(text.replace('"camera_look": null, ', "").encode("utf-8")).hexdigest() for name, text in nones.items()}
     assert got == before
+    for name, (raw, sid) in raws.items():
+        old, new = page(space, {**raw, "camera_look": "none"}, sid).splitlines(), page(space, raw, sid).splitlines()
+        added = [x for x in new if x not in old]
+        assert any("// camera look camera (vidgen/camera-looks)" in x for x in added) and all("camera look" in x or "new Finish(" in x or x.startswith("export const PARAMS") for x in added), name
 
 
 def test_the_pages_import_only_shipped_modules_and_are_valid_javascript(space: Any, tmp_path: Path) -> None:
@@ -312,6 +320,7 @@ export function plane(kind, o) {
 }
 """,
     "vidgen/space-effects": "export const effects = (craft, o) => ({o, object: {}, update(t, u) { globalThis.__fx = o; return this; }});\n",
+    "vidgen/three-finish": "export class Finish { constructor(r, s, c, ctx, o) { globalThis.__finish = o; this.o = o; } render(t) { this.o.update(t); globalThis.__draws = (globalThis.__draws ?? 0) + 1; } }\n",
 }
 
 
@@ -362,8 +371,10 @@ def test_the_camera_operator_is_off_unless_given(space: Any, tmp_path: Path) -> 
     """operator: (Step 399) reaches the page only when given (a page without it is unchanged: no operate line, the
     air's ev a number); on a surface scene the rig's meter drives the air's exposure through the shot's ev; every cut
     starts a shot; an orbital scene takes the hand and the horizon but not the exposure; the page runs in Node."""
-    plain = page(space, SKIM)
+    plain = page(space, {**SKIM, "camera_look": "none"})
     assert "operator" not in plain.split("export const PARAMS")[1].split("\n", 1)[1] and "operate" not in plain and '"ev": 0,' in plain
+    camera = page(space, SKIM)                                         # the default camera look (Step 401) has no operator
+    assert "operate" not in camera and '"ev": 0,' in camera
     given = page(space, {**SKIM, "operator": {"hand": "mounted", "exposure": True, "horizon": 1.5, "seed": 3}})
     assert 'S.view = S.cam.operator(S.view, {"hand": "mounted", "exposure": true, "horizon": 1.5, "seed": 3});' in given
     assert '"ev": () => (S.shot && Number.isFinite(S.shot.ev) ? S.shot.ev : 0) + 0,' in given
@@ -378,9 +389,10 @@ def test_the_camera_operator_is_off_unless_given(space: Any, tmp_path: Path) -> 
 
 def test_a_camera_look_turns_the_finish_on_and_meters_a_surface_scene(space: Any) -> None:
     """camera_look: (Step 400) on a surface scene: the finish is drawn (a surface scene without finish: is drawn straight
-    to the canvas), the look's automatic exposure drives the air's ev, the scene's own operator wins."""
-    plain = page(space, SKIM)
-    assert "new Finish(" not in plain
+    to the canvas only with camera_look: none), the look's automatic exposure drives the air's ev, the scene's own
+    operator wins."""
+    plain = page(space, {**SKIM, "camera_look": "none"})
+    assert "new Finish(" not in plain and "new Finish(" in page(space, SKIM)
     text = page(space, {**SKIM, "camera_look": "drone", "operator": {"exposure": {"hunt": 0}}})
     assert "new Finish(" in text and "// camera look drone (vidgen/camera-looks)" in text
     assert 'S.view = S.cam.operator(S.view, {"hand": {"style": "mounted", "amount": 0.5}, "exposure": {"strength": 0.35, "hunt": 0, "speed": 0.35, "most": 1}});' in text

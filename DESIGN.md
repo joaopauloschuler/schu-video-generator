@@ -30495,14 +30495,17 @@ the video's soundtrack with its normalisation) of each of the seven films is byt
 draft.
 
 
-## 124. Footage, not a render (Steps 397–400)
+## 124. Footage, not a render (Steps 397–401)
 
 The owner's request (2026-11-23): web scenes that read as real camera footage, by ordinary image
 processing (no AI): the camera's own flaws and the person holding it. Every effect is a function
 of `t` and the options (no state carried from frame to frame), off by default (no existing
 scene's pixels change unless it asks), cheap (measured at 1280x720 on the 09_rise view of Step
 390), and has a JavaScript twin of its curves tested without rendering. Steps: 397 the sensor,
-398 the lens, 399 the operator, 400 camera looks.
+398 the lens, 399 the operator, 400 camera looks, 401 a camera by default. Step 401 reverses "off by
+default" for `space` scenes only, at the owner's decision (old scenes need not look the same): they get
+the `camera` look unless they say `camera_look: none` (§124.5); three-finish's and the operator's own
+defaults stay off.
 
 ### 124.1 The sensor: `noise`, `range`, `sharpen` in `vidgen/three-finish` (Step 397)
 
@@ -30736,7 +30739,8 @@ horizon, ev}`.
 ### 124.4 Camera looks: `camera_look:` and `vidgen/camera-looks` (Step 400)
 
 **What.** One word for a matched set of Steps 397–399 and the existing finishing: the sensor, the lens, the
-person or mount holding the camera, the bloom, vignette and grade of one kind of camera. Off unless given.
+person or mount holding the camera, the bloom, vignette and grade of one kind of camera. Off unless given
+(until Step 401: a `space` scene now gets the `camera` look unless it says `none`, §124.5).
 
 - **The table** is `CAMERA_LOOKS` of a new module `vidgen/camera-looks` (plain JavaScript, no imports):
   `window_handheld` (handheld through a spacecraft's window: a calm braced hand, a gentle meter, the
@@ -30795,3 +30799,53 @@ person or mount holding the camera, the bloom, vignette and grade of one kind of
 - **Cost** (2 cores, SwiftShader, 1280x720, the 09_rise frames 121–129, wall time of `page.frame`,
   median): no look 8.56 / 7.74 s, `window_handheld` 7.97 / 7.83 s (two runs each): nothing measurable
   against the ±0.6 s spread (Steps 397–399 measured each part at +0.045, +0.063 and 0 s).
+
+### 124.5 A camera by default: the `camera` look (Step 401)
+
+**What.** The owner's decision (2026-11-23): old scenes need not look the same. Every `space` scene, orbital
+and surface, that gives no `camera_look:` gets the look `camera`, a row of `CAMERA_LOOKS` like the others
+(so it is documented, listed and tested the same way): the sensor and the lens of a good small camera with
+nobody holding it. `camera_look: none` (or `null`) is no look: the page and its pixels are those of before.
+
+- **The values**: `noise: {amount: 0.006}`, `range: {stops: 2.8, shoulder: 0.1}`, `sharpen: 0.3`, `distort: 1`
+  (the lens's own bend, from the camera's focal length at each moment, §124.2), `edges: {soft: 1, fringe: 0.6}`,
+  `halation: {amount: 0.15, threshold: 0.45}`, `vignette: 0.2`; `operator: {}`. Modelled on `window_handheld`
+  without the operator (no hand, no horizon error, no automatic exposure), without the glass (no lift, no wide
+  bloom) and gentler. Motion blur stays the scene's (it multiplies a frame's cost).
+- **Tuning** on views not tried before (stills in the step's scratch folder): a dark night side from orbit (a
+  thin crescent of Earth, stars), a Mars-like desert at noon (sun 70° up, a skim 200 m over the dunes), a ship
+  close-up (`into-bay` of a 3.2 km carrier), a calm sea at noon, and the 09_rise view at 4 and 8 s. A first
+  draft took `window_handheld`'s 2.3 stops and noise 0.008: on the desert the per-channel stretch of the range
+  (§124.1: values over half the white are stretched so the white lands at 1) pushed the bright orange sand
+  visibly redder and more saturated, and the noise showed as a mottle in the noon sky at 100 %. 2.8 stops
+  (3.2 was tried: hardly less shift) and noise 0.006 keep the shift small and the noise below notice in a
+  640x360 still; the rise's sunlit tops still reach near white at 8 s (99.5th percentile of luma 235 against
+  215, 0.37 % of pixels at 250+, none without). The space finish's vignette 0.3 darkened the desert's and the
+  sea's corners in a way the clean render did not have (a surface scene without a look is not finished at
+  all); 0.2 is a lens's falloff without a frame.
+- **Rules.** Without `camera_look:` → `camera`, merged with the scene's own `finish:` and `operator:` as any
+  look (§124.4: the scene's values win key by key). `finish: false` without `camera_look:` → no look, straight to
+  the canvas (the scene asked for no finishing); with a named look it is still refused. The page writes the
+  look's comment line and the merged finish options; `camera` writes no operator line (`camera_look()` returns
+  no operator when neither the look nor the scene gives one). A surface scene with `camera` is drawn through
+  the finish (with the space finish's bloom 0.3 at threshold 1, so the sun and the glitter bloom as on orbital
+  pages); with `none` and no `finish:` straight to the canvas as before. `flash:` on a surface scene therefore
+  needs `finish:` only with `none`. `cameraLook("none", own)` in JavaScript returns the own options alone.
+- **Why only `space` scenes.** three-finish's own defaults (and the operator's) stay off: a `web` scene or a
+  music-video page that calls `new Finish(...)` in its own code chose its finishing by hand and is not a space
+  scene; changing those defaults would change every such page and every music video's pixels (and the module's
+  hash, so every page would be drawn again), outside what the owner decided. A page of one's own takes the look
+  in one line (`cameraLook("camera")`).
+- **`none` is exact.** The four new views rendered before the step (no `camera_look`) and after it with
+  `camera_look: none`: 0 differing pixels at 1280x720. The page text of Outbound's five scenes and the Step 376
+  demos with `none` is byte-identical to Step 391's but for the scene's own `"camera_look": null` in `PARAMS`
+  (the test strips that entry and compares hashes); without it the only added lines are the look's comment, the
+  merged `new Finish(...)` line and `PARAMS`.
+- **Cost** (2 cores, SwiftShader, 1280x720, the 09_rise frames 121–129, median of 9, two runs in both orders):
+  `none` (the space finish) 7.30 / 7.38 s, `camera` 7.97 / 7.69 s: about +0.3 to +0.7 s, at the edge of the
+  ±0.6 s spread (Steps 397–398 measured the sensor and lens at +0.045 and +0.063 s with `finish.render` alone;
+  the frame's own spread is larger). A surface scene with no `finish:` also gains the finish's own passes (bloom,
+  tone mapping, output) it did not draw before; single stills: desert 5.5 → 6.3 s, sea 2.3 → 2.9–3.2 s (first
+  still of a page, not a median). The cost table's air rows (`space_costs.py`) are measured without it.
+- **Not verified**: motion (no clip: the noise is new every frame by construction, the distortion follows the
+  lens; Steps 397–398's tests cover both); a desert or snow at noon with the sun in frame; long-lens moves.

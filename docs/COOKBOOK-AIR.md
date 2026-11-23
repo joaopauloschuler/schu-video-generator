@@ -20,8 +20,10 @@ ev, quality}`. The air (`vidgen/space-air`) is the one the same planet shows fro
 from an orbital scene of the same world keeps its colours; the sea, ground and clouds belong to that
 world and that place (the ground's continents are the globe's). `sun` is `[elevation, azimuth]` in
 degrees or `{date, utc}` (the Earth's Sun at the place then). The stars behind the air are `sky:`.
-A surface scene is drawn straight to the canvas (every number in the cost table is); `finish:`
-draws it through `vidgen/three-finish`. `flights:` are planned in Python (the `flight_data` words: legs,
+A surface scene is drawn through `vidgen/three-finish` with the default camera look `camera` (Step
+401: the sensor and the lens of a camera, nobody holding it; the scenes look different from before);
+`camera_look: none` draws it straight to the canvas as before (the cost table's numbers were measured
+so), and `finish:` given with `none` draws it through the finish without a camera. `flights:` are planned in Python (the `flight_data` words: legs,
 turns, climbs, following the ground, a landing) and checked never to come under the ground or the
 sea; `craft:` with `plane:` flies them. Each recipe validates as it stands (`tests/test_docs.py`).
 
@@ -250,9 +252,11 @@ DESIGN §123 where it is made:
   seeded noise shaped like a person's, not measured; the automatic exposure meters an estimate of the frame's
   brightness from the camera's view, the sun, the decks and the ground (within about a stop of the drawn
   picture's mean on the views it was fitted to), not the picture itself;
-- the camera looks (`camera_look:`): matched sets of the finish's and the operator's options chosen by eye on
-  four views (a rise to 60 km, a skim into the sun, a pass beside a hull, a sunrise over a limb), not
-  measured from real cameras;
+- the camera looks (`camera_look:`, `camera` by default): matched sets of the finish's and the operator's
+  options chosen by eye on eight views (a rise to 60 km, a skim into the sun, a pass beside a hull, a sunrise
+  over a limb; for the default also a night side, a desert at noon, a ship's bay and a calm sea at noon), not
+  measured from real cameras; the default's 2.8 stops make bright saturated ground (a Mars-like desert at noon)
+  a little more saturated;
 - the ground: rock beds on steep faces (layered rock in a canyon); the lava's glow lighting the ground
   beside it; the globe's relief shading from very high up;
 - the descent: the camera falls far faster than any vehicle; the globe's clouds and the decks' are not
