@@ -5,7 +5,20 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–407
+## Steps 193–408
+
+### vidgen on a Colab session (Step 408)
+
+- **`vidgen remote NAME ARGS...`** runs a vidgen command on Colab session `NAME` from the project
+  folder: it syncs the changed files up (SHA-256 manifest; never `build/`, `output/`, `exports/`,
+  `media/`, `--exclude DIR`), refuses when the VM's vidgen is not this computer's code (and prints
+  the setup command), runs `vidgen ARGS` there detached while streaming its log, and brings back the
+  files the command's JSON document names outside `build/` (plus the render's `timings.json`) and the
+  files the run made or changed. `build/` stays on Colab. Standard library only on this side.
+- **`tools/colab/setup_session.py`** also installs this checkout's vidgen (`setup_vidgen.sh`:
+  ffmpeg, LaTeX, cairo/pango, espeak-ng, Playwright's Chromium once; vidgen into
+  `/content/vidgen-venv` when its code hash changes). `--no-vidgen` skips it, `--vidgen-only` does
+  only it. The `colab` helpers moved to `vidgen.colab`, shared by both.
 
 ### The LTX HOWTO tightened (Step 407)
 

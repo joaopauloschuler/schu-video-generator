@@ -5731,6 +5731,27 @@ scenes:
   (about 1.7 Colab units for 6 stills and 4 clips). Ask the user before starting a Colab GPU; reuse a
   running session between experiments (`setup_session.py` with its name); stop it when the user says so.
 
+### Use a Colab session: render on a GPU VM
+
+Heavy commands (`render`, `storyboard`, `tts`) can run on a Google Colab VM while you work here.
+Ask the user before starting a Colab GPU (it bills by the hour). Every command names its session;
+nothing falls back to Colab, and nothing here stops a session.
+
+```
+python tools/colab/setup_session.py NAME --vidgen-only   # from vidgen's source folder: create or reuse NAME, install this code
+cd my-project
+vidgen remote NAME render      # sync changed files up, render there, bring back the MP4 and build/final/timings.json
+vidgen remote NAME storyboard  # any other command
+colab stop -s NAME             # only when the user says so
+```
+
+- Synced to `/content/projects/<folder name>/` on the VM: only changed files, never `build/`,
+  `output/`, `exports/`, `media/` (`--exclude DIR` before NAME leaves out more). `build/` stays there as a cache.
+- Brought back: the files the command's JSON document names outside `build/` (plus the render's
+  `timings.json`) and the files the run made or changed outside those folders.
+- After vidgen's code changes, `vidgen remote` stops and prints the setup command (it reinstalls vidgen only).
+- Several sessions can run at once, each under its own name.
+
 ### Your content and third-party services
 
 - The MIT licence covers the software, not the videos you make or the files you add.

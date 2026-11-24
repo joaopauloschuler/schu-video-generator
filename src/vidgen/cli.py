@@ -2456,6 +2456,24 @@ def cmd_schema(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_remote(args: argparse.Namespace) -> CommandResult:
+    """Run a vidgen command on a Colab session from the project folder."""
+    from vidgen.colab import Colab
+    from vidgen.remote import EXCLUDED_DIRS, RemoteRun
+
+    vidgen_args = list(args.vidgen_args)
+    if vidgen_args[:1] == ["--"]:
+        vidgen_args = vidgen_args[1:]
+    if not vidgen_args:
+        raise VidgenError("give the vidgen command to run, e.g. vidgen remote NAME render")
+    if vidgen_args[0] == "remote":
+        raise VidgenError("vidgen remote runs a vidgen command on the session; it cannot run remote there")
+    colab = Colab(args.session, cli=args.colab)
+    run = RemoteRun(colab, Path.cwd(), vidgen_args, json_commands=JSON_COMMANDS,
+                    exclude=(*EXCLUDED_DIRS, *args.exclude))
+    return run.run()
+
+
 def cmd_guide(args: argparse.Namespace) -> CommandResult:
     """Print the author guide for AI agents, one topic of it, or the list of topics (DESIGN.md §59)."""
     from vidgen.guide import find_topic, guide_text, guide_topics, topic_lines
@@ -3129,6 +3147,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     all_languages_arg(p)
     p.set_defaults(func=cmd_lint)
+
+    p = sub.add_parser(
+        "remote",
+        help="run a vidgen command on a Colab session from the project folder: sync the changed files up, "
+        "run it there, bring back its outputs (build/ stays on Colab)",
+    )
+    p.add_argument("session", help="the Colab session name (set up with tools/colab/setup_session.py NAME --vidgen-only)")
+    p.add_argument("vidgen_args", nargs=argparse.REMAINDER, metavar="ARGS", help="the vidgen command and its arguments, e.g. render --preview")
+    p.add_argument("--exclude", action="append", default=[], metavar="DIR",
+                   help="a top folder of the project not to sync (repeatable; build, output, exports and media never are)")
+    p.add_argument("--colab", default="colab", help="the colab CLI command (default: colab)")
+    p.set_defaults(func=cmd_remote)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")
     project_arg(p)

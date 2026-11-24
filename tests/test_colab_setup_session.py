@@ -24,6 +24,7 @@ def _load(name: str) -> ModuleType:
 setup_session = _load("setup_session")
 vm_state = _load("vm_state")
 
+LOCAL_HASH = "c0de"
 SESSION_LINE = "[{name}] gpu-l4-s-abc | Hardware: L4 | Shape: Standard | Variant: GPU"
 
 
@@ -35,8 +36,11 @@ class FakeVM:
     """A Colab VM as vm_state.py reports it: a started script finishes after `polls_to_finish` probes."""
 
     def __init__(self, ltx: dict | None = None, image: dict | None = None, comfy_up: bool = False,
-                 polls_to_finish: int = 1, fail: str | None = None) -> None:
+                 polls_to_finish: int = 1, fail: str | None = None, vidgen_hash: str | None = LOCAL_HASH) -> None:
         self.parts = {"ltx": ltx or _part(), "image": image or _part()}
+        self.vidgen = {"hash": vidgen_hash, "setup_running": False,
+                       "log": {"exists": True, "milestones": ["### vidgen step"], "tail": ["vidgen last line"]}}
+        self.vidgen_polls = 0
         self.comfy = {"up": comfy_up, "running": comfy_up, "dir": True,
                       "models": {"unet_gguf": ["a.gguf"]} if comfy_up else {}}
         self.polls_to_finish = polls_to_finish
@@ -95,9 +99,21 @@ class FakeColabCLI:
                 if self.probes in self.dropped_probes:
                     return setup_session.CommandResult(1, "RuntimeError: Connection was lost.")
                 return setup_session.CommandResult(0, self.vm.state_json())
+            env = dict(a.split("=", 1) for a in args if "=" in a)
+            if script == "colab_vm.py":
+                assert env["VIDGEN_ACTION"] == "state"
+                vidgen = self.vm.vidgen
+                if vidgen["setup_running"]:
+                    self.vm.vidgen_polls += 1
+                    if self.vm.vidgen_polls > 1:
+                        vidgen["setup_running"] = False
+                        vidgen["hash"] = None if self.vm.fail == "vidgen" else vidgen["pending"]
+                return setup_session.CommandResult(0, "VIDGEN_VM " + json.dumps({"vidgen": vidgen}))
             if script == "start_setup.py":
-                env = dict(a.split("=", 1) for a in args if "=" in a)
-                self.vm.start("image" if env["SCRIPT"].endswith("setup_image.sh") else "ltx")
+                if env["SCRIPT"].endswith("setup_vidgen.sh"):
+                    self.vm.vidgen.update(setup_running=True, pending=env["VIDGEN_HASH"])
+                else:
+                    self.vm.start("image" if env["SCRIPT"].endswith("setup_image.sh") else "ltx")
                 return setup_session.CommandResult(0, "started")
             if script == "start_comfy.py":
                 self.vm.comfy["running"] = True
@@ -106,6 +122,18 @@ class FakeColabCLI:
 
     def commands(self) -> list[str]:
         return [" ".join(c[1:2] + ([Path(c[c.index("-f") + 1]).name] if "-f" in c else [])) for c in self.calls]
+
+
+@pytest.fixture(autouse=True)
+def _cheap_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """No hashing or packing of the real 45 MB package in these tests."""
+    monkeypatch.setattr(setup_session, "package_hash", lambda package_dir=None: LOCAL_HASH)
+
+    def archive(repo: Path, dest: Path) -> Path:
+        dest.write_bytes(b"tar")
+        return dest
+
+    monkeypatch.setattr(setup_session, "source_archive", archive)
 
 
 def _run(cli: FakeColabCLI, argv: list[str]) -> tuple[int, list[str]]:
@@ -153,8 +181,9 @@ def test_existing_ready_session_is_all_skipped() -> None:
     cli = FakeColabCLI(vm, sessions=["ltx"])
     code, lines = _run(cli, ["ltx"])
     assert code == 0
-    assert cli.commands() == ["sessions", "exec vm_state.py"]
+    assert cli.commands() == ["sessions", "exec vm_state.py", "exec colab_vm.py"]
     text = "\n".join(lines)
+    assert "reused (marker, code c0de)" in text and "vidgen remote ltx render" in text
     assert "reused (all files present, no marker)" in text and "reused (marker)" in text
     assert "reused (already answering)" in text and "colab stop -s ltx" in text
 
@@ -239,3 +268,31 @@ def test_vm_state_reports_markers_files_and_processes(tmp_path: Path, monkeypatc
     assert state["comfy"]["up"] is False and state["comfy"]["dir"] is True
     assert state["logs"]["setup.log"]["milestones"] == ["### 10:00 +1s SETUP DONE"]
     assert state["logs"]["comfy.log"]["exists"] is False
+
+
+def test_vidgen_only_installs_this_code_and_skips_the_models() -> None:
+    cli = FakeColabCLI(FakeVM(vidgen_hash="old1"), sessions=["s"])
+    code, lines = _run(cli, ["s", "--vidgen-only"])
+    assert code == 0
+    assert "exec vm_state.py" not in cli.commands()
+    uploads = [c[-1] for c in cli.calls if c[1] == "upload"]
+    assert uploads == ["/content/vidgen-src.tar.gz", "/content/setup_vidgen.sh"]
+    start = next(c for c in cli.calls if "start_setup.py" in c[-1])
+    assert "VIDGEN_HASH=c0de" in start and "SCRIPT=/content/setup_vidgen.sh" in start
+    text = "\n".join(lines)
+    assert "installed code c0de" in text and "setup_vidgen.log: ### vidgen step" in text
+    assert "ComfyUI" not in text
+
+
+def test_no_vidgen_skips_it_and_a_failed_vidgen_setup_shows_its_log() -> None:
+    vm = FakeVM(ltx=_part(marker=True, missing=False), image=_part(marker=True, missing=False),
+                comfy_up=True, vidgen_hash=None)
+    cli = FakeColabCLI(vm, sessions=["s"])
+    code, lines = _run(cli, ["s", "--no-vidgen"])
+    assert code == 0 and "exec colab_vm.py" not in cli.commands() and "skipped (--no-vidgen)" in "\n".join(lines)
+    vm.fail = "vidgen"
+    code, lines = _run(FakeColabCLI(vm, sessions=["s"]), ["s", "--vidgen-only"])
+    text = "\n".join(lines)
+    assert code == 1 and "setup_vidgen.sh stopped before it finished" in text and "vidgen last line" in text
+    with pytest.raises(SystemExit):
+        setup_session.parse_args(["s", "--no-vidgen", "--vidgen-only"])

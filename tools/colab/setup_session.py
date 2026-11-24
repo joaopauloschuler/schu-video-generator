@@ -1,93 +1,49 @@
 """Find or create a Google Colab GPU session and set it up for docs/HOWTO-restyle-with-ltx-on-colab.md.
 
-    python tools/colab/setup_session.py NAME [--gpu L4] [--no-image] [--latest]
+    python tools/colab/setup_session.py NAME [--gpu L4] [--no-image] [--latest] [--no-vidgen | --vidgen-only]
 
 Runs on your machine (standard library only, Windows too) and drives the `colab` CLI: it reuses the
 session NAME when `colab sessions` lists it (else `colab new`, retried on 503), then installs
-ComfyUI + the LTX-2.3 weights (setup.sh) and the image models (setup_image.sh) and starts ComfyUI,
-skipping each part that is already done. It never stops the session. See README.md here.
+ComfyUI + the LTX-2.3 weights (setup.sh) and the image models (setup_image.sh), starts ComfyUI, and
+installs this checkout's vidgen (setup_vidgen.sh), skipping each part that is already done. It
+never stops the session. See README.md here.
 """
 from __future__ import annotations
 
 import argparse
-import json
-import re
-import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 TOOLS_DIR = Path(__file__).resolve().parent
+REPO = TOOLS_DIR.parents[1]
+sys.path.insert(0, str(REPO / "src"))  # this checkout's vidgen.colab, also when an older vidgen is installed
+
+from vidgen.colab import (  # noqa: E402
+    VM_SOURCE_ARCHIVE, Colab as _Colab, ColabError as SetupError, CommandResult, Runner, format_seconds,
+    last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions, run_command, say_now, shown,
+    source_archive,
+)
+
+__all__ = ["CommandResult", "Runner", "SetupError", "format_seconds", "parse_sessions", "run_command", "say_now", "shown"]
+
 STATE_PREFIX = "VIDGEN_STATE "
 GPUS = ("T4", "L4", "G4", "H100", "A100")
 UPLOADS = ("vm_state.py", "setup.sh", "setup_image.sh")
 PART_SCRIPTS = {"ltx": "setup.sh", "image": "setup_image.sh"}
 PART_LOGS = {"ltx": ("setup.log", "download.log"), "image": ("setup_image.log",)}
 PART_TITLES = {"ltx": "ComfyUI + LTX-2.3 weights", "image": "image models (Qwen-Image-Edit, Z-Image)"}
+VIDGEN_TITLE = "vidgen (this computer's code)"
+VIDGEN_SCRIPT = "setup_vidgen.sh"
 HOWTO = "docs/HOWTO-restyle-with-ltx-on-colab.md"
-
-
-@dataclass(frozen=True)
-class CommandResult:
-    """Exit code and combined stdout + stderr of one `colab` call."""
-
-    returncode: int
-    output: str
-
-
-Runner = Callable[[list[str], float], CommandResult]
-
-
-def say_now(line: str) -> None:
-    """Print a progress line at once, also when stdout is a pipe."""
-    print(line, flush=True)
-
-
-class SetupError(Exception):
-    """A setup step failed; the message says which and shows the VM's log tail when there is one."""
-
-
-def run_command(args: list[str], timeout_seconds: float) -> CommandResult:
-    """Run one command and return its exit code and output (124 when it timed out)."""
-    try:
-        # check=False: the caller retries dropped calls, and `colab exec` exits 0 even when the code fails.
-        done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=timeout_seconds, check=False)
-    except FileNotFoundError as exc:
-        raise SetupError(f"{args[0]!r} not found: install and log in to the colab CLI (google-colab-cli)") from exc
-    except subprocess.TimeoutExpired as exc:
-        partial = "".join(_text(part) for part in (exc.stdout, exc.stderr))
-        return CommandResult(124, f"{partial}\n(timed out after {timeout_seconds:.0f} s)")
-    return CommandResult(done.returncode, done.stdout + done.stderr)
-
-
-def _text(data: str | bytes | None) -> str:
-    if isinstance(data, bytes):
-        return data.decode("utf-8", "replace")
-    return data or ""
-
-
-def parse_sessions(text: str) -> dict[str, str]:
-    """Session name -> hardware from `colab sessions` lines like `[ltx] gpu-l4-... | Hardware: L4 | ...`."""
-    sessions = {}
-    for line in text.splitlines():
-        match = re.match(r"\s*\[(?P<name>[^\]]+)\]\s+\S+\s*\|\s*Hardware:\s*(?P<hardware>[^|]+?)\s*(\||$)", line)
-        if match:
-            sessions[match["name"]] = match["hardware"]
-    return sessions
 
 
 def parse_state(text: str) -> dict | None:
     """The JSON that vm_state.py printed, or None when the line is missing (the exec dropped)."""
-    for line in text.splitlines():
-        if line.startswith(STATE_PREFIX):
-            try:
-                return json.loads(line[len(STATE_PREFIX):])
-            except ValueError:
-                return None
-    return None
+    return parse_prefixed_json(text, STATE_PREFIX)
 
 
 def part_status(part: dict) -> str:
@@ -101,82 +57,12 @@ def part_status(part: dict) -> str:
     return "todo"
 
 
-def _last_line(text: str) -> str:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return lines[-1] if lines else "(no output)"
-
-
-def format_seconds(seconds: float) -> str:
-    """`75` -> `1 min 15 s`."""
-    minutes, rest = divmod(int(round(seconds)), 60)
-    return f"{minutes} min {rest} s" if minutes else f"{rest} s"
-
-
-def shown(name: str) -> str:
-    """The session name as typed in a printed command (quoted when it has spaces)."""
-    return f'"{name}"' if re.search(r"\s", name) else name
-
-
-@dataclass
-class Colab:
-    """The `colab` CLI for one session: every call is a list of arguments, one call at a time."""
-
-    session: str
-    cli: str = "colab"
-    runner: Runner = run_command
-    sleep: Callable[[float], None] = time.sleep
-    say: Callable[[str], None] = say_now
-    attempts: int = 5
-    retry_pause: float = 20.0
-
-    def run(self, args: list[str], timeout_seconds: float) -> CommandResult:
-        return self.runner([self.cli, *args], timeout_seconds)
-
-    def sessions(self) -> dict[str, str]:
-        """The sessions `colab sessions` lists (name -> hardware)."""
-        result = self.run(["sessions"], 90)
-        if result.returncode != 0:
-            raise SetupError(f"`colab sessions` failed: {_last_line(result.output)}")
-        return parse_sessions(result.output)
-
-    def create(self, gpu: str) -> CommandResult:
-        return self.run(["new", "-s", self.session, "--gpu", gpu], 600)
-
-    def exec_args(self, script: Path, env: dict[str, str]) -> list[str]:
-        """Arguments of `colab exec` running a local file on the VM with `--env KEY=VALUE` pairs."""
-        args = ["exec", "-s", self.session, "--timeout", "45"]
-        for key, value in env.items():
-            args += ["--env", f"{key}={value}"]
-        return [*args, "-f", str(script)]
-
-    def exec_file(self, script: Path, env: dict[str, str] | None = None) -> CommandResult:
-        # These scripts answer in 5-15 s; a call that hangs (seen while connecting) is cut at 60 s and retried.
-        return self.run(self.exec_args(script, env or {}), 60)
-
-    def upload(self, local: Path, remote: str) -> None:
-        """`colab upload`, retried when the transfer fails."""
-        for attempt in range(1, self.attempts + 1):
-            result = self.run(["upload", "-s", self.session, str(local), remote], 300)
-            if result.returncode == 0 and "Traceback" not in result.output:
-                return
-            self.pause_before_retry(f"upload of {local.name} failed ({_last_line(result.output)})", attempt)
-        raise SetupError(f"could not upload {local} to {remote}")
+class Colab(_Colab):
+    """vidgen.colab.Colab plus the probe of vm_state.py."""
 
     def probe(self) -> dict:
         """Run vm_state.py on the VM and return its JSON; retries a dropped exec."""
-        for attempt in range(1, self.attempts + 1):
-            result = self.exec_file(TOOLS_DIR / "vm_state.py")
-            state = parse_state(result.output)
-            if state is not None:
-                return state
-            self.pause_before_retry(f"exec dropped ({_last_line(result.output)})", attempt)
-        raise SetupError(f"`colab exec` on {self.session} kept failing; try `colab exec -s {shown(self.session)}` by hand")
-
-    def pause_before_retry(self, what: str, attempt: int) -> None:
-        """Say what failed and wait, unless `attempt` was the last one."""
-        if attempt < self.attempts:
-            self.say(f"   {what}; retry {attempt + 1}/{self.attempts} in {self.retry_pause:.0f} s")
-            self.sleep(self.retry_pause)
+        return self.exec_json(TOOLS_DIR / "vm_state.py", {}, STATE_PREFIX)
 
 
 def ensure_session(colab: Colab, gpu: str, attempts: int = 4, pause_seconds: float = 60.0) -> tuple[bool, str]:
@@ -343,35 +229,122 @@ class SessionSetup:
         return last
 
 
-def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elapsed_seconds: float) -> list[str]:
+class VidgenSetup:
+    """The vidgen part: upload this checkout's source and install it unless the VM has its hash."""
+
+    def __init__(self, colab: Colab, clock: Callable[[], float] = time.monotonic, repo: Path = REPO,
+                 poll_seconds: float = 20.0, limit_seconds: float = 40 * 60) -> None:
+        self.colab = colab
+        self.clock = clock
+        self.repo = repo
+        self.poll_seconds = poll_seconds
+        self.limit_seconds = limit_seconds
+        self.printed: set[str] = set()
+
+    def state(self) -> dict:
+        return self.colab.vm("state", VIDGEN_PROJECT="")["vidgen"]
+
+    def run(self, report: Report) -> None:
+        code = package_hash(self.repo / "src" / "vidgen")
+        state = self.state()
+        if state["hash"] == code:
+            report.outcomes["vidgen"] = f"reused (marker, code {code})"
+            return
+        begin = self.clock()
+        if state["setup_running"]:
+            self.colab.say(f"## {VIDGEN_TITLE}: a setup is already running, waiting for it")
+        else:
+            self.start(code)
+        self.wait(code)
+        report.outcomes["vidgen"] = f"installed code {code} in {format_seconds(self.clock() - begin)}"
+
+    def start(self, code: str) -> None:
+        self.colab.say(f"## uploading vidgen's source (code {code}) and {VIDGEN_SCRIPT}")
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = source_archive(self.repo, Path(tmp) / "vidgen-src.tar.gz")
+            self.colab.upload(archive, VM_SOURCE_ARCHIVE)
+        self.colab.upload(TOOLS_DIR / VIDGEN_SCRIPT, f"/content/{VIDGEN_SCRIPT}")
+        env = {"SCRIPT": f"/content/{VIDGEN_SCRIPT}", "PIN": "1", "VIDGEN_HASH": code}
+        for attempt in range(1, self.colab.attempts + 1):
+            self.colab.say(f"## starting {VIDGEN_SCRIPT} ({VIDGEN_TITLE})")
+            self.colab.exec_file(TOOLS_DIR / "start_setup.py", env)
+            state = self.state()
+            if state["setup_running"] or state["hash"] == code:
+                return
+            self.colab.pause_before_retry(f"{VIDGEN_SCRIPT} is not running on the VM", attempt)
+        raise SetupError(f"{VIDGEN_SCRIPT} did not start; " + _vidgen_tail(state))
+
+    def wait(self, code: str) -> dict:
+        """Poll until the marker holds `code`; fail with the log tail when the script stops first."""
+        begin = self.clock()
+        while True:
+            try:
+                state = self.state()
+            except SetupError as exc:
+                self.colab.say(f"   {exc}; still waiting")
+            else:
+                for line in state["log"]["milestones"]:
+                    if line not in self.printed:
+                        self.printed.add(line)
+                        self.colab.say(f"   setup_vidgen.log: {line}")
+                if state["hash"] == code:
+                    return state
+                if not state["setup_running"]:
+                    if state["hash"]:
+                        raise SetupError(f"another setup installed code {state['hash']}, not {code}; run this again")
+                    raise SetupError(f"{VIDGEN_SCRIPT} stopped before it finished; " + _vidgen_tail(state))
+            if self.clock() - begin > self.limit_seconds:
+                raise SetupError(f"{VIDGEN_SCRIPT} not done after {format_seconds(self.limit_seconds)}")
+            self.colab.sleep(self.poll_seconds)
+
+
+def _vidgen_tail(state: dict) -> str:
+    log = state["log"]
+    if not log["exists"]:
+        return "(no /content/setup_vidgen.log)"
+    return "last lines of /content/setup_vidgen.log:\n" + "\n".join("   " + line for line in log["tail"])
+
+
+def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elapsed_seconds: float,
+                  vidgen: bool = True) -> list[str]:
     """The final summary: session, GPU, what was installed or reused, time, the next commands."""
     name = shown(session)
     lines = [f"== session {session} is ready ({format_seconds(elapsed_seconds)})",
              f"   session:    {session} ({report.hardware or gpu}, {'created' if report.created else 'reused'})"]
-    for part in PART_SCRIPTS:
-        outcome = report.outcomes.get(part, "?") if part in parts else "skipped (--no-image)"
-        lines.append(f"   {PART_TITLES[part]}: {outcome}")
-    lines.append(f"   ComfyUI:    {report.outcomes.get('comfy', '?')} on 127.0.0.1:8188 (VM)")
-    if report.models:
-        listed = ", ".join(f"{folder} {len(names)}" for folder, names in report.models.items() if names)
-        lines.append(f"   models ComfyUI lists: {listed}")
-    lines += [f"next: upload your inputs and go on with {HOWTO} section 6.3, e.g.",
-              f"   colab upload -s {name} ltx-inputs/render_121_960x512.mp4 /content/render_121_960x512.mp4",
-              f"stop it when you are done (an idle L4 still bills about 1.94 units/h): colab stop -s {name}"]
+    if parts:
+        for part in PART_SCRIPTS:
+            outcome = report.outcomes.get(part, "?") if part in parts else "skipped (--no-image)"
+            lines.append(f"   {PART_TITLES[part]}: {outcome}")
+        lines.append(f"   ComfyUI:    {report.outcomes.get('comfy', '?')} on 127.0.0.1:8188 (VM)")
+        if report.models:
+            listed = ", ".join(f"{folder} {len(names)}" for folder, names in report.models.items() if names)
+            lines.append(f"   models ComfyUI lists: {listed}")
+    lines.append(f"   {VIDGEN_TITLE}: {report.outcomes.get('vidgen', '?') if vidgen else 'skipped (--no-vidgen)'}")
+    lines.append("next:")
+    if vidgen:
+        lines.append(f"   in a project folder: vidgen remote {name} render")
+    if parts:
+        lines += [f"   or go on with {HOWTO} section 6.3, e.g.",
+                  f"   colab upload -s {name} ltx-inputs/render_121_960x512.mp4 /content/render_121_960x512.mp4"]
+    lines.append(f"stop it when you are done (an idle L4 still bills about 1.94 units/h): colab stop -s {name}")
     return lines
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="setup_session.py",
-        description="Find or create a Colab GPU session and set it up for the LTX-2.3 HOWTO "
-                    "(ComfyUI, LTX-2.3, image models). Never stops the session.")
+        description="Find or create a Colab GPU session and set it up: ComfyUI, LTX-2.3 and image models "
+                    "(the LTX-2.3 HOWTO), and this checkout's vidgen (vidgen remote). Never stops the session.")
     parser.add_argument("session", help="Colab session name (reused when `colab sessions` lists it)")
     parser.add_argument("--gpu", default="L4", choices=GPUS, help="GPU for a new session (default L4)")
     parser.add_argument("--no-image", action="store_true",
                         help="skip the image models (Qwen-Image-Edit, Z-Image; about 50 GB)")
     parser.add_argument("--latest", action="store_true",
                         help="latest ComfyUI and node commits instead of the tested ones (setup.sh PIN=0)")
+    which = parser.add_mutually_exclusive_group()
+    which.add_argument("--no-vidgen", action="store_true", help="skip installing vidgen (this checkout's code)")
+    which.add_argument("--vidgen-only", action="store_true",
+                       help="only install vidgen (for vidgen remote): no ComfyUI, LTX-2.3 or image models")
     parser.add_argument("--colab", default="colab", help="the colab CLI command (default: colab)")
     args = parser.parse_args(argv)
     if not args.session.strip() or args.session.startswith("-"):
@@ -385,7 +358,7 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
     """Set up the session; returns the exit code (0 ready, 1 failed, 130 interrupted)."""
     args = parse_args(argv)
     colab = Colab(args.session, cli=args.colab, runner=runner, sleep=sleep, say=say)
-    parts = ["ltx"] if args.no_image else ["ltx", "image"]
+    parts = [] if args.vidgen_only else ["ltx"] if args.no_image else ["ltx", "image"]
     report = Report()
     begin = clock()
     session_exists = False
@@ -396,7 +369,10 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
             say(f"## reusing session {args.session} ({report.hardware})")
             if report.hardware != args.gpu:
                 say(f"   note: it has a {report.hardware}; --gpu only applies to a new session")
-        SessionSetup(colab, pin=not args.latest, clock=clock).run(parts, report)
+        if parts:
+            SessionSetup(colab, pin=not args.latest, clock=clock).run(parts, report)
+        if not args.no_vidgen:
+            VidgenSetup(colab, clock=clock).run(report)
     except (SetupError, KeyboardInterrupt) as exc:
         say(f"error: {exc}" if isinstance(exc, SetupError) else "interrupted")
         if not session_exists:
@@ -405,7 +381,7 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
             say(f"session {args.session} is still running (this script never stops it); "
                 f"run this again to resume, or stop it: colab stop -s {shown(args.session)}")
         return 1 if isinstance(exc, SetupError) else 130
-    for line in summary_lines(args.session, args.gpu, report, parts, clock() - begin):
+    for line in summary_lines(args.session, args.gpu, report, parts, clock() - begin, vidgen=not args.no_vidgen):
         say(line)
     return 0
 
