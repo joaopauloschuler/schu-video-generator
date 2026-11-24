@@ -500,6 +500,7 @@ class Tube {
     const air = !glow && !!sky;
     this.material = tune(new THREE.ShaderMaterial({vertexShader: TRAIL_VERT, fragmentShader: TRAIL_FRAG(air), defines: glow ? {GLOW: 1} : {}, side: THREE.DoubleSide,
       uniforms: {...(air ? sky.uniforms : {}), uView: {value: new THREE.Vector4(least, 0.002, keep, 0)}, uSunDir: {value: V3(0, 1, 0)}, uSun: {value: V3(1, 1, 1)}, uSky: {value: V3(0.2, 0.25, 0.3)}, uLook: {value: new THREE.Vector4(soft, lumps, grain, 0)}}}), glow);
+    if (air && typeof sky.shadowsInto === "function") sky.shadowsInto(this.material);      // the air's shadows in front of the trail (vidgen/space-air)
     this.mesh = watch(new THREE.Mesh(g, this.material)); this.mesh.renderOrder = glow ? 6 : 4; this.mesh.name = glow ? "trail of light" : "vapour trail";
     this._t = V3(); this._a = V3(); this._b = V3();
   }

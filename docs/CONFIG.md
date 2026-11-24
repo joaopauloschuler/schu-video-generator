@@ -8226,7 +8226,7 @@ cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side:
 page of a `web` scene: `import {world} from "vidgen/space-descent"`.
 
 - `const w = world(renderer, {planet, at, sun, air, sea, land, clouds, globe, handover, match,
-  exposure, ev, quality, stars, scene})`; `scene.add(w.object)`; each frame, after the camera is
+  exposure, ev, quality, stars, scene, shadows})`; `scene.add(w.object)`; each frame, after the camera is
   placed: `w.update(t, {camera})`. A plain three.js scene in metres (the local frame of the air,
   the sea and the ground; not a `SpaceView`).
 - `planet`: a world of `vidgen/space-bodies` (name or options; default the ground's own, else
@@ -8237,7 +8237,8 @@ page of a `web` scene: `import {world} from "vidgen/space-descent"`.
   1024 from 300 rows; `clouds`); `handover`: `"low"` (near 60 to 400 km, height 2.5 to 80 km: the
   default with a sea or decks), `"high"` (150 to 600 km, 60 to 300 km: bare ground) or `{near:
   [from, to], height: [from, to]}` in metres; `match`: the globe's brightness beside the local
-  picture's (1).
+  picture's (1); `shadows`: the air's (default on; then the decks also shade the sea and the ground,
+  through `clouds.mapShade`).
 - What is drawn: above `near[1]` the globe through the world's own air (`w.state.stage` is
   `"globe"`); under `height[0]` the sea, the ground and the decks (`"local"`); between, both,
   the globe where a pixel's ground is far (`"handover"`). `w.stage(height)` says it for any
@@ -8294,12 +8295,15 @@ camera's height from where it stands; call it before every draw.
 | `quality` | `"standard"` | the sky table: `fast` (96 x 96, 16 steps), `standard` (128 x 192, 32), `fine` (192 x 320, 48) |
 | `unit`, `center` | 1, the radius under the origin | metres a scene unit; the world's middle in the scene (`[x, y, z]`, a `Vector3`, or an `Object3D` read at every update: a body's `object`) |
 | `over` | `false` | draw the dome after everything (with `ground: false`: the air over a body made with `air: false`) |
+| `shadows` | `true` | shadows in the air (Step 403): what casts a shadow (`vidgen/space-clouds`' decks and `vidgen/space-land`'s ground add themselves) darkens the air in it; `false`: none (the pixels of before); or `{reach: 200000, share: 0.25, steps: 24}` (metres along a ray under the casters' top; the shadows' picture against the canvas; steps along each of its rays, a multiple of four; `quality: "fast"` halves them). About +0.4 s a frame at 1280x720 under a deck; nothing when nothing casts |
 
 `sky.light.sun` is a `DirectionalLight` (the sun after the air where the camera stands),
 `sky.light.sky` a `HemisphereLight` (the sky from above, the lit ground from below); `sky.state`
 holds `height` (m), `elevation` (the sun's, degrees), `ev`, `gain`, `stars`, `sunlight`,
 `ambient`, `inside`. A `ShaderMaterial` of your own includes `AIR_GLSL`, takes `sky.uniforms` and
-calls `airThrough(colour, toPoint)`. Straight to the canvas the dome applies ACES and sRGB
+calls `airThrough(colour, toPoint)` (and `sky.shadowsInto(material)` so the shadows in the air reach it;
+`sky.haze` does that itself); `sky.addCaster({name, glsl, uniforms, top, diffuse})` lets something of your own
+cast shadows into the air (DESIGN §123.17). Straight to the canvas the dome applies ACES and sRGB
 itself; meshes then need `renderer.toneMapping = THREE.ACESFilmicToneMapping` (through
 `vidgen/three-finish` everything is linear and the finish applies the curve). The numbers without a
 renderer are pure functions (`airOf`, `transmittance`, `skyLight`, `sunlightAt`, `skyAmbient`,
@@ -8460,7 +8464,10 @@ clouds' own picture is drawn in `update`). Add the clouds' object after the dome
 `weather.decks` and `weather.towers` hold what was made (heights, places, radii);
 `weather.coverAt(deck, x, z, t)` says how much cloud a deck has over a place (0 open, towards 1 in
 a cloud); `weather.horizon(deck)` a deck's horizon for the last camera; `weather.flashes(t)` the
-flashes seen now. `giantSky(world, {latitude, scale, radius, towers, squeeze})` returns the options
+flashes seen now. With the air's `shadows` on (the default) the decks that cast a shadow also cast it
+into the air (a map of what each lets through of the sun's light, 60 km each side of the camera, drawn
+every update: `AIR_SHADOW`); `weather.mapShade` reads the same map as a `shade` for the sea or the ground
+(cheaper and softer than `weather.shade`; `null` without the air's shadows). `giantSky(world, {latitude, scale, radius, towers, squeeze})` returns the options
 of a giant's sky (three decks, the dark below, towers when asked for) with the bands
 `vidgen/space-bodies` paints north and south of that latitude, drawn `squeeze` (40) times narrower
 than on the world so that several are in view (1: true width, one colour to the horizon), their
@@ -8762,6 +8769,7 @@ In a surface scene a craft flies a flight (`fly:` its name) and takes `plane`, `
 | `globe` | mapping | — | more options for the globe (`size`, `clouds`...) |
 | `handover` | str \| mapping | by what is under the air | where the globe hands over to the near picture: `low`, `high`, `{near: [from, to], height: [from, to]}` (metres) |
 | `match`, `exposure`, `ev`, `quality` | | `1`, `film`, `0`, `standard` | the globe's brightness beside the near picture; the air's exposure; `fast`, `standard`, `fine` for the air, sea, ground and clouds |
+| `shadows` | bool \| mapping | on | shadows in the air (Step 403): the decks' and the ground's shadows darken the haze (light shafts, the dim air under a closed deck, mountains' shadows) and the decks shade the sea and the ground; `false`: none (the picture of before); `{reach, share, steps}`: see `vidgen/space-air`'s `shadows` |
 
 The stars behind the air are `sky:` (512 px unless it says `size`). A surface scene is drawn through three-finish with the default camera look (Step 401); with `camera_look: none` it is drawn straight to the canvas (the air, sea, ground and clouds make the display themselves, as every recipe of Steps 381–391 is measured) unless it gives `finish:`. Its camera's moves are the air moves below; `world.problems` (a camera far from the place or under the surface) is printed as a warning.
 

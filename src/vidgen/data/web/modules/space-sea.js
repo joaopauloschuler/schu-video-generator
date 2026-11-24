@@ -666,6 +666,7 @@ export class Sea {
     this.material = new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {NW: n, NG: Math.max(this.list.lifted, 1), FACES: faces}, vertexShader: SEA_VERT, fragmentShader: SEA_FRAG(o.depth?.glsl ?? DEEP, o.shade?.glsl ?? OPEN),
       side: THREE.DoubleSide, depthTest: true, depthWrite: true, toneMapped: false, fog: false, transparent: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor});
+    if (typeof sky.shadowsInto === "function") sky.shadowsInto(this.material);      // the air's shadows in front of the water (vidgen/space-air)
     this.geometry = null; this._gridFor = "";
     /** The water: drawn after the air's dome and before the scene's other things, which it hides where they are under it. */
     this.object = new THREE.Mesh(new THREE.BufferGeometry(), this.material);

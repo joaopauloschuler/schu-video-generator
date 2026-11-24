@@ -2334,6 +2334,12 @@ Make web scenes read as real camera footage with ordinary image processing, no A
 - [x] **Step 404 (Opus 5.5) — a HOWTO: restyle a render into real footage with LTX-2.3 on Colab.** `docs/HOWTO-restyle-with-ltx-on-colab.md` (inputs from `guide: final` / `guide: depth`, the L4 session, install with pinned commits, ungated downloads, the API graph, poll, download, compare, stop, costs, troubleshooting, the 7-run results and verdict, G4 and a quick-tunnel service marked untested) and replayable scripts in `docs/howto/ltx-colab/`; pointers in CONFIG.md and the author guide.
 - Later, not planned yet: flare ghosts and veiling glare with the sun near the frame; lens dirt and window reflections / double panes; rolling shutter; focus breathing and hunting; compression character (blocks in flat sky, crawl in detail); frame rate and shutter angle per look.
 
+### Shadows in the air (owner's request, 2026-11-23)
+
+The sky (`space-air.js`) already follows the sun's light by scattering, but the light crosses the air as if nothing cast a shadow.
+- [x] **Step 403 (Opus 5.5) — shadows in the air.** (Numbered 403 on origin/a3 while the local branch also made a Step 403, the depth pass above; the merge keeps both numbers.) Light shafts through gaps in cloud decks (crepuscular rays) and the shadowed air under a closed deck; mountains' shadows reaching across the haze; the planet's own shadow rising opposite the sun at dusk with the pink band above it (check first whether the model already has it). On by default where it shows; cost measured and kept small; the CPU twins and the limb from orbit kept consistent.
+- Later, not planned yet: sharp light shafts (a haze layer with its own, lower scale height; a finer shadow picture); towers' shadows in the air; the sea's reflection and the exposure knowing about the decks; a cloud's diffuse light coloured by the cloud.
+
 
 ---
 

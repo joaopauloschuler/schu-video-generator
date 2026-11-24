@@ -309,7 +309,7 @@ def air_names() -> dict[str, Any]:
     """The names and options of the Phase AO modules a ``space`` scene reaches (DESIGN.md §123.14), read
     from their shipped source as :func:`space_names` reads Phase AN's:
 
-    ``air_presets``, ``air_options`` (vidgen/space-air); ``sea_states``, ``waters``, ``sea_options``,
+    ``air_presets``, ``air_options``, ``air_shadows`` (vidgen/space-air); ``sea_states``, ``waters``, ``sea_options``,
     ``state_options`` (vidgen/space-sea); ``skies`` (name -> its decks' types), ``deck_types``,
     ``deck_options``, ``cloud_options``, ``tower_options``, ``lightning_options`` (vidgen/space-clouds);
     ``land_presets``, ``land_options``, ``land_parts`` (vidgen/space-land); ``world_options``,
@@ -365,7 +365,7 @@ def air_names() -> dict[str, Any]:
     descent_mod = "vidgen/space-descent"
     return {
         "air_presets": constant_keys(air, "PRESETS"), "air_options": [*constant_strings(air, "AIR_OPTIONS")], "air_qualities": constant_strings(air, "QUALITIES"),
-        "exposures": constant_strings(air, "EXPOSURES"),
+        "exposures": constant_strings(air, "EXPOSURES"), "air_shadows": constant_keys(air, "SHADOWS"),
         "sea_states": constant_keys(sea, "STATES"), "waters": constant_keys(sea, "WATERS"), "sea_options": constant_keys(sea, "OPTIONS"),
         "state_options": [k for k in constant_strings(sea, "STATE_OPTIONS") if k != "name"],
         "skies": skies, "sky_towers": sky_towers, "deck_types": constant_keys(clouds, "DECKS"), "deck_options": constant_strings(clouds, "DECK_OPTIONS"),

@@ -235,7 +235,7 @@ def test_the_pages_are_stable_and_say_what_the_params_say(space: Any) -> None:
     (CARRIER, ("craft", 0, "seed"), 2), (CARRIER, ("craft", 0, "dress"), {"plumes": "both"}), (CARRIER, ("camera", 0, "standoff"), 80),
     (CARRIER, ("craft", 0, "scale_ref", "kind"), "tug"), (CARRIER, ("flash",), [{"at": 8}]),
     (SKIM, ("operator",), {"hand": "handheld"}), (SKIM, ("operator",), {"exposure": 0.5}), (SKIM, ("operator",), {"horizon": {"degrees": 2}}),
-    (CARRIER, ("operator",), {"hand": "mounted"}),
+    (CARRIER, ("operator",), {"hand": "mounted"}), (CHASE, ("world", "shadows"), False), (CHASE, ("world", "shadows"), {"steps": 8}),
 ])
 def test_every_new_param_changes_the_page(space: Any, raw: dict[str, Any], path: tuple[Any, ...], value: Any) -> None:
     changed = copy.deepcopy(raw)
@@ -244,6 +244,15 @@ def test_every_new_param_changes_the_page(space: Any, raw: dict[str, Any], path:
         target = target.setdefault(key, {}) if isinstance(key, str) else target[key]
     target[path[-1]] = value
     assert page(space, changed) != page(space, raw)
+
+
+def test_shadows_in_the_air_are_on_unless_the_world_says_so(space: Any) -> None:
+    # Step 403: on by default (the page says nothing), `shadows: false` or {reach, share, steps} written to the world; a wrong key named
+    assert '"shadows"' not in page(space, CHASE)
+    assert '"shadows": false' in page(space, {**CHASE, "world": {**CHASE["world"], "shadows": False}})
+    assert '"shadows": {"steps": 8}' in page(space, {**CHASE, "world": {**CHASE["world"], "shadows": {"steps": 8}}})
+    with pytest.raises(Exception, match="did you mean 'reach'"):
+        space.Params.model_validate({**CHASE, "world": {**CHASE["world"], "shadows": {"reech": 1}}})
 
 
 def test_existing_space_scenes_write_the_same_pages_with_camera_look_none(space: Any) -> None:

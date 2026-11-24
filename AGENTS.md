@@ -3341,7 +3341,8 @@ planes flying them. Each kind refuses the other's words with a message saying wh
   `land` (a preset: alpine, mars, canyon, dunes, snow, volcanic, airless; or `{preset, seed, mountains, ...}`), `clouds` (a sky:
   fair, overcast, layers, towers, storm; or `{decks: [{type: cumulus, base, top, cover, fronts}], towers, lightning: {times, track, rate}}`;
   a deck's cover is the one asked for round the place and varies tens of km away, `fronts: 0` keeps it even),
-  `globe`, `handover` (low, high), `exposure`, `ev`, `quality` (fast, standard, fine). The stars behind the air are `sky:`.
+  `globe`, `handover` (low, high), `exposure`, `ev`, `quality` (fast, standard, fine), `shadows` (on by default: the decks' and
+  the ground's shadows in the haze and the decks' shadows on the sea and the ground; `false` for none). The stars behind the air are `sky:`.
 - **Planes** (`craft: [{plane: glider, fly: FLIGHT}]`): glider, freighter, needle, lifter, scout, skiff; any part of the
   description (`wing: {preset: swept, sweep: 42}`, `fins`, `body`, `scheme`, `scorch`), `gear`, `bay`, `cabin` (0..1, or
   `{over: [10, 14], from: 0, to: 1}`), `controls`, `throttle`. A craft of the kit flies too (`kind: probe, fly: FLIGHT`), and

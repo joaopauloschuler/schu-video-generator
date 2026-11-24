@@ -16,7 +16,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   without the CG first frame, and then with invented content). Replayable scripts in
   `docs/howto/ltx-colab/`. No change to vidgen itself.
 
-### A web scene's exact depth (Step 403)
+### A web scene's exact depth (Step 403, the second Step 403)
 
 - **`guide: depth` on `space` and `web` scenes**: the scene's own depth buffer from three.js
   (not an estimate), drawn with the finished render (same size, frame rate, camera and frames), by
@@ -26,6 +26,21 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   must draw through `vidgen/three-finish`. For depth-control video models.
 - **Space scenes draw their frames again once**: `vidgen/three-finish` changed, so a `space` scene's
   web frames (and those of pages that use the module) are redrawn on the next render.
+
+### Shadows in the air (Step 403, the first Step 403)
+
+- **Shadows in the air** (Step 403): **surface scenes and pages with `vidgen/space-air` and cloud decks
+  or ground look different.** What casts a shadow now darkens the air in it: the haze under a cloud
+  deck is in the deck's shadow (dim and grey under a closed deck, the glow round a low sun held in the
+  gaps of a broken one), mountains' shadows lie across the haze in front of them, and in a surface scene
+  the decks now shade the sea and the ground too (before, the sun hidden by a cloud still lit the sea's
+  glitter). On by default; `world: {shadows: false}` in a surface scene, or `air(renderer, what,
+  {shadows: false})` in code, gives the picture of before; `{reach, share, steps}` tunes it. It costs
+  about +0.4 s a frame at 1280x720 under a deck, nothing where nothing casts a shadow. The Earth's
+  shadow rising opposite the sun at dusk, with the pink band above it, was already in the sky model
+  and is unchanged. Light shafts are soft and broad, not sharp beams; they show most in a hazy air
+  with a low sun. In code: `sky.addCaster` for shadows of your own, `sky.shadowsInto(material)` for
+  shaders of your own, `clouds.mapShade` (the decks' shadow from the same map).
 
 ### The finished render to a video model (Step 402)
 

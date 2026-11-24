@@ -449,7 +449,7 @@ def test_the_space_cookbook_recipes_validate_and_it_is_linked() -> None:
         ids.append(scene["id"])
     assert ids == ["sunrise", "sunrise_window", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump", "kit", "across",   # orbital scenes
                    "carrier", "powers", "burn", "reveal", "fleet",                                            # giant ships
-                   "dusk", "skim", "skim_drone", "volcano", "climb", "chase", "wingtip", "flypast", "descent"]  # the air cookbook (Step 393)
+                   "dusk", "skim", "skim_drone", "volcano", "climb", "gaps", "chase", "wingtip", "flypast", "descent"]  # the air cookbook (Step 393)
     assert "COOKBOOK-AIR.md" in text and "COOKBOOK-SPACE.md" in air and "COOKBOOK-AIR.md" in (ROOT / "docs" / "COOKBOOK.md").read_text(encoding="utf-8")
     for doc in ("docs/COOKBOOK.md", "docs/COOKBOOK-3D.md", "docs/COOKBOOK-ORBITS.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
         assert "COOKBOOK-SPACE.md" in (ROOT / doc).read_text(encoding="utf-8"), doc

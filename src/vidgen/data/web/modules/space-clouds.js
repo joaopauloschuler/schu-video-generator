@@ -576,6 +576,12 @@ vec2 cloudLevel(int i, vec2 p, float foot, float weather, vec2 shift) {
 }
 // a cloud's top (0 the deck's base, 1 its top) where the pattern stands v over its level
 float cloudTop(int i, float v) { return min(uDeckB[i].y + sqrt(max(v, 0.0) * uDeckB[i].x), 1.0); }
+// a deck's cloud over the place q (metres from the camera), read with a step foot metres wide: the column's depth in shares of light
+float cloudDepth(int j, vec2 q, float foot) {
+  vec4 A = uDeckA[j];
+  vec2 lv = cloudLevel(j, q, foot, cloudWeather(j, q, foot), cloudShift(j * 8 + 4, q));
+  return A.z * A.y * cloudTop(j, lv.x) * smoothstep(0.0, uDeckB[j].z, lv.x);
+}
 float cloudShade(vec2 p, float height) {
   float lit = 1.0;
   if (uCloudSun.z < 0.03) return lit;
@@ -584,9 +590,7 @@ float cloudShade(vec2 p, float height) {
     if (uDeckC[j].w < 0.5 || A.x < height) continue;
     float up = A.x + 0.5 * A.y - height, foot = 0.2 * A.y / uCloudSun.z + 0.02 * up;
     vec2 q = p + uCloudSun.xy * (up * uCloudSun.w / uCloudSun.z);
-    vec2 lv = cloudLevel(j, q, foot, cloudWeather(j, q, foot), cloudShift(j * 8 + 4, q));
-    float depth = A.z * A.y * cloudTop(j, lv.x) * smoothstep(0.0, uDeckB[j].z, lv.x);
-    lit *= exp(-0.5 * depth / max(uCloudSun.z, 0.25));
+    lit *= exp(-0.5 * cloudDepth(j, q, foot) / max(uCloudSun.z, 0.25));
   }
   return lit;
 }
@@ -817,6 +821,7 @@ void walkTower(int j, float t0, float len) {
 void main() {
   vec3 rd = normalize(vDir);
   float mu = dot(rd, uAirUp), cosv = dot(rd, uAirSun), R = uCloudGeo.x, h = uCloudGeo.y, pix = uCloudGeo.w, unit = uCloudGeo.z;
+  airRay = rd;
   vec2 dh = vec2(dot(rd, uCloudE1), dot(rd, uCloudE2));
   gDh = dh; gMu = mu; gPix = pix; gCosv = cosv; gH = h;
   // four neighbouring pixels walk their steps a quarter of a step apart; the picture laid over the scene is their mean
@@ -884,6 +889,82 @@ void main() {
   gl_FragColor = vec4(sum, 1.0 - T);
 }`;
 const QUAD_VERT = "varying vec2 vUv; void main() { vUv = 0.5 * position.xy + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }";
+/** The decks' shadows in the air (vidgen/space-air's `shadows`): the map of what each deck lets through of the sun's
+ * light, a deck a channel (at most four), `size` texels across `reach` metres each side of the camera (finer near it:
+ * a place x along is kept at the square root of x / reach; a low sun's ray crosses kilometres of a deck: see
+ * deckLetThrough); `sky`: how much of the sky's light a closed deck takes from the air under it; `diffuse`: the share of the sun's light a cloud hides that it passes on all round (the air in its shadow is not black);
+ * `mip`: the level of the map read for that (a mean over some kilometres). */
+export const AIR_SHADOW = Object.freeze({size: 256, reach: 60000, sky: 0.7, diffuse: 0.25, mip: 3, lowest: 0.02});
+/** Where the map keeps a place `x` metres from its middle along one axis (0 to 1 across), and back. Pure. */
+export const shadowMapAt = (x, reach = AIR_SHADOW.reach) => { const s = Math.max(-1, Math.min(1, x / reach)); return 0.5 + 0.5 * Math.sign(s) * Math.sqrt(Math.abs(s)); };
+export const shadowMapPlace = (u, reach = AIR_SHADOW.reach) => { const s = 2 * u - 1; return Math.sign(s) * s * s * reach; };
+/** The heights in a deck (0 its base, 1 its top) at which the sun's slant path through it is read: where it comes
+ * out under the deck (the side away from the sun), at its middle, where it enters (towards the sun). */
+export const SHADOW_PATH = Object.freeze([0.15, 0.5, 0.85]);
+/** What a deck lets through of the sun's light along its slant path through the deck's middle at a place (the map's
+ * arithmetic): the path is read at the heights SHADOW_PATH, each (y - 0.5) x depth / tan(elevation) metres along the
+ * sun's bearing from the place; `inside(offset, y)` says how much cloud fills the deck there (0 to 1: under a
+ * cloud's rounded top, which reaches the deck's top only in its middle); the light passes `density` (a metre's
+ * share) over a third of the path's length at each. `depth` the deck's depth (m), `sinE` the sun's sine over the
+ * level (under AIR_SHADOW.lowest read as that; under twice that the shadows fade out). Pure. */
+export function deckLetThrough(inside, depth, density, sinE) {
+  const s = Math.max(sinE, AIR_SHADOW.lowest), cot = Math.sqrt(Math.max(1 - s * s, 0)) / s;
+  const filled = SHADOW_PATH.reduce((sum, y) => sum + inside((y - 0.5) * depth * cot, y), 0);
+  return 1 - (1 - Math.exp(-density * depth / s / 3 * filled)) * smooth(0, 2 * AIR_SHADOW.lowest, sinE);
+}
+// the map: a deck a channel, what it lets through of the sun's light at each place of its middle's level
+const MAP_FRAG = /* glsl */`
+${FIELD_GLSL}
+uniform vec4 uMapSet;       // the map's reach each side (m), the sun's cotangent (capped), its sine (at least the lowest), the shadows' strength by the sun's height
+uniform vec4 uMapAt[ND];    // a deck's map middle from the camera (m along +x and +z)
+uniform vec2 uMapSize;
+// how much cloud fills deck j at the place q, y up in it (0 its base, 1 its top): under a cloud's rounded top (the
+// weather and the clouds' warp, which change slowly, read once for the three places)
+float deckInside(int j, vec2 q, float foot, float y, float weather, vec2 shift) {
+  vec2 lv = cloudLevel(j, q, foot, weather, shift);
+  return smoothstep(0.0, uDeckB[j].z, lv.x) * smoothstep(-0.06, 0.06, cloudTop(j, lv.x) - y);
+}
+void main() {
+  vec2 s = gl_FragCoord.xy / uMapSize * 2.0 - 1.0, x = sign(s) * s * s * uMapSet.x;
+  vec2 cell = 4.0 * sqrt(max(abs(x), 1.0) * uMapSet.x) / uMapSize;
+  vec4 kept = vec4(1.0);
+  for (int j = 0; j < ND && j < 4; j++) {
+    vec4 A = uDeckA[j];
+    if (uDeckC[j].w < 0.5) continue;
+    vec2 q = uMapAt[j].xy + x, a = uCloudSun.xy * (A.y * uMapSet.y);
+    float foot = max(max(cell.x, cell.y), 0.2 * A.y / uMapSet.z);
+    float weather = cloudWeather(j, q, foot); vec2 shift = cloudShift(j * 8 + 4, q);
+    float filled = ${SHADOW_PATH.map((y) => `deckInside(j, q + a * ${(y - 0.5).toFixed(3)}, foot, ${y.toFixed(3)}, weather, shift)`).join(" + ")};
+    float v = 1.0 - (1.0 - exp(-A.z * A.y / uMapSet.z / 3.0 * filled)) * uMapSet.w;
+    if (j == 0) kept.x = v; else if (j == 1) kept.y = v; else if (j == 2) kept.z = v; else kept.w = v;
+  }
+  gl_FragColor = kept;
+}`;
+// what the air's shadow pass reads (vidgen/space-air's addCaster): the decks that cast a shadow, a channel each
+const airCaster = (decks) => /* glsl */`
+uniform sampler2D uCloudAir;
+uniform vec4 uCloudAirSet;      // the map's reach each side (m), the sun's cotangent (capped), one over the reach
+uniform vec4 uCloudAirAt[4];    // a deck's map middle from the camera (m along +x and +z)
+uniform vec4 uCloudAirSun;      // the sun's direction along +x and +z
+uniform vec3 uCloudAirE1, uCloudAirE2;
+vec2 cloudsAirUv(vec2 q) { vec2 s = q * uCloudAirSet.z; return sign(s) * sqrt(min(abs(s), 1.0)) * 0.5 + 0.5; }
+float cloudsAirEdge(vec2 q) { return smoothstep(0.85, 1.0, max(abs(q.x), abs(q.y)) * uCloudAirSet.z); }
+// beyond the map a deck lets through what it does on the mean
+float cloudsSun(vec3 w, float h) {
+  vec2 p = vec2(dot(w, uCloudAirE1), dot(w, uCloudAirE2)), q; float lit = 1.0, e;
+  vec4 mean = textureLod(uCloudAir, vec2(0.5), 12.0);
+${decks.map(({i, d}) => `  if (h < ${d.top.toFixed(1)}) { q = p + uCloudAirSun.xy * ((${(d.base + 0.5 * d.depth).toFixed(1)} - h) * uCloudAirSet.y) - uCloudAirAt[${i}].xy; e = cloudsAirEdge(q);
+    lit *= mix(mix(texture2D(uCloudAir, cloudsAirUv(q)).${"xyzw"[i]}, mean.${"xyzw"[i]}, e), 1.0, smoothstep(${d.base.toFixed(1)}, ${d.top.toFixed(1)}, h)); }`).join("\n")}
+  return lit;
+}
+// under a deck the sky's light comes through it: its mean over some kilometres round the place
+float cloudsSky(vec3 w, float h) {
+  vec2 p = vec2(dot(w, uCloudAirE1), dot(w, uCloudAirE2)), q; float lit = 1.0, e;
+  vec4 mean = textureLod(uCloudAir, vec2(0.5), 12.0);
+${decks.map(({i, d}) => `  if (h < ${d.base.toFixed(1)}) { q = p - uCloudAirAt[${i}].xy; e = cloudsAirEdge(q);
+    lit *= 1.0 - ${AIR_SHADOW.sky.toFixed(3)} * (1.0 - mix(textureLod(uCloudAir, cloudsAirUv(q), ${AIR_SHADOW.mip.toFixed(1)}).${"xyzw"[i]}, mean.${"xyzw"[i]}, e)); }`).join("\n")}
+  return lit;
+}`;
 // the clouds' picture laid over what is behind it
 const OVER_FRAG = /* glsl */`
 ${DISPLAY_GLSL}
@@ -977,6 +1058,7 @@ export class Clouds {
     this._pass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {ND: nd, NT: nt, NF: nf, COARSE: coarse, FINE: fine, ...(this.decks.some((d) => d.stripes) ? {STRIPES: 1} : {}), ...(o.behind !== null ? {BEHIND: 1} : {})}, vertexShader: CLOUD_VERT, fragmentShader: CLOUD_FRAG,
       depthTest: false, depthWrite: false, toneMapped: false, fog: false}));
     this._pass.frustumCulled = false;
+    if (typeof sky.shadowsInto === "function") sky.shadowsInto(this._pass.material);      // the air's shadows in front of each cloud (vidgen/space-air)
     this._scene = new THREE.Scene(); this._scene.add(this._pass); this._camera = new THREE.Camera();
     this.target = new THREE.WebGLRenderTarget(4, 4, {type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false});
     this.material = new THREE.ShaderMaterial({uniforms: {uCloudPicture: {value: this.target.texture}, uDisplay: {value: 0}, uGrain: {value: 2}, uCloudTexel: {value: new THREE.Vector2()}}, vertexShader: QUAD_VERT, fragmentShader: OVER_FRAG,
@@ -990,8 +1072,25 @@ export class Clouds {
     this.shade = {glsl: `#define ND ${nd}\n${FIELD_GLSL}\nfloat seaShade(vec2 p) { return cloudShade(p, 0.0); }`, uniforms: this.fieldUniforms};
     // a giant has no ground: the dark under the decks covers what is under the horizon
     if (floor) sky.under(true);
+    // shadows in the air: the decks that cast a shadow, a channel each of a map the air's shadow pass reads (one clouds a sky)
+    const casting = this.decks.map((d, i) => ({i, d})).filter(({i, d}) => i < 4 && d.density * d.depth > 1);
+    this._air = null; this.mapShade = null;
+    if (sky.shadowsOn && typeof sky.addCaster === "function" && casting.length && !sky.casters.some((c) => c.name === "clouds")) {
+      const N = Math.round(AIR_SHADOW.size * (o.quality === "fast" ? 0.5 : o.quality === "fine" ? 1.5 : 1));
+      const target = new THREE.WebGLRenderTarget(N, N, {type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, depthBuffer: false, generateMipmaps: true});
+      const set = new THREE.Vector4(AIR_SHADOW.reach, 0, 1, 0), at = Array.from({length: nd}, v4), airSet = new THREE.Vector4(AIR_SHADOW.reach, 0, 1 / AIR_SHADOW.reach, 0), airAt = Array.from({length: 4}, v4);
+      const material = new THREE.ShaderMaterial({uniforms: {...this.fieldUniforms, uMapSet: {value: set}, uMapAt: {value: at}, uMapSize: {value: new THREE.Vector2(N, N)}}, defines: {ND: nd}, vertexShader: QUAD_VERT, fragmentShader: MAP_FRAG, depthTest: false, depthWrite: false, toneMapped: false});
+      const mesh = new THREE.Mesh(this._pass.geometry, material), scene = new THREE.Scene();
+      mesh.frustumCulled = false; scene.add(mesh);
+      this._air = {target, material, scene, set, at, airSet, airAt, casting};
+      const glsl = airCaster(casting), uniforms = {uCloudAir: {value: target.texture}, uCloudAirSet: {value: airSet}, uCloudAirAt: {value: airAt}, uCloudAirSun: this.fieldUniforms.uCloudSun, uCloudAirE1: {value: this.frame.e1}, uCloudAirE2: {value: this.frame.e2}};
+      sky.addCaster({name: "clouds", glsl, top: Math.max(...casting.map(({d}) => d.top)), diffuse: AIR_SHADOW.diffuse, uniforms});
+      /** The decks' shadow read from the same map as the air's (cheaper than `shade`, as soft as the map; null without the
+       * air's shadows): `ground.shadedBy(weather.mapShade)`, `sea(renderer, sky, {shade: weather.mapShade})`. */
+      this.mapShade = {glsl: `${glsl}\nfloat cloudShade(vec2 p, float height) { return cloudsSun(uCloudAirE1 * p.x + uCloudAirE2 * p.y, height); }\nfloat seaShade(vec2 p) { return cloudShade(p, 0.0); }`, uniforms};
+    }
     this._lights = "";
-    this.material.addEventListener("dispose", () => { this.noise.dispose(); this.stripes.dispose(); this.target.dispose(); this._pass.material.dispose(); });
+    this.material.addEventListener("dispose", () => { this.noise.dispose(); this.stripes.dispose(); this.target.dispose(); this._pass.material.dispose(); if (this._air) { this._air.target.dispose(); this._air.material.dispose(); } });
     this.t = 0; this.height = 0;
   }
 
@@ -1069,6 +1168,20 @@ export class Clouds {
       else { u.uFlashA.value[k].set(0, 0, 0, 0); u.uFlashB.value[k].set(0, 0, 0, 1); }
     }
     const before = r.getRenderTarget(), auto = r.autoClear, colour = r.getClearColor(new THREE.Color()), alpha = r.getClearAlpha();
+    if (this._air) {
+      // the decks' shadow map, each deck's middle where the camera's own ray towards the sun crosses that deck
+      const A = this._air, sinE = Math.max(mus, AIR_SHADOW.lowest), cot = Math.sqrt(Math.max(1 - sinE * sinE, 0)) / sinE, [sx, sz] = [u.uCloudSun.value.x, u.uCloudSun.value.y];
+      A.set.set(AIR_SHADOW.reach, cot, sinE, smooth(0, 2 * AIR_SHADOW.lowest, mus)); A.airSet.y = cot;
+      for (const {i, d} of A.casting) {
+        const c = clamp((d.base + 0.5 * d.depth - h) * cot, -0.5 * AIR_SHADOW.reach, 0.5 * AIR_SHADOW.reach);
+        A.at[i].set(sx * c, sz * c, 0, 0); A.airAt[i].set(sx * c, sz * c, 0, 0);
+      }
+      A.material.uniformsNeedUpdate = true;
+      r.autoClear = true; r.setRenderTarget(A.target); r.render(A.scene, this._camera);
+      sky.shadowsChanged();
+    }
+    // the air's shadows (the decks' and the ground's) before the clouds' own picture, which lays the air in front of each cloud
+    r.setRenderTarget(before); if (typeof sky.drawShadows === "function") sky.drawShadows();
     r.autoClear = true; r.setClearColor(0x000000, 0); r.setRenderTarget(this.target); r.render(this._scene, this._camera);
     r.setRenderTarget(before); r.autoClear = auto; r.setClearColor(colour, alpha);
     return this;

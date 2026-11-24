@@ -252,6 +252,18 @@ SHOTS = [
 ]
 
 
+def test_the_grounds_shadow_in_the_air_is_kept_in_a_byte(tmp_path: Path) -> None:
+    # Step 403: how high over a place the ground's shadow reaches, kept as the square root of a share of the ground's range
+    out = _run_in_node(tmp_path, """
+out.push([[0, 10, 100, 1000, 3999, 4000, 9000].map((h) => L.shadowKeep(h, 4000)), [0, 10, 100, 1000, 3999].map((h) => L.shadowReach(L.shadowKeep(h, 4000), 4000)),
+  [10, 100, 1000].map((h) => L.shadowReach((Math.round(255 * L.shadowKeep(h, 4000)) + 1) / 255, 4000) - L.shadowReach(Math.round(255 * L.shadowKeep(h, 4000)) / 255, 4000)), L.AIR_SHADOW]);
+""")
+    keep, back, steps, consts = out[0]
+    assert keep[0] == 0 and keep[4] < 1 and keep[5] == keep[6] == 1 and keep == sorted(keep)
+    assert back == pytest.approx([0, 10, 100, 1000, 3999])
+    assert steps[0] < 2 and steps[1] < 5 and steps[2] < 16                                              # a byte keeps it finely near the ground, coarser high up
+    assert consts == {"soft": 30, "cells": 1.5}
+
 @pytest.mark.slow
 @pytest.mark.render
 def test_the_ground_draws_in_chromium(tmp_path: Path) -> None:
