@@ -6963,7 +6963,9 @@ fps). For each frame vidgen, in this order:
    4 ms, as in browsers; more than 10 000 callbacks before one frame is an error);
 2. waits for the `fetch()` requests the page started and its `<img>` pictures;
 3. sets every CSS animation and transition, Web Animation (`element.animate`), SVG animation and
-   `<video>` to the frame's time (and waits for each video's picture);
+   `<video>` to the frame's time (and waits for each video's picture); a video moves only while it
+   plays (`autoplay`, or `play()` called): a paused one, as a `<video>` made in script is unless it
+   says so, stays on its first frame: give it `autoplay = true`;
 4. runs one round of `requestAnimationFrame` callbacks (those requested before the round, with
    the frame's time in milliseconds; one requested inside a callback waits for the next frame);
 5. calls the page's `frame(t, ctx)`, if it has one;

@@ -28099,3 +28099,22 @@ project), repo work is generic.
 - **Known gaps**: the 8-hour idle test itself is not run. `colab exec` drops show as `no-answer` (one
   exec a round, by design).
 - **How to test**: `python -m pytest -q tests/test_colab_keepalive.py tests/test_remote.py tests/test_colab_transfer.py tests/test_colab_setup_session.py tests/test_videogen_comfyui.py`.
+
+## Step 417 — a web page's `<video>` moves only while it plays (docs)
+
+- **Built**: nothing in code. Found while making the 9:16 film `~/app/video-projects/glider-short` (every beat an
+  LTX-2.3 shot on `ltx`; the film one `web_cut` page playing the placed render and the CG render with a wipe between
+  them and `vidgen/title-cards` on top): both `<video>` elements made in the page's script stayed on frame 0,
+  because `media.js` advances only a video whose record is `playing` (`autoplay`, or `play()` called). CONFIG.md
+  ("Time belongs to vidgen", step 3) now says so and gives `autoplay = true`.
+- **Files**: `docs/CONFIG.md`, `tasklist.md`.
+- **Public interfaces**: none.
+- **Known gaps** (the film's doc-friction list, in its `NOTES.md`): `vidgen remote` brings nothing back from `build/`
+  (stills, storyboard sheets, restyled frames, overlays) though the footage recipe says to look at them, and the local
+  `generate plan` then says "inputs not made yet"; `vidgen validate` passes `chase` `height: [a, b]` (only `distance`
+  takes a pair; the render fails); the chase options are documented only in `space-camera-air.js`; the "Real footage"
+  recipe does not show a silent shot (placeholder words, `pause:`, `audio: none`, `line: false`) nor a portrait size
+  (short side 512, long side up to a multiple of 64); the default restyle instruction turns fog into sea (use
+  `first_frame_prompt:`); `web` scenes have no `fade: false` (a loop needs the examples' `web_cut`); a file deleted
+  locally is brought back from the VM; no wind or sea sounds; ~50 dropped `colab exec` calls in 20 remote commands.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_docs.py` (80 passed).
