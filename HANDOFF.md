@@ -28072,3 +28072,30 @@ project), repo work is generic.
 - **Public interfaces**: no `vidgen.api` change. `cloudflared` on PATH is now required for `vidgen remote` and Colab comfyui.
 - **Known gaps**: the manual HOWTO (`docs/HOWTO-restyle-with-ltx-on-colab.md`) still uses `colab upload` / `download` by hand (not vidgen code); the down side's 17 s for a small result is mostly the VM tunnel offer exec and local DNS wait; `tests/test_guide.py::test_the_web_topics_code_runs_in_chromium` fails under `ulimit -v` here before and after this step.
 - **How to test**: `python -m pytest -q tests/test_colab_transfer.py tests/test_remote.py tests/test_colab_setup_session.py tests/test_videogen_comfyui.py -m "slow or not slow"`.
+
+## Step 416 — `tools/colab/keepalive.py`, a testing tool
+
+- **Built**: `tools/colab/keepalive.py SESSION [--every 7m] [--hours 8] [--log PATH]` and its VM side
+  `tools/colab/keepalive_vm.py`. Each round: `colab sessions` (not listed: log `gone`, stop); try the
+  session lock without waiting (`skip-locked`); skip when the newest call by someone else (the stamp
+  or the CLI history file's mtime, newer than the keepalive's own last call + 2 s) is within `--every`
+  (`skip-recent (Ns ago)`); else, holding the lock, one `colab exec` (cut at 30 s, no retry) sending
+  random `a`; the VM returns `b` and `a+b` (`ok rtt=Ns` / `wrong-sum` / `no-answer`). Rounds are on a
+  fixed grid from the start; a `stop after N h` line at the end, `stop (Ctrl-C)` on Ctrl-C (exit 130).
+- **Helpers** (`vidgen.colab`): `Colab.stamp_path` (`<lock>.last`), `touch_stamp()` after every call
+  but `sessions` and after each upload/download; `try_locked(timeout)` (yields False at once when held);
+  `locked` now loops on `_acquire`. `Colab.lock_dir` defaults to `None` (= `LOCK_DIR`, read at use) so
+  that `tests/conftest.py` (`_no_real_colab_locks`) keeps every test off the real lock folder: before,
+  tests touched the real `ltx` stamp and the first real round skipped.
+- **Real check** (`ltx`, `--every 1m --hours 0.05`, twice): `17:10:24 skip-recent (8s ago)` (the test
+  run, fixed above), `17:11:48 ok rtt=25.1s`, `17:12:53 no-answer`; then `17:13:41 skip-recent (48s ago)`
+  (the first run's last exec), `17:14:54 ok rtt=13.0s`, `17:16:11 no-answer`. The `no-answer` execs hung
+  in the CLI after "Starting the kernel client" (the drops of Step 413). `ltx` still listed afterwards.
+- **Files**: `src/vidgen/colab.py`, `tools/colab/keepalive.py` (new), `tools/colab/keepalive_vm.py` (new),
+  `tools/colab/README.md`, `tests/test_colab_keepalive.py` (new, 8 tests), `tests/conftest.py`, CHANGELOG,
+  tasklist.
+- **Public interfaces**: `Colab.stamp_path`, `Colab.touch_stamp`, `Colab.try_locked`; `Colab.lock_dir`
+  is `Path | None`. No `vidgen.api` or config change.
+- **Known gaps**: the 8-hour idle test itself is not run. `colab exec` drops show as `no-answer` (one
+  exec a round, by design).
+- **How to test**: `python -m pytest -q tests/test_colab_keepalive.py tests/test_remote.py tests/test_colab_transfer.py tests/test_colab_setup_session.py tests/test_videogen_comfyui.py`.

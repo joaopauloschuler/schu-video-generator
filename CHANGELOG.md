@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–415
+## Steps 193–416
+
+### A keepalive test tool for idle Colab sessions (Step 416)
+
+- `tools/colab/keepalive.py SESSION`, started only by hand, tests whether Colab ends idle
+  sessions: one tiny `colab exec` per idle round, one log line per round. vidgen's Colab calls
+  now touch a "last call" stamp next to the session's lock.
 
 ### Colab file transfers through quick tunnels (Step 415)
 

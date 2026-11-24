@@ -108,6 +108,21 @@ standard library only; VM side: `src/vidgen/colab_vm.py` (run with `colab exec -
 `vidgen remote` compares the hash of the `vidgen` package it runs from, so run it from this
 checkout (`pip install -e .`).
 
+## `keepalive.py` (for testing only)
+
+```
+python tools/colab/keepalive.py NAME [--every 7m] [--hours 8] [--log PATH]
+```
+
+Tests whether Colab ends idle sessions. Nothing starts it; run it by hand. Every `--every` it
+skips when another call holds the session's lock, or when any call reached the session within
+`--every` (vidgen's "last call" stamp next to the lock, or `~/.config/colab-cli/history/NAME.jsonl`,
+which also sees `colab` calls made by hand). Otherwise it runs one `colab exec` (`keepalive_vm.py`:
+a sum check). One line per round goes to stdout and the log (default
+`~/.config/colab-cli/keepalive-NAME.log`): `skip-locked`, `skip-recent (Ns ago)`, `ok rtt=Ns`,
+`wrong-sum`, `no-answer` or `gone`. It stops after `--hours`, when `colab sessions` no longer lists
+the session (`gone`), or on Ctrl-C. It never creates or stops a session.
+
 ## The other scripts
 
 Local: `check_hf.sh`, `prepare_inputs.sh`, `build_workflow.py` and `build_image_workflow.py` (vidgen's

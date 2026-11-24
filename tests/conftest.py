@@ -146,6 +146,12 @@ def _no_baked_maps_in_the_real_cache(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_real_colab_locks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Tests never touch the real per-session colab locks and "last call" stamps (a running keepalive reads them)."""
+    monkeypatch.setattr("vidgen.colab.LOCK_DIR", tmp_path / "colab-locks")
+
+
+@pytest.fixture(autouse=True)
 def _no_sweep_of_the_real_temp_folder(monkeypatch: pytest.MonkeyPatch) -> None:
     """A test never deletes real ``vidgen-share-*`` folders: tests of the sweep pass their own folder or run in a subprocess."""
     from vidgen.videogen import host_guard

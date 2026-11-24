@@ -3,11 +3,11 @@
 
 Standard library only (it runs before vidgen's dependencies matter, Windows too). Every call to
 ``colab`` is a list of arguments, one call at a time per session, also across processes (a lock
-file in :data:`LOCK_DIR`): two overlapping calls on one session drop each other. ``colab exec``
-calls are cut at 30 s and retried after 3, 10, 20, 30 s; every VM-side action is safe to repeat,
-since the VM's work goes on when a connection drops. Files go both ways through Cloudflare quick
-tunnels (:mod:`vidgen.colab_transfer`), never ``colab upload`` / ``download``. Nothing here stops
-a session.
+file in :data:`LOCK_DIR`, and a "last call" stamp next to it): two overlapping calls on one session
+drop each other. ``colab exec`` calls are cut at 30 s and retried after 3, 10, 20, 30 s; every
+VM-side action is safe to repeat, since the VM's work goes on when a connection drops. Files go
+both ways through Cloudflare quick tunnels (:mod:`vidgen.colab_transfer`), never ``colab upload`` /
+``download``. Nothing here stops a session.
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ class Colab:
     say: Callable[[str], None] = say_now
     attempts: int = 5
     retry_pauses: tuple[float, ...] = RETRY_PAUSES
-    lock_dir: Path = LOCK_DIR
+    lock_dir: Path | None = None   # None: :data:`LOCK_DIR`
     wall: Callable[[], float] = time.time
     transfer_factory: Callable[[Colab], Transfers] | None = None
     _transfers: Transfers | None = field(default=None, init=False, repr=False)
@@ -155,20 +155,29 @@ class Colab:
         if args[0] == "sessions":
             return self.runner([self.cli, *args], timeout_seconds)
         with self.locked(timeout_seconds):
-            return self.runner([self.cli, *args], timeout_seconds)
+            try:
+                return self.runner([self.cli, *args], timeout_seconds)
+            finally:
+                self.touch_stamp()
 
     @property
     def lock_path(self) -> Path:
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", self.session)
-        return self.lock_dir / f"{safe}-{hashlib.sha256(self.session.encode('utf-8')).hexdigest()[:8]}.lock"
+        return (self.lock_dir or LOCK_DIR) / f"{safe}-{hashlib.sha256(self.session.encode('utf-8')).hexdigest()[:8]}.lock"
 
-    @contextmanager
-    def locked(self, timeout_seconds: float) -> Iterator[None]:
-        """Hold the session's lock file for one call; a lock whose holder's call should have ended
-        (its ``until`` time passed) is stale and taken over."""
+    @property
+    def stamp_path(self) -> Path:
+        """The session's "last call" stamp next to its lock (touched after every call but ``sessions``)."""
+        return self.lock_path.with_suffix(".last")
+
+    def touch_stamp(self) -> None:
+        self.stamp_path.parent.mkdir(parents=True, exist_ok=True)
+        self.stamp_path.touch()
+
+    def _acquire(self, timeout_seconds: float) -> bool:
+        """Take the session's lock file unless another holder's call is still on (a stale lock is taken over)."""
         path = self.lock_path
         path.parent.mkdir(parents=True, exist_ok=True)
-        waited = False
         while True:
             try:
                 handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -176,18 +185,35 @@ class Colab:
                 if self._stale(path):
                     path.unlink(missing_ok=True)
                     continue
-                if not waited:
-                    self.say(f"   waiting for another colab call on session {self.session} to end")
-                    waited = True
-                self.sleep(1.0)
-                continue
+                return False
             with os.fdopen(handle, "w", encoding="utf-8") as lock:
                 json.dump({"pid": os.getpid(), "until": self.wall() + timeout_seconds + 15}, lock)
-            break
+            return True
+
+    @contextmanager
+    def locked(self, timeout_seconds: float) -> Iterator[None]:
+        """Hold the session's lock file for one call; a lock whose holder's call should have ended
+        (its ``until`` time passed) is stale and taken over."""
+        waited = False
+        while not self._acquire(timeout_seconds):
+            if not waited:
+                self.say(f"   waiting for another colab call on session {self.session} to end")
+                waited = True
+            self.sleep(1.0)
         try:
             yield
         finally:
-            path.unlink(missing_ok=True)
+            self.lock_path.unlink(missing_ok=True)
+
+    @contextmanager
+    def try_locked(self, timeout_seconds: float) -> Iterator[bool]:
+        """Hold the session's lock when it is free (yields True), else yield False at once; never waits."""
+        got = self._acquire(timeout_seconds)
+        try:
+            yield got
+        finally:
+            if got:
+                self.lock_path.unlink(missing_ok=True)
 
     def _stale(self, path: Path) -> bool:
         try:
@@ -254,11 +280,17 @@ class Colab:
 
     def upload_many(self, pairs: list[tuple[Path, str]]) -> None:
         """Send several files in one transfer job."""
-        self.transfers.upload(pairs)
+        try:
+            self.transfers.upload(pairs)
+        finally:
+            self.touch_stamp()
 
     def download(self, remote: str, local: Path) -> None:
         """Bring the VM file ``remote`` to ``local`` (through a quick tunnel, SHA-256 checked)."""
-        self.transfers.download(remote, local)
+        try:
+            self.transfers.download(remote, local)
+        finally:
+            self.touch_stamp()
 
     def close(self) -> None:
         """Close this command's tunnels (safe to repeat; also done at exit)."""
