@@ -5805,6 +5805,19 @@ colab stop -s NAME                                 # only when the user says so
 - On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
 - Several sessions can run at once, each under its own name; run one command at a time per session.
 
+### Long films: one agent per phase
+
+A film with generated shots takes hours, and one agent's context fills with logs until it slows
+and forgets. Run one fresh agent per phase, with the project's `NOTES.md` as the handoff:
+
+1. story and `video.yaml`, then the computer render (`vidgen render`, looked at);
+2. the shots (`vidgen generate inputs --guide`, `generate run`);
+3. reviewing the takes: pick, regenerate the bad ones (at most once each), place;
+4. the final film: transitions, reveal, cards, sound, `vidgen render`.
+
+Each agent reads `NOTES.md` first and appends its decisions, the files it made, what failed and
+a timing table (step, wall time, GPU time).
+
 ### Your content and third-party services
 
 - The MIT licence covers the software, not the videos you make or the files you add.
