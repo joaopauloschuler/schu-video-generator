@@ -5721,6 +5721,12 @@ scenes:
   render (same size, frames and camera), grey as 1 / distance: near white, far dark, sky black, one
   range for the shot, no film effects. For depth-control video models (an IC-LoRA's depth control).
   An orbital scene in depth slices (`vidgen/space-scale`'s default) is not drawn right yet.
+- **An open model instead of Seedance** (by hand, outside `vidgen generate`): the shot's
+  `guide.final.mp4` and `guide.depth.mp4` restyled by LTX-2.3 with its union-control IC-LoRA in
+  ComfyUI on a Colab L4: docs/HOWTO-restyle-with-ltx-on-colab.md in the repository (scripts in
+  `docs/howto/ltx-colab/`). Tested once: about 1.3 Colab units for 7 clips; with the render's first
+  frame the clip stays CG, without it it looks real but invents content. Ask the user before starting a
+  Colab GPU, and always stop the session.
 
 ### Your content and third-party services
 

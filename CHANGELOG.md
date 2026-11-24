@@ -5,7 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–403
+## Steps 193–404
+
+### A HOWTO: restyle a render with LTX-2.3 on Colab (Step 404)
+
+- **`docs/HOWTO-restyle-with-ltx-on-colab.md`**: how to send a shot's `guide.final.mp4` /
+  `guide.depth.mp4` (plus a canny of the render) to LTX-2.3 with the union-control IC-LoRA in ComfyUI
+  on a Colab L4, by hand: inputs, install (pinned commits), downloads (all ungated), the API graph,
+  polling, comparison, stopping the session, costs, errors, and the test's results (real-looking only
+  without the CG first frame, and then with invented content). Replayable scripts in
+  `docs/howto/ltx-colab/`. No change to vidgen itself.
 
 ### A web scene's exact depth (Step 403)
 
