@@ -6,6 +6,9 @@
 # The system part (apt: ffmpeg, LaTeX, cairo/pango, espeak-ng; Playwright's Chromium) runs once
 # (/content/.vidgen_system_done); a new hash only reinstalls vidgen into /content/vidgen-venv,
 # a venv that sees Colab's packages (torch) without changing them.
+# With an NVIDIA driver it adds the Vulkan and EGL vendor files Colab leaves out, and when
+# Chromium's WebGL then names the GPU, writes VIDGEN_WEBGL=gpu into /content/vidgen.env (the
+# environment of vidgen remote's runs); otherwise WebGL stays on SwiftShader.
 set -euo pipefail
 cd /content
 T0=$(date +%s)
@@ -14,6 +17,8 @@ stamp() { echo "### $(date -u +%H:%M:%S) +$(( $(date +%s) - T0 ))s $*"; }
 MARKER=/content/.vidgen_setup_vidgen_done
 SYSTEM=/content/.vidgen_system_done
 VENV=/content/vidgen-venv
+ENVFILE=/content/vidgen.env
+NV=/usr/lib64-nvidia
 rm -f "$MARKER"
 
 if [ ! -f "$SYSTEM" ]; then
@@ -40,6 +45,24 @@ ln -sf "$VENV/bin/vidgen" /usr/local/bin/vidgen
 stamp "Playwright's Chromium"
 "$VENV/bin/python" -m playwright install --with-deps chromium >/dev/null
 touch "$SYSTEM"
+
+rm -f "$ENVFILE"
+if command -v nvidia-smi >/dev/null && [ -f "$NV/libGLX_nvidia.so.0" ] && [ -f "$NV/libEGL_nvidia.so.0" ]; then
+  stamp "WebGL on the GPU: NVIDIA Vulkan and EGL vendor files"
+  mkdir -p /etc/vulkan/icd.d /etc/glvnd/egl_vendor.d
+  echo '{"file_format_version": "1.0.1", "ICD": {"library_path": "'"$NV"'/libGLX_nvidia.so.0", "api_version": "1.3.0"}}' \
+    > /etc/vulkan/icd.d/nvidia_icd.json
+  echo '{"file_format_version": "1.0.0", "ICD": {"library_path": "'"$NV"'/libEGL_nvidia.so.0"}}' \
+    > /etc/glvnd/egl_vendor.d/10_nvidia.json
+  RENDERER=$(VIDGEN_WEBGL=gpu LD_LIBRARY_PATH="$NV:${LD_LIBRARY_PATH:-}" "$VENV/bin/python" -c \
+    "from vidgen.browser.chromium import webgl_renderer; print(webgl_renderer())" 2>&1 | tail -n 1) || true
+  if [[ "$RENDERER" == *NVIDIA* ]]; then
+    printf 'VIDGEN_WEBGL=gpu\nLD_LIBRARY_PATH=%s\n' "$NV:${LD_LIBRARY_PATH:-}" > "$ENVFILE"
+    stamp "WebGL: $RENDERER"
+  else
+    stamp "WebGL stays on SwiftShader (the GPU check gave: $RENDERER)"
+  fi
+fi
 
 stamp "check"
 "$VENV/bin/vidgen" --version

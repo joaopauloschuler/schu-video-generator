@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from vidgen.browser import chromium
-from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
+from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels, webgl_backend
 from vidgen.browser.frames_clip import FrameProgress, FramesClipWriter
 from vidgen.errors import VidgenError
 from vidgen.fonts import FONTS_DIR
@@ -53,8 +53,10 @@ def _served() -> dict[str, Path]:
 
 
 def engine_id() -> str:
-    """What draws the frames, for the cache key: the page digest and the Playwright version."""
-    return f"page={page_digest()} playwright={playwright_version() or 'none'}"
+    """What draws the frames, for the cache key: the page digest, the Playwright version and, on
+    the GPU (``VIDGEN_WEBGL=gpu``), ``webgl=gpu``."""
+    gpu = " webgl=gpu" if webgl_backend() == "gpu" else ""
+    return f"page={page_digest()} playwright={playwright_version() or 'none'}{gpu}"
 
 
 def _serve(route: Any) -> None:

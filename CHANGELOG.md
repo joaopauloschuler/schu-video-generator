@@ -5,7 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–409
+## Steps 193–411
+
+### WebGL on the GPU of a Colab session (Step 411)
+
+- `tools/colab/setup_session.py NAME` (also `--vidgen-only`) adds the NVIDIA Vulkan and EGL vendor
+  files Colab leaves out and, when Chromium's WebGL then names the GPU, sets `VIDGEN_WEBGL=gpu` for
+  `vidgen remote` runs (`/content/vidgen.env`): `3d` and `web` scenes draw on the L4
+  (`ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA L4 ...))`), about 5x faster per frame.
+- `VIDGEN_WEBGL=gpu|swiftshader` (default `swiftshader`, unchanged locally); `gpu` is in the `3d`/`web`
+  cache key, so GPU frames are their own build.
 
 ### The `comfyui` video provider (Step 409)
 

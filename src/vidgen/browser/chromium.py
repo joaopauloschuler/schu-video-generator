@@ -4,7 +4,9 @@ DESIGN.md §114.4, §118).
 :class:`Chromium` starts Playwright and one Chromium and stops both; :func:`missing_dependency`
 checks cheaply (no browser started) that Playwright and its Chromium are installed;
 :mod:`vidgen.browser.frames_clip` keeps the frames drawn (DESIGN.md §120.9). WebGL runs on
-SwiftShader (Chromium's software GL), so the pixels do not depend on the graphics card.
+SwiftShader (Chromium's software GL), so the pixels do not depend on the graphics card, unless
+``VIDGEN_WEBGL=gpu`` (set on a Colab VM by ``tools/colab/setup_vidgen.sh``) picks the GPU through
+ANGLE's Vulkan backend (:func:`chromium_args`).
 """
 
 from __future__ import annotations
@@ -23,6 +25,10 @@ from vidgen.errors import incomplete_install, VidgenError
 
 #: Chromium flags: WebGL through ANGLE on SwiftShader (same pixels on every machine).
 CHROMIUM_ARGS: tuple[str, ...] = ("--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist")
+#: Chromium flags with ``VIDGEN_WEBGL=gpu``: WebGL through ANGLE on the GPU's Vulkan driver.
+GPU_ARGS: tuple[str, ...] = ("--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist")
+#: The environment variable that picks the WebGL backend: ``swiftshader`` (default) or ``gpu``.
+WEBGL_ENV = "VIDGEN_WEBGL"
 #: The scene types drawn in Chromium (``vidgen validate`` warns when it is missing).
 BROWSER_SCENE_TYPES: tuple[str, ...] = ("3d", "web")
 
@@ -34,6 +40,20 @@ BROWSER_HINT = (
     "Playwright's Chromium is not installed: run python -m playwright install chromium "
     "(Windows: py -m playwright install chromium)"
 )
+
+
+def webgl_backend() -> str:
+    """``"gpu"`` or ``"swiftshader"`` from :data:`WEBGL_ENV` (unset or empty: ``"swiftshader"``);
+    another value is a :class:`VidgenError`."""
+    value = os.environ.get(WEBGL_ENV, "").strip().lower() or "swiftshader"
+    if value not in ("gpu", "swiftshader"):
+        raise VidgenError(f"{WEBGL_ENV}={value!r}: use gpu or swiftshader")
+    return value
+
+
+def chromium_args() -> tuple[str, ...]:
+    """The Chromium flags for :func:`webgl_backend`: :data:`GPU_ARGS` or :data:`CHROMIUM_ARGS`."""
+    return GPU_ARGS if webgl_backend() == "gpu" else CHROMIUM_ARGS
 
 
 def sync_api() -> Any:
@@ -119,13 +139,13 @@ def browser_error(exc: Exception, what: str) -> VidgenError:
 class Chromium:
     """``with Chromium("a 3D scene") as chromium: chromium.browser.new_context(...)``.
 
-    Starts Playwright and one headless Chromium (:data:`CHROMIUM_ARGS` plus ``extra_args``) on
+    Starts Playwright and one headless Chromium (:func:`chromium_args` plus ``extra_args``) on
     enter, stops both on exit (also :meth:`close`, safe to call twice). A failed start is a
     :class:`VidgenError` (:func:`browser_error`)."""
 
     def __init__(self, what: str, extra_args: tuple[str, ...] = ()) -> None:
         self.what = what
-        self.args = CHROMIUM_ARGS + extra_args
+        self.args = chromium_args() + extra_args
         self.playwright: Any = None
         self.browser: Any = None
 
@@ -154,6 +174,16 @@ class Chromium:
         self.browser = self.playwright = None
 
 
+def webgl_renderer() -> str:
+    """The WebGL renderer string (``UNMASKED_RENDERER_WEBGL``) of a Chromium started with
+    :func:`chromium_args`, e.g. ``ANGLE (NVIDIA, Vulkan ... NVIDIA L4 ...)``; ``"no WebGL"``."""
+    script = ("() => { const g = document.createElement('canvas').getContext('webgl2'); if (!g) return 'no WebGL';"
+              " const e = g.getExtension('WEBGL_debug_renderer_info');"
+              " return g.getParameter(e ? e.UNMASKED_RENDERER_WEBGL : g.RENDERER); }")
+    with Chromium("the WebGL check") as chromium:
+        return str(chromium.browser.new_page().evaluate(script))
+
+
 def png_pixels(png: bytes, size: tuple[int, int] | None, what: str, *, alpha: bool = False) -> np.ndarray:
     """A PNG's RGB pixels (RGBA with ``alpha``), checked to be ``size`` (W, H; ``None``: not
     checked); ``what`` names the page in the error."""
@@ -169,6 +199,6 @@ def png_pixels(png: bytes, size: tuple[int, int] | None, what: str, *, alpha: bo
 
 
 __all__ = [
-    "BROWSER_HINT", "BROWSER_SCENE_TYPES", "CHROMIUM_ARGS", "INSTALL_HINT", "Chromium", "browser_error", "first_line",
-    "install_warnings", "missing_dependency", "playwright_version", "png_pixels", "sync_api",
+    "BROWSER_HINT", "BROWSER_SCENE_TYPES", "CHROMIUM_ARGS", "GPU_ARGS", "INSTALL_HINT", "WEBGL_ENV", "Chromium", "browser_error", "chromium_args", "first_line",
+    "install_warnings", "missing_dependency", "playwright_version", "png_pixels", "sync_api", "webgl_backend", "webgl_renderer",
 ]

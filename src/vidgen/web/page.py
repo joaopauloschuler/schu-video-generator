@@ -161,7 +161,7 @@ def layout_digest() -> str:
 def engine_id() -> str:
     """What draws the frames, for the cache key: vidgen's page files (the clock among them), the
     Chromium flags, the time zone and locale, and the Playwright version (which pins the Chromium build)."""
-    return (f"web={runtime_digest()} args={' '.join(chromium.CHROMIUM_ARGS + WEB_ARGS)} tz={TIMEZONE} locale={LOCALE} "
+    return (f"web={runtime_digest()} args={' '.join(chromium.chromium_args() + WEB_ARGS)} tz={TIMEZONE} locale={LOCALE} "
             f"playwright={playwright_version() or 'none'}")
 
 

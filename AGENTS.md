@@ -5759,6 +5759,7 @@ colab stop -s NAME             # only when the user says so
 - Brought back: the files the command's JSON document names outside `build/` (plus the render's
   `timings.json`) and the files the run made or changed outside those folders.
 - After vidgen's code changes, `vidgen remote` stops and prints the setup command (it reinstalls vidgen only).
+- On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
 - Several sessions can run at once, each under its own name.
 
 ### Your content and third-party services

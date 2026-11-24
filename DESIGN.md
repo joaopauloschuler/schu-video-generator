@@ -22567,7 +22567,8 @@ scenes only (§118.14): the `3d` page neither serves nor hashes it.
 `three_d/browser.py`, `PageRenderer(description)` (a context manager; one per scene render):
 starts Playwright and Chromium (`headless`, `--use-angle=swiftshader --enable-unsafe-swiftshader
 --ignore-gpu-blocklist`: WebGL on Chromium's software renderer, the same pixels whatever the
-graphics card), a context with the frame's size as viewport and `device_scale_factor 1`, and a
+graphics card; `VIDGEN_WEBGL=gpu` uses `--use-angle=vulkan --enable-features=Vulkan
+--ignore-gpu-blocklist` instead and adds `webgl=gpu` to the engine id, Step 411), a context with the frame's size as viewport and `device_scale_factor 1`, and a
 route for **every** request: `http://vidgen-3d.invalid/<file>` is answered from `PAGE_FILES` in
 the package, anything else is aborted — so nothing is fetched from the network (ES-module imports
 need an http origin; `file://` modules are blocked by Chromium). `frame(n)` evaluates

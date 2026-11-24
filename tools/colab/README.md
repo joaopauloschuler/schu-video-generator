@@ -28,7 +28,17 @@ installed and logged in (`colab usage` prints the balance). It:
 | ComfyUI + LTX-2.3 | `setup.sh`, `/content/setup.log`, `/content/download.log` | ComfyUI and four custom nodes at the tested commits (`--latest`: their newest, `PIN=0`), their requirements without touching Colab's torch, the LTX-2.3 GGUF, VAEs, connectors, IC-LoRA and Gemma (~34 GB) |
 | image models (skip with `--no-image`) | `setup_image.sh`, `/content/setup_image.log` | Qwen-Image-Edit-2511 GGUF + Lightning LoRA + text encoder + VAE, Z-Image-Turbo + Fun ControlNet (~50 GB); runs beside `setup.sh` |
 | ComfyUI server | `start_comfy.py`, `/content/comfy.log` | `main.py --listen 127.0.0.1 --port 8188`, and `nvidia-smi` into `/content/vram.csv` |
-| vidgen (skip with `--no-vidgen`; `--vidgen-only` skips the rows above) | `setup_vidgen.sh`, `/content/setup_vidgen.log` | once: apt `ffmpeg`, LaTeX (`texlive-latex-extra`, `dvisvgm`), cairo/pango, `espeak-ng`, Playwright's Chromium with its libraries; each time the code changes: `src/vidgen` of the working tree (uncommitted changes too, uploaded as `/content/vidgen-src.tar.gz`, nothing from GitHub) installed with its dependencies into `/content/vidgen-venv` (a venv that sees Colab's torch without changing it), linked as `/usr/local/bin/vidgen` |
+| vidgen (skip with `--no-vidgen`; `--vidgen-only` skips the rows above) | `setup_vidgen.sh`, `/content/setup_vidgen.log` | once: apt `ffmpeg`, LaTeX (`texlive-latex-extra`, `dvisvgm`), cairo/pango, `espeak-ng`, Playwright's Chromium with its libraries; each time the code changes: `src/vidgen` of the working tree (uncommitted changes too, uploaded as `/content/vidgen-src.tar.gz`, nothing from GitHub) installed with its dependencies into `/content/vidgen-venv` (a venv that sees Colab's torch without changing it), linked as `/usr/local/bin/vidgen`; WebGL on the GPU (below) |
+
+**WebGL on the GPU.** Colab ships the NVIDIA libraries in `/usr/lib64-nvidia` but not their vendor
+files, so Chromium falls back to SwiftShader. `setup_vidgen.sh` writes
+`/etc/vulkan/icd.d/nvidia_icd.json` and `/etc/glvnd/egl_vendor.d/10_nvidia.json`, starts Chromium
+with `VIDGEN_WEBGL=gpu` (flags `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist`)
+and, when the WebGL renderer names NVIDIA, writes `VIDGEN_WEBGL=gpu` (and `LD_LIBRARY_PATH`) into
+`/content/vidgen.env`, which `vidgen remote` adds to its runs; the log shows
+`### WebGL: ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA L4 ...))`. Without a GPU or when the check
+fails, the file is not written and WebGL stays on SwiftShader. `VIDGEN_WEBGL=gpu` is part of the
+`3d`/`web` cache key, so GPU frames are their own build.
 
 The HOWTO's §4 and §6 list the repos, files and commits.
 

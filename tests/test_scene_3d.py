@@ -347,3 +347,19 @@ def test_render_landscape_and_portrait_with_captions_and_cache(make_project) -> 
     view = _frames(root / "build" / "preview_vertical" / "three_d" / "cube.mkv")[k]
     assert frames[k][80, 45, 0] > 100   # the box in the middle of the tall frame
     assert np.abs(frames[k][110:140] - view[110:140]).mean() > 10   # the caption is drawn over the 3D picture
+
+
+def test_webgl_gpu_env_picks_the_vulkan_flags_and_its_own_cache_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen.three_d.browser import engine_id as three_engine
+    from vidgen.web.page import engine_id as web_engine
+
+    monkeypatch.delenv(chromium.WEBGL_ENV, raising=False)
+    assert chromium.chromium_args() == chromium.CHROMIUM_ARGS and chromium.Chromium("x").args == chromium.CHROMIUM_ARGS
+    soft_3d, soft_web = three_engine(), web_engine()
+    assert "webgl" not in soft_3d and "--use-angle=swiftshader" in soft_web
+    monkeypatch.setenv(chromium.WEBGL_ENV, "GPU")
+    assert chromium.chromium_args() == chromium.GPU_ARGS and "--use-angle=vulkan" in chromium.GPU_ARGS
+    assert three_engine() == soft_3d + " webgl=gpu" and "--use-angle=vulkan" in web_engine()
+    monkeypatch.setenv(chromium.WEBGL_ENV, "metal")
+    with pytest.raises(VidgenError, match="VIDGEN_WEBGL='metal'"):
+        chromium.chromium_args()

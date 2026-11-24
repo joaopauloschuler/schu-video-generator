@@ -211,3 +211,13 @@ def test_package_hash_and_archives(tmp_path: Path) -> None:
         assert tar.getnames() == ["pyproject.toml"]
     with pytest.raises(ColabError, match="not vidgen's source folder"):
         source_archive(tmp_path, tmp_path / "t.tar.gz")
+
+
+def test_run_env_adds_the_vm_env_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KEEP", "1")
+    assert colab_vm.run_env(tmp_path / "missing.env")["KEEP"] == "1"
+    env_file = tmp_path / "vidgen.env"
+    env_file.write_text("VIDGEN_WEBGL=gpu\n# note\n\nLD_LIBRARY_PATH=/a:/b=c\n", encoding="utf-8")
+    env = colab_vm.run_env(env_file)
+    assert env["VIDGEN_WEBGL"] == "gpu" and env["LD_LIBRARY_PATH"] == "/a:/b=c" and env["KEEP"] == "1"
+    assert "# note" not in env

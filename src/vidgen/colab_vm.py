@@ -8,7 +8,9 @@ Actions (``--env`` values stay set in the kernel, so every call passes all the k
   project's files (path -> SHA-256, ``VIDGEN_EXCLUDE`` top folders left out) and its run;
 - ``unpack``: extract ``VIDGEN_ARCHIVE`` (.tar.gz) into ``VIDGEN_DEST``;
 - ``start``: run ``VIDGEN_BIN`` with the JSON list ``VIDGEN_ARGS`` in the project, detached, as run
-  ``VIDGEN_RUN`` (a retried start of the same run does nothing);
+  ``VIDGEN_RUN`` (a retried start of the same run does nothing), with the ``KEY=VALUE`` lines of
+  ``/content/vidgen.env`` (written by ``setup_vidgen.sh``, e.g. ``VIDGEN_WEBGL=gpu``) added to its
+  environment;
 - ``poll``: the run's log from byte ``VIDGEN_OFFSET``, and when it is done its exit code and stdout.
 
 Standard library only: it runs in the Colab kernel's Python.
@@ -27,6 +29,7 @@ CONTENT = Path("/content")
 MARKER = CONTENT / ".vidgen_setup_vidgen_done"
 SETUP_SCRIPT = "/content/setup_vidgen.sh"
 SETUP_LOG = CONTENT / "setup_vidgen.log"
+ENV_FILE = CONTENT / "vidgen.env"
 RUN_DIR = ".vidgen-remote"
 ALWAYS_SKIPPED = ("__pycache__", ".git", RUN_DIR)
 LOG_CHUNK = 64_000
@@ -129,6 +132,19 @@ def unpack(env):
     return {"count": len(members)}
 
 
+def run_env(env_file=None):
+    """This process's environment plus the ``KEY=VALUE`` lines of ``env_file`` (default
+    :data:`ENV_FILE`; missing: nothing added; blank and ``#`` lines skipped)."""
+    env_file = ENV_FILE if env_file is None else env_file
+    env = dict(os.environ)
+    if env_file.is_file():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.strip().partition("=")
+            if sep and key and not key.startswith("#"):
+                env[key] = value
+    return env
+
+
 def start(env, proc=Path("/proc")):
     project = Path(env["VIDGEN_PROJECT"])
     run_id = env["VIDGEN_RUN"]
@@ -144,7 +160,7 @@ def start(env, proc=Path("/proc")):
     (run / "run.id").write_text(run_id, encoding="utf-8")
     command = [env["VIDGEN_BIN"], *json.loads(env["VIDGEN_ARGS"])]
     child = subprocess.Popen([sys.executable, "-c", WRAPPER, str(run / "run.out"), str(run / "run.log"),
-                              str(run / "run.rc"), *command], cwd=project, start_new_session=True,
+                              str(run / "run.rc"), *command], cwd=project, env=run_env(), start_new_session=True,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     (run / "run.pid").write_text(str(child.pid), encoding="utf-8")
     return {"started": True, "run": run_status(project, proc)}
