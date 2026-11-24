@@ -72,18 +72,24 @@ vidgen remote NAME render
 vidgen remote --exclude ltx-test NAME render --preview
 ```
 
-1. checks that `colab sessions` lists `NAME`, and that the VM's vidgen hash is this computer's
-   (else it stops and prints the `setup_session.py ... --vidgen-only` command);
-2. syncs the project to `/content/projects/<folder name>/`: the files whose SHA-256 differs, in one
-   `.tar.gz`; `build/`, `output/`, `exports/`, `media/` and `--exclude DIR` top folders are never
-   sent, and nothing on the VM is deleted;
-3. starts `vidgen ARGS` there detached (`--json` added for commands that have it), log in
-   `.vidgen-remote/run.log`, and polls it (one `colab exec` at a time, each cut at 60 s and
-   retried), printing its lines; on failure it prints the log tail and returns the exit code;
-4. brings back the files the JSON document names inside the project outside `build/` (for
-   `render`: the MP4, SRT, chapters, thumbnail) plus the render's `build/final/timings.json`,
-   and the files the run made or changed outside the never-sent folders (e.g. `audio/` of `tts`).
-   The rest of `build/` stays on the VM as a cache for the next run.
+1. checks that `colab sessions` lists `NAME`;
+2. sends to `/content/projects/<folder name>/` the files whose SHA-256 the VM lacks, in one `.tar`
+   (it keeps the VM's file list in `.vidgen-remote/`; the first run asks the VM). `build/`,
+   `output/`, `exports/`, `media/` and `--exclude DIR` top folders are never sent, and nothing on
+   the VM is deleted;
+3. in the same `colab exec`, checks that the VM's vidgen hash is this computer's (else it stops
+   and prints the `setup_session.py ... --vidgen-only` command) and starts `vidgen ARGS` there
+   detached (`--json` added for commands that have it), log in `.vidgen-remote/run.log`; it polls
+   the log after 2 s, 5 s, then every 10 s, printing its lines; on failure it prints the log tail
+   and returns the exit code;
+4. brings back, in one `.tar`, the files the JSON document names inside the project outside
+   `build/` (for `render`: the MP4, SRT, chapters, thumbnail) plus the render's
+   `build/final/timings.json`, and the files the run made or changed outside the never-sent
+   folders (e.g. `audio/` of `tts`). The rest of `build/` stays on the VM as a cache.
+
+Every `colab` call on a session waits for any other vidgen call on it to end (a lock file in the
+temp folder); a `colab exec` is cut at 30 s and retried after 3, 10, 20, 30 s, and every VM step
+is safe to repeat. `setup_session.py` and the `comfyui` provider use the same helpers.
 
 Local side: `src/vidgen/remote.py` and `src/vidgen/colab.py` (shared with `setup_session.py`),
 standard library only; VM side: `src/vidgen/colab_vm.py` (run with `colab exec -f`).

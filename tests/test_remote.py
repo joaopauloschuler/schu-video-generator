@@ -69,7 +69,7 @@ class FakeColab:
             self.dropped -= 1
             return CommandResult(1, "RuntimeError: Connection was lost.")
         env = dict(a.split("=", 1) for a in args if "=" in a and a.startswith("VIDGEN_"))
-        for key in ("VIDGEN_PROJECT", "VIDGEN_ARCHIVE", "VIDGEN_DEST"):
+        for key in ("VIDGEN_PROJECT", "VIDGEN_ARCHIVE"):
             if env.get(key):
                 env[key] = str(self.local(env[key]))
         out = io.StringIO()
@@ -103,7 +103,7 @@ def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     def make(vidgen_hash: str | None = "c0de") -> tuple[FakeColab, Colab]:
         fake = FakeColab(vm, vidgen_hash)
         lines: list[str] = []
-        colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append)
+        colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks")
         colab.lines = lines  # type: ignore[attr-defined]
         return fake, colab
 
@@ -131,10 +131,20 @@ def test_render_syncs_changed_files_runs_and_brings_back_outputs(setup) -> None:
     text = "\n".join(colab.lines)  # type: ignore[attr-defined]
     assert "[1/1] chase: rendering" in text and "brought back 3 file(s)" in text
     assert json.loads((vm_project / ".vidgen-remote" / "run.out").read_text())["args"] == ["render", "--json"]
-    # The second run sends nothing: every file is there already.
+    assert fake.names()[:4] == ["sessions", "VIDGEN_ACTION=state", "upload", "VIDGEN_ACTION=begin"]
+    assert fake.names()[-1] == "download" and fake.names().count("download") == 1   # one result tar
+    # The second run asks nothing first (the VM's file list is cached) and sends no file.
     fake.calls.clear()
     assert _run(project, colab, ["render"]) == 0, "\n".join(colab.lines[-8:])  # type: ignore[attr-defined]
-    assert "upload" not in fake.names() and "none changed" in "\n".join(colab.lines)  # type: ignore[attr-defined]
+    names = fake.names()
+    assert names[:3] == ["sessions", "upload", "VIDGEN_ACTION=begin"] and "VIDGEN_ACTION=state" not in names
+    assert "0 of 3 files to send" in "\n".join(colab.lines)  # type: ignore[attr-defined]
+    # The VM lost the project (a new session): begin reports the missing files, a second tar sends them.
+    shutil.rmtree(vm_project)
+    fake.calls.clear()
+    assert _run(project, colab, ["render"]) == 0
+    assert fake.names().count("upload") == 2 and (vm_project / "video.yaml").is_file()
+    assert "the VM lacks 3 more file(s)" in "\n".join(colab.lines)  # type: ignore[attr-defined]
 
 
 def test_failure_shows_the_log_tail_and_returns_the_exit_code(setup) -> None:
@@ -156,6 +166,14 @@ def test_other_code_on_the_vm_fails_with_the_setup_command(setup) -> None:
     colab_vm.MARKER.unlink()
     with pytest.raises(VidgenError, match="has no vidgen"):
         _run(project, colab, ["render"])
+    # With a cached file list the check happens in the begin exec.
+    run = remote.RemoteRun(colab, project, ["render"], local_hash="c0de")
+    run.remember_files({})
+    fake, colab = make(vidgen_hash="0ld")
+    run.colab = colab
+    with pytest.raises(ColabError, match="has vidgen 0ld"):
+        run.run()
+    assert "VIDGEN_ACTION=state" not in fake.names()
 
 
 def test_unknown_session_is_an_error_without_fallback(setup) -> None:
@@ -170,9 +188,6 @@ def test_with_json_named_files_and_changes() -> None:
     assert remote.with_json(["render", "--preview"], ["render"]) == (["render", "--preview", "--json"], False)
     assert remote.with_json(["render", "--json"], ["render"]) == (["render", "--json"], True)
     assert remote.with_json(["studio"], ["render"]) == (["studio"], False)
-    doc = {"outputs": {"video": "/p/x/output/a.mp4", "timings": "/p/x/build/final/timings.json"},
-           "other": ["/p/x/build/y", "/elsewhere/z", "/p/x/output/a.mp4"]}
-    assert remote.named_files(doc, "/p/x") == ["output/a.mp4", "build/final/timings.json"]
     assert remote.changed_files({"a": "1", "b": "2"}, {"a": "1", "b": "3"}) == ["b"]
     assert remote.vm_name(Path("my project!")) == "my_project_"
 
@@ -221,3 +236,58 @@ def test_run_env_adds_the_vm_env_file(tmp_path: Path, monkeypatch: pytest.Monkey
     env = colab_vm.run_env(env_file)
     assert env["VIDGEN_WEBGL"] == "gpu" and env["LD_LIBRARY_PATH"] == "/a:/b=c" and env["KEEP"] == "1"
     assert "# note" not in env
+
+
+def test_bring_back_names_and_changes(tmp_path: Path) -> None:
+    for rel in ("output/a.mp4", "build/final/timings.json", "build/y", "audio/n.mp3"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_bytes(b"x")
+    p = str(tmp_path)
+    doc = json.dumps({"outputs": {"video": f"{p}/output/a.mp4", "timings": f"{p}/build/final/timings.json"},
+                      "other": [f"{p}/build/y", "/elsewhere/z", f"{p}/output/a.mp4", f"{p}/output/gone.mp4"]})
+    assert colab_vm.named_files(doc, tmp_path) == ["output/a.mp4", "build/final/timings.json"]
+    after = {"audio/n.mp3": "1", "video.yaml": "2", "output/a.mp4": "3"}
+    assert colab_vm.bring_back(doc, tmp_path, after, {"video.yaml": "2"}) == [
+        "output/a.mp4", "build/final/timings.json", "audio/n.mp3"]
+    packed = colab_vm.pack(tmp_path, ["output/a.mp4", "audio/n.mp3"])
+    assert packed["files"] == {"output/a.mp4": 1, "audio/n.mp3": 1} and packed["size"] > 0
+    assert colab_vm.pack(tmp_path, [])["archive"] is None
+
+
+def test_begin_starts_a_run_once_and_checks_the_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(colab_vm, "start", lambda env, proc=None: {"started": True, "run": {"id": env["VIDGEN_RUN"]}})
+    project = tmp_path / "p"
+    archive = tmp_path / "sync.tar"
+    want = {"a.txt": __import__("hashlib").sha256(b"A").hexdigest()}
+    (tmp_path / "src").mkdir()
+    remote.sync_archive(tmp_path / "src", [], want, archive)
+    env = {"VIDGEN_PROJECT": str(project), "VIDGEN_RUN": "r1", "VIDGEN_ARCHIVE": str(archive), "VIDGEN_CHECK": "1"}
+    assert colab_vm.begin(env) == {"started": False, "missing": ["a.txt"]} and archive.is_file()
+    (tmp_path / "src" / "a.txt").write_bytes(b"A")
+    remote.sync_archive(tmp_path / "src", ["a.txt"], want, archive)
+    assert colab_vm.begin(env)["started"] and not archive.exists() and (project / "a.txt").read_bytes() == b"A"
+    (project / colab_vm.RUN_DIR / "run.id").write_text("r1")
+    assert colab_vm.begin(env)["started"] is False     # a retried begin of the same run does nothing
+
+
+def test_lock_waits_for_another_call_and_takes_over_a_stale_one(tmp_path: Path) -> None:
+    now = [1000.0]
+    colab = Colab("ltx", runner=lambda a, t: CommandResult(0, ""), sleep=lambda s: now.__setitem__(0, now[0] + s),
+                  say=lambda line: None, lock_dir=tmp_path, wall=lambda: now[0])
+    colab.lock_path.write_text(json.dumps({"pid": 1, "until": 1005.0}), encoding="utf-8")
+    colab.run(["exec", "-s", "ltx"], 30)
+    assert now[0] > 1005.0 and not colab.lock_path.exists()   # waited until the holder's call ended
+    colab.lock_path.write_text("", encoding="utf-8")            # unreadable and old: garbage
+    now[0] += 100
+    __import__("os").utime(colab.lock_path, (now[0] - 50, now[0] - 50))
+    colab.run(["exec", "-s", "ltx"], 30)
+    assert not colab.lock_path.exists()
+
+
+def test_retries_pause_longer_each_time(tmp_path: Path) -> None:
+    pauses: list[float] = []
+    colab = Colab("ltx", runner=lambda a, t: CommandResult(124, "(timed out after 30 s)"), sleep=pauses.append,
+                  say=lambda line: None, lock_dir=tmp_path)
+    with pytest.raises(ColabError, match="kept failing"):
+        colab.vm("state")
+    assert pauses == [3.0, 10.0, 20.0, 30.0]

@@ -322,7 +322,8 @@ def test_colab_transport_runs_the_client_on_the_vm(tmp_path: Path) -> None:
     spec = json.loads(fake.archive["job.json"])
     assert spec["url"] == comfyui.VM_URL and spec["uploads"] == {"c.mp4": "inputs/c.mp4"} and fake.archive["inputs/c.mp4"] == b"control"
     assert b"def run_job" in fake.archive["comfyui_client.py"]
-    start = dict(fake.actions)["start"]
+    assert [action for action, _ in fake.actions] == ["begin"]
+    start = dict(fake.actions)["begin"]
     assert start["VIDGEN_BIN"] == "python3" and json.loads(start["VIDGEN_ARGS"]) == ["comfyui_client.py", "job.json"]
     assert start["VIDGEN_PROJECT"] == f"{comfyui.VM_JOBS}/{job_id}"
     provider = ComfyUIVideoProvider(transport, poll_seconds=0, sleep=lambda s: None)  # type: ignore[arg-type]

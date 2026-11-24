@@ -337,9 +337,8 @@ class ColabTransport:
             files = ["job.json", "comfyui_client.py", *names.values()]
             archive = files_archive(folder, files, folder / f"vidgen-comfyui-{job_id}.tar.gz")
             self.colab.upload(archive, f"/content/{archive.name}")
-        self.colab.vm("unpack", VIDGEN_ARCHIVE=f"/content/{archive.name}", VIDGEN_DEST=remote)
-        self.colab.vm("start", VIDGEN_PROJECT=remote, VIDGEN_RUN=job_id, VIDGEN_BIN="python3",
-                      VIDGEN_ARGS=json.dumps(["comfyui_client.py", "job.json"]))
+        self.colab.vm("begin", VIDGEN_PROJECT=remote, VIDGEN_RUN=job_id, VIDGEN_BIN="python3",
+                      VIDGEN_ARCHIVE=f"/content/{archive.name}", VIDGEN_ARGS=json.dumps(["comfyui_client.py", "job.json"]))
         self.outputs[job_id] = job.output
         return job_id
 

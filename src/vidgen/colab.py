@@ -2,18 +2,24 @@
 ``vidgen remote``.
 
 Standard library only (it runs before vidgen's dependencies matter, Windows too). Every call to
-``colab`` is a list of arguments, one call at a time; ``colab exec`` calls are cut at 60 s and
-retried, since the VM's work goes on when a connection drops. Nothing here stops a session.
+``colab`` is a list of arguments, one call at a time per session, also across processes (a lock
+file in :data:`LOCK_DIR`): two overlapping calls on one session drop each other. ``colab exec``
+calls are cut at 30 s and retried after 3, 10, 20, 30 s; every VM-side action is safe to repeat,
+since the VM's work goes on when a connection drops. Nothing here stops a session.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tarfile
+import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -32,6 +38,16 @@ VM_SOURCE_ARCHIVE = "/content/vidgen-src.tar.gz"
 SOURCE_TOP_FILES = ("pyproject.toml", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md")
 _SKIPPED_PARTS = ("__pycache__",)
 _SKIPPED_SUFFIXES = (".pyc", ".pyo")
+#: The ``--env`` keys :data:`VM_SCRIPT` reads. ``--env`` values stay set in the kernel, so
+#: :meth:`Colab.vm` passes every key, blank unless given.
+VM_KEYS = ("VIDGEN_PROJECT", "VIDGEN_EXCLUDE", "VIDGEN_RUN", "VIDGEN_BIN", "VIDGEN_ARGS", "VIDGEN_HASH",
+           "VIDGEN_ARCHIVE", "VIDGEN_CHECK", "VIDGEN_OFFSET", "VIDGEN_PACK")
+#: Where the per-session lock files live (one ``colab`` call at a time per session).
+LOCK_DIR = Path(tempfile.gettempdir()) / "vidgen-colab-locks"
+#: A ``colab exec`` is cut after this many seconds (the VM scripts answer in 5-15 s).
+EXEC_SECONDS = 30.0
+#: The pauses before the 2nd, 3rd, ... try of a dropped call.
+RETRY_PAUSES = (3.0, 10.0, 20.0, 30.0)
 
 
 class ColabError(VidgenError):
@@ -123,10 +139,59 @@ class Colab:
     sleep: Callable[[float], None] = time.sleep
     say: Callable[[str], None] = say_now
     attempts: int = 5
-    retry_pause: float = 20.0
+    retry_pauses: tuple[float, ...] = RETRY_PAUSES
+    lock_dir: Path = LOCK_DIR
+    wall: Callable[[], float] = time.time
 
     def run(self, args: list[str], timeout_seconds: float) -> CommandResult:
-        return self.runner([self.cli, *args], timeout_seconds)
+        if args[0] == "sessions":
+            return self.runner([self.cli, *args], timeout_seconds)
+        with self.locked(timeout_seconds):
+            return self.runner([self.cli, *args], timeout_seconds)
+
+    @property
+    def lock_path(self) -> Path:
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", self.session)
+        return self.lock_dir / f"{safe}-{hashlib.sha256(self.session.encode('utf-8')).hexdigest()[:8]}.lock"
+
+    @contextmanager
+    def locked(self, timeout_seconds: float) -> Iterator[None]:
+        """Hold the session's lock file for one call; a lock whose holder's call should have ended
+        (its ``until`` time passed) is stale and taken over."""
+        path = self.lock_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        waited = False
+        while True:
+            try:
+                handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if self._stale(path):
+                    path.unlink(missing_ok=True)
+                    continue
+                if not waited:
+                    self.say(f"   waiting for another colab call on session {self.session} to end")
+                    waited = True
+                self.sleep(1.0)
+                continue
+            with os.fdopen(handle, "w", encoding="utf-8") as lock:
+                json.dump({"pid": os.getpid(), "until": self.wall() + timeout_seconds + 15}, lock)
+            break
+        try:
+            yield
+        finally:
+            path.unlink(missing_ok=True)
+
+    def _stale(self, path: Path) -> bool:
+        try:
+            until = float(json.loads(path.read_text(encoding="utf-8"))["until"])
+        except FileNotFoundError:
+            return False
+        except (OSError, ValueError, KeyError, TypeError):
+            try:   # being written right now, or garbage left behind
+                return self.wall() - path.stat().st_mtime > 5
+            except FileNotFoundError:
+                return False
+        return self.wall() > until
 
     def sessions(self) -> dict[str, str]:
         """The sessions ``colab sessions`` lists (name -> hardware)."""
@@ -140,14 +205,14 @@ class Colab:
 
     def exec_args(self, script: Path, env: dict[str, str]) -> list[str]:
         """Arguments of ``colab exec`` running a local file on the VM with ``--env KEY=VALUE`` pairs."""
-        args = ["exec", "-s", self.session, "--timeout", "45"]
+        args = ["exec", "-s", self.session, "--timeout", f"{EXEC_SECONDS - 10:.0f}"]
         for key, value in env.items():
             args += ["--env", f"{key}={value}"]
         return [*args, "-f", str(script)]
 
     def exec_file(self, script: Path, env: dict[str, str] | None = None) -> CommandResult:
-        # These scripts answer in 5-15 s; a call that hangs (seen while connecting) is cut at 60 s and retried.
-        return self.run(self.exec_args(script, env or {}), 60)
+        # These scripts answer in 5-15 s; a call that hangs (often) is cut and retried.
+        return self.run(self.exec_args(script, env or {}), EXEC_SECONDS)
 
     def exec_json(self, script: Path, env: dict[str, str], prefix: str) -> dict:
         """Run ``script`` on the VM and return the JSON it printed after ``prefix``; retries a dropped exec."""
@@ -161,25 +226,27 @@ class Colab:
 
     def vm(self, action: str, **env: str) -> dict:
         """Run :data:`VM_SCRIPT` with ``VIDGEN_ACTION=action``; raises when it reports an error."""
-        reply = self.exec_json(VM_SCRIPT, {"VIDGEN_ACTION": action, **env}, VM_PREFIX)
+        reply = self.exec_json(VM_SCRIPT, {"VIDGEN_ACTION": action, **dict.fromkeys(VM_KEYS, ""), **env}, VM_PREFIX)
         if reply.get("error"):
             raise ColabError(f"on {self.session}: {reply['error']}")
         return reply
 
     def upload(self, local: Path, remote: str) -> None:
         """``colab upload``, retried when the transfer fails."""
+        timeout = transfer_seconds(local.stat().st_size)
         for attempt in range(1, self.attempts + 1):
-            result = self.run(["upload", "-s", self.session, str(local), remote], 300)
+            result = self.run(["upload", "-s", self.session, str(local), remote], timeout)
             if result.returncode == 0 and "Traceback" not in result.output:
                 return
             self.pause_before_retry(f"upload of {local.name} failed ({last_line(result.output)})", attempt)
         raise ColabError(f"could not upload {local} to {remote}")
 
-    def download(self, remote: str, local: Path) -> None:
-        """``colab download``, retried until ``local`` exists."""
+    def download(self, remote: str, local: Path, size: int | None = None) -> None:
+        """``colab download``, retried until ``local`` exists (cut by ``size`` when known)."""
         local.parent.mkdir(parents=True, exist_ok=True)
+        timeout = 600.0 if size is None else transfer_seconds(size)
         for attempt in range(1, self.attempts + 1):
-            result = self.run(["download", "-s", self.session, remote, str(local)], 600)
+            result = self.run(["download", "-s", self.session, remote, str(local)], timeout)
             if result.returncode == 0 and "Traceback" not in result.output and local.is_file():
                 return
             self.pause_before_retry(f"download of {remote} failed ({last_line(result.output)})", attempt)
@@ -188,8 +255,14 @@ class Colab:
     def pause_before_retry(self, what: str, attempt: int) -> None:
         """Say what failed and wait, unless ``attempt`` was the last one."""
         if attempt < self.attempts:
-            self.say(f"   {what}; retry {attempt + 1}/{self.attempts} in {self.retry_pause:.0f} s")
-            self.sleep(self.retry_pause)
+            pause = self.retry_pauses[min(attempt, len(self.retry_pauses)) - 1]
+            self.say(f"   {what}; retry {attempt + 1}/{self.attempts} in {pause:.0f} s")
+            self.sleep(pause)
+
+
+def transfer_seconds(size: int) -> float:
+    """The cut-off of an upload or download of ``size`` bytes: 60 s plus 1 s per MB."""
+    return 60.0 + size / 1e6
 
 
 def _package_files(package_dir: Path) -> list[Path]:
@@ -232,3 +305,16 @@ def files_archive(root: Path, relpaths: list[str], dest: Path) -> Path:
         for rel in relpaths:
             archive.add(root / Path(rel), arcname=rel)
     return dest
+
+
+def extract_archive(archive: Path, dest: Path) -> list[str]:
+    """Extract ``archive`` (.tar or .tar.gz) into ``dest``; returns its member names. Raises
+    :class:`ColabError` on an absolute path or ``..``."""
+    dest.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, "r:*") as tar:
+        members = tar.getmembers()
+        for member in members:
+            if member.name.startswith(("/", "\\")) or ".." in Path(member.name).parts:
+                raise ColabError(f"unsafe path in {archive.name}: {member.name}")
+        tar.extractall(dest, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
+    return [member.name for member in members]

@@ -172,7 +172,7 @@ def test_part_status_order() -> None:
 def test_exec_args_pass_the_name_as_one_argument() -> None:
     colab = setup_session.Colab("two words; rm -rf")
     args = colab.exec_args(Path("start_setup.py"), {"SCRIPT": "/content/setup.sh", "PIN": "1"})
-    assert args == ["exec", "-s", "two words; rm -rf", "--timeout", "45", "--env", "SCRIPT=/content/setup.sh",
+    assert args == ["exec", "-s", "two words; rm -rf", "--timeout", "20", "--env", "SCRIPT=/content/setup.sh",
                     "--env", "PIN=1", "-f", "start_setup.py"]
 
 

@@ -1,19 +1,23 @@
 """``vidgen remote SESSION ARGS...``: run a vidgen command on a Colab session.
 
-From the project folder it syncs the changed files up to ``/content/projects/<name>/`` on the VM,
-checks that the VM's vidgen is this computer's code (:func:`vidgen.colab.package_hash`), runs
-``vidgen ARGS`` there detached and streams its log, then brings back what the next step needs:
-the files the command's JSON document names inside the project (not under ``build/``, except the
-render's ``timings.json``) and the files the run created or changed outside the left-out folders.
+From the project folder it sends the files the VM lacks to ``/content/projects/<name>/`` (in one
+tar; which ones comes from the VM's file list cached in ``.vidgen-remote/``, the VM reports any it
+still lacks), and in the same ``colab exec`` checks that the VM's vidgen is this computer's code
+(:func:`vidgen.colab.package_hash`) and starts ``vidgen ARGS`` there detached. It polls the log
+(after 2 s, 5 s, then every 10 s), then brings back in one tar what the next step needs: the files
+the command's JSON document names inside the project (not under ``build/``, except the render's
+``timings.json``) and the files the run created or changed outside the left-out folders.
 ``build/`` stays on the VM as a cache. Standard library only; it never stops the session.
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
 import secrets
+import tarfile
 import tempfile
 import time
 from collections.abc import Iterable, Sequence
@@ -21,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from vidgen.colab import VM_PROJECTS, Colab, ColabError, files_archive, format_seconds, package_hash, shown
+from vidgen.colab import VM_PROJECTS, Colab, ColabError, extract_archive, format_seconds, package_hash, shown
 
 #: Top folders of a project that are never synced (generated); ``--exclude`` adds more.
 EXCLUDED_DIRS: tuple[str, ...] = ("build", "output", "exports", "media")
@@ -30,6 +34,10 @@ ALWAYS_SKIPPED: tuple[str, ...] = ("__pycache__", ".git", ".vidgen-remote")
 #: vidgen in the VM's venv (tools/colab/setup_vidgen.sh).
 VM_VIDGEN = "/content/vidgen-venv/bin/vidgen"
 LOG_TAIL_LINES = 30
+#: The pauses between log polls: 2 s, 5 s, then 10 s each.
+POLL_PAUSES: tuple[float, ...] = (2.0, 5.0, 10.0)
+#: Where the VM's want-list goes in the sync archive (``colab_vm.WANT``).
+WANT = ".vidgen-remote/want.json"
 
 
 def setup_command(session: str) -> str:
@@ -72,33 +80,6 @@ def with_json(args: Sequence[str], json_commands: Iterable[str]) -> tuple[list[s
     return args, asked
 
 
-def _strings(value: Any) -> Iterable[str]:
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _strings(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _strings(item)
-
-
-def named_files(doc: dict[str, Any] | None, remote_dir: str) -> list[str]:
-    """The project files a JSON document names (relative paths): none under ``build/`` except the
-    render's ``outputs.timings``."""
-    if not doc:
-        return []
-    prefix = remote_dir.rstrip("/") + "/"
-    timings = (doc.get("outputs") or {}).get("timings") if isinstance(doc.get("outputs"), dict) else None
-    found = []
-    for text in _strings(doc):
-        if text.startswith(prefix):
-            rel = text[len(prefix):]
-            if rel and (not rel.startswith("build/") or text == timings) and rel not in found:
-                found.append(rel)
-    return found
-
-
 def parse_document(out: str) -> dict[str, Any] | None:
     """The JSON document a ``--json`` command printed on stdout, or None."""
     try:
@@ -106,6 +87,19 @@ def parse_document(out: str) -> dict[str, Any] | None:
     except ValueError:
         return None
     return doc if isinstance(doc, dict) else None
+
+
+def sync_archive(root: Path, relpaths: list[str], want: dict[str, str], dest: Path) -> Path:
+    """Write ``dest`` (.tar): ``root``'s files ``relpaths`` and :data:`WANT` holding ``want``."""
+    with tarfile.open(dest, "w") as archive:
+        for rel in relpaths:
+            archive.add(root / Path(rel), arcname=rel)
+        data = json.dumps(want).encode("utf-8")
+        info = tarfile.TarInfo(WANT)
+        info.size = len(data)
+        info.mtime = int(time.time())
+        archive.addfile(info, io.BytesIO(data))
+    return dest
 
 
 @dataclass
@@ -118,7 +112,7 @@ class RemoteRun:
     json_commands: Sequence[str] = ()
     exclude: Sequence[str] = EXCLUDED_DIRS
     clock: Callable[[], float] = time.monotonic
-    poll_seconds: float = 5.0
+    poll_pauses: Sequence[float] = POLL_PAUSES
     max_poll_failures: int = 3
     local_hash: str | None = None
     fetched: list[str] = field(default_factory=list)
@@ -126,6 +120,23 @@ class RemoteRun:
     @property
     def remote_dir(self) -> str:
         return f"{VM_PROJECTS}/{vm_name(self.project_dir)}"
+
+    @property
+    def cache_path(self) -> Path:
+        """The VM's file list as last seen, per session (``.vidgen-remote/`` is never synced)."""
+        digest = hashlib.sha256(f"{self.colab.session}\0{self.remote_dir}".encode("utf-8")).hexdigest()[:12]
+        return self.project_dir / ".vidgen-remote" / f"vm-files-{digest}.json"
+
+    def known_files(self) -> dict[str, str] | None:
+        try:
+            files = json.loads(self.cache_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return files if isinstance(files, dict) else None
+
+    def remember_files(self, files: dict[str, str]) -> None:
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self.cache_path.write_text(json.dumps(files), encoding="utf-8")
 
     def vm_state(self) -> dict[str, Any]:
         return self.colab.vm("state", VIDGEN_PROJECT=self.remote_dir, VIDGEN_EXCLUDE=json.dumps(list(self.exclude)))
@@ -135,36 +146,36 @@ class RemoteRun:
         if session not in self.colab.sessions():
             raise ColabError(f"no Colab session {session!r} (colab sessions); create and set it up: {setup_command(session)}")
         begin = self.clock()
-        state = self.vm_state()
-        self.check_version(state)
-        if state["run"]["running"]:
-            raise ColabError(f"a vidgen run ({state['run']['id']}) is still going on in {self.remote_dir} on {session}; wait for it")
-        synced = self.sync(state["project"]["files"])
+        local = local_hashes(self.project_dir, self.exclude)
+        known = self.known_files()
+        if known is None:   # the first run from here: ask the VM what it has
+            state = self.vm_state()
+            self.check_version(state["vidgen"])
+            known = state["project"]["files"]
         args, asked_json = with_json(self.args, self.json_commands)
         run_id = f"{int(time.time())}-{secrets.token_hex(3)}"
-        self.colab.say(f"## running on {session}: vidgen {' '.join(args)}")
-        self.colab.vm("start", VIDGEN_PROJECT=self.remote_dir, VIDGEN_RUN=run_id, VIDGEN_BIN=VM_VIDGEN,
-                      VIDGEN_ARGS=json.dumps(args))
+        self.start(local, known, run_id, args)
         reply, log = self.follow(run_id)
+        if "files" in reply:
+            self.remember_files(reply["files"])
         rc = reply["run"]["rc"]
         seconds = format_seconds(self.clock() - begin)
         if rc != 0:
             tail = "\n".join("   " + line for line in log.splitlines()[-LOG_TAIL_LINES:])
             self.colab.say(f"## vidgen failed on {session} (exit code {rc}) after {seconds}; last lines of the log:\n{tail}")
             return 1 if rc is None else int(rc)
+        self.fetch(reply.get("result") or {})
         doc = parse_document(reply.get("out", ""))
-        named = [rel for rel in named_files(doc, self.remote_dir) if rel in reply.get("named", {})]
-        self.fetch(named + self.made_by_run(synced))
         if asked_json and doc is not None:
             print(json.dumps(doc, indent=2), flush=True)
-        self.colab.say(f"## done on {session} in {seconds}; brought back {len(self.fetched)} file(s); "
-                       f"the rest stays in {self.remote_dir} on the VM")
+        self.colab.say(f"## done on {session} in {format_seconds(self.clock() - begin)}; brought back "
+                       f"{len(self.fetched)} file(s); the rest stays in {self.remote_dir} on the VM")
         return 0
 
-    def check_version(self, state: dict[str, Any]) -> None:
-        """Fail with the setup command when the VM's vidgen is not this computer's code."""
+    def check_version(self, vm: dict[str, Any]) -> None:
+        """Fail with the setup command when the VM's vidgen (``vm``: hash, setup_running) is not this
+        computer's code."""
         local = self.local_hash or package_hash()
-        vm = state["vidgen"]
         if vm["hash"] == local:
             return
         found = f"vidgen {vm['hash']}" if vm["hash"] else "no vidgen"
@@ -172,28 +183,40 @@ class RemoteRun:
         raise ColabError(f"{self.colab.session} has {found}{running}, this computer's code is {local}; "
                          f"install it there: {setup_command(self.colab.session)}")
 
-    def sync(self, remote: dict[str, str]) -> dict[str, str]:
-        """Upload the project's changed files in one archive; returns the local hashes."""
-        local = local_hashes(self.project_dir, self.exclude)
-        changed = changed_files(local, remote)
-        if not changed:
-            self.colab.say(f"## sync: {len(local)} files, none changed")
-            return local
-        size = sum((self.project_dir / rel).stat().st_size for rel in changed)
-        self.colab.say(f"## sync: {len(changed)} of {len(local)} files changed ({size / 1e6:.1f} MB) -> {self.remote_dir}")
-        archive_name = f".vidgen-sync-{vm_name(self.project_dir)}.tar.gz"
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = files_archive(self.project_dir, changed, Path(tmp) / archive_name)
-            self.colab.upload(archive, f"/content/{archive_name}")
-        self.colab.vm("unpack", VIDGEN_ARCHIVE=f"/content/{archive_name}", VIDGEN_DEST=self.remote_dir)
-        return local
+    def start(self, local: dict[str, str], known: dict[str, str], run_id: str, args: list[str]) -> None:
+        """Send the files the VM lacks in one tar and start the run in the same exec; a second round
+        sends what the VM still reports missing (its files changed since the cached list)."""
+        archive_name = f".vidgen-sync-{run_id}.tar"
+        for _ in range(2):
+            changed = changed_files(local, known)
+            size = sum((self.project_dir / rel).stat().st_size for rel in changed)
+            self.colab.say(f"## sync: {len(changed)} of {len(local)} files to send ({size / 1e6:.1f} MB) -> {self.remote_dir}")
+            with tempfile.TemporaryDirectory() as tmp:
+                archive = sync_archive(self.project_dir, changed, local, Path(tmp) / archive_name)
+                self.colab.upload(archive, f"/content/{archive_name}")
+            self.colab.say(f"## running on {self.colab.session}: vidgen {' '.join(args)}")
+            reply = self.colab.vm("begin", VIDGEN_PROJECT=self.remote_dir, VIDGEN_RUN=run_id, VIDGEN_BIN=VM_VIDGEN,
+                                  VIDGEN_ARGS=json.dumps(args), VIDGEN_HASH=self.local_hash or package_hash(),
+                                  VIDGEN_ARCHIVE=f"/content/{archive_name}", VIDGEN_CHECK="1",
+                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)))
+            if "vidgen" in reply:
+                self.check_version(reply["vidgen"])
+            missing = reply.get("missing")
+            if not missing:
+                return
+            known = {rel: digest for rel, digest in known.items() if rel not in set(missing)}
+            self.colab.say(f"   the VM lacks {len(missing)} more file(s); sending them")
+        raise ColabError(f"{self.colab.session} still lacks {len(missing)} file(s) after a second upload, e.g. {missing[0]}")
 
     def follow(self, run_id: str) -> tuple[dict[str, Any], str]:
         """Poll the run's log until it ends, printing each new line; returns the last reply and the log."""
-        offset, failures, log = 0, 0, ""
+        offset, failures, polls, log = 0, 0, 0, ""
         while True:
+            self.colab.sleep(self.poll_pauses[min(polls, len(self.poll_pauses) - 1)])
+            polls += 1
             try:
-                reply = self.colab.vm("poll", VIDGEN_PROJECT=self.remote_dir, VIDGEN_OFFSET=str(offset))
+                reply = self.colab.vm("poll", VIDGEN_PROJECT=self.remote_dir, VIDGEN_OFFSET=str(offset), VIDGEN_PACK="1",
+                                      VIDGEN_EXCLUDE=json.dumps(list(self.exclude)))
             except ColabError as exc:
                 failures += 1
                 if failures >= self.max_poll_failures:
@@ -211,17 +234,15 @@ class RemoteRun:
             offset = reply["offset"]
             if reply["done"]:
                 return reply, log
-            if not reply["log"]:
-                self.colab.sleep(self.poll_seconds)
 
-    def made_by_run(self, synced: dict[str, str]) -> list[str]:
-        """The files outside the left-out folders that the run created or changed."""
-        after = self.vm_state()["project"]["files"]
-        return changed_files(after, synced)
-
-    def fetch(self, relpaths: list[str]) -> None:
-        for rel in dict.fromkeys(relpaths):
-            local = self.project_dir / Path(rel)
-            self.colab.download(f"{self.remote_dir}/{rel}", local)
+    def fetch(self, result: dict[str, Any]) -> None:
+        """Download the run's result tar (``colab_vm.pack``) and unpack it into the project."""
+        if not result.get("archive"):
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "result.tar"
+            self.colab.download(result["archive"], local, size=int(result["size"]))
+            extract_archive(local, self.project_dir)
+        for rel, size in result["files"].items():
             self.fetched.append(rel)
-            self.colab.say(f"   fetched {rel} ({local.stat().st_size / 1e6:.2f} MB)")
+            self.colab.say(f"   fetched {rel} ({size / 1e6:.2f} MB)")

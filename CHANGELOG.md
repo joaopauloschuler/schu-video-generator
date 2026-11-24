@@ -5,7 +5,17 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–412
+## Steps 193–413
+
+### Fewer and steadier Colab calls (Step 413)
+
+- **`vidgen remote`**: one upload, one exec to check the version and start, a few polls (after 2 s,
+  5 s, then every 10 s) and one download of a tar with the results; the VM's file list is kept in
+  `.vidgen-remote/` (the VM reports files it lacks, and they are sent).
+- **Every colab call**: one at a time per session across vidgen processes (a lock file);
+  `colab exec` cut at 30 s, retried after 3, 10, 20, 30 s; uploads and downloads cut by size. Also
+  for `setup_session.py` and the `comfyui` provider on Colab (whose upload is unpacked and started
+  in one exec).
 
 ### Chained parts, a better restyle prompt, two recipes (Step 412)
 
