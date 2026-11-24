@@ -88,7 +88,8 @@ def test_check_estimate_and_guide_rules(tmp_path: Path) -> None:
     bad = check_request(VideoRequest(model=LTX, duration=7, resolution="480p"), model)
     assert len(bad.problems) == 3
     assert estimate(ok, model).cost == 0.0
-    assert guide_problem(LTX, "depth") is None and "guide: depth" in (guide_problem(LTX, "final") or "")
+    assert guide_problem(LTX, "depth") is None and guide_problem(LTX, "canny") is None
+    assert "guide: canny or depth" in (guide_problem(LTX, "final") or "")
     assert guide_problem("bytedance/seedance-2.0-fast", "final") is None
 
 

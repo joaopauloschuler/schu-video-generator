@@ -47,6 +47,9 @@ dry-run plan of ``vidgen generate plan``.
   ``build/videogen/<shot>/last_of.<source>.<take>.png``. An unknown shot, the shot itself or a
   cycle is a problem; a source with no take blocks the shot, so a run never pays for it in the
   same pass as the clip it starts from.
+- **A restyled first frame** (``first_frame: restyled``, DESIGN.md §113.21): the render's first
+  frame made photoreal on the ComfyUI server (``first_frame.restyled.png``, made by
+  ``vidgen generate inputs --guide``); it needs ``videogen.provider: comfyui``.
 - **A painted starting picture** (``first_frame: painted``, DESIGN.md §113.15): the picture
   ``vidgen generate frames`` made from ``paint_first_frame:``; until it exists the shot is blocked.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
@@ -64,7 +67,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from vidgen.config import PAINTED_FIRST_FRAME, BeatConfig, FileRef, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
+from vidgen.config import PAINTED_FIRST_FRAME, RESTYLED_FIRST_FRAME, BeatConfig, FileRef, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen import COMFYUI_PROVIDER, MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
@@ -113,6 +116,7 @@ _SHEET_ONLY_CLAUSE = re.compile(
 GUIDE_PROMPTS: dict[str, str] = {
     "depth": "The guide video is a depth map (near is white, far is dark): follow its layout and camera motion",
     "outline": "The guide video is an outline drawing (white edges on black): follow its shapes, layout and camera motion",
+    "canny": "The guide video is an edge map (white edges on black) of the computer render of this shot: follow its shapes, layout and camera motion",
     "mask": "The guide video is a colour mask (each object one flat colour on black): follow its layout and motion",
     "final": (
         "The guide video is the finished computer render of this shot: keep its layout, framing, camera motion and timing, "
@@ -127,6 +131,7 @@ MASK_NAMES_MAX = 4
 GUIDE_WHAT: dict[str, str] = {
     "render": "silent draft render",
     "final": "silent finished render of the beat",
+    "canny": "canny edges of the beat's finished render",
     "depth": "depth pass of the beat's scene",
     "outline": "outline pass of the beat's 3D scene",
     "mask": "mask pass of the beat's 3D scene",
@@ -292,6 +297,10 @@ def guide_name(source: str, *, opening: bool = False) -> str:
     (``guide.opening.mp4``, ``guide.<pass>.opening.mp4``, for ``first_frame_in: guide``)."""
     base = "guide" if source == "render" else f"guide.{source}"
     return f"{base}{'.opening' if opening else ''}.mp4"
+
+
+#: The restyled first frame (``first_frame: restyled``), in the shot's folder.
+RESTYLED_NAME = "first_frame.restyled.png"
 
 
 def last_of_name(source: str, take: int) -> str:
@@ -615,6 +624,8 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             needs.add(owner)
     elif source == "render":
         first, what = folder / "first_frame.png", "first frame of the beat's render"
+    elif source == RESTYLED_FIRST_FRAME:
+        first, what = folder / RESTYLED_NAME, "first frame of the beat's render, restyled as a photograph"
     elif spec.last_of_shot is not None:
         if shot.last_of_picture is not None and shot.last_of_take is not None:
             first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
@@ -659,7 +670,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             shot.blocked.append(sheet.problem() or "")
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
-        shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source == 'render')}`")
+        shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source in ('render', RESTYLED_FIRST_FRAME))}`")
     if shot.shared and project.config.videogen.provider != COMFYUI_PROVIDER:   # ComfyUI gets the files themselves
         settings = project.config.videogen
         if settings.inline_media == "all" and settings.host != "quick_tunnel":
@@ -844,6 +855,8 @@ def _beat_shots(
             problems.append(f"{where}.model: {provider_mismatch(model.id, model.provider, config.videogen.provider)}")
         elif (guided := guide_problem(model.id, spec.guide_source)) is not None:
             problems.append(f"{where}.guide: {guided}")
+    if spec.first_frame == RESTYLED_FIRST_FRAME and (config.videogen.provider != COMFYUI_PROVIDER or (model is not None and model.provider != COMFYUI_PROVIDER)):
+        problems.append(f"{where}.first_frame: restyled is made on the ComfyUI server: it needs videogen.provider: comfyui and a ComfyUI workflow model (ltx-2.3-union-control)")
     names = [e.name for e in config.characters]
     speaker = _speaker(config, scene, beat)
     for name in spec.characters or []:
@@ -1122,6 +1135,6 @@ def plan_shots(
 
 
 __all__ = [
-    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "project_sheet_map", "reference_inputs", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
+    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "project_sheet_map", "reference_inputs", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "RESTYLED_NAME", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio", "without_framing",
 ]

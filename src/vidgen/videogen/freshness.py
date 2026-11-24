@@ -19,6 +19,11 @@ the cut inputs: per file its SHA-256 and what it was made from. The plan
   frame rate (a draft's ``draft:`` settings are not in the fingerprint), the part's offset and
   length and the guide kind; a guide with its starting picture (``first_frame_in: guide``) also
   the SHA-256 of the picture and the dissolve's length;
+- a ``guide: canny`` input (``guide.canny.mp4``): a ``final`` render input plus the canny
+  settings and the size the edges were found at;
+- a restyled first frame (``first_frame.restyled.png``): the first frame's render source, the
+  SHA-256 of ``first_frame.png`` and the edit (prompt, seed, size, model); its entry also keeps
+  the GPU ``usage`` of the job that made it;
 - a picture cut from a take (``first_frame: last_of:``): the shot, the take's number and the
   take's SHA-256. A different take shown means a different picture file, so a shot whose current
   picture is not cut yet but which recorded an earlier one is stale, not merely unmade.
@@ -38,7 +43,7 @@ from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
 from vidgen.project import Project
 from vidgen.soundfont import file_sha256
-from vidgen.videogen.shots import INPUTS_DIR, Shot, ShotInput, inputs_command
+from vidgen.videogen.shots import INPUTS_DIR, RESTYLED_NAME, Shot, ShotInput, inputs_command
 
 #: The record of a shot's cut inputs, in the shot's folder.
 RECORD_NAME = "inputs.json"
@@ -58,6 +63,10 @@ _CHANGE_REASONS: tuple[tuple[str, str], ...] = (
     ("offset", "the shot's part of the beat moved"),
     ("length", "the shot's length changed"),
     ("guide", "the guide kind changed"),
+    ("canny", "the canny settings changed"),
+    ("canny_size", "the canny size changed (another model or aspect ratio)"),
+    ("first_frame_sha256", "the render's first frame changed"),
+    ("restyle", "the restyle prompt, seed or size changed"),
 )
 
 
@@ -92,6 +101,29 @@ def last_of_source(shot: Shot) -> dict[str, Any]:
     return {"last_of_shot": shot.last_of, "last_of_take": shot.last_of_take.number, "last_of_take_sha256": file_sha256(shot.last_of_take.path)}
 
 
+def canny_source(shot: Shot) -> dict[str, Any]:
+    """What a ``guide: canny`` input adds to its render source: the settings and the edge size."""
+    from vidgen.videogen.inputs import guide_size
+
+    c = shot.spec.canny_settings
+    return {"canny": [c.low, c.high, c.glint], "canny_size": list(guide_size(shot))}
+
+
+def restyled_source(shot: Shot, render_source: dict[str, Any], frame: Path) -> dict[str, Any]:
+    """What ``shot``'s restyled first frame is made from: the first frame ``frame`` (it must exist) and the edit."""
+    from vidgen.videogen.comfyui import RESTYLE_MODEL
+    from vidgen.videogen.inputs import guide_size, restyle_prompt, restyle_seed
+
+    edit = {"prompt": restyle_prompt(shot), "seed": restyle_seed(shot), "size": list(guide_size(shot)), "model": RESTYLE_MODEL}
+    return {**render_source, "first_frame_sha256": file_sha256(frame), "restyle": edit}
+
+
+def recorded_matches(path: Path, source: dict[str, Any]) -> bool:
+    """Whether ``path`` exists unchanged and its record says it was made from ``source``."""
+    record = _read_record(path.parent / RECORD_NAME).get(path.name)
+    return path.is_file() and isinstance(record, dict) and record.get("source") == source and record.get("sha256") == file_sha256(path)
+
+
 def _read_record(path: Path) -> dict[str, Any]:
     """The shot's record (``{}`` when missing, unreadable or of another version)."""
     try:
@@ -101,11 +133,12 @@ def _read_record(path: Path) -> dict[str, Any]:
     return doc.get("inputs", {}) if isinstance(doc, dict) and doc.get("version") == RECORD_VERSION else {}
 
 
-def record_input(path: Path, source: dict[str, Any]) -> None:
-    """Note in the record beside the cut input ``path`` that it was made from ``source``."""
+def record_input(path: Path, source: dict[str, Any], usage: dict[str, Any] | None = None) -> None:
+    """Note in the record beside the cut input ``path`` that it was made from ``source`` (``usage``:
+    the GPU time of the job that made it)."""
     record = path.parent / RECORD_NAME
     inputs = _read_record(record)
-    inputs[path.name] = {"sha256": file_sha256(path), "source": source}
+    inputs[path.name] = {"sha256": file_sha256(path), "source": source, **({"usage": usage} if usage is not None else {})}
     write_text_atomic(record, json.dumps({"version": RECORD_VERSION, "inputs": inputs}, indent=1, sort_keys=True, ensure_ascii=True) + "\n")
 
 
@@ -155,7 +188,8 @@ class InputSources:
         from vidgen.videogen.inputs import render_kind
 
         scene = self._render_of(shot.scene_id, kind if kind in ("render", "final") else render_kind(self.project, shot.scene_id, kind))
-        return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot)}
+        extra = canny_source(shot) if kind == "canny" else {}
+        return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot), **extra}
 
     def _render_of(self, scene_id: str, made: str) -> dict[str, Any]:
         if (scene_id, made) not in self._renders:
@@ -231,6 +265,13 @@ class InputSources:
             source = voice_source(self._mp3(shot), shot)
         elif item.path == shot.last_of_picture:
             source = last_of_source(shot)
+        elif item.path.name == RESTYLED_NAME:
+            from vidgen.videogen.inputs import render_kind
+
+            frame = item.path.with_name("first_frame.png")
+            if not frame.is_file():
+                return "the render's first frame (first_frame.png) is missing"
+            source = restyled_source(shot, self.render(shot, render_kind(self.project, shot.scene_id, shot.spec.guide_source)), frame)
         else:
             from vidgen.videogen.inputs import render_kind
 
@@ -247,4 +288,7 @@ class InputSources:
         return None if record.get("sha256") == file_sha256(item.path) else "the file was changed after it was cut"
 
 
-__all__ = ["RECORD_NAME", "InputSources", "StaleInputs", "last_of_source", "mix_source", "opening_source", "record_input", "voice_source"]
+__all__ = [
+    "RECORD_NAME", "InputSources", "StaleInputs", "canny_source", "last_of_source", "mix_source", "opening_source", "record_input", "recorded_matches",
+    "restyled_source", "voice_source",
+]

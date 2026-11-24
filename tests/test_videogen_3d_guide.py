@@ -63,7 +63,7 @@ def test_guide_values(make_project, value: Any, source: str | None) -> None:
 
 
 def test_unknown_guide_is_refused_with_did_you_mean(make_project) -> None:
-    with pytest.raises(VidgenError, match=r"'dpeth' is not true, false, render, final, depth, outline, mask \(did you mean depth\?\)"):
+    with pytest.raises(VidgenError, match=r"'dpeth' is not true, false, render, final, canny, depth, outline, mask \(did you mean depth\?\)"):
         Project.load(make_project(guide_config("dpeth")))
 
 

@@ -92,7 +92,8 @@ checkout (`pip install -e .`).
 
 ## The other scripts
 
-Local: `check_hf.sh`, `prepare_inputs.sh`, `build_workflow.py`, `build_image_workflow.py`,
+Local: `check_hf.sh`, `prepare_inputs.sh`, `build_workflow.py` and `build_image_workflow.py` (vidgen's
+graphs, `src/vidgen/videogen/ltx_graph.py` and `qwen_graph.py`),
 `poll.sh`, `fetch_outputs.sh`, `make_compare.sh`. VM, started with `colab exec -f`: `start_bg.py`,
 `start_job.py` + `run_job.py`, `make_canny.py`, `make_canny_soft.py`, `prep_image_inputs.py`,
 `align_check.py`, `free_vram.py`, `object_info.py`, `object_info_image.py`. The HOWTO says when to

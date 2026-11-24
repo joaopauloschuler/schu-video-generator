@@ -19,6 +19,9 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
 
 - **Settings**: photoreal first frame (Qwen-Image-Edit-2511, §6.4) + **glint-masked canny**
   (`make_canny_soft.py`, §6.3), first-frame strength 1.0, seed 42, 8 steps, cfg 1, 960x512, 121 frames.
+- **Inside vidgen**: the same as a shot: `videogen: {provider: comfyui, comfyui: {colab: ltx}}`,
+  `model: ltx-2.3-union-control`, `guide: canny`, `first_frame: restyled`, then
+  `vidgen generate inputs --guide` and `vidgen generate run --pay` ([CONFIG.md](CONFIG.md)).
 - **The first frame sets the look.** The CG frame 0 keeps the CG look; no first frame looks real
   but invents things (a beach, a different glider).
 - **Canny holds the layout and the horizon.** Depth alone rolls the horizon: in 1 / z depth the far
@@ -35,7 +38,7 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
 |---|---|---|
 | Control | exact per-frame control video (depth, canny, pose; two chained) | a reference video + prompt; the model decides how much to follow |
 | Cost | Colab units: ~1.3 for 7 clips, ~1.7 for 6 stills + 4 clips | dollars per clip; OpenRouter reserves its worst case (HTTP 402 under ~$10 of credits) |
-| Inside vidgen | no: by hand with these scripts | yes: plan, budget, ledger, takes |
+| Inside vidgen | yes with `provider: comfyui` (takes, GPU units); or by hand with these scripts | yes: plan, budget, ledger, takes |
 | Audio | makes its own (not used) | can take the film's sound (`audio: mix`) |
 
 Use it to follow the render's layout and camera frame by frame, or to try ideas cheaply; use

@@ -3,8 +3,9 @@
 Standard library only, no vidgen imports: the Colab transport copies this file next to a job on
 the VM and runs ``python3 comfyui_client.py job.json`` there, detached, against 127.0.0.1:8188.
 ``job.json`` holds ``url``, ``graph`` (API format), ``uploads`` (name in ComfyUI's input folder ->
-file next to ``job.json``), ``poll_seconds`` and ``timeout``; the run writes ``output.mp4`` and
-prints one JSON line (:func:`job_outcome` and ``prompt_id``) on stdout, its progress on stderr.
+file next to ``job.json``), ``poll_seconds``, ``timeout`` and optionally ``output`` (the file name,
+default ``output.mp4``; ``.png`` for a picture) and ``free_after`` (unload the models when done);
+the run writes the output file and prints one JSON line (:func:`job_outcome` and ``prompt_id``) on stdout, its progress on stderr.
 """
 
 from __future__ import annotations
@@ -22,8 +23,10 @@ from typing import Any
 
 #: The file a job's clip is written to, next to ``job.json``.
 OUTPUT_NAME = "output.mp4"
-#: Output keys of ComfyUI's history that hold video files (VHS_VideoCombine: ``gifs``).
+#: Output keys of ComfyUI's history that hold video files (VHS_VideoCombine: ``gifs``) and pictures (SaveImage: ``images``).
 VIDEO_KEYS = ("gifs", "videos", "images")
+#: The output files a job can make, in the order they are looked for (a video graph's first).
+OUTPUT_SUFFIXES = (".mp4", ".png")
 
 
 class ComfyError(Exception):
@@ -91,6 +94,10 @@ class ComfyClient:
         entry = reply.get(prompt_id) if isinstance(reply, dict) else None
         return entry if isinstance(entry, dict) else None
 
+    def free(self) -> None:
+        """``POST /free``: unload the models and free the GPU memory once the queue is idle (another model loads next)."""
+        self._call("/free", json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8"), {"Content-Type": "application/json"})
+
     def view(self, file: dict[str, Any], dest: Path) -> int:
         """Download an output ``file`` (``filename``, ``subfolder``, ``type``) to ``dest``; returns its size."""
         query = urllib.parse.urlencode({k: file.get(k, "") for k in ("filename", "subfolder", "type")})
@@ -102,7 +109,8 @@ class ComfyClient:
 
 def job_outcome(entry: dict[str, Any] | None) -> dict[str, Any]:
     """A history entry as ``{status: running | completed | failed, seconds, error, output}``:
-    ``seconds`` from ComfyUI's ``execution_start`` to its end, ``output`` the first video file."""
+    ``seconds`` from ComfyUI's ``execution_start`` to its end, ``output`` the first video file
+    (else the first picture, :data:`OUTPUT_SUFFIXES`)."""
     if entry is None:
         return {"status": "running", "seconds": None, "error": None, "output": None}
     status = entry.get("status") or {}
@@ -112,11 +120,11 @@ def job_outcome(entry: dict[str, Any] | None) -> dict[str, Any]:
     end = stamps.get("execution_success") or stamps.get("execution_error") or stamps.get("execution_interrupted")
     seconds = round((end - start) / 1000.0, 1) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else None
     if status.get("status_str") == "success":
-        output = next((f for node in (entry.get("outputs") or {}).values() for key in VIDEO_KEYS
-                       for f in node.get(key, []) if isinstance(f, dict) and str(f.get("filename", "")).endswith(".mp4")
-                       and f.get("type") == "output"), None)
+        files = [f for node in (entry.get("outputs") or {}).values() for key in VIDEO_KEYS
+                 for f in node.get(key, []) if isinstance(f, dict) and f.get("type") == "output"]
+        output = next((f for suffix in OUTPUT_SUFFIXES for f in files if str(f.get("filename", "")).endswith(suffix)), None)
         if output is None:
-            return {"status": "failed", "seconds": seconds, "error": "the graph ran but made no .mp4 output", "output": None}
+            return {"status": "failed", "seconds": seconds, "error": "the graph ran but made no .mp4 or .png output", "output": None}
         return {"status": "completed", "seconds": seconds, "error": None, "output": output}
     if status.get("status_str") == "error" or status.get("completed") is False:
         error = next((f"{info.get('node_type', '?')}: {info.get('exception_message', '').strip()}" for name, info in messages
@@ -145,8 +153,10 @@ def run_job(job_file: Path, *, client: ComfyClient | None = None, sleep: Callabl
             outcome = {"status": "failed", "seconds": None, "error": f"still running after {job.get('timeout', 3600)} s", "output": None}
             break
         sleep(float(job.get("poll_seconds", 5)))
+    if job.get("free_after"):
+        comfy.free()
     if outcome["status"] == "completed":
-        size = comfy.view(outcome["output"], job_file.parent / OUTPUT_NAME)
+        size = comfy.view(outcome["output"], job_file.parent / str(job.get("output", OUTPUT_NAME)))
         tell(f"done in {outcome['seconds']} s: {outcome['output']['filename']} ({size / 1e6:.2f} MB)")
     else:
         tell(f"failed: {outcome['error']}")

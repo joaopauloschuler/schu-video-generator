@@ -2809,7 +2809,7 @@ videogen:
 - **ComfyUI** (`provider: comfyui`, DESIGN.md §113.20): shots use workflows kept with vidgen as their
   `model:`, listed by `vidgen generate models`. `ltx-2.3-union-control` (LTX-2.3 distilled-1.1 GGUF
   Q5_K_M + IC-LoRA union control ref0.5, 8 steps, cfg 1, seed 42 or the shot's `seed:`) takes the shot's
-  `guide: depth` as its control video (required), its `first_frame:` (optional, strength 1.0) and the
+  `guide: canny` or `guide: depth` as its control video (required), its `first_frame:` (optional, strength 1.0) and the
   prompt; no references (they are left out, with a note) and no last frame. Its shape rules: 512p,
   the long side rounded up to a multiple of 64 (16:9: 960x512), 1-5 s (longer beats are split into
   parts), 8k+1 frames at 24 fps. vidgen scales the guide and the first frame to cover that size
@@ -2820,7 +2820,8 @@ videogen:
   VM itself (`vidgen remote <session> generate run --pay`) uses 127.0.0.1:8188 directly. A job costs
   $0: `--pay` runs it without a budget, its own ledger is `videogen-ledger.comfyui.jsonl`, and the take
   records `usage: {gpu_seconds, compute_units, units_per_hour, server}` (ComfyUI's execution time x
-  `units_per_hour` / 3600). Same request, same cached clip, as with OpenRouter.
+  `units_per_hour` / 3600). Same request, same cached clip, as with OpenRouter. The recommended shot
+  is `guide: canny` (with its glint mask) and `first_frame: restyled` (why: the HOWTO's "Recommended setup and why").
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
   never stored, logged or shown. Or `key_via_proxy: true` (or `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`)
   when the network's proxy adds `Authorization: Bearer ...` for openrouter.ai itself.
@@ -2937,9 +2938,12 @@ scenes:
           audio: beat                       # beat | mix (the film's sound: voice, music, effects) | none; default beat for talking shots
           guide: true                       # a silent draft render of the beat as a video reference (true = render);
                                             # final: the beat's finished render instead, to remake as real footage;
+                                            # canny: white edges on black of that finished render (settings in canny:);
                                             # on a 3d scene also depth | outline | mask: that guide pass instead;
                                             # on a space or web scene also depth (from the finished render)
-          first_frame: none                 # sheet | render | none | a picture file | painted (made by generate frames) | last_of:<shot id> (last frame of that shot's take); default sheet for talking
+          canny: {low: 92, high: 200, glint: 150}  # guide: canny only; glint: false keeps the edges in bright areas
+          first_frame: none                 # sheet | render | restyled (comfyui only) | none | a picture file | painted (made by generate frames) | last_of:<shot id> (last frame of that shot's take); default sheet for talking
+          first_frame_prompt: null          # first_frame: restyled only: the edit instruction instead of vidgen's default
           paint_first_frame: null           # null (default); {prompt, refs, seed, model, resolution}: how `vidgen generate frames` paints the starting picture
           # paint_first_frame:
           #   prompt: "who stands where..."   # what the picture shows (required)
@@ -3007,6 +3011,28 @@ scenes:
   captions or overlays. `first_frame: render` is the finished render's first frame. `vidgen render
   --guide-passes depth` draws it in every web scene too. Not drawn right yet: an orbital scene that
   draws in depth slices (`vidgen/space-scale`'s default `depth: split`) leaves only the nearest slice's depth.
+- **The canny guide** (`guide: canny`, DESIGN.md §113.21): the same part of the **finished** render as
+  `guide: final` (same frames and timing; `first_frame: render` is its first frame), turned into white
+  Canny edges on black (`guide.canny.mp4`, silent H.264). `canny: {low, high, glint}`: the edge
+  thresholds (OpenCV's, on the L1 gradient, no blur first; default 92 / 200) and `glint` (default
+  150): edges are removed where the frame, blurred over 41 px, is brighter than that grey level (0-255),
+  the mask's edge softened over 31 px. A sun glint on water gives many edges that a video model draws as
+  surf or foam; `glint: false` keeps them. The edges are found at the workflow's size (960x512 for
+  16:9) for a ComfyUI workflow, else 512 px on the short side. Any scene type; changing `canny:` marks
+  the guide as changed (cut it again, free).
+- **A restyled first frame** (`first_frame: restyled`, `videogen.provider: comfyui` only): the
+  render's first frame (`first_frame.png`; the finished render's with `guide: final` or `canny`) made
+  photoreal by Qwen-Image-Edit-2511 (GGUF Q4_K_M, Lightning LoRA, 4 steps, seed 42 or the shot's
+  `seed:`) on the same ComfyUI server: the frame scaled to 1.5x the workflow's size (1440x768), edited
+  as its own reference, scaled back to 960x512, then the models are unloaded for the video job. It is
+  `first_frame.restyled.png`, made by `vidgen generate inputs --guide` (on a Colab L4 about 25 s, about
+  110 s when the models load); its GPU seconds and compute units are kept in the shot's `inputs.json`.
+  The default edit instruction asks for a real photograph with everything kept in place and the
+  computer-generated patterns (water ripples, ground, skin, metal) replaced by real irregular detail;
+  `first_frame_prompt:` replaces it: name the shot's own computer-graphics pattern and what
+  should replace it (e.g. "replace the regular ripple pattern of the water with real, irregular
+  open-ocean waves, wind chop and a few whitecaps"); the generic default can keep such a pattern. It is made again only when its source changed (a new render, a new
+  first frame, prompt, seed or size); the plan reports such a change. Look at it before paying for the clip.
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
   go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
   `vidgen generate`: [HOWTO-restyle-with-ltx-on-colab.md](HOWTO-restyle-with-ltx-on-colab.md) (the

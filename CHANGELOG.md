@@ -7,6 +7,18 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Steps 193–411
 
+### The canny guide and the restyled first frame (Step 410)
+
+- **`guide: canny`**: white Canny edges on black of the beat's finished render (the same frames and
+  timing as `guide: final`), with the edges in bright areas removed (a sun glint a model draws as
+  foam): `canny: {low: 92, high: 200, glint: 150}`, `glint: false` keeps them. Made with numpy/scipy
+  (no OpenCV needed), the same edges as OpenCV's Canny. `ltx-2.3-union-control` takes it (and `depth`).
+- **`first_frame: restyled`** (`provider: comfyui`): the render's first frame made photoreal by
+  Qwen-Image-Edit-2511 on the same ComfyUI server, by `vidgen generate inputs --guide`; its GPU
+  seconds and units are kept in `inputs.json`, it is made again only when the render, prompt or seed
+  changes. `first_frame_prompt:` replaces the default edit instruction. Works with `vidgen remote`.
+- `tools/colab/build_image_workflow.py` now uses vidgen's graph (`src/vidgen/videogen/qwen_graph.py`).
+
 ### WebGL on the GPU of a Colab session (Step 411)
 
 - `tools/colab/setup_session.py NAME` (also `--vidgen-only`) adds the NVIDIA Vulkan and EGL vendor

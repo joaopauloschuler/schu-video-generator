@@ -18,6 +18,10 @@ to a transport:
   127.0.0.1:8188, detached (:mod:`vidgen.colab_vm`), and the clip comes back with ``colab download``.
 
 A finished job reports its GPU seconds and compute units (``usage``), kept in the take.
+
+:func:`restyle_picture` (``first_frame: restyled``, DESIGN.md §113.21) sends a picture job the
+same way: Qwen-Image-Edit-2511 (:mod:`.qwen_graph`) makes a photoreal version of the render's
+first frame at the workflow's size, then the models are unloaded for the video job.
 """
 
 from __future__ import annotations
@@ -123,9 +127,9 @@ class Workflow:
 WORKFLOWS: dict[str, Workflow] = {
     "ltx-2.3-union-control": Workflow(
         id="ltx-2.3-union-control", name="LTX-2.3 IC-LoRA Union Control (ComfyUI)",
-        description="LTX-2.3 distilled-1.1 GGUF Q5_K_M + IC-LoRA union-control ref0.5: restyles a control video (the shot's depth guide), "
+        description="LTX-2.3 distilled-1.1 GGUF Q5_K_M + IC-LoRA union-control ref0.5: restyles a control video (the shot's canny or depth guide), "
                     "optionally from a first frame; 8 steps, cfg 1",
-        controls=("depth",),
+        controls=("canny", "depth"),
     ),
 }
 
@@ -195,20 +199,24 @@ def fit_control(source: Path, dest: Path, *, width: int, height: int, frames: in
     return dest
 
 
-def fit_picture(source: Path, dest: Path, *, width: int, height: int) -> Path:
+def fit_picture(source: Path, dest: Path, *, width: int, height: int, lanczos: bool = False) -> Path:
     """The first picture of ``source`` (a picture or a video) at ``width`` x ``height`` (cover, centre crop), as PNG."""
     from vidgen.render.ffmpeg import find_ffmpeg, run_ffmpeg
 
-    run_ffmpeg(find_ffmpeg(), ["-i", str(source), "-vf", _cover(width, height), "-frames:v", "1", str(dest)], "fit the first frame to the workflow")
+    cover = _cover(width, height).replace("increase", "increase:flags=lanczos") if lanczos else _cover(width, height)
+    run_ffmpeg(find_ffmpeg(), ["-i", str(source), "-vf", cover, "-frames:v", "1", str(dest)], "fit the first frame to the workflow")
     return dest
 
 
 @dataclass(frozen=True)
 class PreparedJob:
-    """A job ready to send: the graph and the files it loads (name in ComfyUI's input folder -> local file)."""
+    """A job ready to send: the graph, the files it loads (name in ComfyUI's input folder -> local
+    file), the name of its output file and whether the models are unloaded after it."""
 
     graph: dict[str, Any]
     uploads: dict[str, Path]
+    output: str = client_module.OUTPUT_NAME
+    free_after: bool = False
 
 
 def prepare_job(request: VideoRequest, folder: Path, key: str) -> PreparedJob:
@@ -254,6 +262,7 @@ class HttpTransport:
     def __init__(self, url: str, client: ComfyClient | None = None) -> None:
         self.client = client or ComfyClient(url)
         self.where = self.client.url
+        self.free_after: set[str] = set()
 
     def check(self) -> None:
         try:
@@ -265,13 +274,20 @@ class HttpTransport:
         try:
             for name, path in job.uploads.items():
                 self.client.upload(path, name)
-            return self.client.submit(job.graph)
+            job_id = self.client.submit(job.graph)
         except ComfyError as exc:
             raise VidgenError(str(exc)) from None
+        if job.free_after:
+            self.free_after.add(job_id)
+        return job_id
 
     def outcome(self, job_id: str) -> dict[str, Any]:
         try:
-            return job_outcome(self.client.history(job_id))
+            result = job_outcome(self.client.history(job_id))
+            if result["status"] != "running" and job_id in self.free_after:
+                self.free_after.discard(job_id)
+                self.client.free()
+            return result
         except ComfyError as exc:
             raise VidgenError(str(exc)) from None
 
@@ -294,6 +310,7 @@ class ColabTransport:
         self.poll_seconds = poll_seconds
         self.timeout = timeout
         self.offsets: dict[str, int] = {}
+        self.outputs: dict[str, str] = {}
 
     def check(self) -> None:
         from vidgen.colab import ColabError
@@ -313,7 +330,8 @@ class ColabTransport:
             (folder / "inputs").mkdir()
             for name, path in job.uploads.items():
                 shutil.copyfile(path, folder / names[name])
-            spec = {"url": VM_URL, "graph": job.graph, "uploads": names, "poll_seconds": self.poll_seconds, "timeout": self.timeout}
+            spec = {"url": VM_URL, "graph": job.graph, "uploads": names, "poll_seconds": self.poll_seconds, "timeout": self.timeout,
+                    "output": job.output, "free_after": job.free_after}
             (folder / "job.json").write_text(json.dumps(spec), encoding="utf-8")
             shutil.copyfile(client_module.__file__, folder / "comfyui_client.py")
             files = ["job.json", "comfyui_client.py", *names.values()]
@@ -322,6 +340,7 @@ class ColabTransport:
         self.colab.vm("unpack", VIDGEN_ARCHIVE=f"/content/{archive.name}", VIDGEN_DEST=remote)
         self.colab.vm("start", VIDGEN_PROJECT=remote, VIDGEN_RUN=job_id, VIDGEN_BIN="python3",
                       VIDGEN_ARGS=json.dumps(["comfyui_client.py", "job.json"]))
+        self.outputs[job_id] = job.output
         return job_id
 
     def outcome(self, job_id: str) -> dict[str, Any]:
@@ -341,7 +360,7 @@ class ColabTransport:
         return result if isinstance(result, dict) else {"status": "failed", "seconds": None, "error": "unreadable outcome", "output": None}
 
     def download(self, job_id: str, dest: Path) -> int:
-        self.colab.download(f"{VM_JOBS}/{job_id}/{client_module.OUTPUT_NAME}", dest)
+        self.colab.download(f"{VM_JOBS}/{job_id}/{self.outputs.get(job_id, client_module.OUTPUT_NAME)}", dest)
         return dest.stat().st_size
 
 
@@ -431,7 +450,46 @@ class ComfyUIVideoProvider:
         return self.transport.download(job_id, dest)
 
 
+# ----- the restyled first frame ---------------------------------------------------------------
+
+
+#: The model that restyles a first frame (``first_frame: restyled``), as the plan names it.
+RESTYLE_MODEL = "Qwen-Image-Edit-2511 (GGUF Q4_K_M, Lightning 4 steps)"
+
+
+def restyle_picture(settings: ComfyuiSettings, source: Path, dest: Path, *, width: int, height: int, prompt: str, seed: int,
+                    poll_timeout: float = 900.0, say: Callable[[str], None] | None = None,
+                    transport: Transport | None = None, sleep: Callable[[float], None] = time.sleep) -> Mapping[str, Any]:
+    """Write ``dest``: a photoreal version of the picture ``source`` at ``width`` x ``height``
+    (cover, centre crop) made by Qwen-Image-Edit-2511 with ``prompt`` on the ComfyUI server of
+    ``settings`` (``transport`` replaces it in tests); the models are unloaded afterwards. Returns
+    the job's usage (GPU seconds, compute units)."""
+    import hashlib
+
+    from vidgen.videogen import qwen_graph
+
+    server = transport or make_transport(settings, poll_timeout=poll_timeout, say=say)
+    provider = ComfyUIVideoProvider(server, units_per_hour=settings.units_per_hour, poll_timeout=poll_timeout, poll_seconds=5.0, sleep=sleep)
+    provider.check_credentials()
+    key = hashlib.sha256(source.read_bytes() + f"|{prompt}|{seed}|{width}x{height}".encode("utf-8")).hexdigest()[:16]
+    with tempfile.TemporaryDirectory() as tmp:
+        up = fit_picture(source, Path(tmp) / f"vidgen_{key}_restyle_in.png", width=round(width * qwen_graph.UPSCALE),
+                         height=round(height * qwen_graph.UPSCALE), lanczos=True)
+        graph = qwen_graph.qwen_graph(f"vidgen_{key}_restyled", prompt, seed, width=width, height=height, image=up.name, full=False)
+        try:
+            job_id = server.submit(PreparedJob(graph, {up.name: up}, output="output.png", free_after=True))
+        except VidgenError as exc:
+            raise VidgenError(f"{server.where}: could not queue the restyle of {source.name}: {exc}") from None
+    done = provider.wait(JobState(job_id, "pending", cost=0.0))
+    if done.status != "completed":
+        raise VidgenError(f"{server.where}: the restyle of {source.name} failed: {done.error or done.status}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    provider.download(job_id, dest)
+    return dict(done.usage or provider.usage(None))
+
+
 __all__ = [
+    "RESTYLE_MODEL", "restyle_picture",
     "ColabTransport", "ComfyUIVideoProvider", "HttpTransport", "PreparedJob", "VM_URL", "WORKFLOWS", "Workflow",
     "check_workflow_request", "find_workflow", "fit_control", "fit_picture", "guide_problem", "make_transport", "on_colab_vm",
     "prepare_job", "workflow_estimate", "workflow_records",

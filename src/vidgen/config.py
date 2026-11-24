@@ -3335,11 +3335,12 @@ def strip_emphasis(text: str) -> str:
 #: Kinds of generated video shots (DESIGN.md §113.3).
 ShotKind = Literal["talking", "action", "establishing"]
 #: What a generated shot's ``guide:`` sends (DESIGN.md §113.8): the beat's draft render, its
-#: finished render (``final``, §113.18), or one of the guide passes of its ``3d`` scene.
-GuideChoice = Literal["render", "final", "depth", "outline", "mask"]
-GUIDE_CHOICES: tuple[str, ...] = ("render", "final", "depth", "outline", "mask")
+#: finished render (``final``, §113.18), the edges of the finished render (``canny``, §113.21),
+#: or one of the guide passes of its ``3d`` scene.
+GuideChoice = Literal["render", "final", "canny", "depth", "outline", "mask"]
+GUIDE_CHOICES: tuple[str, ...] = ("render", "final", "canny", "depth", "outline", "mask")
 #: The guides any scene type can send (the others are guide passes of a ``3d`` scene).
-GUIDES_OF_ANY_SCENE: tuple[str | None, ...] = (None, "render", "final")
+GUIDES_OF_ANY_SCENE: tuple[str | None, ...] = (None, "render", "final", "canny")
 #: The guide passes a three.js web scene draws too (``space``, ``web``; DESIGN.md §113.19).
 GUIDES_OF_WEB_SCENES: tuple[str, ...] = ("depth",)
 
@@ -3365,6 +3366,8 @@ _BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "t
 LAST_OF_PREFIX = "last_of:"
 #: ``generated_shot.first_frame: painted``: the picture ``vidgen generate frames`` painted for the shot.
 PAINTED_FIRST_FRAME = "painted"
+#: ``generated_shot.first_frame: restyled``: the render's first frame made photoreal on the ComfyUI server (§113.21).
+RESTYLED_FIRST_FRAME = "restyled"
 #: The image model ``vidgen generate frames`` uses when a shot does not name one.
 DEFAULT_PAINT_MODEL = "bytedance-seed/seedream-4.5"
 
@@ -3395,6 +3398,30 @@ class PaintFirstFrame(_Strict):
     """Resolution tier sent with the aspect ratio of the video's format (a model that lists fewer tiers is refused by the dry run)."""
 
 
+class CannyGuide(_Strict):
+    """A shot's ``canny:`` (with ``guide: canny``, DESIGN.md §113.21): how its edge video is made from the finished render."""
+
+    low: int = Field(default=92, ge=0, le=1020)
+    """Edges weaker than this are dropped (OpenCV Canny's low threshold, on the L1 gradient)."""
+    high: int = Field(default=200, ge=0, le=1020)
+    """Edges at least this strong start a line (the high threshold); weaker ones above low join a line."""
+    glint: int | Literal[False] = Field(default=150)
+    """Edges are removed where the frame, blurred over 41 px, is brighter than this grey level (0-255): a sun glint on water, which a video model draws as surf or foam; false keeps every edge."""
+
+    @field_validator("glint", mode="before")
+    @classmethod
+    def _glint(cls, v: Any) -> Any:
+        if v is True or (isinstance(v, int) and not isinstance(v, bool) and not 0 <= v <= 255):
+            raise ValueError("glint: a grey level 0-255 (edges brighter than it are removed), or false (keep every edge)")
+        return v
+
+    @model_validator(mode="after")
+    def _order(self) -> CannyGuide:
+        if self.low > self.high:
+            raise ValueError(f"canny.low ({self.low}) must not be above canny.high ({self.high})")
+        return self
+
+
 class GeneratedShot(_Strict):
     """A beat's ``generated_shot:`` (DESIGN.md §113.3): the beat is shown by a clip a video model
     makes (``vidgen generate plan`` lists it with its inputs and estimated cost). Not the
@@ -3415,9 +3442,13 @@ class GeneratedShot(_Strict):
     audio: Literal["beat", "mix", "none"] | None = None
     """beat: the beat's own voice, cut to the beat's exact length, goes in as an audio reference (lip-sync); mix: the film's own sound over the shot (voice, music and effects, cut from the rendered film: `vidgen render` first); none: no audio; default beat for talking shots, none otherwise."""
     guide: bool | GuideChoice = False
-    """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); final: the beat's finished render (the video's own size and look, without overlays, captions or placed takes), silent, for the model to remake as real footage; depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
+    """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); final: the beat's finished render (the video's own size and look, without overlays, captions or placed takes), silent, for the model to remake as real footage; canny: white edges on black of that finished render (same frames and timing; settings in canny:); depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
+    canny: CannyGuide | None = None
+    """With guide: canny: the edge thresholds and the glint mask {low: 92, high: 200, glint: 150}; default those."""
     first_frame: str | None = Field(default=None, min_length=1)
-    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, a picture file, painted (the picture `vidgen generate frames` painted from paint_first_frame:), or last_of:<shot id> (the last frame of the take that shot shows; made by `vidgen generate inputs`); default sheet for talking shots, none otherwise."""
+    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), restyled (that first frame made photoreal by Qwen-Image-Edit-2511 on the ComfyUI server, videogen.provider: comfyui; made by `vidgen generate inputs --guide`), none, a picture file, painted (the picture `vidgen generate frames` painted from paint_first_frame:), or last_of:<shot id> (the last frame of the take that shot shows; made by `vidgen generate inputs`); default sheet for talking shots, none otherwise."""
+    first_frame_prompt: str | None = Field(default=None, min_length=1)
+    """With first_frame: restyled: the edit instruction instead of vidgen's default (make the render a real photograph, keep everything in place, replace computer-generated patterns with real detail)."""
     seed: int | None = Field(default=None, ge=0)
     """Seed sent to models that take one (not guaranteed to repeat a clip)."""
     resolution: str | None = Field(default=None, min_length=1)
@@ -3445,7 +3476,7 @@ class GeneratedShot(_Strict):
         if isinstance(v, str) and v not in GUIDE_CHOICES and v.strip().lower() not in _BOOL_WORDS:
             close = difflib.get_close_matches(v.lower(), GUIDE_CHOICES, n=1)
             hint = f" (did you mean {close[0]}?)" if close else ""
-            raise ValueError(f"{v!r} is not true, false, {', '.join(GUIDE_CHOICES)}{hint}; final is the finished render; depth, outline and mask are guide passes of a 3d scene")
+            raise ValueError(f"{v!r} is not true, false, {', '.join(GUIDE_CHOICES)}{hint}; final is the finished render, canny its edges; depth, outline and mask are guide passes of a 3d scene")
         return v
 
     @property
@@ -3467,6 +3498,10 @@ class GeneratedShot(_Strict):
             raise ValueError("a talking shot is lip-synced to the beat's voice alone: leave audio out (or audio: beat), or make it an action shot")
         if self.first_frame is not None and self.first_frame.startswith(LAST_OF_PREFIX) and self.last_of_shot is None:
             raise ValueError(f"first_frame: {LAST_OF_PREFIX} needs a shot id, e.g. {LAST_OF_PREFIX}intro_b1")
+        if self.canny is not None and self.guide_source != "canny":
+            raise ValueError("canny: sets how the guide: canny edge video is made; this shot has no guide: canny")
+        if self.first_frame_prompt is not None and self.first_frame != RESTYLED_FIRST_FRAME:
+            raise ValueError(f"first_frame_prompt: is the edit instruction of first_frame: {RESTYLED_FIRST_FRAME}; this shot has first_frame: {self.first_frame or 'its default'}")
         if self.first_frame == PAINTED_FIRST_FRAME and self.paint_first_frame is None:
             raise ValueError("first_frame: painted needs paint_first_frame: {prompt: ...} on the shot (what `vidgen generate frames` paints)")
         if self.paint_first_frame is not None and "/" not in self.paint_first_frame.model.strip("/"):
@@ -3485,8 +3520,13 @@ class GeneratedShot(_Strict):
         return self.audio or ("beat" if self.kind == "talking" else "none")
 
     @property
+    def canny_settings(self) -> CannyGuide:
+        """The ``canny:`` settings (the defaults when not given)."""
+        return self.canny or CannyGuide()
+
+    @property
     def first_frame_source(self) -> str:
-        """``sheet``, ``render``, ``none``, ``painted`` or a picture file (``first_frame`` or the kind's default)."""
+        """``sheet``, ``render``, ``restyled``, ``none``, ``painted`` or a picture file (``first_frame`` or the kind's default)."""
         return self.first_frame or ("sheet" if self.kind == "talking" else "none")
 
     @property

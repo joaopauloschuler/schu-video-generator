@@ -12,6 +12,12 @@
   takes (the film's own scene render when nothing is drawn over the scene, else
   :meth:`~vidgen.project.Project.without_takes` into ``build/final_source``; either is rendered
   when not current), without sound; its first frame is ``first_frame.png`` with ``first_frame: render``;
+- ``guide.canny.mp4`` (``guide: canny``, DESIGN.md §113.21): white edges on black of the same
+  part of the finished render (:mod:`vidgen.videogen.canny`, the shot's ``canny:`` settings),
+  at :func:`guide_size` and the render's frame rate; its ``first_frame.png`` from the colour part;
+- ``first_frame.restyled.png`` (``first_frame: restyled``): ``first_frame.png`` made photoreal
+  by Qwen-Image-Edit-2511 on the ComfyUI server (:func:`~vidgen.videogen.comfyui.restyle_picture`;
+  GPU time, kept in ``inputs.json``), made again only when its source changed;
 - ``guide.<pass>.mp4`` (``guide: depth | outline | mask`` on a ``3d`` scene): the same part of
   that guide pass of the draft render (the lossless ``.mkv`` beside the 3D clip, drawn when
   missing), as H.264 / yuv420p at the draft's size and frame rate;
@@ -34,7 +40,7 @@
 - ``layout.png`` (``vidgen generate frames``, not this module's run): the first frame of the beat's
   draft render, the picture a painted starting picture keeps the composition of (:func:`layout_picture`).
 
-Free and local (ffmpeg and vidgen's own renderer); the cuts are made again on every run, the
+Free and local (ffmpeg and vidgen's own renderer; the restyled frame alone uses the GPU); the cuts are made again on every run, the
 draft render is reused while current. ``inputs.json`` beside them records what each file was cut
 from (:mod:`vidgen.videogen.freshness`), so the plan can tell when it no longer matches.
 """
@@ -50,7 +56,8 @@ from typing import Any
 
 from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.videogen.shots import INPUTS_DIR, Shot, guide_name
+from vidgen.config import RESTYLED_FIRST_FRAME
+from vidgen.videogen.shots import INPUTS_DIR, RESTYLED_NAME, Shot, guide_name
 
 #: The cut voice: MP3 (small enough to send inline), mono, 44.1 kHz.
 AUDIO_ARGS = ["-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k"]
@@ -255,7 +262,7 @@ def render_kind(project: Project, scene_id: str, guide: str | None) -> str:
     the finished render, at the video's size and frame rate, DESIGN.md §113.19), else ``render`` (the draft)."""
     from vidgen.config import GUIDES_OF_WEB_SCENES, is_web_scene_type
 
-    if guide == "final" or (guide in GUIDES_OF_WEB_SCENES and is_web_scene_type(project.scene(scene_id).type)):
+    if guide in ("final", "canny") or (guide in GUIDES_OF_WEB_SCENES and is_web_scene_type(project.scene(scene_id).type)):
         return "final"
     return "render"
 
@@ -306,6 +313,76 @@ def _passes_by_render(project: Project, shots: Sequence[Shot]) -> dict[tuple[str
         if source not in GUIDES_OF_ANY_SCENE:
             wanted.setdefault((shot.scene_id, render_kind(project, shot.scene_id, source)), set()).add(source)
     return {key: tuple(p for p in GUIDE_PASSES if p in modes) for key, modes in wanted.items()}
+
+
+#: The short side of a canny guide for a model that is no ComfyUI workflow (the tested thresholds are for 512 px).
+CANNY_SHORT_SIDE = 512
+
+
+def guide_size(shot: Shot) -> tuple[int, int]:
+    """The size a ``guide: canny`` video and a restyled first frame are made at: the workflow's own
+    (960x512 for 16:9) for a ComfyUI workflow, else :data:`CANNY_SHORT_SIDE` on the short side."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(shot.spec.model)
+    if workflow is not None:
+        return workflow.size(shot.aspect_ratio)
+    a, _, b = (shot.aspect_ratio or "16:9").partition(":")
+    ratio = float(a) / float(b)
+    long = 2 * round(CANNY_SHORT_SIDE * max(ratio, 1 / ratio) / 2)
+    return (long, CANNY_SHORT_SIDE) if ratio >= 1 else (CANNY_SHORT_SIDE, long)
+
+
+def restyle_prompt(shot: Shot) -> str:
+    """The edit instruction of ``shot``'s restyled first frame (``first_frame_prompt:``, else vidgen's default)."""
+    from vidgen.videogen.qwen_graph import RESTYLE_PROMPT
+
+    return shot.spec.first_frame_prompt or RESTYLE_PROMPT
+
+
+def restyle_seed(shot: Shot) -> int:
+    """The seed of ``shot``'s restyled first frame (the shot's ``seed:``, else 42)."""
+    return 42 if shot.spec.seed is None else shot.spec.seed
+
+
+def _write_restyled(project: Project, shot: Shot, frame: Path, render_source: dict[str, Any], written: list[Path], out: Callable[[str], None]) -> None:
+    """Make (or keep, when its source is unchanged) ``shot``'s restyled first frame from ``frame``."""
+    from vidgen.videogen.comfyui import restyle_picture
+    from vidgen.videogen.freshness import record_input, recorded_matches, restyled_source
+
+    dest = frame.with_name(RESTYLED_NAME)
+    source = restyled_source(shot, render_source, frame)
+    shown = dest.relative_to(project.root).as_posix()
+    if recorded_matches(dest, source):
+        out(f"{shot.id}: restyled first frame {shown} is current (kept, no GPU time)")
+        return
+    settings = project.config.videogen.comfyui
+    if settings is None:
+        raise VidgenError(f"shot {shot.id}: first_frame: restyled is made on the ComfyUI server: set videogen.provider: comfyui and videogen.comfyui")
+    width, height = guide_size(shot)
+    server = f"Colab session {settings.colab}" if settings.colab else settings.url
+    out(f"{shot.id}: restyling the first frame on {server} ({width}x{height}, Qwen-Image-Edit-2511)")
+    usage = restyle_picture(settings, frame, dest, width=width, height=height, prompt=restyle_prompt(shot), seed=restyle_seed(shot),
+                            poll_timeout=project.config.videogen.poll_timeout, say=out)
+    record_input(dest, source, usage=dict(usage))
+    written.append(dest)
+    seconds, units = usage.get("gpu_seconds"), usage.get("compute_units")
+    spent = f"{seconds:g} s GPU, {units:g} units" if seconds is not None and units is not None else "GPU time not reported"
+    out(f"{shot.id}: restyled first frame {shown} ({spent}); look at it before paying for the clip")
+
+
+def _write_canny(ffmpeg: str, project: Project, shot: Shot, scene: SceneRender, start: float, clip: Path, frame: Path) -> int:
+    """Cut the colour part of ``scene`` for ``shot``, write its first frame to ``frame`` and its edges to ``clip``."""
+    from vidgen.videogen.canny import make_canny
+
+    c = shot.spec.canny_settings
+    width, height = guide_size(shot)
+    frame.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="vidgen-canny-") as scratch:
+        part = Path(scratch) / "render.mp4"
+        cut_video(ffmpeg, scene.video, part, start, shot.length)
+        first_frame(ffmpeg, part, frame)
+        return make_canny(ffmpeg, part, clip, width=width, height=height, low=c.low, high=c.high, glint=None if c.glint is False else c.glint)
 
 
 def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path, source: dict[str, Any], written: list[Path], out: Callable[[str], None]) -> None:
@@ -439,7 +516,8 @@ def make_inputs(
         if shot.spec.last_of_shot is not None:
             _write_last_of_picture(ffmpeg, project, shot, written, out)
         kind = shot.spec.guide_source
-        wants_frame = shot.spec.first_frame_source == "render"
+        restyled = shot.spec.first_frame_source == RESTYLED_FIRST_FRAME
+        wants_frame = shot.spec.first_frame_source in ("render", RESTYLED_FIRST_FRAME)
         if kind is None and not wants_frame:
             continue
         if not guide:
@@ -464,7 +542,24 @@ def make_inputs(
             written += [clip, frame]
             what = "the finished render, " if made == "final" else ""
             out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} and its first frame ({what}{shot.length:.2f} s, silent)")
+            if restyled:
+                _write_restyled(project, shot, frame, made_from, written, out)
             _write_opening_guide(ffmpeg, project, shot, clip, made_from, written, out)
+            _write_overlay(ffmpeg, project, shot, clip, written, out)
+            continue
+        if kind == "canny":
+            clip = folder / guide_name(kind)
+            count = _write_canny(ffmpeg, project, shot, scene, start, clip, frame)
+            record_input(clip, sources.render(shot, kind, scene.fingerprint))
+            frame_source = sources.render(shot, made, scene.fingerprint)
+            record_input(frame, frame_source)
+            written += [clip, frame]
+            c = shot.spec.canny_settings
+            glint = "no glint mask" if c.glint is False else f"edges removed where brighter than {c.glint}"
+            out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} (canny {c.low}/{c.high} of the finished render, {glint}; {count} frames) and its first frame")
+            if restyled:
+                _write_restyled(project, shot, frame, frame_source, written, out)
+            _write_opening_guide(ffmpeg, project, shot, clip, sources.render(shot, kind, scene.fingerprint), written, out)
             _write_overlay(ffmpeg, project, shot, clip, written, out)
             continue
         lossless = scene.passes.get(kind)
@@ -491,9 +586,11 @@ def make_inputs(
             record_input(frame, sources.render(shot, made, scene.fingerprint))
             written.append(frame)
             out(f"{shot.id}: first frame {frame.relative_to(project.root).as_posix()} (from the {which} render)")
+            if restyled:
+                _write_restyled(project, shot, frame, sources.render(shot, made, scene.fingerprint), written, out)
         _write_opening_guide(ffmpeg, project, shot, clip, sources.render(shot, kind, scene.fingerprint), written, out)
         _write_overlay(ffmpeg, project, shot, clip, written, out)
     return written
 
 
-__all__ = ["CHANGE_LEVELS", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "film_sound", "make_opening_guide", "make_overlay", "render_kind", "render_project"]
+__all__ = ["CANNY_SHORT_SIDE", "CHANGE_LEVELS", "guide_size", "restyle_prompt", "restyle_seed", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "film_sound", "make_opening_guide", "make_overlay", "render_kind", "render_project"]

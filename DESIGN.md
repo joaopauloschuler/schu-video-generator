@@ -22470,6 +22470,38 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
   `compute_units` = seconds x `units_per_hour` / 3600, `server`) goes into the clip's sidecar and the
   take's record.
 
+### 113.21 The canny guide and the restyled first frame (Step 410)
+
+The tested best LTX setup (HOWTO "Recommended setup and why") as two shot settings.
+
+- **`guide: canny`** (`config.GUIDE_CHOICES`, `GUIDES_OF_ANY_SCENE`): `render_kind` is `final`, so the
+  colour part is cut from the same finished render as `guide: final` (same frames and timing) and its
+  first frame is `first_frame.png`. `videogen/canny.py` finds the edges in numpy + scipy (both already
+  dependencies through manim; *why not OpenCV:* it is not a dependency and would be a heavy one):
+  OpenCV's `Canny` re-implemented (3x3 Sobel with replicated border, L1 gradient, its sector
+  non-maximum suppression, 8-connected hysteresis; frame 60 of the Step 405 render gives the same
+  edge pixels as `cv2.Canny`), no blur first, then `make_canny_soft.py`'s glint mask (41 px Gaussian
+  of the grey frame `<= glint`, feathered 31 px). Frames are decoded and encoded with ffmpeg pipes, one
+  at a time. `GeneratedShot.canny` (`CannyGuide`: `low` 92, `high` 200, `glint` 150 or false; only
+  with `guide: canny`). Size: `inputs.guide_size` (the workflow's own size for a workflow model, so
+  `fit_control` only resamples; else 512 on the short side: the thresholds are for that scale).
+  Freshness: a `final` render source plus `canny` and `canny_size`.
+- **`first_frame: restyled`** (`RESTYLED_FIRST_FRAME`; a plan problem unless `videogen.provider:
+  comfyui` and a workflow model): `make_inputs` cuts `first_frame.png` as for `render`, then
+  `comfyui.restyle_picture` sends `qwen_graph.qwen_graph` (moved from
+  `tools/colab/build_image_workflow.py`, which loads the file by its path; one copy) through the same
+  transport as clips: the frame at 1.5x `guide_size` (Lanczos) is its own reference latent, the
+  output scaled to `guide_size` and saved once; `PreparedJob.output` (`output.png`) and `free_after`
+  (`POST /free` when the job ends: the video model loads next) are new job fields, honoured by
+  `run_job` and both transports; `job_outcome` takes a `.png` when there is no `.mp4`. The result
+  `first_frame.restyled.png` is the shot's frame input. Its record in `inputs.json` holds the first
+  frame's render source, `first_frame_sha256` and `restyle` (prompt, seed, size, model) and the job's
+  `usage`; `generate inputs` keeps it while that matches (`freshness.recorded_matches`), so a re-cut
+  costs no GPU, and the plan reports a change like any input's. *Why in `generate inputs`:* the clip's
+  request key needs the picture, and inputs are where a shot's derived files are made and tracked; it
+  is GPU time, not money, and is printed with its units. Default prompt `qwen_graph.RESTYLE_PROMPT`
+  (run 2's prompt C without its subject); `first_frame_prompt:` replaces it.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

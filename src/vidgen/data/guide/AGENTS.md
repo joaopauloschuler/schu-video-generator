@@ -5674,12 +5674,34 @@ scenes:
 - **Your own GPU (ComfyUI, no money)**: `videogen: {provider: comfyui, comfyui: {colab: <session>}}`
   (a Colab session set up with `tools/colab/setup_session.py <session>`; always name it) or
   `{url: http://host:8188}` (any ComfyUI server), and `generated_shot.model: ltx-2.3-union-control`
-  (LTX-2.3 + IC-LoRA union control: restyles the shot's `guide: depth` video, optionally from its
-  `first_frame:`; no references, 512p, 1-5 s parts, seed 42 unless `seed:`). vidgen fits the inputs (960x512 for
+  (LTX-2.3 + IC-LoRA union control: restyles the shot's `guide: canny` or `guide: depth` video, optionally
+  from its `first_frame:`; no references, 512p, 1-5 s parts, seed 42 unless `seed:`). vidgen fits the inputs (960x512 for
   16:9, 8k+1 frames at 24 fps), runs the job and keeps the clip as a normal take, with its GPU seconds and
   compute units (`videogen.comfyui.units_per_hour`, 1.94 for an L4) in the take's record. `generate run --pay` runs it
   ($0: no budget needed); an L4 job takes about 2-4 minutes of GPU. With `colab:` the job runs on that VM from this computer;
   vidgen run on that VM (`vidgen remote <session> ARGS`) uses its ComfyUI directly.
+  The recommended shot (real footage from a render):
+
+  ```yaml
+  videogen: {provider: comfyui, comfyui: {colab: ltx}}
+  scenes:
+    - id: chase
+      type: text_card            # any scene type; a space or 3d render in practice
+      params: {text: "Glider"}
+      beats:
+        - text: "Low over the open sea, the glider leans into a gentle turn."
+          generated_shot:
+            kind: establishing
+            model: ltx-2.3-union-control
+            prompt: "a grey glider flies low over a rough open sea; real 35 mm aerial footage"
+            guide: canny           # edges of the finished render; canny: {low: 92, high: 200, glint: 150}
+            first_frame: restyled  # the render's first frame made photoreal (Qwen-Image-Edit-2511)
+            # first_frame_prompt: "..."   # only to replace the default edit instruction
+  ```
+
+  `vidgen generate inputs --guide` makes `guide.canny.mp4` and `first_frame.restyled.png` (GPU time,
+  ~25-110 s on an L4, printed with its units); look at the restyled frame, then `generate run --pay`.
+  `glint` removes edges in bright areas (a sun glint a model draws as foam); `false` keeps them.
 - **Where the starting picture goes** (`first_frame_in: frame | guide`: `generated_shot`, then
   `videogen.models.<model>`, then `videogen`, default `frame`; `videogen.first_frame_dissolve`, default
   0.4 s): `guide` puts the shot's `first_frame:` picture into the guide video
