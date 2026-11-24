@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–406
+## Steps 193–407
+
+### The LTX HOWTO tightened (Step 407)
+
+- **`docs/HOWTO-restyle-with-ltx-on-colab.md`** opens with the recommended setup (photoreal first
+  frame + glint-masked canny) and why, and is shorter; the tests' raw log is in
+  `docs/howto/ltx-colab-runlog.md`. The depth-pass Step 403 is called Step 403b in the docs.
 
 ### One Colab setup command (Step 406)
 
@@ -41,7 +47,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   without the CG first frame, and then with invented content). Replayable scripts (now in
   `tools/colab/`). No change to vidgen itself.
 
-### A web scene's exact depth (Step 403, the second Step 403)
+### A web scene's exact depth (Step 403b)
 
 - **`guide: depth` on `space` and `web` scenes**: the scene's own depth buffer from three.js
   (not an estimate), drawn with the finished render (same size, frame rate, camera and frames), by
@@ -52,7 +58,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 - **Space scenes draw their frames again once**: `vidgen/three-finish` changed, so a `space` scene's
   web frames (and those of pages that use the module) are redrawn on the next render.
 
-### Shadows in the air (Step 403, the first Step 403)
+### Shadows in the air (Step 403)
 
 - **Shadows in the air** (Step 403): **surface scenes and pages with `vidgen/space-air` and cloud decks
   or ground look different.** What casts a shadow now darkens the air in it: the haze under a cloud

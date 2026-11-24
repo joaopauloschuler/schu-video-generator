@@ -1,4 +1,4 @@
-"""Step 403: ``guide: depth`` of a three.js web scene (DESIGN.md §113.19). vidgen/three-finish packs
+"""Step 403b: ``guide: depth`` of a three.js web scene (DESIGN.md §113.19). vidgen/three-finish packs
 the depth buffer (distance along the view, log2 in 24 bits; 0: nothing drawn) and vidgen makes the
 grey guide with one range for the shot (near / z: near white, far dark, the sky black). Cheap: the
 packing, the grey, the config, which render a pass is cut from and the cut from a stub render; in

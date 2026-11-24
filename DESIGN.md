@@ -22386,7 +22386,7 @@ request's maximum cost exceeds your available credits") for Seedance 2.0 and 2.0
 with $3.57 of credits against vidgen's estimates of $0.50 and $0.38. OpenRouter checks a worst case
 of its own before accepting the job; it is not in the model list, so vidgen cannot predict it.
 
-### 113.19 A web scene's exact depth (Step 403)
+### 113.19 A web scene's exact depth (Step 403b)
 
 For a depth-control video model (the owner's experiment: LTX-2.3 with the IC-LoRA Union Control,
 which takes a depth, canny or pose video aligned to its output) vidgen gives the depth three.js
