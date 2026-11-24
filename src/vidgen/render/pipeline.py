@@ -72,8 +72,8 @@ class RenderResult:
     ``<output>_chapters.txt`` when one was written (the video has chapters and
     ``chapters.youtube``), else ``None``; ``thumbnail`` the thumbnail written after the join
     (with a ``thumbnail:`` config and ``auto``, DESIGN.md §53), else ``None``.
-    ``guide_passes``: the guide pass files of each ``3d`` scene whose render has them (DESIGN.md
-    §114.14), by scene id. ``disk``: the build folder's size, of it in frames clips, and the
+    ``guide_passes``: the guide pass files of each scene whose render has them (a ``3d`` scene's,
+    DESIGN.md §114.14; a web scene's depth, §113.19), by scene id. ``disk``: the build folder's size, of it in frames clips, and the
     free disk after the join; ``removed``: the bytes of frames clips deleted in this run
     (``render.keep_intermediates: false``, DESIGN.md §120.9).
     """
@@ -204,32 +204,52 @@ def _usable_render(
     )
 
 
-def _has_guide_passes(project: Project, preview: bool, scene_id: str, meta: dict[str, Any], guide_passes: tuple[str, ...]) -> bool:
-    """Whether the render (its ``meta``) of a ``3d`` scene drew ``guide_passes`` and their files
-    are there (other scene types have none to draw: always true)."""
-    if not guide_passes or project.scene(scene_id).type != "3d":
-        return True
-    from vidgen.three_d.passes import pass_files
+def scene_pass_clips(project: Project, preview: bool, scene_id: str, passes: tuple[str, ...] | list[str]) -> dict[str, Path]:
+    """The lossless clips of those guide ``passes`` a render of ``scene_id`` draws (pass -> file): all three
+    of a ``3d`` scene (``<render_dir>/three_d/<scene>.<pass>.mkv``, DESIGN.md §114.14), ``depth`` of a web
+    scene (``<render_dir>/web/<scene>.depth.mkv``, §113.19); none of other scene types."""
+    from vidgen.three_d.passes import pass_clip
+    from vidgen.web.depth import WEB_GUIDE_PASSES
+    from vidgen.web.entry import is_web_type
 
+    kind = project.scene(scene_id).type
+    if kind == "3d":
+        return {mode: pass_clip(project.render_dir(preview) / "three_d", scene_id, mode) for mode in passes}
+    if is_web_type(kind):
+        return {mode: pass_clip(project.render_dir(preview) / "web", scene_id, mode) for mode in passes if mode in WEB_GUIDE_PASSES}
+    return {}
+
+
+def _scene_pass_files(project: Project, preview: bool, scene_id: str, passes: tuple[str, ...] | list[str]) -> list[Path]:
+    """The files those guide ``passes`` of ``scene_id`` leave: their clips (:func:`scene_pass_clips`) and,
+    for a ``3d`` scene's mask, its colour table."""
+    from vidgen.three_d.passes import mask_table_path
+
+    files = list(scene_pass_clips(project, preview, scene_id, passes).values())
+    if "mask" in passes and project.scene(scene_id).type == "3d":
+        files.append(mask_table_path(project.render_dir(preview) / "three_d", scene_id))
+    return files
+
+
+def _has_guide_passes(project: Project, preview: bool, scene_id: str, meta: dict[str, Any], guide_passes: tuple[str, ...]) -> bool:
+    """Whether the render (its ``meta``) of a scene drew those of ``guide_passes`` it draws
+    (:func:`scene_pass_clips`) and their files are there (a scene that draws none: always true)."""
+    drawn = list(scene_pass_clips(project, preview, scene_id, guide_passes))
     made = meta.get("guide_passes") or []
-    folder = project.render_dir(preview) / "three_d"
-    return all(p in made for p in guide_passes) and all(f.is_file() for f in pass_files(folder, scene_id, guide_passes))
+    return all(p in made for p in drawn) and all(f.is_file() for f in _scene_pass_files(project, preview, scene_id, drawn))
 
 
 def guide_pass_outputs(project: Project, preview: bool) -> dict[str, list[Path]]:
-    """The guide pass files of each ``3d`` scene whose current render drew some (its timings
-    record them), by scene id (DESIGN.md §114.14)."""
-    from vidgen.three_d.passes import pass_files
-
+    """The guide pass files of each scene whose current render drew some (its timings record them:
+    a ``3d`` scene's passes, a web scene's depth), by scene id (DESIGN.md §114.14, §113.19)."""
     out: dict[str, list[Path]] = {}
     for spec in project.config.scenes:
-        if spec.type != "3d":
-            continue
         try:
             meta = json.loads(scene_timings_path(project, preview, spec.id).read_text(encoding="utf-8")).get("render", {})
         except (OSError, ValueError):
             continue
-        files = [f for f in pass_files(project.render_dir(preview) / "three_d", spec.id, meta.get("guide_passes") or []) if f.is_file()]
+        made = meta.get("guide_passes") or []
+        files = [f for f in _scene_pass_files(project, preview, spec.id, made) if f.is_file()] if made else []
         if files:
             out[spec.id] = files
     return out

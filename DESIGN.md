@@ -22386,6 +22386,47 @@ request's maximum cost exceeds your available credits") for Seedance 2.0 and 2.0
 with $3.57 of credits against vidgen's estimates of $0.50 and $0.38. OpenRouter checks a worst case
 of its own before accepting the job; it is not in the model list, so vidgen cannot predict it.
 
+### 113.19 A web scene's exact depth (Step 403)
+
+For a depth-control video model (the owner's experiment: LTX-2.3 with the IC-LoRA Union Control,
+which takes a depth, canny or pose video aligned to its output) vidgen gives the depth three.js
+itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` scenes
+(`config.GUIDES_OF_WEB_SCENES`, `scene_draws_guide`, `is_web_scene_type`).
+
+- **Drawn by the scene's own shaders.** Overriding materials (`MeshDepthMaterial`) would lose a sea
+  displaced in its vertex shader and every shader-made geometry. `vidgen/three-finish`'s `Finish`
+  already draws the scene into a target with a `DepthTexture`; with `ctx.draw_mode` `"depth"`
+  (`WebPage(draw_mode=)`, in the clip's inputs only when set, so no other key changes) `render(t)`
+  draws the scene exactly as for the picture at `t` (the `update` hook, the same camera; no motion
+  blur samples) and replaces the whole chain by one pass, `DEPTH_PACK`: the window depth made the
+  distance along the view (perspective `near / (1 − d (1 − near/far))`, precise with far = 4e7;
+  orthographic; a logarithmic depth buffer), packed as `n = 1 + round(u (2^24 − 2))`,
+  `u = (log2 z + 16) / 48` (`DEPTH_LOG`), into red, green and blue, `n = 0` where the depth stayed
+  cleared (the sky and the background: sky domes and atmosphere passes write no depth or one at the
+  far plane, both read "far"). It samples through the lens's barrel distortion (the grade's formula,
+  nearest texel), so the pass lies on the colour frame; no noise, halation, vignette, bloom, grade or
+  grain. A page counts its depth frames (`globalThis.__vidgenDepthFrames`); a page that draws none
+  (not through `Finish`) is refused at frame 0.
+- **Kept lossless beside the colour.** `Web._draw_view` draws, when `depth` is among the scene's
+  `guide_passes` (worker `--guide-passes`), `make_web_clip(..., draw_mode="depth")` into
+  `<render_dir>/web/<scene>.depth.mkv` (+ `.json`; always FFV1, never `compact`, which would break
+  the packing). `pipeline.scene_pass_clips` names a scene's pass clips by type (a `3d` scene's three,
+  a web scene's depth), used by `_has_guide_passes`, `guide_pass_outputs` and `inputs._render_scene`.
+- **From the finished render.** `inputs.render_kind(project, scene, guide)`: a web scene's pass is
+  cut from the `final` render (the video's size and frame rate: a depth control wants the output's
+  frames), a `3d` pass from the draft as before. The `(scene, made)` renders, `_passes_by_render`
+  and the freshness records (`InputSources.render`, the first frame's kind) all go through it.
+- **One range a shot, 1 / distance.** `web.depth.cut_depth` decodes the shot's part twice
+  (`-ss`/`-t` as `cut_video`): first a histogram of log2 z (64 bins an octave) gives `near`, the
+  distance the nearest 1 % of the shot's drawn pixels are within; then grey = `near / z` clipped
+  (near white, far dark, the sky black), H.264 as the other passes (BT.709, CRF 12). *Why 1 / z, not
+  the `3d` pass's linear range with a 0.15 floor:* a sea runs to the horizon; a linear range needs a
+  far bound that flattens everything beyond it to one grey with a step to the sky, while 1 / z falls
+  smoothly to black at the horizon, as depth estimators (Depth Anything, the depth the control
+  models are trained on) give it, near white. *Why per shot:* a range per frame flickers.
+- **Known gap.** An orbital scene drawn in depth slices (`vidgen/space-scale`, `depth: split`, the
+  default) clears the depth between slices: the pass holds only the nearest slice.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

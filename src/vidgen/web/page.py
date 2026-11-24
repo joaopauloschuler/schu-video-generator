@@ -365,7 +365,8 @@ class WebPage:
     (:func:`vidgen.web.music.scene_music`), given to the page as ``ctx.music`` by vidgen's music
     helper; ``None``: no helper, no ``ctx.music``. ``orbits`` (§122.3): the scene's orbit data
     (:func:`vidgen.scenes.orbit_data.scene_orbit_data`), given as ``ctx.orbits`` by vidgen's orbit
-    helper; ``None``: no helper, no ``ctx.orbits``. ``baked`` (§123.2): the cache of baked maps the
+    helper; ``None``: no helper, no ``ctx.orbits``. ``draw_mode`` (§113.19): ``"depth"`` is given as
+    ``ctx.draw_mode`` (vidgen/three-finish then draws the depth pass); ``None``: no ``ctx.draw_mode``. ``baked`` (§123.2): the cache of baked maps the
     page's ``vidgen/baked`` uses (``True``: :func:`~vidgen.web.baked.default_store`, which is off
     when ``VIDGEN_BAKED_CACHE_MB=0``; ``False``: none; or a store); :attr:`baked_log` lists
     ``("hit" | "damaged" | "stored" | "baked", name, bytes)`` per bake (``baked``: not kept).
@@ -376,8 +377,9 @@ class WebPage:
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
                  beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None,
                  design_width: int | None = None, music: dict[str, Any] | None = None, orbits: dict[str, Any] | None = None,
-                 baked: BakedStore | bool = True) -> None:
+                 baked: BakedStore | bool = True, draw_mode: str | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
+        self.draw_mode = draw_mode
         self.baked: BakedStore | None = (default_store() if baked else None) if isinstance(baked, bool) else baked
         self.baked_log: list[tuple[str, str, int]] = []
         self._baked_seen: dict[str, tuple[str, list[int], list[int]]] = {}
@@ -658,7 +660,8 @@ class WebPage:
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
                 "frames": self.frames, "duration": self.frames / self.fps, "theme": self.theme, "data": self.data,
                 "beats": self.beats, **self.shape, **({} if self.music is None else {"music": self.music}),
-                **({} if self.orbits is None else {"orbits": self.orbits})}
+                **({} if self.orbits is None else {"orbits": self.orbits}),
+                **({} if self.draw_mode is None else {"draw_mode": self.draw_mode})}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
         self._store_baked()
@@ -740,6 +743,10 @@ class WebPage:
         hook (if any), then a screenshot (:meth:`advance`, :meth:`screenshot`, :meth:`pixels`)."""
         self.advance(n)
         return self.pixels(self.screenshot(n))
+
+    def depth_frames(self) -> int:
+        """How many depth frames the page drew so far (vidgen/three-finish's count, ``ctx.draw_mode`` ``"depth"``)."""
+        return int(self._page.evaluate("() => Number(globalThis.__vidgenDepthFrames) || 0"))
 
     def screenshot(self, n: int) -> bytes:
         """A PNG of the page as it is now (frame ``n``, for the error message), with its alpha:

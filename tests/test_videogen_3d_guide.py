@@ -82,7 +82,7 @@ def test_the_shot_sends_the_pass_and_says_what_it_is(make_project) -> None:
     (shot,) = project_shots(project, CATALOG)
     (guide,) = [i for i in shot.inputs if i.role == "guide"]
     assert guide.path == project.root / "build" / "videogen" / "act" / "guide.depth.mp4" and guide.kind == "video"
-    assert guide.what.startswith("depth pass of the beat's 3D scene")
+    assert guide.what.startswith("depth pass of the beat's scene")
     assert GUIDE_PROMPTS["depth"] + "." in shot.prompt and "Mask colours" not in shot.prompt
     render = project_shots(Project.load(make_project(guide_config(True), folder="r")), CATALOG)[0]
     assert render.inputs[-1].path.name == "guide.mp4" and "The guide video is" not in render.prompt
@@ -122,7 +122,7 @@ def test_plan_names_the_pass_and_shares_it(make_project, fake_cloudflared: list[
     root = make_project(unhosted)
     (item,) = plan_shots(Project.load(root), catalog=CATALOG).shots
     text = "\n".join(item.lines(root))
-    assert "  guide: build/videogen/act/guide.depth.mp4 (depth pass of the beat's 3D scene" in text and "not made yet" in text
+    assert "  guide: build/videogen/act/guide.depth.mp4 (depth pass of the beat's scene" in text and "not made yet" in text
     assert NO_HOST_BLOCKED in item.shot.blocked and "inputs not made yet: `vidgen generate inputs --guide`" in item.shot.blocked
     hosted = guide_config("depth")
     hosted["videogen"] = {"provider": "openrouter", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}

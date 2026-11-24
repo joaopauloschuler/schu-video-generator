@@ -2918,7 +2918,8 @@ scenes:
           audio: beat                       # beat | mix (the film's sound: voice, music, effects) | none; default beat for talking shots
           guide: true                       # a silent draft render of the beat as a video reference (true = render);
                                             # final: the beat's finished render instead, to remake as real footage;
-                                            # on a 3d scene also depth | outline | mask: that guide pass instead
+                                            # on a 3d scene also depth | outline | mask: that guide pass instead;
+                                            # on a space or web scene also depth (from the finished render)
           first_frame: none                 # sheet | render | none | a picture file | painted (made by generate frames) | last_of:<shot id> (last frame of that shot's take); default sheet for talking
           paint_first_frame: null           # null (default); {prompt, refs, seed, model, resolution}: how `vidgen generate frames` paints the starting picture
           # paint_first_frame:
@@ -2974,6 +2975,19 @@ scenes:
   start in it (`vidgen render` first; a talking shot keeps `audio: beat`); the prompt calls it the
   shot's soundtrack. A film rendered again (also only to show a new take) marks it as changed: cut it
   again (free). Both are video / audio inputs, so they need the quick tunnel.
+- **A web scene's depth** (DESIGN.md §113.19): `guide: depth` also works on a `space` scene and on
+  a `web` scene whose page draws through `vidgen/three-finish` (`Finish.render(t)`; another page is
+  refused when it is drawn). The depth is the scene's own depth buffer, drawn with the **finished**
+  render (the video's size and frame rate, the same camera and frames; `guide: final`'s render, so
+  `vidgen render` and the pass share the colour frames) by the scene's own shaders (a sea's waves
+  stay), beside it as `build/final/web/<scene>.depth.mkv` (lossless, the distance packed into the
+  pixels). The shot gets `guide.depth.mp4`: grey **proportional to 1 / distance, near white, far
+  dark, the sky and the background black**, with one range for the whole shot (white: the nearest 1 %
+  of the shot's pixels; it does not flicker as things move), through the lens's barrel distortion as
+  the colour frame, with no film effects (noise, halation, vignette, grain, bloom, motion blur),
+  captions or overlays. `first_frame: render` is the finished render's first frame. `vidgen render
+  --guide-passes depth` draws it in every web scene too. Not drawn right yet: an orbital scene that
+  draws in depth slices (`vidgen/space-scale`'s default `depth: split`) leaves only the nearest slice's depth.
 - **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was
   cut from. A shot whose inputs no longer match (scene, beat text or timing, narration MP3, draft
   size, or no record yet) is blocked in `vidgen generate plan` with the free command to cut them
@@ -18842,7 +18856,7 @@ difference between two palette colours).
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
-| `guide_passes` | object | the [guide pass](#3d) files of each `3d` scene whose render has them, by scene id (`{}` without) |
+| `guide_passes` | object | the [guide pass](#3d) files of each scene whose render has them (a `3d` scene's, a web scene's depth), by scene id (`{}` without) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |

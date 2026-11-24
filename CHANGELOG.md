@@ -5,7 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–402
+## Steps 193–403
+
+### A web scene's exact depth (Step 403)
+
+- **`guide: depth` on `space` and `web` scenes**: the scene's own depth buffer from three.js
+  (not an estimate), drawn with the finished render (same size, frame rate, camera and frames), by
+  the scene's own shaders (a displaced sea keeps its waves). The shot's `guide.depth.mp4` is grey as
+  1 / distance: near white, far dark, the sky black; one range for the whole shot; through the
+  lens's distortion like the colour frame, without film effects, captions or overlays. A `web` page
+  must draw through `vidgen/three-finish`. For depth-control video models.
+- **Space scenes draw their frames again once**: `vidgen/three-finish` changed, so a `space` scene's
+  web frames (and those of pages that use the module) are redrawn on the next render.
 
 ### The finished render to a video model (Step 402)
 

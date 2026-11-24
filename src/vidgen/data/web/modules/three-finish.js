@@ -17,7 +17,8 @@
 // (`distort`), softness and a colour fringe growing towards the edges (`edges`), halation (a warm glow round
 // the highlights, picked and blurred at a quarter size). Everything is a function of `t` and the
 // options, so two renders of a frame are the same. Intermediate pictures are linear half floats;
-// the scene's own render targets get no tone mapping or colour-space conversion from three.js.
+// the scene's own render targets get no tone mapping or colour-space conversion from three.js. With `ctx.draw_mode`
+// "depth" (a `guide: depth` pass, Step 403) `render` draws the depth pass instead: see DEPTH_PACK.
 import * as THREE from "three";
 import {FullScreenQuad} from "three/addons/postprocessing/Pass.js";
 import {UnrealBloomPass} from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -256,6 +257,30 @@ const VERT = "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(posit
 const quad = (fragmentShader, uniforms, defines = {}) => new THREE.ShaderMaterial({
   vertexShader: VERT, fragmentShader, uniforms, defines, depthTest: false, depthWrite: false, toneMapped: false});
 
+// The depth pass (ctx.draw_mode "depth", DESIGN.md §113.19): the scene's depth buffer as the distance along the view z
+// (metres), packed into red, green and blue as one 24-bit number n = 1 + round(u (2^24 - 2)), u = (log2 z - MIN) / SPAN
+// (DEPTH_LOG); n = 0 where nothing was drawn (the sky, the background). Read through the lens's barrel distortion
+// (the grade's), nearest texel, so it lies on the colour frame. vidgen (src/vidgen/web/depth.py) unpacks it and
+// makes the grey picture with one range for the whole shot.
+export const DEPTH_LOG = Object.freeze({min: -16, span: 48});
+const DEPTH_PACK = `varying vec2 vUv; uniform highp sampler2D tDepth; uniform float uNear, uFar, uDistort; uniform vec2 uAspect;
+void main() {
+  vec2 q = vUv - 0.5, qa = q * uAspect;
+  float r = length(qa) / length(0.5 * uAspect);
+  float d = texture2D(tDepth, 0.5 + q * (1.0 + uDistort * r * r) / (1.0 + uDistort)).x;
+  if (d >= 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+#ifdef LOG_DEPTH
+  float z = exp2(d * log2(uFar + 1.0)) - 1.0;
+#elif defined(ORTHOGRAPHIC)
+  float z = uNear + d * (uFar - uNear);
+#else
+  float z = uNear / (1.0 - d * (1.0 - uNear / uFar));
+#endif
+  float u = clamp((log2(max(z, 1e-30)) - float(${DEPTH_LOG.min})) / float(${DEPTH_LOG.span}), 0.0, 1.0);
+  float n = floor(u * 16777214.0 + 0.5) + 1.0, hi = floor(n / 65536.0), mid = floor((n - hi * 65536.0) / 256.0);
+  gl_FragColor = vec4(hi, mid, n - hi * 65536.0 - mid * 256.0, 255.0) / 255.0;
+}`;
+
 const COPY = `varying vec2 vUv; uniform sampler2D tColor; uniform float uWeight;
 void main() { gl_FragColor = vec4(texture2D(tColor, vUv).rgb * uWeight, 1.0); }`;
 
@@ -472,6 +497,8 @@ export class Finish {
     if (!camera || !camera.isCamera) throw fail("the third argument must be a THREE.Camera");
     if (!ctx || !Number.isFinite(ctx.fps)) throw fail("the fourth argument must be the ctx vidgen gives load(ctx)");
     this.renderer = renderer; this.scene = scene; this.camera = camera; this.fps = ctx.fps;
+    this.drawMode = ctx.draw_mode ?? null;
+    if (this.drawMode !== null) choice("ctx.draw_mode", this.drawMode, ["depth"]);
     this.raw = {...options};
     this.options = resolveOptions(this.raw, 0);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -484,6 +511,7 @@ export class Finish {
     this.gatherMaterials = {};
     this.mix = quad(DOF_MIX, {tColor: {value: null}, tBlur: {value: null}});
     this.outputMaterials = {};
+    this.depthMaterials = {};
     this.targets = {};
   }
 
@@ -517,8 +545,9 @@ export class Finish {
     r.setRenderTarget(rt); r.clear(); r.render(this.scene, this.camera);
   }
 
-  /** Draw the frame at `t` (seconds of the scene) to the canvas. */
+  /** Draw the frame at `t` (seconds of the scene) to the canvas (the depth pass with ctx.draw_mode "depth"). */
   render(t) {
+    if (this.drawMode === "depth") return this._renderDepth(t);
     const r = this.renderer, o = resolveOptions(this.raw, t);
     this.options = o; this.lastTime = t;
     const W = this.width, H = this.height;
@@ -611,6 +640,29 @@ export class Finish {
     r.autoClear = autoClear;
   }
 
+  /** The depth pass at `t` (DEPTH_PACK): the scene drawn as for the picture (its own shaders: a displaced sea keeps
+   * its waves), then its depth packed to the canvas through the lens's distortion; no motion blur, depth of field,
+   * bloom, grade or grain. Counts its frames in globalThis.__vidgenDepthFrames (vidgen checks the page drew one). */
+  _renderDepth(t) {
+    const r = this.renderer, W = this.width, H = this.height, c = this.camera;
+    let o = resolveOptions(this.raw, t);
+    this.options = o; this.lastTime = t;
+    const sceneRT = this._sceneTarget(Math.round(W * o.renderScale), Math.round(H * o.renderScale)), autoClear = r.autoClear;
+    r.autoClear = false;
+    if (o.update) o.update(t);
+    this._drawScene(sceneRT);
+    o = this.options = resolveOptions(this.raw, t);
+    const log = r.capabilities.logarithmicDepthBuffer, ortho = !!c.isOrthographicCamera;
+    const m = this.depthMaterials[`${log} ${ortho}`] ??= quad(DEPTH_PACK, {tDepth: {value: null}, uNear: {value: 1}, uFar: {value: 100},
+      uDistort: {value: 0}, uAspect: {value: new THREE.Vector2(1, 1)}}, log ? {LOG_DEPTH: 1} : ortho ? {ORTHOGRAPHIC: 1} : {});
+    const d = o.distort.amount > 0 ? lensDistortion(o.distort.mm ?? this._focalLength(), o.distort.amount) : 0;
+    const u = m.uniforms;
+    u.uNear.value = c.near; u.uFar.value = c.far; u.tDepth.value = sceneRT.depthTexture; u.uDistort.value = d / (1 - d); u.uAspect.value.set(W / H, 1);
+    this._pass(m, null);
+    r.autoClear = autoClear;
+    globalThis.__vidgenDepthFrames = (globalThis.__vidgenDepthFrames ?? 0) + 1;
+  }
+
   /** Compile every shader of the scene and of the chain and draw the frame at `t` once (in load): frame 0 then
    * pays no compile time. Waits for the GPU with a one-pixel read. Not compileAsync: its polling timer never
    * fires while vidgen's clock stands still in load. */
@@ -685,7 +737,7 @@ export class Finish {
   /** Free the render targets and materials. */
   dispose() {
     for (const rt of Object.values(this.targets)) rt.dispose();
-    for (const m of [this.copy, this.add, this.mix, ...(this.haloPick ? [this.haloPick, this.haloBlur] : []), ...Object.values(this.gradeMaterials), ...Object.values(this.gatherMaterials), ...Object.values(this.outputMaterials)]) m.dispose();
+    for (const m of [this.copy, this.add, this.mix, ...(this.haloPick ? [this.haloPick, this.haloBlur] : []), ...Object.values(this.gradeMaterials), ...Object.values(this.gatherMaterials), ...Object.values(this.outputMaterials), ...Object.values(this.depthMaterials)]) m.dispose();
     if (this.bloomPass) this.bloomPass.dispose();
     this.fsq.dispose();
   }

@@ -35,7 +35,7 @@ def test_the_module_is_served_by_its_import_name_only() -> None:
     assert IMPORT_MAP["imports"]["vidgen/three-finish"] == f"/{URL_PATH}"
     assert vidgen_file("modules/three-finish.js") == MODULE and MODULE.is_file()
     assert vidgen_file("modules/other.js") is None and vidgen_file("modules/../modules/three-finish.js") is None
-    assert MODULE.stat().st_size < 60_000
+    assert MODULE.stat().st_size < 64_000
 
 
 def test_the_module_imports_only_three_and_shipped_add_ons() -> None:

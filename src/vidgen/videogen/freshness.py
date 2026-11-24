@@ -152,7 +152,9 @@ class InputSources:
         """The current source of a render input of ``shot``: a guide of ``kind`` or the first frame
         (``render``; ``final``: of the finished render). ``fingerprint``: the render's own record,
         when known (else computed)."""
-        scene = self._render_of(shot.scene_id, "final" if kind == "final" else "render")
+        from vidgen.videogen.inputs import render_kind
+
+        scene = self._render_of(shot.scene_id, kind if kind in ("render", "final") else render_kind(self.project, shot.scene_id, kind))
         return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot)}
 
     def _render_of(self, scene_id: str, made: str) -> dict[str, Any]:
@@ -230,7 +232,9 @@ class InputSources:
         elif item.path == shot.last_of_picture:
             source = last_of_source(shot)
         else:
-            frame_kind = "final" if shot.spec.guide_source == "final" else "render"   # the first frame is cut with the guide
+            from vidgen.videogen.inputs import render_kind
+
+            frame_kind = render_kind(self.project, shot.scene_id, shot.spec.guide_source)   # the first frame is cut with the guide
             source = self.render(shot, (shot.spec.guide_source or "render") if item.role == "guide" else frame_kind)
             if item.role == "guide" and shot.opening_picture is not None:
                 if not shot.opening_picture.is_file():

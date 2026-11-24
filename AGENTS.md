@@ -5716,6 +5716,11 @@ scenes:
   OpenRouter refuses a Seedance job with a reference video (HTTP 402) when the account's credits are
   under its own worst-case cost, even when vidgen's estimate is far lower: $3.57 was not enough for a
   $0.38 clip.
+- **A web scene's depth as the guide** (`guide: depth` on a `space` scene, or a `web` scene drawn
+  through `vidgen/three-finish`): the scene's exact depth from three.js, drawn with the finished
+  render (same size, frames and camera), grey as 1 / distance: near white, far dark, sky black, one
+  range for the shot, no film effects. For depth-control video models (an IC-LoRA's depth control).
+  An orbital scene in depth slices (`vidgen/space-scale`'s default) is not drawn right yet.
 
 ### Your content and third-party services
 

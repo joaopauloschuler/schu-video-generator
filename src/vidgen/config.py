@@ -3308,6 +3308,23 @@ GuideChoice = Literal["render", "final", "depth", "outline", "mask"]
 GUIDE_CHOICES: tuple[str, ...] = ("render", "final", "depth", "outline", "mask")
 #: The guides any scene type can send (the others are guide passes of a ``3d`` scene).
 GUIDES_OF_ANY_SCENE: tuple[str | None, ...] = (None, "render", "final")
+#: The guide passes a three.js web scene draws too (``space``, ``web``; DESIGN.md §113.19).
+GUIDES_OF_WEB_SCENES: tuple[str, ...] = ("depth",)
+
+
+def is_web_scene_type(scene_type: str) -> bool:
+    """Whether scenes of ``scene_type`` are pages drawn in Chromium: ``web``, ``space`` or a type built on ``web``."""
+    from vidgen.web.entry import is_web_type
+
+    return scene_type in ("web", "space") or is_web_type(scene_type)
+
+
+def scene_draws_guide(scene_type: str, guide: str | None) -> bool:
+    """Whether a scene of ``scene_type`` can send ``guide`` (:data:`GUIDES_OF_ANY_SCENE`; every pass
+    of a ``3d`` scene; :data:`GUIDES_OF_WEB_SCENES` of a web scene, :func:`is_web_scene_type`)."""
+    if guide in GUIDES_OF_ANY_SCENE or scene_type == "3d":
+        return True
+    return guide in GUIDES_OF_WEB_SCENES and is_web_scene_type(scene_type)
 #: Strings pydantic reads as booleans (``guide: yes`` stays ``true``).
 _BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "true", "y", "yes"})
 
@@ -3675,10 +3692,11 @@ class SceneConfig(_Strict):
                 cite_index(self, cite)
         for j, beat in enumerate(self.beats):
             guide = beat.generated_shot.guide_source if beat.generated_shot is not None else None
-            if guide not in GUIDES_OF_ANY_SCENE and self.type != "3d":
+            if not scene_draws_guide(self.type, guide):
                 raise ValueError(
                     f"beats[{j}].generated_shot.guide: {guide} is a guide pass of a 3d scene, but scene '{self.id}' is a "
-                    f"{self.type} scene; use guide: true (its draft render) or final (its finished render), or make the scene type: 3d"
+                    f"{self.type} scene; use guide: true (its draft render), final (its finished render) or, on a web or space "
+                    "scene, depth; or make the scene type: 3d"
                 )
         return self
 

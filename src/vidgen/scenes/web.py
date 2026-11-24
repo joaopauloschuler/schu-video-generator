@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from vidgen.api import *
+from vidgen.web.depth import WEB_GUIDE_PASSES
 
 from .flight_data import FlightData
 from .orbit_data import OrbitData
@@ -206,11 +207,18 @@ class Web(NarratedScene):
 
     def _draw_view(self, box: Region) -> Path:
         """The clip of the page's frames at the size of ``box`` (drawn now, or reused while its
-        inputs are unchanged); drawing it also reads the page's text at the stills' frames."""
+        inputs are unchanged); drawing it also reads the page's text at the stills' frames. With
+        ``depth`` among the guide passes asked for (``vidgen render --guide-passes``, a shot's
+        ``guide: depth``), the page's depth pass too, beside it (DESIGN.md §113.19)."""
         self._clip_args: dict[str, Any] = self.page_clip_args(box)
         self._still_frames = planned_still_frames(self)
         self._layouts: dict[int, dict[str, Any]] = {}
-        return make_web_clip(**self._clip_args, layout_frames=self._still_frames, intermediate=self.project.config.render.intermediate)
+        clip = make_web_clip(**self._clip_args, layout_frames=self._still_frames, intermediate=self.project.config.render.intermediate)
+        passes = tuple(p for p in WEB_GUIDE_PASSES if p in self.guide_passes)
+        for mode in passes:
+            make_web_clip(**self._clip_args, draw_mode=mode)
+        self.guide_passes_made = passes
+        return clip
 
     def page_layout(self, frame: int) -> tuple[dict[str, Any], Mobject] | None:
         """What text the page shows at output frame ``frame`` (the clip's frame of that index) and

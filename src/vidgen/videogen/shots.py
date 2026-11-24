@@ -127,7 +127,7 @@ MASK_NAMES_MAX = 4
 GUIDE_WHAT: dict[str, str] = {
     "render": "silent draft render",
     "final": "silent finished render of the beat",
-    "depth": "depth pass of the beat's 3D scene",
+    "depth": "depth pass of the beat's scene",
     "outline": "outline pass of the beat's 3D scene",
     "mask": "mask pass of the beat's 3D scene",
 }

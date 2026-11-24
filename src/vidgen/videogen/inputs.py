@@ -15,6 +15,10 @@
 - ``guide.<pass>.mp4`` (``guide: depth | outline | mask`` on a ``3d`` scene): the same part of
   that guide pass of the draft render (the lossless ``.mkv`` beside the 3D clip, drawn when
   missing), as H.264 / yuv420p at the draft's size and frame rate;
+- ``guide.depth.mp4`` on a web scene (``space``, ``web``; DESIGN.md §113.19): the same part of the
+  depth pass drawn with the finished render (``<render_dir>/web/<scene>.depth.mkv``, packed
+  distances), grey with one range for the shot (:func:`vidgen.web.depth.cut_depth`), at the
+  video's size and frame rate; its ``first_frame.png`` from the finished render;
 - ``first_frame.png``: the first frame of the draft render of the part (the first one not dark,
   when the scene fades in from black); always the normal render, also with a guide pass;
 - ``guide[.<pass>].opening.mp4`` (``first_frame_in: guide``): that guide with the shot's starting
@@ -245,6 +249,17 @@ class SceneRender:
     fingerprint: str | None = None
 
 
+def render_kind(project: Project, scene_id: str, guide: str | None) -> str:
+    """The render an input of ``scene_id`` for a shot with ``guide`` (``None``: the first frame alone) is
+    cut from: ``final`` for ``guide: final`` and for a web scene's guide pass (its depth is drawn with
+    the finished render, at the video's size and frame rate, DESIGN.md §113.19), else ``render`` (the draft)."""
+    from vidgen.config import GUIDES_OF_WEB_SCENES, is_web_scene_type
+
+    if guide == "final" or (guide in GUIDES_OF_WEB_SCENES and is_web_scene_type(project.scene(scene_id).type)):
+        return "final"
+    return "render"
+
+
 def render_project(project: Project, kind: str, scene_id: str) -> Project:
     """The project whose render of ``scene_id`` a guide of ``kind`` is cut from: the draft
     (``render`` and the passes) or, for ``final``, the finished render without overlays or takes:
@@ -264,9 +279,8 @@ def _render_scene(project: Project, scene_id: str, passes: tuple[str, ...], kind
     ``passes`` (reused while current; a render without the passes is made again, reusing the 3D
     frames, DESIGN.md §114.14)."""
     from vidgen import extensions
-    from vidgen.render.pipeline import current_render, render_scenes
+    from vidgen.render.pipeline import current_render, render_scenes, scene_pass_clips
     from vidgen.render.worker import scene_timings_path, scene_video_path
-    from vidgen.three_d.passes import pass_clip
 
     draft = render_project(project, kind, scene_id)
     with extensions.project_session(draft):
@@ -274,25 +288,24 @@ def _render_scene(project: Project, scene_id: str, passes: tuple[str, ...], kind
     if not current:
         render_scenes(draft, False, [scene_id], guide_passes=passes)
     timings = json.loads(scene_timings_path(draft, False, scene_id).read_text(encoding="utf-8"))
-    folder = draft.render_dir(False) / "three_d"
     return SceneRender(
         scene_video_path(draft, False, scene_id), {b["id"]: float(b["start"]) for b in timings["beats"]},
-        {mode: pass_clip(folder, scene_id, mode) for mode in passes}, timings.get("render", {}).get("fingerprint"),
+        scene_pass_clips(draft, False, scene_id, passes), timings.get("render", {}).get("fingerprint"),
     )
 
 
-def _passes_by_scene(shots: Sequence[Shot]) -> dict[str, tuple[str, ...]]:
-    """The guide passes each scene's draft render must draw for ``shots`` (in drawing order)."""
+def _passes_by_render(project: Project, shots: Sequence[Shot]) -> dict[tuple[str, str], tuple[str, ...]]:
+    """The guide passes each render (scene, :func:`render_kind`) must draw for ``shots`` (in drawing order)."""
     from vidgen.three_d.spec import GUIDE_PASSES
 
     from vidgen.config import GUIDES_OF_ANY_SCENE
 
-    wanted: dict[str, set[str]] = {}
+    wanted: dict[tuple[str, str], set[str]] = {}
     for shot in shots:
         source = shot.spec.guide_source
         if source not in GUIDES_OF_ANY_SCENE:
-            wanted.setdefault(shot.scene_id, set()).add(source)
-    return {scene: tuple(p for p in GUIDE_PASSES if p in modes) for scene, modes in wanted.items()}
+            wanted.setdefault((shot.scene_id, render_kind(project, shot.scene_id, source)), set()).add(source)
+    return {key: tuple(p for p in GUIDE_PASSES if p in modes) for key, modes in wanted.items()}
 
 
 def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path, source: dict[str, Any], written: list[Path], out: Callable[[str], None]) -> None:
@@ -418,7 +431,7 @@ def make_inputs(
     sources = InputSources(project)
     written: list[Path] = []
     renders: dict[tuple[str, str], SceneRender] = {}
-    passes = _passes_by_scene(shots)
+    passes = _passes_by_render(project, shots)
     for shot in shots:
         folder = project.root / INPUTS_DIR / shot.id
         if shot.spec.wants_audio:
@@ -433,10 +446,9 @@ def make_inputs(
             finished = "in its finished form" if kind == "final" else "as a draft"
             out(f"{shot.id}: the render of the beat is skipped (add --guide: renders the scene {finished})")
             continue
-        made = "final" if kind == "final" else "render"
+        made = render_kind(project, shot.scene_id, kind)
         if (shot.scene_id, made) not in renders:
-            scene_passes = passes.get(shot.scene_id, ()) if made == "render" else ()
-            renders[shot.scene_id, made] = (render or _render_scene)(project, shot.scene_id, scene_passes, made)
+            renders[shot.scene_id, made] = (render or _render_scene)(project, shot.scene_id, passes.get((shot.scene_id, made), ()), made)
         scene = renders[shot.scene_id, made]
         if shot.beat.id not in scene.starts:
             raise VidgenError(f"shot {shot.id}: the render of scene {shot.scene_id} has no beat {shot.beat.id}")
@@ -456,24 +468,32 @@ def make_inputs(
             _write_overlay(ffmpeg, project, shot, clip, written, out)
             continue
         lossless = scene.passes.get(kind)
+        which = "finished" if made == "final" else "draft"
         if lossless is None or not lossless.is_file():
-            raise VidgenError(f"shot {shot.id}: the draft render of scene {shot.scene_id} drew no {kind} pass")
+            raise VidgenError(f"shot {shot.id}: the {which} render of scene {shot.scene_id} drew no {kind} pass")
         clip = folder / guide_name(kind)
-        cut_pass(ffmpeg, lossless, clip, start, shot.length)
+        if made == "final":   # a web scene's depth: packed distances, made grey with one range for the shot
+            from vidgen.web.depth import cut_depth
+
+            near = cut_depth(ffmpeg, lossless, clip, start, shot.length, [*PASS_COLOR_ARGS, "-c:v", "libx264", "-crf", str(PASS_CRF), "-pix_fmt", "yuv420p"])
+            reach = f", white at {near:.3g} m and nearer" if near is not None else ", nothing drawn"
+        else:
+            cut_pass(ffmpeg, lossless, clip, start, shot.length)
+            reach = ""
         record_input(clip, sources.render(shot, kind, scene.fingerprint))
         written.append(clip)
-        out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} (the {kind} pass, {shot.length:.2f} s, silent)")
+        out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} (the {kind} pass, {shot.length:.2f} s, silent{reach})")
         if wants_frame:   # the first frame stays the normal render's, not the pass's
             with tempfile.TemporaryDirectory(prefix="vidgen-frame-") as scratch:
                 part = Path(scratch) / "render.mp4"
                 cut_video(ffmpeg, scene.video, part, start, shot.length)
                 first_frame(ffmpeg, part, frame)
-            record_input(frame, sources.render(shot, "render", scene.fingerprint))
+            record_input(frame, sources.render(shot, made, scene.fingerprint))
             written.append(frame)
-            out(f"{shot.id}: first frame {frame.relative_to(project.root).as_posix()} (from the normal render)")
+            out(f"{shot.id}: first frame {frame.relative_to(project.root).as_posix()} (from the {which} render)")
         _write_opening_guide(ffmpeg, project, shot, clip, sources.render(shot, kind, scene.fingerprint), written, out)
         _write_overlay(ffmpeg, project, shot, clip, written, out)
     return written
 
 
-__all__ = ["CHANGE_LEVELS", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "film_sound", "make_opening_guide", "make_overlay", "render_project"]
+__all__ = ["CHANGE_LEVELS", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "film_sound", "make_opening_guide", "make_overlay", "render_kind", "render_project"]
