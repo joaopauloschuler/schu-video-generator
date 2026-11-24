@@ -5,7 +5,19 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–408
+## Steps 193–409
+
+### The `comfyui` video provider (Step 409)
+
+- **`videogen: {provider: comfyui, comfyui: {colab: <session>} | {url: http://host:port}}`** runs
+  generated shots on your own ComfyUI: no money, no budget needed; `--pay` still starts the run. The
+  take records the job's GPU seconds and compute units (`units_per_hour`, 1.94 for an L4).
+- **`model: ltx-2.3-union-control`**, a workflow kept with vidgen (LTX-2.3 + IC-LoRA union control):
+  the shot's `guide: depth` is the control video, `first_frame:` optional; vidgen fits them to 512p
+  (960x512 for 16:9) and 8k+1 frames at 24 fps. Listed by `vidgen generate models`, $0 in `generate plan`.
+- With `colab:` the job runs on that VM from this computer (colab CLI); `vidgen remote <session>
+  generate run --pay` uses the VM's ComfyUI directly. `tools/colab/build_workflow.py` now uses the
+  same graph (`src/vidgen/videogen/ltx_graph.py`).
 
 ### vidgen on a Colab session (Step 408)
 

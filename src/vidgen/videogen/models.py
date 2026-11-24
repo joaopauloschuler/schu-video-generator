@@ -67,6 +67,8 @@ class VideoModel:
     seed: bool | None = None
     passthrough: tuple[str, ...] = ()
     pricing: dict[str, str] = field(default_factory=dict)
+    #: Who runs it: ``openrouter`` (the public list) or ``comfyui`` (a workflow kept with vidgen).
+    provider: str = "openrouter"
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> VideoModel:
@@ -101,6 +103,7 @@ class VideoModel:
             "resolutions": _listed(self.resolutions), "aspect_ratios": _listed(self.aspect_ratios), "sizes": _listed(self.sizes),
             "frame_images": _listed(self.frame_types), "generate_audio": self.generate_audio, "seed": self.seed,
             "passthrough": list(self.passthrough), "pricing_skus": dict(self.pricing), "prices": price_lines(self),
+            "provider": self.provider,
         }
 
 
@@ -128,11 +131,17 @@ class Catalog:
 
     def find(self, model: str) -> VideoModel:
         """The model ``model``. Raises :class:`VidgenError` with a did-you-mean if absent."""
-        for m in self.models:
+        for m in self.with_workflows():
             if m.id == model:
                 return m
-        ids = [m.id for m in self.models]
-        raise VidgenError(f"OpenRouter lists no video model {model!r}{did_you_mean(model, ids)}; `vidgen generate models` lists them")
+        ids = [m.id for m in self.with_workflows()]
+        raise VidgenError(f"OpenRouter lists no video model {model!r} and vidgen keeps no workflow of that name{did_you_mean(model, ids)}; `vidgen generate models` lists them")
+
+    def with_workflows(self) -> list[VideoModel]:
+        """The listed models and the ComfyUI workflows kept with vidgen (:mod:`.comfyui`)."""
+        from vidgen.videogen.comfyui import workflow_records
+
+        return [*self.models, *workflow_records()]
 
 
 def default_cache_path() -> Path:
@@ -273,7 +282,11 @@ def _one_of(name: str, value: str, listed: tuple[str, ...] | None, model: VideoM
 
 
 def check_request(request: VideoRequest, model: VideoModel) -> RequestCheck:
-    """``request`` against ``model``'s listed settings."""
+    """``request`` against ``model``'s listed settings (a workflow's own rules for a ComfyUI workflow)."""
+    if model.provider == "comfyui":
+        from vidgen.videogen.comfyui import check_workflow_request
+
+        return check_workflow_request(request, model)
     check = RequestCheck()
     if request.duration is not None:
         if model.durations is None:
@@ -385,7 +398,11 @@ def estimate(request: VideoRequest, model: VideoModel, *, duration: float | None
     """The estimated cost of ``request`` from ``model``'s ``pricing_skus`` (the highest SKU
     that could apply). ``duration`` (seconds) prices a model without a duration setting (its
     length follows its audio); otherwise the request's duration, else the longest allowed.
-    ``minimum``: apply a per-generation minimum price."""
+    ``minimum``: apply a per-generation minimum price. A ComfyUI workflow costs $0."""
+    if model.provider == "comfyui":
+        from vidgen.videogen.comfyui import workflow_estimate
+
+        return workflow_estimate()
     seconds = float(duration if duration is not None else request.duration or 0) or (max(model.durations) if model.durations else 0.0)
     if not model.pricing:
         return Estimate(None, f"price unknown: {model.id} lists no prices")
@@ -435,7 +452,10 @@ def estimate(request: VideoRequest, model: VideoModel, *, duration: float | None
 
 def price_lines(model: VideoModel) -> list[str]:
     """``480p ~$0.104/s`` per listed resolution (the estimate of one second, 16:9, no
-    inputs), or one line for a model without resolutions; ``price unknown`` when none works."""
+    inputs), or one line for a model without resolutions; ``price unknown`` when none works;
+    ``$0 (comfyui)`` for a workflow."""
+    if model.provider == "comfyui":
+        return ["$0 (comfyui: your own GPU)"]
     tiers: Iterable[str | None] = sorted(model.resolutions, key=lambda r: TIER_SHORT_SIDE.get(r.lower(), 0)) if model.resolutions else [None]
     lines = []
     for tier in tiers:

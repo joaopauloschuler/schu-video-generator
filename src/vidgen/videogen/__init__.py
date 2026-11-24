@@ -100,7 +100,7 @@ class VideoRequest:
     generate_audio: bool = False
 
     def __post_init__(self) -> None:
-        if "/" not in self.model.strip("/"):
+        if "/" not in self.model.strip("/") and not is_workflow_model(self.model):
             raise VidgenError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}")
         if self.duration is not None and self.duration <= 0:
             raise VidgenError(f"duration must be a whole number of seconds above 0, not {self.duration}")
@@ -148,6 +148,15 @@ def request_hash(request: VideoRequest) -> str:
 
 #: The ``videogen.provider`` that sends nothing and shares nothing (a fake API).
 MOCK_PROVIDER = "mock"
+#: The ``videogen.provider`` that runs vidgen's own workflows on a ComfyUI server (no money paid).
+COMFYUI_PROVIDER = "comfyui"
+
+
+def is_workflow_model(model: str) -> bool:
+    """Whether ``model`` names a ComfyUI workflow kept with vidgen (:mod:`.comfyui`)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    return find_workflow(model) is not None
 
 
 @dataclass(frozen=True)
@@ -162,6 +171,8 @@ class JobState:
     cost: float | None = None
     is_byok: bool | None = None
     error: str | None = None
+    #: What a free job used, kept in the take (comfyui: GPU seconds and compute units).
+    usage: Mapping[str, Any] | None = None
 
     @property
     def done(self) -> bool:
@@ -170,6 +181,6 @@ class JobState:
 
 
 __all__ = [
-    "CACHE_VERSION", "CLIPS_DIR", "LEDGER_NAME", "RUNNING_STATUSES", "TERMINAL_STATUSES",
-    "JobState", "MediaInput", "VideoRequest", "canonical_request", "did_you_mean", "request_hash",
+    "CACHE_VERSION", "CLIPS_DIR", "COMFYUI_PROVIDER", "LEDGER_NAME", "MOCK_PROVIDER", "RUNNING_STATUSES", "TERMINAL_STATUSES",
+    "JobState", "MediaInput", "VideoRequest", "canonical_request", "did_you_mean", "is_workflow_model", "request_hash",
 ]

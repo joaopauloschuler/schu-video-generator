@@ -263,7 +263,9 @@ class BudgetState:
 
 
 def refusal(budget: BudgetState, estimate_usd: float | None, model: str) -> str | None:
-    """Why a paid job of ``estimate_usd`` may not be submitted now, else ``None``."""
+    """Why a paid job of ``estimate_usd`` may not be submitted now, else ``None`` (a job of $0 needs no budget)."""
+    if estimate_usd == 0:
+        return None
     if budget.cap_usd is None:
         return "paying needs a budget: set videogen: {budget_usd: 2.0} in video.yaml (a hard cap on what vidgen may spend)"
     if estimate_usd is None:

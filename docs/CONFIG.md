@@ -2784,7 +2784,11 @@ The workflow, cost control and privacy: [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-G
 
 ```yaml
 videogen:
-  provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent, no quick tunnel)
+  provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent, no quick tunnel) | comfyui (your ComfyUI, $0)
+  comfyui:                  # provider: comfyui only; exactly one of colab / url
+    colab: ltx              # a Colab session set up with tools/colab/setup_session.py
+    # url: http://127.0.0.1:8188   # or any ComfyUI server
+    units_per_hour: 1.94    # compute units per GPU hour (Colab L4), for the take's record
   budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
   key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
   inline_media: images      # images | all (all: audio / video would go inline, which OpenRouter refuses: a plan problem)
@@ -2802,6 +2806,21 @@ videogen:
   first_frame_dissolve: 0.4 # seconds the starting picture dissolves into the guide with first_frame_in: guide
 ```
 
+- **ComfyUI** (`provider: comfyui`, DESIGN.md §113.20): shots use workflows kept with vidgen as their
+  `model:`, listed by `vidgen generate models`. `ltx-2.3-union-control` (LTX-2.3 distilled-1.1 GGUF
+  Q5_K_M + IC-LoRA union control ref0.5, 8 steps, cfg 1, seed 42 or the shot's `seed:`) takes the shot's
+  `guide: depth` as its control video (required), its `first_frame:` (optional, strength 1.0) and the
+  prompt; no references (they are left out, with a note) and no last frame. Its shape rules: 512p,
+  the long side rounded up to a multiple of 64 (16:9: 960x512), 1-5 s (longer beats are split into
+  parts), 8k+1 frames at 24 fps. vidgen scales the guide and the first frame to cover that size
+  (centre crop) and cuts or holds frames to the length; placing trims the clip to the shot. With
+  `url:` vidgen talks to ComfyUI over HTTP (`/upload/image`, `/prompt`, `/history`, `/view`).
+  With `colab: <session>` it uploads the fitted inputs with the colab CLI, runs the same HTTP client
+  on the VM against 127.0.0.1:8188, detached, polls it and downloads the clip; vidgen running on that
+  VM itself (`vidgen remote <session> generate run --pay`) uses 127.0.0.1:8188 directly. A job costs
+  $0: `--pay` runs it without a budget, its own ledger is `videogen-ledger.comfyui.jsonl`, and the take
+  records `usage: {gpu_seconds, compute_units, units_per_hour, server}` (ComfyUI's execution time x
+  `units_per_hour` / 3600). Same request, same cached clip, as with OpenRouter.
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
   never stored, logged or shown. Or `key_via_proxy: true` (or `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`)
   when the network's proxy adds `Authorization: Bearer ...` for openrouter.ai itself.

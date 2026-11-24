@@ -22427,6 +22427,49 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
 - **Known gap.** An orbital scene drawn in depth slices (`vidgen/space-scale`, `depth: split`, the
   default) clears the depth between slices: the pass holds only the nearest slice.
 
+### 113.20 The `comfyui` video provider (Step 409)
+
+`videogen.provider: comfyui` runs workflows kept with vidgen on a ComfyUI server; no money is paid.
+
+- **Config.** `videogen.comfyui` (`ComfyuiSettings`) takes exactly one of `colab: <session>` or
+  `url: http(s)://...`, and `units_per_hour` (1.94, an L4). `provider: comfyui` without it is a config
+  error. A shot's `model:` (and a `videogen.models` key) may be a workflow id as well as `author/name`.
+- **Workflows** (`videogen/comfyui.py`, `Workflow`, `WORKFLOWS`). A workflow declares the guides it
+  takes as its control video (`controls`), the optional first frame, and its shape rules: `short_side`
+  512, sizes in multiples of 64 (the long side rounded up: 16:9 -> 960x512), `8k+1` frames up to
+  `max_frames` 121 at 24 fps. `record()` is its `VideoModel` (`provider: comfyui`, durations 1-5,
+  resolution 512p, first frame, seed); `Catalog.find` and `vidgen generate models` add the workflows
+  to OpenRouter's list. `check_request` and `estimate` hand a workflow to `check_workflow_request`
+  (one control video, no last frame, 512p; references and audio are notes, not sent) and
+  `workflow_estimate` ($0). A shot with another guide, or a workflow under another provider (or an
+  OpenRouter model under `comfyui`), is a plan problem. `ltx-2.3-union-control`'s graph is
+  `videogen/ltx_graph.py` (standard library only); `tools/colab/build_workflow.py` loads that file by
+  its path and keeps its CLI and experiment graphs byte-identical. `with_audio` false (the shot's
+  `sound: mix`) drops the audio decode from the output.
+- **Fitting.** `prepare_job` scales the guide to cover the size (centre crop), resamples it to 24 fps
+  and cuts it to the frame count or holds its last frame (`fit_control`); the first frame the same
+  (`fit_picture`); without one, the control's first frame is a bypassed placeholder (LoadImage needs a
+  file). Files are named `vidgen_<request key>_control.mp4` / `_first.png` in ComfyUI's input folder,
+  outputs `vidgen_<key>_*.mp4`. The clip is kept as made; placing trims it to the shot (the duration
+  snaps up, so the clip is never shorter).
+- **One client, two transports.** `comfyui_client.py` (standard library, no vidgen imports) is
+  ComfyUI's HTTP API and `run_job(job.json)`. `HttpTransport` uses it in process (job id = prompt id).
+  `ColabTransport` writes `job.json`, the fitted inputs and a copy of `comfyui_client.py` into one
+  archive, `colab upload`s it, unpacks it into `/content/vidgen-comfyui/<job id>` and starts
+  `python3 comfyui_client.py job.json` there detached with `colab_vm.py` (`start` / `poll`, as
+  `vidgen remote`); the client's last stdout line is the outcome; `colab download` fetches
+  `output.mp4`. `colab:` on the VM itself (the setup marker `/content/.vidgen_setup_vidgen_done`)
+  uses `HttpTransport(127.0.0.1:8188)`: the path of `vidgen remote <session> generate run --pay`.
+- **Provider and cost.** `ComfyUIVideoProvider` has the OpenRouter provider's interface, so
+  `generate_clip` caches by the same request key, records the submit and end in its own ledger
+  `videogen-ledger.comfyui.jsonl` (cost 0), and `run_shots` keeps the clip with `add_take`; picking,
+  placing and `first_frame: last_of:` work as for any take. *Why `--pay` stays:* it is still the
+  one switch that starts real work, and a dry run stays free; a job estimated at $0 needs no budget
+  (`ledger.refusal`, `run_shots`). A failure before ComfyUI queued the job is a refused submit (no open
+  intent). The ended job's `usage` (`gpu_seconds` from ComfyUI's execution start to its end,
+  `compute_units` = seconds x `units_per_hour` / 3600, `server`) goes into the clip's sidecar and the
+  take's record.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

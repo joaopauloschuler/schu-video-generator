@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.videogen import COMFYUI_PROVIDER
 from vidgen.videogen.models import Catalog, load_catalog, money
 from vidgen.videogen.openrouter import OpenRouterVideoProvider
 from vidgen.videogen.takes import Take, add_take, chosen_take, load_picks, takes_of
@@ -101,14 +102,15 @@ def run_shots(
     root = project.root
     settings = project.config.videogen
     catalog = catalog if catalog is not None else load_catalog()
-    if share is None and settings.host == "quick_tunnel":
+    if share is None and settings.host == "quick_tunnel" and settings.provider != COMFYUI_PROVIDER:
         from vidgen.videogen.host import ShareOptions
 
         share = ShareOptions.from_config(settings, out=lambda line: out(f"  {line}"))
     plan = plan_shots(project, catalog=catalog, budget_usd=budget_usd, shot_ids=shot_ids)
     report = RunReport(paid=pay)
     if pay:
-        if _cap(settings, budget_usd) is None:
+        free = all(s.cost == 0 and s.estimate is not None and s.estimate.cost == 0 for s in plan.shots if not s.shot.blocked)
+        if _cap(settings, budget_usd) is None and not free:
             raise VidgenError("--pay needs a budget: set videogen: {budget_usd: 2.0} in video.yaml or pass --budget USD (a hard cap)")
         broken = [s for s in plan.shots if s.shot.problems or s.check.problems]
         if broken:
@@ -167,10 +169,12 @@ def run_shots(
             run.take, run.new_take = add_take(
                 root, shot.id, result.path, key=result.plan.key, model=model, provider=result.plan.provider,
                 job_id=result.job.id if result.job else None, cost=result.cost, length=shot.length, width=fmt.width, height=fmt.height, sound=shot.sound,
-                warnings=result.warnings, opening_picture=shot.starting_picture,
+                warnings=result.warnings, opening_picture=shot.starting_picture, usage=result.job.usage if result.job else None,
             )
             what = "new take" if run.new_take else "already take"
             cost = f", {money(result.cost)}" if result.cost is not None else ""
+            if result.job is not None and result.job.usage and result.job.usage.get("gpu_seconds") is not None:
+                cost += f", {result.job.usage['gpu_seconds']:.0f} s GPU, {result.job.usage['compute_units']:.3f} compute units"
             out(f"shot {shot.id}: {status}{cost}: {what} {run.take.number} ({run.take.path.relative_to(root).as_posix()}, {run.take.qa.get('summary')})")
             for warning in result.warnings:
                 out(f"shot {shot.id}: warning: {warning}")

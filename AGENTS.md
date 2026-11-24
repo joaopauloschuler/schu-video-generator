@@ -5671,6 +5671,15 @@ scenes:
   first with `vidgen generate host-test`; `generate plan` lists exactly which files a run would
   share. Ask the user before turning the host on: the files are reachable on the public
   internet by anyone with the address for those minutes.
+- **Your own GPU (ComfyUI, no money)**: `videogen: {provider: comfyui, comfyui: {colab: <session>}}`
+  (a Colab session set up with `tools/colab/setup_session.py <session>`; always name it) or
+  `{url: http://host:8188}` (any ComfyUI server), and `generated_shot.model: ltx-2.3-union-control`
+  (LTX-2.3 + IC-LoRA union control: restyles the shot's `guide: depth` video, optionally from its
+  `first_frame:`; no references, 512p, 1-5 s parts, seed 42 unless `seed:`). vidgen fits the inputs (960x512 for
+  16:9, 8k+1 frames at 24 fps), runs the job and keeps the clip as a normal take, with its GPU seconds and
+  compute units (`videogen.comfyui.units_per_hour`, 1.94 for an L4) in the take's record. `generate run --pay` runs it
+  ($0: no budget needed); an L4 job takes about 2-4 minutes of GPU. With `colab:` the job runs on that VM from this computer;
+  vidgen run on that VM (`vidgen remote <session> ARGS`) uses its ComfyUI directly.
 - **Where the starting picture goes** (`first_frame_in: frame | guide`: `generated_shot`, then
   `videogen.models.<model>`, then `videogen`, default `frame`; `videogen.first_frame_dissolve`, default
   0.4 s): `guide` puts the shot's `first_frame:` picture into the guide video

@@ -87,3 +87,7 @@ Local: `check_hf.sh`, `prepare_inputs.sh`, `build_workflow.py`, `build_image_wor
 `start_job.py` + `run_job.py`, `make_canny.py`, `make_canny_soft.py`, `prep_image_inputs.py`,
 `align_check.py`, `free_vram.py`, `object_info.py`, `object_info_image.py`. The HOWTO says when to
 use each.
+
+`build_workflow.py` writes the graph of vidgen's `ltx-2.3-union-control` workflow
+(`src/vidgen/videogen/ltx_graph.py`, one copy). To run it on a shot from a project, use vidgen's
+`comfyui` provider instead (`videogen: {provider: comfyui, comfyui: {colab: <session>}}`, docs/CONFIG.md).

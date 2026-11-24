@@ -1025,12 +1025,38 @@ class VideogenModelSettings(_Strict):
     """Whether this model uses references sent with a first frame: false blocks a shot that sends both (the plan names first_frame_in: guide), true lets it through; default vidgen's own record (false for bytedance/seedance-*, unknown and not blocked for other models)."""
 
 
-class VideogenConfig(_Strict):
-    """The optional ``videogen:`` section: generated video shots through OpenRouter's video API
-    (DESIGN.md §113). Nothing is paid without ``--pay`` and a budget."""
+class ComfyuiSettings(_Strict):
+    """``videogen.comfyui``: the ComfyUI server that runs ``provider: comfyui`` shots (DESIGN.md §113.20)."""
 
-    provider: Literal["openrouter", "mock"] = "openrouter"
-    """openrouter (OpenRouter's video API, paid; OPENROUTER_API_KEY or key_via_proxy) or mock (a fake API: no key, nothing sent or charged; for trying the flow)."""
+    colab: str | None = Field(default=None, min_length=1)
+    """A Colab session with ComfyUI set up (tools/colab/setup_session.py): vidgen sends the inputs with the colab CLI, runs the job on the VM and downloads the clip; vidgen itself on that VM (vidgen remote) uses its ComfyUI at 127.0.0.1:8188."""
+    url: str | None = Field(default=None, pattern=r"^https?://\S+$")
+    """Any ComfyUI server, e.g. http://127.0.0.1:8188 (vidgen talks to it over HTTP)."""
+    units_per_hour: PositiveFloat = 1.94
+    """Compute units the GPU costs per hour (Colab L4: 1.94); a take records its GPU seconds and seconds x this / 3600."""
+
+    @model_validator(mode="after")
+    def _one_server(self) -> ComfyuiSettings:
+        if (self.colab is None) == (self.url is None):
+            raise ValueError("videogen.comfyui takes exactly one of colab: <session> (a Colab session) or url: http://host:port (a ComfyUI server)")
+        return self
+
+
+def _known_model_id(model: str) -> bool:
+    """Whether ``model`` is an OpenRouter id (author/name) or a workflow kept with vidgen."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    return "/" in model.strip("/") or find_workflow(model) is not None
+
+
+class VideogenConfig(_Strict):
+    """The optional ``videogen:`` section: generated video shots through OpenRouter's video API or
+    a ComfyUI server (DESIGN.md §113). Nothing is paid without ``--pay`` and a budget."""
+
+    provider: Literal["openrouter", "mock", "comfyui"] = "openrouter"
+    """openrouter (OpenRouter's video API, paid; OPENROUTER_API_KEY or key_via_proxy), mock (a fake API: no key, nothing sent or charged; for trying the flow) or comfyui (vidgen's own workflows on a ComfyUI server, videogen.comfyui; no money is paid)."""
+    comfyui: ComfyuiSettings | None = None
+    """The ComfyUI server of provider: comfyui: {colab: <session>} or {url: http://host:port}."""
     budget_usd: float | None = Field(default=None, ge=0)
     """Hard cap in US dollars on what generated video may cost in this project (the ledger videogen-ledger.jsonl counts it); paying needs it."""
     key_via_proxy: bool = False
@@ -1064,9 +1090,15 @@ class VideogenConfig(_Strict):
     @classmethod
     def _model_ids(cls, value: dict[str, VideogenModelSettings]) -> dict[str, VideogenModelSettings]:
         for model in value:
-            if "/" not in model.strip("/"):
+            if not _known_model_id(model):
                 raise ValueError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-mini), not {model!r}")
         return value
+
+    @model_validator(mode="after")
+    def _comfyui_server(self) -> VideogenConfig:
+        if self.provider == "comfyui" and self.comfyui is None:
+            raise ValueError("videogen.provider: comfyui needs videogen.comfyui: {colab: <session>} or {url: http://host:port}")
+        return self
 
     def sound_for(self, model: str, shot_sound: SoundChoice | None = None) -> SoundChoice:
         """The sound setting of a shot of ``model``: its own ``shot_sound``, else this model's
@@ -3426,8 +3458,11 @@ class GeneratedShot(_Strict):
 
     @model_validator(mode="after")
     def _check_shot(self) -> GeneratedShot:
-        if "/" not in self.model.strip("/"):
-            raise ValueError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}")
+        if not _known_model_id(self.model):
+            raise ValueError(
+                f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}; "
+                "vidgen's ComfyUI workflows: ltx-2.3-union-control"
+            )
         if self.kind == "talking" and self.audio in ("none", "mix"):
             raise ValueError("a talking shot is lip-synced to the beat's voice alone: leave audio out (or audio: beat), or make it an action shot")
         if self.first_frame is not None and self.first_frame.startswith(LAST_OF_PREFIX) and self.last_of_shot is None:

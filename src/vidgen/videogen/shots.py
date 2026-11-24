@@ -67,7 +67,7 @@ from typing import Any
 from vidgen.config import PAINTED_FIRST_FRAME, BeatConfig, FileRef, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
+from vidgen.videogen import COMFYUI_PROVIDER, MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
 from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
 from vidgen.videogen.models import (
     TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, guide_opening_template, known_first_frame_with_references, money, snap_duration,
@@ -660,7 +660,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
         shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source == 'render')}`")
-    if shot.shared:
+    if shot.shared and project.config.videogen.provider != COMFYUI_PROVIDER:   # ComfyUI gets the files themselves
         settings = project.config.videogen
         if settings.inline_media == "all" and settings.host != "quick_tunnel":
             shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
@@ -836,6 +836,14 @@ def _beat_shots(
             model = catalog.find(spec.model)
         except VidgenError as exc:
             problems.append(f"{where}.model: {exc}")
+    if model is not None:
+        from vidgen.videogen.comfyui import guide_problem
+        from vidgen.videogen.run import provider_mismatch
+
+        if (model.provider == COMFYUI_PROVIDER) != (config.videogen.provider == COMFYUI_PROVIDER):
+            problems.append(f"{where}.model: {provider_mismatch(model.id, model.provider, config.videogen.provider)}")
+        elif (guided := guide_problem(model.id, spec.guide_source)) is not None:
+            problems.append(f"{where}.guide: {guided}")
     names = [e.name for e in config.characters]
     speaker = _speaker(config, scene, beat)
     for name in spec.characters or []:
@@ -1084,7 +1092,7 @@ def plan_shots(
                     shot.blocked.append(EARLIER_WORDING_BLOCKED)
                 item.check = clip.check
                 item.estimate = clip.estimate or estimate(item.request, shot.model, duration=shot.priced_seconds)
-                if not clip.cached:
+                if not clip.cached and shot.model.provider != COMFYUI_PROVIDER:
                     item.request_bytes = request_bytes(item.request, project.root)
                     if item.request_bytes > MAX_INLINE_BYTES:
                         shot.problems.append(

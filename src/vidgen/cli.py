@@ -2181,11 +2181,15 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         if args.json:
             return jsonout.envelope(
                 "generate", True, action="models", source=catalog.source, fetched_at=stamp,
-                models=[m.to_json() for m in catalog.models],
+                models=[m.to_json() for m in catalog.with_workflows()],
             )
         print(f"{len(catalog.models)} video models on OpenRouter (list of {stamp}, {catalog.source}; --refresh fetches it again)")
         print("model | durations | resolutions | aspect ratios | frame images | estimated price without audio")
         for model in catalog.models:
+            print(f"  {model_line(model)}")
+        workflows = catalog.with_workflows()[len(catalog.models):]
+        print(f"{len(workflows)} ComfyUI workflow(s) kept with vidgen (videogen.provider: comfyui):")
+        for model in workflows:
             print(f"  {model_line(model)}")
         print("prices: vidgen's conservative estimates from the listed SKUs (~: per video token, estimated); the model's audio is never generated")
         print("references: pictures on every model; audio / video references only where the provider supports them (e.g. Seedance 2.x)")
