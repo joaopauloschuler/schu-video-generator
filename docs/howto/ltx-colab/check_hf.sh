@@ -1,10 +1,16 @@
 #!/bin/bash
 # Local: check that each Hugging Face repo the HOWTO uses is public and ungated (no login needed),
-# and print its current commit (compare with the HOWTO's table) and the sizes of the files used.
-#   bash check_hf.sh
+# and print its current commit (compare with the HOWTO's tables) and the sizes of the files used.
+#   bash check_hf.sh            the LTX-2.3 repos
+#   bash check_hf.sh --image    also the image models for the photoreal first frame (HOWTO §7)
+# curl -L: a renamed repo answers with a redirect ("Temporary Redirect"), not JSON.
 set -uo pipefail
-api() { curl -s "https://huggingface.co/api/models/$1$2"; }
-for repo in unsloth/LTX-2.3-GGUF Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control Comfy-Org/ltx-2 Lightricks/LTX-2.3; do
+api() { curl -sL "https://huggingface.co/api/models/$1$2"; }
+repos=(unsloth/LTX-2.3-GGUF Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control Comfy-Org/ltx-2 Lightricks/LTX-2.3)
+IMAGE=0; [ "${1:-}" = --image ] && IMAGE=1
+[ $IMAGE = 1 ] && repos+=(unsloth/Qwen-Image-Edit-2511-GGUF lightx2v/Qwen-Image-Edit-2511-Lightning
+  Comfy-Org/Qwen-Image Comfy-Org/Z-Image-Turbo alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1)
+for repo in "${repos[@]}"; do
   api "$repo" "" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"{d.get('id')}: gated={d.get('gated')} private={d.get('private')} sha={d.get('sha')}\")"
 done
 sizes() { # repo, then paths
@@ -22,3 +28,13 @@ sizes unsloth/LTX-2.3-GGUF vae/ltx-2.3-22b-distilled_video_vae.safetensors vae/l
 sizes unsloth/LTX-2.3-GGUF text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors
 sizes Comfy-Org/ltx-2 split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
 sizes Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors
+if [ $IMAGE = 1 ]; then
+  sizes unsloth/Qwen-Image-Edit-2511-GGUF qwen-image-edit-2511-Q4_K_M.gguf
+  sizes lightx2v/Qwen-Image-Edit-2511-Lightning Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors
+  sizes Comfy-Org/Qwen-Image split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors
+  sizes Comfy-Org/Qwen-Image split_files/vae/qwen_image_vae.safetensors
+  sizes Comfy-Org/Z-Image-Turbo split_files/diffusion_models/z_image_turbo_bf16.safetensors
+  sizes Comfy-Org/Z-Image-Turbo split_files/text_encoders/qwen_3_4b.safetensors
+  sizes Comfy-Org/Z-Image-Turbo split_files/vae/ae.safetensors
+  sizes alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1 Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors
+fi

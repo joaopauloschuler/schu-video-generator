@@ -2991,7 +2991,8 @@ scenes:
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
   go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
   `vidgen generate`: [HOWTO-restyle-with-ltx-on-colab.md](HOWTO-restyle-with-ltx-on-colab.md) (the
-  steps, scripts in `docs/howto/ltx-colab/`, costs, errors and the results of the 2026-11-24 test).
+  steps, scripts in `docs/howto/ltx-colab/`, costs, errors and the results of the 2026-11-24 tests,
+  among them a photoreal first frame made with an image-editing model).
 - **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was
   cut from. A shot whose inputs no longer match (scene, beat text or timing, narration MP3, draft
   size, or no record yet) is blocked in `vidgen generate plan` with the free command to cut them

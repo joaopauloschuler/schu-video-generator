@@ -1,7 +1,8 @@
 # HOWTO: restyle a vidgen render into real-looking footage with LTX-2.3 on Colab
 
-This is the recipe of a test run on 2026-11-24 (Step 404 wrote it down; the inputs came from
-Steps 402 and 403). It takes a shot that vidgen rendered (here a `space` scene: a glider chased
+This is the recipe of two test runs on 2026-11-24 (Step 404 wrote down the first; Step 405
+replayed it, fixed what was wrong, and added the photoreal first frame of §6.4; the inputs came
+from Steps 402 and 403). It takes a shot that vidgen rendered (here a `space` scene: a glider chased
 low over a rough sea), sends its **depth** and/or **canny edges** as control videos to the
 open video model **LTX-2.3** with the IC-LoRA **`Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control`**,
 and runs it in **ComfyUI on a Google Colab L4 GPU**, driven from your own machine by the
@@ -10,8 +11,11 @@ and runs it in **ComfyUI on a Google Colab L4 GPU**, driven from your own machin
 Every script named below is in [`docs/howto/ltx-colab/`](howto/ltx-colab/). Follow the steps in
 order; each one says where it runs (**local** = your machine, **VM** = the Colab machine).
 
-> **Always stop the session when you are done** (`colab stop -s ltx`, step 10). An idle Colab
-> GPU keeps spending compute units.
+> **Keep the session between experiments, stop it when you are done.** Setting up costs ~6 min
+> and ~34-80 GB of downloads, so run your experiments in one session: before `colab new`, run
+> `colab sessions` and reuse `ltx` if it is there (its weights, ComfyUI and outputs are still on
+> the VM). An idle session still spends ~1.94 units an hour: when the owner says you are done,
+> stop it (`colab stop -s ltx`, §10).
 
 ---
 
@@ -20,10 +24,10 @@ order; each one says where it runs (**local** = your machine, **VM** = the Colab
 | | LTX-2.3 IC-LoRA on Colab (this HOWTO) | OpenRouter Seedance (`vidgen generate run`) |
 |---|---|---|
 | Control | exact per-frame control video (depth, canny, pose; two chained) | a reference video + prompt; the model decides how much to follow |
-| Cost | Colab compute units (~1.3 units for 40 min of L4 covered 7 clips) | dollars per clip; OpenRouter reserves its worst case (HTTP 402 under ~$10 of credits) |
+| Cost | Colab compute units (~1.3 units for 40 min of L4 covered 7 clips; ~1.7 units for 6 stills + 4 clips in run 2) | dollars per clip; OpenRouter reserves its worst case (HTTP 402 under ~$10 of credits) |
 | Inside vidgen | no: done by hand with the scripts here, outside `vidgen generate` | yes: plan, budget, ledger, takes |
 | Audio | generates its own (not used here) | can take the film's sound (`audio: mix`) |
-| Look of the result (this test) | real footage only **without** the CG first frame, and then it invents things (see §12) | not tried yet (credits) |
+| Look of the result (these tests) | run 1: real footage only **without** the CG first frame, and then it invents things; run 2: real-looking **with a photoreal first frame** (§6.4) and the layout kept (see §12) | not tried yet (credits) |
 
 Use this route when you want the clip to follow the render's layout and camera frame by frame
 and can afford some invented content, or to try ideas cheaply; use Seedance for the paid,
@@ -33,12 +37,13 @@ tracked path inside vidgen.
 
 - The **`colab` CLI** (google-colab-cli; 0.8.0 was used) installed and authenticated to the
   Colab account (`colab usage` prints the balance). Run `colab skill` once for its own agent guide.
-- **Compute units** on the account (the whole test cost about 1.3). An L4 costs about 1.94 units
+- **Compute units** on the account (run 1 cost about 1.3, run 2 about 1.7). An L4 costs about 1.94 units
   an hour; check `colab usage` before and after.
 - No SSH key and no Hugging Face login: files go up and down with `colab upload` / `colab download`,
   commands run with `colab exec`.
 - Locally: `ffmpeg` / `ffprobe`, Python 3.10+ (only the standard library), `curl`.
-- **Ask the owner before `colab new` with a GPU** (it spends their units).
+- **Ask the owner before `colab new` with a GPU** (it spends their units), and check
+  `colab sessions` first: reuse a running `ltx` instead of making a second session.
 
 ## 3. Make the inputs with vidgen (local)
 
@@ -73,7 +78,8 @@ You need, for one shot, frame-aligned: the colour render, its depth, and its fir
    It centre-crops (960x544 -> 960x512: 16 px off top and bottom), keeps the first 121 frames and
    writes `render_121_960x512.mp4`, `depth_121_960x512.mp4`, `first_frame_960x512.png`.
 5. **Canny** is made on the VM (it has OpenCV; step 6.3) with `make_canny.py`, thresholds 92 / 200
-   like the official workflow's `CannyEdgePreprocessor`. With OpenCV locally,
+   like the official workflow's `CannyEdgePreprocessor`, or with `make_canny_soft.py`, which
+   also removes the edges in the sun glint (better, §12). With OpenCV locally,
    `python make_canny.py SRC DST` works the same.
 
 Restore `video.yaml` afterwards if you changed its format for the test.
@@ -81,9 +87,10 @@ Restore `video.yaml` afterwards if you changed its format for the test.
 ## 4. Check the Hugging Face repos (local, free)
 
 ```bash
-bash docs/howto/ltx-colab/check_hf.sh
+bash docs/howto/ltx-colab/check_hf.sh            # add --image for the models of §6.4
 ```
-prints `gated=False` for each repo and the sizes of the files used. If a repo is gated now, stop:
+prints `gated=False` for each repo and the sizes of the files used. (It uses `curl -sL`: a renamed
+repo, e.g. `Comfy-Org/Qwen-Image_ComfyUI` -> `Comfy-Org/Qwen-Image`, answers with a redirect.) If a repo is gated now, stop:
 the install would need a token (never put one in these scripts).
 
 | repo | commit used | file | size |
@@ -103,10 +110,11 @@ The repos can be checked by hand at `https://huggingface.co/api/models/<repo>` (
 ## 5. Create the L4 session (local)
 
 ```bash
-colab new -s ltx --gpu L4        # 1.5-3 min; billing starts at "Session READY"
+colab sessions                   # first: if `ltx` is listed, reuse it and skip to the step you need
+colab new -s ltx --gpu L4        # 8 s to 3 min; billing starts at "Session READY"
 colab sessions                   # check
 ```
-The first try may fail after ~3 min with `ColabRequestError ... accelerator=L4: Service Unavailable`
+The first try may fail (both test runs hit it) after ~3 min with `ColabRequestError ... accelerator=L4: Service Unavailable`
 (HTTP 503: no capacity). `colab sessions` then shows nothing (not billed): wait a minute and run
 `colab new` again. The test VM: Python 3.13, torch 2.14.1+cu130, CUDA 13.0, L4 23 GB, 52 GB RAM,
 236 GB disk.
@@ -125,6 +133,11 @@ colab exec -s ltx -f start_setup.py          # returns at once; the setup runs i
 bash poll.sh ltx setup                       # every minute or so, until "### ... SETUP DONE"
 ```
 (`ltx-inputs` is wherever `prepare_inputs.sh` wrote; adjust the path.)
+
+The first `colab exec` of a new session can fail with `RuntimeError: Connection was lost.` and then
+**nothing was started** (run 2: no `/content/setup.log`). Check with
+`echo '!ls /content' | colab exec -s ltx` and run `start_setup.py` again. `start_setup.py` runs
+another script with `--env SCRIPT=/content/<script>.sh` (log `/content/<script>.log`): §6.4 uses it.
 
 `setup.sh` does, logging to `/content/setup.log`:
 - `pip install -U "huggingface_hub[hf_xet]" hf_transfer` (hub 2.4.0; pip warns that `datasets`
@@ -149,7 +162,8 @@ bash poll.sh ltx setup                       # every minute or so, until "### ..
   safetensors 0.8.0, comfyui_frontend_package 1.59.11;
 - symlinks of the weights into `ComfyUI/models/{unet,loras,vae,text_encoders}`.
 
-Timings: install ~70 s; downloads 178 s in all (GGUF 118 s, Gemma 37 s); **setup done in ~3 min**.
+Timings: install ~70 s (run 2: the clone alone took 114 s); downloads 178-186 s in all; **setup
+done in ~3-5.5 min**.
 
 ### 6.2 Start ComfyUI, detached
 
@@ -163,13 +177,94 @@ Optional: `colab exec -s ltx -f object_info.py` prints the input names of every 
 
 ### 6.3 Make the canny control (VM)
 
+Run it **detached** with `start_bg.py` (a foreground `colab exec` that loses its websocket kills the
+work with it: run 2 lost a canny that way):
 ```bash
-colab exec -s ltx -f make_canny.py --env SRC=/content/render_121_960x512.mp4 \
-  --env DST=/content/canny_121_960x512.mp4
-echo '!cp /content/depth_121_960x512.mp4 /content/canny_121_960x512.mp4 /content/first_frame_960x512.png /content/ComfyUI/input/' | colab exec -s ltx
+colab upload -s ltx start_bg.py /content/start_bg.py
+colab upload -s ltx make_canny_soft.py /content/make_canny_soft.py
+colab exec -s ltx -f start_bg.py --env NAME=cannysoft --env CMD="python /content/make_canny_soft.py" \
+  --env SRC=/content/render_121_960x512.mp4 --env DST=/content/cannysoft_121_960x512.mp4
+echo '!cat /content/cannysoft.log' | colab exec -s ltx     # "canny-soft frames 121 ..." when done (~1 min)
+echo '!cp /content/depth_121_960x512.mp4 /content/cannysoft_121_960x512.mp4 /content/first_frame_960x512.png /content/ComfyUI/input/' | colab exec -s ltx
 ```
+(The plain canny of run 1: the same with `make_canny.py` and `DST=/content/canny_121_960x512.mp4`.)
 `LoadVideo` / `LoadImage` read from `ComfyUI/input/`. A sun-glint sea gives a lot of edges (6.6 %
-of pixels in the middle frame).
+of pixels in the middle frame) that LTX reads as surf. `make_canny_soft.py` (defaults `BLUR=0`,
+92 / 200, `GLINT=150`, `FEATHER=31`) removes the edges where the frame, blurred over 41 px, is
+brighter than 150: 3.2 % left, the glider's outline and the darker sea kept, the glint empty. Do not
+blur before the canny (`BLUR=5` lost most of the glider's outline in run 2).
+
+### 6.4 Make a photoreal first frame (VM; run 2, recommended)
+
+With the CG frame 0 as the first frame, LTX keeps the CG look; without one, it invents (§12). The fix
+that worked: restyle frame 0 into a photo with an image-editing model **on the same VM**, then give
+that picture to LTX as the first frame. Only the look must change: the subject's position, size,
+attitude and outline, the horizon and the glint must stay where they are.
+
+**Model: Qwen-Image-Edit-2511** (GGUF Q4_K_M) with the 4-step Lightning LoRA. An edit model takes the
+frame itself as its reference, so the layout is kept by construction; with the Lightning LoRA it is
+4 steps. The other family tried, Z-Image-Turbo + Fun ControlNet Union 2.1 (canny or depth) as
+img2img, gave a real sea but **replaced the glider** with a wider F/A-18-like jet (denoise 0.55-0.75):
+not usable here. FLUX.1 schnell / dev / Kontext are gated (`"gated": "auto"`): not used.
+
+| repo (all `gated: false`) | file | size |
+|---|---|---|
+| `unsloth/Qwen-Image-Edit-2511-GGUF` | `qwen-image-edit-2511-Q4_K_M.gguf` | 12.84 GB |
+| `lightx2v/Qwen-Image-Edit-2511-Lightning` | `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | 0.85 GB |
+| `Comfy-Org/Qwen-Image` | `split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors` | 9.38 GB |
+| " | `split_files/vae/qwen_image_vae.safetensors` | 0.25 GB |
+| `Comfy-Org/Z-Image-Turbo` (tried, not chosen) | `z_image_turbo_bf16`, `qwen_3_4b`, `ae` (`split_files/...`) | 12.31 + 8.04 + 0.34 GB |
+| `alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1` (tried) | `Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors` | 6.71 GB |
+
+(Commits on 2026-11-24 in `check_hf.sh --image`'s output; the fp8 Qwen-Image-Edit-2511 is 20.5 GB,
+too big beside its text encoder on 24 GB, hence the GGUF.) Steps:
+```bash
+colab upload -s ltx setup_image.sh /content/setup_image.sh     # downloads (~4 min) + links; can run beside setup.sh
+colab exec -s ltx --env SCRIPT=/content/setup_image.sh -f start_setup.py
+echo '!grep "^###" /content/setup_image.log | tail -3' | colab exec -s ltx    # "### ... IMAGE SETUP DONE"
+for f in prep_image_inputs.py align_check.py free_vram.py; do colab upload -s ltx "$f" "/content/$f"; done
+colab exec -s ltx -f prep_image_inputs.py      # ComfyUI/input/ff_up.png (frame 0 at 1440x768), ff_canny.png, ff_depth.png
+python build_image_workflow.py qwen --run qwen_c --out workflow_qwen_c.json      # local
+colab upload -s ltx workflow_qwen_c.json /content/workflow_qwen_c.json
+colab exec -s ltx --env RUN=qwen_c -f start_job.py
+bash poll.sh ltx job qwen_c                    # ~110 s the first time (load), ~25 s after
+colab download -s ltx /content/ComfyUI/output/qwen_c_00001_.png qwen_c.png
+```
+The graph (`build_image_workflow.py qwen`): `UnetLoaderGGUF` -> `LoraLoaderModelOnly` (Lightning, 1.0)
+-> `ModelSamplingAuraFlow` (shift 3.1) -> `CFGNorm`; `CLIPLoader` (`qwen_image`); the prompt through
+`TextEncodeQwenImageEditPlus` with `image1` = the frame and **no `vae`**, then `ReferenceLatent` with the
+frame's own `VAEEncode` and `FluxKontextMultiReferenceLatentMethod` (`index_timestep_zero`); `KSampler`
+seed 42, 4 steps, cfg 1, euler, simple, denoise 1.0 on that same latent; decode, save at 1440x768
+(`<run>_full_`) and scaled to **960x512** (`<run>_00001_.png`). Frame 0 is upscaled to 1440x768 first
+(1.5x, same 15:8 aspect, ~1.1 MP, multiples of 16). Feeding the reference latent yourself keeps it on
+the output's grid: through the encoder's `vae` input it is rescaled to ~1 MP and can shift.
+
+**The prompt matters most.** "Make the sea real ocean water" (prompt A) kept the CG ripple pattern; naming
+it worked (prompt C, the script's default): "*Replace the regular, repeating computer-generated ripple
+pattern of the water with real, irregular open-ocean waves ...*", together with "*Do not move or resize
+anything: the aircraft's position, size, angle and outline, the horizon line and the bright sun glint
+... must stay exactly where they are.*" Make 2-3 candidates (seed, prompt) and keep the best.
+
+**Alignment check.** `align_check.py` (VM, or locally with OpenCV) writes, for each candidate, an
+overlay of the two canny maps (frame 0 red, candidate green, both yellow) and an edge F-score (3 px
+tolerance) for the whole frame and the subject's box:
+```bash
+colab exec -s ltx -f start_bg.py --env NAME=align --env CMD="python /content/align_check.py" \
+  --env REF=/content/first_frame_960x512.png --env OUT=/content/align \
+  --env CANDS="/content/ComfyUI/output/qwen_a_00001_.png /content/ComfyUI/output/qwen_c_00001_.png"
+echo '!cat /content/align.log' | colab exec -s ltx
+```
+Read it with care: the score counts the sea's texture too, so the candidate that rightly replaces the
+CG sea scores lower (run 2: 0.815 for the CG-sea qwen_a, 0.50 for the chosen qwen_c, while the glider's
+outline sits on frame 0's in both). The automatic horizon row is fooled by the haze the model adds:
+**check the overlay, a zoom of the subject and of the horizon by eye** (run 2: within ~4 px).
+Then put the chosen frame where LTX reads it and free the image models before LTX:
+```bash
+echo '!cp /content/ComfyUI/output/qwen_c_00001_.png /content/ComfyUI/input/photoreal_qwen_c.png' | colab exec -s ltx
+colab exec -s ltx -f free_vram.py          # POST /free: unload all models
+```
+Switching between the image models and LTX in one ComfyUI costs a reload (~80-120 s): group the runs
+by model.
 
 ## 7. Build and submit the workflow
 
@@ -180,6 +275,8 @@ python build_workflow.py --experiment --out-dir /some/dir      # the 7 graphs of
 python build_workflow.py --run canny_noff --control canny_121_960x512.mp4 --no-first-frame
 python build_workflow.py --run dc --control depth_121_960x512.mp4 \
   --second-control canny_121_960x512.mp4 --first-frame-strength 0.5 --prompt-file prompt.txt
+python build_workflow.py --run pr_cannysoft --control cannysoft_121_960x512.mp4 \
+  --first-frame photoreal_qwen_c.png         # run 2's best: photoreal first frame, glint-masked canny
 ```
 `--experiment` writes the seven graphs byte for byte as they were run (checked in Step 404).
 The graph is the official `example_workflows/2.3/LTX-2.3_ICLoRA_Union_Control_Distilled.json`
@@ -226,7 +323,8 @@ VRAM from `vram.csv`). Jobs queue in ComfyUI, so several can be started one afte
 bash poll.sh ltx job canny_noff                 # empty until done; shows the step counter
 bash fetch_outputs.sh ltx canny_noff out        # out/canny_noff_with_audio.mp4, out/canny_noff.mp4, out/job_canny_noff.json
 ```
-One poller at a time, short calls (`timeout 90` is built in). The first run of a session takes
+One poller at a time, short calls (`timeout 90` is built in): a background wait loop and a manual
+look at the same time drop each other's websocket (hit in run 2). The first run of a session takes
 ~75 s longer (loading the models and encoding the prompt).
 
 ## 9. Make a comparison video (local)
@@ -240,8 +338,10 @@ Labelled 640x340 panels in a grid of N columns, played in step. Look at single f
 subject's design. Flicker: `ffmpeg -i clip.mp4 -vf "tblend=all_mode=difference,signalstats" -f null -`
 style per-frame differences; no run of the test had spikes.
 
-## 10. Always stop the session (local)
+## 10. Stop the session when you are done (local)
 
+Between experiments, leave it running (see the note at the top): reuse it with `colab sessions` and
+`-s ltx`. When the owner says you are done:
 ```bash
 colab stop -s ltx          # "Session terminated."
 colab sessions             # "No active sessions found on server."
@@ -253,15 +353,22 @@ Do this even after an error. Download everything you need first; the VM's disk i
 
 | item | measured |
 |---|---|
-| session start | 1.5-3 min (plus a 503 retry) |
-| setup (install + 34 GB of downloads) | ~3 min |
+| session start | 8 s-3 min (plus a 503 retry: hit in both runs) |
+| setup (install + 34 GB of downloads) | ~3-5.5 min |
+| image models (§6.4: 50 GB more, in parallel) | ~4 min |
+| Qwen-Image-Edit, one 1440x768 picture, 4 steps | ~110 s with the model load, ~25 s after; peak ~19.5 GB |
+| Z-Image-Turbo + ControlNet, 8 steps | ~115 s with the load, ~17 s after; peak ~21.7 GB |
+| first LTX run after the image models | ~316 s (LTX load again) |
 | first run of a session | ~267 s (incl. ~75 s model load + text encode) |
 | later runs, one control | ~192-195 s (~22 s a step) |
 | later runs, two controls | ~223-225 s (~25.7 s a step, +17 %) |
 | peak VRAM (nvidia-smi, device) | ~21.3 GB of 23 GB; RAM ~5 GB + page cache |
 | whole test (7 runs) | 40 min of L4, about **1.3 compute units** (balance showed -1.14 right after the stop) |
+| run 2 (6 stills + 4 clips) | 54 min of L4 to the last download, about **1.7 units** (session then left running) |
 
-## 12. Results of the test (honest)
+## 12. Results of the tests (honest)
+
+### Run 1: CG first frame or none
 
 All 7 runs: seed 42, 960x512, 121 frames, 24 fps, 8 steps, cfg 1, GGUF Q5_K_M distilled-1.1, IC-LoRA
 and guide strength 1.0. All succeeded; no OOM; **no flicker in any run**.
@@ -283,11 +390,31 @@ and changes the glider's design. Depth alone does not hold the camera: in 1 / z 
 and the sky are both black, so there is no horizon line and the model invents its own bank.
 Nothing here is usable as-is for the film; the route works and is cheap.
 
+### Run 2: a photoreal first frame (§6.4)
+
+First frame: Qwen-Image-Edit-2511's `qwen_c` (prompt C, seed 42), first-frame strength 1.0 unless
+said; otherwise the same settings as run 1. All succeeded; no OOM; no flicker (no spikes in the
+per-frame difference; it is about twice the render's because real, high-contrast waves move).
+
+| run | control | real footage? | glider and sea | horizon |
+|---|---|---|---|---|
+| `pr_canny` | canny | **yes** (open ocean, swells, whitecaps, haze) | glider kept (place, size, bank, outline, red stripe and wing tips); **no beach**; white foam-like streaks where the glint edges were | level, stable |
+| `pr_depth_canny` | depth + canny | yes | as canny, busier white sparkle patches | level, stable |
+| `pr_cannysoft` | glint-masked canny (`make_canny_soft.py`) | **yes, the best** | glider kept, **no beach**, a smooth natural glare where the glint is | level, stable |
+| `pr_canny_ff07` | canny, first frame 0.7 | yes | almost the same as `pr_canny` | level, stable |
+
+**Verdict.** The photoreal first frame is what was missing: every run looks like real aerial footage,
+keeps our glider and the open sea (no invented beach) and a level horizon (~4 px below the CG one,
+under a haze band the image model added). Best: **photoreal first frame + glint-masked canny**. Still
+not perfect: the glider's surface looks a little clean/plastic, and its twin nozzles merged into one
+dark shape and the green wing-tip light went missing (already in the photoreal frame, so LTX kept
+that). Depth adds nothing over canny here. Strength 0.7 changes little.
+
 **Next ideas (untested):**
-- a **photoreal first frame**: restyle frame 0 with an image model first, then use it with strength 1.0
-  (keeps the content of the render, gives the real look);
-- **mask the sun glint out of the canny** (or blur first and raise the thresholds), or a sparse canny
-  of only the subject and the horizon with the depth;
+- keep the subject's details in the photoreal frame: edit only the background (a mask) or paste the
+  CG subject back and let the edit blend it;
+- a photoreal frame for the **last** frame too, for long shots;
+- a sparse canny of only the subject and the horizon with the depth;
 - a **depth convention that keeps the horizon visible** (e.g. a floor so the far sea is not black like
   the sky, or a gamma; `vidgen.web.depth` normalises per shot, the place to add it).
 
@@ -299,6 +426,12 @@ Nothing here is usable as-is for the film; the route works and is cheap.
 |---|---|---|
 | (hit) `colab new` fails after ~3 min: `ColabRequestError ... accelerator=L4: Service Unavailable` | no L4 capacity (HTTP 503) | `colab sessions` (nothing billed), wait a minute, run `colab new` again |
 | (hit, twice) `RuntimeError: Connection was lost.` from `colab exec` | the websocket dropped under heavy network use (big downloads) or two `exec` calls at once | the remote command usually finished: poll again; one poller only; keep calls short (`timeout 90`); start long work detached (`Popen(..., start_new_session=True)`) |
+| (hit, run 2) the same error on the **first** `exec` of a new session, or on a foreground script | the websocket dropped before or while the code ran | the code did **not** run, or died with the connection: check (`ls /content`, the log) and run it again; run anything over ~20 s with `start_bg.py` |
+| (hit, run 2) `colab exec` keeps failing right after a dropped call | the kernel is still busy or reconnecting | wait ~20 s and try `echo 'print(1)' \| colab exec -s ltx` before the next call |
+| (hit, run 2) `colab download` of a small file hangs past its timeout | a slow or dropped transfer | run it again |
+| (hit, run 2) `check_hf.sh` prints a JSON error for a repo | `curl -s` got "Temporary Redirect" (the repo was renamed) | fixed: `curl -sL` |
+| (hit, run 2) `QwenImageDiffsynthControlnet` for Z-Image's Fun ControlNet 2.1 | the 2.1 patch has its own node | `ZImageFunControlnet` (`object_info_image.py` lists the inputs) |
+| (hit, run 2) the image edit keeps the CG sea | the prompt only asked for "real water" | name the CG pattern and ask to replace it (prompt C, §6.4) |
 | (avoided) `colab exec` gives up after 30 s without output (its `--timeout` default) | long work in the foreground | everything long goes through `start_*.py` (detached) |
 | (avoided) guide and output sizes do not match | 960x544 with the `ref0.5` LoRA (the half-size guide is not a whole number of latents) | width and height multiples of 64: crop to 960x512 or render 1024x576 |
 | (avoided) frame count off | LTX wants 8k+1 frames | 121 (or 97, 73 ...); `prepare_inputs.sh` checks it |
@@ -338,8 +471,11 @@ two tries fail on DNS of a new address before it resolved: retry the resolve bef
 
 ## Files
 
-`docs/howto/ltx-colab/`: `check_hf.sh`, `prepare_inputs.sh` (local); `setup.sh`, `start_setup.py`,
-`start_comfy.py`, `object_info.py`, `make_canny.py`, `run_job.py`, `start_job.py` (VM, started with
-`colab exec`); `build_workflow.py`, `poll.sh`, `fetch_outputs.sh`, `make_compare.sh` (local).
-The full log of the test (`RUNLOG.md`), its graphs, logs, `pip_freeze.txt` and the clips stay outside
-the repo, in the owner's `video-projects/footage-test/ltx-test/`.
+`docs/howto/ltx-colab/`: `check_hf.sh`, `prepare_inputs.sh` (local); `setup.sh`, `setup_image.sh`,
+`start_setup.py`, `start_bg.py`, `start_comfy.py`, `object_info.py`, `object_info_image.py`,
+`make_canny.py`, `make_canny_soft.py`, `prep_image_inputs.py`, `align_check.py`, `free_vram.py`,
+`run_job.py`, `start_job.py` (VM, started with `colab exec`); `build_workflow.py`,
+`build_image_workflow.py`, `poll.sh`, `fetch_outputs.sh`, `make_compare.sh` (local).
+The full log of both tests (`RUNLOG.md`, run 2 in its "Run 2 (photoreal first frame)" section), their
+graphs (`colab/`, `colab2/`), logs, `pip_freeze.txt`, the candidates and the clips (`out/`, `out2/`) stay
+outside the repo, in the owner's `video-projects/footage-test/ltx-test/`.

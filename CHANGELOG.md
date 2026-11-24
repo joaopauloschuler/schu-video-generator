@@ -5,7 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–404
+## Steps 193–405
+
+### A photoreal first frame for LTX-2.3 (Step 405)
+
+- **`docs/HOWTO-restyle-with-ltx-on-colab.md` §6.4**: make a photoreal version of the shot's first
+  frame on the same Colab GPU with Qwen-Image-Edit-2511 (GGUF + 4-step Lightning LoRA, ungated), check
+  its alignment with an edge overlay, then give it to LTX-2.3 as the first frame. Tested: real-looking
+  footage that keeps the glider, the open sea and a level horizon (no invented beach); best with a canny
+  whose sun-glint edges are masked (`make_canny_soft.py`). New scripts in `docs/howto/ltx-colab/`
+  (`setup_image.sh`, `build_image_workflow.py`, `prep_image_inputs.py`, `align_check.py`,
+  `make_canny_soft.py`, `start_bg.py`, `free_vram.py`, `object_info_image.py`).
+- **HOWTO fixes from its first replay**: keep and reuse the session between experiments (`colab
+  sessions` first); the first `colab exec` of a session can drop without running anything; setup takes
+  3-5.5 min; long VM work (the canny) runs detached; `check_hf.sh` follows redirects (`--image` added);
+  `start_setup.py` runs any setup script (`SCRIPT`). No change to vidgen itself.
 
 ### A HOWTO: restyle a render with LTX-2.3 on Colab (Step 404)
 
