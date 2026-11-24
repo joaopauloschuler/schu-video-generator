@@ -74,6 +74,7 @@ from vidgen.config import PAINTED_FIRST_FRAME, RESTYLED_FIRST_FRAME, BeatConfig,
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen import COMFYUI_PROVIDER, MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
+from vidgen.videogen.chain import lead_frames
 from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
 from vidgen.videogen.models import (
     TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, guide_opening_template, known_first_frame_with_references, money, snap_duration,
@@ -254,9 +255,16 @@ class Shot:
     last_of: str | None = None
     last_of_take: Take | None = None
     last_of_picture: Path | None = None
+    #: The film's frame rate (the frames of a chained part, :mod:`vidgen.videogen.chain`).
+    fps: int = 24
     #: A guided shot's prompt under the earlier wording, when it differs from :attr:`prompt` (else
     #: empty): what a clip paid for before the wording changed was asked with.
     earlier_prompt: str = ""
+
+    @property
+    def lead(self) -> int:
+        """Frames the take starts before the part (a chained part, :func:`vidgen.videogen.chain.lead_frames`)."""
+        return lead_frames(self.part, self.spec.first_frame_source)
 
     @property
     def starting_picture(self) -> Path | None:
@@ -766,7 +774,7 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
                 if beat.generated_shot is not None:
                     found = _beat_shots(project, scene, beat, f"scenes[{i}].beats[{j}].generated_shot", slot.start + beat_slot.start, window, catalog)
                     for shot in found:
-                        shot.scene_start, shot.scene_end = slot.start, slot.start + slot.duration
+                        shot.scene_start, shot.scene_end, shot.fps = slot.start, slot.start + slot.duration, fps
                     shots += found
         _link_last_of(project, shots, parts_known=catalog is not None)
         for shot in shots:
@@ -887,7 +895,9 @@ def _beat_shots(
             first_frame_in=config.videogen.first_frame_in_for(spec.model, spec.first_frame_in), opening_dissolve_seconds=config.videogen.first_frame_dissolve,
         )
         if model is not None:
-            shot.duration = snap_duration(length, model.durations) if model.durations else None
+            # a chained part's take starts its lead frames early (``config.format.fps``)
+            lead = lead_frames(k + 1, spec.first_frame_source) / config.format.fps
+            shot.duration = snap_duration(length + lead, model.durations) if model.durations else None
             shot.resolution = spec.resolution or lowest_resolution(model)
             shot.aspect_ratio = spec.aspect_ratio or pick_aspect(config, model)
             if parts > 1 and k == 0:

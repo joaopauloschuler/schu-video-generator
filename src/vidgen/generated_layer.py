@@ -9,7 +9,8 @@ the scene's own picture is replaced by the take's frame showing then:
   (centred), ``contain`` shows all of it on black;
 - **frame rate**: the take's frame showing at each render frame's time (decoded in order by
   :class:`vidgen.clips.ClipReader`); a take shorter than its window holds its last frame, a longer
-  one is cut (the snapped length is trimmed);
+  one is cut (the snapped length is trimmed); a chained part's first ``lead`` frames are skipped
+  (they copy the picture it starts from, :mod:`vidgen.videogen.chain`);
 - **light colour matching**: per-channel gains from the take's average colour (grey world) and
   exposure, at ``color_match`` strength, each gain within 0.8-1.25;
 - **joins of parts** (``match_join``): a part that follows the part before it gets the gain per
@@ -28,6 +29,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+from vidgen.videogen.chain import frame_index
 
 if TYPE_CHECKING:
     from vidgen.clip_join import GainMatch
@@ -64,8 +67,10 @@ class _Take:
     def __init__(self, placement: Placement, fps: int) -> None:
         self.placement = placement
         self.fps = fps
-        self.first = round(placement.start * fps)
-        self.end = max(self.first + 1, round((placement.start + placement.length) * fps))
+        self.first = frame_index(placement.start, fps)
+        self.end = max(self.first + 1, frame_index(placement.start + placement.length, fps))
+        #: Seconds of the take hidden at its start (a chained part's lead frames).
+        self.skip = placement.lead / fps
         self.reader: ClipReader | None = None
         self.box: tuple[int, int, int, int] = (0, 0, 0, 0)   # x0, y0, w, h in the frame
         self.gains = np.ones(3, dtype=np.float32)
@@ -75,7 +80,7 @@ class _Take:
 
     def last_shown(self) -> np.ndarray:
         """The take's last shown frame, small and with its colour gains (RGB float)."""
-        return self._sample((self.end - 1 - self.first) / self.fps)
+        return self._sample((self.end - 1 - self.first) / self.fps + self.skip)
 
     def _sample(self, seconds: float) -> np.ndarray:
         from vidgen.clips import ClipReader, probe_clip
@@ -117,7 +122,7 @@ class _Take:
             from vidgen.clip_join import GAIN_RANGE as JOIN_RANGE
             from vidgen.clip_join import GainMatch, channel_gains
 
-            reference, opening = self.previous.last_shown(), self._sample(0.0)
+            reference, opening = self.previous.last_shown(), self._sample(self.skip)
             gains = channel_gains(np.clip(reference, 0, 255), np.clip(opening, 0, 255))
             if gains is not None and all(JOIN_RANGE[0] <= g <= JOIN_RANGE[1] for g in gains):
                 self.join = GainMatch(gains)
@@ -138,7 +143,7 @@ class _Take:
         if self.reader is None:
             self.open(width, height)
         assert self.reader is not None
-        pixels = self.reader.frame((frame - self.first) / fps)[:, :, :3].astype(np.float32)
+        pixels = self.reader.frame((frame - self.first) / fps + self.skip)[:, :, :3].astype(np.float32)
         if not np.allclose(self.gains, 1.0):
             pixels = pixels * self.gains
         state = self.join.state((frame - self.first) / fps) if self.join is not None else None

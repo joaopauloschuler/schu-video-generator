@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–413
+## Steps 193–414
+
+### No repeated frame at a chained join (Step 414)
+
+- A later part of a split beat now starts from the last frame the film shows of the part before
+  (it was one frame earlier), its guide starts on that same frame, and its first frame (LTX's copy
+  of that picture) is not shown.
 
 ### Fewer and steadier Colab calls (Step 413)
 

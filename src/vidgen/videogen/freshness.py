@@ -63,6 +63,7 @@ _CHANGE_REASONS: tuple[tuple[str, str], ...] = (
     ("draft", "the draft's size or frame rate changed"),
     ("offset", "the shot's part of the beat moved"),
     ("length", "the shot's length changed"),
+    ("lead", "the frames a chained part starts before its part changed"),
     ("guide", "the guide kind changed"),
     ("canny", "the canny settings changed"),
     ("canny_size", "the canny size changed (another model or aspect ratio)"),
@@ -96,16 +97,16 @@ def opening_source(shot: Shot) -> dict[str, Any]:
     return {"opening_picture_sha256": file_sha256(shot.opening_picture), "opening_dissolve": round(shot.opening_dissolve_seconds, 6)}
 
 
-#: How far before the part's end a chained part's picture is cut (about a frame at 24-30 fps).
-CHAINED_MARGIN = 0.04
-
-
 def chained_cut_at(shot: Shot) -> float | None:
-    """A later part of a split beat: the time (s) of the previous part's last frame shown in the
-    film (the take is trimmed to the part's length), else ``None`` (the take's last frame)."""
-    if shot.part == 1 or shot.spec.last_of_shot is not None:
+    """A later part of a split beat: the time (s) in the previous part's take of the frame the
+    film shows ``shot.lead`` frames before this part (:func:`vidgen.videogen.chain.picture_at`),
+    else ``None`` (the take's last frame)."""
+    from vidgen.videogen.chain import lead_frames, picture_at
+
+    if shot.lead == 0:
         return None
-    return round(max(0.0, shot.length - CHAINED_MARGIN), 6)
+    previous = lead_frames(shot.part - 1, shot.spec.first_frame_source)
+    return round(picture_at(shot.start - shot.scene_start, shot.length, shot.lead, previous, shot.fps), 6)
 
 
 def last_of_source(shot: Shot) -> dict[str, Any]:
@@ -204,7 +205,7 @@ class InputSources:
 
         scene = self._render_of(shot.scene_id, kind if kind in ("render", "final") else render_kind(self.project, shot.scene_id, kind))
         extra = canny_source(shot) if kind == "canny" else {}
-        return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot), **extra}
+        return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot), **({"lead": shot.lead} if shot.lead else {}), **extra}
 
     def _render_of(self, scene_id: str, made: str) -> dict[str, Any]:
         if (scene_id, made) not in self._renders:

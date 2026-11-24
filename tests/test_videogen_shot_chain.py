@@ -157,6 +157,8 @@ def test_a_later_part_starts_from_the_part_before_it(make_project) -> None:
     first, second = shots_of(root).values()
     assert first.last_of is None and second.last_of == "w_p1"
     assert any("w_p1 has no take yet" in b for b in second.blocked) and any("part 2 of 2" in n for n in second.notes)
+    assert (first.lead, second.lead) == (0, 1)   # part 2's take starts a frame early: still covered
+    assert second.duration is not None and second.duration >= second.length + 1 / second.fps
 
 
 @pytest.mark.slow

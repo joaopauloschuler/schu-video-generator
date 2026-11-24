@@ -383,8 +383,18 @@ def _write_restyled(project: Project, shot: Shot, frame: Path, render_source: di
     out(f"{shot.id}: restyled first frame {shown} ({spent}); look at it before paying for the clip")
 
 
-def _write_canny(ffmpeg: str, project: Project, shot: Shot, scene: SceneRender, start: float, clip: Path, frame: Path) -> int:
-    """Cut the colour part of ``scene`` for ``shot``, write its first frame to ``frame`` and its edges to ``clip``."""
+def guide_cut(shot: Shot, start: float) -> tuple[float, float]:
+    """``(start, length)`` of the render cut for ``shot``'s guide, ``start`` being where its part
+    begins in the render: a chained part's begins its lead frames early (:func:`vidgen.videogen.chain.guide_span`)."""
+    from vidgen.videogen.chain import guide_span
+
+    at = shot.start - shot.scene_start   # the part's start in its scene, as the takes are placed
+    begin, length = guide_span(at, shot.length, shot.lead, shot.fps)
+    return start + begin - at, length
+
+
+def _write_canny(ffmpeg: str, project: Project, shot: Shot, scene: SceneRender, start: float, length: float, clip: Path, frame: Path) -> int:
+    """Cut ``length`` s of the colour part of ``scene`` from ``start``, write its first frame to ``frame`` and its edges to ``clip``."""
     from vidgen.videogen.canny import make_canny
 
     c = shot.spec.canny_settings
@@ -392,7 +402,7 @@ def _write_canny(ffmpeg: str, project: Project, shot: Shot, scene: SceneRender, 
     frame.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="vidgen-canny-") as scratch:
         part = Path(scratch) / "render.mp4"
-        cut_video(ffmpeg, scene.video, part, start, shot.length)
+        cut_video(ffmpeg, scene.video, part, start, length)
         first_frame(ffmpeg, part, frame)
         return make_canny(ffmpeg, part, clip, width=width, height=height, low=c.low, high=c.high, glint=None if c.glint is False else c.glint)
 
@@ -547,18 +557,18 @@ def make_inputs(
         scene = renders[shot.scene_id, made]
         if shot.beat.id not in scene.starts:
             raise VidgenError(f"shot {shot.id}: the render of scene {shot.scene_id} has no beat {shot.beat.id}")
-        start = scene.starts[shot.beat.id] + shot.offset
+        start, span = guide_cut(shot, scene.starts[shot.beat.id] + shot.offset)
         frame = folder / "first_frame.png"
         if kind in (None, "render", "final"):
             clip = folder / guide_name(made)
-            cut_video(ffmpeg, scene.video, clip, start, shot.length)
+            cut_video(ffmpeg, scene.video, clip, start, span)
             first_frame(ffmpeg, clip, frame)
             made_from = sources.render(shot, made, scene.fingerprint)
             record_input(clip, made_from)
             record_input(frame, made_from)
             written += [clip, frame]
             what = "the finished render, " if made == "final" else ""
-            out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} and its first frame ({what}{shot.length:.2f} s, silent)")
+            out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} and its first frame ({what}{span:.2f} s, silent)")
             if restyled:
                 _write_restyled(project, shot, frame, made_from, written, out)
             _write_opening_guide(ffmpeg, project, shot, clip, made_from, written, out)
@@ -566,7 +576,7 @@ def make_inputs(
             continue
         if kind == "canny":
             clip = folder / guide_name(kind)
-            count = _write_canny(ffmpeg, project, shot, scene, start, clip, frame)
+            count = _write_canny(ffmpeg, project, shot, scene, start, span, clip, frame)
             record_input(clip, sources.render(shot, kind, scene.fingerprint))
             frame_source = sources.render(shot, made, scene.fingerprint)
             record_input(frame, frame_source)
@@ -587,18 +597,18 @@ def make_inputs(
         if made == "final":   # a web scene's depth: packed distances, made grey with one range for the shot
             from vidgen.web.depth import cut_depth
 
-            near = cut_depth(ffmpeg, lossless, clip, start, shot.length, [*PASS_COLOR_ARGS, "-c:v", "libx264", "-crf", str(PASS_CRF), "-pix_fmt", "yuv420p"])
+            near = cut_depth(ffmpeg, lossless, clip, start, span, [*PASS_COLOR_ARGS, "-c:v", "libx264", "-crf", str(PASS_CRF), "-pix_fmt", "yuv420p"])
             reach = f", white at {near:.3g} m and nearer" if near is not None else ", nothing drawn"
         else:
-            cut_pass(ffmpeg, lossless, clip, start, shot.length)
+            cut_pass(ffmpeg, lossless, clip, start, span)
             reach = ""
         record_input(clip, sources.render(shot, kind, scene.fingerprint))
         written.append(clip)
-        out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} (the {kind} pass, {shot.length:.2f} s, silent{reach})")
+        out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} (the {kind} pass, {span:.2f} s, silent{reach})")
         if wants_frame:   # the first frame stays the normal render's, not the pass's
             with tempfile.TemporaryDirectory(prefix="vidgen-frame-") as scratch:
                 part = Path(scratch) / "render.mp4"
-                cut_video(ffmpeg, scene.video, part, start, shot.length)
+                cut_video(ffmpeg, scene.video, part, start, span)
                 first_frame(ffmpeg, part, frame)
             record_input(frame, sources.render(shot, made, scene.fingerprint))
             written.append(frame)

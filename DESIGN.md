@@ -22506,9 +22506,16 @@ The tested best LTX setup (HOWTO "Recommended setup and why") as two shot settin
 
 - **Chained parts**: in a beat split into parts with a starting picture (`first_frame` not `none`),
   part 1 uses `first_frame` and part k > 1 gets `Shot.last_of = <beat>_p<k-1>` in `_link_last_of`:
-  the same blocking and freshness as `first_frame: last_of:` (no restyle for it), but the picture is
-  the previous take's frame at the part's length minus `freshness.CHAINED_MARGIN` (0.04 s; the take is
-  trimmed to its part), recorded as `last_of_at`. So a run makes one part per pass, in order. `first_frame: none` parts are not chained.
+  the same blocking and freshness as `first_frame: last_of:` (no restyle for it). So a run makes one part per pass, in order. `first_frame: none` parts are not chained.
+- **Frames at the join** (Step 414, `vidgen/videogen/chain.py`): LTX gives the picture back as its
+  frame 0, so a chained part's take starts `chain.CHAIN_DROP_FRAMES` (1) frames early and those are
+  hidden (`Shot.lead`, `Placement.lead`; `GeneratedLayer` reads the take from that frame on). With
+  `first` the part's first film frame (`chain.frame_index`, the layer's rounding): the picture is the
+  previous take's frame the film shows at `first - lead` (`chain.picture_at`, recorded as
+  `last_of_at`); the guide is cut from that film frame to the part's end (`chain.guide_span`, a
+  quarter frame early so the cut keeps it; `lead` in its record); the take's frame `i` lines up with
+  film frame `first - lead + i`. The part's duration covers `length + lead / fps`. Exact when the
+  model's frame rate is the film's.
 - **The join**: `Placement.match_join` (true for a part placed right after its beat's previous part;
   in the fingerprint only when true). `GeneratedLayer` gives that take
   `clip_join.GainMatch(channel_gains(previous take's last shown frame, its first frame))`, both after
