@@ -1,7 +1,6 @@
-# Run with: colab exec -s ltx -f start_setup.py
-# (after: colab upload -s ltx setup.sh /content/setup.sh). Add --env PIN=0 for the latest commits,
-# --env SCRIPT=/content/setup_image.sh to start another setup script (log /content/<name>.log).
-# Starts the script detached so no exec call blocks; poll its log.
+# VM side, run by setup_session.py: colab exec -s NAME --env SCRIPT=/content/setup.sh --env PIN=1 -f start_setup.py
+# Starts SCRIPT (default /content/setup.sh) detached, log /content/<script name>.log, so no exec
+# call blocks. --env values stay set in the kernel, so pass SCRIPT and PIN on every call.
 import os
 import subprocess
 from pathlib import Path

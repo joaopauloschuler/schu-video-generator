@@ -1,4 +1,4 @@
-# Run with: colab exec -s ltx -f start_comfy.py
+# VM side, run by setup_session.py: colab exec -s NAME -f start_comfy.py
 # Starts the ComfyUI server detached on 127.0.0.1:8188, log in /content/comfy.log,
 # plus an nvidia-smi sampler (every 1 s) in /content/vram.csv for peak-VRAM numbers.
 import subprocess

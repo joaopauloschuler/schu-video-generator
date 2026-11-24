@@ -5,7 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–405
+## Steps 193–406
+
+### One Colab setup command (Step 406)
+
+- **`python tools/colab/setup_session.py <name> [--gpu L4] [--no-image] [--latest]`** sets up a Colab
+  GPU session for `docs/HOWTO-restyle-with-ltx-on-colab.md` in one command: it reuses or creates the
+  session (retrying HTTP 503), skips each part that is done (done markers on the VM, or all files
+  present; a ComfyUI that answers), installs ComfyUI + LTX-2.3 and the image models side by side,
+  starts ComfyUI and prints a summary. It never stops the session; several sessions can run under
+  different names. The HOWTO's scripts moved from `docs/howto/ltx-colab/` to `tools/colab/`
+  (with a README); `setup.sh` and `setup_image.sh` keep existing clones and write the done markers
+  only after every file is checked (`vm_state.py`). No change to vidgen itself.
 
 ### A photoreal first frame for LTX-2.3 (Step 405)
 
@@ -13,7 +24,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   frame on the same Colab GPU with Qwen-Image-Edit-2511 (GGUF + 4-step Lightning LoRA, ungated), check
   its alignment with an edge overlay, then give it to LTX-2.3 as the first frame. Tested: real-looking
   footage that keeps the glider, the open sea and a level horizon (no invented beach); best with a canny
-  whose sun-glint edges are masked (`make_canny_soft.py`). New scripts in `docs/howto/ltx-colab/`
+  whose sun-glint edges are masked (`make_canny_soft.py`). New scripts (now in `tools/colab/`)
   (`setup_image.sh`, `build_image_workflow.py`, `prep_image_inputs.py`, `align_check.py`,
   `make_canny_soft.py`, `start_bg.py`, `free_vram.py`, `object_info_image.py`).
 - **HOWTO fixes from its first replay**: keep and reuse the session between experiments (`colab
@@ -27,8 +38,8 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   `guide.depth.mp4` (plus a canny of the render) to LTX-2.3 with the union-control IC-LoRA in ComfyUI
   on a Colab L4, by hand: inputs, install (pinned commits), downloads (all ungated), the API graph,
   polling, comparison, stopping the session, costs, errors, and the test's results (real-looking only
-  without the CG first frame, and then with invented content). Replayable scripts in
-  `docs/howto/ltx-colab/`. No change to vidgen itself.
+  without the CG first frame, and then with invented content). Replayable scripts (now in
+  `tools/colab/`). No change to vidgen itself.
 
 ### A web scene's exact depth (Step 403, the second Step 403)
 

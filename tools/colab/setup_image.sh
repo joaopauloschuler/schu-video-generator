@@ -1,7 +1,8 @@
 #!/bin/bash
 # Download the image models for the photoreal first frame and link them into ComfyUI.
-# Run after setup.sh (needs /content/ComfyUI). Started detached by start_setup.py with
-# --env SCRIPT=/content/setup_image.sh; log /content/setup_image.log (### milestones).
+# setup_session.py starts it detached through start_setup.py (--env SCRIPT=/content/setup_image.sh)
+# beside setup.sh; it waits for setup.sh's ComfyUI clone before linking. Log
+# /content/setup_image.log (### milestones); on success it writes /content/.vidgen_setup_image_done.
 # Every repo is ungated (check_hf.sh --image). No Hugging Face login.
 set -x
 cd /content
@@ -39,4 +40,10 @@ ln -sf $H/Comfy-Org/Z-Image-Turbo/split_files/text_encoders/qwen_3_4b.safetensor
 ln -sf $H/Comfy-Org/Z-Image-Turbo/split_files/vae/ae.safetensors $M/vae/
 ln -sf $H/alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1/Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors $M/model_patches/
 ls -laL $M/unet $M/loras $M/vae $M/text_encoders $M/diffusion_models $M/model_patches
-stamp "IMAGE SETUP DONE"
+if python /content/vm_state.py image; then
+  touch /content/.vidgen_setup_image_done
+  stamp "IMAGE SETUP DONE"
+else
+  stamp "IMAGE SETUP FAILED: files missing (MISSING lines above)"
+  exit 1
+fi

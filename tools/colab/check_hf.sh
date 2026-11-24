@@ -2,7 +2,7 @@
 # Local: check that each Hugging Face repo the HOWTO uses is public and ungated (no login needed),
 # and print its current commit (compare with the HOWTO's tables) and the sizes of the files used.
 #   bash check_hf.sh            the LTX-2.3 repos
-#   bash check_hf.sh --image    also the image models for the photoreal first frame (HOWTO §7)
+#   bash check_hf.sh --image    also the image models for the photoreal first frame (HOWTO §6.4)
 # curl -L: a renamed repo answers with a redirect ("Temporary Redirect"), not JSON.
 set -uo pipefail
 api() { curl -sL "https://huggingface.co/api/models/$1$2"; }

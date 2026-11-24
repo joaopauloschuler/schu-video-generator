@@ -8,14 +8,15 @@ open video model **LTX-2.3** with the IC-LoRA **`Lightricks/LTX-2.3-22b-IC-LoRA-
 and runs it in **ComfyUI on a Google Colab L4 GPU**, driven from your own machine by the
 `colab` command-line tool. Everything it downloads is ungated on Hugging Face: no login, no token.
 
-Every script named below is in [`docs/howto/ltx-colab/`](howto/ltx-colab/). Follow the steps in
-order; each one says where it runs (**local** = your machine, **VM** = the Colab machine).
+Every script named below is in [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.md)
+lists them). Follow the steps in order; each one says where it runs (**local** = your machine,
+**VM** = the Colab machine).
 
 > **Keep the session between experiments, stop it when you are done.** Setting up costs ~6 min
-> and ~34-80 GB of downloads, so run your experiments in one session: before `colab new`, run
-> `colab sessions` and reuse `ltx` if it is there (its weights, ComfyUI and outputs are still on
-> the VM). An idle session still spends ~1.94 units an hour: when the owner says you are done,
-> stop it (`colab stop -s ltx`, §10).
+> and ~34-80 GB of downloads, so run your experiments in one session:
+> `python tools/colab/setup_session.py ltx` reuses `ltx` when it runs (its weights, ComfyUI and
+> outputs are still on the VM) and then takes about 20 s. An idle session still spends ~1.94 units
+> an hour: when the owner says you are done, stop it (`colab stop -s ltx`, §10).
 
 ---
 
@@ -42,8 +43,8 @@ tracked path inside vidgen.
 - No SSH key and no Hugging Face login: files go up and down with `colab upload` / `colab download`,
   commands run with `colab exec`.
 - Locally: `ffmpeg` / `ffprobe`, Python 3.10+ (only the standard library), `curl`.
-- **Ask the owner before `colab new` with a GPU** (it spends their units), and check
-  `colab sessions` first: reuse a running `ltx` instead of making a second session.
+- **Ask the owner before creating a GPU session** (it spends their units). `setup_session.py`
+  reuses a running session of the same name instead of making a second one.
 
 ## 3. Make the inputs with vidgen (local)
 
@@ -71,7 +72,7 @@ You need, for one shot, frame-aligned: the colour render, its depth, and its fir
 4. **Trim and crop** for LTX: the frame count must be **8k+1** (121 = 5.04 s at 24 fps) and, with the
    `ref0.5` LoRA, width and height **multiples of 64** (960x544 is not: 544 / 2 / 32 is not whole).
    ```bash
-   bash docs/howto/ltx-colab/prepare_inputs.sh \
+   bash tools/colab/prepare_inputs.sh \
      build/videogen/chase_b1/guide.final.mp4 build/videogen/chase_b1/guide.depth.mp4 \
      build/videogen/chase_b1/first_frame.png ltx-inputs 960 512 121 24
    ```
@@ -87,7 +88,7 @@ Restore `video.yaml` afterwards if you changed its format for the test.
 ## 4. Check the Hugging Face repos (local, free)
 
 ```bash
-bash docs/howto/ltx-colab/check_hf.sh            # add --image for the models of §6.4
+bash tools/colab/check_hf.sh            # add --image for the models of §6.4
 ```
 prints `gated=False` for each repo and the sizes of the files used. (It uses `curl -sL`: a renamed
 repo, e.g. `Comfy-Org/Qwen-Image_ComfyUI` -> `Comfy-Org/Qwen-Image`, answers with a redirect.) If a repo is gated now, stop:
@@ -107,45 +108,44 @@ Use the `distilled_` VAE and connector files (unsloth also has `dev_` ones) to m
 the `LTXAddVideoICLoRAGuide` node does the halving, so feed the control at full size.
 The repos can be checked by hand at `https://huggingface.co/api/models/<repo>` (`"gated": false`).
 
-## 5. Create the L4 session (local)
+## 5. Create and set up the session (local)
 
 ```bash
-colab sessions                   # first: if `ltx` is listed, reuse it and skip to the step you need
-colab new -s ltx --gpu L4        # 8 s to 3 min; billing starts at "Session READY"
-colab sessions                   # check
+python tools/colab/setup_session.py ltx      # --no-image: without §6.4's models; --gpu G4; --latest
 ```
-The first try may fail (both test runs hit it) after ~3 min with `ColabRequestError ... accelerator=L4: Service Unavailable`
-(HTTP 503: no capacity). `colab sessions` then shows nothing (not billed): wait a minute and run
-`colab new` again. The test VM: Python 3.13, torch 2.14.1+cu130, CUDA 13.0, L4 23 GB, 52 GB RAM,
-236 GB disk.
+One command, run from the repository root (any session name works; several sessions can run side by
+side under different names). [`tools/colab/setup_session.py`](../tools/colab/setup_session.py):
+- reuses `ltx` when `colab sessions` lists it, or else runs `colab new -s ltx --gpu L4` (8 s to 3 min;
+  billing starts at "Session READY"). A try can fail after ~3 min with `ColabRequestError ...
+  accelerator=L4: Service Unavailable` (HTTP 503: no capacity; nothing billed): the script tries 4
+  times, a minute apart;
+- asks the VM what is done (`vm_state.py`) and skips it: the done markers
+  `/content/.vidgen_setup_ltx_done` and `/content/.vidgen_setup_image_done`, or all the part's files
+  in `ComfyUI/models` when the marker is missing, and a ComfyUI that answers on 127.0.0.1:8188;
+- uploads and starts the missing setups detached, `setup.sh` and `setup_image.sh` side by side,
+  checks on the VM that each one runs (the first `colab exec` of a new session can drop with
+  `RuntimeError: Connection was lost.` before anything started), and prints their `###` milestones;
+- starts ComfyUI (`start_comfy.py`) and waits until it answers;
+- prints the session, its GPU, what it installed or reused, the elapsed time and the next commands.
 
-## 6. Install and download (VM, started from local)
+It runs one `colab exec` at a time (two at once drop each other) and retries a dropped one. It never
+stops the session, also not after an error: run it again to go on, or stop the session (§10). The test
+VM: Python 3.13, torch 2.14.1+cu130, CUDA 13.0, L4 23 GB, 52 GB RAM, 236 GB disk.
 
-All commands from `docs/howto/ltx-colab/` (the scripts) with your inputs in `ltx-inputs/`.
+## 6. What the setup installs, and the per-run steps (VM, started from local)
 
-### 6.1 Upload and start the setup, detached
+From here on, run the commands from `tools/colab/` (the scripts) with your inputs in `ltx-inputs/`
+(wherever `prepare_inputs.sh` wrote; adjust the path).
 
-```bash
-cd docs/howto/ltx-colab
-colab upload -s ltx setup.sh /content/setup.sh
-for f in ../../../ltx-inputs/*; do colab upload -s ltx "$f" "/content/$(basename "$f")"; done
-colab exec -s ltx -f start_setup.py          # returns at once; the setup runs in the background
-bash poll.sh ltx setup                       # every minute or so, until "### ... SETUP DONE"
-```
-(`ltx-inputs` is wherever `prepare_inputs.sh` wrote; adjust the path.)
+### 6.1 The setup scripts
 
-The first `colab exec` of a new session can fail with `RuntimeError: Connection was lost.` and then
-**nothing was started** (run 2: no `/content/setup.log`). Check with
-`echo '!ls /content' | colab exec -s ltx` and run `start_setup.py` again. `start_setup.py` runs
-another script with `--env SCRIPT=/content/<script>.sh` (log `/content/<script>.log`): §6.4 uses it.
-
-`setup.sh` does, logging to `/content/setup.log`:
+`setup.sh` (log `/content/setup.log`) does:
 - `pip install -U "huggingface_hub[hf_xet]" hf_transfer` (hub 2.4.0; pip warns that `datasets`
   wants hub < 2.0: harmless here);
 - the six downloads with `hf download <repo> <file> --local-dir /content/hf/<repo>` and
   `HF_XET_HIGH_PERFORMANCE=1`, in a background subshell while ComfyUI installs (`/content/download.log`);
-- `git clone` of ComfyUI and four custom nodes, **checked out at the tested commits** (`PIN=0`, i.e.
-  `colab exec -s ltx --env PIN=0 -f start_setup.py`, takes the latest instead):
+- `git clone` of ComfyUI and four custom nodes (kept when already cloned), **checked out at the
+  tested commits** (`setup_session.py --latest`, i.e. `PIN=0`, takes the latest instead):
 
   | repo | commit (date) | why |
   |---|---|---|
@@ -160,26 +160,29 @@ another script with `--env SCRIPT=/content/<script>.sh` (log `/content/<script>.
   CPU or other-CUDA torch over it and break the GPU). After the install: torch 2.14.1+cu130,
   torchvision 0.29.1, torchaudio 2.11.0, gguf 0.19.0, transformers 5.22.1, numpy 2.4.6, av 19.0.2,
   safetensors 0.8.0, comfyui_frontend_package 1.59.11;
-- symlinks of the weights into `ComfyUI/models/{unet,loras,vae,text_encoders}`.
+- symlinks of the weights into `ComfyUI/models/{unet,loras,vae,text_encoders}`, then
+  `vm_state.py ltx` checks every file and the marker is written.
 
-Timings: install ~70 s (run 2: the clone alone took 114 s); downloads 178-186 s in all; **setup
-done in ~3-5.5 min**.
+`setup_image.sh` (log `/content/setup_image.log`) downloads the image models of §6.4, waits for
+`setup.sh`'s ComfyUI clone, links them and writes its marker the same way.
 
-### 6.2 Start ComfyUI, detached
+Timings: install ~70 s (the clone alone took 114 s once); downloads 178-186 s in all; **setup done
+in ~3-5.5 min**; the image models ~4 min beside it.
 
-```bash
-colab exec -s ltx -f start_comfy.py          # main.py --listen 127.0.0.1 --port 8188, log /content/comfy.log
-bash poll.sh ltx comfy                       # until the log says "To see the GUI go to: http://127.0.0.1:8188"
-```
-It also starts `nvidia-smi -l 1` into `/content/vram.csv` for the peak-VRAM numbers.
-Optional: `colab exec -s ltx -f object_info.py` prints the input names of every node used (from
-`/object_info`); use it when a node's inputs changed after an update.
+### 6.2 ComfyUI
+
+`start_comfy.py` runs `main.py --listen 127.0.0.1 --port 8188` (log `/content/comfy.log`) and
+`nvidia-smi -l 1` into `/content/vram.csv` for the peak-VRAM numbers. `bash poll.sh ltx comfy` shows
+the log's last lines and the GPU memory. Optional: `colab exec -s ltx -f object_info.py` prints the
+input names of every node used (from `/object_info`); use it when a node's inputs changed after an
+update.
 
 ### 6.3 Make the canny control (VM)
 
-Run it **detached** with `start_bg.py` (a foreground `colab exec` that loses its websocket kills the
-work with it: run 2 lost a canny that way):
+Upload the inputs, then run the canny **detached** with `start_bg.py` (a foreground `colab exec` that
+loses its websocket kills the work with it: run 2 lost a canny that way):
 ```bash
+for f in ../../ltx-inputs/*; do colab upload -s ltx "$f" "/content/$(basename "$f")"; done
 colab upload -s ltx start_bg.py /content/start_bg.py
 colab upload -s ltx make_canny_soft.py /content/make_canny_soft.py
 colab exec -s ltx -f start_bg.py --env NAME=cannysoft --env CMD="python /content/make_canny_soft.py" \
@@ -217,11 +220,9 @@ not usable here. FLUX.1 schnell / dev / Kontext are gated (`"gated": "auto"`): n
 | `alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1` (tried) | `Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors` | 6.71 GB |
 
 (Commits on 2026-11-24 in `check_hf.sh --image`'s output; the fp8 Qwen-Image-Edit-2511 is 20.5 GB,
-too big beside its text encoder on 24 GB, hence the GGUF.) Steps:
+too big beside its text encoder on 24 GB, hence the GGUF.)
+`setup_session.py` installed these models (unless `--no-image`). Steps:
 ```bash
-colab upload -s ltx setup_image.sh /content/setup_image.sh     # downloads (~4 min) + links; can run beside setup.sh
-colab exec -s ltx --env SCRIPT=/content/setup_image.sh -f start_setup.py
-echo '!grep "^###" /content/setup_image.log | tail -3' | colab exec -s ltx    # "### ... IMAGE SETUP DONE"
 for f in prep_image_inputs.py align_check.py free_vram.py; do colab upload -s ltx "$f" "/content/$f"; done
 colab exec -s ltx -f prep_image_inputs.py      # ComfyUI/input/ff_up.png (frame 0 at 1440x768), ff_canny.png, ff_depth.png
 python build_image_workflow.py qwen --run qwen_c --out workflow_qwen_c.json      # local
@@ -355,6 +356,8 @@ Do this even after an error. Download everything you need first; the VM's disk i
 |---|---|
 | session start | 8 s-3 min (plus a 503 retry: hit in both runs) |
 | setup (install + 34 GB of downloads) | ~3-5.5 min |
+| `setup_session.py` on a ready session (everything skipped) | 10-20 s |
+| `setup_session.py` on a new session (2026-11-24) | 23 min: one 503 and the session ~5 min, the first uploads ~3 min, both setups 4 min 45 s side by side, ComfyUI 6 min 40 s (most of it `colab exec` calls that hung and were retried) |
 | image models (§6.4: 50 GB more, in parallel) | ~4 min |
 | Qwen-Image-Edit, one 1440x768 picture, 4 steps | ~110 s with the model load, ~25 s after; peak ~19.5 GB |
 | Z-Image-Turbo + ControlNet, 8 steps | ~115 s with the load, ~17 s after; peak ~21.7 GB |
@@ -424,11 +427,12 @@ that). Depth adds nothing over canny here. Strength 0.7 changes little.
 
 | symptom | cause | fix |
 |---|---|---|
-| (hit) `colab new` fails after ~3 min: `ColabRequestError ... accelerator=L4: Service Unavailable` | no L4 capacity (HTTP 503) | `colab sessions` (nothing billed), wait a minute, run `colab new` again |
+| (hit) `colab new` fails after ~3 min: `ColabRequestError ... accelerator=L4: Service Unavailable` | no L4 capacity (HTTP 503) | `setup_session.py` tries 4 times a minute apart; if all fail, run it again later (nothing billed) |
 | (hit, twice) `RuntimeError: Connection was lost.` from `colab exec` | the websocket dropped under heavy network use (big downloads) or two `exec` calls at once | the remote command usually finished: poll again; one poller only; keep calls short (`timeout 90`); start long work detached (`Popen(..., start_new_session=True)`) |
-| (hit, run 2) the same error on the **first** `exec` of a new session, or on a foreground script | the websocket dropped before or while the code ran | the code did **not** run, or died with the connection: check (`ls /content`, the log) and run it again; run anything over ~20 s with `start_bg.py` |
+| (hit, run 2) the same error on the **first** `exec` of a new session, or on a foreground script | the websocket dropped before or while the code ran | the code did **not** run, or died with the connection: check (`ls /content`, the log) and run it again (`setup_session.py` does this for the setup); run anything over ~20 s with `start_bg.py` |
 | (hit, run 2) `colab exec` keeps failing right after a dropped call | the kernel is still busy or reconnecting | wait ~20 s and try `echo 'print(1)' \| colab exec -s ltx` before the next call |
 | (hit, run 2) `colab download` of a small file hangs past its timeout | a slow or dropped transfer | run it again |
+| (hit, 2026-11-24) a session that was running is gone from `colab sessions` | Colab ended it on its side (no `colab stop` was sent; the cause is not known) | its disk is gone: download outputs as soon as a run finishes; `setup_session.py <name>` makes a new one |
 | (hit, run 2) `check_hf.sh` prints a JSON error for a repo | `curl -s` got "Temporary Redirect" (the repo was renamed) | fixed: `curl -sL` |
 | (hit, run 2) `QwenImageDiffsynthControlnet` for Z-Image's Fun ControlNet 2.1 | the 2.1 patch has its own node | `ZImageFunControlnet` (`object_info_image.py` lists the inputs) |
 | (hit, run 2) the image edit keeps the CG sea | the prompt only asked for "real water" | name the CG pattern and ask to replace it (prompt C, §6.4) |
@@ -437,13 +441,14 @@ that). Depth adds nothing over canny here. Strength 0.7 changes little.
 | (avoided) frame count off | LTX wants 8k+1 frames | 121 (or 97, 73 ...); `prepare_inputs.sh` checks it |
 | (hit, in `/object_info`) `LTXAVTextEncoderLoader` has an empty `ckpt_name` list; `CheckpointLoaderSimple` / `LTXVAudioVAELoader` unusable | they want the full LTX checkpoint; a GGUF setup has none | `DualCLIPLoader` (`type: ltxv`), `VAELoaderKJ` for both VAEs (needs KJNodes), `UnetLoaderGGUF` |
 | (avoided) GPU torch gone after installing node requirements | a requirements file reinstalled torch | `setup.sh` strips the torch / torchvision / torchaudio lines; keep Colab's torch |
+| `setup_session.py` stops with "... stopped before it finished" and a log tail | a download or install failed on the VM | read the tail; run `setup_session.py` again: it keeps what is there and starts only the unfinished part |
 | (hit, warning) pip: `datasets 4.8.5 requires huggingface-hub<2.0` | upgrading the hub for `hf download` + xet | harmless here (datasets is not used) |
 | (possible) download of `ltx_<run>_00001-audio.mp4` fails | a second run with the same prefix writes `_00002` | `colab ls -s ltx /content/ComfyUI/output` |
-| (possible) a node's inputs changed after an update | node versions moved | `PIN=1` (default) or `object_info.py` to read the new names |
+| (possible) a node's inputs changed after an update | node versions moved | the tested commits (`setup_session.py` without `--latest`) or `object_info.py` to read the new names |
 
 ## 14. Scaling to the G4 (96 GB) — untested
 
-`colab new -s ltx --gpu G4` (RTX PRO 6000, 96 GB; check its rate with `colab usage`) could run the
+`python tools/colab/setup_session.py ltx-g4 --gpu G4` (RTX PRO 6000, 96 GB; check its rate with `colab usage`) could run the
 model unquantized and the official workflow almost unchanged:
 - `Lightricks/LTX-2.3` (ungated): `ltx-2.3-22b-distilled-1.1.safetensors` (46.15 GB), or
   `ltx-2.3-22b-dev.safetensors` (46.15 GB) + `ltx-2.3-22b-distilled-lora-384-1.1.safetensors`
@@ -471,11 +476,12 @@ two tries fail on DNS of a new address before it resolved: retry the resolve bef
 
 ## Files
 
-`docs/howto/ltx-colab/`: `check_hf.sh`, `prepare_inputs.sh` (local); `setup.sh`, `setup_image.sh`,
-`start_setup.py`, `start_bg.py`, `start_comfy.py`, `object_info.py`, `object_info_image.py`,
-`make_canny.py`, `make_canny_soft.py`, `prep_image_inputs.py`, `align_check.py`, `free_vram.py`,
-`run_job.py`, `start_job.py` (VM, started with `colab exec`); `build_workflow.py`,
-`build_image_workflow.py`, `poll.sh`, `fetch_outputs.sh`, `make_compare.sh` (local).
+[`tools/colab/`](../tools/colab/): `setup_session.py`, `check_hf.sh`, `prepare_inputs.sh` (local);
+`vm_state.py`, `setup.sh`, `setup_image.sh`, `start_setup.py`, `start_bg.py`, `start_comfy.py`,
+`object_info.py`, `object_info_image.py`, `make_canny.py`, `make_canny_soft.py`,
+`prep_image_inputs.py`, `align_check.py`, `free_vram.py`, `run_job.py`, `start_job.py` (VM, started
+with `colab exec`); `build_workflow.py`, `build_image_workflow.py`, `poll.sh`, `fetch_outputs.sh`,
+`make_compare.sh` (local).
 The full log of both tests (`RUNLOG.md`, run 2 in its "Run 2 (photoreal first frame)" section), their
 graphs (`colab/`, `colab2/`), logs, `pip_freeze.txt`, the candidates and the clips (`out/`, `out2/`) stay
 outside the repo, in the owner's `video-projects/footage-test/ltx-test/`.

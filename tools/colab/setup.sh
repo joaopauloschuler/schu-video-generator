@@ -1,10 +1,12 @@
 #!/bin/bash
 # Install ComfyUI + custom nodes and download the LTX-2.3 weights on a Colab VM.
-# Started detached by start_setup.py; writes progress to /content/setup.log
-# (lines starting with ### are the milestones) and /content/download.log.
+# setup_session.py uploads it with vm_state.py and starts it detached through start_setup.py;
+# progress goes to /content/setup.log (lines starting with ### are the milestones) and
+# /content/download.log. On success it writes /content/.vidgen_setup_ltx_done.
 # Tested 2026-11-24 on a Colab L4 (Python 3.13, torch 2.14.1+cu130 preinstalled and kept).
 # PIN=1 (default) checks out the commits that were tested; PIN=0 keeps the latest of each repo.
 # No Hugging Face login: every repo below is ungated (check with check_hf.sh first).
+# Safe to run again: existing clones are kept and hf download skips finished files.
 set -x
 cd /content
 T0=$(date +%s)
@@ -41,12 +43,11 @@ mkdir -p /content/hf
 DLPID=$!
 
 stamp "clone ComfyUI + custom nodes"
-git clone -q https://github.com/Comfy-Org/ComfyUI.git /content/ComfyUI
-cd /content/ComfyUI/custom_nodes
-git clone -q https://github.com/Lightricks/ComfyUI-LTXVideo.git
-git clone -q https://github.com/city96/ComfyUI-GGUF.git
-git clone -q https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
-git clone -q https://github.com/kijai/ComfyUI-KJNodes.git
+clone() { [ -d "$2/.git" ] || git clone -q "https://github.com/$1.git" "$2"; }
+clone Comfy-Org/ComfyUI /content/ComfyUI
+for repo in Lightricks/ComfyUI-LTXVideo city96/ComfyUI-GGUF Kosinkadink/ComfyUI-VideoHelperSuite kijai/ComfyUI-KJNodes; do
+  clone "$repo" "/content/ComfyUI/custom_nodes/${repo#*/}"
+done
 cd /content/ComfyUI
 if [ "${PIN:-1}" = "1" ]; then
   git checkout -q da8bd08e48deee74d9f6c3bc00aed365b00ec209
@@ -84,4 +85,10 @@ ln -sf /content/hf/unsloth/LTX-2.3-GGUF/text_encoders/ltx-2.3-22b-distilled_embe
 ln -sf /content/hf/Comfy-Org/ltx-2/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors $M/text_encoders/
 ln -sf /content/hf/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control/ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors $M/loras/
 ls -laL $M/unet $M/loras $M/vae $M/text_encoders
-stamp "SETUP DONE"
+if python /content/vm_state.py ltx; then
+  touch /content/.vidgen_setup_ltx_done
+  stamp "SETUP DONE"
+else
+  stamp "SETUP FAILED: files missing (MISSING lines above)"
+  exit 1
+fi
