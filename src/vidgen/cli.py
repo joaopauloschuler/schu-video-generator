@@ -2478,10 +2478,10 @@ def cmd_remote(args: argparse.Namespace) -> CommandResult:
         raise VidgenError("give the vidgen command to run, e.g. vidgen remote NAME render")
     if vidgen_args[0] == "remote":
         raise VidgenError("vidgen remote runs a vidgen command on the session; it cannot run remote there")
-    colab = Colab(args.session, cli=args.colab)
-    run = RemoteRun(colab, Path.cwd(), vidgen_args, json_commands=JSON_COMMANDS,
-                    exclude=(*EXCLUDED_DIRS, *args.exclude))
-    return run.run()
+    with Colab(args.session, cli=args.colab) as colab:
+        run = RemoteRun(colab, Path.cwd(), vidgen_args, json_commands=JSON_COMMANDS,
+                        exclude=(*EXCLUDED_DIRS, *args.exclude))
+        return run.run()
 
 
 def cmd_guide(args: argparse.Namespace) -> CommandResult:

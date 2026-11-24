@@ -5,7 +5,9 @@ Standard library only (it runs before vidgen's dependencies matter, Windows too)
 ``colab`` is a list of arguments, one call at a time per session, also across processes (a lock
 file in :data:`LOCK_DIR`): two overlapping calls on one session drop each other. ``colab exec``
 calls are cut at 30 s and retried after 3, 10, 20, 30 s; every VM-side action is safe to repeat,
-since the VM's work goes on when a connection drops. Nothing here stops a session.
+since the VM's work goes on when a connection drops. Files go both ways through Cloudflare quick
+tunnels (:mod:`vidgen.colab_transfer`), never ``colab upload`` / ``download``. Nothing here stops
+a session.
 """
 
 from __future__ import annotations
@@ -20,11 +22,14 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from vidgen.errors import VidgenError
+
+if TYPE_CHECKING:
+    from vidgen.colab_transfer import Transfers
 
 #: The VM-side script (``colab exec -f``) that reports state, unpacks, starts and polls runs.
 VM_SCRIPT = Path(__file__).resolve().parent / "colab_vm.py"
@@ -41,7 +46,8 @@ _SKIPPED_SUFFIXES = (".pyc", ".pyo")
 #: The ``--env`` keys :data:`VM_SCRIPT` reads. ``--env`` values stay set in the kernel, so
 #: :meth:`Colab.vm` passes every key, blank unless given.
 VM_KEYS = ("VIDGEN_PROJECT", "VIDGEN_EXCLUDE", "VIDGEN_RUN", "VIDGEN_BIN", "VIDGEN_ARGS", "VIDGEN_HASH",
-           "VIDGEN_ARCHIVE", "VIDGEN_CHECK", "VIDGEN_OFFSET", "VIDGEN_PACK")
+           "VIDGEN_ARCHIVE", "VIDGEN_CHECK", "VIDGEN_OFFSET", "VIDGEN_PACK", "VIDGEN_URL", "VIDGEN_FILES",
+           "VIDGEN_ATTEMPT", "VIDGEN_SECRET", "VIDGEN_OFFER", "VIDGEN_RESTART")
 #: Where the per-session lock files live (one ``colab`` call at a time per session).
 LOCK_DIR = Path(tempfile.gettempdir()) / "vidgen-colab-locks"
 #: A ``colab exec`` is cut after this many seconds (the VM scripts answer in 5-15 s).
@@ -142,6 +148,8 @@ class Colab:
     retry_pauses: tuple[float, ...] = RETRY_PAUSES
     lock_dir: Path = LOCK_DIR
     wall: Callable[[], float] = time.time
+    transfer_factory: Callable[[Colab], Transfers] | None = None
+    _transfers: Transfers | None = field(default=None, init=False, repr=False)
 
     def run(self, args: list[str], timeout_seconds: float) -> CommandResult:
         if args[0] == "sessions":
@@ -231,26 +239,37 @@ class Colab:
             raise ColabError(f"on {self.session}: {reply['error']}")
         return reply
 
-    def upload(self, local: Path, remote: str) -> None:
-        """``colab upload``, retried when the transfer fails."""
-        timeout = transfer_seconds(local.stat().st_size)
-        for attempt in range(1, self.attempts + 1):
-            result = self.run(["upload", "-s", self.session, str(local), remote], timeout)
-            if result.returncode == 0 and "Traceback" not in result.output:
-                return
-            self.pause_before_retry(f"upload of {local.name} failed ({last_line(result.output)})", attempt)
-        raise ColabError(f"could not upload {local} to {remote}")
+    @property
+    def transfers(self) -> Transfers:
+        """This command's file transfers (:mod:`vidgen.colab_transfer`; tunnels open on first use)."""
+        if self._transfers is None:
+            from vidgen.colab_transfer import Transfers
 
-    def download(self, remote: str, local: Path, size: int | None = None) -> None:
-        """``colab download``, retried until ``local`` exists (cut by ``size`` when known)."""
-        local.parent.mkdir(parents=True, exist_ok=True)
-        timeout = 600.0 if size is None else transfer_seconds(size)
-        for attempt in range(1, self.attempts + 1):
-            result = self.run(["download", "-s", self.session, remote, str(local)], timeout)
-            if result.returncode == 0 and "Traceback" not in result.output and local.is_file():
-                return
-            self.pause_before_retry(f"download of {remote} failed ({last_line(result.output)})", attempt)
-        raise ColabError(f"could not download {remote} from {self.session}")
+            self._transfers = (self.transfer_factory or Transfers)(self)
+        return self._transfers
+
+    def upload(self, local: Path, remote: str) -> None:
+        """Send ``local`` to the VM path ``remote`` (through a quick tunnel, SHA-256 checked)."""
+        self.upload_many([(local, remote)])
+
+    def upload_many(self, pairs: list[tuple[Path, str]]) -> None:
+        """Send several files in one transfer job."""
+        self.transfers.upload(pairs)
+
+    def download(self, remote: str, local: Path) -> None:
+        """Bring the VM file ``remote`` to ``local`` (through a quick tunnel, SHA-256 checked)."""
+        self.transfers.download(remote, local)
+
+    def close(self) -> None:
+        """Close this command's tunnels (safe to repeat; also done at exit)."""
+        if self._transfers is not None:
+            self._transfers.close()
+
+    def __enter__(self) -> Colab:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def pause_before_retry(self, what: str, attempt: int) -> None:
         """Say what failed and wait, unless ``attempt`` was the last one."""
@@ -258,11 +277,6 @@ class Colab:
             pause = self.retry_pauses[min(attempt, len(self.retry_pauses)) - 1]
             self.say(f"   {what}; retry {attempt + 1}/{self.attempts} in {pause:.0f} s")
             self.sleep(pause)
-
-
-def transfer_seconds(size: int) -> float:
-    """The cut-off of an upload or download of ``size`` bytes: 60 s plus 1 s per MB."""
-    return 60.0 + size / 1e6
 
 
 def _package_files(package_dir: Path) -> list[Path]:

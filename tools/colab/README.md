@@ -51,6 +51,18 @@ there (`vm_state.MODEL_FILES`, plus ComfyUI and its custom nodes for LTX-2.3). A
 still runs is waited for, never started twice. So running the command again on a ready session
 takes about 20 s, and after an error it goes on from where it stopped.
 
+**Transfers.** Every file between your machine and the VM (`vidgen remote`, the `comfyui`
+provider on Colab, this script's uploads) goes through a Cloudflare quick tunnel
+(`vidgen.colab_transfer`), never `colab upload` / `colab download`: up, your machine serves it
+and the VM gets it with `curl`; down, the VM serves it (with `cloudflared` 2026.10.7, which this
+script installs at `/content/bin/cloudflared` before the other parts) and your machine gets it.
+Each side's tunnel opens once per command and closes when it ends. Needs `cloudflared` on your
+PATH. **Security:** each tunnel serves only its own folder under a new
+`secrets.token_urlsafe(32)` path, which both sides learn only through `colab exec` and which is
+masked in messages; it binds to 127.0.0.1, lists nothing and answers 404 to anything else; every
+file's SHA-256 is checked. A failed transfer is retried twice (a new tunnel when its address does
+not resolve), then stops with an error.
+
 **Several sessions.** Each `NAME` is its own VM; the name goes to `colab` as one argument.
 
 **The script never stops a session**, also not after an error. Stop it yourself when you are done

@@ -41,6 +41,7 @@ class FakeVM:
         self.vidgen = {"hash": vidgen_hash, "setup_running": False,
                        "log": {"exists": True, "milestones": ["### vidgen step"], "tail": ["vidgen last line"]}}
         self.vidgen_polls = 0
+        self.done: set[str] = set()
         self.comfy = {"up": comfy_up, "running": comfy_up, "dir": True,
                       "models": {"unet_gguf": ["a.gguf"]} if comfy_up else {}}
         self.polls_to_finish = polls_to_finish
@@ -90,8 +91,6 @@ class FakeColabCLI:
             if "READY" in result:
                 self.sessions.append(args[args.index("-s") + 1])
             return setup_session.CommandResult(0 if "READY" in result else 1, result)
-        if command == "upload":
-            return setup_session.CommandResult(0, "uploaded")
         if command == "exec":
             script = Path(args[args.index("-f") + 1]).name
             if script == "vm_state.py":
@@ -100,6 +99,10 @@ class FakeColabCLI:
                     return setup_session.CommandResult(1, "RuntimeError: Connection was lost.")
                 return setup_session.CommandResult(0, self.vm.state_json())
             env = dict(a.split("=", 1) for a in args if "=" in a)
+            if script == "colab_vm.py" and env["VIDGEN_ACTION"] == "cloudflared":
+                reply = {"version": "cloudflared version 2026.10.7", "installed": "cloudflared" not in self.vm.done}
+                self.vm.done.add("cloudflared")
+                return setup_session.CommandResult(0, "VIDGEN_VM " + json.dumps(reply))
             if script == "colab_vm.py":
                 assert env["VIDGEN_ACTION"] == "state"
                 vidgen = self.vm.vidgen
@@ -120,6 +123,12 @@ class FakeColabCLI:
                 return setup_session.CommandResult(0, "comfy pid 1")
         raise AssertionError(f"unexpected call {args}")
 
+    def upload(self, pairs: list[tuple[Path, str]]) -> None:
+        self.calls += [["colab", "upload", str(local), remote] for local, remote in pairs]
+
+    def close(self) -> None:
+        pass
+
     def commands(self) -> list[str]:
         return [" ".join(c[1:2] + ([Path(c[c.index("-f") + 1]).name] if "-f" in c else [])) for c in self.calls]
 
@@ -139,7 +148,8 @@ def _cheap_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 def _run(cli: FakeColabCLI, argv: list[str]) -> tuple[int, list[str]]:
     lines: list[str] = []
     clock = iter(range(0, 100000, 5))
-    code = setup_session.main(argv, runner=cli, sleep=lambda s: None, clock=lambda: next(clock), say=lines.append)
+    code = setup_session.main(argv, runner=cli, sleep=lambda s: None, clock=lambda: next(clock), say=lines.append,
+                              transfer_factory=lambda colab: cli)  # type: ignore[arg-type, return-value]
     return code, lines
 
 
@@ -181,8 +191,9 @@ def test_existing_ready_session_is_all_skipped() -> None:
     cli = FakeColabCLI(vm, sessions=["ltx"])
     code, lines = _run(cli, ["ltx"])
     assert code == 0
-    assert cli.commands() == ["sessions", "exec vm_state.py", "exec colab_vm.py"]
+    assert cli.commands() == ["sessions", "exec colab_vm.py", "exec vm_state.py", "exec colab_vm.py"]
     text = "\n".join(lines)
+    assert "cloudflared (VM, for transfers): installed (cloudflared version 2026.10.7)" in text
     assert "reused (marker, code c0de)" in text and "vidgen remote ltx render" in text
     assert "reused (all files present, no marker)" in text and "reused (marker)" in text
     assert "reused (already answering)" in text and "colab stop -s ltx" in text
@@ -289,7 +300,7 @@ def test_no_vidgen_skips_it_and_a_failed_vidgen_setup_shows_its_log() -> None:
                 comfy_up=True, vidgen_hash=None)
     cli = FakeColabCLI(vm, sessions=["s"])
     code, lines = _run(cli, ["s", "--no-vidgen"])
-    assert code == 0 and "exec colab_vm.py" not in cli.commands() and "skipped (--no-vidgen)" in "\n".join(lines)
+    assert code == 0 and cli.commands().count("exec colab_vm.py") == 1 and "skipped (--no-vidgen)" in "\n".join(lines)
     vm.fail = "vidgen"
     code, lines = _run(FakeColabCLI(vm, sessions=["s"]), ["s", "--vidgen-only"])
     text = "\n".join(lines)

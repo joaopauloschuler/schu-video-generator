@@ -36,7 +36,7 @@ print(json.dumps({"ok": True, "args": args, "outputs": {
 
 
 class FakeColab:
-    """`colab` for one VM folder: sessions, upload/download (copies) and exec of colab_vm.py."""
+    """`colab` for one VM folder: sessions and exec of colab_vm.py; also the transfers (copies)."""
 
     def __init__(self, vm: Path, vidgen_hash: str | None) -> None:
         self.vm = vm
@@ -56,14 +56,6 @@ class FakeColab:
         command = args[1]
         if command == "sessions":
             return CommandResult(0, "[ltx] gpu-l4-x | Hardware: L4 | Shape: Standard")
-        if command == "upload":
-            target = self.local(args[-1])
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(args[-2], target)
-            return CommandResult(0, "")
-        if command == "download":
-            shutil.copyfile(self.local(args[-2]), args[-1])
-            return CommandResult(0, "")
         assert command == "exec" and Path(args[-1]).name == "colab_vm.py"
         if self.dropped:
             self.dropped -= 1
@@ -76,6 +68,24 @@ class FakeColab:
         with redirect_stdout(out):
             colab_vm.main(env)
         return CommandResult(0, out.getvalue())
+
+    def upload(self, pairs: list[tuple[Path, str]]) -> None:
+        for local, remote_path in pairs:
+            self.calls.append(["colab", "upload", str(local), remote_path])
+            target = self.local(remote_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(local, target)
+
+    def download(self, remote_path: str, local: Path) -> int:
+        self.calls.append(["colab", "download", remote_path, str(local)])
+        shutil.copyfile(self.local(remote_path), local)
+        return local.stat().st_size
+
+    def prestart_env(self) -> dict[str, str]:
+        return {}
+
+    def close(self) -> None:
+        self.calls.append(["colab", "close"])
 
     def names(self) -> list[str]:
         return [c[1] if c[1] != "exec" else next(a for a in c if a.startswith("VIDGEN_ACTION")) for c in self.calls]
@@ -103,7 +113,8 @@ def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     def make(vidgen_hash: str | None = "c0de") -> tuple[FakeColab, Colab]:
         fake = FakeColab(vm, vidgen_hash)
         lines: list[str] = []
-        colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks")
+        colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks",
+                      transfer_factory=lambda c: fake)  # type: ignore[arg-type, return-value]
         colab.lines = lines  # type: ignore[attr-defined]
         return fake, colab
 

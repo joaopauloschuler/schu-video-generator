@@ -22455,9 +22455,9 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
 - **One client, two transports.** `comfyui_client.py` (standard library, no vidgen imports) is
   ComfyUI's HTTP API and `run_job(job.json)`. `HttpTransport` uses it in process (job id = prompt id).
   `ColabTransport` writes `job.json`, the fitted inputs and a copy of `comfyui_client.py` into one
-  archive, `colab upload`s it, unpacks it into `/content/vidgen-comfyui/<job id>` and starts
+  archive, sends it (`Colab.upload`, a quick tunnel: `vidgen.colab_transfer`), unpacks it into `/content/vidgen-comfyui/<job id>` and starts
   `python3 comfyui_client.py job.json` there detached with `colab_vm.py` (`start` / `poll`, as
-  `vidgen remote`); the client's last stdout line is the outcome; `colab download` fetches
+  `vidgen remote`); the client's last stdout line is the outcome; `Colab.download` (a tunnel on the VM) fetches
   `output.mp4`. `colab:` on the VM itself (the setup marker `/content/.vidgen_setup_vidgen_done`)
   uses `HttpTransport(127.0.0.1:8188)`: the path of `vidgen remote <session> generate run --pay`.
 - **Provider and cost.** `ComfyUIVideoProvider` has the OpenRouter provider's interface, so

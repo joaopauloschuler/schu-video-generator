@@ -5,8 +5,9 @@
 Runs on your machine (standard library only, Windows too) and drives the `colab` CLI: it reuses the
 session NAME when `colab sessions` lists it (else `colab new`, retried on 503), then installs
 ComfyUI + the LTX-2.3 weights (setup.sh) and the image models (setup_image.sh), starts ComfyUI, and
-installs this checkout's vidgen (setup_vidgen.sh), skipping each part that is already done. It
-never stops the session. See README.md here.
+installs this checkout's vidgen (setup_vidgen.sh), skipping each part that is already done; first
+it installs cloudflared on the VM (files go both ways through quick tunnels). It never stops the
+session. See README.md here.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ from vidgen.colab import (  # noqa: E402
     last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions, run_command, say_now, shown,
     source_archive,
 )
+from vidgen.colab_transfer import Transfers  # noqa: E402
 
 __all__ = ["CommandResult", "Runner", "SetupError", "format_seconds", "parse_sessions", "run_command", "say_now", "shown"]
 
@@ -130,8 +132,7 @@ class SessionSetup:
         to_start = [part for part in parts if status[part] == "todo"]
         if to_start:
             self.colab.say("## uploading " + ", ".join(UPLOADS))
-            for name in UPLOADS:
-                self.colab.upload(TOOLS_DIR / name, f"/content/{name}")
+            self.colab.upload_many([(TOOLS_DIR / name, f"/content/{name}") for name in UPLOADS])
             for part in to_start:
                 state = self.start_part(part)
         waiting = [part for part in parts if status[part] in ("todo", "running")]
@@ -229,6 +230,20 @@ class SessionSetup:
         return last
 
 
+def ensure_cloudflared(colab: Colab, report: Report) -> None:
+    """Install cloudflared on the VM (the pinned linux-amd64 release) unless it is there: files
+    come back from the VM through its quick tunnel."""
+    for attempt in range(1, 4):
+        try:
+            reply = colab.vm("cloudflared")
+            break
+        except SetupError as exc:
+            if attempt == 3:
+                raise
+            colab.say(f"   cloudflared install on the VM failed ({exc}); trying again")
+    report.outcomes["cloudflared"] = f"{'installed' if reply['installed'] else 'reused'} ({reply['version']})"
+
+
 class VidgenSetup:
     """The vidgen part: upload this checkout's source and install it unless the VM has its hash."""
 
@@ -262,8 +277,7 @@ class VidgenSetup:
         self.colab.say(f"## uploading vidgen's source (code {code}) and {VIDGEN_SCRIPT}")
         with tempfile.TemporaryDirectory() as tmp:
             archive = source_archive(self.repo, Path(tmp) / "vidgen-src.tar.gz")
-            self.colab.upload(archive, VM_SOURCE_ARCHIVE)
-        self.colab.upload(TOOLS_DIR / VIDGEN_SCRIPT, f"/content/{VIDGEN_SCRIPT}")
+            self.colab.upload_many([(archive, VM_SOURCE_ARCHIVE), (TOOLS_DIR / VIDGEN_SCRIPT, f"/content/{VIDGEN_SCRIPT}")])
         env = {"SCRIPT": f"/content/{VIDGEN_SCRIPT}", "PIN": "1", "VIDGEN_HASH": code}
         for attempt in range(1, self.colab.attempts + 1):
             self.colab.say(f"## starting {VIDGEN_SCRIPT} ({VIDGEN_TITLE})")
@@ -310,7 +324,8 @@ def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elap
     """The final summary: session, GPU, what was installed or reused, time, the next commands."""
     name = shown(session)
     lines = [f"== session {session} is ready ({format_seconds(elapsed_seconds)})",
-             f"   session:    {session} ({report.hardware or gpu}, {'created' if report.created else 'reused'})"]
+             f"   session:    {session} ({report.hardware or gpu}, {'created' if report.created else 'reused'})",
+             f"   cloudflared (VM, for transfers): {report.outcomes.get('cloudflared', '?')}"]
     if parts:
         for part in PART_SCRIPTS:
             outcome = report.outcomes.get(part, "?") if part in parts else "skipped (--no-image)"
@@ -354,10 +369,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None, runner: Runner = run_command,
          sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-         say: Callable[[str], None] = say_now) -> int:
+         say: Callable[[str], None] = say_now, transfer_factory: Callable[[Colab], Transfers] | None = None) -> int:
     """Set up the session; returns the exit code (0 ready, 1 failed, 130 interrupted)."""
     args = parse_args(argv)
-    colab = Colab(args.session, cli=args.colab, runner=runner, sleep=sleep, say=say)
+    colab = Colab(args.session, cli=args.colab, runner=runner, sleep=sleep, say=say, transfer_factory=transfer_factory)
     parts = [] if args.vidgen_only else ["ltx"] if args.no_image else ["ltx", "image"]
     report = Report()
     begin = clock()
@@ -369,6 +384,7 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
             say(f"## reusing session {args.session} ({report.hardware})")
             if report.hardware != args.gpu:
                 say(f"   note: it has a {report.hardware}; --gpu only applies to a new session")
+        ensure_cloudflared(colab, report)
         if parts:
             SessionSetup(colab, pin=not args.latest, clock=clock).run(parts, report)
         if not args.no_vidgen:
@@ -381,6 +397,8 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
             say(f"session {args.session} is still running (this script never stops it); "
                 f"run this again to resume, or stop it: colab stop -s {shown(args.session)}")
         return 1 if isinstance(exc, SetupError) else 130
+    finally:
+        colab.close()
     for line in summary_lines(args.session, args.gpu, report, parts, clock() - begin, vidgen=not args.no_vidgen):
         say(line)
     return 0

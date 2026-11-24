@@ -16,7 +16,16 @@ Actions (``--env`` values stay set in the kernel, so every call passes all the k
   ``VIDGEN_WEBGL=gpu``) added to its environment;
 - ``poll``: the run's log from byte ``VIDGEN_OFFSET``, and when it is done its exit code and
   stdout; with ``VIDGEN_PACK``, also the project's files after the run and, when it succeeded, one
-  ``.vidgen-remote/result.tar`` of the files to bring back (:func:`bring_back`).
+  ``.vidgen-remote/result.tar`` of the files to bring back (:func:`bring_back`);
+- ``fetch`` (files up, :mod:`vidgen.colab_transfer`): ``curl`` in a detached job gets the files
+  ``VIDGEN_FILES`` (``name``, ``dest``, ``sha256``) from ``VIDGEN_URL`` (this computer's tunnel
+  and secret path); a repeat waits for it, a new ``VIDGEN_ATTEMPT`` starts it again; a file is put
+  in place only when its SHA-256 matches;
+- ``serve`` (files down): start (once per secret ``VIDGEN_SECRET``; ``VIDGEN_RESTART``: a new
+  one) the VM's tunnel: :data:`SERVE_CODE` with ``cloudflared``; link the ``VIDGEN_OFFER`` paths
+  into its folder; reply its address and each file's name, size and SHA-256;
+- ``unserve``: stop that tunnel and delete its folder;
+- ``cloudflared``: install :data:`CLOUDFLARED_VERSION` (once).
 
 Standard library only: it runs in the Colab kernel's Python.
 """
@@ -24,10 +33,14 @@ Standard library only: it runs in the Colab kernel's Python.
 import hashlib
 import json
 import os
+import shutil
+import signal
 import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PREFIX = "VIDGEN_VM "
 CONTENT = Path("/content")
@@ -50,6 +63,296 @@ WRAPPER = (
     "open(rc + '.tmp', 'w').write(str(code))\n"
     "import os; os.replace(rc + '.tmp', rc)\n"
 )
+
+
+#: The cloudflared release the setup installs on the VM (the linux-amd64 binary).
+CLOUDFLARED_VERSION = "2026.10.7"
+CLOUDFLARED_URL = ("https://github.com/cloudflare/cloudflared/releases/download/"
+                   f"{CLOUDFLARED_VERSION}/cloudflared-linux-amd64")
+CLOUDFLARED = CONTENT / "bin" / "cloudflared"
+CLOUDFLARED_MARKER = CONTENT / ".vidgen_cloudflared_done"
+TUNNEL_DIR = CONTENT / ".vidgen-tunnel"
+FETCH_DIR = CONTENT / ".vidgen-fetch"
+#: How long one exec waits for a tunnel or a fetch before it answers "not yet".
+WAIT_SECONDS = 14.0
+#: A VM tunnel stops by itself after this long (a killed vidgen cannot close it).
+TUNNEL_MAX_SECONDS = 6 * 3600
+PART = ".vidgen-part"
+MASK = "***"
+
+# The tunnel process, on both sides (argv: folder state cloudflared max_seconds watch_stdin; the
+# secret in env VIDGEN_SERVE_SECRET). It serves only GET/HEAD /<secret>/<name> of the files right
+# in the folder on 127.0.0.1, a plain 404 for anything else, no listing; runs cloudflared on that
+# port and writes its address to the state file; stops (cloudflared too) when cloudflared ends,
+# after max_seconds, or when stdin closes (watch_stdin 1: the local vidgen ended).
+SERVE_CODE = r"""
+import hmac, json, os, re, subprocess, sys, threading, time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+root, state_file, cloudflared = Path(sys.argv[1]).resolve(), Path(sys.argv[2]), sys.argv[3]
+max_seconds, watch_stdin = float(sys.argv[4]), sys.argv[5] == "1"
+secret = os.environ.pop("VIDGEN_SERVE_SECRET")
+class Handler(BaseHTTPRequestHandler):
+    def version_string(self):
+        return "vidgen"
+    def log_message(self, *args):
+        pass
+    def do_GET(self):
+        self.answer(True)
+    def do_HEAD(self):
+        self.answer(False)
+    def do_POST(self):
+        self.missing()
+    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_POST
+    def missing(self):
+        self.send_response(404)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", "10")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(b"not found\n")
+    def answer(self, body):
+        parts = self.path.split("?", 1)[0].split("/")
+        name = parts[2] if len(parts) == 3 and parts[0] == "" else ""
+        given = (parts[1] if len(parts) > 1 else "").encode("utf-8", "replace")
+        if not hmac.compare_digest(given, secret.encode("utf-8")) or not name or name.startswith(".") or "\\" in name:
+            return self.missing()
+        path = root / name
+        if path.is_symlink() or not path.is_file() or path.resolve().parent != root:
+            return self.missing()
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.end_headers()
+        if body:
+            with path.open("rb") as handle:
+                while chunk := handle.read(1 << 20):
+                    self.wfile.write(chunk)
+server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+port = server.server_address[1]
+threading.Thread(target=server.serve_forever, daemon=True).start()
+state = {"pid": os.getpid(), "port": port, "url": None, "registered": False, "ended": False, "tail": []}
+def write():
+    tmp = state_file.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        os.replace(tmp, state_file)
+    except OSError:   # Windows: a reader holds it open; the next line writes it again
+        pass
+write()
+command = [cloudflared, "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate", "--protocol", "http2"]
+tunnel = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace")
+stop = threading.Event()
+import signal
+signal.signal(signal.SIGTERM, lambda *args: stop.set())   # a stop of the group: still reap cloudflared
+def read():
+    for line in tunnel.stdout:
+        state["tail"] = (state["tail"] + [line.rstrip()])[-12:]
+        found = re.search(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com", line)
+        if found and not state["url"]:
+            state["url"] = found.group(0)
+        if "Registered tunnel connection" in line:
+            state["registered"] = True
+        write()
+    stop.set()
+threading.Thread(target=read, daemon=True).start()
+if watch_stdin:
+    threading.Thread(target=lambda: (sys.stdin.read(), stop.set()), daemon=True).start()
+stop.wait(max_seconds)
+tunnel.terminate()
+try:
+    tunnel.wait(5)
+except subprocess.TimeoutExpired:
+    tunnel.kill()
+state["ended"] = True
+write()
+server.shutdown()
+"""
+
+# The fetch job (argv: curl config, rc file, host): waits (up to 90 s) until the new tunnel's
+# host resolves, runs curl with retries, then deletes the config (it holds the secret) and writes
+# the exit code.
+FETCH_CODE = (
+    "import os, socket, subprocess, sys, time\n"
+    "cfg, rc, host = sys.argv[1:4]\n"
+    "for _ in range(90):\n"
+    "    try:\n"
+    "        socket.getaddrinfo(host, 443)\n"
+    "        break\n"
+    "    except OSError:\n"
+    "        time.sleep(1)\n"
+    "with open(rc + '.log', 'wb') as log:\n"
+    "    code = subprocess.call(['curl', '-sS', '--fail', '--create-dirs', '--retry', '3', '--retry-delay', '2',\n"
+    "                            '--retry-all-errors', '--connect-timeout', '20', '-K', cfg], stdout=log, stderr=log)\n"
+    "os.unlink(cfg)\n"
+    "open(rc + '.tmp', 'w').write(str(code))\n"
+    "os.replace(rc + '.tmp', rc)\n"
+)
+
+
+def masked(text, secret):
+    """``text`` with ``secret`` replaced by :data:`MASK`."""
+    return text.replace(secret, MASK) if secret else text
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _read_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _stop_group(pid):
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+
+
+def _curl_quote(text):
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def fetch(env, proc=Path("/proc"), wait_seconds=None):
+    """Get ``VIDGEN_FILES`` from ``VIDGEN_URL`` with a detached curl (see the module docstring)."""
+    files = json.loads(env["VIDGEN_FILES"])
+    base, attempt = env["VIDGEN_URL"], env.get("VIDGEN_ATTEMPT") or "1"
+    secret = base.rstrip("/").rsplit("/", 1)[-1]
+    job = FETCH_DIR / hashlib.sha256(env["VIDGEN_FILES"].encode("utf-8")).hexdigest()[:16]
+    pending = [f for f in files if not (Path(f["dest"]).is_file() and sha256_file(Path(f["dest"])) == f["sha256"])]
+    if not pending:
+        shutil.rmtree(job, ignore_errors=True)
+        return {"done": True, "ok": True}
+    info = _read_json(job / "job.json")
+    rc_file = job / "rc"
+    if info.get("attempt") != attempt and not pid_alive(info.get("pid", -1), proc):
+        shutil.rmtree(job, ignore_errors=True)
+        job.mkdir(parents=True)
+        cfg = job / "curl.cfg"
+        handle = os.open(cfg, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        with os.fdopen(handle, "w", encoding="utf-8") as config:
+            for f in pending:
+                config.write(f"url = {_curl_quote(base + f['name'])}\noutput = {_curl_quote(f['dest'] + PART)}\n")
+        child = subprocess.Popen([sys.executable, "-c", FETCH_CODE, str(cfg), str(rc_file), urlsplit(base).hostname or ""], start_new_session=True,
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        (job / "job.json").write_text(json.dumps({"attempt": attempt, "pid": child.pid}), encoding="utf-8")
+    deadline = time.time() + (WAIT_SECONDS if wait_seconds is None else wait_seconds)
+    while not rc_file.is_file() and time.time() < deadline:
+        time.sleep(0.3)
+    if not rc_file.is_file():
+        return {"done": False}
+    rc = int(rc_file.read_text(encoding="utf-8").strip() or "1")
+    bad = []
+    for f in pending:
+        part = Path(f["dest"] + PART)
+        if part.is_file() and sha256_file(part) == f["sha256"]:
+            os.replace(part, f["dest"])
+        else:
+            bad.append(f["dest"])
+            part.unlink(missing_ok=True)
+    if not bad:
+        shutil.rmtree(job, ignore_errors=True)
+        return {"done": True, "ok": True}
+    log = (job / "rc.log").read_text(encoding="utf-8", errors="replace") if (job / "rc.log").is_file() else ""
+    error = masked(log.strip().splitlines()[-1] if log.strip() else f"curl exit code {rc}", secret)
+    if rc == 0:
+        error = f"SHA-256 differs for {bad[0]}"
+    # curl 6: the address did not resolve (the caller then opens a new tunnel)
+    return {"done": True, "ok": False, "rc": rc, "resolve": rc == 6, "problem": error, "failed": bad}
+
+
+def tunnel_id(secret):
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()[:16]
+
+
+def serve_start(secret, restart=False, proc=Path("/proc"), cloudflared=None, max_seconds=TUNNEL_MAX_SECONDS):
+    """Start the VM's tunnel for ``secret`` unless it runs already; returns its folder."""
+    info = _read_json(TUNNEL_DIR / "id.json")
+    if not restart and info.get("id") == tunnel_id(secret) and pid_alive(info.get("pid", -1), proc):
+        return TUNNEL_DIR / "files"
+    serve_stop()
+    (TUNNEL_DIR / "files").mkdir(parents=True)
+    child = subprocess.Popen(
+        [sys.executable, "-c", SERVE_CODE, str(TUNNEL_DIR / "files"), str(TUNNEL_DIR / "state.json"),
+         str(cloudflared or CLOUDFLARED), str(max_seconds), "0"],
+        env={**os.environ, "VIDGEN_SERVE_SECRET": secret}, start_new_session=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    (TUNNEL_DIR / "id.json").write_text(json.dumps({"id": tunnel_id(secret), "pid": child.pid}), encoding="utf-8")
+    return TUNNEL_DIR / "files"
+
+
+def serve_stop():
+    info = _read_json(TUNNEL_DIR / "id.json")
+    if info.get("pid"):
+        _stop_group(int(info["pid"]))
+    shutil.rmtree(TUNNEL_DIR, ignore_errors=True)
+
+
+def offer(path, folder):
+    """Link (else copy) ``path`` into the tunnel's ``folder``; its name, size and SHA-256."""
+    name = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:12] + "-" + "".join(
+        c if c.isalnum() or c in "._-" else "_" for c in path.name).lstrip(".")
+    target = folder / name
+    target.unlink(missing_ok=True)
+    try:
+        os.link(path, target)
+    except OSError:
+        shutil.copyfile(path, target)
+    return {"name": name, "size": target.stat().st_size, "sha256": sha256_file(target)}
+
+
+def serve(env, proc=Path("/proc"), wait_seconds=None):
+    if not CLOUDFLARED.is_file():
+        return {"error": "no cloudflared on the VM; install it: python tools/colab/setup_session.py NAME --vidgen-only"}
+    folder = serve_start(env["VIDGEN_SECRET"], restart=bool(env.get("VIDGEN_RESTART")), proc=proc)
+    files = {}
+    for path in json.loads(env.get("VIDGEN_OFFER") or "[]"):
+        if not Path(path).is_file():
+            return {"error": f"{path} is not on the VM"}
+        files[path] = offer(Path(path), folder)
+    deadline = time.time() + (WAIT_SECONDS if wait_seconds is None else wait_seconds)
+    while True:
+        state = _read_json(TUNNEL_DIR / "state.json")
+        if state.get("ended"):   # the caller opens a new one
+            return {"url": None, "files": files, "problem": "the VM's cloudflared stopped: " + " | ".join(state.get("tail", [])[-3:])}
+        if (state.get("url") and state.get("registered")) or time.time() >= deadline:
+            break
+        time.sleep(0.3)
+    ready = bool(state.get("url") and state.get("registered"))
+    return {"url": state["url"] if ready else None, "files": files}
+
+
+def unserve(env, proc=Path("/proc")):
+    serve_stop()
+    return {"closed": True}
+
+
+def install_cloudflared(env, proc=Path("/proc")):
+    """Install :data:`CLOUDFLARED_VERSION` at :data:`CLOUDFLARED` unless the marker says it is there."""
+    marker = CLOUDFLARED_MARKER.read_text(encoding="utf-8").strip() if CLOUDFLARED_MARKER.is_file() else ""
+    if CLOUDFLARED.is_file() and CLOUDFLARED_VERSION in marker:
+        return {"version": marker, "installed": False}
+    CLOUDFLARED.parent.mkdir(parents=True, exist_ok=True)
+    part = CLOUDFLARED.with_suffix(PART)
+    subprocess.run(["curl", "-fsSL", "--retry", "2", "-o", str(part), CLOUDFLARED_URL], check=True,
+                   capture_output=True, timeout=WAIT_SECONDS + 4)
+    part.chmod(0o755)
+    version = subprocess.run([str(part), "--version"], check=True, capture_output=True, text=True, timeout=10).stdout.strip()
+    if CLOUDFLARED_VERSION not in version:
+        return {"error": f"cloudflared from {CLOUDFLARED_URL} says {version!r}"}
+    os.replace(part, CLOUDFLARED)
+    CLOUDFLARED_MARKER.write_text(version, encoding="utf-8")
+    return {"version": version, "installed": True}
 
 
 def running_commands(proc=Path("/proc")):
@@ -157,6 +460,8 @@ def missing_files(project, want):
 
 
 def begin(env, proc=Path("/proc")):
+    if env.get("VIDGEN_SECRET") and CLOUDFLARED.is_file():
+        serve_start(env["VIDGEN_SECRET"], proc=proc)   # the results' tunnel starts while the run goes on
     project = Path(env["VIDGEN_PROJECT"])
     status = run_status(project, proc)
     if status["id"] == env["VIDGEN_RUN"]:
@@ -292,7 +597,8 @@ def bring_back(out, project, after, want):
     return list(dict.fromkeys(named_files(out, project) + changed))
 
 
-ACTIONS = {"state": state, "begin": begin, "poll": poll}
+ACTIONS = {"state": state, "begin": begin, "poll": poll, "fetch": fetch, "serve": serve, "unserve": unserve,
+           "cloudflared": install_cloudflared}
 
 
 def main(env):
@@ -300,7 +606,10 @@ def main(env):
     try:
         reply = action(env) if action else {"error": f"unknown VIDGEN_ACTION {env.get('VIDGEN_ACTION')!r}"}
     except Exception as exc:  # noqa: BLE001 - the local side shows it
-        reply = {"error": f"{type(exc).__name__}: {exc}"}
+        text = f"{type(exc).__name__}: {exc}"
+        for secret in (env.get("VIDGEN_SECRET", ""), (env.get("VIDGEN_URL") or "").rstrip("/").rsplit("/", 1)[-1]):
+            text = masked(text, secret)
+        reply = {"error": text}
     print(PREFIX + json.dumps(reply), flush=True)
 
 

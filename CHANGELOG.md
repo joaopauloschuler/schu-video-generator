@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–414
+## Steps 193–415
+
+### Colab file transfers through quick tunnels (Step 415)
+
+- Every file between this computer and a Colab VM (`vidgen remote`, the `comfyui` provider on
+  Colab, `setup_session.py`) now goes through Cloudflare quick tunnels, not `colab upload` /
+  `colab download`: a full 260 MB project now syncs (it failed before). One tunnel a side per
+  command, a secret path, 404 for anything else, SHA-256 checked, retried, then a clear error.
+- `setup_session.py` installs `cloudflared` 2026.10.7 on the VM. `cloudflared` must be on PATH here.
 
 ### No repeated frame at a chained join (Step 414)
 

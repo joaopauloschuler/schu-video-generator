@@ -6,7 +6,9 @@ still lacks), and in the same ``colab exec`` checks that the VM's vidgen is this
 (:func:`vidgen.colab.package_hash`) and starts ``vidgen ARGS`` there detached. It polls the log
 (after 2 s, 5 s, then every 10 s), then brings back in one tar what the next step needs: the files
 the command's JSON document names inside the project (not under ``build/``, except the render's
-``timings.json``) and the files the run created or changed outside the left-out folders.
+``timings.json``) and the files the run created or changed outside the left-out folders. Both
+tars go through Cloudflare quick tunnels (:mod:`vidgen.colab_transfer`; the VM's one starts with
+the run).
 ``build/`` stays on the VM as a cache. Standard library only; it never stops the session.
 """
 
@@ -191,14 +193,16 @@ class RemoteRun:
             changed = changed_files(local, known)
             size = sum((self.project_dir / rel).stat().st_size for rel in changed)
             self.colab.say(f"## sync: {len(changed)} of {len(local)} files to send ({size / 1e6:.1f} MB) -> {self.remote_dir}")
+            sent = self.clock()
             with tempfile.TemporaryDirectory() as tmp:
                 archive = sync_archive(self.project_dir, changed, local, Path(tmp) / archive_name)
                 self.colab.upload(archive, f"/content/{archive_name}")
+            self.colab.say(f"   sent in {format_seconds(self.clock() - sent)}")
             self.colab.say(f"## running on {self.colab.session}: vidgen {' '.join(args)}")
             reply = self.colab.vm("begin", VIDGEN_PROJECT=self.remote_dir, VIDGEN_RUN=run_id, VIDGEN_BIN=VM_VIDGEN,
                                   VIDGEN_ARGS=json.dumps(args), VIDGEN_HASH=self.local_hash or package_hash(),
                                   VIDGEN_ARCHIVE=f"/content/{archive_name}", VIDGEN_CHECK="1",
-                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)))
+                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)), **self.colab.transfers.prestart_env())
             if "vidgen" in reply:
                 self.check_version(reply["vidgen"])
             missing = reply.get("missing")
@@ -239,10 +243,12 @@ class RemoteRun:
         """Download the run's result tar (``colab_vm.pack``) and unpack it into the project."""
         if not result.get("archive"):
             return
+        got = self.clock()
         with tempfile.TemporaryDirectory() as tmp:
             local = Path(tmp) / "result.tar"
-            self.colab.download(result["archive"], local, size=int(result["size"]))
+            self.colab.download(result["archive"], local)
             extract_archive(local, self.project_dir)
+        self.colab.say(f"   result ({int(result['size']) / 1e6:.1f} MB) brought back in {format_seconds(self.clock() - got)}")
         for rel, size in result["files"].items():
             self.fetched.append(rel)
             self.colab.say(f"   fetched {rel} ({size / 1e6:.2f} MB)")
