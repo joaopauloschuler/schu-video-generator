@@ -47,6 +47,9 @@ dry-run plan of ``vidgen generate plan``.
   ``build/videogen/<shot>/last_of.<source>.<take>.png``. An unknown shot, the shot itself or a
   cycle is a problem; a source with no take blocks the shot, so a run never pays for it in the
   same pass as the clip it starts from.
+- **Chained parts**: in a split beat with a starting picture (any ``first_frame`` but ``none``),
+  part 1 uses ``first_frame`` and every later part starts from the last frame of the part before
+  it, as with ``last_of:`` (:func:`_link_last_of`).
 - **A restyled first frame** (``first_frame: restyled``, DESIGN.md §113.21): the render's first
   frame made photoreal on the ComfyUI server (``first_frame.restyled.png``, made by
   ``vidgen generate inputs --guide``); it needs ``videogen.provider: comfyui``.
@@ -611,7 +614,10 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     source = spec.first_frame_source
     first: Path | None = None
     what = ""
-    if source == "sheet":
+    if shot.last_of is not None or spec.last_of_shot is not None:   # last_of: or a chained part
+        if shot.last_of_picture is not None and shot.last_of_take is not None:
+            first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
+    elif source == "sheet":
         owner = shot.speaker if spec.kind == "talking" and shot.speaker else (shot.characters[0] if shot.characters else None)
         sheet = _sheet_of(owner, sheets) if owner else None
         if owner is None:
@@ -626,9 +632,6 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
         first, what = folder / "first_frame.png", "first frame of the beat's render"
     elif source == RESTYLED_FIRST_FRAME:
         first, what = folder / RESTYLED_NAME, "first frame of the beat's render, restyled as a photograph"
-    elif spec.last_of_shot is not None:
-        if shot.last_of_picture is not None and shot.last_of_take is not None:
-            first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
     elif source == PAINTED_FIRST_FRAME:
         from vidgen.videogen.frames import painted_picture
 
@@ -774,7 +777,8 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
 def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool) -> None:
     """Find the source of every ``first_frame: last_of:`` shot among ``shots``: its problems (an
     unknown shot, itself, a cycle), or the take to cut from, or why it is blocked. A beat's id
-    means its last part; ``parts_known`` false (no model list): ``<beat>_p<n>`` is taken on trust."""
+    means its last part; ``parts_known`` false (no model list): ``<beat>_p<n>`` is taken on trust.
+    A later part of a split beat with a starting picture starts from the part before it."""
     ids = {s.id: s for s in shots}
     last_part = {s.beat.id: s.id for s in shots}
     sources: dict[str, str] = {}
@@ -793,6 +797,11 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
             shot.problems.append(f"{where}: last_of:{name}: a shot cannot start from its own last frame")
         else:
             sources[shot.id] = source
+    previous: dict[str, str] = {}   # beat id -> the id of its part seen last
+    for shot in shots:
+        before, previous[shot.beat.id] = previous.get(shot.beat.id), shot.id
+        if shot.part > 1 and before is not None and shot.spec.first_frame_source != "none":
+            sources[shot.id] = before
     for shot in shots:
         source = sources.get(shot.id)
         if source is None:
@@ -805,6 +814,8 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
             shot.problems.append(f"{shot.location}.first_frame: last_of: these shots wait for each other's last frame: {' -> '.join([*chain, at])}")
             continue
         shot.last_of = source
+        if shot.part > 1:
+            shot.notes.append(f"part {shot.part} of {shot.parts}: starts from the last frame of part {shot.part - 1} (shot {source})")
         take = chosen_take(project.root, source)
         if take is None:
             why = "shows no take (none is picked, or every take has QA errors)" if takes_of(project.root, source) else "has no take yet"
@@ -814,8 +825,6 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
             )
             continue
         shot.last_of_take, shot.last_of_picture = take, project.root / INPUTS_DIR / shot.id / last_of_name(source, take.number)
-        if shot.parts > 1 and shot.part == 1:
-            shot.notes.append(f"this beat is split into {shot.parts} parts: every part starts from the last frame of shot {source}")
 
 
 def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:

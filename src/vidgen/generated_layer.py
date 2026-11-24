@@ -12,6 +12,10 @@ the scene's own picture is replaced by the take's frame showing then:
   one is cut (the snapped length is trimmed);
 - **light colour matching**: per-channel gains from the take's average colour (grey world) and
   exposure, at ``color_match`` strength, each gain within 0.8-1.25;
+- **joins of parts** (``match_join``): a part that follows the part before it gets the gain per
+  channel that gives its first frame that part's last frame's mean colour
+  (:func:`vidgen.clip_join.channel_gains`), eased back to 1 over a second; a gain outside
+  :data:`vidgen.clip_join.GAIN_RANGE` is no continuation and is left out;
 - **crossfades**: the take fades in from and out to the scene's picture over ``fade_in`` /
   ``fade_out`` seconds inside its window (the beat's timing stays exact);
 - **sound**: never read (the film's mix is vidgen's).
@@ -26,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
+    from vidgen.clip_join import GainMatch
     from vidgen.clips import ClipReader
     from vidgen.scene import NarratedScene
     from vidgen.videogen.compose import Placement
@@ -58,11 +63,29 @@ class _Take:
 
     def __init__(self, placement: Placement, fps: int) -> None:
         self.placement = placement
+        self.fps = fps
         self.first = round(placement.start * fps)
         self.end = max(self.first + 1, round((placement.start + placement.length) * fps))
         self.reader: ClipReader | None = None
         self.box: tuple[int, int, int, int] = (0, 0, 0, 0)   # x0, y0, w, h in the frame
         self.gains = np.ones(3, dtype=np.float32)
+        #: ``match_join``: the take before it, and the eased gains at the cut once measured.
+        self.previous: _Take | None = None
+        self.join: GainMatch | None = None
+
+    def last_shown(self) -> np.ndarray:
+        """The take's last shown frame, small and with its colour gains (RGB float)."""
+        return self._sample((self.end - 1 - self.first) / self.fps)
+
+    def _sample(self, seconds: float) -> np.ndarray:
+        from vidgen.clips import ClipReader, probe_clip
+
+        info = probe_clip(self.placement.take)
+        probe = ClipReader(self.placement.take, (64, max(1, round(64 * info.height / info.width))))
+        try:
+            return probe.frame(seconds)[:, :, :3].astype(np.float32) * self.gains
+        finally:
+            probe.close()
 
     def open(self, width: int, height: int) -> None:
         from vidgen.clips import ClipReader, probe_clip
@@ -90,6 +113,14 @@ class _Take:
             finally:
                 probe.close()
             self.gains = color_gains(samples, p.color_match)
+        if self.previous is not None:
+            from vidgen.clip_join import GAIN_RANGE as JOIN_RANGE
+            from vidgen.clip_join import GainMatch, channel_gains
+
+            reference, opening = self.previous.last_shown(), self._sample(0.0)
+            gains = channel_gains(np.clip(reference, 0, 255), np.clip(opening, 0, 255))
+            if gains is not None and all(JOIN_RANGE[0] <= g <= JOIN_RANGE[1] for g in gains):
+                self.join = GainMatch(gains)
 
     def alpha(self, frame: int, fps: int) -> float:
         """How much of the take shows at render frame ``frame`` (the fades at its edges)."""
@@ -110,6 +141,9 @@ class _Take:
         pixels = self.reader.frame((frame - self.first) / fps)[:, :, :3].astype(np.float32)
         if not np.allclose(self.gains, 1.0):
             pixels = pixels * self.gains
+        state = self.join.state((frame - self.first) / fps) if self.join is not None else None
+        if state is not None:
+            pixels = pixels * np.asarray(state, dtype=np.float32)
         x0, y0, w, h = self.box
         layer = np.zeros((height, width, 3), dtype=np.float32)
         layer[y0:y0 + h, x0:x0 + w] = pixels
@@ -136,6 +170,9 @@ class GeneratedLayer:
         self.placements = placements
         self.fps = int(config.frame_rate)
         self.takes = [_Take(p, self.fps) for p in placements]
+        for before, take in zip(self.takes, self.takes[1:]):
+            if take.placement.match_join:
+                take.previous = before
         self.written = 0
 
     def _at(self, frame: int) -> _Take | None:

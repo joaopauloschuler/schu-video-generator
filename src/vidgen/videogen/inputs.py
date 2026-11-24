@@ -31,7 +31,8 @@
   picture as its first frame, dissolving into it over ``videogen.first_frame_dissolve`` seconds,
   same length, size and frame rate (DESIGN.md §113.13). This one is sent, not the plain guide;
 - ``last_of.<source>.<take>.png`` (``first_frame: last_of:``): the last decoded frame of the take
-  the source shot shows (no ``--guide`` needed);
+  the source shot shows; for a later part of a split beat, the previous part's frame the film shows
+  last (its take is trimmed to the part) (no ``--guide`` needed);
 - ``overlay.png``: the shot's starting picture blended over the first frame of its plain guide,
   to check the fit of the 3D figures before paying. Never sent;
 - ``overlay.last.png``: the same picture over the plain guide's last frame: an object that appears
@@ -149,6 +150,17 @@ def last_frame(ffmpeg: str, source: Path, dest: Path) -> None:
     run_ffmpeg(ffmpeg, ["-sseof", f"-{LAST_FRAME_SEEK:g}", "-i", str(source), "-update", "1", "-vsync", "0", str(dest)], f"taking the last frame of {source.name}")
     if not dest.is_file():
         raise VidgenError(f"could not take the last frame of {source}: ffmpeg wrote no picture")
+
+
+def frame_at(ffmpeg: str, source: Path, dest: Path, seconds: float) -> None:
+    """``dest``: the frame of the video ``source`` showing at ``seconds`` (PNG; past its end: its last frame)."""
+    from vidgen.render.ffmpeg import run_ffmpeg
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.unlink(missing_ok=True)
+    run_ffmpeg(ffmpeg, ["-i", str(source), "-vf", f"trim=end={seconds + 1e-3:.6f}", "-update", "1", "-vsync", "0", str(dest)], f"taking the frame at {seconds:.2f} s of {source.name}")
+    if not dest.is_file():
+        raise VidgenError(f"could not take the frame at {seconds:.2f} s of {source}: ffmpeg wrote no picture")
 
 
 #: The longer side of the overlays, in pixels (the guide is only a draft: small objects need room).
@@ -404,12 +416,16 @@ def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path,
 
 def _write_last_of_picture(ffmpeg: str, project: Project, shot: Shot, written: list[Path], out: Callable[[str], None]) -> None:
     """Cut and record the picture of a ``first_frame: last_of:`` shot, or say what it waits for."""
-    from vidgen.videogen.freshness import last_of_source, record_input
+    from vidgen.videogen.freshness import chained_cut_at, last_of_source, record_input
 
     if shot.last_of_picture is None or shot.last_of_take is None:
-        out(f"{shot.id}: no starting picture yet (first_frame: last_of:{shot.spec.last_of_shot}; `vidgen generate plan` says why)")
+        out(f"{shot.id}: no starting picture yet (the last frame of shot {shot.last_of or shot.spec.last_of_shot}; `vidgen generate plan` says why)")
         return
-    last_frame(ffmpeg, shot.last_of_take.path, shot.last_of_picture)
+    at = chained_cut_at(shot)
+    if at is None:
+        last_frame(ffmpeg, shot.last_of_take.path, shot.last_of_picture)
+    else:   # the previous part's take is trimmed to its part: its last frame shown in the film
+        frame_at(ffmpeg, shot.last_of_take.path, shot.last_of_picture, at)
     record_input(shot.last_of_picture, last_of_source(shot))
     written.append(shot.last_of_picture)
     out(f"{shot.id}: starting picture {shot.last_of_picture.relative_to(project.root).as_posix()} (last frame of shot {shot.last_of}, take {shot.last_of_take.number})")
@@ -513,11 +529,12 @@ def make_inputs(
         folder = project.root / INPUTS_DIR / shot.id
         if shot.spec.wants_audio:
             _write_audio(ffmpeg, project, shot, written, out)
-        if shot.spec.last_of_shot is not None:
+        chained = shot.last_of is not None or shot.spec.last_of_shot is not None
+        if chained:
             _write_last_of_picture(ffmpeg, project, shot, written, out)
         kind = shot.spec.guide_source
-        restyled = shot.spec.first_frame_source == RESTYLED_FIRST_FRAME
-        wants_frame = shot.spec.first_frame_source in ("render", RESTYLED_FIRST_FRAME)
+        restyled = shot.spec.first_frame_source == RESTYLED_FIRST_FRAME and not chained
+        wants_frame = shot.spec.first_frame_source in ("render", RESTYLED_FIRST_FRAME) and not chained
         if kind is None and not wants_frame:
             continue
         if not guide:

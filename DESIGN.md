@@ -22500,7 +22500,19 @@ The tested best LTX setup (HOWTO "Recommended setup and why") as two shot settin
   costs no GPU, and the plan reports a change like any input's. *Why in `generate inputs`:* the clip's
   request key needs the picture, and inputs are where a shot's derived files are made and tracked; it
   is GPU time, not money, and is printed with its units. Default prompt `qwen_graph.RESTYLE_PROMPT`
-  (run 2's prompt C without its subject); `first_frame_prompt:` replaces it.
+  (run 2's prompt C made general: it names the usual CG giveaways); `first_frame_prompt:` replaces it.
+
+### 113.22 Chained parts and their join (Step 412)
+
+- **Chained parts**: in a beat split into parts with a starting picture (`first_frame` not `none`),
+  part 1 uses `first_frame` and part k > 1 gets `Shot.last_of = <beat>_p<k-1>` in `_link_last_of`:
+  the same blocking and freshness as `first_frame: last_of:` (no restyle for it), but the picture is
+  the previous take's frame at the part's length minus `freshness.CHAINED_MARGIN` (0.04 s; the take is
+  trimmed to its part), recorded as `last_of_at`. So a run makes one part per pass, in order. `first_frame: none` parts are not chained.
+- **The join**: `Placement.match_join` (true for a part placed right after its beat's previous part;
+  in the fingerprint only when true). `GeneratedLayer` gives that take
+  `clip_join.GainMatch(channel_gains(previous take's last shown frame, its first frame))`, both after
+  their `color_match` gains, eased out over 1 s; outside `clip_join.GAIN_RANGE` nothing is applied.
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 

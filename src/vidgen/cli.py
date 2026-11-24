@@ -2285,6 +2285,8 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         if args.json:
             return jsonout.envelope("generate", True, action="inputs", written=[p.relative_to(project.root).as_posix() for p in written])
         print(f"{len(written)} input file(s) written in build/videogen/")
+        only = "".join(f" --shot {s}" for s in args.shot or ())
+        print(f"next: look at the first frames and guides there, then `vidgen generate run --pay{only}`")
         return 0
     plan = plan_shots(project, budget_usd=args.budget, shot_ids=args.shot or ())
     root = project.root
@@ -2392,6 +2394,10 @@ def _generate_workflow(args: argparse.Namespace) -> CommandResult:
         report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=(lambda line: None) if args.json else print)
         if args.json:
             return jsonout.envelope("generate", True, action="run", paid=args.pay, cost_usd=report.cost_usd, shots=[s.to_json(root) for s in report.shots])
+        made = [s.shot for s in report.shots if s.take is not None]
+        if args.pay and made:
+            print(f"next: `vidgen generate takes` (look at the contact sheets), `vidgen generate pick --shot {made[0]} --take N`; "
+                  "a later part of a split beat then needs `vidgen generate inputs --guide` (its first frame is this take's last)")
         return 0
     catalog = catalog_or_none()
     if args.action == "status":

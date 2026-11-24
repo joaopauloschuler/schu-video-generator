@@ -3027,11 +3027,11 @@ scenes:
   as its own reference, scaled back to 960x512, then the models are unloaded for the video job. It is
   `first_frame.restyled.png`, made by `vidgen generate inputs --guide` (on a Colab L4 about 25 s, about
   110 s when the models load); its GPU seconds and compute units are kept in the shot's `inputs.json`.
-  The default edit instruction asks for a real photograph with everything kept in place and the
-  computer-generated patterns (water ripples, ground, skin, metal) replaced by real irregular detail;
-  `first_frame_prompt:` replaces it: name the shot's own computer-graphics pattern and what
-  should replace it (e.g. "replace the regular ripple pattern of the water with real, irregular
-  open-ocean waves, wind chop and a few whitecaps"); the generic default can keep such a pattern. It is made again only when its source changed (a new render, a new
+  The default edit instruction asks for a real photograph with everything kept in place, names the
+  usual computer-graphics giveaways (uniform repeating ripple or texture patterns, plastic surfaces,
+  too-clean edges) and asks for real irregular detail (waves with swells, chop and whitecaps; rough
+  terrain), real light and haze; `first_frame_prompt:` replaces it, e.g. to name the shot's own
+  subject and pattern. It is made again only when its source changed (a new render, a new
   first frame, prompt, seed or size); the plan reports such a change. Look at it before paying for the clip.
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
   go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
@@ -3046,6 +3046,9 @@ scenes:
 - **Lengths**: a shot covers its beat's window on the planned timeline (to the next beat's
   start). The model is asked for the shortest length it allows that covers it (trimmed later);
   a beat longer than the model's longest clip is split into equal parts (`<beat>_p1`, `_p2`...).
+  With a starting picture (any `first_frame` but `none`) part 1 uses it and every later part starts
+  from the frame the film shows last of the part before it (as `last_of:`; make them in order). Placed
+  parts meet with a cut, the later one colour-matched to the earlier one's last frame (eased out over 1 s).
   A model that takes no duration (heygen/avatar-iv) follows its audio and is priced in whole
   seconds.
 - **Frame images**: the first frame goes in as a frame image where the model lists

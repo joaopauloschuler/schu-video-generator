@@ -55,6 +55,7 @@ _CHANGE_REASONS: tuple[tuple[str, str], ...] = (
     ("last_of_shot", "it now starts from another shot"),
     ("last_of_take", "the take of the shot it starts from changed"),
     ("last_of_take_sha256", "the take it was cut from changed"),
+    ("last_of_at", "the time it is cut at changed"),
     ("narration_sha256", "the beat's narration MP3 changed"),
     ("film", "the rendered film changed (rendered again, or removed)"),
     ("film_start", "the shot's part of the film moved"),
@@ -95,10 +96,24 @@ def opening_source(shot: Shot) -> dict[str, Any]:
     return {"opening_picture_sha256": file_sha256(shot.opening_picture), "opening_dissolve": round(shot.opening_dissolve_seconds, 6)}
 
 
+#: How far before the part's end a chained part's picture is cut (about a frame at 24-30 fps).
+CHAINED_MARGIN = 0.04
+
+
+def chained_cut_at(shot: Shot) -> float | None:
+    """A later part of a split beat: the time (s) of the previous part's last frame shown in the
+    film (the take is trimmed to the part's length), else ``None`` (the take's last frame)."""
+    if shot.part == 1 or shot.spec.last_of_shot is not None:
+        return None
+    return round(max(0.0, shot.length - CHAINED_MARGIN), 6)
+
+
 def last_of_source(shot: Shot) -> dict[str, Any]:
     """What ``shot``'s ``last_of`` picture is cut from (the shot has a take to cut from)."""
     assert shot.last_of_take is not None
-    return {"last_of_shot": shot.last_of, "last_of_take": shot.last_of_take.number, "last_of_take_sha256": file_sha256(shot.last_of_take.path)}
+    found = {"last_of_shot": shot.last_of, "last_of_take": shot.last_of_take.number, "last_of_take_sha256": file_sha256(shot.last_of_take.path)}
+    at = chained_cut_at(shot)
+    return found if at is None else {**found, "last_of_at": at}
 
 
 def canny_source(shot: Shot) -> dict[str, Any]:
@@ -289,6 +304,6 @@ class InputSources:
 
 
 __all__ = [
-    "RECORD_NAME", "InputSources", "StaleInputs", "canny_source", "last_of_source", "mix_source", "opening_source", "record_input", "recorded_matches",
+    "RECORD_NAME", "InputSources", "StaleInputs", "canny_source", "chained_cut_at", "last_of_source", "mix_source", "opening_source", "record_input", "recorded_matches",
     "restyled_source", "voice_source",
 ]

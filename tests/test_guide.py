@@ -366,6 +366,12 @@ def test_every_command_and_option_named_exists() -> None:
     subparsers = next(a for a in parser._actions if a.dest == "command").choices
     seen = set()
     for fragment in code_fragments():
+        # `vidgen remote [--exclude DIR] NAME ARGS`: remote's own options, then ARGS as a command of their own
+        remote = re.search(r"\bvidgen remote((?: --[a-z-]+ \S+)*) [A-Za-z0-9_<>-]+ (?=[a-z])", fragment)
+        if remote:
+            assert all(f in subparsers["remote"]._option_string_actions for f in re.findall(r"--[a-z-]+", remote[1])), fragment
+            seen.add("remote")
+            fragment = fragment[:remote.start()] + "vidgen " + fragment[remote.end():]
         for match in re.finditer(r"\bvidgen ([a-z][a-z-]*)(.*?)(?=\bvidgen |$)", fragment):
             command, rest = match[1], match[2].split("#")[0]
             assert command in subparsers, f"`vidgen {command}` is not a command ({fragment!r})"

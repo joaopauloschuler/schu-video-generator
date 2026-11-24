@@ -5,7 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–411
+## Steps 193–412
+
+### Chained parts, a better restyle prompt, two recipes (Step 412)
+
+- **Chained parts**: in a beat split into parts with a starting picture, every part after the first
+  starts from the last frame of the take the part before it shows (as `first_frame: last_of:`).
+- **The join of placed parts**: the later part is colour-matched to the earlier one's last frame at
+  the cut, eased out over 1 s.
+- **Restyle prompt**: the default `first_frame: restyled` instruction names the usual CG giveaways
+  (repeating ripple and texture patterns, plastic surfaces, too-clean edges) and adds nothing new.
+- **Guide**: recipes "Real footage from a web scene" and "Use a Colab session" (the whole pipeline);
+  `generate inputs` and `generate run --pay` print the next command.
 
 ### The canny guide and the restyled first frame (Step 410)
 

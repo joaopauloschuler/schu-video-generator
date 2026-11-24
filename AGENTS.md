@@ -5680,27 +5680,7 @@ scenes:
   compute units (`videogen.comfyui.units_per_hour`, 1.94 for an L4) in the take's record. `generate run --pay` runs it
   ($0: no budget needed); an L4 job takes about 2-4 minutes of GPU. With `colab:` the job runs on that VM from this computer;
   vidgen run on that VM (`vidgen remote <session> ARGS`) uses its ComfyUI directly.
-  The recommended shot (real footage from a render):
-
-  ```yaml
-  videogen: {provider: comfyui, comfyui: {colab: ltx}}
-  scenes:
-    - id: chase
-      type: text_card            # any scene type; a space or 3d render in practice
-      params: {text: "Glider"}
-      beats:
-        - text: "Low over the open sea, the glider leans into a gentle turn."
-          generated_shot:
-            kind: establishing
-            model: ltx-2.3-union-control
-            prompt: "a grey glider flies low over a rough open sea; real 35 mm aerial footage"
-            guide: canny           # edges of the finished render; canny: {low: 92, high: 200, glint: 150}
-            first_frame: restyled  # the render's first frame made photoreal (Qwen-Image-Edit-2511)
-            # first_frame_prompt: "..."   # only to replace the default edit instruction
-  ```
-
-  `vidgen generate inputs --guide` makes `guide.canny.mp4` and `first_frame.restyled.png` (GPU time,
-  ~25-110 s on an L4, printed with its units); look at the restyled frame, then `generate run --pay`.
+  The recommended shot and the commands: "Real footage from a web scene" below.
   `glint` removes edges in bright areas (a sun glint a model draws as foam); `false` keeps them.
 - **Where the starting picture goes** (`first_frame_in: frame | guide`: `generated_shot`, then
   `videogen.models.<model>`, then `videogen`, default `frame`; `videogen.first_frame_dissolve`, default
@@ -5762,27 +5742,68 @@ scenes:
   (about 1.7 Colab units for 6 stills and 4 clips). Ask the user before starting a Colab GPU; reuse a
   running session between experiments (`setup_session.py` with its name); stop it when the user says so.
 
-### Use a Colab session: render on a GPU VM
+### Real footage from a web scene
 
-Heavy commands (`render`, `storyboard`, `tts`) can run on a Google Colab VM while you work here.
-Ask the user before starting a Colab GPU (it bills by the hour). Every command names its session;
-nothing falls back to Colab, and nothing here stops a session.
+A `space` or `web` scene rendered, then remade as real camera footage by LTX-2.3 on your own GPU
+(a Colab session, next section). Add to the beat:
+
+```yaml
+videogen: {provider: comfyui, comfyui: {colab: ltx}}
+scenes:
+  - id: chase
+    type: text_card            # your space or web scene
+    params: {text: "Glider"}
+    beats:
+      - text: "Low over the open sea, the glider leans into a gentle turn."
+        generated_shot:
+          kind: establishing
+          model: ltx-2.3-union-control
+          prompt: "a grey glider flies low over a rough open sea; real 35 mm aerial footage"
+          guide: canny           # edges of the finished render; canny: {low: 92, high: 200, glint: 150}
+          first_frame: restyled  # the render's first frame made photoreal (Qwen-Image-Edit-2511)
+          place: true            # the picked takes replace the beat in the film
+          # first_frame_prompt: "..."   # replaces the default edit instruction
+```
 
 ```
-python tools/colab/setup_session.py NAME --vidgen-only   # from vidgen's source folder: create or reuse NAME, install this code
+vidgen remote ltx render                                      # the finished render (the guide's source)
+vidgen remote ltx generate inputs --guide --shot chase_b1_p1  # canny guide + restyled frame; look at them
+vidgen remote ltx generate run --pay --shot chase_b1_p1       # $0, about 2-4 min of L4 GPU
+vidgen generate pick --shot chase_b1_p1 --take N              # after looking at the take
+vidgen remote ltx generate inputs --guide --shot chase_b1_p2  # its first frame: p1's last
+vidgen remote ltx generate run --pay --shot chase_b1_p2
+vidgen generate pick --shot chase_b1_p2 --take N
+vidgen remote ltx render                                      # the film with the takes
+```
+
+A beat longer than 5 s is split into parts (`<beat>_p1`, `_p2`...): part 1 starts from
+`first_frame:`, every later part from the last frame of the part before it, so make them in order.
+At the cut between two placed parts the later one is colour-matched to the earlier one's last frame.
+
+### Use a Colab session: render on a GPU VM
+
+Heavy commands (`render`, `storyboard`, `tts`, `generate`) can run on a Google Colab VM while you
+work here. Ask the user before starting a Colab GPU (it bills by the hour). Every command names its
+session; nothing falls back to Colab, and nothing here stops a session.
+
+```
+python tools/colab/setup_session.py NAME        # from vidgen's source folder: create or reuse NAME, install ComfyUI + vidgen
+python tools/colab/setup_session.py NAME --vidgen-only   # after code changes: reinstall just vidgen
 cd my-project
-vidgen remote NAME render      # sync changed files up, render there, bring back the MP4 and build/final/timings.json
-vidgen remote NAME storyboard  # any other command
-colab stop -s NAME             # only when the user says so
+vidgen remote NAME render                          # sync changed files up, render there, bring back the MP4
+vidgen remote NAME generate inputs --guide         # guides and restyled frames on the VM's GPU
+vidgen remote NAME generate run --pay --shot ID    # the clip on the VM's ComfyUI; the take comes back
+colab stop -s NAME                                 # only when the user says so
 ```
 
 - Synced to `/content/projects/<folder name>/` on the VM: only changed files, never `build/`,
-  `output/`, `exports/`, `media/` (`--exclude DIR` before NAME leaves out more). `build/` stays there as a cache.
+  `output/`, `exports/`, `media/` (`--exclude DIR` before NAME leaves out more). `build/` stays there as a cache,
+  so make a shot's inputs and its clip on the same machine.
 - Brought back: the files the command's JSON document names outside `build/` (plus the render's
-  `timings.json`) and the files the run made or changed outside those folders.
-- After vidgen's code changes, `vidgen remote` stops and prints the setup command (it reinstalls vidgen only).
+  `timings.json`) and the files the run made or changed outside those folders (takes, picks, ledgers).
+- After vidgen's code changes, `vidgen remote` stops and prints the `--vidgen-only` setup command.
 - On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
-- Several sessions can run at once, each under its own name.
+- Several sessions can run at once, each under its own name; run one command at a time per session.
 
 ### Your content and third-party services
 
