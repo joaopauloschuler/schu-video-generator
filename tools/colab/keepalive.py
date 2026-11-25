@@ -24,7 +24,7 @@ from typing import Callable
 TOOLS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS_DIR.parents[1] / "src"))  # this checkout's vidgen.colab
 
-from vidgen.colab import EXEC_SECONDS, Colab, parse_prefixed_json, parse_sessions  # noqa: E402
+from vidgen.colab import EXEC_SECONDS, Colab, parse_prefixed_json, parse_sessions, via_arg  # noqa: E402
 
 VM_SCRIPT = TOOLS_DIR / "keepalive_vm.py"
 PREFIX = "KEEPALIVE "
@@ -136,8 +136,9 @@ def main(argv: list[str] | None = None, colab: Colab | None = None) -> int:
     parser.add_argument("--every", type=parse_duration, default=7 * 60.0, help="round length (default 7m)")
     parser.add_argument("--hours", type=float, default=8.0, help="stop after this many hours (default 8)")
     parser.add_argument("--log", type=Path, help="default ~/.config/colab-cli/keepalive-SESSION.log")
+    via_arg(parser)
     args = parser.parse_args(argv)
-    colab = colab or Colab(args.session)
+    colab = colab or Colab(args.session, via=args.via)
     log = args.log or Path.home() / ".config" / "colab-cli" / f"keepalive-{args.session}.log"
     keepalive = Keepalive(colab, args.every, args.hours, log)
     try:

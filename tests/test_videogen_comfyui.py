@@ -345,3 +345,20 @@ def test_transport_choice(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     (tmp_path / "marker").write_text("x", encoding="utf-8")
     on_vm = comfyui.make_transport(ComfyuiSettings(colab="ltx"), poll_timeout=9)
     assert isinstance(on_vm, HttpTransport) and on_vm.where == comfyui.VM_URL
+
+
+def test_generate_via_flag_reaches_the_colab_transport(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from vidgen import cli
+
+    monkeypatch.setattr(comfyui, "VM_MARKER", tmp_path / "marker")
+    assert cli.build_parser().parse_args(["generate", "run"]).via == "ssh"
+    args = cli.build_parser().parse_args(["generate", "run", "--via", "exec"])
+    settings = ComfyuiSettings(colab="ltx")
+    assert comfyui.make_transport(settings, poll_timeout=9).colab.via == "ssh"  # type: ignore[attr-defined]
+    cli._use_route(SimpleNamespace(config=SimpleNamespace(videogen=SimpleNamespace(comfyui=settings))), args.via)  # type: ignore[arg-type]
+    assert comfyui.make_transport(settings, poll_timeout=9).colab.via == "exec"  # type: ignore[attr-defined]
+    assert "via" not in settings.model_dump() and "_via" not in ComfyuiSettings.model_json_schema()["properties"]
+    with pytest.raises(ValidationError):
+        ComfyuiSettings(colab="ltx", via="exec")  # type: ignore[call-arg]

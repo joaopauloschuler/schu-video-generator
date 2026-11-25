@@ -148,20 +148,22 @@ def _cheap_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 def _run(cli: FakeColabCLI, argv: list[str]) -> tuple[int, list[str]]:
     lines: list[str] = []
     clock = iter(range(0, 100000, 5))
-    code = setup_session.main(argv, runner=cli, sleep=lambda s: None, clock=lambda: next(clock), say=lines.append,
-                              transfer_factory=lambda colab: cli, via="exec")  # type: ignore[arg-type, return-value]
+    code = setup_session.main([*argv, "--via", "exec"], runner=cli, sleep=lambda s: None, clock=lambda: next(clock), say=lines.append,
+                              transfer_factory=lambda colab: cli)  # type: ignore[arg-type, return-value]
     return code, lines
 
 
 def test_parse_args_defaults_and_flags() -> None:
     args = setup_session.parse_args(["ltx-2"])
-    assert (args.session, args.gpu, args.no_image, args.latest) == ("ltx-2", "L4", False, False)
-    args = setup_session.parse_args(["x", "--gpu", "G4", "--no-image", "--latest"])
-    assert (args.gpu, args.no_image, args.latest) == ("G4", True, True)
+    assert (args.session, args.gpu, args.no_image, args.latest, args.via) == ("ltx-2", "L4", False, False, "ssh")
+    args = setup_session.parse_args(["x", "--gpu", "G4", "--no-image", "--latest", "--via", "exec"])
+    assert (args.gpu, args.no_image, args.latest, args.via) == ("G4", True, True, "exec")
     with pytest.raises(SystemExit):
         setup_session.parse_args(["x", "--gpu", "L5"])
     with pytest.raises(SystemExit):
         setup_session.parse_args(["--", "-bad"])
+    with pytest.raises(SystemExit):
+        setup_session.parse_args(["x", "--via", "scp"])
 
 
 def test_parse_sessions_and_state() -> None:

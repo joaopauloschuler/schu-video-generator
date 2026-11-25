@@ -377,7 +377,7 @@ def make_transport(settings: ComfyuiSettings, *, poll_timeout: float, say: Calla
     from vidgen.colab import Colab, say_now
 
     assert settings.colab is not None
-    return ColabTransport(Colab(settings.colab, say=say or say_now), timeout=poll_timeout)
+    return ColabTransport(Colab(settings.colab, say=say or say_now, via=settings.via), timeout=poll_timeout)
 
 
 # ----- the provider ----------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from typing import Any, NoReturn
 from pydantic import ValidationError
 
 from vidgen import __version__, jsonout
+from vidgen.colab import via_arg
 from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
@@ -2255,6 +2256,12 @@ def _generate_resolve(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def _use_route(project: Project, via: str) -> None:
+    """Send this command's Colab calls of ``videogen.comfyui.colab`` by ``via`` (``--via``)."""
+    if project.config.videogen.comfyui is not None:
+        project.config.videogen.comfyui.use_route(via)
+
+
 def _generate_shots(args: argparse.Namespace) -> CommandResult:
     """``vidgen generate plan | sheets | inputs | frames`` (DESIGN.md §113.3, §113.15)."""
     from vidgen.videogen.inputs import make_inputs
@@ -2263,6 +2270,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
     from vidgen.videogen.shots import plan_shots, project_shots
 
     project = Project.load(args.project, variant=args.variant)
+    _use_route(project, args.via)
     if args.action == "sheets":
         result = run_sheets(project, args.sheet or (), pay=args.pay, out=(lambda line: None) if args.json else print)
         if args.json:
@@ -2387,6 +2395,7 @@ def _generate_workflow(args: argparse.Namespace) -> CommandResult:
     from vidgen.videogen.workflow import catalog_or_none, known_shots, run_shots, status_lines
 
     project = Project.load(args.project, variant=args.variant)
+    _use_route(project, args.via)
     root = project.root
     if args.pay and args.action != "run":
         raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
@@ -2478,7 +2487,7 @@ def cmd_remote(args: argparse.Namespace) -> CommandResult:
         raise VidgenError("give the vidgen command to run, e.g. vidgen remote NAME render")
     if vidgen_args[0] == "remote":
         raise VidgenError("vidgen remote runs a vidgen command on the session; it cannot run remote there")
-    with Colab(args.session, cli=args.colab) as colab:
+    with Colab(args.session, cli=args.colab, via=args.via) as colab:
         run = RemoteRun(colab, Path.cwd(), vidgen_args, json_commands=JSON_COMMANDS,
                         exclude=(*EXCLUDED_DIRS, *args.exclude))
         return run.run()
@@ -2852,6 +2861,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--job", metavar="JOB_ID", help="resolve: the job this submit became; the next run polls and downloads it, free")
     p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
     p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with a guide: (true, or depth / outline / mask on a 3d scene) or first_frame: render (a draft render of their scenes)")
+    via_arg(p)
     p.set_defaults(func=cmd_generate)
 
     p = sub.add_parser("split-sheet", help="cut a style sheet picture into named panels (PNG), by columns and rows or by explicit boxes")
@@ -3168,6 +3178,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--exclude", action="append", default=[], metavar="DIR",
                    help="a top folder of the project not to sync (repeatable; build, output, exports and media never are)")
     p.add_argument("--colab", default="colab", help="the colab CLI command (default: colab)")
+    via_arg(p)
     p.set_defaults(func=cmd_remote)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")

@@ -1034,6 +1034,16 @@ class ComfyuiSettings(_Strict):
     """Any ComfyUI server, e.g. http://127.0.0.1:8188 (vidgen talks to it over HTTP)."""
     units_per_hour: PositiveFloat = 1.94
     """Compute units the GPU costs per hour (Colab L4: 1.94); a take records its GPU seconds and seconds x this / 3600."""
+    _via: str = PrivateAttr(default="ssh")
+
+    @property
+    def via(self) -> str:
+        """The route of ``colab:`` calls: the running command's ``--via`` (ssh or exec), never set in video.yaml."""
+        return self._via
+
+    def use_route(self, via: str) -> None:
+        """Make this command's ``colab:`` calls go by ``via`` (``vidgen generate --via``)."""
+        self._via = via
 
     @model_validator(mode="after")
     def _one_server(self) -> ComfyuiSettings:

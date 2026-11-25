@@ -28159,3 +28159,30 @@ project), repo work is generic.
 - **How to test**: `python -m pytest -q -m "slow or not slow" tests/test_colab_ssh.py tests/test_colab_transfer.py
   tests/test_colab_setup_session.py tests/test_colab_keepalive.py tests/test_remote.py tests/test_videogen_comfyui.py`
   (81 passed with `test_videogen_canny_restyle.py`, 37 s).
+
+## Step 419 — --via exec per command
+
+- **Built**: `--via {ssh,exec}` (default ssh; help `--via exec  use the old colab exec route (default: ssh)`) on every
+  command that builds a `Colab`: `vidgen remote` (goes before the session name: after it, `--via` is part of the
+  command run on the VM, as `--colab` / `--exclude` already are), `vidgen generate`, `tools/colab/setup_session.py`
+  and `tools/colab/keepalive.py` (flag only, passed to `Colab`; setup is reworked later). One helper,
+  `vidgen.colab.via_arg(parser)`, adds it everywhere.
+- **comfyui provider**: `make_transport` builds its `Colab` from `videogen.comfyui`; the call chain is
+  `generate run` -> `run_shots` -> `generate_clip` -> `get_provider`, and `generate inputs` -> `make_inputs` ->
+  `_write_restyled` -> `restyle_picture`. Instead of threading `via` through those six signatures,
+  `ComfyuiSettings` got a pydantic private attribute `_via` (default `"ssh"`) with a read-only `via` property and
+  `use_route(via)`; `cmd_generate` calls `cli._use_route(project, args.via)` right after `Project.load` (in
+  `_generate_shots` and `_generate_workflow`), and `make_transport` passes `settings.via` to `Colab`. It is not a
+  field: video.yaml cannot set it (`via:` is refused as an unknown key), the schema and CONFIG.md do not show it, and
+  no flag means ssh. `vidgen remote --via exec NAME generate run` sets only remote's own route: on the VM the
+  provider talks to its own ComfyUI over HTTP and builds no `Colab`.
+- **Files**: `src/vidgen/colab.py` (`via_arg`), `src/vidgen/cli.py`, `src/vidgen/config.py`,
+  `src/vidgen/videogen/comfyui.py`, `tools/colab/setup_session.py` (`main(..., via=)` test parameter removed; tests
+  pass `--via exec`), `tools/colab/keepalive.py`, `tests/test_remote.py`, `tests/test_colab_keepalive.py`,
+  `tests/test_colab_setup_session.py`, `tests/test_videogen_comfyui.py`, `tasklist.md`.
+- **Public interfaces**: `vidgen.colab.via_arg`; `ComfyuiSettings.via` / `use_route`. No `vidgen.api` or config change.
+- **Known gaps**: AGENTS.md, CONFIG.md and the HOWTO do not name `--via` yet (Step 423). No real Colab session was
+  used or created.
+- **How to test**: `python -m pytest -q -m "slow or not slow" tests/test_colab_ssh.py tests/test_colab_transfer.py
+  tests/test_colab_setup_session.py tests/test_colab_keepalive.py tests/test_remote.py tests/test_videogen_comfyui.py`
+  (72 passed, 13 s); also `tests/test_guide.py tests/test_docs.py` (pass).

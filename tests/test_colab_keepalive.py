@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 from vidgen.colab import Colab, CommandResult
 
 COLAB_DIR = Path(__file__).resolve().parents[1] / "tools" / "colab"
@@ -157,3 +159,17 @@ def test_it_is_started_by_nothing_in_vidgen() -> None:
     found = subprocess.run(["git", "grep", "-l", "keepalive", "--", "src"], cwd=repo, capture_output=True,
                            text=True, encoding="utf-8")
     assert found.stdout == ""
+
+
+def test_via_flag_reaches_colab(monkeypatch: pytest.MonkeyPatch) -> None:
+    made: list[str] = []
+
+    def fake_colab(session: str, *, via: str) -> None:
+        made.append(via)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(keepalive, "Colab", fake_colab)
+    for argv, via in (([], "ssh"), (["--via", "exec"], "exec")):
+        with pytest.raises(RuntimeError):
+            keepalive.main(["ltx", *argv])
+    assert made == ["ssh", "exec"]

@@ -302,3 +302,33 @@ def test_retries_pause_longer_each_time(tmp_path: Path) -> None:
     with pytest.raises(ColabError, match="kept failing"):
         colab.vm("state")
     assert pauses == [3.0, 10.0, 20.0, 30.0]
+
+
+@pytest.mark.parametrize(("argv", "via"), [([], "ssh"), (["--via", "exec"], "exec")])
+def test_remote_via_flag_reaches_colab(argv: list[str], via: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen import cli, colab
+
+    made: list[str] = []
+
+    class FakeColab:
+        def __init__(self, session: str, *, cli: str, via: str) -> None:
+            made.append(via)
+
+        def __enter__(self) -> FakeColab:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    class FakeRun:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def run(self) -> int:
+            return 0
+
+    monkeypatch.setattr(colab, "Colab", FakeColab)
+    monkeypatch.setattr(remote, "RemoteRun", FakeRun)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["remote", *argv, "ltx", "render"]) == 0
+    assert made == [via]

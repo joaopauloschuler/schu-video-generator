@@ -19,6 +19,7 @@ sessions`` / ``new`` always go through the colab CLI. Nothing here stops a sessi
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -64,6 +65,12 @@ EXEC_SECONDS = 30.0
 RETRY_PAUSES = (3.0, 10.0, 20.0, 30.0)
 #: The routes to the VM (:class:`Colab` ``via``); the first is the default.
 ROUTES = ("ssh", "exec")
+
+
+def via_arg(parser: argparse.ArgumentParser) -> None:
+    """Add ``--via {ssh,exec}`` (default ssh): the route of this one command's Colab calls."""
+    parser.add_argument("--via", choices=ROUTES, default=ROUTES[0], metavar="exec",
+                        help="use the old colab exec route (default: ssh)")
 
 
 class ColabError(VidgenError):
