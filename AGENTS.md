@@ -5783,27 +5783,33 @@ At the cut between two placed parts the later one is colour-matched to the earli
 ### Use a Colab session: render on a GPU VM
 
 Heavy commands (`render`, `storyboard`, `tts`, `generate`) can run on a Google Colab VM while you
-work here. Ask the user before starting a Colab GPU (it bills by the hour). Every command names its
-session; nothing falls back to Colab, and nothing here stops a session.
+work here, over SSH (the key `~/.ssh/colab_ed25519`; setup creates it when missing). Ask the user
+before starting a Colab GPU (it bills by the hour). Every command names its session; nothing falls
+back to Colab, and nothing here stops a session.
 
 ```
 python tools/colab/setup_session.py NAME        # from vidgen's source folder: create or reuse NAME, install ComfyUI + vidgen
 python tools/colab/setup_session.py NAME --vidgen-only   # after code changes: reinstall just vidgen
 cd my-project
-vidgen remote NAME render                          # sync changed files up, render there, bring back the MP4
+vidgen remote NAME render                          # sync up, render there, bring back the MP4
 vidgen remote NAME generate inputs --guide         # guides and restyled frames on the VM's GPU
 vidgen remote NAME generate run --pay --shot ID    # the clip on the VM's ComfyUI; the take comes back
 colab stop -s NAME                                 # only when the user says so
 ```
 
-- Synced to `/content/projects/<folder name>/` on the VM: only changed files, never `build/`,
-  `output/`, `exports/`, `media/` (`--exclude DIR` before NAME leaves out more). `build/` stays there as a cache,
-  so make a shot's inputs and its clip on the same machine.
-- Brought back: the files the command's JSON document names outside `build/` (plus the render's
-  `timings.json`) and the files the run made or changed outside those folders (takes, picks, ledgers).
+- For no GPU work (renders, ffmpeg), a CPU high-RAM session: `setup_session.py NAME --gpu CPU --high-mem --vidgen-only`.
+- The comfyui provider with `comfyui: {colab: NAME}` runs `vidgen generate run --pay` here and the job on that VM.
+- Synced to `/content/projects/<folder name>/` on the VM with rsync: files deleted here are deleted
+  there; `build/`, `output/`, `exports/`, `media/` are never sent (`--exclude DIR` before NAME
+  leaves out more).
+- Brought back: the files the command's JSON document names, the files the run made or changed
+  (takes, picks, ledgers), and `build/` without the render caches (scenes, frames, media, web clips,
+  audio). So inputs made on the VM (`generate inputs --guide`) count here too.
+- Without a local `rsync` (Windows) it syncs with tar: nothing is deleted there and `build/` stays
+  there, so make a shot's inputs and its clip on the same machine.
 - After vidgen's code changes, `vidgen remote` stops and prints the `--vidgen-only` setup command.
 - On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
-- Several sessions can run at once, each under its own name; run one command at a time per session.
+- Several sessions can run at once, each under its own name; run one `vidgen remote` at a time per project.
 
 ### Long films: one agent per phase
 

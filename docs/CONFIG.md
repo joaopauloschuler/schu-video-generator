@@ -2815,7 +2815,7 @@ videogen:
   parts), 8k+1 frames at 24 fps. vidgen scales the guide and the first frame to cover that size
   (centre crop) and cuts or holds frames to the length; placing trims the clip to the shot. With
   `url:` vidgen talks to ComfyUI over HTTP (`/upload/image`, `/prompt`, `/history`, `/view`).
-  With `colab: <session>` it uploads the fitted inputs with the colab CLI, runs the same HTTP client
+  With `colab: <session>` it uploads the fitted inputs over SSH (`colab ssh`), runs the same HTTP client
   on the VM against 127.0.0.1:8188, detached, polls it and downloads the clip; vidgen running on that
   VM itself (`vidgen remote <session> generate run --pay`) uses 127.0.0.1:8188 directly. A job costs
   $0: `--pay` runs it without a budget, its own ledger is `videogen-ledger.comfyui.jsonl`, and the take

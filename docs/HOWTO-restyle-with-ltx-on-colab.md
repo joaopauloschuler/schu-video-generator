@@ -3,8 +3,8 @@
 Take a shot vidgen rendered (here a `space` scene: a glider chased low over a rough sea), give its
 **canny edges** (and optionally its **depth**) as control videos to the open video model **LTX-2.3**
 with the IC-LoRA **`Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control`**, with a photoreal first frame
-made on the same GPU, in **ComfyUI on a Google Colab L4**, driven from your machine by the `colab`
-CLI. Everything downloaded is ungated on Hugging Face: no login, no token.
+made on the same GPU, in **ComfyUI on a Google Colab L4**, driven from your machine over SSH
+(`colab ssh`). Everything downloaded is ungated on Hugging Face: no login, no token.
 
 Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.md) lists them).
 **local** = your machine, **VM** = the Colab machine. The raw lab log of the tests:
@@ -49,9 +49,12 @@ Seedance for the paid, tracked path inside vidgen.
 - The **`colab` CLI** (google-colab-cli 0.8.0) installed and logged in (`colab usage` prints the
   balance); `colab skill` prints its own agent guide.
 - **Compute units** on the account (an L4 is ~1.94 units an hour).
-- No Hugging Face login. The hand commands below use `colab exec`; vidgen's own calls (`setup_session.py`,
-  `vidgen remote`) go over SSH with the key `~/.ssh/colab_ed25519` (`tools/colab/README.md`, "Two routes").
-- Locally: `ffmpeg` / `ffprobe`, Python 3.10+ (standard library only), `curl`.
+- OpenSSH's client (`ssh`) and the key `~/.ssh/colab_ed25519` (`setup_session.py` creates it when
+  missing). Everything goes over SSH: `setup_session.py`, `vidgen remote`, the comfyui provider and
+  the hand commands below.
+- No Hugging Face login.
+- Locally: `ffmpeg` / `ffprobe`, Python 3.10+ (standard library only), `curl`; `rsync` for
+  `vidgen remote` (without it, a tar sync).
 - **Ask the owner before creating a GPU session** (it spends their units).
 
 ## 3. Make the inputs with vidgen (local)
@@ -114,16 +117,31 @@ feed the control at full size.
 
 ```bash
 python tools/colab/setup_session.py ltx      # --no-image: without §6.4's models; --gpu; --latest
+python tools/colab/setup_session.py cpu1 --gpu CPU --high-mem --vidgen-only   # no GPU work: renders, ffmpeg
 ```
 From the repository root; any name, several sessions side by side. It reuses or creates the session
-(retrying HTTP 503), skips what is done, installs ComfyUI + LTX-2.3 and the image models side by
-side, starts ComfyUI and prints a summary; [tools/colab/README.md](../tools/colab/README.md) has the
+(retrying HTTP 503), creates the SSH key when missing and checks SSH works, skips what is done,
+starts the setups detached on the VM (`setsid nohup`), installs ComfyUI + LTX-2.3 and the image
+models side by side, starts ComfyUI, installs vidgen while ComfyUI loads and prints a summary.
+`--high-mem` asks for a high-RAM machine (new sessions; an L4 has one shape); [tools/colab/README.md](../tools/colab/README.md) has the
 details. It never stops the session: after an error run it again (it goes on where it stopped).
 Test VM: Python 3.13, torch 2.14.1+cu130, CUDA 13.0, L4 23 GB, 52 GB RAM, 236 GB disk.
 
 ## 6. What it installs, and the per-run steps
 
-Run the commands below from `tools/colab/`, with the inputs in `ltx-inputs/`.
+Run the commands below from `tools/colab/`, with the inputs in `ltx-inputs/`. They use `vm`, a
+shell function that runs a command on the session over SSH (the options vidgen uses):
+```bash
+vm() { ssh -F /dev/null -i ~/.ssh/colab_ed25519 -o IdentitiesOnly=yes -o LogLevel=ERROR \
+  -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null \
+  -o ProxyCommand="colab ssh --proxy-mode -s ltx -i ~/.ssh/colab_ed25519" root@colab "$@"; }
+vm nvidia-smi                                  # a command on the VM, in /content
+vm 'cat > /content/f.py' < f.py                # upload a file
+vm cat /content/out.png > out.png              # download a file
+```
+`colab ssh --proxy-mode -s ltx` creates a missing session: use `vm` only on a session that
+`colab sessions` lists. Calls may run in parallel. Long work runs detached:
+`setsid nohup CMD > LOG 2>&1 < /dev/null & echo started $!`.
 
 ### 6.1 Installed versions
 
@@ -145,27 +163,26 @@ comfyui_frontend_package 1.59.11. pip's warning that `datasets` wants hub < 2.0 
 
 ### 6.2 ComfyUI
 
-`bash poll.sh ltx comfy` shows the log (`/content/comfy.log`) and GPU memory (`/content/vram.csv`).
-`colab exec -s ltx -f object_info.py` prints the inputs of every node used (after a node update).
+`vm 'tail -n 5 /content/comfy.log; nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader'`
+shows the log and GPU memory (also sampled into `/content/vram.csv`).
+`vm python3 - < object_info.py` prints the inputs of every node used (after a node update).
 
 ### 6.3 Canny control (VM)
 
-Upload the inputs and run the canny **detached** with `start_bg.py` (a foreground `colab exec` that
-loses its websocket kills the work):
+Upload the inputs and run the canny detached:
 ```bash
-for f in ../../ltx-inputs/*; do colab upload -s ltx "$f" "/content/$(basename "$f")"; done
-colab upload -s ltx start_bg.py /content/start_bg.py
-colab upload -s ltx make_canny_soft.py /content/make_canny_soft.py
-colab exec -s ltx -f start_bg.py --env NAME=cannysoft --env CMD="python /content/make_canny_soft.py" \
-  --env SRC=/content/render_121_960x512.mp4 --env DST=/content/cannysoft_121_960x512.mp4
-echo '!cat /content/cannysoft.log' | colab exec -s ltx     # "canny-soft frames 121 ..." when done (~1 min)
-echo '!cp /content/depth_121_960x512.mp4 /content/cannysoft_121_960x512.mp4 /content/first_frame_960x512.png /content/ComfyUI/input/' | colab exec -s ltx
+tar cf - -C ../../ltx-inputs . | vm 'tar xf - -C /content'
+vm 'cat > /content/make_canny_soft.py' < make_canny_soft.py
+vm 'cd /content || exit 3; SRC=render_121_960x512.mp4 DST=cannysoft_121_960x512.mp4 \
+  setsid nohup python3 make_canny_soft.py > cannysoft.log 2>&1 < /dev/null & echo started $!'
+vm cat /content/cannysoft.log      # "canny-soft frames 121 ..." when done (~1 min)
+vm 'cd /content && cp depth_121_960x512.mp4 cannysoft_121_960x512.mp4 first_frame_960x512.png ComfyUI/input/'
 ```
 `make_canny_soft.py` (defaults `BLUR=0`, thresholds 92 / 200 as the official
 `CannyEdgePreprocessor`, `GLINT=150`, `FEATHER=31`) removes edges where the frame blurred over 41 px
 is brighter than 150: on the test shot 6.6 % edge pixels -> 3.2 %, the glider's outline and the
 darker sea kept. Do not blur before the canny (`BLUR=5` loses the glider's outline). `make_canny.py`
-is the plain canny (same call, `DST=/content/canny_121_960x512.mp4`; also runs locally with OpenCV).
+is the plain canny (same call, `DST=canny_121_960x512.mp4`; also runs locally with OpenCV).
 `LoadVideo` / `LoadImage` read from `ComfyUI/input/`.
 
 ### 6.4 Photoreal first frame (VM)
@@ -189,13 +206,13 @@ are gated. The fp8 Qwen-Image-Edit-2511 (20.5 GB) does not fit beside its encode
 
 Commits: `check_hf.sh --image`. `setup_session.py` installs these unless `--no-image`.
 ```bash
-for f in prep_image_inputs.py align_check.py free_vram.py; do colab upload -s ltx "$f" "/content/$f"; done
-colab exec -s ltx -f prep_image_inputs.py      # ComfyUI/input/ff_up.png (frame 0 at 1440x768), ff_canny.png, ff_depth.png
+tar cf - prep_image_inputs.py align_check.py run_job.py | vm 'tar xf - -C /content'
+vm 'cd /content && python3 prep_image_inputs.py'   # ComfyUI/input/ff_up.png (frame 0 at 1440x768), ff_canny.png, ff_depth.png
 python build_image_workflow.py qwen --run qwen_c --out workflow_qwen_c.json      # local
-colab upload -s ltx workflow_qwen_c.json /content/workflow_qwen_c.json
-colab exec -s ltx --env RUN=qwen_c -f start_job.py
-bash poll.sh ltx job qwen_c                    # ~110 s the first time (load), ~25 s after
-colab download -s ltx /content/ComfyUI/output/qwen_c_00001_.png qwen_c.png
+vm 'cat > /content/workflow_qwen_c.json' < workflow_qwen_c.json
+vm 'cd /content || exit 3; setsid nohup python3 run_job.py workflow_qwen_c.json qwen_c > job_qwen_c.log 2>&1 < /dev/null & echo started $!'
+vm cat /content/job_qwen_c.json                # missing until done: ~110 s the first time (load), ~25 s after
+vm cat /content/ComfyUI/output/qwen_c_00001_.png > qwen_c.png
 ```
 Graph (`build_image_workflow.py qwen`): `UnetLoaderGGUF` -> `LoraLoaderModelOnly` (Lightning, 1.0)
 -> `ModelSamplingAuraFlow` (shift 3.1) -> `CFGNorm`; `CLIPLoader` (`qwen_image`);
@@ -215,18 +232,18 @@ exactly where they are.*" Make 2-3 candidates (seed, prompt) and keep the best.
 **Alignment check.** `align_check.py` writes per candidate an overlay of the two canny maps (frame 0
 red, candidate green, both yellow) and an edge F-score (3 px tolerance), whole frame and subject box:
 ```bash
-colab exec -s ltx -f start_bg.py --env NAME=align --env CMD="python /content/align_check.py" \
-  --env REF=/content/first_frame_960x512.png --env OUT=/content/align \
-  --env CANDS="/content/ComfyUI/output/qwen_a_00001_.png /content/ComfyUI/output/qwen_c_00001_.png"
-echo '!cat /content/align.log' | colab exec -s ltx
+vm 'cd /content || exit 3; REF=/content/first_frame_960x512.png OUT=/content/align \
+  CANDS="/content/ComfyUI/output/qwen_a_00001_.png /content/ComfyUI/output/qwen_c_00001_.png" \
+  setsid nohup python3 align_check.py > align.log 2>&1 < /dev/null & echo started $!'
+vm cat /content/align.log
 ```
 The score counts the sea's texture, so a candidate that rightly replaces the CG sea scores lower
 (0.50 for the chosen `qwen_c` against 0.815 for a CG-sea candidate, both with the glider on frame 0's
 outline), and the haze the model adds fools the horizon row: **check the overlay and zooms of the
 subject and the horizon by eye** (`qwen_c`: within ~4 px). Then:
 ```bash
-echo '!cp /content/ComfyUI/output/qwen_c_00001_.png /content/ComfyUI/input/photoreal_qwen_c.png' | colab exec -s ltx
-colab exec -s ltx -f free_vram.py          # POST /free: unload all models
+vm cp /content/ComfyUI/output/qwen_c_00001_.png /content/ComfyUI/input/photoreal_qwen_c.png
+vm python3 - < free_vram.py                # POST /free: unload all models
 ```
 Switching between the image models and LTX costs a reload (~80-120 s): group runs by model.
 
@@ -272,8 +289,10 @@ the graph; VHS output. Single stage, no upscaler.
 ### 7.2 Submit, detached
 
 ```bash
-for f in run_job.py workflow_pr_cannysoft.json; do colab upload -s ltx "$f" "/content/$f"; done
-colab exec -s ltx --env RUN=pr_cannysoft -f start_job.py
+vm 'cat > /content/run_job.py' < run_job.py
+vm 'cat > /content/workflow_pr_cannysoft.json' < workflow_pr_cannysoft.json
+vm 'cd /content || exit 3; setsid nohup python3 run_job.py workflow_pr_cannysoft.json pr_cannysoft \
+  > job_pr_cannysoft.log 2>&1 < /dev/null & echo started $!'
 ```
 `run_job.py` POSTs the graph to `/prompt`, polls `/history/<id>` every 3 s and writes
 `/content/job_<run>.json` (wall time, status, outputs, peak VRAM). Jobs queue in ComfyUI.
@@ -281,10 +300,14 @@ colab exec -s ltx --env RUN=pr_cannysoft -f start_job.py
 ## 8. Poll and download (local)
 
 ```bash
-bash poll.sh ltx job pr_cannysoft               # empty until done; shows the step counter
-bash fetch_outputs.sh ltx pr_cannysoft out      # out/pr_cannysoft_with_audio.mp4, out/pr_cannysoft.mp4, out/job_pr_cannysoft.json
+vm "cat /content/job_pr_cannysoft.json; grep -E '[0-9]+/8 ' /content/comfy.log | tail -n 1 | tr '\\r' '\\n' | tail -n 1"
+mkdir -p out                                    # when job_pr_cannysoft.json is there:
+vm cat /content/ComfyUI/output/ltx_pr_cannysoft_00001-audio.mp4 > out/pr_cannysoft_with_audio.mp4
+vm cat /content/job_pr_cannysoft.json > out/job_pr_cannysoft.json
+ffmpeg -v error -y -i out/pr_cannysoft_with_audio.mp4 -an -c copy out/pr_cannysoft.mp4
 ```
-One poller at a time, short calls (`timeout 90` built in): two `colab exec` at once drop each other.
+The job file is missing until the job ends; the `grep` shows the step counter. A second run of the
+same graph writes `_00002`: `vm ls /content/ComfyUI/output`.
 
 ## 9. Compare (local)
 
@@ -310,7 +333,7 @@ colab usage                # 0.00/hr when nothing runs
 | item | measured |
 |---|---|
 | session start | 8 s-3 min, plus ~3 min per HTTP 503 try |
-| `setup_session.py`, new session | ~6 min setup (both parts side by side) after the session is up; up to ~23 min when `colab exec` calls hang and are retried |
+| `setup_session.py`, new session | ~6 min setup (both parts side by side) after the session is up |
 | `setup_session.py`, ready session | 10-20 s |
 | Qwen-Image-Edit, one 1440x768 picture, 4 steps | ~110 s with the load, ~25 s after; peak ~19.5 GB |
 | Z-Image-Turbo + ControlNet, 8 steps | ~115 s with the load, ~17 s after; peak ~21.7 GB |
@@ -355,12 +378,10 @@ surface looks a little clean; twin nozzles and wing-tip light as in "Recommended
 | symptom | cause | fix |
 |---|---|---|
 | `colab new` fails after ~3 min: `ColabRequestError ... accelerator=L4: Service Unavailable` | no L4 capacity (HTTP 503; nothing billed) | `setup_session.py` tries 4 times a minute apart; else run it again later |
-| `RuntimeError: Connection was lost.` from `colab exec` | websocket dropped (big downloads, or two `exec` at once) | the command usually finished: poll again; one poller; short calls; long work detached (`start_bg.py`, `start_job.py`) |
-| the same on the **first** `exec` of a new session, or on a foreground script | dropped before or while the code ran | the code did not run or died: check (`ls /content`, the log) and run it again |
-| `colab exec` keeps failing after a dropped call | the kernel is busy or reconnecting | wait ~20 s, try `echo 'print(1)' \| colab exec -s ltx` |
-| `colab download` of a small file hangs | slow or dropped transfer | run it again |
+| `setup_session.py` stops with "SSH to session NAME does not work" | `ssh` missing, the key refused, or `colab ssh` failing | check `vm echo ok`; or the exec route (below) |
+| `vm` made a new session | `colab ssh --proxy-mode -s NAME` creates a missing one | check `colab sessions` first; stop the unwanted one |
+| a `vm` call ends with exit 255 | the SSH connection dropped | run it again (detached work keeps running) |
 | a running session is gone from `colab sessions` | Colab ended it (cause unknown) | its disk is gone: download outputs as each run finishes; `setup_session.py <name>` makes a new one |
-| `colab exec` gives up after 30 s without output | its `--timeout` default | long work goes through `start_*.py` |
 | `setup_session.py` stops with "... stopped before it finished" and a log tail | a download or install failed on the VM | read the tail; run it again: it starts only the unfinished part |
 | guide and output sizes do not match | 960x544 with `ref0.5` (half-size guide not a whole number of latents) | multiples of 64: 960x512 or 1024x576 |
 | frame count off | LTX wants 8k+1 frames | 121 (or 97, 73 ...); `prepare_inputs.sh` checks it |
@@ -368,8 +389,20 @@ surface looks a little clean; twin nozzles and wing-tip light as in "Recommended
 | GPU torch gone after node requirements | a requirements file reinstalled torch | `setup.sh` strips the torch lines; keep Colab's torch |
 | `QwenImageDiffsynthControlnet` does not take Z-Image's Fun ControlNet 2.1 | 2.1 has its own node | `ZImageFunControlnet` (`object_info_image.py` lists the inputs) |
 | the image edit keeps the CG sea | the prompt only asks for "real water" | name the CG pattern (prompt C, §6.4) |
-| download of `ltx_<run>_00001-audio.mp4` fails | a second run with the same prefix writes `_00002` | `colab ls -s ltx /content/ComfyUI/output` |
+| download of `ltx_<run>_00001-audio.mp4` fails | a second run with the same prefix writes `_00002` | `vm ls /content/ComfyUI/output` |
 | a node's inputs changed | node versions moved | the pinned commits (no `--latest`) or `object_info.py` |
+
+## The colab exec route (`--via exec`)
+
+The other route: `colab exec` one call at a time, files through Cloudflare quick tunnels (needs
+`cloudflared` on your PATH), no SSH key. Pick it per command with `--via exec`:
+```bash
+python tools/colab/setup_session.py ltx --via exec
+vidgen remote --via exec ltx render             # before the session name
+vidgen generate run --pay --via exec --shot ID  # the comfyui provider on Colab
+```
+`tools/colab/README.md` ("Two routes") has the details. The hand scripts `poll.sh` and
+`fetch_outputs.sh`, and the `colab exec -f` header lines of the VM scripts, use this route.
 
 ## Files
 

@@ -7,21 +7,25 @@ the other scripts are the HOWTO's per-run steps.
 ## Set up a session
 
 ```
-python tools/colab/setup_session.py NAME [--gpu L4] [--no-image] [--latest] [--no-vidgen | --vidgen-only]
+python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-vidgen | --vidgen-only] [--via exec]
 ```
 
 Runs on your machine: Python 3.10+, standard library only (Windows too), and the `colab` CLI
 installed and logged in (`colab usage` prints the balance). It:
 
 1. reuses the session `NAME` when `colab sessions` lists it, or else runs `colab new -s NAME --gpu L4`
-   (`--gpu` picks another), trying 4 times a minute apart when there is no capacity (HTTP 503);
-2. runs `vm_state.py` on the VM to see what is done, and skips it;
-3. uploads `vm_state.py`, `setup.sh` and `setup_image.sh` and starts the missing setups detached
-   (`start_setup.py`), checks on the VM that each one runs, and polls their logs every 30 s,
+   (`--gpu` picks another; `--gpu CPU` a CPU runtime, with `--vidgen-only`; `--high-mem` a high-RAM
+   shape, ignored on an L4), trying 4 times a minute apart when there is no capacity (HTTP 503);
+2. creates the key `~/.ssh/colab_ed25519` when missing and checks that SSH to the session works;
+3. runs `vm_state.py` on the VM to see what is done, and skips it;
+4. uploads `vm_state.py`, `setup.sh` and `setup_image.sh`, starts the missing setups detached
+   (`setsid nohup`), checks on the VM that each one runs, and polls their logs every 10 s,
    printing the `###` milestone lines;
-4. starts ComfyUI (`start_comfy.py`) unless it answers on 127.0.0.1:8188 (VM), and waits for it;
-5. installs this checkout's vidgen unless the VM's marker holds its code hash (below);
+5. starts ComfyUI unless it answers on 127.0.0.1:8188 (VM), and waits for it, installing this
+   checkout's vidgen meanwhile unless the VM's marker holds its code hash (below);
 6. prints the session, GPU, what was installed or reused, the elapsed time and the next commands.
+
+With `--via exec` it uses the exec route (below): `start_setup.py` / `start_comfy.py`, polls every 30 s.
 
 | part | script, log | what it installs |
 |---|---|---|
@@ -93,26 +97,28 @@ vidgen remote --exclude ltx-test NAME render --preview
 ```
 
 1. checks that `colab sessions` lists `NAME`;
-2. sends to `/content/projects/<folder name>/` the files whose SHA-256 the VM lacks, in one `.tar`
-   (it keeps the VM's file list in `.vidgen-remote/`; the first run asks the VM). `build/`,
-   `output/`, `exports/`, `media/` and `--exclude DIR` top folders are never sent, and nothing on
-   the VM is deleted;
-3. in the same `colab exec`, checks that the VM's vidgen hash is this computer's (else it stops
-   and prints the `setup_session.py ... --vidgen-only` command) and starts `vidgen ARGS` there
-   detached (`--json` added for commands that have it), log in `.vidgen-remote/run.log`; it polls
-   the log after 2 s, 5 s, then every 10 s, printing its lines; on failure it prints the log tail
-   and returns the exit code;
-4. brings back, in one `.tar`, the files the JSON document names inside the project outside
-   `build/` (for `render`: the MP4, SRT, chapters, thumbnail) plus the render's
-   `build/final/timings.json`, and the files the run made or changed outside the never-sent
-   folders (e.g. `audio/` of `tts`). The rest of `build/` stays on the VM as a cache.
+2. syncs the project to `/content/projects/<folder name>/` with rsync over SSH: files deleted here
+   are deleted there; `build/`, `output/`, `exports/`, `media/`, `--exclude DIR` top folders,
+   `__pycache__`, `.git` and `.vidgen-remote` are never sent or touched there;
+3. checks that the VM's vidgen hash is this computer's (else it stops and prints the
+   `setup_session.py ... --vidgen-only` command) and starts `vidgen ARGS` there detached (`--json`
+   added for commands that have it), log in `.vidgen-remote/run.log`; it polls the log after 2 s,
+   5 s, then every 10 s, printing its lines; on failure it prints the log tail and returns the exit code;
+4. after a run that succeeded, rsyncs back (`--update`: a file changed here meanwhile is kept;
+   nothing is deleted here) the files the JSON document names, the files the run made or changed
+   outside the never-sent folders, and `build/` without the render caches (`build/*/scenes`, `web`
+   clips, `frames`, `media`, `padded`, `three_d`, `audio`, `build/music`); the web captures'
+   `.json` records do come back, so inputs made on the VM count here.
 
-Every `colab` call on a session waits for any other vidgen call on it to end (a lock file in the
-temp folder); a `colab exec` is cut at 30 s and retried after 3, 10, 20, 30 s, and every VM step
-is safe to repeat. `setup_session.py` and the `comfyui` provider use the same helpers.
+Without a local `rsync` (Windows), or with `--via exec` (before `NAME`), it sends the files whose
+SHA-256 the VM lacks in one `.tar` (nothing on the VM is deleted) and brings back, in one `.tar`,
+the named files plus `build/final/timings.json` and the run's new files outside `build/`. On the
+exec route every `colab` call on a session waits for any other vidgen call on it (a lock file in
+the temp folder); a `colab exec` is cut at 30 s and retried after 3, 10, 20, 30 s. Every VM step is
+safe to repeat. `setup_session.py` and the `comfyui` provider use the same helpers.
 
 Local side: `src/vidgen/remote.py` and `src/vidgen/colab.py` (shared with `setup_session.py`),
-standard library only; VM side: `src/vidgen/colab_vm.py` (run with `colab exec -f`).
+standard library only; VM side: `src/vidgen/colab_vm.py` (run with `python3` over SSH, or `colab exec -f`).
 `vidgen remote` compares the hash of the `vidgen` package it runs from, so run it from this
 checkout (`pip install -e .`).
 

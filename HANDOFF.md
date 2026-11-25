@@ -28323,3 +28323,28 @@ project), repo work is generic.
 - **How to test**: `PYTHONPATH=src python -m pytest -q -m "slow or not slow" tests/test_colab_setup_session.py
   tests/test_colab_rsync.py tests/test_remote.py tests/test_colab_ssh.py` (55 passed, 5 s); `tests/test_docs.py
   tests/test_guide.py` (179 passed).
+
+## Step 423 — docs for the SSH route
+
+- **Built** (docs only, no code): the docs now describe the SSH route of Steps 418-422 as the default.
+  - `src/vidgen/data/guide/AGENTS.md` (copied to `AGENTS.md`), "Use a Colab session": the recipe names setup,
+    `vidgen remote NAME ...`, the comfyui provider and `colab stop`; one line for a CPU high-RAM session
+    (`setup_session.py NAME --gpu CPU --high-mem --vidgen-only`); the rsync sync (local deletes reach the VM),
+    the bring-back (`build/` minus the render caches, so VM-made inputs count here), the tar sync without a local
+    rsync. No `--via exec` there.
+  - `docs/HOWTO-restyle-with-ltx-on-colab.md`: every `colab upload` / `colab exec` / `colab download` / `poll.sh` /
+    `fetch_outputs.sh` / `start_bg.py` / `start_job.py` command replaced by a `vm` shell function (plain `ssh` with
+    the options `colab_ssh.SshLink` uses, `UserKnownHostsFile=/dev/null`), `cat`/`tar` over it for files and
+    `setsid nohup ... &` for detached work; prerequisites (ssh, key, rsync), §5 (key, SSH check, `--high-mem`,
+    `--gpu CPU`), troubleshooting rows for SSH; new section "The colab exec route (`--via exec`)".
+  - `docs/CONFIG.md`: the comfyui provider uploads over SSH (`colab ssh`), not "with the colab CLI".
+  - `tools/colab/README.md`: setup steps (key, SSH check, `setsid nohup`, 10 s polls, vidgen while ComfyUI loads,
+    `--high-mem`, `--gpu CPU`) and the `vidgen remote` steps (rsync both ways) describe the SSH route; the tar /
+    lock / 30 s cut-off text now says it is the exec route's (and no-rsync) behaviour.
+- **Left alone**: `docs/COOKBOOK-*`, CONFIG.md and AGENTS.md text on `host: quick_tunnel` / `cloudflared` (the
+  OpenRouter input host, not the Colab route); `docs/howto/ltx-colab-runlog.md` (a run log); the VM scripts'
+  `# Run with: colab exec ...` header comments and `poll.sh` / `fetch_outputs.sh` (code; the HOWTO's exec-route
+  section says they use that route).
+- **Known gaps**: the HOWTO's `vm` hand commands were not run on a real session (this step touched no Colab
+  session). `vm` opens a new SSH connection per call (no ControlMaster).
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_guide.py tests/test_docs.py` (179 passed, 18 s).
