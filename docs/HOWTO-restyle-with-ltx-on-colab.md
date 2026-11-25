@@ -178,7 +178,7 @@ shows the log and GPU memory (also sampled into `/content/vram.csv`).
 ComfyUI 0.46's model compiler is on by default. With it on, `LTXMultiICLoRA` stalls at step 0
 (one CPU core busy, the GPU idle); ComfyUI started with `--disable-comfy-compiler`
 (`setup_session.py NAME --no-comfy-compiler`) runs it. The running ComfyUI's flags:
-`vm "pgrep -af '^python main.py'"`.
+`vm "pgrep -af 'main.py'"`.
 
 ### 6.3 Canny control (VM)
 

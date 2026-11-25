@@ -28469,7 +28469,7 @@ Ask the user before creating the G4 session. From vidgen's source folder (the se
 
 ```
 cd /home/bpsa/app/schu-video-generator
-python tools/colab/setup_session.py g4 --gpu G4 --no-comfy-compiler   # an existing g4: add --vidgen-only first if only code changed, then without it to set the compiler
+python tools/colab/setup_session.py g4 --gpu G4 --no-comfy-compiler   # also on an existing g4: updates vidgen and restarts a ComfyUI whose compiler is on (never with --vidgen-only: a parse error)
 cp -a /home/bpsa/app/video-projects/footage-test-ssh /home/bpsa/app/video-projects/footage-test-sheet   # keep Step 422's takes as they are
 cd /home/bpsa/app/video-projects/footage-test-sheet
 mkdir -p sheets && cp /home/bpsa/app/video-projects/sheet-trial-2026-11-25/trial2/inputs/trial2_sheet_768x448.png sheets/glider_768x448.png
@@ -28514,3 +28514,52 @@ names the sheet; look at it and its `.contact.png`):
 again (a new restyle). `vidgen remote g4 generate run` refuses a sheet shot if ComfyUI runs with the compiler on: then
 `python tools/colab/setup_session.py g4 --no-comfy-compiler` from the source folder. Running locally instead
 (`$V generate run --pay --shot chase_b1_p1`, ColabTransport) works the same. Leave the session up until the user says stop.
+
+## Step 426 — review of Steps 424-425
+
+Review of `git diff d0ec91d..e73e888` against trial run T2c (`video-projects/sheet-trial-2026-11-25/trial2/`).
+
+- **Checked, no change needed**:
+  - Graph: `ltx_graph.graph(sheet_file=...)` with T2c's inputs and `with_audio=False` (a shot with sound `mix` sends
+    that) equals `trial2/graphs/T2c_multi_nocompiler_768_25.json` node for node (loaders, `LTXMultiICLoRA` a =
+    Ingredients guide 0 / b = Union guide 1, sheet guide 42 first with factor `["2",1]`, canny 14 after it with
+    `["2",2]`, `RepeatImageBatch` = frames, sigmas, sampler). At 121 frames the sheet guide, the canny guide and the
+    latent are all 121 frames (no guide is longer than the latent); `frames(5) = 121`, `frames(1) = 25`.
+  - No-sheet path: the dry-run `generate plan` of an untouched copy of `footage-test-ssh` gives the same shots,
+    "512p", "asks for 3 s" and "cached" as the Step 423 code; the request key is unchanged. The inputs of that copy now
+    read "the scene changed (... or vidgen)": `config.py` is a render input, so any schema change makes earlier renders
+    stale (the clip is still reused free); not new with these steps.
+  - HANDOFF Step 425 yaml on a temp copy: plan shows `768x448`, `asks for 5 s, trimmed to 4.98 s`, the sheet line and
+    the `Reference sheet: ...` prompt; with `first_frame: none` + `duration: 1`: `length: 1 s` and the shorter-clip note.
+  - `bash -n` of `setup.sh` and `check_hf.sh`; `setsid nohup ... &` always after `;`; `--gpu G4`/`H100` accepted.
+- **Bug fixed — the restart could not stop a ComfyUI started by hand** (`tools/colab/setup_session.py`):
+  `COMFY_PATTERN` was `^python main.py --listen 127.0.0.1 --port 8188`, while the flag check (`comfy_args`) finds
+  any `main.py` on 8188. The trial's session runs `python3 main.py ...`: the stop matched nothing, printed `stopped`,
+  the new start lost the port, and the summary said `restarted (model compiler on|off)` with the old setting still
+  running. Fix: `COMFY_PATTERN = ^([^ ]*/)?python[0-9.]* ([^ ]*/)?main\.py .*8188`, and the stop command prints
+  `stopped` only when `pgrep` finds no ComfyUI left (else `stop_comfy` raises with the survivor's line). Checked on
+  this machine with dummy `python3 main.py` / `python main.py` servers (both stopped in 1.2 s, the shell kept).
+  Test `test_the_stop_pattern_matches_every_comfyui_the_flag_check_finds`. HOWTO §6.2's `pgrep` hint now `'main.py'`.
+- **Docs fixed**: `AGENTS.md` (both copies) said "Either way a running ComfyUI is restarted"; now "A running ComfyUI
+  with the other setting is restarted (a job running on it is lost)", and the G4 line says "whose compiler is on".
+  The Step 425 G4 block's first comment told to "add --vidgen-only first", which with `--no-comfy-compiler` is a parse
+  error; it now says the same command also serves an existing g4.
+- **Doubts for the G4/H100 test** (no code changed):
+  - 121 frames with `LTXMultiICLoRA` never ran (L4: 73 frames ran out of memory). Watch `comfy.log` for "hook error
+    ... skipping delta" (the node drops LoRA deltas silently under memory pressure) and for
+    "Conditioning frames exceed the length of the latent sequence".
+  - First frame (restyled) + sheet never ran (T2c had none; `T3c_multi_960_73_first` was built, not run): see if
+    the clip starts from the picture and still takes the sheet's look.
+  - The prompt is longer than T2c's (vidgen adds "Establishing shot:", the spoken line, the guide sentence, "No
+    on-screen text..."); compare the T0 1 s take with T2c's clip.
+  - `/free` before the first job is ComfyUI's flag: it unloads after the current job ends, never in the middle.
+  - Running `setup_session.py g4` without `--no-comfy-compiler` (e.g. to update vidgen) restarts ComfyUI with the
+    compiler on; then the sheet shot is refused until the flag is given again.
+  - `units_per_hour` (default 1.94, the L4's) is wrong for G4/H100 takes unless set in `videogen.comfyui`.
+- **Files**: `tools/colab/setup_session.py`, `tests/test_colab_setup_session.py`, `docs/HOWTO-restyle-with-ltx-on-colab.md`,
+  `AGENTS.md`, `src/vidgen/data/guide/AGENTS.md`, `HANDOFF.md`, `tasklist.md`.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_sheet.py tests/test_videogen_comfyui.py
+  tests/test_videogen_canny_restyle.py tests/test_videogen_shots.py tests/test_videogen.py tests/test_videogen_guided_prompts.py
+  tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py tests/test_videogen_first_frame_in.py
+  tests/test_videogen_shot_chain.py tests/test_videogen_compose.py tests/test_colab_setup_session.py tests/test_remote.py
+  tests/test_guide.py tests/test_docs.py` (390 passed, 46 s).

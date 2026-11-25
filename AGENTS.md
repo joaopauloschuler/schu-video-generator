@@ -5799,7 +5799,8 @@ colab stop -s NAME                                 # only when the user says so
 
 - For no GPU work (renders, ffmpeg), a CPU high-RAM session: `setup_session.py NAME --gpu CPU --high-mem --vidgen-only`.
 - `setup_session.py NAME --no-comfy-compiler` starts ComfyUI with its model compiler off (the node LTX Multi
-  IC-LoRA stalls with it on); run again without it to switch back. Either way a running ComfyUI is restarted.
+  IC-LoRA stalls with it on); run again without it to switch back. A running ComfyUI with the other setting is
+  restarted (a job running on it is lost).
 - The comfyui provider with `comfyui: {colab: NAME}` runs `vidgen generate run --pay` here and the job on that VM.
 - Synced to `/content/projects/<folder name>/` on the VM with rsync: files deleted here are deleted
   there; `build/`, `output/`, `exports/`, `media/` are never sent (`--exclude DIR` before NAME
@@ -5817,7 +5818,7 @@ colab stop -s NAME                                 # only when the user says so
 (the guide gives shapes and motion, the sheet the look). The sheet is a picture you made with an image
 model, with the clip's aspect ratio; describe its panels in `sheet_prompt:` (the prompt starts
 `Reference sheet: <sheet_prompt>. Generated video: `). Use a G4 session with ComfyUI's compiler off:
-`python tools/colab/setup_session.py NAME --gpu G4 --no-comfy-compiler` (it restarts a running ComfyUI);
+`python tools/colab/setup_session.py NAME --gpu G4 --no-comfy-compiler` (it restarts a running ComfyUI whose compiler is on);
 `generate run --pay` refuses a sheet shot otherwise.
 
 Add to the `generated_shot:` of "Real footage from a web scene" above:

@@ -539,6 +539,21 @@ def test_exec_route_reports_the_compiler_but_never_restarts_and_rejects_the_opti
     assert setup_session.parse_args(["s", "--no-comfy-compiler"]).no_comfy_compiler is True
 
 
+def test_the_stop_pattern_matches_every_comfyui_the_flag_check_finds() -> None:
+    """A ComfyUI started by hand (``python3 main.py``, as the sheet trial did) is stopped too, never the ssh shell."""
+    import re
+    import shlex
+
+    servers = [" ".join(setup_session.COMFY_COMMAND), "python3 main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch --disable-comfy-compiler",
+               "/usr/bin/python3 /content/ComfyUI/main.py --listen 0.0.0.0 --port 8188"]
+    for line in servers:
+        assert re.search(setup_session.COMFY_PATTERN, line), line
+    for line in ["bash -c " + shlex.quote(setup_session.comfy_stop_command()), "nvidia-smi " + " ".join(setup_session.VRAM_COMMAND[1:]),
+                 "python3 main.py --port 8190"]:
+        assert not re.search(setup_session.COMFY_PATTERN, line), line
+    assert setup_session.comfy_stop_command().endswith("|| echo stopped")   # a survivor is named, not reported stopped
+
+
 def test_vm_state_needs_the_ingredients_lora_and_the_routing_node() -> None:
     assert f"loras/{setup_session.INGREDIENTS_LORA}" in vm_state.MODEL_FILES["ltx"]
     assert setup_session.ROUTING_NODE in vm_state.CUSTOM_NODES

@@ -66,9 +66,11 @@ SSH_CHECK = "echo vidgen-ssh-ok"
 #: ComfyUI and its VRAM sampler, as start_comfy.py starts them on the exec route.
 COMFY_COMMAND = ["python", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
 VRAM_COMMAND = ["nvidia-smi", "--query-gpu=timestamp,memory.used,utilization.gpu", "--format=csv,noheader", "-l", "1"]
-#: pkill/pgrep patterns of those two processes, anchored at the start of the command line (a shell whose
-#: command text names them does not match).
-COMFY_PATTERN = "^" + " ".join(COMFY_COMMAND[:6])
+#: pkill/pgrep patterns (extended regex) of those two processes, anchored at the start of the command line
+#: (a shell whose command text names them does not match). The ComfyUI one also matches a server started
+#: by hand (``python3 main.py``, a path before either word, other flags) on port 8188, as
+#: ``vidgen.colab.comfy_args`` finds it.
+COMFY_PATTERN = r"^([^ ]*/)?python[0-9.]* ([^ ]*/)?main\.py .*8188"
 VRAM_PATTERN = "^" + " ".join(VRAM_COMMAND[:2])
 #: The add-ons for a base video + a sheet in one LTX run (setup.sh installs them with the LTX part).
 INGREDIENTS_LORA = "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"
@@ -119,10 +121,11 @@ def comfy_command(no_compiler: bool = False) -> str:
 
 
 def comfy_stop_command() -> str:
-    """Stop ComfyUI and the VRAM sampler over ssh: SIGTERM, up to 30 s, then SIGKILL."""
+    """Stop ComfyUI and the VRAM sampler over ssh: SIGTERM, up to 30 s, then SIGKILL; prints
+    ``stopped`` only when no ComfyUI process is left."""
     comfy, vram = shlex.quote(COMFY_PATTERN), shlex.quote(VRAM_PATTERN)
     return (f"pkill -f {comfy}; pkill -f {vram}; for i in $(seq 30); do pgrep -f {comfy} > /dev/null || break; "
-            f"sleep 1; done; pkill -9 -f {comfy}; echo stopped")
+            f"sleep 1; done; pkill -9 -f {comfy}; sleep 1; pgrep -af {comfy} || echo stopped")
 
 
 def compiler_word(off: bool) -> str:
