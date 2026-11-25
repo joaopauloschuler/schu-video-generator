@@ -333,12 +333,13 @@ CANNY_SHORT_SIDE = 512
 
 def guide_size(shot: Shot) -> tuple[int, int]:
     """The size a ``guide: canny`` video and a restyled first frame are made at: the workflow's own
-    (960x512 for 16:9) for a ComfyUI workflow, else :data:`CANNY_SHORT_SIDE` on the short side."""
+    (the shot's ``size:``, else 960x512 for 16:9) for a ComfyUI workflow, else
+    :data:`CANNY_SHORT_SIDE` on the short side."""
     from vidgen.videogen.comfyui import find_workflow
 
     workflow = find_workflow(shot.spec.model)
     if workflow is not None:
-        return workflow.size(shot.aspect_ratio)
+        return workflow.size(shot.aspect_ratio, shot.spec.size)
     a, _, b = (shot.aspect_ratio or "16:9").partition(":")
     ratio = float(a) / float(b)
     long = 2 * round(CANNY_SHORT_SIDE * max(ratio, 1 / ratio) / 2)

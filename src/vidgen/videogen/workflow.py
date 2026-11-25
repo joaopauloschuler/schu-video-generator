@@ -11,7 +11,8 @@ order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``p
   ready shots over what the budget has left, before anything is paid or a tunnel opened;
 - each ready shot then goes through :func:`vidgen.videogen.run.generate_clip` (``pay=True``,
   ``duration=shot.priced_seconds``; the ledger keeps the running budget); blocked shots are
-  skipped and named;
+  skipped and named; on the comfyui provider one provider serves the whole run, so the models
+  are unloaded once, before its first job;
 - a ``first_frame: last_of:`` shot is skipped as blocked when the take its source shows changed
   during this run (it was planned against the old picture);
 - every clip returned (paid now, cached, or an earlier job downloaded) becomes a take
@@ -96,7 +97,7 @@ def run_shots(
     inputs are hosted (default: ``videogen.host``). Raises :class:`VidgenError` when a paid run is
     refused (nothing paid) or stopped by a failure (``details``: the outcomes)."""
     from vidgen.videogen.ledger import intent_refusal
-    from vidgen.videogen.run import _cap, generate_clip
+    from vidgen.videogen.run import _cap, generate_clip, get_provider
     from vidgen.videogen.shots import plan_shots
 
     root = project.root
@@ -129,6 +130,8 @@ def run_shots(
         left = plan.budget.remaining_usd
         if left is not None and due > left + 1e-9:
             raise VidgenError(f"not paying: the ready shots are estimated at {money(due)}, more than the budget has left ({plan.budget.text()}); nothing was paid")
+    if pay and provider is None and settings.provider == COMFYUI_PROVIDER:
+        provider = get_provider(settings)
     fmt = project.config.format
     for item in plan.shots:
         shot = item.shot
@@ -170,6 +173,7 @@ def run_shots(
                 root, shot.id, result.path, key=result.plan.key, model=model, provider=result.plan.provider,
                 job_id=result.job.id if result.job else None, cost=result.cost, length=shot.length, width=fmt.width, height=fmt.height, sound=shot.sound,
                 warnings=result.warnings, opening_picture=shot.starting_picture, usage=result.job.usage if result.job else None,
+                sheet=shot.sheet,
             )
             what = "new take" if run.new_take else "already take"
             cost = f", {money(result.cost)}" if result.cost is not None else ""

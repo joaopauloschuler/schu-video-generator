@@ -22,6 +22,8 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
 - **Inside vidgen**: the same as a shot: `videogen: {provider: comfyui, comfyui: {colab: ltx}}`,
   `model: ltx-2.3-union-control`, `guide: canny`, `first_frame: restyled`, then
   `vidgen generate inputs --guide` and `vidgen generate run --pay` ([CONFIG.md](CONFIG.md)).
+- **A stylesheet with the base video** (`sheet:` + `sheet_prompt:` on the shot, `size:` / `duration:` for
+  the clip, ComfyUI started with `--no-comfy-compiler`): §7.1.
 - **The first frame sets the look.** The CG frame 0 keeps the CG look; no first frame looks real
   but invents things (a beach, a different glider).
 - **Canny holds the layout and the horizon.** Depth alone rolls the horizon: in 1 / z depth the far
@@ -296,6 +298,21 @@ Differences from the official workflow: the distilled-1.1 GGUF instead of the de
 distilled LoRA 0.5 (**do not add the distilled LoRA on top**); `DualCLIPLoader` instead of
 `LTXAVTextEncoderLoader` (it wants a full checkpoint); `VAELoaderKJ`; the control prepared outside
 the graph; VHS output. Single stage, no upscaler.
+
+**With a stylesheet** (a shot's `sheet:` + `sheet_prompt:`, [CONFIG.md](CONFIG.md); trial run T2c of
+2026-11-25, `video-projects/sheet-trial-2026-11-25/trial2/`), the same graph with these changes, node for node:
+
+| id | node | key settings |
+|---|---|---|
+| 2 | `LTXMultiICLoRA` (comfyui-hrnodes) | `ic_lora_count` 2, `noisy_blend` 1.0; LoRA a `ltx-2.3-22b-ic-lora-ingredients-0.9`, strength 1.0, guide 0; LoRA b union-control `ref0.5`, strength 1.0, guide 1; outputs MODEL and one `latent_downscale_factor` per guide |
+| 40 / 41 | `LoadImage` + `RepeatImageBatch` | the sheet at the output size, repeated to the clip's frame count |
+| 42 | `LTXAddVideoICLoRAGuide` | the sheet: frame_idx 0, strength 1.0, `latent_downscale_factor` from node 2 output 1; fed by node 6 and node 13 |
+| 14 | `LTXAddVideoICLoRAGuide` | the control, chained after 42, `latent_downscale_factor` from node 2 output 2 |
+
+The prompt starts `Reference sheet: <the panels>. Generated video: `. ComfyUI must run with
+`--disable-comfy-compiler` (§6.2): vidgen checks it before sending such a shot and refuses otherwise.
+The stock loaders (no routing) put the sheet's panels into the clip; only the routing node keeps them
+apart. Inside vidgen, `vidgen generate run --pay` unloads the models (`POST /free`) once before its first job.
 
 ### 7.2 Submit, detached
 

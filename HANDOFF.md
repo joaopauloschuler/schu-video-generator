@@ -28399,3 +28399,118 @@ project), repo work is generic.
   tests/test_remote.py tests/test_colab_ssh.py tests/test_colab_rsync.py tests/test_guide.py tests/test_docs.py`
   (246 passed; `test_the_web_topics_code_runs_in_chromium` needs no `ulimit -v`, Chromium will not start under it);
   `bash -n tools/colab/setup.sh tools/colab/check_hf.sh`.
+
+## Step 425 — a stylesheet for a shot with the base video in one LTX run; clip size and length
+
+- **Built**:
+  - **Shot keys** (`GeneratedShot`, `src/vidgen/config.py`): `sheet:` (a picture file, relative to the project) and
+    `sheet_prompt:` (what each panel shows), only together (`sheet_prompt` without `sheet` and `sheet` without
+    `sheet_prompt` are config errors: no sensible default for the panel text), only on a workflow with
+    `Workflow.takes_sheet` (`ltx-2.3-union-control`); another provider than `comfyui` is a plan problem; a missing
+    file, an unreadable picture, or an aspect ratio more than 1 % off the clip's is a plan problem
+    (`shots._sheet_input`, `SHEET_ASPECT_TOLERANCE`). **Decision: never crop** (a centre crop cuts the outer panels);
+    the sheet is scaled (Lanczos, `fit_picture`) to the clip's size. No project-level default (the schema has no
+    per-shot default pattern for such keys besides `videogen.models.<id>`; not needed for the tests).
+  - `size:` (`WIDTHxHEIGHT`, multiples of 64, not with `resolution:`) and `duration:` (1-5 s), ComfyUI workflows only.
+    **Gap found and fixed**: before, a comfyui clip was always 960x512 for 16:9 (short side 512) and its length was the
+    beat part rounded up, so 768x448 and a 1 s clip on this project could not be expressed. `size` reaches
+    `Workflow.size(aspect, size)`, `inputs.guide_size` (canny guide and restyled frame) and `prepare_job`; `duration`
+    replaces the snapped part length (a shorter clip follows the start of the part's guide; plan note).
+  - **Graph** (`ltx_graph.graph(sheet_file=)`): T2c reproduced exactly; the test builds it with T2c's inputs and
+    compares it with a copy of `trial2/graphs/T2c_multi_nocompiler_768_25.json` (`tests/data/ltx_graph/`): **equal as a
+    whole, no field ignored**. Node 2 `LTXMultiICLoRA` (count 2, `noisy_blend` 1, a = Ingredients 0.9 strength 1 guide 0,
+    b = Union Control ref0.5 `lora_strength` guide 1), 40 `LoadImage` sheet, 41 `RepeatImageBatch` amount = frames,
+    42 `LTXAddVideoICLoRAGuide` (sheet, strength 1, frame 0, factor node 2 out 1, from node 6 / node 13), 14 (canny)
+    chained after 42 with factor node 2 out 2; sampler unchanged. Without a sheet: byte-for-byte the Step 424 output
+    (`no_sheet.json`, saved from the unchanged builder before the edit, 3 variants). Sheet + `second_control_file`: ValueError.
+  - **Prompt** (T2c's actual format, trial 1's style, not the official `### Reference Sheet Description` card):
+    `Reference sheet: <sheet_prompt>. Generated video: <the shot's vidgen prompt>`. Note: vidgen's shot prompt is
+    longer than T2c's (it adds "Establishing shot:", the spoken line unless `line: false`, the guide sentence, "No
+    on-screen text...").
+  - **Compiler check**: `ComfyUIVideoProvider.submit` with a sheet calls `check_compiler()` before anything is fitted,
+    recorded or sent: `ColabTransport.compiler_off()` = `vidgen.colab.comfy_compiler_off(colab)`; `HttpTransport` on
+    the Colab VM itself (`vidgen remote NAME generate run`) reads `colab_vm.comfy_args()` (`/proc`); another URL reads
+    `system.argv` of `/system_stats`. Not `True` -> `VidgenError` naming `python tools/colab/setup_session.py NAME
+    --no-comfy-compiler` (it restarts ComfyUI). Never restarts anything. Shots without a sheet: not checked.
+  - **Free VRAM**: not done before (only the restyle's `free_after`). Now `PreparedJob.free_before` on a provider's
+    first job (`POST /free` before the uploads: `HttpTransport.submit`, and `run_job` on the VM prints "unloaded the
+    models (POST /free)"); `run_shots` makes one provider per paid comfyui run, so once per `generate run`, none
+    between its shots.
+  - **No first frame**: already possible (`first_frame: none` -> node 13 bypassed with a placeholder, as T2c); nothing built.
+  - **Records**: `VideoRequest.sheet` (`MediaInput`); `canonical_request` adds `"sheet"` (SHA-256 + bytes) only when
+    set, so every existing cache key is unchanged; `sheet_prompt` is in the prompt, so both are in the clip key (a
+    changed sheet or text = a new clip, like a picture-file first frame). The sheet is the author's file, not a cut
+    input, so it has no `inputs.json` entry. `add_take(sheet=)` writes `"sheet": "<path>"` in `takes/<shot>/<n>.json`.
+    Plan line: `sheet: <path> (stylesheet, ...)`; the header shows `768x448` instead of `512p` when `size:` is set.
+- **Files**: `src/vidgen/config.py`, `src/vidgen/videogen/{__init__,comfyui,comfyui_client,inputs,ltx_graph,shots,takes,workflow}.py`;
+  `tests/test_videogen_sheet.py` (new, 14 tests), `tests/test_videogen_comfyui.py` (fake server knows `/free`, argv),
+  `tests/data/ltx_graph/{no_sheet,T2c_multi_nocompiler_768_25}.json`; `docs/CONFIG.md`, `DESIGN.md` (§113.23, §113.20
+  one clause), `docs/HOWTO-restyle-with-ltx-on-colab.md` (§ Recommended, §7.1), guide + `AGENTS.md`; `tasklist.md`.
+- **Public interfaces**: config keys `generated_shot.sheet`, `.sheet_prompt`, `.size`, `.duration`;
+  `VideoRequest.sheet`; `Workflow.takes_sheet`, `Workflow.size(aspect_ratio, size=None)`, `Workflow.graph(sheet=)`;
+  `ltx_graph.graph(sheet_file=)`, `UNION_LORA`, `INGREDIENTS_LORA`; `PreparedJob.free_before`; `Transport.compiler_off()`
+  / `.compiler_fix`; `HttpTransport(comfy_args=, compiler_fix=)`; `ComfyUIVideoProvider.check_compiler()`, `.freed`;
+  `add_take(sheet=)`; `shots.SHEET_HEAD`, `SHEET_TAIL`, `SHEET_ASPECT_TOLERANCE`. No `vidgen.api` change.
+- **Known gaps**: nothing ran on a real session. `/system_stats` listing `argv` (plain URL route) is from memory of
+  ComfyUI's server code, not checked live (when absent the check refuses, it does not pass); the two Colab routes use
+  `/proc`. A 121-frame part needs the part to be about 5 s long (this project's beat is 5.29 s, 2 parts of 2.65 s, so the
+  block below adds `pause: 5`). `units_per_hour` defaults to the L4's 1.94; a G4's take records wrong units unless set.
+  The installed `vidgen` on this computer (`/home/bpsa/x/bin/vidgen`, site-packages 0.3.0) is an old copy without
+  `generate`: run the source (`PYTHONPATH=/home/bpsa/app/schu-video-generator/src python -m vidgen`).
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_sheet.py tests/test_videogen_comfyui.py
+  tests/test_videogen_canny_restyle.py tests/test_videogen_shots.py tests/test_videogen.py tests/test_videogen_guided_prompts.py
+  tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py tests/test_videogen_first_frame_in.py
+  tests/test_videogen_shot_chain.py tests/test_videogen_compose.py tests/test_guide.py tests/test_docs.py` (349 passed, 51 s).
+  The first test that loads a project pays a one-time ~8 s import; each sheet test itself is under 0.1 s.
+
+### How to run the G4 tests (Step 425)
+
+Ask the user before creating the G4 session. From vidgen's source folder (the session gets this step's code):
+
+```
+cd /home/bpsa/app/schu-video-generator
+python tools/colab/setup_session.py g4 --gpu G4 --no-comfy-compiler   # an existing g4: add --vidgen-only first if only code changed, then without it to set the compiler
+cp -a /home/bpsa/app/video-projects/footage-test-ssh /home/bpsa/app/video-projects/footage-test-sheet   # keep Step 422's takes as they are
+cd /home/bpsa/app/video-projects/footage-test-sheet
+mkdir -p sheets && cp /home/bpsa/app/video-projects/sheet-trial-2026-11-25/trial2/inputs/trial2_sheet_768x448.png sheets/glider_768x448.png
+export PYTHONPATH=/home/bpsa/app/schu-video-generator/src; V="python -m vidgen"
+```
+
+In `video.yaml`: `videogen: {provider: comfyui, comfyui: {colab: g4}}`, then the beat becomes (`pause: 5` makes the beat
+9.96 s: two parts of 4.98 s, so `chase_b1_p1` asks for 5 s = 121 frames; checked with `generate plan` on a copy):
+
+```yaml
+      - text: "Low over the open sea, the glider leans into a gentle turn."
+        pause: 5
+        generated_shot:
+          kind: establishing
+          model: ltx-2.3-union-control
+          prompt: "a grey glider flies low over a rough open sea and banks gently, the chase camera following close behind. Real 35 mm aerial footage shot from a chase plane: natural daylight, real atmosphere and haze, real waves, spray and whitecaps, fine film grain, low afternoon sun; photographic, not computer graphics"
+          guide: canny
+          first_frame: restyled
+          place: true
+          size: 768x448
+          sheet: sheets/glider_768x448.png
+          sheet_prompt: "top left, a grey jet glider seen from behind and above, delta wings with red tips, two tail fins, two engine nozzles; top right, the same glider in side view; bottom left, the same glider from above; bottom right, a rough open sea under a low afternoon sun"
+```
+
+```
+$V generate plan --shot chase_b1_p1                       # header "768x448", "asks for 5 s", "sheet: sheets/glider_768x448.png", prompt "Reference sheet: ..."
+$V remote g4 generate inputs --guide --shot chase_b1_p1   # canny 768x448 (4.98 s, last frame held to 121) + restyled first frame 768x448
+$V generate plan --shot chase_b1_p1                       # must say nothing is blocked
+```
+
+Then one run per variant (edit the shot, plan, run; each run makes a new take in `takes/chase_b1_p1/`, its `.json`
+names the sheet; look at it and its `.contact.png`):
+
+| test | shot keys changed | then |
+|---|---|---|
+| T0, 1 s check (25 frames) | `first_frame: none`, `duration: 1` | `$V remote g4 generate run --pay --shot chase_b1_p1` |
+| T1, 5 s with first frame | `first_frame: restyled`, no `duration` | same |
+| T2, 5 s without first frame | `first_frame: none` | same |
+| T3, second seed | `first_frame: none`, `seed: 7` | same |
+
+`seed:` also sets the restyled frame's seed, so a seed with `first_frame: restyled` needs `generate inputs --guide`
+again (a new restyle). `vidgen remote g4 generate run` refuses a sheet shot if ComfyUI runs with the compiler on: then
+`python tools/colab/setup_session.py g4 --no-comfy-compiler` from the source folder. Running locally instead
+(`$V generate run --pay --shot chase_b1_p1`, ColabTransport) works the same. Leave the session up until the user says stop.

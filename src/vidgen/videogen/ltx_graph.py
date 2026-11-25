@@ -12,6 +12,13 @@ A translation of example_workflows/2.3/LTX-2.3_ICLoRA_Union_Control_Distilled.js
   GetImageSize / ResizeImageMaskNode chain);
 - output through VHS_VideoCombine (h264 mp4).
 
+With a sheet (``sheet_file``, a stylesheet picture at the output size) the graph is the one of
+trial run T2c (2026-11-25): LTX Multi IC-LoRA (comfyui-hrnodes, class ``LTXMultiICLoRA``) loads
+the Ingredients IC-LoRA (LoRA a, guide 0) and the Union Control IC-LoRA (LoRA b, guide 1) and
+routes each to its own LTXAddVideoICLoRAGuide: first the sheet repeated to the clip's frame count
+(RepeatImageBatch; strength 1, frame 0), then the control video. ComfyUI must run with
+``--disable-comfy-compiler`` (with the compiler on, the routing node's first step never ends).
+
 Standard library only, no vidgen imports: the tools script loads this file by its path.
 """
 
@@ -25,6 +32,8 @@ NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly"
 SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 W, H, FRAMES, FPS, SEED = 960, 512, 121, 24, 42
 FIRST_FRAME = "first_frame_960x512.png"
+UNION_LORA = "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"
+INGREDIENTS_LORA = "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"
 
 
 def graph(control_file: str, prefix: str, use_first_frame: bool,
@@ -32,24 +41,28 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
           second_control_file: str | None = None, first_frame_strength: float = 1.0,
           prompt: str = PROMPT, negative: str = NEGATIVE, width: int = W, height: int = H,
           frames: int = FRAMES, fps: int = FPS, seed: int = SEED,
-          first_frame_file: str = FIRST_FRAME, with_audio: bool = True) -> dict:
+          first_frame_file: str = FIRST_FRAME, with_audio: bool = True, sheet_file: str | None = None) -> dict:
     """Return the API-format prompt graph for one run.
 
     second_control_file: chain a second LTXAddVideoICLoRAGuide (node 31) after the first,
     so two control videos (e.g. depth + canny) guide the same generation.
     width and height must be multiples of 64 (the ref0.5 LoRA halves the guide), frames 8k+1.
     with_audio false: the model's own sound is not decoded and the clip is silent.
+    sheet_file: a stylesheet picture at width x height, given with the control video (see the
+    module docstring); not with second_control_file.
     """
     if width % 64 or height % 64:
         raise ValueError(f"width and height must be multiples of 64, not {width}x{height}")
     if (frames - 1) % 8:
         raise ValueError(f"frames must be 8k+1 (e.g. 121), not {frames}")
+    if sheet_file and second_control_file:
+        raise ValueError("a sheet goes with one control video, not two")
     g = {
         "1": {"class_type": "UnetLoaderGGUF",
               "inputs": {"unet_name": "ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"}},
         "2": {"class_type": "LTXICLoRALoaderModelOnly",
               "inputs": {"model": ["1", 0],
-                         "lora_name": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+                         "lora_name": UNION_LORA,
                          "strength_model": lora_strength}},
         "3": {"class_type": "DualCLIPLoader",
               "inputs": {"clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
@@ -123,4 +136,16 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
         for nid in ("20", "23"):
             g[nid]["inputs"]["positive"] = ["31", 0]
             g[nid]["inputs"]["negative"] = ["31", 1]
+    if sheet_file:
+        g["2"] = {"class_type": "LTXMultiICLoRA",
+                  "inputs": {"model": ["1", 0], "ic_lora_count": 2, "noisy_blend": 1.0,
+                             "lora_a": INGREDIENTS_LORA, "strength_a": 1.0, "guide_index_a": 0, "enable_a": True,
+                             "lora_b": UNION_LORA, "strength_b": lora_strength, "guide_index_b": 1, "enable_b": True}}
+        g["40"] = {"class_type": "LoadImage", "inputs": {"image": sheet_file}}
+        g["41"] = {"class_type": "RepeatImageBatch", "inputs": {"image": ["40", 0], "amount": frames}}
+        g["42"] = {"class_type": "LTXAddVideoICLoRAGuide",
+                   "inputs": {**g["14"]["inputs"], "image": ["41", 0], "frame_idx": 0, "strength": 1.0,
+                              "latent_downscale_factor": ["2", 1]}}
+        g["14"]["inputs"].update(positive=["42", 0], negative=["42", 1], latent=["42", 2],
+                                 latent_downscale_factor=["2", 2])
     return g

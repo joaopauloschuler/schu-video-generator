@@ -3479,6 +3479,14 @@ class GeneratedShot(_Strict):
     """How `vidgen generate frames` paints this shot's starting picture from the first frame of the beat's 3D render and reference pictures; use it with first_frame: painted, or give first_frame: the painted file the command names."""
     first_frame_in: FirstFrameIn | None = None
     """frame: the first_frame: picture goes in as a first frame image; guide: it is spliced into the start of the guide video and no frame image is sent (for models that take a first frame or references, never both; needs guide: and first_frame:). Default: videogen.models.<model>.first_frame_in, then videogen.first_frame_in, then frame."""
+    sheet: str | None = Field(default=None, min_length=1)
+    """A stylesheet picture file (relative to the project) the video model follows together with the guide, e.g. sheets/glider.png: its panels show how things look (made by an image model); the clip follows the guide's shapes and motion and the sheet's look. vidgen's ComfyUI workflow ltx-2.3-union-control only (videogen.provider: comfyui; ComfyUI started with --disable-comfy-compiler); the picture must have the clip's aspect ratio (it is scaled to the clip's size, never cropped). Needs sheet_prompt:."""
+    sheet_prompt: str | None = Field(default=None, min_length=1)
+    """With sheet: what each panel of the sheet shows, e.g. "top left, a grey jet glider seen from behind...; bottom right, a rough open sea"; the prompt starts with "Reference sheet: <this>. Generated video: " before the shot's own text."""
+    size: str | None = Field(default=None, pattern=r"^\d+x\d+$")
+    """WIDTHxHEIGHT of the clip a ComfyUI workflow makes (multiples of 64, e.g. 768x448); the guide and the restyled first frame are made at it too. Default: the workflow's size for the aspect ratio (16:9: 960x512). Not with resolution:."""
+    duration: int | None = Field(default=None, ge=1)
+    """Seconds of the clip a ComfyUI workflow makes (1-5; 24 fps, 8k+1 frames: 1 s = 25 frames, 5 s = 121), instead of the beat part's length rounded up; a shorter clip uses the start of the part's guide, a longer one holds the guide's last frame."""
 
     @field_validator("guide", mode="before")
     @classmethod
@@ -3516,7 +3524,32 @@ class GeneratedShot(_Strict):
             raise ValueError("first_frame: painted needs paint_first_frame: {prompt: ...} on the shot (what `vidgen generate frames` paints)")
         if self.paint_first_frame is not None and "/" not in self.paint_first_frame.model.strip("/"):
             raise ValueError(f"paint_first_frame.model: OpenRouter model ids look like author/name (e.g. {DEFAULT_PAINT_MODEL}), not {self.paint_first_frame.model!r}")
+        self._check_workflow_keys()
         return self
+
+    def _check_workflow_keys(self) -> None:
+        """The keys of vidgen's ComfyUI workflows only: sheet, sheet_prompt, size, duration."""
+        from vidgen.videogen.comfyui import WORKFLOWS, find_workflow
+
+        workflow = find_workflow(self.model)
+        if self.sheet_prompt is not None and self.sheet is None:
+            raise ValueError("sheet_prompt: describes the panels of a sheet: picture; this shot has no sheet:")
+        if self.sheet is not None and self.sheet_prompt is None:
+            raise ValueError('sheet: needs sheet_prompt: what each panel shows, e.g. "top left, the glider from behind; bottom right, the sea"')
+        if self.sheet is not None and (workflow is None or not workflow.takes_sheet):
+            takers = ", ".join(w.id for w in WORKFLOWS.values() if w.takes_sheet)
+            raise ValueError(f"sheet: is given to vidgen's ComfyUI workflow {takers} (videogen.provider: comfyui), not to {self.model}")
+        for key in ("size", "duration"):
+            if getattr(self, key) is not None and workflow is None:
+                raise ValueError(f"{key}: is for vidgen's ComfyUI workflows (ltx-2.3-union-control), not {self.model}")
+        if self.size is not None and workflow is not None:
+            if self.resolution is not None:
+                raise ValueError("give size: (WIDTHxHEIGHT) or resolution:, not both")
+            width, height = (int(n) for n in self.size.split("x"))
+            if width % workflow.size_step or height % workflow.size_step or not width or not height:
+                raise ValueError(f"size: {self.size}: {workflow.id} needs width and height in multiples of {workflow.size_step} (e.g. 768x448, 960x512)")
+        if self.duration is not None and workflow is not None and self.duration > workflow.max_seconds:
+            raise ValueError(f"duration: {workflow.id} makes clips of 1-{workflow.max_seconds} s, not {self.duration}")
 
     @property
     def wants_audio(self) -> bool:

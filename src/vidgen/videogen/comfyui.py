@@ -17,7 +17,13 @@ to a transport:
   :mod:`.comfyui_client` go up with the colab CLI, the client runs on the VM against
   127.0.0.1:8188, detached (:mod:`vidgen.colab_vm`), and the clip comes back with ``colab download``.
 
-A finished job reports its GPU seconds and compute units (``usage``), kept in the take.
+A finished job reports its GPU seconds and compute units (``usage``), kept in the take. The
+first job of a provider (one ``vidgen generate run``) unloads the models first (``POST /free``), so
+no picture model is left in the GPU's memory; the jobs after it keep the video model loaded.
+
+A request with a ``sheet`` (a shot's ``sheet:``) is the base video + stylesheet graph of
+:mod:`.ltx_graph`; it runs only on a ComfyUI started with ``--disable-comfy-compiler``
+(:meth:`ComfyUIVideoProvider.check_compiler`, never a restart from here).
 
 :func:`restyle_picture` (``first_frame: restyled``, DESIGN.md §113.21) sends a picture job the
 same way: Qwen-Image-Edit-2511 (:mod:`.qwen_graph`) makes a photoreal version of the render's
@@ -74,6 +80,7 @@ class Workflow:
     frame_step: int = 8
     max_frames: int = 121
     seed: int = 42
+    takes_sheet: bool = False
 
     @property
     def resolution(self) -> str:
@@ -94,9 +101,13 @@ class Workflow:
             resolutions=(self.resolution,), frame_types=("first_frame",), generate_audio=True, seed=True, provider=COMFYUI_PROVIDER,
         )
 
-    def size(self, aspect_ratio: str | None) -> tuple[int, int]:
-        """Width and height for ``aspect_ratio`` (``W:H``; 16:9 when none): the short side
-        :attr:`short_side`, the long side rounded up to :attr:`size_step` (16:9 -> 960x512)."""
+    def size(self, aspect_ratio: str | None, size: str | None = None) -> tuple[int, int]:
+        """Width and height: ``size`` (``WIDTHxHEIGHT``, a shot's ``size:``) when given, else for
+        ``aspect_ratio`` (``W:H``; 16:9 when none) the short side :attr:`short_side` and the long
+        side rounded up to :attr:`size_step` (16:9 -> 960x512)."""
+        if size is not None:
+            width, _, height = size.partition("x")
+            return int(width), int(height)
         a, _, b = (aspect_ratio or "16:9").partition(":")
         try:
             ratio = float(a) / float(b)
@@ -111,15 +122,15 @@ class Workflow:
         return min(self.max_frames, steps * self.frame_step + 1)
 
     def graph(self, *, control: str, first_frame: str | None, placeholder: str, prompt: str, width: int, height: int,
-              frames: int, seed: int | None, prefix: str, with_audio: bool) -> dict[str, Any]:
-        """The API-format graph (``control`` / ``first_frame`` are names in ComfyUI's input
-        folder; ``placeholder`` is loaded and bypassed when there is no first frame)."""
+              frames: int, seed: int | None, prefix: str, with_audio: bool, sheet: str | None = None) -> dict[str, Any]:
+        """The API-format graph (``control`` / ``first_frame`` / ``sheet`` are names in ComfyUI's
+        input folder; ``placeholder`` is loaded and bypassed when there is no first frame)."""
         from vidgen.videogen import ltx_graph
 
         return ltx_graph.graph(
             control_file=control, prefix=prefix, use_first_frame=first_frame is not None, prompt=prompt or ltx_graph.PROMPT,
             width=width, height=height, frames=frames, fps=self.fps, seed=self.seed if seed is None else seed,
-            first_frame_file=first_frame or placeholder, with_audio=with_audio,
+            first_frame_file=first_frame or placeholder, with_audio=with_audio, sheet_file=sheet,
         )
 
 
@@ -128,8 +139,8 @@ WORKFLOWS: dict[str, Workflow] = {
     "ltx-2.3-union-control": Workflow(
         id="ltx-2.3-union-control", name="LTX-2.3 IC-LoRA Union Control (ComfyUI)",
         description="LTX-2.3 distilled-1.1 GGUF Q5_K_M + IC-LoRA union-control ref0.5: restyles a control video (the shot's canny or depth guide), "
-                    "optionally from a first frame; 8 steps, cfg 1",
-        controls=("canny", "depth"),
+                    "optionally from a first frame and with a stylesheet (sheet:, Ingredients IC-LoRA); 8 steps, cfg 1",
+        controls=("canny", "depth"), takes_sheet=True,
     ),
 }
 
@@ -163,6 +174,12 @@ def check_workflow_request(request: VideoRequest, model: VideoModel) -> RequestC
         check.notes.append(f"{model.id} takes no reference pictures or sound: {len(left_out)} reference(s) are not sent")
     if request.duration is not None and request.duration > workflow.max_seconds:
         check.problems.append(f"{model.id} makes clips of 1-{workflow.max_seconds} s, not {request.duration}")
+    if request.sheet is not None and not workflow.takes_sheet:
+        check.problems.append(f"{model.id} takes no sheet")
+    if request.size is not None:
+        width, height = workflow.size(None, request.size)
+        if width % workflow.size_step or height % workflow.size_step:
+            check.problems.append(f"{model.id} makes sizes in multiples of {workflow.size_step}, not {request.size}")
     return check
 
 
@@ -211,12 +228,13 @@ def fit_picture(source: Path, dest: Path, *, width: int, height: int, lanczos: b
 @dataclass(frozen=True)
 class PreparedJob:
     """A job ready to send: the graph, the files it loads (name in ComfyUI's input folder -> local
-    file), the name of its output file and whether the models are unloaded after it."""
+    file), the name of its output file and whether the models are unloaded before / after it."""
 
     graph: dict[str, Any]
     uploads: dict[str, Path]
     output: str = client_module.OUTPUT_NAME
     free_after: bool = False
+    free_before: bool = False
 
 
 def prepare_job(request: VideoRequest, folder: Path, key: str) -> PreparedJob:
@@ -227,7 +245,7 @@ def prepare_job(request: VideoRequest, folder: Path, key: str) -> PreparedJob:
     videos = [r for r in request.references if r.kind == "video" and r.path is not None]
     if len(videos) != 1:
         raise VidgenError(f"{request.model} needs one local control video (the shot's guide)")
-    width, height = workflow.size(request.aspect_ratio)
+    width, height = workflow.size(request.aspect_ratio, request.size)
     frames = workflow.frames(float(request.duration or workflow.max_seconds))
     assert videos[0].path is not None
     control = fit_control(videos[0].path, folder / f"vidgen_{key}_control.mp4", width=width, height=height, frames=frames, fps=workflow.fps)
@@ -235,9 +253,14 @@ def prepare_job(request: VideoRequest, folder: Path, key: str) -> PreparedJob:
     first = next((f.path for f in request.frame_images if f.frame_type == "first_frame" and f.path is not None), None)
     picture = fit_picture(first or control, folder / f"vidgen_{key}_first.png", width=width, height=height)
     uploads[picture.name] = picture
+    sheet = None
+    if request.sheet is not None and request.sheet.path is not None:   # the shot's plan checked its aspect ratio
+        sheet = fit_picture(request.sheet.path, folder / f"vidgen_{key}_sheet.png", width=width, height=height, lanczos=True)
+        uploads[sheet.name] = sheet
     graph = workflow.graph(
         control=control.name, first_frame=picture.name if first is not None else None, placeholder=picture.name, prompt=request.prompt,
         width=width, height=height, frames=frames, seed=request.seed, prefix=f"vidgen_{key}", with_audio=request.generate_audio,
+        sheet=sheet.name if sheet is not None else None,
     )
     return PreparedJob(graph, uploads)
 
@@ -249,20 +272,28 @@ class Transport(Protocol):
     """How jobs reach a ComfyUI server."""
 
     where: str
+    #: How to start the server's ComfyUI with ``--disable-comfy-compiler``.
+    compiler_fix: str
 
     def check(self) -> None: ...
+    def compiler_off(self) -> bool | None: ...
     def submit(self, job: PreparedJob) -> str: ...
     def outcome(self, job_id: str) -> dict[str, Any]: ...
     def download(self, job_id: str, dest: Path) -> int: ...
 
 
 class HttpTransport:
-    """ComfyUI over HTTP at ``url`` (the job id is ComfyUI's prompt id)."""
+    """ComfyUI over HTTP at ``url`` (the job id is ComfyUI's prompt id). ``comfy_args`` reads the
+    arguments the server was started with (on the Colab VM itself: :func:`vidgen.colab_vm.comfy_args`,
+    from ``/proc``); without it they come from ``/system_stats``."""
 
-    def __init__(self, url: str, client: ComfyClient | None = None) -> None:
+    def __init__(self, url: str, client: ComfyClient | None = None, *, comfy_args: Callable[[], list[str] | None] | None = None,
+                 compiler_fix: str = "start ComfyUI there with --disable-comfy-compiler") -> None:
         self.client = client or ComfyClient(url)
         self.where = self.client.url
         self.free_after: set[str] = set()
+        self.comfy_args = comfy_args
+        self.compiler_fix = compiler_fix
 
     def check(self) -> None:
         try:
@@ -270,8 +301,24 @@ class HttpTransport:
         except ComfyError as exc:
             raise VidgenError(f"{exc}: start ComfyUI there, or fix videogen.comfyui.url") from None
 
+    def compiler_off(self) -> bool | None:
+        """Whether the server's ComfyUI runs with ``--disable-comfy-compiler`` (None: none runs, or
+        ``/system_stats`` does not list its ``argv``)."""
+        from vidgen.colab import NO_COMPILER_FLAG
+
+        if self.comfy_args is not None:
+            argv = self.comfy_args()
+        else:
+            try:
+                argv = (self.client.system_stats().get("system") or {}).get("argv")
+            except ComfyError as exc:
+                raise VidgenError(str(exc)) from None
+        return NO_COMPILER_FLAG in argv if isinstance(argv, list) else None
+
     def submit(self, job: PreparedJob) -> str:
         try:
+            if job.free_before:
+                self.client.free()
             for name, path in job.uploads.items():
                 self.client.upload(path, name)
             job_id = self.client.submit(job.graph)
@@ -311,6 +358,7 @@ class ColabTransport:
         self.timeout = timeout
         self.offsets: dict[str, int] = {}
         self.outputs: dict[str, str] = {}
+        self.compiler_fix = f"run `python tools/colab/setup_session.py {colab.session} --no-comfy-compiler` (it restarts ComfyUI on the VM)"
 
     def check(self) -> None:
         from vidgen.colab import ColabError
@@ -318,6 +366,12 @@ class ColabTransport:
 
         if self.colab.session not in self.colab.sessions():
             raise ColabError(f"no Colab session {self.colab.session!r} (colab sessions); create and set it up: {setup_command(self.colab.session)}")
+
+    def compiler_off(self) -> bool | None:
+        """Whether the VM's ComfyUI runs with ``--disable-comfy-compiler`` (None: none runs)."""
+        from vidgen.colab import comfy_compiler_off
+
+        return comfy_compiler_off(self.colab)
 
     def submit(self, job: PreparedJob) -> str:
         from vidgen.colab import files_archive
@@ -331,7 +385,7 @@ class ColabTransport:
             for name, path in job.uploads.items():
                 shutil.copyfile(path, folder / names[name])
             spec = {"url": VM_URL, "graph": job.graph, "uploads": names, "poll_seconds": self.poll_seconds, "timeout": self.timeout,
-                    "output": job.output, "free_after": job.free_after}
+                    "output": job.output, "free_after": job.free_after, "free_before": job.free_before}
             (folder / "job.json").write_text(json.dumps(spec), encoding="utf-8")
             shutil.copyfile(client_module.__file__, folder / "comfyui_client.py")
             files = ["job.json", "comfyui_client.py", *names.values()]
@@ -373,7 +427,10 @@ def make_transport(settings: ComfyuiSettings, *, poll_timeout: float, say: Calla
     if settings.url is not None:
         return HttpTransport(settings.url)
     if on_colab_vm():
-        return HttpTransport(VM_URL)
+        from vidgen.colab_vm import comfy_args
+
+        fix = f"run `python tools/colab/setup_session.py {settings.colab} --no-comfy-compiler` on your computer (it restarts ComfyUI on the VM)"
+        return HttpTransport(VM_URL, comfy_args=comfy_args, compiler_fix=fix)
     from vidgen.colab import Colab, say_now
 
     assert settings.colab is not None
@@ -397,24 +454,41 @@ class ComfyUIVideoProvider:
         self.sleep = sleep
         self.clock = clock
         self.uploader: Callable[[Path], str] | None = None   # unused: inputs go to ComfyUI itself
+        self.freed = False   # the models were unloaded before this provider's first job
+
+    def check_compiler(self) -> None:
+        """Refuse (:class:`VidgenError`) unless the server's ComfyUI runs with ``--disable-comfy-compiler``
+        (a shot with a sheet: LTX Multi IC-LoRA never finishes a step with the model compiler on)."""
+        off = self.transport.compiler_off()
+        if off is True:
+            return
+        state = "no ComfyUI runs there, or it does not report its arguments" if off is None else "its ComfyUI runs with the model compiler on"
+        raise VidgenError(f"{self.transport.where}: {state}; a shot with sheet: needs ComfyUI started with --disable-comfy-compiler "
+                          f"(with the compiler on, LTX Multi IC-LoRA never finishes a step): {self.transport.compiler_fix}")
 
     def check_credentials(self) -> None:
         """Whether the server is there (no key is needed)."""
         self.transport.check()
 
     def submit(self, request: VideoRequest, drop: set[str] | frozenset[str] = frozenset(), *, on_sending: Callable[[], None] | None = None) -> JobState:
-        """Fit the inputs, build the graph and queue it; a failure before ComfyUI queued it is a refused submit."""
+        """Fit the inputs, build the graph and queue it; a failure before ComfyUI queued it is a refused
+        submit. A request with a sheet is checked first (:meth:`check_compiler`); the first job unloads the models before it."""
+        from dataclasses import replace
+
         from vidgen.videogen import request_hash
         from vidgen.videogen.openrouter import SubmitRefused
 
+        if request.sheet is not None:
+            self.check_compiler()
         with tempfile.TemporaryDirectory() as tmp:
-            job = prepare_job(request, Path(tmp), request_hash(request))
+            job = replace(prepare_job(request, Path(tmp), request_hash(request)), free_before=not self.freed)
             if on_sending is not None:
                 on_sending()
             try:
                 job_id = self.transport.submit(job)
             except VidgenError as exc:
                 raise SubmitRefused(f"{self.transport.where}: {exc}") from None
+            self.freed = True
         log.info("ComfyUI job %s queued on %s", job_id, self.transport.where)
         return JobState(job_id, "pending", cost=0.0)
 

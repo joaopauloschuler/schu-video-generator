@@ -4,7 +4,8 @@ Standard library only, no vidgen imports: the Colab transport copies this file n
 the VM and runs ``python3 comfyui_client.py job.json`` there, detached, against 127.0.0.1:8188.
 ``job.json`` holds ``url``, ``graph`` (API format), ``uploads`` (name in ComfyUI's input folder ->
 file next to ``job.json``), ``poll_seconds``, ``timeout`` and optionally ``output`` (the file name,
-default ``output.mp4``; ``.png`` for a picture) and ``free_after`` (unload the models when done);
+default ``output.mp4``; ``.png`` for a picture), ``free_before`` (unload the models first) and
+``free_after`` (unload them when done);
 the run writes the output file and prints one JSON line (:func:`job_outcome` and ``prompt_id``) on stdout, its progress on stderr.
 """
 
@@ -139,6 +140,9 @@ def run_job(job_file: Path, *, client: ComfyClient | None = None, sleep: Callabl
     tell = say or (lambda line: print(line, file=sys.stderr, flush=True))
     job = json.loads(job_file.read_text(encoding="utf-8"))
     comfy = client or ComfyClient(job["url"])
+    if job.get("free_before"):
+        comfy.free()
+        tell("unloaded the models (POST /free)")
     for name, rel in job.get("uploads", {}).items():
         comfy.upload(job_file.parent / rel, name)
         tell(f"uploaded {name}")

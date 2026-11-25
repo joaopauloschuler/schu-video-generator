@@ -5813,6 +5813,23 @@ colab stop -s NAME                                 # only when the user says so
 - On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
 - Several sessions can run at once, each under its own name; run one `vidgen remote` at a time per project.
 
+**A stylesheet for a shot.** LTX-2.3 can follow the canny guide and a stylesheet picture in one run
+(the guide gives shapes and motion, the sheet the look). The sheet is a picture you made with an image
+model, with the clip's aspect ratio; describe its panels in `sheet_prompt:` (the prompt starts
+`Reference sheet: <sheet_prompt>. Generated video: `). Use a G4 session with ComfyUI's compiler off:
+`python tools/colab/setup_session.py NAME --gpu G4 --no-comfy-compiler` (it restarts a running ComfyUI);
+`generate run --pay` refuses a sheet shot otherwise.
+
+Add to the `generated_shot:` of "Real footage from a web scene" above:
+
+```
+          size: 768x448          # the clip (multiples of 64); default 960x512 for 16:9
+          duration: 5            # seconds: 5 = 121 frames, 1 = 25; default the part's length
+          sheet: sheets/glider_768x448.png   # 768x448 too: the sheet is scaled, never cropped
+          sheet_prompt: "top left, the glider from behind and above, red wing tips; top right, the same glider in side view; bottom left, from above; bottom right, a rough open sea under a low sun"
+          # first_frame: none    # no first frame (restyled still works)
+```
+
 ### Long films: one agent per phase
 
 A film with generated shots takes hours, and one agent's context fills with logs until it slows

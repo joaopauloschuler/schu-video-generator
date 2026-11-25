@@ -123,19 +123,24 @@ def test_ledger_of_comfyui_is_its_own(tmp_path: Path) -> None:
 class FakeServer:
     """urlopen for a ComfyUI that queues one prompt and finishes it after ``polls`` history calls."""
 
-    def __init__(self, polls: int = 1, outcome: dict[str, Any] | None = None) -> None:
+    def __init__(self, polls: int = 1, outcome: dict[str, Any] | None = None, argv: list[str] | None = None) -> None:
         self.polls = polls
         self.outcome = outcome or _history()
         self.uploads: dict[str, bytes] = {}
         self.prompts: list[dict[str, Any]] = []
         self.down = False
+        self.argv = argv
+        self.calls: list[str] = []
 
     def __call__(self, request: Any, timeout: float) -> io.BytesIO:
         if self.down:
             raise urllib.error.URLError("connection refused")
         path = request.full_url.split("8188", 1)[1]
+        self.calls.append(path.split("?")[0])
         if path == "/system_stats":
-            return io.BytesIO(b'{"system": {}}')
+            return io.BytesIO(json.dumps({"system": {} if self.argv is None else {"argv": self.argv}}).encode())
+        if path == "/free":
+            return io.BytesIO(b"")
         if path == "/upload/image":
             body = request.data
             name = body.split(b'filename="', 1)[1].split(b'"', 1)[0].decode()
@@ -249,6 +254,7 @@ def test_generate_clip_over_http_records_usage_and_costs_nothing(tmp_path: Path,
     # the same request again is the cached clip: nothing is sent
     again = generate_clip(tmp_path, settings, request, pay=True, provider=provider, catalog=Catalog((), 0.0, "cache"))
     assert again.plan.cached and len(server.prompts) == 1
+    assert server.calls.count("/free") == 1 and server.calls.index("/free") < server.calls.index("/upload/image")   # unloaded before the first job
 
 
 def test_a_failed_server_refuses_the_submit_and_leaves_no_open_intent(tmp_path: Path, no_ffmpeg: list[tuple[str, Path]]) -> None:

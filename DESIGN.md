@@ -22451,7 +22451,7 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
   (`fit_picture`); without one, the control's first frame is a bypassed placeholder (LoadImage needs a
   file). Files are named `vidgen_<request key>_control.mp4` / `_first.png` in ComfyUI's input folder,
   outputs `vidgen_<key>_*.mp4`. The clip is kept as made; placing trims it to the shot (the duration
-  snaps up, so the clip is never shorter).
+  snaps up, so the clip is never shorter unless the shot sets `duration:`, §113.23).
 - **One client, two transports.** `comfyui_client.py` (standard library, no vidgen imports) is
   ComfyUI's HTTP API and `run_job(job.json)`. `HttpTransport` uses it in process (job id = prompt id).
   `ColabTransport` writes `job.json`, the fitted inputs and a copy of `comfyui_client.py` into one
@@ -22525,6 +22525,45 @@ The tested best LTX setup (HOWTO "Recommended setup and why") as two shot settin
   in the fingerprint only when true). `GeneratedLayer` gives that take
   `clip_join.GainMatch(channel_gains(previous take's last shown frame, its first frame))`, both after
   their `color_match` gains, eased out over 1 s; outside `clip_join.GAIN_RANGE` nothing is applied.
+
+### 113.23 A stylesheet with the base video; the clip's size and length (Step 425)
+
+Trial run T2c (2026-11-25, `video-projects/sheet-trial-2026-11-25/trial2/`): LTX-2.3 follows the canny
+base video and a stylesheet in one run when each IC-LoRA has its own guide.
+
+- **Config.** `GeneratedShot.sheet` (a picture file, relative to the project) and `sheet_prompt` (what
+  each panel shows), only together, only on a workflow with `Workflow.takes_sheet`
+  (`ltx-2.3-union-control`); `videogen.provider` other than `comfyui` is a plan problem. *Why
+  `sheet_prompt` is required:* the head of the prompt describes the panels, and vidgen cannot know them.
+  `size` (`WIDTHxHEIGHT`, multiples of `size_step`; not with `resolution`) and `duration` (1 to
+  `max_seconds`) are keys of the workflows only: `Workflow.size(aspect_ratio, size)`,
+  `inputs.guide_size` and `prepare_job` honour `size`; `duration` replaces the snapped part length, so a
+  clip may be shorter than its part (a plan note; the clip follows the start of the guide).
+- **The shot.** `shots._sheet_input` sets `Shot.sheet` when the file exists and its aspect ratio is the
+  clip's within 1 % (`SHEET_ASPECT_TOLERANCE`), else a plan problem. *Why no crop:* a centre crop
+  would cut the outer panels; the sheet is scaled (Lanczos) to the clip's size. The prompt is
+  `Reference sheet: <sheet_prompt>. Generated video: <the shot's prompt>` (`SHEET_HEAD`, `SHEET_TAIL`,
+  T2c's format). `VideoRequest.sheet` (a `MediaInput`) carries the picture; `canonical_request` adds
+  `sheet` (its SHA-256 and size) only when there is one, so the keys of requests without a sheet stay;
+  the sheet's contents and `sheet_prompt` are thus in the clip's key. `add_take(sheet=)` names it in
+  the take's record.
+- **The graph** (`ltx_graph.graph(sheet_file=)`): T2c node for node. Node 2 becomes `LTXMultiICLoRA`
+  (`ic_lora_count` 2, `noisy_blend` 1; LoRA a = Ingredients 0.9, strength 1, guide 0; LoRA b = Union
+  Control ref0.5, `lora_strength`, guide 1); node 40 `LoadImage` (the sheet), 41 `RepeatImageBatch`
+  (`amount` = the clip's frames), 42 `LTXAddVideoICLoRAGuide` on the sheet (strength 1, frame 0,
+  `latent_downscale_factor` = node 2 output 1) fed by the conditioning and node 13; node 14 (the
+  control) chains after 42 with node 2 output 2. Without a sheet the graph is unchanged byte for byte
+  (`tests/data/ltx_graph/no_sheet.json`). Not with `second_control_file`.
+- **Compiler.** `ComfyUIVideoProvider.submit` of a request with a sheet first calls
+  `check_compiler`: `Transport.compiler_off()` (Colab: `vidgen.colab.comfy_compiler_off`; HTTP on the
+  Colab VM itself: `colab_vm.comfy_args`, from `/proc`; another URL: `system.argv` of `/system_stats`)
+  must be `True`, else a `VidgenError`
+  naming `Transport.compiler_fix` (Colab: `setup_session.py NAME --no-comfy-compiler`, which restarts
+  ComfyUI). The provider never restarts ComfyUI. Nothing is recorded in the ledger.
+- **Free VRAM once per run.** A provider's first job has `PreparedJob.free_before` (`POST /free` before
+  the uploads, in `HttpTransport.submit` and in `run_job` on the VM); `run_shots` makes one provider for
+  a paid comfyui run, so the models are unloaded once, before its first job, and stay loaded between
+  its shots.
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 

@@ -2960,6 +2960,10 @@ scenes:
           crossfade: null                   # seconds; default videogen.crossfade
           sound: null                       # mix | model; default videogen.models.<model>.sound, then videogen.sound (mix)
           first_frame_in: null              # frame | guide; default videogen.models.<model>.first_frame_in, then videogen.first_frame_in (frame)
+          sheet: null                       # ltx-2.3-union-control only: a stylesheet picture file followed with the guide (needs sheet_prompt)
+          sheet_prompt: null                # with sheet: what each panel shows; the prompt starts "Reference sheet: <this>. Generated video: "
+          size: null                        # ComfyUI workflows only: WIDTHxHEIGHT in multiples of 64 (e.g. 768x448); default 960x512 for 16:9
+          duration: null                    # ComfyUI workflows only: seconds of the clip (1-5; 1 s = 25 frames, 5 s = 121); default the part's length rounded up
 ```
 
 - **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
@@ -3033,6 +3037,23 @@ scenes:
   terrain), real light and haze; `first_frame_prompt:` replaces it, e.g. to name the shot's own
   subject and pattern. It is made again only when its source changed (a new render, a new
   first frame, prompt, seed or size); the plan reports such a change. Look at it before paying for the clip.
+- **A stylesheet for a shot** (`sheet:` + `sheet_prompt:`, model `ltx-2.3-union-control`,
+  `videogen.provider: comfyui`): a picture file you made with an image model (panels that show how the
+  subject and the place look, e.g. a 2x2 sheet) that LTX-2.3 follows together with the guide in one run:
+  the clip keeps the guide's shapes and motion and takes the sheet's look. The graph loads both
+  IC-LoRAs (Union Control on the guide, Ingredients on the sheet) through `LTX Multi IC-LoRA`
+  (comfyui-hrnodes), which gives each LoRA its own guide; the sheet is scaled to the clip's size
+  (Lanczos) and repeated for each of the clip's frames. It must have the clip's aspect ratio (within
+  1 %; a 768x448 clip takes e.g. a 768x448 sheet): it is never cropped, so a sheet of another shape is a
+  problem in the plan. The prompt starts with `Reference sheet: <sheet_prompt>. Generated video: `, then
+  the shot's own prompt. ComfyUI must run with `--disable-comfy-compiler` (`tools/colab/setup_session.py
+  NAME --no-comfy-compiler`); otherwise `vidgen generate run --pay` refuses the shot before sending it. The
+  sheet's contents and `sheet_prompt:` are part of the clip's cache key, and the take's record names the
+  sheet (`"sheet"` in `takes/<shot>/<n>.json`). `size:` and `duration:` set the clip of a ComfyUI workflow
+  (e.g. `size: 768x448`, `duration: 5` = 121 frames, `duration: 1` = 25 frames from the start of the part's
+  guide; the guide, its last frame held when the part is shorter, and the sheet have the clip's frame count).
+  `first_frame: none` sends no first frame. On the comfyui provider, `vidgen generate run --pay` unloads
+  the models (ComfyUI `POST /free`) once, before its first job, so no picture model stays in the GPU's memory.
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
   go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
   `vidgen generate`: [HOWTO-restyle-with-ltx-on-colab.md](HOWTO-restyle-with-ltx-on-colab.md) (the

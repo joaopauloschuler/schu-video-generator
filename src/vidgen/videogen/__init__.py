@@ -84,7 +84,8 @@ class MediaInput:
 @dataclass(frozen=True)
 class VideoRequest:
     """One clip asked of a video model. ``provider_options`` maps an upstream provider's slug
-    to its passthrough parameters (``provider.options.<slug>.parameters``)."""
+    to its passthrough parameters (``provider.options.<slug>.parameters``); ``sheet`` is a
+    stylesheet picture a ComfyUI workflow follows together with the control video."""
 
     model: str
     prompt: str = ""
@@ -98,6 +99,7 @@ class VideoRequest:
     previous_job_id: str | None = None
     provider_options: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     generate_audio: bool = False
+    sheet: MediaInput | None = None
 
     def __post_init__(self) -> None:
         if "/" not in self.model.strip("/") and not is_workflow_model(self.model):
@@ -110,6 +112,8 @@ class VideoRequest:
             raise VidgenError("each frame image needs frame_type first_frame or last_frame")
         if any(r.frame_type is not None for r in self.references):
             raise VidgenError("references take no frame_type (put frame images in frame_images)")
+        if self.sheet is not None and (self.sheet.kind != "image" or self.sheet.frame_type is not None):
+            raise VidgenError("a sheet is one picture (no frame_type)")
 
     @property
     def images(self) -> int:
@@ -119,10 +123,11 @@ class VideoRequest:
 
 def canonical_request(request: VideoRequest) -> dict[str, Any]:
     """Everything that decides the clip, as plain JSON (input files by content hash; local
-    pictures by their source, with the size limit of the copies sent, :mod:`.pictures`)."""
+    pictures by their source, with the size limit of the copies sent, :mod:`.pictures`; a
+    ``sheet`` by its content hash, only when there is one, so requests without keep their keys)."""
     from vidgen.videogen.pictures import JPEG_QUALITY, PICTURE_MAX_SIDE
 
-    return {
+    out: dict[str, Any] = {
         "cache_version": CACHE_VERSION,
         "model": request.model,
         "prompt": request.prompt,
@@ -138,6 +143,9 @@ def canonical_request(request: VideoRequest) -> dict[str, Any]:
         "previous_job_id": request.previous_job_id,
         "provider_options": {k: dict(v) for k, v in sorted(request.provider_options.items())},
     }
+    if request.sheet is not None:
+        out["sheet"] = request.sheet.canonical()
+    return out
 
 
 def request_hash(request: VideoRequest) -> str:

@@ -260,6 +260,8 @@ class Shot:
     #: A guided shot's prompt under the earlier wording, when it differs from :attr:`prompt` (else
     #: empty): what a clip paid for before the wording changed was asked with.
     earlier_prompt: str = ""
+    #: ``sheet:``: the stylesheet picture sent with the guide (``None``: none, or the file is missing).
+    sheet: Path | None = None
 
     @property
     def lead(self) -> int:
@@ -290,10 +292,10 @@ class Shot:
             return None
         return VideoRequest(
             model=self.model.id, prompt=self.prompt, duration=self.duration if self.duration is not None else max(1, math.ceil(self.length - 1e-9)),
-            resolution=self.resolution, aspect_ratio=self.aspect_ratio,
+            resolution=self.resolution, size=self.spec.size, aspect_ratio=self.aspect_ratio,
             frame_images=tuple(i.media() for i in self.inputs if i.frame),
             references=tuple(i.media() for i in self.inputs if not i.frame), seed=self.spec.seed,
-            generate_audio=self.sound == "model",
+            generate_audio=self.sound == "model", sheet=MediaInput("image", path=self.sheet) if self.sheet is not None else None,
         )
 
     @property
@@ -442,7 +444,46 @@ def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], 
         parts.append(f"Style: {style.words()}")
     parts.append(NO_TEXT)
     opening = _guide_opening_sentences(shot)
-    return " ".join(_sentence(p) for p in [*opening, *parts])
+    text = " ".join(_sentence(p) for p in [*opening, *parts])
+    return f"{SHEET_HEAD}{_sentence(_clean(spec.sheet_prompt))} {SHEET_TAIL}{text}" if spec.sheet_prompt else text
+
+
+#: The start of the prompt of a shot with a ``sheet:`` (trial run T2c's format, 2026-11-25):
+#: ``Reference sheet: <sheet_prompt>. Generated video: <the shot's prompt>``.
+SHEET_HEAD = "Reference sheet: "
+SHEET_TAIL = "Generated video: "
+#: How far a sheet's aspect ratio may be from the clip's (1 %; it is scaled to the clip's size).
+SHEET_ASPECT_TOLERANCE = 0.01
+
+
+def _sheet_input(project: Project, shot: Shot) -> None:
+    """Set ``shot.sheet`` from ``sheet:`` (a picture file with the clip's aspect ratio), else a problem."""
+    from PIL import Image
+
+    from vidgen.videogen.comfyui import find_workflow
+
+    spec, where = shot.spec, f"{shot.location}.sheet"
+    workflow = find_workflow(spec.model)
+    if spec.sheet is None or workflow is None:
+        return
+    path = _picture(project, spec.sheet, where, shot.problems)
+    if path is None:
+        return
+    try:
+        with Image.open(path) as picture:
+            sheet_w, sheet_h = picture.size
+    except OSError as exc:
+        shot.problems.append(f"{where}: cannot read the picture {spec.sheet}: {exc}")
+        return
+    width, height = workflow.size(shot.aspect_ratio, spec.size)
+    if abs(math.log((sheet_w / sheet_h) / (width / height))) > SHEET_ASPECT_TOLERANCE:
+        shot.problems.append(
+            f"{where}: {spec.sheet} is {sheet_w}x{sheet_h}, the clip {width}x{height}: make the sheet with the clip's aspect ratio "
+            "(it is scaled to the clip's size; cropping would cut its panels)"
+        )
+        return
+    shot.sheet = path
+
 
 
 def _guide_opening_sentences(shot: Shot) -> list[str]:
@@ -838,6 +879,7 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
 def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:
     """Fill ``shot``'s inputs, its sound checks and its prompt (every shot id is known by now)."""
     _resolve_inputs(project, shot, sheets)
+    _sheet_input(project, shot)
     if shot.spec.paint_first_frame is not None:
         from vidgen.videogen.frames import paint_references
 
@@ -874,6 +916,8 @@ def _beat_shots(
             problems.append(f"{where}.guide: {guided}")
     if spec.first_frame == RESTYLED_FIRST_FRAME and (config.videogen.provider != COMFYUI_PROVIDER or (model is not None and model.provider != COMFYUI_PROVIDER)):
         problems.append(f"{where}.first_frame: restyled is made on the ComfyUI server: it needs videogen.provider: comfyui and a ComfyUI workflow model (ltx-2.3-union-control)")
+    if spec.sheet is not None and config.videogen.provider != COMFYUI_PROVIDER:
+        problems.append(f"{where}.sheet: the sheet goes to vidgen's ComfyUI workflow: it needs videogen.provider: comfyui")
     names = [e.name for e in config.characters]
     speaker = _speaker(config, scene, beat)
     for name in spec.characters or []:
@@ -897,9 +941,11 @@ def _beat_shots(
         if model is not None:
             # a chained part's take starts its lead frames early (``config.format.fps``)
             lead = lead_frames(k + 1, spec.first_frame_source) / config.format.fps
-            shot.duration = snap_duration(length + lead, model.durations) if model.durations else None
-            shot.resolution = spec.resolution or lowest_resolution(model)
+            shot.duration = spec.duration or (snap_duration(length + lead, model.durations) if model.durations else None)
+            shot.resolution = None if spec.size else spec.resolution or lowest_resolution(model)
             shot.aspect_ratio = spec.aspect_ratio or pick_aspect(config, model)
+            if spec.duration is not None and spec.duration < length - 1e-6:
+                shot.notes.append(f"duration: {spec.duration} s is shorter than the part ({length:.2f} s): the clip follows the start of the part's guide")
             if parts > 1 and k == 0:
                 shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({max(model.durations or [0])} s): split into {parts} parts")
         shots.append(shot)
@@ -962,7 +1008,7 @@ class ShotPlan:
         end = shot.start + shot.length
         part = f", part {shot.part} of {shot.parts}" if shot.parts > 1 else ""
         r = self.request
-        what = [spec.model, r.resolution if r else None, r.aspect_ratio if r else None]
+        what = [spec.model, r.size or r.resolution if r else None, r.aspect_ratio if r else None]
         lines = [f"shot {shot.id} ({spec.kind}, scene {shot.scene_id}, beat {shot.beat.id}{part}, {_clock(shot.start)}-{_clock(end)}, {shot.length:.2f} s): {', '.join(w for w in what if w)}"]
         if shot.model is not None:
             if shot.duration is None:
@@ -977,6 +1023,8 @@ class ShotPlan:
         for item in shot.inputs:
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
             lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
+        if shot.sheet is not None:
+            lines.append(f"  sheet: {_shown(shot.sheet, root)} (stylesheet, given with the guide; its panels are described at the start of the prompt)")
         if shot.fake_addresses and not self.cached and not self.previous_job:
             lines.append("  mock provider: these inputs stay on this machine (fake addresses; nothing is shared)")
         if shot.share_minutes is not None and not self.cached and not self.previous_job:
