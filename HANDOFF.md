@@ -28226,3 +28226,52 @@ project), repo work is generic.
   tests/test_videogen_comfyui.py tests/test_docs.py tests/test_guide.py` (265 passed, 120 s). `test_colab_rsync.py`
   runs the local rsync between two temp folders with a fake `ssh` on PATH (no network) to prove the deletes and the
   protections.
+
+## Step 421 — setup_session.py over SSH
+
+- **Built** (`tools/colab/setup_session.py`, SSH route = default):
+  - `ensure_key`: when `~/.ssh/colab_ed25519` is missing, runs `ssh-keygen -t ed25519 -N "" -C colab-vidgen -f KEY`
+    (list args, `check=True`) and prints one `## created the SSH key ...` line. It touches no other key and not `~/.ssh/config`.
+  - `Colab.check_ssh`: right after `ensure_session` (created or reused), opens the master and runs `echo vidgen-ssh-ok`.
+    On failure it raises `SetupError("SSH to session NAME does not work (...). To use the old colab exec route instead:
+    python tools/colab/setup_session.py NAME --via exec")`. There is no fallback.
+  - The scripts start with `setsid nohup ... > log 2>&1 < /dev/null &` over ssh (`detached`, `setup_command`,
+    `comfy_command`, `Colab.start_detached`). The env goes through `colab_ssh.env_words` and the log names are the
+    ones start_setup.py uses, so `vm_state.py`'s `bash /content/<script>` process check still matches. ComfyUI and the
+    nvidia-smi sampler start the same way as start_comfy.py starts them. On this route start_setup.py / start_comfy.py are
+    not used and the "exec dropped, start again" loops are gone (one start, one probe; a script that is not running is an error).
+    There is no lock (Step 418). Uploads and probes already went over ssh.
+  - Shorter polls on ssh (`POLLS`): setup 10 s, ComfyUI 3 s, vidgen 10 s (exec route: 30 / 10 / 20, unchanged).
+  - vidgen's install (`VidgenSetup.begin`) starts while ComfyUI loads (`SessionSetup.run(meanwhile=)`), after
+    setup.sh's pip installs. It does not run beside setup.sh: its `uv venv --system-site-packages` reads the packages
+    setup.sh is still changing at that point. `VidgenSetup.run` then waits.
+  - The summary keeps its shape. On ssh, "next:" names `vidgen remote NAME generate run --pay` for LTX shots,
+    not `colab upload`.
+- **`--via exec`**: unchanged (start_setup.py, start_comfy.py, retries, the old next-hint). No key is made and no ssh is used.
+- **Pitfall found live**: `cd /content && setsid nohup ... &` backgrounds the whole `&&` list as a subshell whose stdout is
+  the ssh channel. That subshell waits for setup.sh, so the call hung until its 60 s cut (setup.sh itself had started).
+  The commands are now `cd DIR || exit 3; ... & echo started $!`, which returned in 0.8 s on the VM.
+- **Files**: `tools/colab/setup_session.py`, `tests/test_colab_setup_session.py` (+4: SSH route starts with nohup and
+  vidgen before the ComfyUI wait; key creation once and an existing key left alone; SSH check failure names `--via exec`
+  and nothing else runs; the exec route never uses ssh or makes a key), `tests/conftest.py` (autouse: `colab_ssh.KEY` in
+  tmp, so no test touches `~/.ssh`; the run_ssh guard stays), `tasklist.md`, `HANDOFF.md`.
+- **Public interfaces**: none in vidgen. setup_session.py: `main(..., ssh_factory=)` for tests, `ensure_key`, `detached`,
+  `setup_command`, `comfy_command`, `SSH_CHECK`, `POLLS`, `VidgenSetup.begin`.
+- **Real runs** (L4, `python tools/colab/setup_session.py ltx --gpu L4`):
+
+  | run | what happened | wall |
+  |---|---|---|
+  | earlier exec route (reference, no vidgen part) | created, setups, ComfyUI; 2 dropped execs (60 s cut + 20 s each) | 10 min 32 s |
+  | 1 (SSH) | 4 x HTTP 503, no L4 capacity, no session created | 16 min 9 s |
+  | 2 (SSH) | created on try 1, SSH check ok, uploads ok; the setup.sh start call hung (the `&&` bug) and was cut at 60 s, so the run stopped there; setup.sh had started | 2 min 7 s |
+  | 3 (SSH, fixed) | not run: the agent's permission classifier refused a third run | - |
+
+  Drops and retries on SSH: 0 reconnects and 0 retried calls. The one failure was the hung start (a bug, not a drop).
+  When this step ended, setup.sh on `ltx` was at `waiting for downloads` (+112 s); the image part and vidgen had not
+  started, and ComfyUI was not started, so no model list was taken. **`ltx` is left running** (not stopped).
+- **Known gaps**: the fixed SSH route has not finished one real run. To finish: `python tools/colab/setup_session.py ltx`
+  (it waits for the running setup.sh, starts setup_image.sh, ComfyUI and vidgen). The time against 10 min 32 s is not yet
+  measured. AGENTS.md / HOWTO / README are not updated (Step 423).
+- **How to test**: `PYTHONPATH=src python -m pytest -q -m "slow or not slow" tests/test_colab_setup_session.py
+  tests/test_colab_ssh.py tests/test_colab_keepalive.py tests/test_remote.py tests/test_colab_rsync.py` (61 passed, 6 s);
+  `tests/test_docs.py tests/test_guide.py` (pass).

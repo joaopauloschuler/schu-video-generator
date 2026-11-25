@@ -6,12 +6,20 @@ Runs on your machine (standard library only, Windows too) and drives the `colab`
 session NAME when `colab sessions` lists it (else `colab new`, retried on 503), then installs
 ComfyUI + the LTX-2.3 weights (setup.sh) and the image models (setup_image.sh), starts ComfyUI, and
 installs this checkout's vidgen (setup_vidgen.sh), skipping each part that is already done; first
-it installs cloudflared on the VM (files go both ways through quick tunnels). It never stops the
+it installs cloudflared on the VM (the exec route's file transfers use it). It never stops the
 session. See README.md here.
+
+Two routes (``--via``): over SSH (the default) it creates the key ``~/.ssh/colab_ed25519`` when it is
+missing, checks one SSH call right after the session exists (a failure stops it; it never falls back),
+and starts every script with ``setsid nohup ... &`` over SSH; vidgen's setup starts while ComfyUI
+loads. ``--via exec`` keeps the ``colab exec`` route (start_setup.py / start_comfy.py detach the
+scripts from the Jupyter kernel).
 """
 from __future__ import annotations
 
 import argparse
+import shlex
+import subprocess
 import sys
 import tempfile
 import time
@@ -28,6 +36,8 @@ from vidgen.colab import (  # noqa: E402
     last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions, run_command, say_now, shown,
     source_archive, via_arg,
 )
+from vidgen import colab_ssh  # noqa: E402
+from vidgen.colab_ssh import SshLink, env_words  # noqa: E402
 from vidgen.colab_transfer import Transfers  # noqa: E402
 
 __all__ = ["CommandResult", "Runner", "SetupError", "format_seconds", "parse_sessions", "run_command", "say_now", "shown"]
@@ -41,6 +51,13 @@ PART_TITLES = {"ltx": "ComfyUI + LTX-2.3 weights", "image": "image models (Qwen-
 VIDGEN_TITLE = "vidgen (this computer's code)"
 VIDGEN_SCRIPT = "setup_vidgen.sh"
 HOWTO = "docs/HOWTO-restyle-with-ltx-on-colab.md"
+#: What the SSH check runs on the VM, and what it must print.
+SSH_CHECK = "echo vidgen-ssh-ok"
+#: ComfyUI and its VRAM sampler, as start_comfy.py starts them on the exec route.
+COMFY_COMMAND = ["python", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
+VRAM_COMMAND = ["nvidia-smi", "--query-gpu=timestamp,memory.used,utilization.gpu", "--format=csv,noheader", "-l", "1"]
+#: Poll pauses (s) per route: an SSH call costs about 0.5 s, a `colab exec` 5-15 s.
+POLLS = {"ssh": {"setup": 10.0, "comfy": 3.0, "vidgen": 10.0}, "exec": {"setup": 30.0, "comfy": 10.0, "vidgen": 20.0}}
 
 
 def parse_state(text: str) -> dict | None:
@@ -59,12 +76,67 @@ def part_status(part: dict) -> str:
     return "todo"
 
 
+def detached(command: list[str], log: str, env: dict[str, str] | None = None, append: bool = False) -> str:
+    """Shell words that start ``command`` with ``setsid nohup`` in the background, all output to the
+    VM file ``log``, stdin from /dev/null (so the ssh call returns at once and the job outlives it).
+    Put it after ``;``, never after ``&&``: ``a && b &`` backgrounds a subshell that keeps the ssh
+    channel open until the job ends."""
+    words = [*(env_words(env) if env else []), "setsid", "nohup", *(shlex.quote(w) for w in command)]
+    return " ".join([*words, ">>" if append else ">", shlex.quote(log), "2>&1 < /dev/null &"])
+
+
+def setup_command(script: str, env: dict[str, str]) -> str:
+    """Start ``/content/<script>`` (log ``/content/<stem>.log``, as start_setup.py names it) over ssh."""
+    return "cd /content || exit 3; " + detached(["bash", f"/content/{script}"], f"/content/{Path(script).stem}.log", env) \
+        + " echo started $!"
+
+
+def comfy_command() -> str:
+    """Start ComfyUI on 127.0.0.1:8188 and the 1 s VRAM sampler over ssh (as start_comfy.py does)."""
+    return ("cd /content/ComfyUI || exit 3; " + detached(COMFY_COMMAND, "/content/comfy.log", append=True) + " "
+            + detached(VRAM_COMMAND, "/content/vram.csv", append=True) + " echo started $!")
+
+
+def ensure_key(key: Path, say: Callable[[str], None]) -> None:
+    """Create the SSH route's key (ed25519, no passphrase) when it is missing; never touches another file."""
+    if key.is_file():
+        return
+    key.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        subprocess.run(["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "colab-vidgen", "-f", str(key)],
+                       check=True, capture_output=True, text=True, encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise SetupError(f"no SSH key at {key} and no ssh-keygen to create it (install OpenSSH's client), "
+                         "or use --via exec") from exc
+    except subprocess.CalledProcessError as exc:
+        raise SetupError(f"ssh-keygen could not create {key}: {_last_line(exc.stderr or exc.stdout or '')}") from exc
+    say(f"## created the SSH key {key} (no passphrase; colab ssh sends its public half to the VM)")
+
+
 class Colab(_Colab):
-    """vidgen.colab.Colab plus the probe of vm_state.py."""
+    """vidgen.colab.Colab plus the probe of vm_state.py and the SSH route's check and detached starts."""
 
     def probe(self) -> dict:
         """Run vm_state.py on the VM and return its JSON; retries a dropped exec."""
         return self.exec_json(TOOLS_DIR / "vm_state.py", {}, STATE_PREFIX)
+
+    def check_ssh(self) -> None:
+        """Open the SSH master and run one command; a failure stops the setup (no fallback to exec)."""
+        try:
+            result = self.link.call(SSH_CHECK, 120)
+            why = "" if result.returncode == 0 and "vidgen-ssh-ok" in result.output else _last_line(result.output)
+        except SetupError as exc:
+            why = str(exc)
+        if why:
+            raise SetupError(f"SSH to session {self.session} does not work ({why}). To use the old colab exec "
+                             f"route instead: python tools/colab/setup_session.py {shown(self.session)} --via exec")
+        self.say(f"## SSH to {self.session} works")
+
+    def start_detached(self, command: str, what: str) -> None:
+        """Run a ``setsid nohup ... &`` command over ssh; raises when the shell did not start it."""
+        result = self.link.call(command, 60)
+        if result.returncode != 0 or "started" not in result.output:
+            raise SetupError(f"could not start {what} over ssh on {self.session}: {_last_line(result.output)}")
 
 
 def ensure_session(colab: Colab, gpu: str, attempts: int = 4, pause_seconds: float = 60.0) -> tuple[bool, str]:
@@ -121,7 +193,8 @@ class SessionSetup:
         self.comfy_limit_seconds = comfy_limit_seconds
         self.printed: set[str] = set()
 
-    def run(self, parts: list[str], report: Report) -> None:
+    def run(self, parts: list[str], report: Report, meanwhile: Callable[[], None] | None = None) -> None:
+        """Set up ``parts``; ``meanwhile`` (if given) runs once ComfyUI has been started, before waiting for it."""
         state = self.colab.probe()
         status = {part: part_status(state["parts"][part]) for part in parts}
         for part in parts:
@@ -141,12 +214,19 @@ class SessionSetup:
                 if status[part] == "running":
                     self.colab.say(f"## {PART_TITLES[part]}: already running, waiting for it")
             state = self.wait_for_parts(waiting, report, started=set(to_start))
-        state = self.ensure_comfy(state, report)
+        state = self.ensure_comfy(state, report, meanwhile)
         report.models = state["comfy"].get("models") or {}
 
     def start_part(self, part: str) -> dict:
         """Start setup.sh / setup_image.sh detached and check on the VM that it runs."""
         script = PART_SCRIPTS[part]
+        if self.colab.via == "ssh":
+            self.colab.say(f"## starting {script} ({PART_TITLES[part]})")
+            self.colab.start_detached(setup_command(script, {"PIN": "1" if self.pin else "0"}), script)
+            state = self.colab.probe()
+            if part_status(state["parts"][part]) == "todo":
+                raise SetupError(f"{script} stopped right after it started; " + _log_tail(state, PART_LOGS[part][0]))
+            return state
         env = {"SCRIPT": f"/content/{script}", "PIN": "1" if self.pin else "0"}
         for attempt in range(1, self.colab.attempts + 1):
             self.colab.say(f"## starting {script} ({PART_TITLES[part]})")
@@ -197,7 +277,7 @@ class SessionSetup:
                                  + ", ".join(PART_SCRIPTS[p] for p in pending) + " still running")
             self.colab.sleep(self.poll_seconds)
 
-    def ensure_comfy(self, state: dict, report: Report) -> dict:
+    def ensure_comfy(self, state: dict, report: Report, meanwhile: Callable[[], None] | None = None) -> dict:
         """Start ComfyUI unless it answers or is starting, then wait until it answers."""
         comfy = state["comfy"]
         if comfy["up"]:
@@ -205,7 +285,14 @@ class SessionSetup:
             return state
         begin = self.clock()
         verb = "was starting; answers"
-        if not comfy["running"]:
+        if not comfy["running"] and self.colab.via == "ssh":
+            verb = "started; answers"
+            self.colab.say("## starting ComfyUI (setsid nohup python main.py)")
+            self.colab.start_detached(comfy_command(), "ComfyUI")
+            state = self.colab.probe()
+            if not (state["comfy"]["up"] or state["comfy"]["running"]):
+                raise SetupError("ComfyUI stopped right after it started; " + _log_tail(state, "comfy.log"))
+        elif not comfy["running"]:
             verb = "started; answers"
             for attempt in range(1, self.colab.attempts + 1):
                 self.colab.say("## starting ComfyUI (start_comfy.py)")
@@ -216,6 +303,8 @@ class SessionSetup:
                 self.colab.pause_before_retry("ComfyUI is not running on the VM", attempt)
             else:
                 raise SetupError("ComfyUI did not start; " + _log_tail(state, "comfy.log"))
+        if meanwhile is not None:
+            meanwhile()
         self.colab.say("## waiting for ComfyUI on 127.0.0.1:8188 (VM)")
         last: dict = state
         while not last["comfy"]["up"]:
@@ -255,29 +344,43 @@ class VidgenSetup:
         self.poll_seconds = poll_seconds
         self.limit_seconds = limit_seconds
         self.printed: set[str] = set()
+        self.code = ""
+        self.started_at: float | None = None
 
     def state(self) -> dict:
         return self.colab.vm("state", VIDGEN_PROJECT="")["vidgen"]
 
-    def run(self, report: Report) -> None:
-        code = package_hash(self.repo / "src" / "vidgen")
+    def begin(self, report: Report) -> None:
+        """Start the install unless the VM has this code (then the outcome is set); safe to call once."""
+        self.code = package_hash(self.repo / "src" / "vidgen")
         state = self.state()
-        if state["hash"] == code:
-            report.outcomes["vidgen"] = f"reused (marker, code {code})"
+        if state["hash"] == self.code:
+            report.outcomes["vidgen"] = f"reused (marker, code {self.code})"
             return
-        begin = self.clock()
+        self.started_at = self.clock()
         if state["setup_running"]:
             self.colab.say(f"## {VIDGEN_TITLE}: a setup is already running, waiting for it")
         else:
-            self.start(code)
-        self.wait(code)
-        report.outcomes["vidgen"] = f"installed code {code} in {format_seconds(self.clock() - begin)}"
+            self.start(self.code)
+
+    def run(self, report: Report) -> None:
+        """Install vidgen (or finish the install :meth:`begin` started) and wait for its marker."""
+        if not self.code:
+            self.begin(report)
+        if self.started_at is None:
+            return
+        self.wait(self.code)
+        report.outcomes["vidgen"] = f"installed code {self.code} in {format_seconds(self.clock() - self.started_at)}"
 
     def start(self, code: str) -> None:
         self.colab.say(f"## uploading vidgen's source (code {code}) and {VIDGEN_SCRIPT}")
         with tempfile.TemporaryDirectory() as tmp:
             archive = source_archive(self.repo, Path(tmp) / "vidgen-src.tar.gz")
             self.colab.upload_many([(archive, VM_SOURCE_ARCHIVE), (TOOLS_DIR / VIDGEN_SCRIPT, f"/content/{VIDGEN_SCRIPT}")])
+        if self.colab.via == "ssh":
+            self.colab.say(f"## starting {VIDGEN_SCRIPT} ({VIDGEN_TITLE})")
+            self.colab.start_detached(setup_command(VIDGEN_SCRIPT, {"PIN": "1", "VIDGEN_HASH": code}), VIDGEN_SCRIPT)
+            return
         env = {"SCRIPT": f"/content/{VIDGEN_SCRIPT}", "PIN": "1", "VIDGEN_HASH": code}
         for attempt in range(1, self.colab.attempts + 1):
             self.colab.say(f"## starting {VIDGEN_SCRIPT} ({VIDGEN_TITLE})")
@@ -320,7 +423,7 @@ def _vidgen_tail(state: dict) -> str:
 
 
 def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elapsed_seconds: float,
-                  vidgen: bool = True) -> list[str]:
+                  vidgen: bool = True, via: str = "ssh") -> list[str]:
     """The final summary: session, GPU, what was installed or reused, time, the next commands."""
     name = shown(session)
     lines = [f"== session {session} is ready ({format_seconds(elapsed_seconds)})",
@@ -338,7 +441,9 @@ def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elap
     lines.append("next:")
     if vidgen:
         lines.append(f"   in a project folder: vidgen remote {name} render")
-    if parts:
+    if parts and via == "ssh":
+        lines.append(f"   LTX shots (provider: comfyui, colab: {name}): vidgen remote {name} generate run --pay")
+    elif parts:
         lines += [f"   or go on with {HOWTO} section 6.3, e.g.",
                   f"   colab upload -s {name} ltx-inputs/render_121_960x512.mp4 /content/render_121_960x512.mp4"]
     lines.append(f"stop it when you are done (an idle L4 still bills about 1.94 units/h): colab stop -s {name}")
@@ -370,27 +475,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None, runner: Runner = run_command,
          sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-         say: Callable[[str], None] = say_now, transfer_factory: Callable[[Colab], Transfers] | None = None) -> int:
+         say: Callable[[str], None] = say_now, transfer_factory: Callable[[Colab], Transfers] | None = None,
+         ssh_factory: Callable[[Colab], SshLink] | None = None) -> int:
     """Set up the session; returns the exit code (0 ready, 1 failed, 130 interrupted)."""
     args = parse_args(argv)
     colab = Colab(args.session, cli=args.colab, runner=runner, sleep=sleep, say=say, transfer_factory=transfer_factory,
-                  via=args.via)
+                  via=args.via, ssh_factory=ssh_factory)
+    polls = POLLS[args.via]
     parts = [] if args.vidgen_only else ["ltx"] if args.no_image else ["ltx", "image"]
     report = Report()
     begin = clock()
     session_exists = False
     try:
+        if args.via == "ssh":
+            ensure_key(colab_ssh.KEY, say)
         report.created, report.hardware = ensure_session(colab, args.gpu)
         session_exists = True
         if not report.created:
             say(f"## reusing session {args.session} ({report.hardware})")
             if report.hardware != args.gpu:
                 say(f"   note: it has a {report.hardware}; --gpu only applies to a new session")
+        if args.via == "ssh":
+            colab.check_ssh()
         ensure_cloudflared(colab, report)
+        vidgen = None if args.no_vidgen else VidgenSetup(colab, clock=clock, poll_seconds=polls["vidgen"])
         if parts:
-            SessionSetup(colab, pin=not args.latest, clock=clock).run(parts, report)
-        if not args.no_vidgen:
-            VidgenSetup(colab, clock=clock).run(report)
+            # Over ssh vidgen's install starts while ComfyUI loads (setup.sh's pip installs are over by then).
+            early = (lambda: vidgen.begin(report)) if vidgen and args.via == "ssh" else None
+            SessionSetup(colab, pin=not args.latest, clock=clock, poll_seconds=polls["setup"],
+                         comfy_poll_seconds=polls["comfy"]).run(parts, report, meanwhile=early)
+        if vidgen:
+            vidgen.run(report)
     except (SetupError, KeyboardInterrupt) as exc:
         say(f"error: {exc}" if isinstance(exc, SetupError) else "interrupted")
         if not session_exists:
@@ -401,7 +516,8 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
         return 1 if isinstance(exc, SetupError) else 130
     finally:
         colab.close()
-    for line in summary_lines(args.session, args.gpu, report, parts, clock() - begin, vidgen=not args.no_vidgen):
+    for line in summary_lines(args.session, args.gpu, report, parts, clock() - begin, vidgen=not args.no_vidgen,
+                              via=args.via):
         say(line)
     return 0
 

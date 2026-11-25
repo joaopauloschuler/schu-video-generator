@@ -160,6 +160,7 @@ def _no_real_ssh_to_colab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
 
     monkeypatch.setattr("vidgen.colab_ssh.run_ssh", refuse)
     monkeypatch.setattr("vidgen.colab_ssh.SOCKET_DIR", tmp_path / "colab-ssh")
+    monkeypatch.setattr("vidgen.colab_ssh.KEY", tmp_path / "colab-ssh-key" / "colab_ed25519")  # ~/.ssh stays untouched
 
 
 @pytest.fixture(autouse=True)

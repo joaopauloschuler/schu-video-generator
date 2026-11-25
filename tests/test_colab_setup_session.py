@@ -309,3 +309,121 @@ def test_no_vidgen_skips_it_and_a_failed_vidgen_setup_shows_its_log() -> None:
     assert code == 1 and "setup_vidgen.sh stopped before it finished" in text and "vidgen last line" in text
     with pytest.raises(SystemExit):
         setup_session.parse_args(["s", "--no-vidgen", "--vidgen-only"])
+
+
+class FakeLink:
+    """The SSH route's link for setup_session.py: scripts go to the fake CLI as if by exec, shell commands are recorded."""
+
+    def __init__(self, cli: FakeColabCLI, check_ok: bool = True) -> None:
+        self.cli = cli
+        self.check_ok = check_ok
+        self.commands: list[str] = []
+
+    def script(self, script: Path, env: dict[str, str]) -> setup_session.CommandResult:
+        args = ["colab", "exec", "-s", "s"]
+        for key, value in env.items():
+            args += ["--env", f"{key}={value}"]
+        return self.cli([*args, "-f", str(script)], 60)
+
+    def call(self, command: str, timeout_seconds: float, stdin: object = None, stdout: object = None) -> setup_session.CommandResult:
+        self.commands.append(command)
+        if command == setup_session.SSH_CHECK:
+            if not self.check_ok:
+                raise setup_session.SetupError("cannot open an SSH connection to s: Connection closed by UNKNOWN port 65535")
+            return setup_session.CommandResult(0, "vidgen-ssh-ok")
+        assert "setsid nohup" in command and command.rstrip().endswith("echo started $!"), command
+        if "setup_vidgen.sh" in command:
+            code = command.split("VIDGEN_HASH=")[1].split()[0].strip("'")
+            self.cli.vm.vidgen.update(setup_running=True, pending=code)
+        elif "main.py" in command:
+            self.cli.vm.comfy["running"] = True
+        else:
+            self.cli.vm.start("image" if "setup_image.sh" in command else "ltx")
+        return setup_session.CommandResult(0, "started 123")
+
+    def upload(self, pairs: list[tuple[Path, str]]) -> None:
+        self.cli.upload(pairs)
+
+    def close(self) -> None:
+        pass
+
+
+def _run_ssh(cli: FakeColabCLI, argv: list[str], link: FakeLink | None = None) -> tuple[int, list[str], FakeLink]:
+    lines: list[str] = []
+    link = link or FakeLink(cli)
+    clock = iter(range(0, 100000, 5))
+    code = setup_session.main(argv, runner=cli, sleep=lambda s: None, clock=lambda: next(clock), say=lines.append,
+                              ssh_factory=lambda colab: link)  # type: ignore[arg-type, return-value]
+    return code, lines, link
+
+
+def _have_key() -> None:
+    key = setup_session.colab_ssh.KEY
+    key.parent.mkdir(parents=True, exist_ok=True)
+    key.write_text("key", encoding="utf-8")
+
+
+def test_ssh_route_starts_everything_with_nohup_and_vidgen_while_comfy_loads() -> None:
+    _have_key()
+    vm = FakeVM(polls_to_finish=2, vidgen_hash="old1")
+    cli = FakeColabCLI(vm)
+    code, lines, link = _run_ssh(cli, ["fresh"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    assert "exec start_setup.py" not in cli.commands() and "exec start_comfy.py" not in cli.commands()
+    assert link.commands[0] == setup_session.SSH_CHECK
+    starts = link.commands[1:]
+    assert ["setup.sh" in c for c in starts] == [True, False, False, False]
+    assert "setup_image.sh" in starts[1] and "main.py" in starts[2] and "setup_vidgen.sh" in starts[3]
+    assert starts[0] == ("cd /content || exit 3; env -- PIN=1 setsid nohup bash /content/setup.sh > /content/setup.log "
+                         "2>&1 < /dev/null & echo started $!")
+    assert "nvidia-smi" in starts[2] and ">> /content/comfy.log" in starts[2]
+    assert text.index("starting setup_vidgen.sh") < text.index("waiting for ComfyUI")
+    assert "## SSH to fresh works" in text and "installed code c0de" in text
+    assert "vidgen remote fresh generate run --pay" in text and "colab upload" not in text
+    assert not any(c[1] == "exec" and "start_setup.py" in c[-1] for c in cli.calls)
+
+
+def test_ssh_route_creates_a_missing_key_with_ssh_keygen(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = setup_session.colab_ssh.KEY
+    ran: list[list[str]] = []
+
+    def keygen(args: list[str], **kwargs: object) -> object:
+        ran.append(args)
+        Path(args[-1]).write_text("key", encoding="utf-8")
+        return setup_session.subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(setup_session.subprocess, "run", keygen)
+    vm = FakeVM(ltx=_part(marker=True, missing=False), image=_part(marker=True, missing=False), comfy_up=True)
+    code, lines, _ = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s"])
+    assert code == 0 and key.is_file()
+    assert ran == [["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "colab-vidgen", "-f", str(key)]]
+    assert sum("created the SSH key" in line for line in lines) == 1
+    ran.clear()
+    _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s"])
+    assert ran == []   # an existing key is left alone
+
+
+def test_ssh_check_failure_stops_and_names_via_exec() -> None:
+    _have_key()
+    cli = FakeColabCLI(FakeVM(), sessions=["s"])
+    code, lines, link = _run_ssh(cli, ["s"], FakeLink(cli, check_ok=False))
+    text = "\n".join(lines)
+    assert code == 1
+    assert "SSH to session s does not work" in text and "setup_session.py s --via exec" in text
+    assert link.commands == [setup_session.SSH_CHECK]
+    assert [c[1] for c in cli.calls] == ["sessions"]   # nothing ran on the VM after the failed check, no fallback
+
+
+def test_exec_route_keeps_start_setup_and_never_uses_ssh() -> None:
+    vm = FakeVM(ltx=_part(), image=_part(marker=True, missing=False))
+    cli = FakeColabCLI(vm, sessions=["s"])
+    lines: list[str] = []
+    clock = iter(range(0, 100000, 5))
+    code = setup_session.main(["s", "--via", "exec"], runner=cli, sleep=lambda s: None, clock=lambda: next(clock),
+                              say=lines.append, transfer_factory=lambda colab: cli,  # type: ignore[arg-type, return-value]
+                              ssh_factory=lambda colab: pytest.fail("no ssh on the exec route"))  # type: ignore[arg-type, return-value]
+    assert code == 0
+    assert cli.commands().count("exec start_setup.py") == 1 and cli.commands().count("exec start_comfy.py") == 1
+    assert not setup_session.colab_ssh.KEY.exists()   # no key made on the exec route
+    assert "colab upload -s s" in "\n".join(lines)
