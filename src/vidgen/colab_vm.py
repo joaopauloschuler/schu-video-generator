@@ -16,7 +16,9 @@ Actions (``--env`` values stay set in the kernel, so every call passes all the k
   ``VIDGEN_WEBGL=gpu``) added to its environment;
 - ``poll``: the run's log from byte ``VIDGEN_OFFSET``, and when it is done its exit code and
   stdout; with ``VIDGEN_PACK``, also the project's files after the run and, when it succeeded, one
-  ``.vidgen-remote/result.tar`` of the files to bring back (:func:`bring_back`);
+  ``.vidgen-remote/result.tar`` of the files to bring back (:func:`bring_back`); with
+  ``VIDGEN_NAMED`` (the rsync sync), when it succeeded, only the files its JSON document names
+  (:func:`named_files`);
 - ``fetch`` (files up, :mod:`vidgen.colab_transfer`): ``curl`` in a detached job gets the files
   ``VIDGEN_FILES`` (``name``, ``dest``, ``sha256``) from ``VIDGEN_URL`` (this computer's tunnel
   and secret path); a repeat waits for it, a new ``VIDGEN_ATTEMPT`` starts it again; a file is put
@@ -535,6 +537,8 @@ def poll(env, proc=Path("/proc")):
     reply = {"run": status, "log": data.decode("utf-8", "replace"), "offset": offset + len(data), "done": done}
     if done and (run / "run.out").is_file():
         reply["out"] = (run / "run.out").read_bytes()[:OUT_LIMIT].decode("utf-8", "replace")
+    if done and env.get("VIDGEN_NAMED") and status["rc"] == 0:
+        reply["named"] = named_files(reply.get("out", ""), project)
     if done and env.get("VIDGEN_PACK"):
         reply["files"] = file_hashes(project, excluded(env))
         if status["rc"] == 0:

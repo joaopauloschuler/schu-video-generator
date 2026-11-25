@@ -195,12 +195,16 @@ class SshLink:
         args = self.ssh("-o", "ControlMaster=no", LOGIN, command)
         result = self.runner(args, timeout_seconds, stdin, stdout)
         if result.returncode == SSH_FAILED:
-            self.say(f"   ssh to {self.session} failed ({last_line(result.output)}); reconnecting once")
-            if self.multiplex:
-                self.runner(self.ssh("-O", "exit", LOGIN), 15, None, None)
-                self.open_master()
+            self.reconnect(result)
             result = self.runner(args, timeout_seconds, stdin, stdout)
         return result
+
+    def reconnect(self, failed: CommandResult) -> None:
+        """After a call whose connection dropped (``failed``): say so and open a new master."""
+        self.say(f"   ssh to {self.session} failed ({last_line(failed.output)}); reconnecting once")
+        if self.multiplex:
+            self.runner(self.ssh("-O", "exit", LOGIN), 15, None, None)
+            self.open_master()
 
     def script(self, script: Path, env: dict[str, str]) -> CommandResult:
         """Run the local Python file ``script`` on the VM with ``env``."""

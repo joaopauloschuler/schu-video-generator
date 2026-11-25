@@ -332,3 +332,77 @@ def test_remote_via_flag_reaches_colab(argv: list[str], via: str, tmp_path: Path
     monkeypatch.chdir(tmp_path)
     assert cli.main(["remote", *argv, "ltx", "render"]) == 0
     assert made == [via]
+
+
+def _ssh_runner(fake: FakeColab):
+    """The SshLink runner of a VM folder: scripts run colab_vm.main here, rsync runs for real
+    (test_colab_rsync's fake `ssh` on PATH), master checks succeed."""
+    import shlex
+    import subprocess
+
+    def run(args: list[str], timeout: float, stdin: object = None, stdout: object = None) -> CommandResult:
+        if args[0] == "rsync":
+            fake.calls.append(["colab", "rsync"])
+            done = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+            return CommandResult(done.returncode, done.stdout + done.stderr)
+        if "-O" in args or "-N" in args:
+            return CommandResult(0, "")
+        words = shlex.split(args[-1])
+        env = dict(w.split("=", 1) for w in words[words.index("--") + 1:words.index("python3")])
+        fake.calls.append(["colab", "exec", f"VIDGEN_ACTION={env['VIDGEN_ACTION']}"])
+        out = io.StringIO()
+        with redirect_stdout(out):
+            colab_vm.main(env)
+        return CommandResult(0, out.getvalue())
+
+    return run
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("rsync") is None or sys.platform == "win32", reason="no local rsync")
+def test_ssh_route_syncs_with_rsync_deletes_there_and_brings_back_build(setup, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from test_colab_rsync import FAKE_SSH
+
+    from vidgen.colab_ssh import SshLink
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "ssh").write_text(f"#!{sys.executable}\n{FAKE_SSH}", encoding="utf-8")
+    (bin_dir / "ssh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{__import__('os').pathsep}{__import__('os').environ['PATH']}")
+    monkeypatch.setenv("FAKE_SSH_LOG", str(tmp_path / "ssh.log"))
+    project, _ = setup
+    fake = FakeColab(tmp_path / "vm", "c0de")
+    key = tmp_path / "key"
+    key.write_text("k", encoding="utf-8")
+    lines: list[str] = []
+    colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks",
+                  ssh_factory=lambda c: SshLink(c.session, runner=_ssh_runner(fake), key=key, socket_dir=tmp_path / "ssh",
+                                                listed=c.sessions, say=c.say, multiplex=True))
+    vm_project = fake.vm / "content" / "projects" / "my_project"
+    (vm_project / "build").mkdir(parents=True)
+    (vm_project / "build" / "big.bin").write_bytes(b"the VM's cache")
+    (vm_project / "stale.txt").write_text("deleted here", encoding="utf-8")
+    assert _run(project, colab, ["render"]) == 0, "\n".join(lines[-8:])
+    names = fake.names()
+    assert names[:3] == ["sessions", "rsync", "VIDGEN_ACTION=begin"] and names[-2:] == ["VIDGEN_ACTION=poll", "rsync"]
+    assert set(names[3:-1]) == {"VIDGEN_ACTION=poll"} and "upload" not in names and "download" not in names
+    assert (vm_project / "video.yaml").is_file() and not (vm_project / "stale.txt").exists()
+    assert (vm_project / "build" / "big.bin").read_bytes() == b"the VM's cache" and not (vm_project / "ltx-test").exists()
+    assert (project / "output" / "v.mp4").read_bytes() == b"mp4"                 # named by the document
+    assert (project / "build" / "final" / "frames.json").is_file()               # build/ comes back
+    assert (project / "build" / "big.bin").read_bytes() == b"the VM's cache"     # the newer copy wins
+    assert (project / "audio" / "new.mp3").is_file()
+    text = "\n".join(lines)
+    assert "sync (rsync over ssh)" in text and "1 deleted there" in text and "fetched output/v.mp4" in text
+
+
+def test_exec_route_keeps_the_tar_sync(setup, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen import colab_rsync
+
+    monkeypatch.setattr(colab_rsync, "run", lambda *a, **k: pytest.fail("the exec route ran rsync"))
+    monkeypatch.setattr(colab_rsync, "available", lambda: True)
+    project, make = setup
+    fake, colab = make()
+    assert _run(project, colab, ["validate"]) == 0
+    assert fake.names()[:4] == ["sessions", "VIDGEN_ACTION=state", "upload", "VIDGEN_ACTION=begin"]

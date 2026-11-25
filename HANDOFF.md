@@ -28186,3 +28186,43 @@ project), repo work is generic.
 - **How to test**: `python -m pytest -q -m "slow or not slow" tests/test_colab_ssh.py tests/test_colab_transfer.py
   tests/test_colab_setup_session.py tests/test_colab_keepalive.py tests/test_remote.py tests/test_videogen_comfyui.py`
   (72 passed, 13 s); also `tests/test_guide.py tests/test_docs.py` (pass).
+
+## Step 420 — vidgen remote syncs with rsync over SSH
+
+- **Built**: on the SSH route, when this computer has `rsync` (not on Windows), `vidgen remote` syncs with rsync over
+  the held master; new module `src/vidgen/colab_rsync.py`. `-e` is `SshLink.ssh("-o", "ControlMaster=no")` (the same
+  options Step 418 builds, each word quoted the way rsync splits `-e`: `'...'`, `''` inside). Flow: `sessions` ->
+  rsync up -> `begin` (vidgen hash check + start, no archive, no want-list check) -> polls (`VIDGEN_NAMED=1` instead of
+  `VIDGEN_PACK`: the VM replies `named`, the files the JSON document names) -> rsync down. No `state` call, no file-list
+  cache, no tar. A dropped rsync (exit 255/12/30/35) reopens the master once (`SshLink.reconnect`, factored out of
+  `call`) and tries again. Without a local rsync the SSH route keeps the tar sync and says so in one line.
+- **Up**: `rsync -rltz --delete --timeout=120` with `--exclude=/<top>` for every `EXCLUDED_DIRS` and `--exclude` folder
+  and `--exclude=__pycache__/.git/.vidgen-remote` at any depth; no `--delete-excluded`, so rsync never deletes or
+  changes those on the VM (`build/` stays there as a cache). `--rsync-path="mkdir -p <dir> && rsync"` makes the project
+  folder. Files deleted locally are deleted on the VM (friction item of Step 417).
+- **The bring-back rule** (Step 417 friction: nothing came back from `build/`): after a run that succeeded, rsync down
+  `--update` (a file changed here during the run is kept; nothing is deleted here), first match wins:
+  the left-out names at any depth; the `named` files and their folders (so `output/`, `exports/` files the document
+  names come back); `build/videogen/***` whole; not `build/*/{scenes,web,frames,media,padded,three_d,audio}/` nor
+  `build/music/`; not the other left-out top folders (`output`, `exports`, `media`, `--exclude` ones). So stills,
+  storyboard sheets, timings, the shots' cut inputs and their `inputs.json` records (what `generate plan` checks:
+  `ShotInput.ready` is "the file exists", freshness reads `inputs.json`), restyled frames, thumbnails and small caches
+  come back; the big render caches stay. Measured with `du`: `glider-short/build` here is 21 MB (nothing came back
+  from the VM), `footage-test/build` 172 MB of which 167 MB is `build/final/web` (captures) and 2.7 MB `padded`; the
+  rule leaves 2.1 MB (`build/videogen`). Because it is rsync, an unchanged file is not sent again.
+- **Exec route** (`--via exec`): unchanged (tar over tunnels, want-list check, VM file-list cache).
+- **Files**: `src/vidgen/colab_rsync.py` (new), `src/vidgen/remote.py` (`send_rsync`, `begin_run`, `fetch_rsync`,
+  `follow(pack=)`; `ALWAYS_SKIPPED` now from `colab_rsync`), `src/vidgen/colab_ssh.py` (`reconnect`),
+  `src/vidgen/colab_vm.py` (`poll` + `VIDGEN_NAMED`), `src/vidgen/colab.py` (`VM_KEYS`), `tests/test_colab_rsync.py`
+  (new), `tests/test_remote.py`, `tasklist.md`.
+- **Public interfaces**: `vidgen.colab_rsync` (`up_args`, `down_args`, `up_filters`, `down_filters`, `run`, `rsh`,
+  `available`, `BUILD_CACHES`), `SshLink.reconnect`, VM key `VIDGEN_NAMED`. No `vidgen.api` or config change.
+- **Known gaps**: no real Colab session used (a later step checks it). The VM's rsync and the local one were not
+  tried together over a real master. Windows has no rsync path (tar sync stays there). A local `build/` file older
+  than the VM's copy is overwritten by it (newer wins). Files the run deleted on the VM are not deleted here.
+  AGENTS.md, CONFIG.md and the HOWTO do not describe this yet (Step 423).
+- **How to test**: `PYTHONPATH=src python -m pytest -q -m "slow or not slow" tests/test_colab_rsync.py tests/test_remote.py
+  tests/test_colab_ssh.py tests/test_colab_transfer.py tests/test_colab_setup_session.py tests/test_colab_keepalive.py
+  tests/test_videogen_comfyui.py tests/test_docs.py tests/test_guide.py` (265 passed, 120 s). `test_colab_rsync.py`
+  runs the local rsync between two temp folders with a fake `ssh` on PATH (no network) to prove the deletes and the
+  protections.

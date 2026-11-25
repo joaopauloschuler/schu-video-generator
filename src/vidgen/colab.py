@@ -56,7 +56,7 @@ _SKIPPED_SUFFIXES = (".pyc", ".pyo")
 #: :meth:`Colab.vm` passes every key, blank unless given.
 VM_KEYS = ("VIDGEN_PROJECT", "VIDGEN_EXCLUDE", "VIDGEN_RUN", "VIDGEN_BIN", "VIDGEN_ARGS", "VIDGEN_HASH",
            "VIDGEN_ARCHIVE", "VIDGEN_CHECK", "VIDGEN_OFFSET", "VIDGEN_PACK", "VIDGEN_URL", "VIDGEN_FILES",
-           "VIDGEN_ATTEMPT", "VIDGEN_SECRET", "VIDGEN_OFFER", "VIDGEN_RESTART")
+           "VIDGEN_ATTEMPT", "VIDGEN_SECRET", "VIDGEN_OFFER", "VIDGEN_RESTART", "VIDGEN_NAMED")
 #: Where the per-session lock files live (one ``colab`` call at a time per session).
 LOCK_DIR = Path(tempfile.gettempdir()) / "vidgen-colab-locks"
 #: A ``colab exec`` is cut after this many seconds (the VM scripts answer in 5-15 s).
