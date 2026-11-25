@@ -28443,7 +28443,7 @@ project), repo work is generic.
     input, so it has no `inputs.json` entry. `add_take(sheet=)` writes `"sheet": "<path>"` in `takes/<shot>/<n>.json`.
     Plan line: `sheet: <path> (stylesheet, ...)`; the header shows `768x448` instead of `512p` when `size:` is set.
 - **Files**: `src/vidgen/config.py`, `src/vidgen/videogen/{__init__,comfyui,comfyui_client,inputs,ltx_graph,shots,takes,workflow}.py`;
-  `tests/test_videogen_sheet.py` (new, 14 tests), `tests/test_videogen_comfyui.py` (fake server knows `/free`, argv),
+  `tests/test_videogen_sheet.py` (new, 13 tests), `tests/test_videogen_comfyui.py` (fake server knows `/free`, argv),
   `tests/data/ltx_graph/{no_sheet,T2c_multi_nocompiler_768_25}.json`; `docs/CONFIG.md`, `DESIGN.md` (§113.23, §113.20
   one clause), `docs/HOWTO-restyle-with-ltx-on-colab.md` (§ Recommended, §7.1), guide + `AGENTS.md`; `tasklist.md`.
 - **Public interfaces**: config keys `generated_shot.sheet`, `.sheet_prompt`, `.size`, `.duration`;
