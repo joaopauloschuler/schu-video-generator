@@ -139,7 +139,8 @@ def test_real_rsync_brings_back_build_without_caches_and_keeps_local_edits(tmp_p
     _write(vm, {"video.yaml": "as sent", "audio/new.mp3": "made by the run",
                 "build/videogen/hook_b1/guide.mp4": "g", "build/videogen/web/first_frame.png": "f",
                 "build/final/storyboard/sheet.png": "sb", "build/final/timings.json": "t",
-                "build/final/scenes/s.mp4": "big", "build/preview/web/c.mkv": "big", "build/final/frames/1.png": "big",
+                "build/final/scenes/s.mp4": "big", "build/preview/web/c.mkv": "big", "build/final/web/c.json": "record",
+                "build/final/web/c.depth.json": "record", "build/final/web/c.depth.mkv": "big", "build/final/frames/1.png": "big",
                 "build/final/padded/mix.wav": "big", "build/final/media/videos/x.mp4": "big", "build/music/m.wav": "big",
                 "output/v.mp4": "named", "output/other.mp4": "not named", "exports/stills/s.png": "named too",
                 "ltx-test/x": "vm only", ".vidgen-remote/run.log": "log"})
@@ -149,10 +150,20 @@ def test_real_rsync_brings_back_build_without_caches_and_keeps_local_edits(tmp_p
     moved = colab_rsync.run(link, args, "bring back")
     assert (here / "video.yaml").read_text() == "edited here during the run"
     for rel in ("audio/new.mp3", "build/videogen/hook_b1/guide.mp4", "build/videogen/web/first_frame.png",
-                "build/final/storyboard/sheet.png", "build/final/timings.json", "output/v.mp4", "exports/stills/s.png"):
+                "build/final/storyboard/sheet.png", "build/final/timings.json", "output/v.mp4", "exports/stills/s.png",
+                "build/final/web/c.json", "build/final/web/c.depth.json"):
         assert (here / rel).is_file(), rel
-    for rel in ("build/final/scenes", "build/preview/web", "build/final/frames", "build/final/padded", "build/final/media",
+    assert sorted(p.name for p in (here / "build/final/web").iterdir()) == ["c.depth.json", "c.json"]   # no clips
+    for rel in ("build/final/scenes", "build/preview/web/c.mkv", "build/final/frames", "build/final/padded", "build/final/media",
                 "build/music", "output/other.mp4", "ltx-test", ".vidgen-remote"):
         assert not (here / rel).exists(), rel
     assert (here / "output" / "old.mp4").is_file()   # nothing deleted here
     assert "output/v.mp4" in moved.files and "video.yaml" not in moved.files
+
+
+def test_colab_modules_are_not_render_inputs() -> None:
+    """A change to the Colab / remote code must not make every render and shot input stale."""
+    from vidgen.render.fingerprint import NOT_RENDER_INPUTS
+
+    for name in ("colab.py", "colab_rsync.py", "colab_ssh.py", "colab_transfer.py", "colab_vm.py", "remote.py"):
+        assert name in NOT_RENDER_INPUTS, name

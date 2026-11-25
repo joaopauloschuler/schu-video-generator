@@ -427,3 +427,29 @@ def test_exec_route_keeps_start_setup_and_never_uses_ssh() -> None:
     assert cli.commands().count("exec start_setup.py") == 1 and cli.commands().count("exec start_comfy.py") == 1
     assert not setup_session.colab_ssh.KEY.exists()   # no key made on the exec route
     assert "colab upload -s s" in "\n".join(lines)
+
+
+def test_high_mem_cpu_session_with_vidgen_only_makes_no_gpu_or_model_calls() -> None:
+    _have_key()
+    cli = FakeColabCLI(FakeVM(vidgen_hash="old1"))
+    code, lines, link = _run_ssh(cli, ["cpu", "--gpu", "CPU", "--high-mem", "--vidgen-only"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    assert ["new", "-s", "cpu", "--high-mem"] == cli.calls[1][1:]
+    assert "(CPU, high-RAM)" in text and "ignored" not in text
+    assert "exec vm_state.py" not in cli.commands() and "ComfyUI" not in text
+    assert not any("nvidia-smi" in c or "main.py" in c or "setup.sh" in c.split("/")[-1] for c in link.commands)
+    assert any("setup_vidgen.sh" in c for c in link.commands) and "installed code c0de" in text
+
+
+def test_high_mem_on_l4_is_passed_on_with_one_ignored_line_and_cpu_needs_vidgen_only() -> None:
+    _have_key()
+    cli = FakeColabCLI(FakeVM(polls_to_finish=1, vidgen_hash="old1"))
+    code, lines, _ = _run_ssh(cli, ["fresh", "--high-mem"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    assert ["new", "-s", "fresh", "--gpu", "L4", "--high-mem"] == cli.calls[1][1:]
+    assert text.count("--high-mem is ignored on L4") == 1
+    with pytest.raises(SystemExit):
+        setup_session.parse_args(["s", "--gpu", "CPU"])
+    assert setup_session.parse_args(["s", "--gpu", "CPU", "--vidgen-only"]).high_mem is False

@@ -28275,3 +28275,51 @@ project), repo work is generic.
 - **How to test**: `PYTHONPATH=src python -m pytest -q -m "slow or not slow" tests/test_colab_setup_session.py
   tests/test_colab_ssh.py tests/test_colab_keepalive.py tests/test_remote.py tests/test_colab_rsync.py` (61 passed, 6 s);
   `tests/test_docs.py tests/test_guide.py` (pass).
+
+## Step 422 — LTX shot over SSH; --high-mem
+
+- **Built**:
+  - `tools/colab/setup_session.py --high-mem`: passed to `colab new --high-mem` (a new session only). With `--gpu L4`
+    one line says it is ignored there (`SINGLE_SHAPE`, per `colab new --help`). `--gpu CPU` makes a CPU runtime
+    (`colab new` without `--gpu`) and needs `--vidgen-only` (parser error otherwise). With `--vidgen-only` no
+    GPU step runs: no setup.sh / setup_image.sh, no ComfyUI or nvidia-smi sampler; `setup_vidgen.sh` already skips
+    its Vulkan/EGL WebGL step when there is no `nvidia-smi` (unchanged). `Colab.create(gpu, high_mem=False)`.
+  - **Fix found live**: a shot's inputs made on the VM (`vidgen remote NAME generate inputs --guide`) were stale
+    here (`generate plan`: "the scene changed"), the Step 409 "cross-machine fingerprint" gap. Cause: the scene
+    fingerprint of a `web`/`space` scene lists the files its page loaded, read from the capture's record
+    `build/<render folder>/web/<scene>.json`, and the bring-back left out all of `build/*/web/`. Now the down rsync
+    includes `build/*/web/*.json` (`colab_rsync.WEB_RECORDS`; records only, the `.mkv` clips stay there). The
+    fingerprint inputs were then identical on both machines (compared field by field).
+  - **Second fix**: the Colab modules (`colab.py`, `colab_rsync.py`, `colab_ssh.py`, `colab_transfer.py`,
+    `colab_vm.py`, `remote.py`) are in `render.fingerprint.NOT_RENDER_INPUTS`; any change to them changed
+    `vidgen_source` and so made every render and shot input stale (seen here after the rsync fix). This digest
+    changes once now.
+- **Real runs** (session `ltx`, L4, reused, left running; project `~/app/video-projects/footage-test-ssh`, a copy of
+  footage-test without `output/`, `ltx-test/`, `.vidgen-remote/`; `video.yaml` set to `provider: comfyui, colab: ltx`,
+  `model: ltx-2.3-union-control`, `guide: canny`, `first_frame: restyled`, `place: true`, the prompt with
+  "low afternoon sun" added so the clip cache could not answer). Default route (SSH), no `--via`:
+
+  | run | wall | GPU | result |
+  |---|---|---|---|
+  | `vidgen remote ltx generate inputs --guide --shot chase_b1_p1` (first sync of a new folder) | 3 min 15 s | restyle (not reported) | rsync up 49 files 42.7 MB in 20 s; render 25.3 s (141 web frames, 0.077 s each); 9 files 4.7 MB back in 5 s |
+  | `vidgen remote ltx generate plan --shot chase_b1_p1` after deleting `video.yaml.task-backup` here | 18 s | - | "0 file(s), 1 deleted there in 2 s"; `ls` on the VM: the file is gone |
+  | local `generate plan` | - | - | blocked: inputs stale (the bug above) |
+  | `setup_session.py ltx --vidgen-only` (after each fix) | 39 s, 27 s | - | code installed, 0 drops |
+  | `vidgen remote ... generate inputs --guide --shot chase_b1_p1` again | 1 min 26 s | - | scene reused (6.8 s); 9 files back incl. `build/final_source/web/chase.json`; local plan: 0 blocked |
+  | **(a)** local `vidgen generate run . --pay --shot chase_b1_p1` (ColabTransport over SSH) | 5 min 4 s | 256.0 s (0.138 units) | take 4: 960x512, 73 frames, real sea and glider, QA 1 warning (aspect) |
+
+  Dropped calls: 0 in every run (no reconnects, no retries). Errors: only the stale-inputs bug, fixed and run again
+  once. Real runs together about 12 min.
+- **Files**: `tools/colab/setup_session.py`, `src/vidgen/colab.py`, `src/vidgen/colab_rsync.py`,
+  `src/vidgen/render/fingerprint.py`, `tests/test_colab_setup_session.py` (+2), `tests/test_colab_rsync.py` (+1, real
+  rsync test checks the records come back and the clips do not), `DESIGN.md` (§113.20 note), `tasklist.md`.
+- **Public interfaces**: `Colab.create(gpu, high_mem=False)` (`"CPU"` = no `--gpu`); setup_session.py `--high-mem`,
+  `--gpu CPU`, `HARDWARE`, `SINGLE_SHAPE`; `colab_rsync.WEB_RECORDS`. No `vidgen.api` or config change.
+- **Known gaps**: the CPU high-mem route is tested with mocks only (no CPU session was made). The exec route's tar
+  bring-back still leaves the web records out. A brought-back record may let this computer reuse its own older
+  web clip when the clip key matches (same inputs; pixels differ slightly from the GPU drawing). The restyle's GPU
+  time is not printed by `vidgen remote`. AGENTS.md / HOWTO / README not updated (Step 423): `--high-mem`,
+  `--gpu CPU`, and that inputs made on the VM now count here.
+- **How to test**: `PYTHONPATH=src python -m pytest -q -m "slow or not slow" tests/test_colab_setup_session.py
+  tests/test_colab_rsync.py tests/test_remote.py tests/test_colab_ssh.py` (55 passed, 5 s); `tests/test_docs.py
+  tests/test_guide.py` (179 passed).

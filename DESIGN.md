@@ -22460,6 +22460,11 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
   `vidgen remote`); the client's last stdout line is the outcome; `Colab.download` (ssh, or a tunnel on the VM) fetches
   `output.mp4`. `colab:` on the VM itself (the setup marker `/content/.vidgen_setup_vidgen_done`)
   uses `HttpTransport(127.0.0.1:8188)`: the path of `vidgen remote <session> generate run --pay`.
+- **Inputs made on the VM count here (Step 422).** `vidgen remote`'s rsync bring-back includes the web
+  captures' records (`build/*/web/*.json`, not the clips): the scene fingerprint reads the files their
+  pages loaded, so without them a shot's inputs made on the VM were stale on this computer. The Colab
+  and remote modules (`colab*.py`, `remote.py`) are in `NOT_RENDER_INPUTS`: they draw nothing, and a
+  change to them made every render and shot input stale.
 - **Provider and cost.** `ComfyUIVideoProvider` has the OpenRouter provider's interface, so
   `generate_clip` caches by the same request key, records the submit and end in its own ledger
   `videogen-ledger.comfyui.jsonl` (cost 0), and `run_shots` keeps the clip with `add_take`; picking,

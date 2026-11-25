@@ -1,6 +1,6 @@
 """Find or create a Google Colab GPU session and set it up for docs/HOWTO-restyle-with-ltx-on-colab.md.
 
-    python tools/colab/setup_session.py NAME [--gpu L4] [--no-image] [--latest] [--no-vidgen | --vidgen-only]
+    python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-vidgen | --vidgen-only]
 
 Runs on your machine (standard library only, Windows too) and drives the `colab` CLI: it reuses the
 session NAME when `colab sessions` lists it (else `colab new`, retried on 503), then installs
@@ -44,6 +44,10 @@ __all__ = ["CommandResult", "Runner", "SetupError", "format_seconds", "parse_ses
 
 STATE_PREFIX = "VIDGEN_STATE "
 GPUS = ("T4", "L4", "G4", "H100", "A100")
+#: `--gpu` choices: "CPU" makes a CPU runtime (no GPU; only with --vidgen-only).
+HARDWARE = ("CPU", *GPUS)
+#: Accelerators with one machine shape, where `colab new --high-mem` is ignored.
+SINGLE_SHAPE = ("L4",)
 UPLOADS = ("vm_state.py", "setup.sh", "setup_image.sh")
 PART_SCRIPTS = {"ltx": "setup.sh", "image": "setup_image.sh"}
 PART_LOGS = {"ltx": ("setup.log", "download.log"), "image": ("setup_image.log",)}
@@ -139,15 +143,17 @@ class Colab(_Colab):
             raise SetupError(f"could not start {what} over ssh on {self.session}: {_last_line(result.output)}")
 
 
-def ensure_session(colab: Colab, gpu: str, attempts: int = 4, pause_seconds: float = 60.0) -> tuple[bool, str]:
+def ensure_session(colab: Colab, gpu: str, attempts: int = 4, pause_seconds: float = 60.0,
+                   high_mem: bool = False) -> tuple[bool, str]:
     """Reuse the session if listed, else `colab new` (retried); returns (created, hardware)."""
     listed = colab.sessions()
     if colab.session in listed:
         return False, listed[colab.session]
     reason = ""
     for attempt in range(1, attempts + 1):
-        colab.say(f"## creating session {colab.session} ({gpu}), try {attempt}/{attempts} (8 s to 3 min)")
-        result = colab.create(gpu)
+        shape = f"{gpu}, high-RAM" if high_mem and gpu not in SINGLE_SHAPE else gpu
+        colab.say(f"## creating session {colab.session} ({shape}), try {attempt}/{attempts} (8 s to 3 min)")
+        result = colab.create(gpu, high_mem=high_mem)
         listed = colab.sessions()
         if colab.session in listed:
             colab.say(f"## session {colab.session} created ({listed[colab.session]}); billing has started")
@@ -456,7 +462,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Find or create a Colab GPU session and set it up: ComfyUI, LTX-2.3 and image models "
                     "(the LTX-2.3 HOWTO), and this checkout's vidgen (vidgen remote). Never stops the session.")
     parser.add_argument("session", help="Colab session name (reused when `colab sessions` lists it)")
-    parser.add_argument("--gpu", default="L4", choices=GPUS, help="GPU for a new session (default L4)")
+    parser.add_argument("--gpu", default="L4", choices=HARDWARE,
+                        help="GPU for a new session (default L4); CPU: no GPU, only with --vidgen-only")
+    parser.add_argument("--high-mem", action="store_true",
+                        help="high-RAM machine shape for a new session (colab new --high-mem; ignored on L4)")
     parser.add_argument("--no-image", action="store_true",
                         help="skip the image models (Qwen-Image-Edit, Z-Image; about 50 GB)")
     parser.add_argument("--latest", action="store_true",
@@ -470,6 +479,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if not args.session.strip() or args.session.startswith("-"):
         parser.error("the session name must not be empty or start with '-'")
+    if args.gpu == "CPU" and not args.vidgen_only:
+        parser.error("a CPU session has no GPU for ComfyUI and LTX-2.3: add --vidgen-only")
     return args
 
 
@@ -486,10 +497,12 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
     report = Report()
     begin = clock()
     session_exists = False
+    if args.high_mem and args.gpu in SINGLE_SHAPE:
+        say(f"   note: --high-mem is ignored on {args.gpu} (one machine shape)")
     try:
         if args.via == "ssh":
             ensure_key(colab_ssh.KEY, say)
-        report.created, report.hardware = ensure_session(colab, args.gpu)
+        report.created, report.hardware = ensure_session(colab, args.gpu, high_mem=args.high_mem)
         session_exists = True
         if not report.created:
             say(f"## reusing session {args.session} ({report.hardware})")

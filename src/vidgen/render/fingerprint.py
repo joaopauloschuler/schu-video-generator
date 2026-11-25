@@ -61,6 +61,8 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
         "slides_pdf.py", "stt", "readback.py", "speech_flags.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
         "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
         "mcp_server.py", "mcp_tools.py", "animatic.py", "videogen",
+        # Colab sessions and `vidgen remote` move files and start commands; they draw nothing
+        "colab.py", "colab_rsync.py", "colab_ssh.py", "colab_transfer.py", "colab_vm.py", "remote.py",
     }
 )
 

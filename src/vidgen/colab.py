@@ -269,8 +269,10 @@ class Colab:
             raise ColabError(f"`colab sessions` failed: {last_line(result.output)}")
         return parse_sessions(result.output)
 
-    def create(self, gpu: str) -> CommandResult:
-        return self.run(["new", "-s", self.session, "--gpu", gpu], 600)
+    def create(self, gpu: str, high_mem: bool = False) -> CommandResult:
+        """``colab new`` for this session: ``gpu`` "CPU" leaves ``--gpu`` out (a CPU runtime)."""
+        args = ["new", "-s", self.session] + ([] if gpu == "CPU" else ["--gpu", gpu])
+        return self.run(args + (["--high-mem"] if high_mem else []), 600)
 
     def exec_args(self, script: Path, env: dict[str, str]) -> list[str]:
         """Arguments of ``colab exec`` running a local file on the VM with ``--env KEY=VALUE`` pairs."""

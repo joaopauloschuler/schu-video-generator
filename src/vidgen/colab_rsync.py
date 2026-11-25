@@ -8,7 +8,9 @@
 - **Down** (:func:`down_args`): after a run that succeeded, what the next step here needs: the
   files the command's JSON document names (``named``), and everything else outside the
   left-out folders, plus ``build/`` without its big caches (:data:`BUILD_CACHES`, rebuilt by a
-  render: scene clips, web captures, frames, Manim's media, padded and mixed sound, music).
+  render: scene clips, web captures, frames, Manim's media, padded and mixed sound, music). The
+  web captures' records (:data:`WEB_RECORDS`, small JSON) do come back: the scene fingerprint reads
+  the files their pages loaded, so without them a shot's inputs made there look stale here.
   ``--update`` keeps a file changed here during the run; nothing is deleted here.
 
 Both use ``-rltz`` (times kept, so an unchanged file is not sent again) and ``--timeout``: rsync
@@ -33,6 +35,9 @@ ALWAYS_SKIPPED: tuple[str, ...] = ("__pycache__", ".git", ".vidgen-remote")
 BUILD_CACHES: tuple[str, ...] = ("scenes", "web", "frames", "media", "padded", "three_d", "audio")
 #: Folders right in ``build/`` that do not come back (the music cache: rendered sound).
 BUILD_TOP_CACHES: tuple[str, ...] = ("music",)
+#: The web captures' records in ``build/<render folder>/web/`` that come back without the clips
+#: (``<scene>.json``, ``.depth.json``, ``.layout.json``; :func:`vidgen.web.loaded.record_path`).
+WEB_RECORDS = "*.json"
 #: ``build/`` folders that always come back whole (a shot named like a cache folder included).
 BUILD_KEPT: tuple[str, ...] = ("videogen",)
 #: rsync gives up when no data moves for this many seconds.
@@ -94,12 +99,14 @@ def _parents(rel: str) -> list[str]:
 
 def down_filters(exclude: Iterable[str], named: Sequence[str]) -> list[str]:
     """The filter rules of a bring-back, first match wins: :data:`ALWAYS_SKIPPED`; the ``named``
-    files (and their folders); ``build/`` without :data:`BUILD_CACHES` / :data:`BUILD_TOP_CACHES`;
+    files (and their folders); ``build/`` without :data:`BUILD_CACHES` / :data:`BUILD_TOP_CACHES`
+    (but with the web records, :data:`WEB_RECORDS`);
     no other ``exclude`` top folder."""
     rules = _skipped()
     for rel in named:
         rules += [f"--include=/{literal(folder)}/" for folder in _parents(rel)] + [f"--include=/{literal(rel)}"]
     rules += [f"--include=/build/{name}/***" for name in BUILD_KEPT]
+    rules += ["--include=/build/*/web/", f"--include=/build/*/web/{WEB_RECORDS}", "--exclude=/build/*/web/*"]
     rules += [f"--exclude=/build/*/{name}/" for name in BUILD_CACHES]
     rules += [f"--exclude=/build/{name}/" for name in BUILD_TOP_CACHES]
     rules += [f"--exclude=/{literal(top)}{tail}" for top in dict.fromkeys(exclude) if top != "build" for tail in ("", "/***")]
