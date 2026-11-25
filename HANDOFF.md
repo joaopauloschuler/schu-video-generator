@@ -28118,3 +28118,44 @@ project), repo work is generic.
   `first_frame_prompt:`); `web` scenes have no `fade: false` (a loop needs the examples' `web_cut`); a file deleted
   locally is brought back from the VM; no wind or sea sounds; ~50 dropped `colab exec` calls in 20 remote commands.
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_docs.py` (80 passed).
+
+## Step 418 — SSH route for Colab (default)
+
+- **Built**: `Colab(via=...)`: `"ssh"` (the default) or `"exec"` (the old `colab exec` + quick-tunnel route,
+  unchanged: lock, backoff, 30 s cut-off). New `vidgen.colab_ssh.SshLink`: `ssh -F /dev/null -i
+  ~/.ssh/colab_ed25519 -o ProxyCommand="colab ssh --proxy-mode -s NAME -i KEY"`, one held master per
+  session (opened on first use after `colab sessions` lists the session, checked with `-O check`,
+  `ControlPersist=20m` as a safety net, ended in `close()` / `__exit__` when this object opened it); a call
+  that fails with ssh's 255 reopens the master once and retries once. Socket `~/.cache/vidgen/ssh/<12-hex hash>`
+  (folder 0700; falls back to the temp folder if that path passes 107 bytes); per-session known_hosts next to
+  it, emptied on each master open, `StrictHostKeyChecking=accept-new`. `exec_file` / `exec_json` / `vm` run
+  `cd /content && env -- 'K=V'... python3 -` with the script on stdin (keys checked, values `shlex.quote`d);
+  `upload(_many)` / `download` are `cat` over the master through a `.vidgen-part` file with the SHA-256 checked
+  on the far side (`colab_transfer.sha256_file` reused). No lock on SSH; script calls time out at 600 s.
+  `Colab.prestart_env()` (remote.py's `begin` used `transfers.prestart_env()`): `{}` on SSH.
+- **Files**: `src/vidgen/colab_ssh.py` (new), `src/vidgen/colab.py`, `src/vidgen/remote.py`,
+  `tools/colab/setup_session.py` (`main(..., via=)` for tests, no flag), `tests/test_colab_ssh.py` (new),
+  `tests/conftest.py` (autouse guard: `colab_ssh.run_ssh` raises, `SOCKET_DIR` in tmp), exec-route tests given
+  `via="exec"` (`test_remote.py`, `test_colab_transfer.py`, `test_colab_setup_session.py`, `test_colab_keepalive.py`),
+  `DESIGN.md` (ColabTransport line), `tools/colab/README.md` ("Two routes"), `docs/HOWTO-restyle-with-ltx-on-colab.md`
+  (prerequisites), `tasklist.md`.
+- **Public interfaces**: `Colab.via`, `Colab.ssh_factory`, `Colab.link`, `Colab.prestart_env()`,
+  `vidgen.colab.ROUTES`; `vidgen.colab_ssh` (`SshLink`, `run_ssh`, `script_command`, `env_words`, `KEY`,
+  `SOCKET_DIR`). No `vidgen.api` or config change.
+- **Deviations**: files go with `cat` over ssh instead of scp: any VM path is quoted by `shlex.quote` (legacy
+  scp re-parses remote paths in a shell), one runner for everything, same channel speed. `colab ssh --proxy-mode
+  -s NAME` **creates a missing session**, so the master opens only after `colab sessions` lists it.
+- **Incident**: before the conftest guard existed, `test_colab_keepalive.py::test_every_call_through_the_helpers_touches_the_stamp`
+  (fake CLI listing `ltx`, default route) ran real ssh and the proxy created a CPU session `ltx` (colab.log
+  07:54:55, `accelerator=NONE`). The guard now makes any real ssh in a test fail. `colab stop` was refused by the
+  agent's permission classifier, so that session was **not stopped** by this step; the real check ran on it
+  instead of a new `s418` (none created).
+- **Real check** (CPU session, default SSH): first `vm("state")` 5.9 s with the master open, then 0.47 s;
+  5 MB up 1.7 s, down 1.7 s, SHA-256 same; 3 parallel `vm` calls 0.60 s; master gone after `close()`.
+- **Known gaps**: Windows' OpenSSH has no ControlMaster (`multiplex` off there: a full proxy connection each
+  call; not tried on Windows; the ProxyCommand quoting is POSIX). No `--via exec` flags, no rsync project
+  sync, setup does not create the key (later steps). `comfyui`'s `ColabTransport` never closes its `Colab`, so
+  its master ends by `ControlPersist` (20 min idle). The keepalive still pings with `colab exec` only.
+- **How to test**: `python -m pytest -q -m "slow or not slow" tests/test_colab_ssh.py tests/test_colab_transfer.py
+  tests/test_colab_setup_session.py tests/test_colab_keepalive.py tests/test_remote.py tests/test_videogen_comfyui.py`
+  (81 passed with `test_videogen_canny_restyle.py`, 37 s).

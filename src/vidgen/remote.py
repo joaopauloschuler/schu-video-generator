@@ -202,7 +202,7 @@ class RemoteRun:
             reply = self.colab.vm("begin", VIDGEN_PROJECT=self.remote_dir, VIDGEN_RUN=run_id, VIDGEN_BIN=VM_VIDGEN,
                                   VIDGEN_ARGS=json.dumps(args), VIDGEN_HASH=self.local_hash or package_hash(),
                                   VIDGEN_ARCHIVE=f"/content/{archive_name}", VIDGEN_CHECK="1",
-                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)), **self.colab.transfers.prestart_env())
+                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)), **self.colab.prestart_env())
             if "vidgen" in reply:
                 self.check_version(reply["vidgen"])
             missing = reply.get("missing")

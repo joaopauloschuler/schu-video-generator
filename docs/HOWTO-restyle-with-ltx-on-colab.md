@@ -49,7 +49,8 @@ Seedance for the paid, tracked path inside vidgen.
 - The **`colab` CLI** (google-colab-cli 0.8.0) installed and logged in (`colab usage` prints the
   balance); `colab skill` prints its own agent guide.
 - **Compute units** on the account (an L4 is ~1.94 units an hour).
-- No SSH key, no Hugging Face login: `colab upload` / `colab download` / `colab exec`.
+- No Hugging Face login. The hand commands below use `colab exec`; vidgen's own calls (`setup_session.py`,
+  `vidgen remote`) go over SSH with the key `~/.ssh/colab_ed25519` (`tools/colab/README.md`, "Two routes").
 - Locally: `ffmpeg` / `ffprobe`, Python 3.10+ (standard library only), `curl`.
 - **Ask the owner before creating a GPU session** (it spends their units).
 

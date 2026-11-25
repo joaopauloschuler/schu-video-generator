@@ -149,7 +149,7 @@ def _run(cli: FakeColabCLI, argv: list[str]) -> tuple[int, list[str]]:
     lines: list[str] = []
     clock = iter(range(0, 100000, 5))
     code = setup_session.main(argv, runner=cli, sleep=lambda s: None, clock=lambda: next(clock), say=lines.append,
-                              transfer_factory=lambda colab: cli)  # type: ignore[arg-type, return-value]
+                              transfer_factory=lambda colab: cli, via="exec")  # type: ignore[arg-type, return-value]
     return code, lines
 
 

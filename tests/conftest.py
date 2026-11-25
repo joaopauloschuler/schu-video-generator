@@ -152,6 +152,17 @@ def _no_real_colab_locks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
 
 
 @pytest.fixture(autouse=True)
+def _no_real_ssh_to_colab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Tests never run the real ssh of ``Colab(via="ssh")``: ``colab ssh --proxy-mode -s NAME``
+    creates a missing session (it is billed), and ``~/.cache/vidgen/ssh`` stays untouched."""
+    def refuse(args: list[str], *rest: object) -> object:
+        raise AssertionError(f"a test ran real ssh: {args[:1]}; give Colab a fake runner or via='exec'")
+
+    monkeypatch.setattr("vidgen.colab_ssh.run_ssh", refuse)
+    monkeypatch.setattr("vidgen.colab_ssh.SOCKET_DIR", tmp_path / "colab-ssh")
+
+
+@pytest.fixture(autouse=True)
 def _no_sweep_of_the_real_temp_folder(monkeypatch: pytest.MonkeyPatch) -> None:
     """A test never deletes real ``vidgen-share-*`` folders: tests of the sweep pass their own folder or run in a subprocess."""
     from vidgen.videogen import host_guard

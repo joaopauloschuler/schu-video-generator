@@ -53,7 +53,7 @@ class FakeCli:
 
 
 def make(tmp_path: Path, cli: FakeCli, every: float = 420.0, hours: float = 1.0) -> tuple[object, list[str]]:
-    colab = Colab("ltx", runner=cli, sleep=cli.sleep, say=lambda line: None, lock_dir=tmp_path / "locks",
+    colab = Colab("ltx", runner=cli, sleep=cli.sleep, say=lambda line: None, lock_dir=tmp_path / "locks", via="exec",
                   wall=lambda: cli.now)
     lines: list[str] = []
     ka = keepalive.Keepalive(colab, every, hours, tmp_path / "ka.log", history_dir=tmp_path / "history",
@@ -107,7 +107,7 @@ def test_a_recent_stamp_or_history_file_skips(tmp_path: Path) -> None:
 
 def test_every_call_through_the_helpers_touches_the_stamp(tmp_path: Path) -> None:
     cli = FakeCli()
-    colab = Colab("ltx", runner=cli, lock_dir=tmp_path)
+    colab = Colab("ltx", runner=cli, lock_dir=tmp_path, via="exec")
     colab.run(["sessions"], 90)
     assert not colab.stamp_path.exists()
     colab.exec_file(COLAB_DIR / "keepalive_vm.py", {"KEEPALIVE_A": "1"})

@@ -24,7 +24,7 @@ REPO = TOOLS_DIR.parents[1]
 sys.path.insert(0, str(REPO / "src"))  # this checkout's vidgen.colab, also when an older vidgen is installed
 
 from vidgen.colab import (  # noqa: E402
-    VM_SOURCE_ARCHIVE, Colab as _Colab, ColabError as SetupError, CommandResult, Runner, format_seconds,
+    ROUTES, VM_SOURCE_ARCHIVE, Colab as _Colab, ColabError as SetupError, CommandResult, Runner, format_seconds,
     last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions, run_command, say_now, shown,
     source_archive,
 )
@@ -369,10 +369,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None, runner: Runner = run_command,
          sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-         say: Callable[[str], None] = say_now, transfer_factory: Callable[[Colab], Transfers] | None = None) -> int:
+         say: Callable[[str], None] = say_now, transfer_factory: Callable[[Colab], Transfers] | None = None,
+         via: str = ROUTES[0]) -> int:
     """Set up the session; returns the exit code (0 ready, 1 failed, 130 interrupted)."""
     args = parse_args(argv)
-    colab = Colab(args.session, cli=args.colab, runner=runner, sleep=sleep, say=say, transfer_factory=transfer_factory)
+    colab = Colab(args.session, cli=args.colab, runner=runner, sleep=sleep, say=say, transfer_factory=transfer_factory,
+                  via=via)
     parts = [] if args.vidgen_only else ["ltx"] if args.no_image else ["ltx", "image"]
     report = Report()
     begin = clock()

@@ -1,13 +1,20 @@
 """The ``colab`` CLI driven from this computer: shared by ``tools/colab/setup_session.py`` and
 ``vidgen remote``.
 
-Standard library only (it runs before vidgen's dependencies matter, Windows too). Every call to
-``colab`` is a list of arguments, one call at a time per session, also across processes (a lock
-file in :data:`LOCK_DIR`, and a "last call" stamp next to it): two overlapping calls on one session
-drop each other. ``colab exec`` calls are cut at 30 s and retried after 3, 10, 20, 30 s; every
-VM-side action is safe to repeat, since the VM's work goes on when a connection drops. Files go
-both ways through Cloudflare quick tunnels (:mod:`vidgen.colab_transfer`), never ``colab upload`` /
-``download``. Nothing here stops a session.
+Standard library only (it runs before vidgen's dependencies matter, Windows too). Two routes to
+the VM, chosen with ``Colab(via=...)``:
+
+- ``"ssh"`` (the default, :mod:`vidgen.colab_ssh`): scripts and files over one held ssh master
+  through ``colab ssh --proxy-mode``; no lock, calls may run in parallel.
+- ``"exec"``: every call to ``colab`` is a list of arguments, one call at a time per session, also
+  across processes (a lock file in :data:`LOCK_DIR`): two overlapping calls on one session drop
+  each other. ``colab exec`` calls are cut at 30 s and retried after 3, 10, 20, 30 s. Files go both
+  ways through Cloudflare quick tunnels (:mod:`vidgen.colab_transfer`), never ``colab upload`` /
+  ``download``.
+
+Every VM-side action is safe to repeat, since the VM's work goes on when a connection drops. A
+"last call" stamp next to the lock file is touched after each call (either route). ``colab
+sessions`` / ``new`` always go through the colab CLI. Nothing here stops a session.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ from typing import TYPE_CHECKING, Callable
 from vidgen.errors import VidgenError
 
 if TYPE_CHECKING:
+    from vidgen.colab_ssh import SshLink
     from vidgen.colab_transfer import Transfers
 
 #: The VM-side script (``colab exec -f``) that reports state, unpacks, starts and polls runs.
@@ -54,6 +62,8 @@ LOCK_DIR = Path(tempfile.gettempdir()) / "vidgen-colab-locks"
 EXEC_SECONDS = 30.0
 #: The pauses before the 2nd, 3rd, ... try of a dropped call.
 RETRY_PAUSES = (3.0, 10.0, 20.0, 30.0)
+#: The routes to the VM (:class:`Colab` ``via``); the first is the default.
+ROUTES = ("ssh", "exec")
 
 
 class ColabError(VidgenError):
@@ -137,7 +147,8 @@ def shown(name: str) -> str:
 
 @dataclass
 class Colab:
-    """The ``colab`` CLI for one session: every call is a list of arguments, one call at a time."""
+    """One Colab session: scripts and files over ssh (``via="ssh"``, the default) or ``colab exec``
+    and quick tunnels (``via="exec"``, one call at a time); see the module docstring."""
 
     session: str
     cli: str = "colab"
@@ -149,7 +160,24 @@ class Colab:
     lock_dir: Path | None = None   # None: :data:`LOCK_DIR`
     wall: Callable[[], float] = time.time
     transfer_factory: Callable[[Colab], Transfers] | None = None
+    via: str = ROUTES[0]
+    ssh_factory: Callable[[Colab], SshLink] | None = None
     _transfers: Transfers | None = field(default=None, init=False, repr=False)
+    _link: SshLink | None = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.via not in ROUTES:
+            raise ColabError(f"unknown Colab route via={self.via!r}; use one of {', '.join(ROUTES)}")
+
+    @property
+    def link(self) -> SshLink:
+        """The SSH route's connection (:mod:`vidgen.colab_ssh`; the master opens on first use)."""
+        if self._link is None:
+            from vidgen.colab_ssh import SshLink
+
+            self._link = (self.ssh_factory(self) if self.ssh_factory else
+                          SshLink(self.session, cli=self.cli, listed=self.sessions, say=self.say))
+        return self._link
 
     def run(self, args: list[str], timeout_seconds: float) -> CommandResult:
         if args[0] == "sessions":
@@ -245,6 +273,12 @@ class Colab:
         return [*args, "-f", str(script)]
 
     def exec_file(self, script: Path, env: dict[str, str] | None = None) -> CommandResult:
+        """Run the local Python file ``script`` on the VM with ``env`` set (over ssh, or ``colab exec``)."""
+        if self.via == "ssh":
+            try:
+                return self.link.script(script, env or {})
+            finally:
+                self.touch_stamp()
         # These scripts answer in 5-15 s; a call that hangs (often) is cut and retried.
         return self.run(self.exec_args(script, env or {}), EXEC_SECONDS)
 
@@ -256,6 +290,8 @@ class Colab:
             if value is not None:
                 return value
             self.pause_before_retry(f"exec dropped ({last_line(result.output)})", attempt)
+        if self.via == "ssh":
+            raise ColabError(f"python3 over ssh on {self.session} kept failing; try `colab ssh -s {shown(self.session)}` by hand")
         raise ColabError(f"`colab exec` on {self.session} kept failing; try `colab exec -s {shown(self.session)}` by hand")
 
     def vm(self, action: str, **env: str) -> dict:
@@ -274,26 +310,38 @@ class Colab:
             self._transfers = (self.transfer_factory or Transfers)(self)
         return self._transfers
 
+    def prestart_env(self) -> dict[str, str]:
+        """Extra env for a ``begin`` call: on the exec route it starts the VM's tunnel early."""
+        return {} if self.via == "ssh" else self.transfers.prestart_env()
+
     def upload(self, local: Path, remote: str) -> None:
-        """Send ``local`` to the VM path ``remote`` (through a quick tunnel, SHA-256 checked)."""
+        """Send ``local`` to the VM path ``remote`` (over ssh or a quick tunnel, SHA-256 checked)."""
         self.upload_many([(local, remote)])
 
     def upload_many(self, pairs: list[tuple[Path, str]]) -> None:
-        """Send several files in one transfer job."""
+        """Send several files (on the exec route in one transfer job)."""
         try:
-            self.transfers.upload(pairs)
+            if self.via == "ssh":
+                self.link.upload(pairs)
+            else:
+                self.transfers.upload(pairs)
         finally:
             self.touch_stamp()
 
     def download(self, remote: str, local: Path) -> None:
-        """Bring the VM file ``remote`` to ``local`` (through a quick tunnel, SHA-256 checked)."""
+        """Bring the VM file ``remote`` to ``local`` (over ssh or a quick tunnel, SHA-256 checked)."""
         try:
-            self.transfers.download(remote, local)
+            if self.via == "ssh":
+                self.link.download(remote, local)
+            else:
+                self.transfers.download(remote, local)
         finally:
             self.touch_stamp()
 
     def close(self) -> None:
-        """Close this command's tunnels (safe to repeat; also done at exit)."""
+        """Close this command's ssh master or tunnels (safe to repeat; tunnels also close at exit)."""
+        if self._link is not None:
+            self._link.close()
         if self._transfers is not None:
             self._transfers.close()
 

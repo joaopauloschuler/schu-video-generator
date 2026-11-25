@@ -108,7 +108,7 @@ def test_upload_and_download_check_hashes_and_close_both_tunnels(tmp_path: Path,
         pytest.skip("needs curl (the VM side's fetch)")
     runner = VMRunner()
     lines: list[str] = []
-    colab = Colab("ltx", runner=runner, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks",
+    colab = Colab("ltx", runner=runner, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks", via="exec",
                   transfer_factory=lambda c: Transfers(c, tunnel_factory=lambda: LoopbackTunnel(fake_cloudflared),
                                                        getter=_loopback_getter))
     (tmp_path / "one.txt").write_bytes(b"one")
@@ -171,7 +171,7 @@ def test_a_name_that_does_not_resolve_gets_a_new_vm_tunnel_then_a_clear_error(tm
         raise TransferError(f"{url} does not resolve", resolve=True)
 
     lines: list[str] = []
-    colab = Colab("ltx", runner=vm, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path,
+    colab = Colab("ltx", runner=vm, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path, via="exec",
                   transfer_factory=lambda c: Transfers(c, getter=getter))
     with pytest.raises(ColabError, match="could not download /content/x.mp4 from ltx after 3 tries") as caught:
         colab.download("/content/x.mp4", tmp_path / "x.mp4")

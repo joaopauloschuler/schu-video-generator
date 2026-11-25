@@ -113,7 +113,7 @@ def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     def make(vidgen_hash: str | None = "c0de") -> tuple[FakeColab, Colab]:
         fake = FakeColab(vm, vidgen_hash)
         lines: list[str] = []
-        colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks",
+        colab = Colab("ltx", runner=fake, sleep=lambda s: None, say=lines.append, lock_dir=tmp_path / "locks", via="exec",
                       transfer_factory=lambda c: fake)  # type: ignore[arg-type, return-value]
         colab.lines = lines  # type: ignore[attr-defined]
         return fake, colab
@@ -284,7 +284,7 @@ def test_begin_starts_a_run_once_and_checks_the_files(tmp_path: Path, monkeypatc
 def test_lock_waits_for_another_call_and_takes_over_a_stale_one(tmp_path: Path) -> None:
     now = [1000.0]
     colab = Colab("ltx", runner=lambda a, t: CommandResult(0, ""), sleep=lambda s: now.__setitem__(0, now[0] + s),
-                  say=lambda line: None, lock_dir=tmp_path, wall=lambda: now[0])
+                  say=lambda line: None, lock_dir=tmp_path, wall=lambda: now[0], via="exec")
     colab.lock_path.write_text(json.dumps({"pid": 1, "until": 1005.0}), encoding="utf-8")
     colab.run(["exec", "-s", "ltx"], 30)
     assert now[0] > 1005.0 and not colab.lock_path.exists()   # waited until the holder's call ended
@@ -298,7 +298,7 @@ def test_lock_waits_for_another_call_and_takes_over_a_stale_one(tmp_path: Path) 
 def test_retries_pause_longer_each_time(tmp_path: Path) -> None:
     pauses: list[float] = []
     colab = Colab("ltx", runner=lambda a, t: CommandResult(124, "(timed out after 30 s)"), sleep=pauses.append,
-                  say=lambda line: None, lock_dir=tmp_path)
+                  say=lambda line: None, lock_dir=tmp_path, via="exec")
     with pytest.raises(ColabError, match="kept failing"):
         colab.vm("state")
     assert pauses == [3.0, 10.0, 20.0, 30.0]
