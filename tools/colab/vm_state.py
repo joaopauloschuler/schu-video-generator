@@ -13,7 +13,7 @@ COMFY_URL = "http://127.0.0.1:8188"
 MARKERS = {"ltx": ".vidgen_setup_ltx_done", "image": ".vidgen_setup_image_done"}
 LOGS = ("setup.log", "download.log", "setup_image.log", "comfy.log")
 SCRIPTS = {"ltx": "/content/setup.sh", "image": "/content/setup_image.sh"}
-CUSTOM_NODES = ("ComfyUI-LTXVideo", "ComfyUI-GGUF", "ComfyUI-VideoHelperSuite", "ComfyUI-KJNodes")
+CUSTOM_NODES = ("ComfyUI-LTXVideo", "ComfyUI-GGUF", "ComfyUI-VideoHelperSuite", "ComfyUI-KJNodes", "comfyui-hrnodes")
 # Files under ComfyUI/models that each setup links in (setup.sh / setup_image.sh).
 MODEL_FILES = {
     "ltx": (
@@ -23,6 +23,7 @@ MODEL_FILES = {
         "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
         "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors",
         "loras/ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+        "loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors",
     ),
     "image": (
         "unet/qwen-image-edit-2511-Q4_K_M.gguf",

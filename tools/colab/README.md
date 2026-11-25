@@ -7,7 +7,7 @@ the other scripts are the HOWTO's per-run steps.
 ## Set up a session
 
 ```
-python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-vidgen | --vidgen-only] [--via exec]
+python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler] [--no-vidgen | --vidgen-only] [--via exec]
 ```
 
 Runs on your machine: Python 3.10+, standard library only (Windows too), and the `colab` CLI
@@ -22,16 +22,30 @@ installed and logged in (`colab usage` prints the balance). It:
    (`setsid nohup`), checks on the VM that each one runs, and polls their logs every 10 s,
    printing the `###` milestone lines;
 5. starts ComfyUI unless it answers on 127.0.0.1:8188 (VM), and waits for it, installing this
-   checkout's vidgen meanwhile unless the VM's marker holds its code hash (below);
-6. prints the session, GPU, what was installed or reused, the elapsed time and the next commands.
+   checkout's vidgen meanwhile unless the VM's marker holds its code hash (below); a ComfyUI that
+   runs is restarted when its model compiler setting differs from the one asked for (below) or when
+   `setup.sh` ran while it was running (new nodes load at start);
+6. prints the session, GPU, what was installed or reused, whether ComfyUI's model compiler is on or
+   off, the Ingredients IC-LoRA (and whether ComfyUI lists it) and the routing node, the elapsed
+   time and the next commands.
 
 With `--via exec` it uses the exec route (below): `start_setup.py` / `start_comfy.py`, polls every 30 s.
+That route never restarts ComfyUI (it prints a note when it should) and refuses `--no-comfy-compiler`.
+
+**The model compiler.** ComfyUI 0.46 compiles the model by default; with it on, the node
+`LTX Multi IC-LoRA` (class `LTXMultiICLoRA`) stalls at step 0. `--no-comfy-compiler` starts ComfyUI
+with `--disable-comfy-compiler`; without the option it starts with the compiler on. On a session
+whose ComfyUI runs with the other setting, the script stops it (`pkill`, up to 30 s, then
+`SIGKILL`, also the `nvidia-smi` sampler) and starts it with the asked-for setting, so a re-run
+switches it either way; a job running on it is lost. The running ComfyUI's flags are read from
+`/proc` on the VM: `vidgen.colab.comfy_args(colab)` returns the arguments after `main.py` (None when
+none runs), `vidgen.colab.comfy_compiler_off(colab)` whether `--disable-comfy-compiler` is among them.
 
 | part | script, log | what it installs |
 |---|---|---|
-| ComfyUI + LTX-2.3 | `setup.sh`, `/content/setup.log`, `/content/download.log` | ComfyUI and four custom nodes at the tested commits (`--latest`: their newest, `PIN=0`), their requirements without touching Colab's torch, the LTX-2.3 GGUF, VAEs, connectors, IC-LoRA and Gemma (~34 GB) |
+| ComfyUI + LTX-2.3 | `setup.sh`, `/content/setup.log`, `/content/download.log` | ComfyUI and five custom nodes at the tested commits (`--latest`: their newest, `PIN=0`; `comfyui-hrnodes` gives `LTX Multi IC-LoRA`), their requirements without touching Colab's torch, the LTX-2.3 GGUF, VAEs, connectors, the Union-Control and Ingredients IC-LoRAs and Gemma (~35 GB) |
 | image models (skip with `--no-image`) | `setup_image.sh`, `/content/setup_image.log` | Qwen-Image-Edit-2511 GGUF + Lightning LoRA + text encoder + VAE, Z-Image-Turbo + Fun ControlNet (~50 GB); runs beside `setup.sh` |
-| ComfyUI server | `start_comfy.py`, `/content/comfy.log` | `main.py --listen 127.0.0.1 --port 8188`, and `nvidia-smi` into `/content/vram.csv` |
+| ComfyUI server | `setsid nohup` over SSH (exec route: `start_comfy.py`), `/content/comfy.log` | `main.py --listen 127.0.0.1 --port 8188` (`--no-comfy-compiler`: plus `--disable-comfy-compiler`), and `nvidia-smi` into `/content/vram.csv` |
 | vidgen (skip with `--no-vidgen`; `--vidgen-only` skips the rows above) | `setup_vidgen.sh`, `/content/setup_vidgen.log` | once: apt `ffmpeg`, LaTeX (`texlive-latex-extra`, `dvisvgm`), cairo/pango, `espeak-ng`, Playwright's Chromium with its libraries; each time the code changes: `src/vidgen` of the working tree (uncommitted changes too, uploaded as `/content/vidgen-src.tar.gz`, nothing from GitHub) installed with its dependencies into `/content/vidgen-venv` (a venv that sees Colab's torch without changing it), linked as `/usr/local/bin/vidgen`; WebGL on the GPU (below) |
 
 **WebGL on the GPU.** Colab ships the NVIDIA libraries in `/usr/lib64-nvidia` but not their vendor
@@ -51,7 +65,8 @@ The HOWTO's §4 and §6 list the repos, files and commits.
 `src/vidgen`'s files, `vidgen.colab.package_hash`; a new hash reinstalls vidgen only), and
 `setup_image.sh` writes `/content/.vidgen_setup_image_done`, after `python /content/vm_state.py
 ltx|image` found every file. A part also counts as done without its marker when all its files are
-there (`vm_state.MODEL_FILES`, plus ComfyUI and its custom nodes for LTX-2.3). A part whose script
+there (`vm_state.MODEL_FILES`, plus ComfyUI and its custom nodes for LTX-2.3); a marker with files
+missing (a session set up before files were added) runs the part's script again. A part whose script
 still runs is waited for, never started twice. So running the command again on a ready session
 takes about 20 s, and after an error it goes on from where it stopped.
 

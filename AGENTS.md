@@ -5798,6 +5798,8 @@ colab stop -s NAME                                 # only when the user says so
 ```
 
 - For no GPU work (renders, ffmpeg), a CPU high-RAM session: `setup_session.py NAME --gpu CPU --high-mem --vidgen-only`.
+- `setup_session.py NAME --no-comfy-compiler` starts ComfyUI with its model compiler off (the node LTX Multi
+  IC-LoRA stalls with it on); run again without it to switch back. Either way a running ComfyUI is restarted.
 - The comfyui provider with `comfyui: {colab: NAME}` runs `vidgen generate run --pay` here and the job on that VM.
 - Synced to `/content/projects/<folder name>/` on the VM with rsync: files deleted here are deleted
   there; `build/`, `output/`, `exports/`, `media/` are never sent (`--exclude DIR` before NAME

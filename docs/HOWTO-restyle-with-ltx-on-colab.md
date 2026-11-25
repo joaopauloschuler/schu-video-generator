@@ -11,7 +11,7 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
 [`howto/ltx-colab-runlog.md`](howto/ltx-colab-runlog.md).
 
 > **Keep the session between experiments, stop it when you are done.** A new session's setup takes
-> ~6 min and 34-80 GB of downloads; `python tools/colab/setup_session.py ltx` on a running `ltx`
+> ~6 min and 35-85 GB of downloads; `python tools/colab/setup_session.py ltx` on a running `ltx`
 > takes ~20 s. An idle L4 still bills ~1.94 units an hour: when the owner says you are done,
 > `colab stop -s ltx` (§10).
 
@@ -108,15 +108,18 @@ redirect). If a repo is gated, stop: never put a token in these scripts. By hand
 | " | " | `text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors` | 2.31 GB |
 | `Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control` | `20a580c8606c06a0988d40375a61309e0fe5893d` | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` | 0.65 GB |
 | `Comfy-Org/ltx-2` | `ccde4ba417d7900669fd56dd292a883cee11ff37` | `split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors` | 13.21 GB |
+| `Comfy-Org/ltx-2.3` | `f20f3a54378001e5e6d642acc84719cc78addf4b` | `split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors` | 1.31 GB |
 
 Use the `distilled_` VAE and connector files (not `dev_`) with the distilled-1.1 transformer.
 `ref0.5`: trained with the control at half the output size; `LTXAddVideoICLoRAGuide` halves it, so
-feed the control at full size.
+feed the control at full size. The Ingredients IC-LoRA (it reads a reference sheet) is the ungated
+Comfy-Org copy; it is linked into `models/loras/` under its own name.
 
 ## 5. Create and set up the session (local)
 
 ```bash
 python tools/colab/setup_session.py ltx      # --no-image: without §6.4's models; --gpu; --latest
+python tools/colab/setup_session.py ltx --no-comfy-compiler   # ComfyUI with its model compiler off
 python tools/colab/setup_session.py cpu1 --gpu CPU --high-mem --vidgen-only   # no GPU work: renders, ffmpeg
 ```
 From the repository root; any name, several sessions side by side. It reuses or creates the session
@@ -125,6 +128,8 @@ starts the setups detached on the VM (`setsid nohup`), installs ComfyUI + LTX-2.
 models side by side, starts ComfyUI, installs vidgen while ComfyUI loads and prints a summary.
 `--high-mem` asks for a high-RAM machine (new sessions; an L4 has one shape); [tools/colab/README.md](../tools/colab/README.md) has the
 details. It never stops the session: after an error run it again (it goes on where it stopped).
+`--no-comfy-compiler` starts ComfyUI with `--disable-comfy-compiler` (§6.2); a re-run with or
+without it restarts a running ComfyUI whose setting differs. The summary says which one runs.
 Test VM: Python 3.13, torch 2.14.1+cu130, CUDA 13.0, L4 23 GB, 52 GB RAM, 236 GB disk.
 
 ## 6. What it installs, and the per-run steps
@@ -145,7 +150,7 @@ vm cat /content/out.png > out.png              # download a file
 
 ### 6.1 Installed versions
 
-`setup.sh` checks out ComfyUI and four custom nodes at these commits (`--latest`: their newest),
+`setup.sh` checks out ComfyUI and five custom nodes at these commits (`--latest`: their newest),
 installs their requirements **without the torch / torchvision / torchaudio lines** (Colab's CUDA
 torch must stay) and links the weights into `ComfyUI/models/`:
 
@@ -156,6 +161,7 @@ torch must stay) and links the weights into `ComfyUI/models/`:
 | `city96/ComfyUI-GGUF` | `6ea2651e7df66d7585f6ffee804b20e92fb38b8a` (2026-01-12) | `UnetLoaderGGUF` |
 | `Kosinkadink/ComfyUI-VideoHelperSuite` | `4d907bee61e92c2e65af3bd6383a4e4d356126d1` (2026-09-01) | `VHS_VideoCombine` (mp4 with audio) |
 | `kijai/ComfyUI-KJNodes` | `187868f53a7d9df007dbfe85891dab41453f7933` (2026-11-23) | `VAELoaderKJ` (separate video / audio VAE files) |
+| `hashu786/comfyui-hrnodes` | `1f91974824c7e4e190d59aae9b38cd9cdd39a590` (2026-07-30) | `LTXMultiICLoRA` ("LTX Multi IC-LoRA": several IC-LoRAs at once, each on its own guide's tokens; no requirements) |
 
 Resulting versions: torch 2.14.1+cu130, torchvision 0.29.1, torchaudio 2.11.0, gguf 0.19.0,
 transformers 5.22.1, numpy 2.4.6, av 19.0.2, safetensors 0.8.0, huggingface_hub 2.4.0,
@@ -166,6 +172,11 @@ comfyui_frontend_package 1.59.11. pip's warning that `datasets` wants hub < 2.0 
 `vm 'tail -n 5 /content/comfy.log; nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader'`
 shows the log and GPU memory (also sampled into `/content/vram.csv`).
 `vm python3 - < object_info.py` prints the inputs of every node used (after a node update).
+
+ComfyUI 0.46's model compiler is on by default. With it on, `LTXMultiICLoRA` stalls at step 0
+(one CPU core busy, the GPU idle); ComfyUI started with `--disable-comfy-compiler`
+(`setup_session.py NAME --no-comfy-compiler`) runs it. The running ComfyUI's flags:
+`vm "pgrep -af '^python main.py'"`.
 
 ### 6.3 Canny control (VM)
 

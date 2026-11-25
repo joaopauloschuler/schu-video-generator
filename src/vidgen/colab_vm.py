@@ -5,8 +5,9 @@
 Actions (``--env`` values stay set in the kernel, so every call passes all the keys,
 ``vidgen.colab.VM_KEYS``, blank when unused). Each is safe to repeat after a dropped call:
 
-- ``state``: the installed vidgen's hash, whether its setup runs, and with ``VIDGEN_PROJECT`` the
-  project's files (path -> SHA-256, ``VIDGEN_EXCLUDE`` top folders left out) and its run;
+- ``state``: the installed vidgen's hash, whether its setup runs, the arguments the running
+  ComfyUI was started with (:func:`comfy_args`), and with ``VIDGEN_PROJECT`` the project's files
+  (path -> SHA-256, ``VIDGEN_EXCLUDE`` top folders left out) and its run;
 - ``begin``: once per run id ``VIDGEN_RUN`` (a repeat only reports the run): with ``VIDGEN_HASH``,
   stop unless the installed vidgen has that hash; extract ``VIDGEN_ARCHIVE`` (.tar or .tar.gz)
   into the project ``VIDGEN_PROJECT``; with ``VIDGEN_CHECK``, stop with the ``missing`` files
@@ -357,9 +358,9 @@ def install_cloudflared(env, proc=Path("/proc")):
     return {"version": version, "installed": True}
 
 
-def running_commands(proc=Path("/proc")):
-    """The command lines of the running processes, each joined with spaces."""
-    lines = []
+def running_argvs(proc=Path("/proc")):
+    """The argument lists of the running processes (from ``/proc/<pid>/cmdline``)."""
+    argvs = []
     for entry in proc.iterdir():
         if entry.name.isdigit():
             try:
@@ -367,8 +368,23 @@ def running_commands(proc=Path("/proc")):
             except OSError:
                 continue
             if raw:
-                lines.append(raw.rstrip(b"\0").replace(b"\0", b" ").decode("utf-8", "replace"))
-    return lines
+                argvs.append(raw.rstrip(b"\0").decode("utf-8", "replace").split("\0"))
+    return argvs
+
+
+def running_commands(proc=Path("/proc")):
+    """The command lines of the running processes, each joined with spaces."""
+    return [" ".join(argv) for argv in running_argvs(proc)]
+
+
+def comfy_args(proc=Path("/proc")):
+    """The arguments after ``main.py`` of the running ComfyUI server on port 8188 (the setup starts it
+    so), or None when none runs."""
+    for argv in running_argvs(proc):
+        mains = [i for i, word in enumerate(argv) if word == "main.py" or word.endswith("/main.py")]
+        if mains and "8188" in argv:
+            return argv[mains[0] + 1:]
+    return None
 
 
 def log_info(path, tail_lines=15, max_bytes=200_000):
@@ -431,7 +447,7 @@ def excluded(env):
 
 
 def state(env, proc=Path("/proc")):
-    reply = {"vidgen": vidgen_state(proc)}
+    reply = {"vidgen": vidgen_state(proc), "comfy": {"args": comfy_args(proc)}}
     if env.get("VIDGEN_PROJECT"):
         project = Path(env["VIDGEN_PROJECT"])
         reply["project"] = {"exists": project.is_dir(), "files": file_hashes(project, excluded(env))}

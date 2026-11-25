@@ -1,6 +1,7 @@
 """Find or create a Google Colab GPU session and set it up for docs/HOWTO-restyle-with-ltx-on-colab.md.
 
-    python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-vidgen | --vidgen-only]
+    python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler]
+                                       [--no-vidgen | --vidgen-only]
 
 Runs on your machine (standard library only, Windows too) and drives the `colab` CLI: it reuses the
 session NAME when `colab sessions` lists it (else `colab new`, retried on 503), then installs
@@ -14,6 +15,11 @@ missing, checks one SSH call right after the session exists (a failure stops it;
 and starts every script with ``setsid nohup ... &`` over SSH; vidgen's setup starts while ComfyUI
 loads. ``--via exec`` keeps the ``colab exec`` route (start_setup.py / start_comfy.py detach the
 scripts from the Jupyter kernel).
+
+ComfyUI starts with its model compiler on; ``--no-comfy-compiler`` starts it with
+``--disable-comfy-compiler`` (needed by the node LTX Multi IC-LoRA). Over SSH a ComfyUI that runs with
+the other setting, or that ran while setup.sh added nodes, is restarted (``vidgen.colab.comfy_args``
+reads its flags on the VM).
 """
 from __future__ import annotations
 
@@ -32,9 +38,9 @@ REPO = TOOLS_DIR.parents[1]
 sys.path.insert(0, str(REPO / "src"))  # this checkout's vidgen.colab, also when an older vidgen is installed
 
 from vidgen.colab import (  # noqa: E402
-    VM_SOURCE_ARCHIVE, Colab as _Colab, ColabError as SetupError, CommandResult, Runner, format_seconds,
-    last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions, run_command, say_now, shown,
-    source_archive, via_arg,
+    NO_COMPILER_FLAG, VM_SOURCE_ARCHIVE, Colab as _Colab, ColabError as SetupError, CommandResult, Runner,
+    comfy_compiler_off, format_seconds, last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions,
+    run_command, say_now, shown, source_archive, via_arg,
 )
 from vidgen import colab_ssh  # noqa: E402
 from vidgen.colab_ssh import SshLink, env_words  # noqa: E402
@@ -60,6 +66,14 @@ SSH_CHECK = "echo vidgen-ssh-ok"
 #: ComfyUI and its VRAM sampler, as start_comfy.py starts them on the exec route.
 COMFY_COMMAND = ["python", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
 VRAM_COMMAND = ["nvidia-smi", "--query-gpu=timestamp,memory.used,utilization.gpu", "--format=csv,noheader", "-l", "1"]
+#: pkill/pgrep patterns of those two processes, anchored at the start of the command line (a shell whose
+#: command text names them does not match).
+COMFY_PATTERN = "^" + " ".join(COMFY_COMMAND[:6])
+VRAM_PATTERN = "^" + " ".join(VRAM_COMMAND[:2])
+#: The add-ons for a base video + a sheet in one LTX run (setup.sh installs them with the LTX part).
+INGREDIENTS_LORA = "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"
+ROUTING_NODE = "comfyui-hrnodes"
+ROUTING_CLASS = "LTXMultiICLoRA"
 #: Poll pauses (s) per route: an SSH call costs about 0.5 s, a `colab exec` 5-15 s.
 POLLS = {"ssh": {"setup": 10.0, "comfy": 3.0, "vidgen": 10.0}, "exec": {"setup": 30.0, "comfy": 10.0, "vidgen": 20.0}}
 
@@ -70,8 +84,9 @@ def parse_state(text: str) -> dict | None:
 
 
 def part_status(part: dict) -> str:
-    """`marker` / `found` (files there, no marker) / `running` / `todo` for one part of vm_state's JSON."""
-    if part["marker"]:
+    """`marker` / `found` (files there, no marker) / `running` / `todo` for one part of vm_state's JSON;
+    a marker with files missing (an older setup, before files were added) counts as not done."""
+    if part["marker"] and not part["missing"]:
         return "marker"
     if part["running"]:
         return "running"
@@ -95,10 +110,23 @@ def setup_command(script: str, env: dict[str, str]) -> str:
         + " echo started $!"
 
 
-def comfy_command() -> str:
-    """Start ComfyUI on 127.0.0.1:8188 and the 1 s VRAM sampler over ssh (as start_comfy.py does)."""
-    return ("cd /content/ComfyUI || exit 3; " + detached(COMFY_COMMAND, "/content/comfy.log", append=True) + " "
+def comfy_command(no_compiler: bool = False) -> str:
+    """Start ComfyUI on 127.0.0.1:8188 (with ``--disable-comfy-compiler`` when ``no_compiler``) and the
+    1 s VRAM sampler over ssh (as start_comfy.py does)."""
+    command = [*COMFY_COMMAND, NO_COMPILER_FLAG] if no_compiler else COMFY_COMMAND
+    return ("cd /content/ComfyUI || exit 3; " + detached(command, "/content/comfy.log", append=True) + " "
             + detached(VRAM_COMMAND, "/content/vram.csv", append=True) + " echo started $!")
+
+
+def comfy_stop_command() -> str:
+    """Stop ComfyUI and the VRAM sampler over ssh: SIGTERM, up to 30 s, then SIGKILL."""
+    comfy, vram = shlex.quote(COMFY_PATTERN), shlex.quote(VRAM_PATTERN)
+    return (f"pkill -f {comfy}; pkill -f {vram}; for i in $(seq 30); do pgrep -f {comfy} > /dev/null || break; "
+            f"sleep 1; done; pkill -9 -f {comfy}; echo stopped")
+
+
+def compiler_word(off: bool) -> str:
+    return "off" if off else "on"
 
 
 def ensure_key(key: Path, say: Callable[[str], None]) -> None:
@@ -135,6 +163,12 @@ class Colab(_Colab):
             raise SetupError(f"SSH to session {self.session} does not work ({why}). To use the old colab exec "
                              f"route instead: python tools/colab/setup_session.py {shown(self.session)} --via exec")
         self.say(f"## SSH to {self.session} works")
+
+    def stop_comfy(self) -> None:
+        """Stop the VM's ComfyUI and VRAM sampler over ssh; raises when the shell did not finish."""
+        result = self.link.call(comfy_stop_command(), 60)
+        if result.returncode != 0 or "stopped" not in result.output:
+            raise SetupError(f"could not stop ComfyUI over ssh on {self.session}: {_last_line(result.output)}")
 
     def start_detached(self, command: str, what: str) -> None:
         """Run a ``setsid nohup ... &`` command over ssh; raises when the shell did not start it."""
@@ -175,6 +209,7 @@ class Report:
     hardware: str = ""
     outcomes: dict[str, str] = field(default_factory=dict)
     models: dict[str, list[str] | None] = field(default_factory=dict)
+    compiler_off: bool | None = None
 
 
 def _log_tail(state: dict, log_name: str) -> str:
@@ -189,9 +224,11 @@ class SessionSetup:
 
     def __init__(self, colab: Colab, pin: bool, clock: Callable[[], float] = time.monotonic,
                  poll_seconds: float = 30.0, setup_limit_seconds: float = 45 * 60,
-                 comfy_poll_seconds: float = 10.0, comfy_limit_seconds: float = 10 * 60) -> None:
+                 comfy_poll_seconds: float = 10.0, comfy_limit_seconds: float = 10 * 60,
+                 no_compiler: bool = False) -> None:
         self.colab = colab
         self.pin = pin
+        self.no_compiler = no_compiler
         self.clock = clock
         self.poll_seconds = poll_seconds
         self.setup_limit_seconds = setup_limit_seconds
@@ -220,7 +257,7 @@ class SessionSetup:
                 if status[part] == "running":
                     self.colab.say(f"## {PART_TITLES[part]}: already running, waiting for it")
             state = self.wait_for_parts(waiting, report, started=set(to_start))
-        state = self.ensure_comfy(state, report, meanwhile)
+        state = self.ensure_comfy(state, report, meanwhile, new_nodes="ltx" in to_start)
         report.models = state["comfy"].get("models") or {}
 
     def start_part(self, part: str) -> dict:
@@ -283,18 +320,48 @@ class SessionSetup:
                                  + ", ".join(PART_SCRIPTS[p] for p in pending) + " still running")
             self.colab.sleep(self.poll_seconds)
 
-    def ensure_comfy(self, state: dict, report: Report, meanwhile: Callable[[], None] | None = None) -> dict:
-        """Start ComfyUI unless it answers or is starting, then wait until it answers."""
+    def restart_reason(self, state: dict, new_nodes: bool, report: Report) -> str:
+        """Why a running ComfyUI must restart ("" when it need not or cannot: only over ssh); sets
+        ``report.compiler_off`` to the running one's setting."""
         comfy = state["comfy"]
-        if comfy["up"]:
+        off = comfy_compiler_off(self.colab) if comfy["up"] or comfy["running"] else None
+        report.compiler_off = self.no_compiler if off is None else off
+        reason = ""
+        if off is not None and off != self.no_compiler:
+            reason = (f"it runs with the model compiler {compiler_word(off)}, "
+                      f"{compiler_word(self.no_compiler)} was asked for")
+        elif off is not None and new_nodes:
+            reason = "setup.sh ran while it was running (new nodes load at start)"
+        if reason and self.colab.via != "ssh":
+            self.colab.say(f"   note: ComfyUI is not restarted on the exec route, but {reason}; "
+                           "restart it by hand (HOWTO) or use the SSH route")
+            return ""
+        return reason
+
+    def ensure_comfy(self, state: dict, report: Report, meanwhile: Callable[[], None] | None = None,
+                     new_nodes: bool = False) -> dict:
+        """Start ComfyUI unless it answers or is starting (over ssh: restart it when its compiler
+        setting differs or ``new_nodes`` were installed while it ran), then wait until it answers."""
+        comfy = state["comfy"]
+        reason = self.restart_reason(state, new_nodes, report)
+        if comfy["up"] and not reason:
             report.outcomes["comfy"] = "reused (already answering)"
             return state
         begin = self.clock()
         verb = "was starting; answers"
-        if not comfy["running"] and self.colab.via == "ssh":
+        if reason:
+            verb = f"restarted (model compiler {compiler_word(self.no_compiler)}); answers"
+            self.colab.say(f"## restarting ComfyUI: {reason}")
+            self.colab.stop_comfy()
+            self.colab.start_detached(comfy_command(self.no_compiler), "ComfyUI")
+            report.compiler_off = self.no_compiler
+            state = self.colab.probe()
+            if not (state["comfy"]["up"] or state["comfy"]["running"]):
+                raise SetupError("ComfyUI stopped right after its restart; " + _log_tail(state, "comfy.log"))
+        elif not comfy["running"] and self.colab.via == "ssh":
             verb = "started; answers"
             self.colab.say("## starting ComfyUI (setsid nohup python main.py)")
-            self.colab.start_detached(comfy_command(), "ComfyUI")
+            self.colab.start_detached(comfy_command(self.no_compiler), "ComfyUI")
             state = self.colab.probe()
             if not (state["comfy"]["up"] or state["comfy"]["running"]):
                 raise SetupError("ComfyUI stopped right after it started; " + _log_tail(state, "comfy.log"))
@@ -439,10 +506,15 @@ def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elap
         for part in PART_SCRIPTS:
             outcome = report.outcomes.get(part, "?") if part in parts else "skipped (--no-image)"
             lines.append(f"   {PART_TITLES[part]}: {outcome}")
-        lines.append(f"   ComfyUI:    {report.outcomes.get('comfy', '?')} on 127.0.0.1:8188 (VM)")
+        compiler = "?" if report.compiler_off is None else compiler_word(report.compiler_off)
+        lines.append(f"   ComfyUI:    {report.outcomes.get('comfy', '?')} on 127.0.0.1:8188 (VM), "
+                     f"model compiler {compiler}" + (f" ({NO_COMPILER_FLAG})" if report.compiler_off else ""))
         if report.models:
             listed = ", ".join(f"{folder} {len(names)}" for folder, names in report.models.items() if names)
             lines.append(f"   models ComfyUI lists: {listed}")
+            listed_lora = "ComfyUI lists it" if INGREDIENTS_LORA in (report.models.get("loras") or []) else "NOT listed"
+            lines.append(f"   base video + sheet: loras/{INGREDIENTS_LORA} ({listed_lora}); node {ROUTING_NODE} "
+                         f"(LTX Multi IC-LoRA, class {ROUTING_CLASS}), both installed by the LTX part")
     lines.append(f"   {VIDGEN_TITLE}: {report.outcomes.get('vidgen', '?') if vidgen else 'skipped (--no-vidgen)'}")
     lines.append("next:")
     if vidgen:
@@ -470,6 +542,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="skip the image models (Qwen-Image-Edit, Z-Image; about 50 GB)")
     parser.add_argument("--latest", action="store_true",
                         help="latest ComfyUI and node commits instead of the tested ones (setup.sh PIN=0)")
+    parser.add_argument("--no-comfy-compiler", action="store_true",
+                        help=f"start ComfyUI with {NO_COMPILER_FLAG} (for LTX Multi IC-LoRA); over SSH a running "
+                             "ComfyUI with the other setting is restarted (without this option: compiler on)")
     which = parser.add_mutually_exclusive_group()
     which.add_argument("--no-vidgen", action="store_true", help="skip installing vidgen (this checkout's code)")
     which.add_argument("--vidgen-only", action="store_true",
@@ -481,6 +556,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("the session name must not be empty or start with '-'")
     if args.gpu == "CPU" and not args.vidgen_only:
         parser.error("a CPU session has no GPU for ComfyUI and LTX-2.3: add --vidgen-only")
+    if args.no_comfy_compiler and (args.vidgen_only or args.via == "exec"):
+        parser.error("--no-comfy-compiler needs ComfyUI over the SSH route: leave out --vidgen-only and --via exec")
     return args
 
 
@@ -516,7 +593,8 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
             # Over ssh vidgen's install starts while ComfyUI loads (setup.sh's pip installs are over by then).
             early = (lambda: vidgen.begin(report)) if vidgen and args.via == "ssh" else None
             SessionSetup(colab, pin=not args.latest, clock=clock, poll_seconds=polls["setup"],
-                         comfy_poll_seconds=polls["comfy"]).run(parts, report, meanwhile=early)
+                         comfy_poll_seconds=polls["comfy"], no_compiler=args.no_comfy_compiler,
+                         ).run(parts, report, meanwhile=early)
         if vidgen:
             vidgen.run(report)
     except (SetupError, KeyboardInterrupt) as exc:

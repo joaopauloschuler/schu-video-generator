@@ -1,5 +1,6 @@
 #!/bin/bash
-# Install ComfyUI + custom nodes and download the LTX-2.3 weights on a Colab VM.
+# Install ComfyUI + custom nodes and download the LTX-2.3 weights on a Colab VM; also the Ingredients
+# IC-LoRA and comfyui-hrnodes (node LTX Multi IC-LoRA) for a base video + a sheet in one run.
 # setup_session.py uploads it with vm_state.py and starts it detached through start_setup.py;
 # progress goes to /content/setup.log (lines starting with ### are the milestones) and
 # /content/download.log. On success it writes /content/.vidgen_setup_ltx_done.
@@ -38,6 +39,7 @@ mkdir -p /content/hf
   dl unsloth/LTX-2.3-GGUF text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors
   dl unsloth/LTX-2.3-GGUF distilled-1.1/ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf
   dl Comfy-Org/ltx-2 split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
+  dl Comfy-Org/ltx-2.3 split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors
   echo "### ALL DOWNLOADS DONE in $(( $(date +%s) - D0 ))s"
 ) > /content/download.log 2>&1 &
 DLPID=$!
@@ -45,7 +47,8 @@ DLPID=$!
 stamp "clone ComfyUI + custom nodes"
 clone() { [ -d "$2/.git" ] || git clone -q "https://github.com/$1.git" "$2"; }
 clone Comfy-Org/ComfyUI /content/ComfyUI
-for repo in Lightricks/ComfyUI-LTXVideo city96/ComfyUI-GGUF Kosinkadink/ComfyUI-VideoHelperSuite kijai/ComfyUI-KJNodes; do
+for repo in Lightricks/ComfyUI-LTXVideo city96/ComfyUI-GGUF Kosinkadink/ComfyUI-VideoHelperSuite kijai/ComfyUI-KJNodes \
+    hashu786/comfyui-hrnodes; do
   clone "$repo" "/content/ComfyUI/custom_nodes/${repo#*/}"
 done
 cd /content/ComfyUI
@@ -55,6 +58,7 @@ if [ "${PIN:-1}" = "1" ]; then
   git -C custom_nodes/ComfyUI-GGUF checkout -q 6ea2651e7df66d7585f6ffee804b20e92fb38b8a
   git -C custom_nodes/ComfyUI-VideoHelperSuite checkout -q 4d907bee61e92c2e65af3bd6383a4e4d356126d1
   git -C custom_nodes/ComfyUI-KJNodes checkout -q 187868f53a7d9df007dbfe85891dab41453f7933
+  git -C custom_nodes/comfyui-hrnodes checkout -q 1f91974824c7e4e190d59aae9b38cd9cdd39a590
 fi
 for d in . custom_nodes/*/; do echo "COMMIT $d $(git -C $d rev-parse HEAD) $(git -C $d log -1 --format=%cd --date=iso)"; done
 
@@ -84,6 +88,7 @@ ln -sf /content/hf/unsloth/LTX-2.3-GGUF/vae/ltx-2.3-22b-distilled_audio_vae.safe
 ln -sf /content/hf/unsloth/LTX-2.3-GGUF/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors $M/text_encoders/
 ln -sf /content/hf/Comfy-Org/ltx-2/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors $M/text_encoders/
 ln -sf /content/hf/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control/ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors $M/loras/
+ln -sf /content/hf/Comfy-Org/ltx-2.3/split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors $M/loras/
 ls -laL $M/unet $M/loras $M/vae $M/text_encoders
 if python /content/vm_state.py ltx; then
   touch /content/.vidgen_setup_ltx_done

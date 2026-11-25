@@ -36,7 +36,8 @@ class FakeVM:
     """A Colab VM as vm_state.py reports it: a started script finishes after `polls_to_finish` probes."""
 
     def __init__(self, ltx: dict | None = None, image: dict | None = None, comfy_up: bool = False,
-                 polls_to_finish: int = 1, fail: str | None = None, vidgen_hash: str | None = LOCAL_HASH) -> None:
+                 polls_to_finish: int = 1, fail: str | None = None, vidgen_hash: str | None = LOCAL_HASH,
+                 compiler_off: bool = False) -> None:
         self.parts = {"ltx": ltx or _part(), "image": image or _part()}
         self.vidgen = {"hash": vidgen_hash, "setup_running": False,
                        "log": {"exists": True, "milestones": ["### vidgen step"], "tail": ["vidgen last line"]}}
@@ -44,9 +45,23 @@ class FakeVM:
         self.done: set[str] = set()
         self.comfy = {"up": comfy_up, "running": comfy_up, "dir": True,
                       "models": {"unet_gguf": ["a.gguf"]} if comfy_up else {}}
+        #: The running ComfyUI's arguments after main.py (colab_vm.py's state), None when none runs.
+        self.comfy_args = self.args_for(compiler_off) if comfy_up else None
         self.polls_to_finish = polls_to_finish
         self.fail = fail
         self.countdown: dict[str, int] = {}
+
+    @staticmethod
+    def args_for(compiler_off: bool) -> list[str]:
+        return setup_session.COMFY_COMMAND[2:] + ([setup_session.NO_COMPILER_FLAG] if compiler_off else [])
+
+    def start_comfy(self, command: str) -> None:
+        self.comfy["running"] = True
+        self.comfy_args = self.args_for(setup_session.NO_COMPILER_FLAG in command)
+
+    def stop_comfy(self) -> None:
+        self.comfy.update(up=False, running=False, models={})
+        self.comfy_args = None
 
     def start(self, part: str) -> None:
         self.parts[part]["running"] = True
@@ -62,7 +77,8 @@ class FakeVM:
             else:
                 self.countdown[part] = left - 1
         if self.comfy["running"] and not self.comfy["up"]:
-            self.comfy.update(up=True, models={"unet_gguf": ["a.gguf"], "loras": ["l.safetensors"]})
+            self.comfy.update(up=True, models={"unet_gguf": ["a.gguf"],
+                                               "loras": ["l.safetensors", setup_session.INGREDIENTS_LORA]})
         logs = {name: {"exists": True, "milestones": [f"### {name} step"], "tail": [f"{name} last line"]}
                 for name in vm_state.LOGS}
         return setup_session.STATE_PREFIX + json.dumps({"parts": self.parts, "comfy": self.comfy, "logs": logs})
@@ -111,7 +127,8 @@ class FakeColabCLI:
                     if self.vm.vidgen_polls > 1:
                         vidgen["setup_running"] = False
                         vidgen["hash"] = None if self.vm.fail == "vidgen" else vidgen["pending"]
-                return setup_session.CommandResult(0, "VIDGEN_VM " + json.dumps({"vidgen": vidgen}))
+                reply = {"vidgen": vidgen, "comfy": {"args": self.vm.comfy_args}}
+                return setup_session.CommandResult(0, "VIDGEN_VM " + json.dumps(reply))
             if script == "start_setup.py":
                 if env["SCRIPT"].endswith("setup_vidgen.sh"):
                     self.vm.vidgen.update(setup_running=True, pending=env["VIDGEN_HASH"])
@@ -119,7 +136,7 @@ class FakeColabCLI:
                     self.vm.start("image" if env["SCRIPT"].endswith("setup_image.sh") else "ltx")
                 return setup_session.CommandResult(0, "started")
             if script == "start_comfy.py":
-                self.vm.comfy["running"] = True
+                self.vm.start_comfy("")
                 return setup_session.CommandResult(0, "comfy pid 1")
         raise AssertionError(f"unexpected call {args}")
 
@@ -175,7 +192,9 @@ def test_parse_sessions_and_state() -> None:
 
 
 def test_part_status_order() -> None:
-    assert setup_session.part_status(_part(marker=True, running=True)) == "marker"
+    assert setup_session.part_status(_part(marker=True, running=True, missing=False)) == "marker"
+    assert setup_session.part_status(_part(marker=True, running=True)) == "running"   # an older setup, files added since
+    assert setup_session.part_status(_part(marker=True)) == "todo"
     assert setup_session.part_status(_part(running=True, missing=False)) == "running"
     assert setup_session.part_status(_part(missing=False)) == "found"
     assert setup_session.part_status(_part()) == "todo"
@@ -193,7 +212,7 @@ def test_existing_ready_session_is_all_skipped() -> None:
     cli = FakeColabCLI(vm, sessions=["ltx"])
     code, lines = _run(cli, ["ltx"])
     assert code == 0
-    assert cli.commands() == ["sessions", "exec colab_vm.py", "exec vm_state.py", "exec colab_vm.py"]
+    assert cli.commands() == ["sessions", "exec colab_vm.py", "exec vm_state.py", "exec colab_vm.py", "exec colab_vm.py"]
     text = "\n".join(lines)
     assert "cloudflared (VM, for transfers): installed (cloudflared version 2026.10.7)" in text
     assert "reused (marker, code c0de)" in text and "vidgen remote ltx render" in text
@@ -302,7 +321,7 @@ def test_no_vidgen_skips_it_and_a_failed_vidgen_setup_shows_its_log() -> None:
                 comfy_up=True, vidgen_hash=None)
     cli = FakeColabCLI(vm, sessions=["s"])
     code, lines = _run(cli, ["s", "--no-vidgen"])
-    assert code == 0 and cli.commands().count("exec colab_vm.py") == 1 and "skipped (--no-vidgen)" in "\n".join(lines)
+    assert code == 0 and cli.commands().count("exec colab_vm.py") == 2 and "skipped (--no-vidgen)" in "\n".join(lines)
     vm.fail = "vidgen"
     code, lines = _run(FakeColabCLI(vm, sessions=["s"]), ["s", "--vidgen-only"])
     text = "\n".join(lines)
@@ -331,12 +350,15 @@ class FakeLink:
             if not self.check_ok:
                 raise setup_session.SetupError("cannot open an SSH connection to s: Connection closed by UNKNOWN port 65535")
             return setup_session.CommandResult(0, "vidgen-ssh-ok")
+        if command == setup_session.comfy_stop_command():
+            self.cli.vm.stop_comfy()
+            return setup_session.CommandResult(0, "stopped")
         assert "setsid nohup" in command and command.rstrip().endswith("echo started $!"), command
         if "setup_vidgen.sh" in command:
             code = command.split("VIDGEN_HASH=")[1].split()[0].strip("'")
             self.cli.vm.vidgen.update(setup_running=True, pending=code)
         elif "main.py" in command:
-            self.cli.vm.comfy["running"] = True
+            self.cli.vm.start_comfy(command)
         else:
             self.cli.vm.start("image" if "setup_image.sh" in command else "ltx")
         return setup_session.CommandResult(0, "started 123")
@@ -453,3 +475,73 @@ def test_high_mem_on_l4_is_passed_on_with_one_ignored_line_and_cpu_needs_vidgen_
     with pytest.raises(SystemExit):
         setup_session.parse_args(["s", "--gpu", "CPU"])
     assert setup_session.parse_args(["s", "--gpu", "CPU", "--vidgen-only"]).high_mem is False
+
+
+def _comfy_starts(link: FakeLink) -> list[str]:
+    return [c for c in link.commands if "main.py" in c or c == setup_session.comfy_stop_command()]
+
+
+def test_no_comfy_compiler_starts_comfyui_with_the_flag_and_the_summary_says_off() -> None:
+    _have_key()
+    cli = FakeColabCLI(FakeVM(polls_to_finish=1, vidgen_hash="old1"))
+    code, lines, link = _run_ssh(cli, ["fresh", "--no-comfy-compiler"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    [start] = _comfy_starts(link)
+    assert "python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch --disable-comfy-compiler >>" in start
+    assert "model compiler off (--disable-comfy-compiler)" in text and "restarting" not in text
+    assert f"loras/{setup_session.INGREDIENTS_LORA} (ComfyUI lists it); node comfyui-hrnodes" in text
+    assert "class LTXMultiICLoRA" in text
+
+
+def test_rerun_switches_a_running_comfyui_compiler_both_ways_and_reuses_a_matching_one() -> None:
+    _have_key()
+    done = {"ltx": _part(marker=True, missing=False), "image": _part(marker=True, missing=False)}
+    vm = FakeVM(**done, comfy_up=True)
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s", "--no-comfy-compiler"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    stop, start = _comfy_starts(link)
+    assert stop == setup_session.comfy_stop_command() and "--disable-comfy-compiler" in start
+    assert "## restarting ComfyUI: it runs with the model compiler on, off was asked for" in text
+    assert "restarted (model compiler off); answers" in text and "model compiler off (" in text
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s", "--no-comfy-compiler"])
+    assert code == 0 and _comfy_starts(link) == [] and "reused (already answering)" in "\n".join(lines)
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s"])
+    text = "\n".join(lines)
+    stop, start = _comfy_starts(link)
+    assert code == 0 and "--disable-comfy-compiler" not in start
+    assert "it runs with the model compiler off, on was asked for" in text and "(VM), model compiler on" in text
+    assert vm.comfy_args == setup_session.COMFY_COMMAND[2:]
+
+
+def test_marker_from_an_older_setup_reruns_setup_sh_and_restarts_comfyui() -> None:
+    _have_key()
+    vm = FakeVM(ltx=_part(marker=True), image=_part(marker=True, missing=False), comfy_up=True)
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s", "--no-image"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    assert any("bash /content/setup.sh" in c for c in link.commands)
+    assert "## restarting ComfyUI: setup.sh ran while it was running" in text
+    assert [c == setup_session.comfy_stop_command() for c in _comfy_starts(link)] == [True, False]
+
+
+def test_exec_route_reports_the_compiler_but_never_restarts_and_rejects_the_option() -> None:
+    vm = FakeVM(ltx=_part(marker=True, missing=False), image=_part(marker=True, missing=False), comfy_up=True,
+                compiler_off=True)
+    code, lines = _run(FakeColabCLI(vm, sessions=["s"]), ["s"])
+    text = "\n".join(lines)
+    assert code == 0 and "note: ComfyUI is not restarted on the exec route" in text
+    assert "reused (already answering) on 127.0.0.1:8188 (VM), model compiler off" in text
+    for argv in (["s", "--no-comfy-compiler", "--via", "exec"], ["s", "--no-comfy-compiler", "--vidgen-only"]):
+        with pytest.raises(SystemExit):
+            setup_session.parse_args(argv)
+    assert setup_session.parse_args(["s", "--no-comfy-compiler"]).no_comfy_compiler is True
+
+
+def test_vm_state_needs_the_ingredients_lora_and_the_routing_node() -> None:
+    assert f"loras/{setup_session.INGREDIENTS_LORA}" in vm_state.MODEL_FILES["ltx"]
+    assert setup_session.ROUTING_NODE in vm_state.CUSTOM_NODES
+    setup_sh = (COLAB_DIR / "setup.sh").read_text(encoding="utf-8")
+    assert "hashu786/comfyui-hrnodes" in setup_sh and "comfyui-hrnodes checkout -q 1f91974824c7e4e1" in setup_sh
+    assert f"dl Comfy-Org/ltx-2.3 split_files/loras/{setup_session.INGREDIENTS_LORA}" in setup_sh

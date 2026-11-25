@@ -6,7 +6,7 @@
 # curl -L: a renamed repo answers with a redirect ("Temporary Redirect"), not JSON.
 set -uo pipefail
 api() { curl -sL "https://huggingface.co/api/models/$1$2"; }
-repos=(unsloth/LTX-2.3-GGUF Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control Comfy-Org/ltx-2 Lightricks/LTX-2.3)
+repos=(unsloth/LTX-2.3-GGUF Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control Comfy-Org/ltx-2 Comfy-Org/ltx-2.3 Lightricks/LTX-2.3)
 IMAGE=0; [ "${1:-}" = --image ] && IMAGE=1
 [ $IMAGE = 1 ] && repos+=(unsloth/Qwen-Image-Edit-2511-GGUF lightx2v/Qwen-Image-Edit-2511-Lightning
   Comfy-Org/Qwen-Image Comfy-Org/Z-Image-Turbo alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1)
@@ -28,6 +28,7 @@ sizes unsloth/LTX-2.3-GGUF vae/ltx-2.3-22b-distilled_video_vae.safetensors vae/l
 sizes unsloth/LTX-2.3-GGUF text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors
 sizes Comfy-Org/ltx-2 split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
 sizes Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors
+sizes Comfy-Org/ltx-2.3 split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors
 if [ $IMAGE = 1 ]; then
   sizes unsloth/Qwen-Image-Edit-2511-GGUF qwen-image-edit-2511-Q4_K_M.gguf
   sizes lightx2v/Qwen-Image-Edit-2511-Lightning Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors

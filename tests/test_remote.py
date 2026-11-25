@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 from vidgen import colab_vm, remote
-from vidgen.colab import Colab, ColabError, CommandResult, files_archive, package_hash, source_archive
+from vidgen.colab import (NO_COMPILER_FLAG, Colab, ColabError, CommandResult, comfy_compiler_off, files_archive,
+                          package_hash, source_archive)
 from vidgen.errors import VidgenError
 
 FAKE_VIDGEN = '''import json, pathlib, sys
@@ -406,3 +407,20 @@ def test_exec_route_keeps_the_tar_sync(setup, monkeypatch: pytest.MonkeyPatch) -
     fake, colab = make()
     assert _run(project, colab, ["validate"]) == 0
     assert fake.names()[:4] == ["sessions", "VIDGEN_ACTION=state", "upload", "VIDGEN_ACTION=begin"]
+
+
+def test_comfy_args_come_from_proc_and_tell_whether_the_compiler_is_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    proc = tmp_path / "proc"
+    for pid, argv in {"7": ["bash", "-c", "cd /content/ComfyUI; python main.py --port 8188"],
+                      "9": ["python", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-comfy-compiler"]}.items():
+        (proc / pid).mkdir(parents=True)
+        (proc / pid / "cmdline").write_bytes(b"\0".join(w.encode() for w in argv) + b"\0")
+    assert colab_vm.comfy_args(proc) == ["--listen", "127.0.0.1", "--port", "8188", "--disable-comfy-compiler"]
+    assert colab_vm.state({}, proc)["comfy"]["args"][-1] == "--disable-comfy-compiler"
+    (proc / "9" / "cmdline").write_bytes(b"python\0other.py\0")
+    assert colab_vm.comfy_args(proc) is None    # a shell whose text names main.py is not ComfyUI
+    replies = iter([{"comfy": {"args": ["--port", "8188", NO_COMPILER_FLAG]}}, {"comfy": {"args": ["--port", "8188"]}},
+                    {"comfy": {"args": None}}])
+    monkeypatch.setattr(Colab, "vm", lambda self, action, **env: next(replies))
+    session = Colab("s")
+    assert [comfy_compiler_off(session) for _ in range(3)] == [True, False, None]

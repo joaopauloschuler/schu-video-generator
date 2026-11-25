@@ -28348,3 +28348,54 @@ project), repo work is generic.
 - **Known gaps**: the HOWTO's `vm` hand commands were not run on a real session (this step touched no Colab
   session). `vm` opens a new SSH connection per call (no ControlMaster).
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_guide.py tests/test_docs.py` (179 passed, 18 s).
+
+## Step 424 — setup for a base video + a sheet in one LTX run (Ingredients IC-LoRA, LTX Multi IC-LoRA, compiler switch)
+
+- **Built** (setup side only; the LTX graph and the project file are Step 425's):
+  - `tools/colab/setup.sh`: downloads `Comfy-Org/ltx-2.3` `split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors`
+    (tokenless `hf download`; repo `"gated": false`, commit `f20f3a54378001e5e6d642acc84719cc78addf4b`, 1,308,778,338 bytes,
+    checked with HEAD/GET) and links it as `ComfyUI/models/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors`; clones
+    `hashu786/comfyui-hrnodes` into `custom_nodes/comfyui-hrnodes`, pinned (PIN=1) to
+    `1f91974824c7e4e190d59aae9b38cd9cdd39a590` (2026-07-30); `--latest` keeps its newest like the other nodes. Its
+    `requirements.txt` is one comment line; the existing requirements loop runs it (pip exits 0 on it, checked).
+  - `tools/colab/vm_state.py`: the LoRA is in `MODEL_FILES["ltx"]`, `comfyui-hrnodes` in `CUSTOM_NODES`, so the LTX part
+    is done only with both. `setup_session.part_status`: a marker with files missing now counts as not done (`running`
+    or `todo`), so a session set up before this step reruns `setup.sh` (idempotent) and gets them.
+  - `setup_session.py --no-comfy-compiler`: ComfyUI starts with `--disable-comfy-compiler` (appended to `COMFY_COMMAND`).
+    Without it the start is as before (compiler on). Over SSH, when ComfyUI already runs, its flags are read
+    (`comfy_compiler_off`); if they differ from what was asked (either way), or `setup.sh` ran this time while it was
+    running (new nodes load only at start), it prints `## restarting ComfyUI: <reason>`, stops it with a separate ssh
+    call (`comfy_stop_command()`: `pkill -f '^python main.py --listen 127.0.0.1 --port 8188'` and the `nvidia-smi`
+    sampler, up to 30 s, then `pkill -9`; patterns anchored at `^` so the ssh shell itself never matches) and starts
+    it again; outcome `restarted (model compiler on|off); answers after ...`. A matching running ComfyUI is reused.
+  - Summary: `ComfyUI: ... on 127.0.0.1:8188 (VM), model compiler on|off (--disable-comfy-compiler)` and
+    `base video + sheet: loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors (ComfyUI lists it | NOT listed); node
+    comfyui-hrnodes (LTX Multi IC-LoRA, class LTXMultiICLoRA), both installed by the LTX part`.
+  - `tools/colab/check_hf.sh` checks `Comfy-Org/ltx-2.3` and the LoRA's size.
+- **Interfaces for Step 425**:
+  - `vidgen.colab.comfy_args(colab: Colab) -> list[str] | None` (arguments after `main.py` of the ComfyUI on port 8188,
+    None when none runs) and `vidgen.colab.comfy_compiler_off(colab: Colab) -> bool | None`; `vidgen.colab.NO_COMPILER_FLAG
+    = "--disable-comfy-compiler"`. They call `colab.vm("state")`, whose reply now has `"comfy": {"args": ...}`
+    (`colab_vm.comfy_args(proc)`, from `/proc/<pid>/cmdline`; works on both routes). `ColabTransport.colab` is the Colab
+    to pass. No state file: `/proc` is what really runs.
+  - Names for the graph: LoRA file `ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors` (loras), node class
+    `LTXMultiICLoRA` (display "LTX Multi IC-LoRA"; trial inputs `ic_lora_count`, `noisy_blend`, `lora_a/b`,
+    `strength_a/b`, `guide_index_a/b`, `enable_a/b`; see the trial's `graphs/T2c_multi_nocompiler_768_25.json`).
+    `setup_session.INGREDIENTS_LORA`, `ROUTING_NODE`, `ROUTING_CLASS` hold them on the tools side.
+- **Decisions**: `/object_info` is not queried by the setup (vm_state reads `/system_stats` and `/models/*` only), so
+  the node's registration is not confirmed there; the summary reports the files. `--via exec` shares the probe but
+  not the start: the exec route refuses `--no-comfy-compiler` (parse error) and never restarts ComfyUI (it prints a note
+  when the setting differs or nodes were added); it does report the compiler setting. `--no-comfy-compiler` with
+  `--vidgen-only` is also a parse error. The flag check adds one `colab_vm` call when ComfyUI already runs (exec-route
+  tests count it).
+- **Known gaps**: nothing ran on a real session (none existed; not allowed). The restart's `pkill` patterns were run
+  here against a dummy `python main.py --listen 127.0.0.1 --port 8188` process (stopped in under 1 s); not on Colab.
+  A restart kills a job running on that ComfyUI. The provider does not check the compiler yet (Step 425).
+- **Files**: `tools/colab/setup.sh`, `setup_session.py`, `vm_state.py`, `check_hf.sh`, `README.md`; `src/vidgen/colab.py`,
+  `src/vidgen/colab_vm.py`; `tests/test_colab_setup_session.py` (+5, fakes know ComfyUI's args and the stop),
+  `tests/test_remote.py` (+1); `docs/HOWTO-restyle-with-ltx-on-colab.md` (§4 row, §5, §6.1 row, §6.2);
+  `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (one line); `tasklist.md`.
+- **How to test**: `PYTHONPATH=src python -m pytest -q -m "slow or not slow" tests/test_colab_setup_session.py
+  tests/test_remote.py tests/test_colab_ssh.py tests/test_colab_rsync.py tests/test_guide.py tests/test_docs.py`
+  (246 passed; `test_the_web_topics_code_runs_in_chromium` needs no `ulimit -v`, Chromium will not start under it);
+  `bash -n tools/colab/setup.sh tools/colab/check_hf.sh`.

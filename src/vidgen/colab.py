@@ -65,6 +65,9 @@ EXEC_SECONDS = 30.0
 RETRY_PAUSES = (3.0, 10.0, 20.0, 30.0)
 #: The routes to the VM (:class:`Colab` ``via``); the first is the default.
 ROUTES = ("ssh", "exec")
+#: ComfyUI's start flag that turns its model compiler off (``LTX Multi IC-LoRA`` stalls at step 0
+#: with the compiler on); ``setup_session.py --no-comfy-compiler`` starts ComfyUI with it.
+NO_COMPILER_FLAG = "--disable-comfy-compiler"
 
 
 def via_arg(parser: argparse.ArgumentParser) -> None:
@@ -366,6 +369,19 @@ class Colab:
             pause = self.retry_pauses[min(attempt, len(self.retry_pauses)) - 1]
             self.say(f"   {what}; retry {attempt + 1}/{self.attempts} in {pause:.0f} s")
             self.sleep(pause)
+
+
+def comfy_args(colab: Colab) -> list[str] | None:
+    """The arguments after ``main.py`` of the ComfyUI running on the session's VM (port 8188, read
+    from ``/proc``), or None when none runs."""
+    return colab.vm("state")["comfy"]["args"]
+
+
+def comfy_compiler_off(colab: Colab) -> bool | None:
+    """Whether the session's running ComfyUI was started with :data:`NO_COMPILER_FLAG` (None: no
+    ComfyUI runs)."""
+    args = comfy_args(colab)
+    return None if args is None else NO_COMPILER_FLAG in args
 
 
 def _package_files(package_dir: Path) -> list[Path]:
