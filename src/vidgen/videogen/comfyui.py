@@ -122,15 +122,17 @@ class Workflow:
         return min(self.max_frames, steps * self.frame_step + 1)
 
     def graph(self, *, control: str, first_frame: str | None, placeholder: str, prompt: str, width: int, height: int,
-              frames: int, seed: int | None, prefix: str, with_audio: bool, sheet: str | None = None) -> dict[str, Any]:
+              frames: int, seed: int | None, prefix: str, with_audio: bool, sheet: str | None = None,
+              text_encoder: str = "cpu") -> dict[str, Any]:
         """The API-format graph (``control`` / ``first_frame`` / ``sheet`` are names in ComfyUI's
-        input folder; ``placeholder`` is loaded and bypassed when there is no first frame)."""
+        input folder; ``placeholder`` is loaded and bypassed when there is no first frame;
+        ``text_encoder``: ``videogen.comfyui.text_encoder``, cpu or gpu)."""
         from vidgen.videogen import ltx_graph
 
         return ltx_graph.graph(
             control_file=control, prefix=prefix, use_first_frame=first_frame is not None, prompt=prompt or ltx_graph.PROMPT,
             width=width, height=height, frames=frames, fps=self.fps, seed=self.seed if seed is None else seed,
-            first_frame_file=first_frame or placeholder, with_audio=with_audio, sheet_file=sheet,
+            first_frame_file=first_frame or placeholder, with_audio=with_audio, sheet_file=sheet, text_encoder=text_encoder,
         )
 
 
@@ -237,8 +239,9 @@ class PreparedJob:
     free_before: bool = False
 
 
-def prepare_job(request: VideoRequest, folder: Path, key: str) -> PreparedJob:
-    """Fit ``request``'s inputs into ``folder`` and build its graph (``key``: names its files in ComfyUI)."""
+def prepare_job(request: VideoRequest, folder: Path, key: str, *, text_encoder: str = "cpu") -> PreparedJob:
+    """Fit ``request``'s inputs into ``folder`` and build its graph (``key``: names its files in ComfyUI;
+    ``text_encoder``: where the graph runs the text encoder, cpu or gpu)."""
     workflow = find_workflow(request.model)
     if workflow is None:
         raise VidgenError(f"{request.model} is no ComfyUI workflow kept with vidgen; workflows: {', '.join(WORKFLOWS)}")
@@ -260,7 +263,7 @@ def prepare_job(request: VideoRequest, folder: Path, key: str) -> PreparedJob:
     graph = workflow.graph(
         control=control.name, first_frame=picture.name if first is not None else None, placeholder=picture.name, prompt=request.prompt,
         width=width, height=height, frames=frames, seed=request.seed, prefix=f"vidgen_{key}", with_audio=request.generate_audio,
-        sheet=sheet.name if sheet is not None else None,
+        sheet=sheet.name if sheet is not None else None, text_encoder=text_encoder,
     )
     return PreparedJob(graph, uploads)
 
@@ -446,9 +449,11 @@ class ComfyUIVideoProvider:
     name = COMFYUI_PROVIDER
 
     def __init__(self, transport: Transport, *, units_per_hour: float = 1.94, poll_timeout: float = 900.0,
-                 poll_seconds: float = 15.0, sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> None:
+                 poll_seconds: float = 15.0, sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
+                 text_encoder: str = "cpu") -> None:
         self.transport = transport
         self.units_per_hour = units_per_hour
+        self.text_encoder = text_encoder   # videogen.comfyui.text_encoder: where the LTX graph runs the text encoder
         self.poll_timeout = poll_timeout
         self.poll_seconds = poll_seconds
         self.sleep = sleep
@@ -481,7 +486,7 @@ class ComfyUIVideoProvider:
         if request.sheet is not None:
             self.check_compiler()
         with tempfile.TemporaryDirectory() as tmp:
-            job = replace(prepare_job(request, Path(tmp), request_hash(request)), free_before=not self.freed)
+            job = replace(prepare_job(request, Path(tmp), request_hash(request), text_encoder=self.text_encoder), free_before=not self.freed)
             if on_sending is not None:
                 on_sending()
             try:

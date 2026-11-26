@@ -5862,8 +5862,9 @@ subjects:
 - Use a G4 session with ComfyUI's compiler off: `python tools/colab/setup_session.py NAME --gpu G4
   --no-comfy-compiler` (it restarts a running ComfyUI whose compiler is on); `generate run --pay`
   refuses a sheet shot otherwise. On a G4, a 5 s clip with a sheet takes about 80 s door to door
-  (53 s in ComfyUI) and peaks at 42.7 GB of VRAM. A G4 bills about 11.2 compute units an hour: set
-  `videogen.comfyui.units_per_hour: 11.2` so the takes record the right units.
+  (53 s in ComfyUI) and peaks at 42.7 GB of VRAM with the text encoder on the GPU. A G4 bills about 11.2 compute units an hour: set
+  `videogen.comfyui.units_per_hour: 11.2` so the takes record the right units. The text encoder runs on the
+  CPU and in RAM (`videogen.comfyui.text_encoder: cpu`, the default); `text_encoder: gpu` puts it in VRAM.
 - **The sheet's background** (`sheet_background:` on the shot, or `videogen.sheet_background:` for all):
   LTX carries the sheet's overall brightness into the clip.
   - `black` (the default): right for outdoor daylight, sea and sky shots and for dark scenes (space,

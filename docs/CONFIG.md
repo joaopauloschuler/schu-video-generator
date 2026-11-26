@@ -2789,6 +2789,7 @@ videogen:
     colab: ltx              # a Colab session set up with tools/colab/setup_session.py
     # url: http://127.0.0.1:8188   # or any ComfyUI server
     units_per_hour: 1.94    # compute units per GPU hour, for the take's record: Colab L4 1.94, G4 11.2 (`colab usage`)
+    text_encoder: cpu       # cpu | gpu: where the LTX graph runs its text encoder (cpu: in RAM, no VRAM; gpu: ComfyUI's default device)
   budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
   key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
   inline_media: images      # images | all (all: audio / video would go inline, which OpenRouter refuses: a plan problem)

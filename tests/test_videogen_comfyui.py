@@ -53,6 +53,34 @@ def test_config_takes_exactly_one_server_and_needs_it_for_comfyui() -> None:
         ComfyuiSettings(url="127.0.0.1:8188")
 
 
+def test_the_text_encoder_runs_on_the_cpu_unless_set_to_gpu() -> None:
+    """Node 3 (DualCLIPLoader) in every LTX graph variant: cpu by default, ComfyUI's default device with gpu."""
+    variants: list[dict[str, Any]] = [{}, {"sheet_file": "s.png"}, {"second_control_file": "d.mp4"}]
+    for kw in variants:
+        assert ltx_graph.graph(control_file="c.mp4", prefix="p", use_first_frame=True, **kw)["3"]["inputs"]["device"] == "cpu"
+        assert ltx_graph.graph(control_file="c.mp4", prefix="p", use_first_frame=True, text_encoder="gpu", **kw)["3"]["inputs"]["device"] == "default"
+    with pytest.raises(ValueError, match="cpu or gpu"):
+        ltx_graph.graph(control_file="c.mp4", prefix="p", use_first_frame=True, text_encoder="tpu")
+    assert ComfyuiSettings(colab="ltx").text_encoder == "cpu"
+
+
+def test_the_text_encoder_setting_reaches_the_graph_from_the_project_config(tmp_path: Path, no_ffmpeg: list[tuple[str, Path]]) -> None:
+    from vidgen.config import parse_config
+    from vidgen.videogen.run import get_provider
+
+    def config(**comfy: Any) -> dict[str, Any]:
+        return {"title": "t", "videogen": {"provider": "comfyui", "comfyui": {"url": "http://127.0.0.1:8188", **comfy}},
+                "scenes": [{"id": "s", "type": "title", "duration": 1, "params": {"title": "x"}}]}
+
+    for comfy, device in (({}, "cpu"), ({"text_encoder": "gpu"}, "default"), ({"text_encoder": "cpu"}, "cpu")):
+        provider = get_provider(parse_config(config(**comfy)).videogen)
+        assert provider.text_encoder == ("gpu" if device == "default" else "cpu")
+        job = comfyui.prepare_job(_request(tmp_path), tmp_path, "k", text_encoder=provider.text_encoder)
+        assert job.graph["3"]["inputs"]["device"] == device
+    with pytest.raises(VidgenError, match="text_encoder"):
+        parse_config(config(text_encoder="cuda"))
+
+
 def test_a_workflow_is_a_model_id_of_a_shot_and_of_videogen_models() -> None:
     assert GeneratedShot(kind="establishing", model=LTX, guide="depth").model == LTX
     assert LTX in VideogenConfig(models={LTX: {}}).models

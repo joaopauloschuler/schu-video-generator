@@ -28846,3 +28846,24 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
   tests/test_videogen_first_frame_in.py tests/test_videogen_shot_chain.py tests/test_videogen_compose.py
   tests/test_videogen_final_guide.py tests/test_remote.py tests/test_guide.py tests/test_docs.py` (384 passed, 30 s);
   `-m slow tests/test_videogen_subjects.py tests/test_videogen_shots.py tests/test_videogen_canny_restyle.py` (12 passed, 22 s).
+
+## Step 432 — the LTX text encoder on the CPU (`videogen.comfyui.text_encoder`)
+- **Built**: the LTX video graph's `DualCLIPLoader` (node 3, gemma + embeddings connectors, `type: ltxv`) gets
+  `device: cpu` by default, so the text encoder runs in RAM and takes no VRAM (14.8 GB on the GPU before). New
+  setting `videogen.comfyui.text_encoder: cpu | gpu` (default `cpu`; `gpu` gives `device: default`, the old graph).
+  All variants of the graph (no sheet, sheet, second control video) follow it. The image-model graphs
+  (`qwen_graph.py`) and the setup scripts are unchanged.
+- **Files**: `src/vidgen/config.py` (`ComfyuiSettings.text_encoder`), `src/vidgen/videogen/ltx_graph.py`
+  (`graph(text_encoder=)`), `src/vidgen/videogen/comfyui.py` (`Workflow.graph(text_encoder=)`,
+  `prepare_job(text_encoder=)`, `ComfyUIVideoProvider(text_encoder=)`), `src/vidgen/videogen/run.py` (`get_provider`
+  passes the setting), `tests/test_videogen_comfyui.py` (+2 tests), `tests/test_videogen_sheet.py` (the saved Step 424
+  and T2c graphs are compared with `text_encoder="gpu"`, as they were sent), `docs/CONFIG.md`, `DESIGN.md` §113.20,
+  `docs/HOWTO-restyle-with-ltx-on-colab.md` (node table), guide + `AGENTS.md`, `tasklist.md`.
+- **Interfaces**: keyword `text_encoder: str = "cpu"` ("cpu" or "gpu") on `ltx_graph.graph`, `Workflow.graph`,
+  `comfyui.prepare_job` and `ComfyUIVideoProvider`; `ltx_graph.graph` raises `ValueError` for another value, the
+  config refuses one with the usual `VidgenError`. The request key is unchanged (the setting is not part of it), so a
+  cached clip made with the encoder on the GPU is reused.
+- **Known gaps**: not yet run on a real GPU. The time of the text step on a CPU, the VRAM saved and that the picture
+  is unchanged are all unmeasured. The subject-panel route (`subjects.py`, Qwen) does not use the setting.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_comfyui.py tests/test_videogen_sheet.py`
+  (34 passed, 7 s); `tests/test_guide.py tests/test_docs.py tests/test_config.py` (202 passed, 15 s).

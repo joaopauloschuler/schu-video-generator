@@ -22433,7 +22433,9 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
 `videogen.provider: comfyui` runs workflows kept with vidgen on a ComfyUI server; no money is paid.
 
 - **Config.** `videogen.comfyui` (`ComfyuiSettings`) takes exactly one of `colab: <session>` or
-  `url: http(s)://...`, and `units_per_hour` (1.94, an L4). `provider: comfyui` without it is a config
+  `url: http(s)://...`, `units_per_hour` (1.94, an L4) and `text_encoder: cpu | gpu` (default cpu: the LTX
+  graph's `DualCLIPLoader`, node 3, gets `device: cpu` and the text encoder takes no VRAM; gpu: `device:
+  default`). `provider: comfyui` without it is a config
   error. A shot's `model:` (and a `videogen.models` key) may be a workflow id as well as `author/name`.
 - **Workflows** (`videogen/comfyui.py`, `Workflow`, `WORKFLOWS`). A workflow declares the guides it
   takes as its control video (`controls`), the optional first frame, and its shape rules: `short_side`

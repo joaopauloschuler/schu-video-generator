@@ -287,7 +287,7 @@ in API format, with GGUF loaders:
 |---|---|---|
 | 1 | `UnetLoaderGGUF` | `ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf` |
 | 2 | `LTXICLoRALoaderModelOnly` | union-control `ref0.5`, strength 1.0; outputs MODEL and `latent_downscale_factor` (2) |
-| 3 | `DualCLIPLoader` | `gemma_3_12B_it_fp8_scaled` + `..._embeddings_connectors`, `type: ltxv` |
+| 3 | `DualCLIPLoader` | `gemma_3_12B_it_fp8_scaled` + `..._embeddings_connectors`, `type: ltxv`, `device: cpu` (vidgen's `videogen.comfyui.text_encoder: gpu` gives `default`) |
 | 4 / 5 | `CLIPTextEncode` | prompt / negative "pc game, console game, video game, cartoon, childish, ugly" |
 | 6 | `LTXVConditioning` | `frame_rate` 24 |
 | 7 / 8 | `VAELoaderKJ` | video VAE / audio VAE, `main_device`, bf16 |

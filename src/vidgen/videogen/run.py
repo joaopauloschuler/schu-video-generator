@@ -78,7 +78,8 @@ def get_provider(settings: VideogenConfig) -> OpenRouterVideoProvider:
 
         assert settings.comfyui is not None
         transport = make_transport(settings.comfyui, poll_timeout=settings.poll_timeout)
-        return ComfyUIVideoProvider(transport, units_per_hour=settings.comfyui.units_per_hour, poll_timeout=settings.poll_timeout)  # type: ignore[return-value]
+        return ComfyUIVideoProvider(transport, units_per_hour=settings.comfyui.units_per_hour, poll_timeout=settings.poll_timeout,
+                                    text_encoder=settings.comfyui.text_encoder)  # type: ignore[return-value]
     if settings.provider == MOCK_PROVIDER:
         from vidgen.videogen.mock import MockVideoProvider
 

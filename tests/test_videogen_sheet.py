@@ -33,15 +33,16 @@ PANELS = "top left, a grey glider from behind; bottom right, a rough open sea"
 
 
 def test_without_a_sheet_the_graph_is_what_it_was() -> None:
-    """The graphs of Step 424's builder (saved in tests/data/ltx_graph/no_sheet.json), byte for byte."""
+    """The graphs of Step 424's builder (saved in tests/data/ltx_graph/no_sheet.json, text encoder on
+    ComfyUI's default device), byte for byte."""
     saved = json.loads((DATA / "no_sheet.json").read_text(encoding="utf-8"))
     wf = WORKFLOWS[LTX]
     now = {
-        "default": ltx_graph.graph(control_file="c.mp4", prefix="p", use_first_frame=True),
+        "default": ltx_graph.graph(control_file="c.mp4", prefix="p", use_first_frame=True, text_encoder="gpu"),
         "workflow_silent_no_first": wf.graph(control="vidgen_k_control.mp4", first_frame=None, placeholder="vidgen_k_first.png", prompt="a glider",
-                                             width=768, height=448, frames=121, seed=7, prefix="vidgen_k", with_audio=False),
+                                             width=768, height=448, frames=121, seed=7, prefix="vidgen_k", with_audio=False, text_encoder="gpu"),
         "workflow_first_audio": wf.graph(control="vidgen_k_control.mp4", first_frame="vidgen_k_first.png", placeholder="vidgen_k_first.png", prompt="",
-                                         width=960, height=512, frames=73, seed=None, prefix="vidgen_k", with_audio=True),
+                                         width=960, height=512, frames=73, seed=None, prefix="vidgen_k", with_audio=True, text_encoder="gpu"),
     }
     for name, graph in now.items():
         assert json.dumps(graph) == json.dumps(saved[name]), name
@@ -52,7 +53,8 @@ def test_with_a_sheet_the_graph_is_the_one_of_trial_run_T2c() -> None:
     t2c = json.loads((DATA / "T2c_multi_nocompiler_768_25.json").read_text(encoding="utf-8"))
     graph = ltx_graph.graph(control_file="trial2_canny_25_768x448.mp4", prefix="t2_T2c_multi_nocompiler_768_25", use_first_frame=False,
                             prompt=t2c["4"]["inputs"]["text"], width=768, height=448, frames=25, seed=42,
-                            first_frame_file="trial2_first_768x448.png", with_audio=False, sheet_file="trial2_sheet_768x448.png")
+                            first_frame_file="trial2_first_768x448.png", with_audio=False, sheet_file="trial2_sheet_768x448.png",
+                            text_encoder="gpu")
     assert graph == t2c
     assert t2c["2"]["class_type"] == "LTXMultiICLoRA" and t2c["41"]["inputs"]["amount"] == 25
     with pytest.raises(ValueError, match="one control video"):

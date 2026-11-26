@@ -41,7 +41,8 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
           second_control_file: str | None = None, first_frame_strength: float = 1.0,
           prompt: str = PROMPT, negative: str = NEGATIVE, width: int = W, height: int = H,
           frames: int = FRAMES, fps: int = FPS, seed: int = SEED,
-          first_frame_file: str = FIRST_FRAME, with_audio: bool = True, sheet_file: str | None = None) -> dict:
+          first_frame_file: str = FIRST_FRAME, with_audio: bool = True, sheet_file: str | None = None,
+          text_encoder: str = "cpu") -> dict:
     """Return the API-format prompt graph for one run.
 
     second_control_file: chain a second LTXAddVideoICLoRAGuide (node 31) after the first,
@@ -50,11 +51,15 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
     with_audio false: the model's own sound is not decoded and the clip is silent.
     sheet_file: a stylesheet picture at width x height, given with the control video (see the
     module docstring); not with second_control_file.
+    text_encoder: "cpu" runs the text encoder (node 3) on the CPU and in RAM, so it takes no VRAM;
+    "gpu" leaves it on ComfyUI's default device.
     """
     if width % 64 or height % 64:
         raise ValueError(f"width and height must be multiples of 64, not {width}x{height}")
     if (frames - 1) % 8:
         raise ValueError(f"frames must be 8k+1 (e.g. 121), not {frames}")
+    if text_encoder not in ("cpu", "gpu"):
+        raise ValueError(f"text_encoder must be cpu or gpu, not {text_encoder!r}")
     if sheet_file and second_control_file:
         raise ValueError("a sheet goes with one control video, not two")
     g = {
@@ -67,7 +72,7 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
         "3": {"class_type": "DualCLIPLoader",
               "inputs": {"clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
                          "clip_name2": "ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
-                         "type": "ltxv", "device": "default"}},
+                         "type": "ltxv", "device": "cpu" if text_encoder == "cpu" else "default"}},
         "4": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["3", 0]}},
         "5": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["3", 0]}},
         "6": {"class_type": "LTXVConditioning",
