@@ -2976,7 +2976,8 @@ scenes:
           sheet_prompt: null                # with sheet: what each panel shows; the prompt starts "Reference sheet: <this>. Generated video: "
           subjects: null                    # ltx-2.3-union-control only, instead of sheet: names from subjects: whose panels make this shot's sheet and its sheet_prompt
           size: null                        # ComfyUI workflows only: WIDTHxHEIGHT in multiples of 64 (e.g. 768x448); default 960x512 for 16:9
-          duration: null                    # ComfyUI workflows only: seconds of the clip (1-5; 1 s = 25 frames, 5 s = 121); default the part's length rounded up
+          duration: null                    # ComfyUI workflows only: seconds of the clip (at most 121 frames: 1-5 s at 24 fps, 1 s = 25 frames, 5 s = 121; 2, 4, 6, 8, 10 s at fps 12); default the part's length rounded up
+          fps: null                         # ComfyUI workflows only: 24 (default) or 12: generated at 12 fps, doubled to 24 fps by RIFE in the same job (up to 10 s per clip)
 ```
 
 - **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
@@ -3066,6 +3067,13 @@ scenes:
   sheet (`"sheet"` in `takes/<shot>/<n>.json`). `size:` and `duration:` set the clip of a ComfyUI workflow
   (e.g. `size: 768x448`, `duration: 5` = 121 frames, `duration: 1` = 25 frames from the start of the part's
   guide; the guide, its last frame held when the part is shorter, and the sheet have the clip's frame count).
+  `fps: 12` generates the clip at 12 fps (the guide fitted at 12 fps, every other frame) and doubles it to
+  24 fps with RIFE 4.26 in the same ComfyUI job, so the stored take is 24 fps like any other. The limit is
+  121 generated frames of 8k+1: 1-5 s at 24 fps, 2, 4, 6, 8 or 10 s at 12 fps (an 8 s clip is 97 frames,
+  the cost of a 4 s one at 24 fps, stored as 193). `generate plan` prints each such shot's frames; a beat is
+  split over 5 s at 24 fps and over 10 s at 12 fps. Each tick or sudden step is spread over 2 frames.
+  `tools/colab/setup.sh` downloads the RIFE weights. `fps` is part of the clip's cache key (`fps: 24` and
+  no `fps:` are the same request).
   `first_frame: none` sends no first frame. On the comfyui provider, `vidgen generate run --pay` unloads
   the models (ComfyUI `POST /free`) once, before its first job, so no picture model stays in the GPU's memory.
 - **Subjects and a composed sheet** (`subjects:` at the top, `subjects: [glider, sea]` on a shot, model

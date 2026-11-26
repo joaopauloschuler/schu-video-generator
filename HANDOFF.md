@@ -28867,3 +28867,55 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
   is unchanged are all unmeasured. The subject-panel route (`subjects.py`, Qwen) does not use the setting.
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_comfyui.py tests/test_videogen_sheet.py`
   (34 passed, 7 s); `tests/test_guide.py tests/test_docs.py tests/test_config.py` (202 passed, 15 s).
+
+## Step 433 — 12 fps generation, doubled to 24 fps with RIFE (`generated_shot.fps`)
+- **Built**: shot key `fps: 12 | 24` (default 24) for vidgen's ComfyUI workflow `ltx-2.3-union-control`, next to
+  `size:` / `duration:`. At 12: the guide is fitted at 12 fps (`fit_control(fps=12)`, every other frame), the graph
+  runs at 12 fps (frame rate on nodes 6, 15; frame count `duration x 12 + 1` on 12, 15, 41) and, after the tiled
+  decode (24), core nodes 50 `FrameInterpolationModelLoader` (`rife_v4.26.safetensors`) + 51 `FrameInterpolate`
+  (multiplier 2) feed node 26 (VHS_VideoCombine) at 24 fps: one ComfyUI job. RIFE gives 2n-1 frames: 49 -> 97 for
+  4 s (exactly the frames of a 24 fps 4 s take), 97 -> 193 for 8 s; the take is placed and trimmed like any other.
+  The length limit is a frame limit: at most 121 generated frames of 8k+1, so 1-5 s at 24 fps and 2, 4, 6, 8, 10 s
+  at 12 fps (odd seconds at 12 fps are not 8k+1 and are refused). The split rule uses that limit (a beat is split
+  over 5 s at 24 fps, over 10 s at 12 fps; parts snap up within the allowed lengths). The plan prints a `frames:`
+  line for every workflow shot. Other models refuse `fps:` (config error; `check_request` problem for a request).
+  `setup.sh` downloads `Comfy-Org/Frame-Interpolation/frame_interpolation/rife_v4.26.safetensors` (ungated, 23 MB)
+  and links it into `models/frame_interpolation/`; `vm_state.py` counts it among the LTX files (an older session
+  runs setup.sh again on the next `setup_session.py`). A ComfyUI without the file refuses the graph; the error then
+  gets the setup command (`comfyui.missing_weights_hint`).
+- **Files**: `src/vidgen/config.py` (`GeneratedShot.fps`, checks), `src/vidgen/videogen/{comfyui,ltx_graph,__init__,models,shots}.py`,
+  `tools/colab/{setup.sh,vm_state.py,check_hf.sh,README.md}`, `tests/test_videogen_fps12.py` (new, 8 tests),
+  `tests/test_colab_setup_session.py` (RIFE in setup.sh / vm_state), `DESIGN.md` §113.20 + new §113.25,
+  `docs/CONFIG.md`, `docs/COOKBOOK-GENERATED-VIDEO.md` (new "An 8 s LTX shot in one clip: `fps: 12`"),
+  `docs/HOWTO-restyle-with-ltx-on-colab.md`, guide + `AGENTS.md`, `tasklist.md`.
+- **Interfaces**: `Workflow.fps_choices`, `max_seconds_at(fps)`, `durations(fps)`, `lengths_text(fps)`,
+  `fps_problem`, `duration_problem`, `frames(seconds, fps=None)`, `stored_frames(frames, fps)`,
+  `Workflow.graph(fps=)`; `ltx_graph.graph(out_fps=)`, `ltx_graph.RIFE_MODEL`; `VideoRequest.fps` (in the key only
+  when set); `shots.generation_fps(spec)` (None for 24 or no `fps:`), `shots.shot_durations(model, spec)`;
+  `comfyui.missing_weights_hint`. `record().durations` is unchanged (1-5).
+- **Key and staleness**: `fps: 12` is a new request key; `fps: 24` and no `fps:` are the same key (the smoke
+  project's 24 fps take read "cached" again after the key was removed). The guide's freshness does not read `fps`:
+  the stored guide stays at the film's rate; the 12 fps control is fitted from it at submit time and is covered by
+  the key. (Deviation from the brief's wording "a 12 fps guide is a different input": no separate 12 fps guide
+  file exists.)
+- **Smoke run (L4 `ltx`, ComfyUI `--disable-comfy-compiler --disable-dynamic-vram --reserve-vram 10`, text encoder
+  CPU)**: `escapement-remake`, `fps: 12` added to `04_escapement_2_b1` (4 s, sheet). My `config.py` change made the
+  shot's guide read stale (config.py is a render input); a local re-cut was killed by the 1.5 GB memory cap
+  (OOM at 72 s), so `setup_session.py ltx --vidgen-only` (44 s) + `vidgen remote ltx generate inputs . --guide
+  --shot 04_escapement_2_b1` (57 s) re-cut it. Then `generate run . --pay --shot 04_escapement_2_b1`: 6 min 48 s
+  door to door, ComfyUI 344.7 s (0.223 units at 2.33/h), the log shows "Frame interpolation 48 steps", peak VRAM
+  18.5 GB (nvidia-smi each second over the run). Take 7: h264 768x448, 24 fps, 97 frames, 4.042 s, decodes, QA ok;
+  frames 0/48/96 next to take 6 (24 fps): same shot and look (gilded balance, blue hairspring, rubies, steel). The
+  key was removed from video.yaml afterwards (file identical to before); take 7 and the re-cut guide stay; nothing
+  picked.
+- **Known gaps**: only a 4 s clip at 12 fps was run through vidgen (8 s at 12 fps only in the FPS12.md experiment,
+  by hand); no clip watched as a moving picture; no 12 fps run with `sound: model` (the audio latent is at 12 fps
+  and 49 frames = 4.08 s of sound under a 4.04 s video; untested). No check before sending for missing RIFE weights
+  (only the hint on ComfyUI's error; not seen for real). `--via exec` and the HTTP transport carry the same graph
+  but were not run.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_fps12.py tests/test_videogen_sheet.py
+  tests/test_videogen_comfyui.py tests/test_videogen_canny_restyle.py tests/test_videogen_subjects.py
+  tests/test_videogen_shots.py tests/test_videogen.py tests/test_videogen_input_freshness.py
+  tests/test_videogen_shot_chain.py tests/test_videogen_chain.py tests/test_guide.py tests/test_docs.py
+  tests/test_config.py` (349 passed, 50 s); `tests/test_colab_setup_session.py tests/test_videogen_fps12.py`
+  (35 passed, 12 s).

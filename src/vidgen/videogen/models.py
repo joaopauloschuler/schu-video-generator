@@ -288,6 +288,8 @@ def check_request(request: VideoRequest, model: VideoModel) -> RequestCheck:
 
         return check_workflow_request(request, model)
     check = RequestCheck()
+    if request.fps is not None:
+        check.problems.append(f"{model.id} makes clips at its own frame rate: fps: is for vidgen's ComfyUI workflows (ltx-2.3-union-control)")
     if request.duration is not None:
         if model.durations is None:
             check.notes.append(f"{model.id} lists no durations (its length follows its inputs): duration {request.duration} is not sent")

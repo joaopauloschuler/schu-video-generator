@@ -5857,6 +5857,7 @@ subjects:
           subjects: [glider, sea]   # at most 4 panels in all
           size: 768x448             # the clip (multiples of 64); default 960x512 for 16:9
           duration: 5               # seconds: 5 = 121 frames, 1 = 25; default the part's length
+          # fps: 12                 # generate at 12 fps (2, 4, 6, 8, 10 s; 8 s = 97 frames), doubled to 24 fps by RIFE
 ```
 
 - Use a G4 session with ComfyUI's compiler off: `python tools/colab/setup_session.py NAME --gpu G4
@@ -5897,7 +5898,16 @@ subjects:
   frame with that seed).
 - One 5 s clip per beat: a beat longer than the model's longest clip (5 s) is split into parts.
   With silent shots, time the beat with a one-word placeholder and `pause:`, e.g. `text: "Gears."`
-  with `pause: 4.6` makes exactly 5.00 s; `generate plan` prints each shot's length.
+  with `pause: 4.6` makes exactly 5.00 s; `generate plan` prints each shot's length and frames.
+- **Up to 10 s in one clip: `fps: 12`.** The limit is 121 generated frames. With `fps: 12` the clip is
+  generated at 12 fps (the guide fitted at 12 fps) and doubled to 24 fps by RIFE in the same ComfyUI
+  job, so the take is 24 fps like any other: `duration:` 2, 4, 6, 8 or 10 (`duration x 12 + 1` must be
+  8k+1; 8 s = 97 frames, the GPU time of a 4 s clip at 24 fps, stored as 193). A beat is split over
+  10 s at 12 fps. For an 8 s shot: `text: "Tick."`, `pause: 7.6`, `duration: 8`, `fps: 12` (the plan
+  shows 8.00 s). Good for slow, steady moves over a long beat (on the L4 test the 8 s clip held its
+  look); the cost: each tick or sudden step is spread over 2 frames (a made-up in-between frame).
+  Keep `fps: 24` (the default) for fast, finely detailed motion. The RIFE weights come with
+  `tools/colab/setup.sh`.
 - A sheet you made yourself instead of `subjects:`: `sheet: FILE` (the clip's aspect ratio; it is scaled,
   never cropped) with `sheet_prompt:` describing its panels (the prompt starts `Reference sheet:
   <sheet_prompt>. Generated video: `). It needs no approval: you supplied it.

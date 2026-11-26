@@ -3565,7 +3565,9 @@ class GeneratedShot(_Strict):
     size: str | None = Field(default=None, pattern=r"^\d+x\d+$")
     """WIDTHxHEIGHT of the clip a ComfyUI workflow makes (multiples of 64, e.g. 768x448); the guide and the restyled first frame are made at it too. Default: the workflow's size for the aspect ratio (16:9: 960x512). Not with resolution:."""
     duration: int | None = Field(default=None, ge=1)
-    """Seconds of the clip a ComfyUI workflow makes (1-5; 24 fps, 8k+1 frames: 1 s = 25 frames, 5 s = 121), instead of the beat part's length rounded up; a shorter clip uses the start of the part's guide, a longer one holds the guide's last frame."""
+    """Seconds of the clip a ComfyUI workflow makes, instead of the beat part's length rounded up to a length it makes (at most 121 frames of 8k+1: 1-5 s at 24 fps, 1 s = 25 frames, 5 s = 121; 2, 4, 6, 8 or 10 s at fps: 12, 8 s = 97 frames); a shorter clip uses the start of the part's guide, a longer one holds the guide's last frame."""
+    fps: int | None = None
+    """Frames a second a ComfyUI workflow generates the clip at: 24 (the default) or 12 (half the frames for the same length, so up to 10 s in one clip at the cost of a 5 s one; the guide is fitted at 12 fps and the clip is doubled to 24 fps by RIFE in the same ComfyUI job, so each tick or sudden step is spread over 2 frames)."""
 
     @field_validator("guide", mode="before")
     @classmethod
@@ -3607,7 +3609,7 @@ class GeneratedShot(_Strict):
         return self
 
     def _check_workflow_keys(self) -> None:
-        """The keys of vidgen's ComfyUI workflows only: sheet, sheet_prompt, size, duration."""
+        """The keys of vidgen's ComfyUI workflows only: sheet, sheet_prompt, size, duration, fps."""
         from vidgen.videogen.comfyui import WORKFLOWS, find_workflow
 
         workflow = find_workflow(self.model)
@@ -3625,7 +3627,7 @@ class GeneratedShot(_Strict):
             if getattr(self, key) is not None and (workflow is None or not workflow.takes_sheet):
                 takers = ", ".join(w.id for w in WORKFLOWS.values() if w.takes_sheet)
                 raise ValueError(f"{key}: is given to vidgen's ComfyUI workflow {takers} (videogen.provider: comfyui), not to {self.model}")
-        for key in ("size", "duration"):
+        for key in ("size", "duration", "fps"):
             if getattr(self, key) is not None and workflow is None:
                 raise ValueError(f"{key}: is for vidgen's ComfyUI workflows (ltx-2.3-union-control), not {self.model}")
         if self.size is not None and workflow is not None:
@@ -3634,8 +3636,10 @@ class GeneratedShot(_Strict):
             width, height = (int(n) for n in self.size.split("x"))
             if width % workflow.size_step or height % workflow.size_step or not width or not height:
                 raise ValueError(f"size: {self.size}: {workflow.id} needs width and height in multiples of {workflow.size_step} (e.g. 768x448, 960x512)")
-        if self.duration is not None and workflow is not None and self.duration > workflow.max_seconds:
-            raise ValueError(f"duration: {workflow.id} makes clips of 1-{workflow.max_seconds} s, not {self.duration}")
+        if workflow is not None and (wrong := workflow.fps_problem(self.fps)) is not None:
+            raise ValueError(f"fps: {wrong}")
+        if workflow is not None and (wrong := workflow.duration_problem(self.duration, self.fps)) is not None:
+            raise ValueError(f"duration: {wrong}")
 
     @property
     def wants_audio(self) -> bool:

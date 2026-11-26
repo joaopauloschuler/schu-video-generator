@@ -19,6 +19,11 @@ routes each to its own LTXAddVideoICLoRAGuide: first the sheet repeated to the c
 (RepeatImageBatch; strength 1, frame 0), then the control video. ComfyUI must run with
 ``--disable-comfy-compiler`` (with the compiler on, the routing node's first step never ends).
 
+With ``out_fps`` above ``fps`` (a clip generated at 12 fps, stored at 24) the decoded frames go
+through ComfyUI's core FrameInterpolationModelLoader + FrameInterpolate (RIFE 4.26, multiplier
+``out_fps / fps``: ``n`` frames become ``2n - 1``) before VHS_VideoCombine, which then writes at
+``out_fps``; the conditioning, the audio latent and the sheet repeat stay at ``fps``.
+
 Standard library only, no vidgen imports: the tools script loads this file by its path.
 """
 
@@ -34,6 +39,8 @@ W, H, FRAMES, FPS, SEED = 960, 512, 121, 24, 42
 FIRST_FRAME = "first_frame_960x512.png"
 UNION_LORA = "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"
 INGREDIENTS_LORA = "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"
+#: The frame interpolation weights (ComfyUI/models/frame_interpolation/, from Comfy-Org/Frame-Interpolation).
+RIFE_MODEL = "rife_v4.26.safetensors"
 
 
 def graph(control_file: str, prefix: str, use_first_frame: bool,
@@ -42,7 +49,7 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
           prompt: str = PROMPT, negative: str = NEGATIVE, width: int = W, height: int = H,
           frames: int = FRAMES, fps: int = FPS, seed: int = SEED,
           first_frame_file: str = FIRST_FRAME, with_audio: bool = True, sheet_file: str | None = None,
-          text_encoder: str = "cpu") -> dict:
+          text_encoder: str = "cpu", out_fps: int | None = None) -> dict:
     """Return the API-format prompt graph for one run.
 
     second_control_file: chain a second LTXAddVideoICLoRAGuide (node 31) after the first,
@@ -53,6 +60,8 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
     module docstring); not with second_control_file.
     text_encoder: "cpu" runs the text encoder (node 3) on the CPU and in RAM, so it takes no VRAM;
     "gpu" leaves it on ComfyUI's default device.
+    out_fps: the frame rate written (default fps); above fps, a whole multiple of it, the clip is
+    interpolated with RIFE (nodes 50, 51) to that rate.
     """
     if width % 64 or height % 64:
         raise ValueError(f"width and height must be multiples of 64, not {width}x{height}")
@@ -62,6 +71,9 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
         raise ValueError(f"text_encoder must be cpu or gpu, not {text_encoder!r}")
     if sheet_file and second_control_file:
         raise ValueError("a sheet goes with one control video, not two")
+    out_fps = out_fps or fps
+    if out_fps < fps or out_fps % fps:
+        raise ValueError(f"out_fps must be fps times a whole number, not {out_fps} for {fps} fps")
     g = {
         "1": {"class_type": "UnetLoaderGGUF",
               "inputs": {"unet_name": "ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"}},
@@ -153,4 +165,9 @@ def graph(control_file: str, prefix: str, use_first_frame: bool,
                               "latent_downscale_factor": ["2", 1]}}
         g["14"]["inputs"].update(positive=["42", 0], negative=["42", 1], latent=["42", 2],
                                  latent_downscale_factor=["2", 2])
+    if out_fps != fps:
+        g["50"] = {"class_type": "FrameInterpolationModelLoader", "inputs": {"model_name": RIFE_MODEL}}
+        g["51"] = {"class_type": "FrameInterpolate",
+                   "inputs": {"interp_model": ["50", 0], "images": ["24", 0], "multiplier": out_fps // fps}}
+        g["26"]["inputs"].update(images=["51", 0], frame_rate=float(out_fps))
     return g

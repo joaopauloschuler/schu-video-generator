@@ -24,6 +24,10 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
   `vidgen generate inputs --guide` and `vidgen generate run --pay` ([CONFIG.md](CONFIG.md)).
 - **A stylesheet with the base video** (`sheet:` + `sheet_prompt:` on the shot, `size:` / `duration:` for
   the clip, ComfyUI started with `--no-comfy-compiler`): §7.1.
+- **Longer clips at 12 fps** (`fps: 12` on the shot): generated at 12 fps (2-10 s in even seconds, at most
+  121 frames), doubled to 24 fps by RIFE 4.26 in the same ComfyUI job (§7.1, nodes 50 / 51). An 8 s clip is
+  97 frames, the cost of a 4 s clip at 24 fps; each tick or sudden step is spread over 2 frames.
+  `setup.sh` downloads the weights (`Comfy-Org/Frame-Interpolation`, ungated, 23 MB).
 - **Sheets made by vidgen** (`subjects:` at the top, `subjects: [glider, sea]` on the shot): `vidgen remote
   NAME generate subjects` makes each subject's panels with Qwen-Image-Edit on the session's ComfyUI, all in one
   batch (about 10 s a panel on a G4), then unloads the model once, and writes `sheets/<subject>/contact.png`;
@@ -119,6 +123,7 @@ redirect). If a repo is gated, stop: never put a token in these scripts. By hand
 | `Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control` | `20a580c8606c06a0988d40375a61309e0fe5893d` | `ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors` | 0.65 GB |
 | `Comfy-Org/ltx-2` | `ccde4ba417d7900669fd56dd292a883cee11ff37` | `split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors` | 13.21 GB |
 | `Comfy-Org/ltx-2.3` | `f20f3a54378001e5e6d642acc84719cc78addf4b` | `split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors` | 1.31 GB |
+| `Comfy-Org/Frame-Interpolation` | `aa7009be4d1471ea0bac91d6fe4d7e4b637cbbfc` | `frame_interpolation/rife_v4.26.safetensors` (12 fps shots) | 0.02 GB |
 
 Use the `distilled_` VAE and connector files (not `dev_`) with the distilled-1.1 transformer.
 `ref0.5`: trained with the control at half the output size; `LTXAddVideoICLoRAGuide` halves it, so
@@ -316,6 +321,17 @@ the graph; VHS output. Single stage, no upscaler.
 | 40 / 41 | `LoadImage` + `RepeatImageBatch` | the sheet at the output size, repeated to the clip's frame count |
 | 42 | `LTXAddVideoICLoRAGuide` | the sheet: frame_idx 0, strength 1.0, `latent_downscale_factor` from node 2 output 1; fed by node 6 and node 13 |
 | 14 | `LTXAddVideoICLoRAGuide` | the control, chained after 42, `latent_downscale_factor` from node 2 output 2 |
+
+**At 12 fps** (a shot's `fps: 12`): frame rate 12 on nodes 6 and 15, the frame count (`duration x 12 + 1`)
+on 12, 15 and 41, and after the decode:
+
+| id | node | key settings |
+|---|---|---|
+| 50 | `FrameInterpolationModelLoader` (core) | `rife_v4.26.safetensors` in `models/frame_interpolation/` |
+| 51 | `FrameInterpolate` (core) | images from node 24, multiplier 2: n frames become 2n - 1 |
+| 26 | `VHS_VideoCombine` | images from node 51, 24 fps |
+
+On an L4 the interpolation took 3-4 s and about 550 MiB of VRAM (FPS12.md, 2026-11-26).
 
 The prompt starts `Reference sheet: <the panels>. Generated video: `. ComfyUI must run with
 `--disable-comfy-compiler` (§6.2): vidgen checks it before sending such a shot and refuses otherwise.

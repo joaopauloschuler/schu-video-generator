@@ -560,6 +560,9 @@ def test_vm_state_needs_the_ingredients_lora_and_the_routing_node() -> None:
     setup_sh = (COLAB_DIR / "setup.sh").read_text(encoding="utf-8")
     assert "hashu786/comfyui-hrnodes" in setup_sh and "comfyui-hrnodes checkout -q 1f91974824c7e4e1" in setup_sh
     assert f"dl Comfy-Org/ltx-2.3 split_files/loras/{setup_session.INGREDIENTS_LORA}" in setup_sh
+    assert "frame_interpolation/rife_v4.26.safetensors" in vm_state.MODEL_FILES["ltx"]
+    assert "dl Comfy-Org/Frame-Interpolation frame_interpolation/rife_v4.26.safetensors" in setup_sh
+    assert "/frame_interpolation/rife_v4.26.safetensors $M/frame_interpolation/" in setup_sh
 
 
 def test_the_summary_names_the_sessions_rate_and_the_units_per_hour_to_set() -> None:

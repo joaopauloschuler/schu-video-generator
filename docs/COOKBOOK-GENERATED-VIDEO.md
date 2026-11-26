@@ -541,6 +541,43 @@ stand-ins).
 - Labels and name tags are never in a pass (only the 3D shapes), and the guide is the draft's
   low resolution: it is for layout and motion, not detail.
 
+### An 8 s LTX shot in one clip: `fps: 12` (ComfyUI)
+
+vidgen's ComfyUI workflow `ltx-2.3-union-control` makes at most 121 frames per clip: 5 s at 24 fps. With
+`fps: 12` on the shot it generates at 12 fps (up to 10 s: 2, 4, 6, 8 or 10 s), fits the guide at 12 fps
+and doubles the clip to 24 fps with RIFE in the same ComfyUI job, so the take is a normal 24 fps clip. An
+8 s clip at 12 fps is 97 frames: it costs the same GPU time as a 4 s clip at 24 fps (about 7 min on an L4
+with a sheet). Time a silent beat with a one-word placeholder and `pause:` so the plan shows exactly
+8.00 s (here a 0.4 s word, as `pause: 3.6` makes 4.00 s in the same project):
+
+```yaml
+      - text: "Tick."
+        pause: 7.6                      # the beat (word + pause) = 8.00 s
+        generated_shot:
+          kind: establishing
+          model: ltx-2.3-union-control
+          guide: canny
+          subjects: [escapement, plate]
+          size: 768x448
+          duration: 8                   # 8 x 12 + 1 = 97 frames (8k+1); 5, 7 or 9 s are refused at 12 fps
+          fps: 12                       # stored as 193 frames at 24 fps
+```
+
+`vidgen generate plan` prints `length: 8 s` and `frames: 97 generated at 12 fps (...), doubled by RIFE in
+the same ComfyUI job to 193 at 24 fps`; at 24 fps the same beat is split into two 4 s parts. Check the
+plan's shot line says `8.00 s`: a longer beat snaps up to 10 s (the clip is trimmed), a beat over 10 s is
+split.
+
+- **When it is a good idea:** slow camera moves and steady motion over a long beat (one continuous clip
+  instead of two that may not match at the cut), or a 4 s shot for less GPU time (49 frames). In the
+  experiment (FPS12.md in the escapement-remake project) an 8 s clip held its look over the whole length
+  and followed the guide as well as 24 fps.
+- **Its cost:** each tick or sudden step is spread over 2 frames instead of 1 (the frame between two
+  model frames is made up), so a sharp snap reads a little softer. Fast motion with fine detail (spinning
+  spokes, flicker) can show it more; keep `fps: 24` for those.
+- The ComfyUI must have the RIFE weights (`tools/colab/setup.sh` downloads them; a session set up before
+  needs `setup_session.py NAME` again). `fps:` is for vidgen's ComfyUI workflows only.
+
 ## 7. Takes, QA and picking
 
 Each clip becomes `takes/<shot>/<n>.mp4` with `<n>.json` (model, cost, QA) and

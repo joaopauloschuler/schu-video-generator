@@ -1,6 +1,7 @@
 #!/bin/bash
 # Install ComfyUI + custom nodes and download the LTX-2.3 weights on a Colab VM; also the Ingredients
-# IC-LoRA and comfyui-hrnodes (node LTX Multi IC-LoRA) for a base video + a sheet in one run.
+# IC-LoRA and comfyui-hrnodes (node LTX Multi IC-LoRA) for a base video + a sheet in one run, and the
+# RIFE 4.26 frame interpolation weights (core node FrameInterpolate) that double a 12 fps clip to 24 fps.
 # setup_session.py uploads it with vm_state.py and starts it detached through start_setup.py;
 # progress goes to /content/setup.log (lines starting with ### are the milestones) and
 # /content/download.log. On success it writes /content/.vidgen_setup_ltx_done.
@@ -40,6 +41,7 @@ mkdir -p /content/hf
   dl unsloth/LTX-2.3-GGUF distilled-1.1/ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf
   dl Comfy-Org/ltx-2 split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
   dl Comfy-Org/ltx-2.3 split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors
+  dl Comfy-Org/Frame-Interpolation frame_interpolation/rife_v4.26.safetensors
   echo "### ALL DOWNLOADS DONE in $(( $(date +%s) - D0 ))s"
 ) > /content/download.log 2>&1 &
 DLPID=$!
@@ -81,7 +83,7 @@ cat /content/download.log
 
 stamp "link models into ComfyUI/models"
 M=/content/ComfyUI/models
-mkdir -p $M/unet $M/loras $M/vae $M/text_encoders $M/diffusion_models
+mkdir -p $M/unet $M/loras $M/vae $M/text_encoders $M/diffusion_models $M/frame_interpolation
 ln -sf /content/hf/unsloth/LTX-2.3-GGUF/distilled-1.1/ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf $M/unet/
 ln -sf /content/hf/unsloth/LTX-2.3-GGUF/vae/ltx-2.3-22b-distilled_video_vae.safetensors $M/vae/
 ln -sf /content/hf/unsloth/LTX-2.3-GGUF/vae/ltx-2.3-22b-distilled_audio_vae.safetensors $M/vae/
@@ -89,7 +91,8 @@ ln -sf /content/hf/unsloth/LTX-2.3-GGUF/text_encoders/ltx-2.3-22b-distilled_embe
 ln -sf /content/hf/Comfy-Org/ltx-2/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors $M/text_encoders/
 ln -sf /content/hf/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control/ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors $M/loras/
 ln -sf /content/hf/Comfy-Org/ltx-2.3/split_files/loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors $M/loras/
-ls -laL $M/unet $M/loras $M/vae $M/text_encoders
+ln -sf /content/hf/Comfy-Org/Frame-Interpolation/frame_interpolation/rife_v4.26.safetensors $M/frame_interpolation/
+ls -laL $M/unet $M/loras $M/vae $M/text_encoders $M/frame_interpolation
 if python /content/vm_state.py ltx; then
   touch /content/.vidgen_setup_ltx_done
   stamp "SETUP DONE"

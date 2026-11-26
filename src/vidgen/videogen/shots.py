@@ -7,7 +7,9 @@ dry-run plan of ``vidgen generate plan``.
   the shortest length it allows that covers it (:func:`~vidgen.videogen.models.snap_duration`;
   the clip is trimmed later); a beat longer than the model's longest clip is split into equal
   parts (``<beat>_p2``...). A model without lengths (heygen/avatar-iv) follows its audio: the
-  beat's length is sent as nothing and priced in whole seconds.
+  beat's length is sent as nothing and priced in whole seconds. A ComfyUI workflow's lengths
+  depend on the shot's ``fps:`` (:func:`shot_durations`: at most 121 frames, 1-5 s at 24 fps,
+  2-10 s in even seconds at 12 fps).
 - **Inputs** (made by :mod:`vidgen.videogen.inputs` into ``build/videogen/<shot>/``): the
   beat's voice cut to the part (``audio.mp3``; ``audio: mix``: the film's sound over the part), a
   silent low-resolution render of the part (``guide.mp4``; ``guide: final``: the finished render,
@@ -299,12 +301,31 @@ class Shot:
             frame_images=tuple(i.media() for i in self.inputs if i.frame),
             references=tuple(i.media() for i in self.inputs if not i.frame), seed=self.spec.seed,
             generate_audio=self.sound == "model", sheet=MediaInput("image", path=self.sheet) if self.sheet is not None else None,
+            fps=generation_fps(self.spec),
         )
 
     @property
     def priced_seconds(self) -> float | None:
         """Seconds a model without lengths is priced for (the part, rounded up), else ``None``."""
         return float(math.ceil(self.length - 1e-9)) if self.duration is None else None
+
+
+def generation_fps(spec: GeneratedShot) -> int | None:
+    """The frame rate a shot's request asks its ComfyUI workflow to generate at: ``fps:`` when it is
+    not the workflow's own (``None``: the workflow's own, so a shot with ``fps: 24`` keeps the key of one without)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(spec.model)
+    return None if spec.fps is None or workflow is None or spec.fps == workflow.fps else spec.fps
+
+
+def shot_durations(model: VideoModel, spec: GeneratedShot) -> tuple[int, ...] | None:
+    """The clip lengths ``model`` makes for ``spec``: a ComfyUI workflow's at the shot's ``fps:``,
+    else the model's list (``None``: it takes no length)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(model.id)
+    return workflow.durations(spec.fps) if workflow is not None else model.durations
 
 
 def guide_name(source: str, *, opening: bool = False) -> str:
@@ -971,8 +992,9 @@ def _beat_shots(
     if spec.kind == "talking" and spec.characters:
         speaker = chosen[0] if chosen else speaker
     parts = 1
-    if model is not None and model.durations:
-        parts = max(1, math.ceil(window / max(model.durations) - 1e-9))
+    durations = shot_durations(model, spec) if model is not None else None
+    if durations:
+        parts = max(1, math.ceil(window / max(durations) - 1e-9))
     length = window / parts
     shots = []
     for k in range(parts):
@@ -985,14 +1007,15 @@ def _beat_shots(
         if model is not None:
             # a chained part's take starts its lead frames early (``config.format.fps``)
             lead = lead_frames(k + 1, spec.first_frame_source) / config.format.fps
-            shot.duration = spec.duration or (snap_duration(length + lead, model.durations) if model.durations else None)
+            shot.duration = spec.duration or (snap_duration(length + lead, durations) if durations else None)
             shot.resolution = None if spec.size else spec.resolution or lowest_resolution(model)
             shot.aspect_ratio = spec.aspect_ratio or pick_aspect(config, model)
             if spec.duration is not None and spec.duration < length - 1e-6:
                 shot.notes.append(f"duration: {spec.duration} s is shorter than the part ({length:.2f} s): the clip follows the start of the part's guide")
             if parts > 1 and k == 0:
-                longest = max(model.durations or [0])
-                shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({longest} s): split into {parts} parts; "
+                longest = max(durations or [0])
+                at = f" at {spec.fps} fps" if spec.fps is not None and model.provider == COMFYUI_PROVIDER else ""
+                shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip{at} ({longest} s): split into {parts} parts; "
                                   f"for one clip, make the beat at most {longest} s (its words plus pause:)")
         if spec.first_frame == "none" and spec.first_frame_prompt is not None and k == 0:
             shot.notes.append("first_frame_prompt: is not used with first_frame: none (kept for first_frame: restyled)")
@@ -1064,6 +1087,8 @@ class ShotPlan:
             else:
                 trim = shot.duration - shot.length
                 lines.append(f"  length: asks for {shot.duration} s, trimmed to {shot.length:.2f} s later" if trim > 1e-6 else f"  length: {shot.duration} s")
+                if (frames := _frames_line(shot)) is not None:
+                    lines.append(frames)
         lines.append(f"  sound: {shot.sound} ({SOUND_WHAT[shot.sound]})")
         if shot.first_frame_in == "guide":
             shown = _shown(shot.opening_picture, root) if shot.opening_picture is not None else "none"
@@ -1100,6 +1125,22 @@ class ShotPlan:
         lines += [f"  blocked: {b}" for b in shot.blocked]
         lines.append(f"  prompt: {shot.prompt}")
         return lines
+
+
+def _frames_line(shot: Shot) -> str | None:
+    """A ComfyUI workflow shot's frames as the plan shows them (``None``: no workflow)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(shot.spec.model)
+    if workflow is None or shot.duration is None:
+        return None
+    fps = shot.spec.fps or workflow.fps
+    frames = workflow.frames(shot.duration, fps)
+    limit = f"at most {workflow.max_frames}: {workflow.lengths_text(fps)} s at {fps} fps"
+    if fps == workflow.fps:
+        return f"  frames: {frames} at {fps} fps ({limit})"
+    return (f"  frames: {frames} generated at {fps} fps ({limit}), doubled by RIFE in the same ComfyUI job "
+            f"to {workflow.stored_frames(frames, fps)} at {workflow.fps} fps")
 
 
 def _shown(path: Path, root: Path) -> str:

@@ -24,6 +24,7 @@ MODEL_FILES = {
         "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors",
         "loras/ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
         "loras/ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors",
+        "frame_interpolation/rife_v4.26.safetensors",
     ),
     "image": (
         "unet/qwen-image-edit-2511-Q4_K_M.gguf",

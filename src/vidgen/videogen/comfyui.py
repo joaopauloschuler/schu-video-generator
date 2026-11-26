@@ -2,8 +2,8 @@
 
 A workflow (:class:`Workflow`, :data:`WORKFLOWS`) is a model id kept with vidgen: its inputs
 (a control video from the shot's ``guide``, an optional first frame, the prompt), its shape rules
-(width and height in multiples of 64, ``8k+1`` frames, 24 fps) and its graph
-(:mod:`.ltx_graph`). It shows in the model list (:meth:`Workflow.record`) and costs $0.
+(width and height in multiples of 64, ``8k+1`` frames, at most 121 of them, made at 24 fps or at
+12 fps and then doubled to 24 fps by RIFE in the same job) and its graph (:mod:`.ltx_graph`). It shows in the model list (:meth:`Workflow.record`) and costs $0.
 
 :class:`ComfyUIVideoProvider` has the OpenRouter provider's interface (submit, status, wait,
 download), so :func:`vidgen.videogen.run.generate_clip` caches, records and keeps its clips the
@@ -68,13 +68,15 @@ VM_JOBS = "/content/vidgen-comfyui"
 class Workflow:
     """A ComfyUI workflow kept with vidgen: its id, the guides it takes as its control video, and
     its shape rules (``short_side`` and sizes in multiples of ``size_step``; ``frame_step * k + 1``
-    frames up to ``max_frames`` at ``fps``)."""
+    frames up to ``max_frames``, generated at one of ``fps_choices``; the clip vidgen stores is at
+    ``fps``: a clip generated at a lower rate is doubled to it by RIFE in the same job)."""
 
     id: str
     name: str
     description: str
     controls: tuple[str, ...]
     fps: int = 24
+    fps_choices: tuple[int, ...] = (12, 24)
     short_side: int = 512
     size_step: int = 64
     frame_step: int = 8
@@ -89,15 +91,51 @@ class Workflow:
 
     @property
     def max_seconds(self) -> int:
-        """The longest whole-second clip it makes."""
-        return (self.max_frames - 1) // self.fps
+        """The longest whole-second clip it makes at :attr:`fps`."""
+        return self.max_seconds_at(self.fps)
+
+    def max_seconds_at(self, fps: int | None) -> int:
+        """The longest whole-second clip it generates at ``fps`` (``None``: :attr:`fps`)."""
+        return (self.max_frames - 1) // (fps or self.fps)
+
+    def durations(self, fps: int | None = None) -> tuple[int, ...]:
+        """The whole-second lengths it makes at ``fps`` (``None``: :attr:`fps`): ``seconds x fps + 1``
+        frames must be ``frame_step * k + 1`` and at most :attr:`max_frames` (24 fps: 1-5 s; 12 fps: 2, 4, 6, 8, 10 s)."""
+        rate = fps or self.fps
+        return tuple(d for d in range(1, self.max_seconds_at(rate) + 1) if (d * rate) % self.frame_step == 0)
+
+    def lengths_text(self, fps: int | None = None) -> str:
+        """:meth:`durations` as messages show them (``1-5``; ``2, 4, 6, 8, 10``)."""
+        lengths = self.durations(fps)
+        if len(lengths) > 2 and lengths == tuple(range(lengths[0], lengths[-1] + 1)):
+            return f"{lengths[0]}-{lengths[-1]}"
+        return ", ".join(map(str, lengths))
+
+    def fps_problem(self, fps: int | None) -> str | None:
+        """Why ``fps`` is no frame rate it generates at (``None``: it is, or none was given)."""
+        if fps is None or fps in self.fps_choices:
+            return None
+        return f"{self.id} generates at {' or '.join(map(str, self.fps_choices))} fps, not {fps}"
+
+    def duration_problem(self, seconds: int | None, fps: int | None) -> str | None:
+        """Why a clip of ``seconds`` at ``fps`` cannot be made (``None``: it can, or no length was given)."""
+        rate = fps or self.fps
+        if seconds is None or seconds in self.durations(rate):
+            return None
+        frames = seconds * rate + 1
+        allowed = self.lengths_text(rate)
+        if frames > self.max_frames:
+            why = f"{frames} frames, over its {self.max_frames}"
+        else:
+            why = f"{frames} frames, not {self.frame_step}k+1"
+        return f"{self.id} makes clips of {allowed} s at {rate} fps, not {seconds} s ({why})"
 
     def record(self) -> VideoModel:
         """Its entry in the model list."""
         from vidgen.videogen.models import VideoModel
 
         return VideoModel(
-            id=self.id, name=self.name, description=self.description, durations=tuple(range(1, self.max_seconds + 1)),
+            id=self.id, name=self.name, description=self.description, durations=self.durations(),
             resolutions=(self.resolution,), frame_types=("first_frame",), generate_audio=True, seed=True, provider=COMFYUI_PROVIDER,
         )
 
@@ -116,23 +154,33 @@ class Workflow:
         long = self.size_step * math.ceil(self.short_side * max(ratio, 1 / ratio) / self.size_step - 1e-9)
         return (long, self.short_side) if ratio >= 1 else (self.short_side, long)
 
-    def frames(self, seconds: float) -> int:
-        """The frame count for ``seconds``: at least that long, ``frame_step * k + 1``, at most :attr:`max_frames`."""
-        steps = math.ceil(max(seconds, 1 / self.fps) * self.fps / self.frame_step - 1e-9)
+    def frames(self, seconds: float, fps: int | None = None) -> int:
+        """The frame count generated for ``seconds`` at ``fps`` (``None``: :attr:`fps`): at least that
+        long, ``frame_step * k + 1``, at most :attr:`max_frames`."""
+        rate = fps or self.fps
+        steps = math.ceil(max(seconds, 1 / rate) * rate / self.frame_step - 1e-9)
         return min(self.max_frames, steps * self.frame_step + 1)
+
+    def stored_frames(self, frames: int, fps: int | None = None) -> int:
+        """The frames of the clip vidgen stores for ``frames`` generated at ``fps``: the same at
+        :attr:`fps`; doubled by RIFE (``2n - 1``: one made-up frame between each two) below it."""
+        multiplier = self.fps // (fps or self.fps)
+        return (frames - 1) * multiplier + 1
 
     def graph(self, *, control: str, first_frame: str | None, placeholder: str, prompt: str, width: int, height: int,
               frames: int, seed: int | None, prefix: str, with_audio: bool, sheet: str | None = None,
-              text_encoder: str = "cpu") -> dict[str, Any]:
+              text_encoder: str = "cpu", fps: int | None = None) -> dict[str, Any]:
         """The API-format graph (``control`` / ``first_frame`` / ``sheet`` are names in ComfyUI's
         input folder; ``placeholder`` is loaded and bypassed when there is no first frame;
-        ``text_encoder``: ``videogen.comfyui.text_encoder``, cpu or gpu)."""
+        ``text_encoder``: ``videogen.comfyui.text_encoder``, cpu or gpu; ``fps``: the rate it
+        generates at, ``None`` for :attr:`fps`; below it the graph doubles the clip to :attr:`fps`)."""
         from vidgen.videogen import ltx_graph
 
         return ltx_graph.graph(
             control_file=control, prefix=prefix, use_first_frame=first_frame is not None, prompt=prompt or ltx_graph.PROMPT,
-            width=width, height=height, frames=frames, fps=self.fps, seed=self.seed if seed is None else seed,
+            width=width, height=height, frames=frames, fps=fps or self.fps, seed=self.seed if seed is None else seed,
             first_frame_file=first_frame or placeholder, with_audio=with_audio, sheet_file=sheet, text_encoder=text_encoder,
+            out_fps=self.fps,
         )
 
 
@@ -174,8 +222,10 @@ def check_workflow_request(request: VideoRequest, model: VideoModel) -> RequestC
     left_out = [r.kind for r in request.references if r.kind != "video"]
     if left_out:
         check.notes.append(f"{model.id} takes no reference pictures or sound: {len(left_out)} reference(s) are not sent")
-    if request.duration is not None and request.duration > workflow.max_seconds:
-        check.problems.append(f"{model.id} makes clips of 1-{workflow.max_seconds} s, not {request.duration}")
+    if (wrong_fps := workflow.fps_problem(request.fps)) is not None:
+        check.problems.append(wrong_fps)
+    elif (wrong_length := workflow.duration_problem(request.duration, request.fps)) is not None:
+        check.problems.append(wrong_length)
     if request.sheet is not None and not workflow.takes_sheet:
         check.problems.append(f"{model.id} takes no sheet")
     if request.size is not None:
@@ -248,10 +298,13 @@ def prepare_job(request: VideoRequest, folder: Path, key: str, *, text_encoder: 
     videos = [r for r in request.references if r.kind == "video" and r.path is not None]
     if len(videos) != 1:
         raise VidgenError(f"{request.model} needs one local control video (the shot's guide)")
+    if (wrong_fps := workflow.fps_problem(request.fps)) is not None:
+        raise VidgenError(wrong_fps)
+    fps = request.fps or workflow.fps
     width, height = workflow.size(request.aspect_ratio, request.size)
-    frames = workflow.frames(float(request.duration or workflow.max_seconds))
+    frames = workflow.frames(float(request.duration or workflow.max_seconds_at(fps)), fps)
     assert videos[0].path is not None
-    control = fit_control(videos[0].path, folder / f"vidgen_{key}_control.mp4", width=width, height=height, frames=frames, fps=workflow.fps)
+    control = fit_control(videos[0].path, folder / f"vidgen_{key}_control.mp4", width=width, height=height, frames=frames, fps=fps)
     uploads = {control.name: control}
     first = next((f.path for f in request.frame_images if f.frame_type == "first_frame" and f.path is not None), None)
     picture = fit_picture(first or control, folder / f"vidgen_{key}_first.png", width=width, height=height)
@@ -263,7 +316,7 @@ def prepare_job(request: VideoRequest, folder: Path, key: str, *, text_encoder: 
     graph = workflow.graph(
         control=control.name, first_frame=picture.name if first is not None else None, placeholder=picture.name, prompt=request.prompt,
         width=width, height=height, frames=frames, seed=request.seed, prefix=f"vidgen_{key}", with_audio=request.generate_audio,
-        sheet=sheet.name if sheet is not None else None, text_encoder=text_encoder,
+        sheet=sheet.name if sheet is not None else None, text_encoder=text_encoder, fps=fps,
     )
     return PreparedJob(graph, uploads)
 
@@ -443,6 +496,18 @@ def make_transport(settings: ComfyuiSettings, *, poll_timeout: float, say: Calla
 # ----- the provider ----------------------------------------------------------------------------
 
 
+def missing_weights_hint(error: str) -> str:
+    """``error`` with how to get the RIFE weights when ComfyUI's message names them (a 12 fps shot
+    on a ComfyUI set up before the weights were part of tools/colab/setup.sh)."""
+    from vidgen.videogen.ltx_graph import RIFE_MODEL
+
+    if RIFE_MODEL not in error:
+        return error
+    return (f"{error} -- a 12 fps shot doubles its clip with RIFE: ComfyUI needs models/frame_interpolation/{RIFE_MODEL} "
+            "(run `python tools/colab/setup_session.py NAME` again: setup.sh downloads it; elsewhere get it from "
+            "huggingface.co/Comfy-Org/Frame-Interpolation, no login)")
+
+
 class ComfyUIVideoProvider:
     """The ``comfyui`` provider (the OpenRouter provider's interface; see the module docstring)."""
 
@@ -492,7 +557,7 @@ class ComfyUIVideoProvider:
             try:
                 job_id = self.transport.submit(job)
             except VidgenError as exc:
-                raise SubmitRefused(f"{self.transport.where}: {exc}") from None
+                raise SubmitRefused(f"{self.transport.where}: {missing_weights_hint(str(exc))}") from None
             self.freed = True
         log.info("ComfyUI job %s queued on %s", job_id, self.transport.where)
         return JobState(job_id, "pending", cost=0.0)
@@ -502,7 +567,8 @@ class ComfyUIVideoProvider:
         result = self.transport.outcome(job_id)
         status = {"running": "in_progress", "completed": "completed"}.get(result["status"], "failed")
         usage = self.usage(result.get("seconds")) if status != "in_progress" else None
-        return JobState(job_id, status, cost=0.0, error=result.get("error"), usage=usage)
+        error = result.get("error")
+        return JobState(job_id, status, cost=0.0, error=missing_weights_hint(error) if error else error, usage=usage)
 
     def usage(self, seconds: float | None) -> Mapping[str, Any]:
         """What a job of ``seconds`` GPU time used."""
@@ -569,6 +635,6 @@ def restyle_picture(settings: ComfyuiSettings, source: Path, dest: Path, *, widt
 __all__ = [
     "RESTYLE_MODEL", "restyle_picture",
     "ColabTransport", "ComfyUIVideoProvider", "HttpTransport", "PreparedJob", "VM_URL", "WORKFLOWS", "Workflow",
-    "check_workflow_request", "find_workflow", "fit_control", "fit_picture", "guide_problem", "make_transport", "on_colab_vm",
+    "check_workflow_request", "find_workflow", "fit_control", "fit_picture", "guide_problem", "make_transport", "missing_weights_hint", "on_colab_vm",
     "prepare_job", "workflow_estimate", "workflow_records",
 ]

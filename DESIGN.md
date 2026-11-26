@@ -22440,7 +22440,8 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
 - **Workflows** (`videogen/comfyui.py`, `Workflow`, `WORKFLOWS`). A workflow declares the guides it
   takes as its control video (`controls`), the optional first frame, and its shape rules: `short_side`
   512, sizes in multiples of 64 (the long side rounded up: 16:9 -> 960x512), `8k+1` frames up to
-  `max_frames` 121 at 24 fps. `record()` is its `VideoModel` (`provider: comfyui`, durations 1-5,
+  `max_frames` 121, generated at one of `fps_choices` (12, 24) and stored at `fps` 24 (§113.25).
+  `record()` is its `VideoModel` (`provider: comfyui`, durations 1-5 at 24 fps,
   resolution 512p, first frame, seed); `Catalog.find` and `vidgen generate models` add the workflows
   to OpenRouter's list. `check_request` and `estimate` hand a workflow to `check_workflow_request`
   (one control video, no last frame, 512p; references and audio are notes, not sent) and
@@ -22449,8 +22450,8 @@ itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` sc
   `videogen/ltx_graph.py` (standard library only); `tools/colab/build_workflow.py` loads that file by
   its path and keeps its CLI and experiment graphs byte-identical. `with_audio` false (the shot's
   `sound: mix`) drops the audio decode from the output.
-- **Fitting.** `prepare_job` scales the guide to cover the size (centre crop), resamples it to 24 fps
-  and cuts it to the frame count or holds its last frame (`fit_control`); the first frame the same
+- **Fitting.** `prepare_job` scales the guide to cover the size (centre crop), resamples it to the
+  rate the clip is generated at (24 fps, or the shot's `fps: 12`) and cuts it to the frame count or holds its last frame (`fit_control`); the first frame the same
   (`fit_picture`); without one, the control's first frame is a bypassed placeholder (LoadImage needs a
   file). Files are named `vidgen_<request key>_control.mp4` / `_first.png` in ComfyUI's input folder,
   outputs `vidgen_<key>_*.mp4`. The clip is kept as made; placing trims it to the shot (the duration
@@ -22619,6 +22620,41 @@ hosted service), with the image model loaded once for the whole batch and unload
   `inputs.json` (the panels' SHA-256 and size); `shots._subjects_sheet` sets `Shot.sheet` only when
   that record matches, else blocks the shot (panels: `vidgen generate subjects`; sheet: `generate
   inputs`). From there it is a `sheet:` shot (§113.23).
+
+### 113.25 Generating at 12 fps, doubled to 24 fps (Step 433)
+
+Experiment 2026-11-26 on an L4 (`video-projects/escapement-remake/FPS12.md`): LTX-2.3 with base video
+and stylesheet at 12 fps keeps the look over 8 s (97 frames, the cost of a 4 s clip at 24 fps), and
+RIFE 4.26 doubling to 24 fps keeps every tick on its beat, each tick spread over 2 frames instead of 1.
+
+- **Config.** `GeneratedShot.fps` (`None`, 12 or 24; a workflow key like `size` and `duration`,
+  refused on an OpenRouter model). `Workflow.fps_problem` refuses any other value; the length limit is
+  a frame limit: `Workflow.durations(fps)` are the whole seconds whose `seconds x fps + 1` frames are
+  `8k+1` and at most `max_frames` 121 (24 fps: 1-5; 12 fps: 2, 4, 6, 8, 10), `duration_problem` names
+  the frames of a length that does not fit. The config, `check_workflow_request` and `prepare_job` use
+  them.
+- **The split rule and the plan.** `shots.shot_durations` gives a workflow's durations at the shot's
+  `fps` (else the model's list): a beat is split over its longest (5 s at 24 fps, 10 s at 12) and each
+  part's length snaps up within them. The plan prints a workflow shot's frames line (`frames: 49
+  generated at 12 fps (...), doubled by RIFE in the same ComfyUI job to 97 at 24 fps`).
+- **The key.** `VideoRequest.fps` is set only when the shot asks for a rate other than the workflow's
+  own (`shots.generation_fps`), and `canonical_request` adds `fps` only when set: requests at 24 fps,
+  with or without `fps: 24`, keep their keys. *Why the guide's freshness does not read it:* the guide
+  stays at the film's frame rate; the 12 fps control video is fitted from it at submit time
+  (`fit_control(fps=12)`, every other frame), so it is covered by the request key.
+- **The graph** (`ltx_graph.graph(fps=12, out_fps=24)`): frame rate 12 on nodes 6 (LTXVConditioning),
+  15 (audio latent) and the frame count on 12, 15 and 41 (sheet repeat), as at 24 fps; after the tiled
+  decode (24) node 50 `FrameInterpolationModelLoader` (`rife_v4.26.safetensors`) and node 51
+  `FrameInterpolate` (multiplier 2) feed node 26 (VHS_VideoCombine) at 24 fps. Core ComfyUI nodes, one
+  job. With `out_fps` equal to `fps` the graph is unchanged byte for byte.
+- **The take.** RIFE makes `2n - 1` frames (`Workflow.stored_frames`): 49 -> 97 for 4 s, as long as a
+  24 fps take of 4 s; 97 -> 193 (8.04 s) for 8 s. The take is placed and trimmed to its shot like any
+  other (the duration snaps up, §113.20).
+- **Setup.** `tools/colab/setup.sh` downloads `frame_interpolation/rife_v4.26.safetensors` from
+  `Comfy-Org/Frame-Interpolation` (ungated) and links it into `ComfyUI/models/frame_interpolation/`;
+  `vm_state.py` counts it among the LTX files, so an older session runs setup.sh again. A ComfyUI
+  without the file refuses the graph; `comfyui.missing_weights_hint` adds the setup command to that
+  error (no check before sending).
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
