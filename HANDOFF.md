@@ -28729,3 +28729,55 @@ Review of `git diff d0ec91d..e73e888` against trial run T2c (`video-projects/she
   tests/test_videogen_final_guide.py tests/test_remote.py tests/test_colab_setup_session.py tests/test_guide.py
   tests/test_docs.py` (409 passed, 39 s); `-m slow tests/test_videogen_subjects.py tests/test_videogen_final_guide.py`
   (9 passed, 15 s).
+
+## Step 430 — review of Steps 428-429
+
+Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed sheet, fingerprint fixes, docs).
+
+- **Confirmed bugs, fixed**:
+  1. **`vidgen remote NAME generate plan` / `generate run` / `inputs` / `sheets` / `frames` printed nothing
+     locally.** Older than Steps 424-429: since Step 408 `vidgen remote` adds `--json` to every command of
+     `cli.JSON_COMMANDS` (`generate` is one) and shows only the VM's stderr (its `run.log`) plus the JSON
+     document when the caller gave `--json` itself; `generate run|inputs|sheets|frames` passed
+     `out=(lambda line: None)` under `--json`, and `generate plan --json` printed only the document, so the
+     text landed nowhere (the document only in `run.out`). Fix (`cli.py`): these commands print their lines
+     with `print` always (under `--json` stdout is redirected to stderr, the document still alone on stdout),
+     as `generate subjects` already did; `generate plan` prints its lines before the document. Over MCP the
+     lines arrive as progress. Test: `test_generate_plan_and_run_with_json_print_their_lines_on_stderr_for_vidgen_remote`.
+  2. **The no-sheet warning named a guide topic that does not exist**: "(`vidgen guide` Stylesheets)";
+     `vidgen guide Stylesheets` is an error (the section is in topic `outputs`). Now "(`vidgen guide outputs`,
+     section Stylesheets)" (`shots._no_sheet_warnings`); the test checks the topic holds `### Stylesheets`.
+- **Checked, no bug** (scratch tests and dry runs, not kept): the gate — a hand-edited panel PNG blocks the
+  shot ("the panel file was changed after it was made"), `generate subjects` remakes only it and it is not
+  approved; a changed picture file under `image:` blocks; a hand-edited `sheet.png` blocks ("not composed from
+  the current panels"); a batch failing on panel 2 of 3 keeps panel 1, the re-run makes only the rest with one
+  free before and one after; `run --pay` skips every blocked shot before `generate_clip` (cached or not, with
+  `--shot`, and on the VM the same plan runs). Composed sheet at 960x512, 768x448, 448x768, 770x450 and 1-4
+  panels: exact size, black corners, each panel's colour in the cell its position words name, same bytes twice.
+  The guide's example (subjects + generated_shot) validates against the schema as written. The real
+  footage-test-approval panels are 1440x768 (the prompt's grid assumes `PANEL_SIZE`), and its plan reads
+  them current with its `build/`.
+- **Doubts (no change)**:
+  - Scene fingerprints depend on `build/` (a web/space scene's recorded page loads) and on file mtimes
+    (`_stat`): on a copy without `build/` the `from:` panels read "its still changed" until `generate subjects`
+    renders the scene again (then "recorded", no GPU, approval kept — but it needs `videogen.comfyui` set and
+    renders locally). On the exec route's tars, mtimes may lose precision, so records made on the VM may read
+    stale here. Pre-existing render design.
+  - Step 429's `final` fix records the computed `without_takes()` fingerprint, not the render's own record.
+    When the film's render is cut while `build/final_source` was never rendered, that is the pre-render value;
+    the first `_source` render later (a `from:` panel, a re-cut with a take placed) makes those inputs read
+    changed once (one free re-cut). The documented order (subjects first) avoids it.
+  - A failure in the middle of a panel batch leaves the image model loaded until the next `generate run`'s
+    first `/free` (said in the error); no contact pictures are written after a failure.
+  - `image:` paths are not checked to be inside the project (an absolute or `..` path is read, never written;
+    the same as `sheet:`); outside files are not synced by `vidgen remote`. Writes stay under `sheets/<id>/`
+    and `build/videogen/<shot>/` (identifiers only).
+  - The `generate plan --json` document has no field for the panels' states (only the shots' `blocked`).
+- **Files**: `src/vidgen/cli.py`, `src/vidgen/videogen/shots.py`, `tests/test_videogen_subjects.py`,
+  `HANDOFF.md`, `tasklist.md`.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_subjects.py tests/test_videogen_sheet.py
+  tests/test_videogen_comfyui.py tests/test_videogen_shots.py tests/test_videogen.py tests/test_videogen_guided_prompts.py
+  tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py tests/test_videogen_final_guide.py
+  tests/test_videogen_host.py tests/test_videogen_frames.py tests/test_remote.py tests/test_guide.py tests/test_docs.py`
+  (339 passed, 25 s); `-m slow` on the videogen files (43 passed; `test_cli_models_from_cache_and_ledger` fails
+  with and without this change: the cached catalog lists 34 models, the test expects 33).

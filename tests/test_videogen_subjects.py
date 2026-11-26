@@ -343,7 +343,7 @@ def test_an_explicit_sheet_needs_no_approval_and_a_shot_without_a_sheet_gets_a_w
         del data["scenes"][0]["beats"][0]["generated_shot"][key]
     (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     plan = _plan(root)
-    assert plan.warnings == ["shot sea: no subjects: and no sheet:, so nothing keeps its subject looking the same across shots (`vidgen guide` Stylesheets)"]
+    assert plan.warnings == ["shot sea: no subjects: and no sheet:, so nothing keeps its subject looking the same across shots (`vidgen guide outputs`, section Stylesheets)"]
     assert "warning: shot sea: no subjects:" in "\n".join(plan.lines(root))
     with pytest.raises(ValidationError, match="cannot be named contact"):
         Subject.model_validate({"look": "x", "views": [{"name": "contact", "image": "a.png", "text": "t"}]})
@@ -376,3 +376,24 @@ def test_the_cli_approves_and_prints_the_panels_progress_also_with_json(make_pro
     assert "glider/rear: approved" in capsys.readouterr().out
     assert subjects.is_approved(subject_panels(Project.load(root), "glider")[0])
     assert not subjects.is_approved(subject_panels(Project.load(root), "glider")[1])
+
+
+@pytest.mark.slow
+def test_generate_plan_and_run_with_json_print_their_lines_on_stderr_for_vidgen_remote(
+        make_project: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """`vidgen remote` adds --json and shows the VM's stderr: the plan's and the run's lines go there (Step 430)."""
+    import json
+
+    from vidgen import cli
+    from vidgen.guide import find_topic
+    from vidgen.videogen.models import Catalog
+
+    root = _project(make_project)
+    monkeypatch.setattr("vidgen.videogen.models.load_catalog", lambda *a, **k: Catalog((), 0.0, "cache"))
+    assert cli.main(["generate", "plan", str(root), "--json"]) == 0
+    captured = capsys.readouterr()
+    assert "glider/rear: sheets/glider/rear.png - not made yet" in captured.err and json.loads(captured.out)["shots"][0]["id"] == "sea"
+    assert cli.main(["generate", "run", str(root), "--json"]) == 0
+    captured = capsys.readouterr()
+    assert "shot sea: blocked (" in captured.err and json.loads(captured.out)["shots"][0]["status"] == "blocked"
+    assert "### Stylesheets" in find_topic("outputs").text   # the section the no-sheet warning names

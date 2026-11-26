@@ -1171,7 +1171,7 @@ def _no_sheet_warnings(project: Project, shots: Sequence[Shot]) -> list[str]:
     if project.config.videogen.provider != COMFYUI_PROVIDER:
         return []
     return [
-        f"shot {s.id}: no subjects: and no sheet:, so nothing keeps its subject looking the same across shots (`vidgen guide` Stylesheets)"
+        f"shot {s.id}: no subjects: and no sheet:, so nothing keeps its subject looking the same across shots (`vidgen guide outputs`, section Stylesheets)"
         for s in shots
         if s.spec.subjects is None and s.spec.sheet is None and (w := find_workflow(s.spec.model)) is not None and w.takes_sheet
     ]

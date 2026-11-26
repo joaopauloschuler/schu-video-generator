@@ -2317,7 +2317,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
     project = Project.load(args.project, variant=args.variant)
     _use_route(project, args.via)
     if args.action == "sheets":
-        result = run_sheets(project, args.sheet or (), pay=args.pay, out=(lambda line: None) if args.json else print)
+        result = run_sheets(project, args.sheet or (), pay=args.pay, out=print)
         if args.json:
             total, unknown = result.cost
             return jsonout.envelope(
@@ -2336,7 +2336,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
     if args.action == "inputs":
         catalog = load_catalog()
         shots = [s for s in project_shots(project, catalog) if not args.shot or s.id in args.shot or s.beat.id in args.shot]
-        written = make_inputs(project, shots, guide=args.guide, out=(lambda line: None) if args.json else print)
+        written = make_inputs(project, shots, guide=args.guide, out=print)
         if args.json:
             return jsonout.envelope("generate", True, action="inputs", written=[p.relative_to(project.root).as_posix() for p in written])
         print(f"{len(written)} input file(s) written in build/videogen/")
@@ -2345,6 +2345,8 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         return 0
     plan = plan_shots(project, budget_usd=args.budget, shot_ids=args.shot or ())
     root = project.root
+    for line in plan.lines(root):   # with --json on stderr (`vidgen remote` shows it), the document on stdout
+        print(line)
     if args.json:
         return jsonout.envelope(
             "generate", True, action="plan", clips_usd=plan.clips_cost, sheets_usd=plan.sheets_cost, total_usd=plan.total,
@@ -2367,8 +2369,6 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
                 for s in plan.shots
             ],
         )
-    for line in plan.lines(root):
-        print(line)
     return 0
 
 
@@ -2379,7 +2379,7 @@ def _generate_frames(project: Project, args: argparse.Namespace) -> CommandResul
     from vidgen.videogen.shots import project_shots
 
     shots = select_paint_shots(project_shots(project, load_catalog()), args.shot or ())
-    result = run_frames(project, shots, pay=args.pay, out=(lambda line: None) if args.json else print)
+    result = run_frames(project, shots, pay=args.pay, out=print)
     if args.json:
         total, unknown = result.cost
         return jsonout.envelope(
@@ -2447,7 +2447,7 @@ def _generate_workflow(args: argparse.Namespace) -> CommandResult:
     if args.pay and args.action != "run":
         raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
     if args.action == "run":
-        report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=(lambda line: None) if args.json else print)
+        report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=print)
         if args.json:
             return jsonout.envelope("generate", True, action="run", paid=args.pay, cost_usd=report.cost_usd, shots=[s.to_json(root) for s in report.shots])
         made = [s.shot for s in report.shots if s.take is not None]
