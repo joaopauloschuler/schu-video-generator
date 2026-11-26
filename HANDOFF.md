@@ -28563,3 +28563,27 @@ Review of `git diff d0ec91d..e73e888` against trial run T2c (`video-projects/she
   tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py tests/test_videogen_first_frame_in.py
   tests/test_videogen_shot_chain.py tests/test_videogen_compose.py tests/test_colab_setup_session.py tests/test_remote.py
   tests/test_guide.py tests/test_docs.py` (390 passed, 46 s).
+
+## Step 427 — G4 tests of sheet + base video (no code change)
+
+- **What ran**: on the Colab G4 session `ltx` (RTX PRO 6000, 96 GB VRAM, 176 GB RAM, 48 cores; 11.2 units/hour;
+  ComfyUI 0.46 with `--disable-comfy-compiler`, GGUF Q5_K_M), a slim copy of `footage-test-ssh`
+  (`video-projects/footage-test-sheet`, the Step 425 yaml, `units_per_hour: 11.2`), 768x448. Results, clips and
+  comparison pictures: `/home/bpsa/app/video-projects/sheet-g4-tests-2026-11-25/RESULT.md`.
+- **Verdict: works at 5 s (121 frames)**: one glider at the guide's place with the sheet's look (grey, red wing tips,
+  twin nozzles, fins) for all 5 s, in two shots (`chase_b1_p1`, `chase_b1_p2`) and two seeds; no panels, black areas
+  or frozen extra gliders; no `hook error`/`skipping delta`/`Conditioning frames exceed`/OOM in `comfy.log`. Without
+  the sheet the shot invents a coast and a different plane. Small faults: weak bank in shot 1, a faint red smudge in
+  shot 2, the guide's horizon line visible at the end of shot 1.
+- **Numbers**: 5 s with sheet 53 s in ComfyUI (8 steps x 5.22 s), peak 42.7 GB; without sheet 30 s (2.48 s/step),
+  peak 35.6 GB; 1 s with sheet 22 s (1.71 s/step); door to door about 80 s / 58 s / 44 s. `/free` before the first
+  job works: VRAM held by the previous run (31.8-35.2 GB) fell to 0.8-1.4 GB before loading.
+- **First frame**: sent as a frame (`first_frame: restyled`) opens on the picture (QA opening match 0.972) and keeps
+  the sheet's details; `first_frame_in: guide` runs (opening guide + sheet guide, both 121 frames, node 13 bypassed)
+  but opens on an over-exposed teal frame (opening match 0.445) and then looks like the no-first-frame clip.
+- **Gap found, not fixed**: once a shot has a take placed in the scene, its `guide: final`/`canny` inputs read stale
+  ("the scene changed"): `inputs.render_project` switches from the film's render to `without_takes()`, whose
+  fingerprint always differs (`overlays: false` on every scene). One `generate inputs --guide` re-cut fixes it. Fix
+  idea in RESULT.md; added to `tasklist.md` Backlog line of this step.
+- **Files**: `HANDOFF.md`, `tasklist.md` only.
+- **How to test**: manual GPU runs only (see RESULT.md); nothing added to the suite.
