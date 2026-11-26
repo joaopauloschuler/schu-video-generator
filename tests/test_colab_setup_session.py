@@ -560,3 +560,12 @@ def test_vm_state_needs_the_ingredients_lora_and_the_routing_node() -> None:
     setup_sh = (COLAB_DIR / "setup.sh").read_text(encoding="utf-8")
     assert "hashu786/comfyui-hrnodes" in setup_sh and "comfyui-hrnodes checkout -q 1f91974824c7e4e1" in setup_sh
     assert f"dl Comfy-Org/ltx-2.3 split_files/loras/{setup_session.INGREDIENTS_LORA}" in setup_sh
+
+
+def test_the_summary_names_the_sessions_rate_and_the_units_per_hour_to_set() -> None:
+    assert setup_session.rate_line("L4") == "rate: L4 bills about 1.94 compute units an hour, also idle"
+    g4 = setup_session.rate_line("G4")
+    assert "G4 bills about 11.2 compute units an hour" in g4 and "set videogen.comfyui.units_per_hour: 11.2" in g4
+    h100 = setup_session.rate_line("H100")
+    assert "`colab usage` shows how many: set videogen.comfyui.units_per_hour to it" in h100
+    assert "units_per_hour" not in setup_session.rate_line("CPU", comfy=False)

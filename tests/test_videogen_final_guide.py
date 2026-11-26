@@ -153,3 +153,34 @@ def test_the_finished_render_is_cut_as_the_guide_and_recorded_against_it(make_pr
     assert record["guide.final.mp4"]["source"]["guide"] == "final" == record["first_frame.png"]["source"]["guide"]
     assert record["guide.final.mp4"]["source"]["draft"] == [320, 180, 10]   # the video's own size, not the draft's
     assert blocked_by_change(project) == ""
+
+
+@pytest.mark.slow
+def test_a_final_guide_stays_current_when_the_shots_first_take_is_placed_in_the_scene(make_project, tmp_path: Path) -> None:
+    project = Project.load(make_project(config(audio="none", first_frame="render", place=True)))
+    root = project.root
+    video = write_clip(root / "fake" / "scene.mp4", seconds=6.0, size="32x18", fps=5, audio=False)
+
+    def render(_project: Project, _scene: str, _passes: tuple[str, ...], kind: str = "render") -> SceneRender:
+        return SceneRender(video, {"a": 0.5}, fingerprint="the film's own render")   # reused: nothing is drawn over the scene yet
+
+    make_inputs(project, project_shots(project, CATALOG), guide=True, out=quiet, render=render)
+    assert blocked_by_change(Project.load(root)) == ""
+    take = write_clip(tmp_path / "take.mp4", seconds=3.0, size="64x36", fps=5, audio=False)
+    add_take(root, "a", take, key="k1", model=MODEL, provider="mock", job_id="j", cost=0.1, length=2.0, width=320, height=180)
+    pick_take(root, "a", "1", ["a"])
+    assert render_project(Project.load(root), "final", "s1").render_dir(False).name == "final_source"
+    assert blocked_by_change(Project.load(root)) == ""
+
+
+def test_a_final_input_records_the_fingerprint_of_the_render_without_takes(make_project) -> None:
+    from vidgen import extensions
+    from vidgen.render.fingerprint import scene_fingerprint
+    from vidgen.videogen.freshness import InputSources
+
+    project = Project.load(make_project(config(audio="none")))
+    (shot,) = project_shots(project, CATALOG)
+    source = project.without_takes()
+    with extensions.project_session(source):
+        wanted = scene_fingerprint(source, "s1")
+    assert InputSources(project).render(shot, "final", "the film's own render")["scene_fingerprint"] == wanted   # the same picture either way

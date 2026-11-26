@@ -28666,3 +28666,66 @@ Review of `git diff d0ec91d..e73e888` against trial run T2c (`video-projects/she
   tests/test_videogen_first_frame_in.py tests/test_videogen_shot_chain.py tests/test_videogen_compose.py tests/test_remote.py
   tests/test_guide.py tests/test_docs.py` (376 passed, 31 s); `-m "slow or not slow" tests/test_videogen_subjects.py`
   (11 passed, 9 s).
+
+## Step 429 — approving the sheet panels; contact pictures; fixes from the G4 work
+
+- **Built**:
+  - **Approval** (`videogen/subjects.py`, `cli.py`): `vidgen generate subjects --approve NAME` (repeatable),
+    `--approve-all`, `--reject NAME` (repeatable), `--view VIEW` (one view of the one named subject); no GPU, no
+    panel made (`--subject`/`--force` with them is an error; remaking stays `--force --subject NAME`).
+    `set_approval` writes `"approved": true` at the top level of `sheets/<subject>/<view>.json` (beside
+    `source`) or removes it; approving a missing or out-of-date panel is a `VidgenError` and nothing is
+    written. A remade panel gets a new record (no flag); a re-recorded one (same still) keeps it.
+    `is_approved`, `approve_command`, `contact_path`.
+  - **Contact picture**: `make_panels` keeps each panel's still as `<view>.still.png` (also writes it for a
+    kept panel that has none) and ends with `write_contact` per selected subject: `sheets/<subject>/contact.png`,
+    panels at half size (720x384) with their view names, the stills underneath (Pillow, PNG level 3, ~1.3 MB
+    for 3 views); the path and the approve command are printed. A view may not be named `contact` (config error).
+  - **Plan**: panel lines `(current, approved)` / `(current, not approved)` plus `<subject>: look at
+    sheets/<subject>/contact.png, then `vidgen generate subjects --approve <subject>``. A shot with an
+    unapproved panel is blocked (`sheet panels not approved (...): look at ..., then `vidgen generate subjects
+    --approve A --approve B``); the composed sheet is still set/composed (`generate inputs` says the shot stays
+    blocked). `run --pay` skips blocked shots as before. An explicit `sheet:` needs no approval.
+    `plan_shots` adds `warning: shot ID: no subjects: and no sheet:, ...` for a comfyui shot of a
+    `takes_sheet` workflow with neither (not a block).
+- **Fixes**:
+  a. `vidgen remote NAME generate subjects`: the progress went to a no-op under `--json`; now `print` always
+     (under `--json` stdout is redirected to stderr, which is the remote log). Seen working on the G4.
+  b. Cause of the Step 427 stale guide: a `final` input recorded the film render's fingerprint while no take
+     was placed and the `without_takes()` one after (they differ by `overlays: false`). Now
+     `InputSources.render` records/compares the `without_takes()` fingerprint for `final` always (the same
+     picture). Inputs cut before this step read changed once more (one free re-cut).
+  c. `setup_session.py` summary: `rate: <hardware> bills about N compute units an hour, also idle` from
+     `UNITS_PER_HOUR = {"L4": 1.94, "G4": 11.2}`, for a G4 also "set videogen.comfyui.units_per_hour: 11.2";
+     another GPU: check `colab usage`. Picking `units_per_hour` from the session automatically was not done
+     (needs a `colab sessions` call per run and is unknown on the VM itself); documented instead.
+  d. **Found in the G4 check, fixed**: a panel record made on a fresh VM kept the scene fingerprint taken
+     *before* the scene's first render there; that render records what the page loaded (part of the
+     fingerprint), so the panels read "its still changed" on the next run and locally. `PanelSources.forget`
+     after the render in `write_still`.
+- **Docs**: guide (+ `AGENTS.md`) "Stylesheets: one look for a subject across shots" in the Colab section (order,
+  example, G4 + `--no-comfy-compiler`, 10 s a panel, ~80 s / 42.7 GB for 5 s, 11.2 units/h, first-frame
+  guidance, explicit `sheet:`); `docs/CONFIG.md` (approval, contact, warning, units_per_hour rates); DESIGN.md
+  §113.24 (approval), §113.18 (final fingerprint); HOWTO (rates, order); `tools/colab/README.md` (rate line).
+- **G4 check (2026-11-26 ~00:45-01:00 UTC, session `ltx`, compiler off)** on a copy
+  `/home/bpsa/app/video-projects/footage-test-approval` (kept, 20 MB; `seed: 3` and one changed view text in its
+  yaml): plan showed the panels not approved and the shot blocked; `remote generate subjects` printed the panel
+  lines, wrote both contact pictures (looked at: clean panels, stills underneath); `--approve glider --approve sea`
+  -> plan 0 blocked; `remote generate inputs --guide`, `remote generate run --pay` (seed 3): 5 s clip, 52.3 s GPU,
+  0.1627 units at 11.2/h, 1 min 13 s door to door, one glider with the sheet's look; then the top view's text
+  changed -> `remote generate subjects` remade only `glider/top` (15 s door to door) -> plan: `glider/top
+  (current, not approved)`, shot blocked. Session left up, ComfyUI idle, compiler off.
+- **Known gaps**: `vidgen remote ... generate plan` / `generate run` print no text through remote (their `--json`
+  documents only); `run` was not changed. Approval is per panel record; there is no approval of a composed sheet
+  as such.
+- **Files**: `src/vidgen/{cli,config}.py`, `src/vidgen/videogen/{subjects,shots,inputs,freshness}.py`,
+  `tools/colab/setup_session.py`, `tools/colab/README.md`; tests `test_videogen_subjects.py` (+3, 2 slow; 2
+  changed), `test_videogen_final_guide.py` (+2, 1 slow), `test_colab_setup_session.py` (+1); docs as above;
+  `tasklist.md`.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_subjects.py tests/test_videogen_sheet.py
+  tests/test_videogen_comfyui.py tests/test_videogen_canny_restyle.py tests/test_videogen_shots.py tests/test_videogen.py
+  tests/test_videogen_guided_prompts.py tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py
+  tests/test_videogen_first_frame_in.py tests/test_videogen_shot_chain.py tests/test_videogen_compose.py
+  tests/test_videogen_final_guide.py tests/test_remote.py tests/test_colab_setup_session.py tests/test_guide.py
+  tests/test_docs.py` (409 passed, 39 s); `-m slow tests/test_videogen_subjects.py tests/test_videogen_final_guide.py`
+  (9 passed, 15 s).

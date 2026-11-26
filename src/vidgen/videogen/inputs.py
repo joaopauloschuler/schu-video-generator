@@ -436,7 +436,7 @@ def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path,
 def _write_subjects_sheet(project: Project, shot: Shot, panels: PanelSources, written: list[Path], out: Callable[[str], None]) -> None:
     """Compose and record ``shot``'s sheet from its subjects' panels (``panels``: their current
     sources), or say what it waits for."""
-    from vidgen.videogen.subjects import SHEET_NAME, compose_shot_sheet, shot_panels
+    from vidgen.videogen.subjects import SHEET_NAME, approve_command, compose_shot_sheet, is_approved, shot_panels
 
     assert shot.spec.subjects is not None
     found = shot_panels(project, shot.spec.subjects)
@@ -448,7 +448,9 @@ def _write_subjects_sheet(project: Project, shot: Shot, panels: PanelSources, wr
     dest = project.root / INPUTS_DIR / shot.id / SHEET_NAME
     compose_shot_sheet(found, width, height, dest)
     written.append(dest)
-    out(f"{shot.id}: sheet {dest.relative_to(project.root).as_posix()} ({width}x{height}, {len(found)} panel(s) of {', '.join(shot.spec.subjects)})")
+    unapproved = list(dict.fromkeys(p.subject for p in found if not is_approved(p)))
+    waits = f"; its panels are not approved yet, so the shot stays blocked: `{approve_command(unapproved)}`" if unapproved else ""
+    out(f"{shot.id}: sheet {dest.relative_to(project.root).as_posix()} ({width}x{height}, {len(found)} panel(s) of {', '.join(shot.spec.subjects)}){waits}")
 
 
 def _write_last_of_picture(ffmpeg: str, project: Project, shot: Shot, written: list[Path], out: Callable[[str], None]) -> None:

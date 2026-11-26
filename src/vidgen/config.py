@@ -3412,7 +3412,7 @@ class SubjectView(_Strict):
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
     name: Identifier | None = None
-    """The panel's name and file name (sheets/<subject>/<name>.png); default view1, view2, ... in order."""
+    """The panel's name and file name (sheets/<subject>/<name>.png; not contact); default view1, view2, ... in order."""
     from_: SceneMoment | None = Field(default=None, alias="from")
     """The still: {scene: chase, at: 1.5}, the frame at 1.5 s of that scene's finished render (without overlays or takes). Give from: or image:."""
     image: str | None = Field(default=None, min_length=1)
@@ -3451,6 +3451,8 @@ class Subject(_Strict):
         names = self.view_names
         if len(set(names)) != len(names):
             raise ValueError(f"view names must be unique: {', '.join(names)}")
+        if "contact" in names:
+            raise ValueError("a view cannot be named contact: sheets/<subject>/contact.png is the picture of its panels to look at")
         return self
 
     @property

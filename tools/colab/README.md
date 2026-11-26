@@ -27,7 +27,8 @@ installed and logged in (`colab usage` prints the balance). It:
    `setup.sh` ran while it was running (new nodes load at start);
 6. prints the session, GPU, what was installed or reused, whether ComfyUI's model compiler is on or
    off, the Ingredients IC-LoRA (and whether ComfyUI lists it) and the routing node, the elapsed
-   time and the next commands.
+   time, the session's rate (`rate:` L4 1.94, G4 11.2 compute units an hour, with the
+   `videogen.comfyui.units_per_hour` to set; another GPU: check `colab usage`) and the next commands.
 
 With `--via exec` it uses the exec route (below): `start_setup.py` / `start_comfy.py`, polls every 30 s.
 That route never restarts ComfyUI (it prints a note when it should) and refuses `--no-comfy-compiler`.
@@ -93,7 +94,8 @@ not resolve), then stops with an error.
 **Several sessions.** Each `NAME` is its own VM; the name goes to `colab` as one argument.
 
 **The script never stops a session**, also not after an error. Stop it yourself when you are done
-(an idle L4 still bills about 1.94 compute units an hour); the VM's disk is gone afterwards:
+(an idle L4 still bills about 1.94 compute units an hour, a G4 about 11.2: the summary's `rate:` line names
+the session's, or says to check `colab usage` for another GPU); the VM's disk is gone afterwards:
 
 ```
 colab stop -s NAME

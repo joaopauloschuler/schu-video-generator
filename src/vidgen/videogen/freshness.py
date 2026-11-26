@@ -200,12 +200,16 @@ class InputSources:
     def render(self, shot: Shot, kind: str, fingerprint: str | None = None) -> dict[str, Any]:
         """The current source of a render input of ``shot``: a guide of ``kind`` or the first frame
         (``render``; ``final``: of the finished render). ``fingerprint``: the render's own record,
-        when known (else computed)."""
+        when known (else computed); a ``final`` input always records the fingerprint of the render
+        without overlays or takes, also when the film's own render was the same picture and was cut
+        instead, so placing the shot's first take does not make it look changed."""
         from vidgen.videogen.inputs import render_kind
 
-        scene = self._render_of(shot.scene_id, kind if kind in ("render", "final") else render_kind(self.project, shot.scene_id, kind))
+        made = kind if kind in ("render", "final") else render_kind(self.project, shot.scene_id, kind)
+        scene = self._render_of(shot.scene_id, made)
         extra = canny_source(shot) if kind == "canny" else {}
-        return {**scene, "scene_fingerprint": fingerprint or scene["scene_fingerprint"], "guide": kind, **_part(shot), **({"lead": shot.lead} if shot.lead else {}), **extra}
+        digest = scene["scene_fingerprint"] if made == "final" else fingerprint or scene["scene_fingerprint"]
+        return {**scene, "scene_fingerprint": digest, "guide": kind, **_part(shot), **({"lead": shot.lead} if shot.lead else {}), **extra}
 
     def _render_of(self, scene_id: str, made: str) -> dict[str, Any]:
         if (scene_id, made) not in self._renders:
@@ -214,6 +218,8 @@ class InputSources:
             from vidgen.videogen.inputs import render_project
 
             source = render_project(self.project, made, scene_id)
+            if made == "final":   # the film's own render or this one: the same picture, one fingerprint
+                source = source if not source.takes_shown else source.without_takes()
             size = source.render_format(False)
             with extensions.project_session(source):   # as the render's own fingerprint is taken
                 digest = scene_fingerprint(source, scene_id)

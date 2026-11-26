@@ -52,6 +52,8 @@ STATE_PREFIX = "VIDGEN_STATE "
 GPUS = ("T4", "L4", "G4", "H100", "A100")
 #: `--gpu` choices: "CPU" makes a CPU runtime (no GPU; only with --vidgen-only).
 HARDWARE = ("CPU", *GPUS)
+#: Compute units an hour of the sessions measured with `colab usage` (L4 and G4 on 2026-11-25).
+UNITS_PER_HOUR = {"L4": 1.94, "G4": 11.2}
 #: Accelerators with one machine shape, where `colab new --high-mem` is ignored.
 SINGLE_SHAPE = ("L4",)
 UPLOADS = ("vm_state.py", "setup.sh", "setup_image.sh")
@@ -527,8 +529,23 @@ def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elap
     elif parts:
         lines += [f"   or go on with {HOWTO} section 6.3, e.g.",
                   f"   colab upload -s {name} ltx-inputs/render_121_960x512.mp4 /content/render_121_960x512.mp4"]
-    lines.append(f"stop it when you are done (an idle L4 still bills about 1.94 units/h): colab stop -s {name}")
+    lines.append(rate_line(report.hardware or gpu, comfy=bool(parts)))
+    lines.append(f"stop it when you are done: colab stop -s {name}")
     return lines
+
+
+def rate_line(hardware: str, comfy: bool = True) -> str:
+    """What the session bills an hour (:data:`UNITS_PER_HOUR`, else where to look) and, with
+    ``comfy``, the ``units_per_hour`` its takes should record (vidgen's default is the L4's)."""
+    rate = UNITS_PER_HOUR.get(hardware)
+    setting = "videogen.comfyui.units_per_hour"
+    if rate is None:
+        line = f"rate: {hardware or 'this session'} bills compute units every hour it is up, also idle; `colab usage` shows how many"
+        return line + (f": set {setting} to it (takes record their units with it)" if comfy else "")
+    line = f"rate: {hardware} bills about {rate:g} compute units an hour, also idle"
+    if comfy and rate != UNITS_PER_HOUR["L4"]:
+        line += f"; set {setting}: {rate:g} (the default {UNITS_PER_HOUR['L4']:g} is the L4's; takes record their units with it)"
+    return line
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

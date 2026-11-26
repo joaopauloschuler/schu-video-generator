@@ -15,13 +15,18 @@ or crop, the picture file, the look, the text or the seed: :class:`PanelSources`
 or with ``force``. When only the scene's fingerprint changed and its still is the same picture,
 the record is updated and nothing is sent.
 
+Each subject's ``contact.png`` shows its panels with the stills they were made from underneath.
+The author looks at it and approves the panels (:func:`set_approval`: ``"approved": true`` in the
+record, beside ``source``); a panel made again gets a new record, so it is not approved any more.
+
 A shot's ``subjects:`` composes its sheet from these panels (:mod:`.sheet_layout`, when its inputs
-are made); a shot whose panels are missing or out of date is blocked.
+are made); a shot whose panels are missing, out of date or not approved is blocked.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import time
 from collections.abc import Callable, Sequence
@@ -45,6 +50,10 @@ RECORD_VERSION = 1
 DEFAULT_SEED = 42
 #: The image model of the panels, as records and the plan name it.
 PANEL_MODEL = "Qwen-Image-Edit-2511 (GGUF Q4_K_M, Lightning 4 steps)"
+#: A subject's picture to look at before approving: its panels, the stills they were made from underneath.
+CONTACT_NAME = "contact.png"
+#: The view names' size on the contact picture, in pixels.
+CONTACT_FONT = 22
 
 OBJECT_PROMPT = (
     "Make this a clean product-style photograph of {look}, {text}. Show it alone, whole and centred, on a plain "
@@ -72,6 +81,11 @@ class Panel:
     def record_path(self) -> Path:
         """``<view>.json`` beside the panel."""
         return self.path.with_suffix(".json")
+
+    @property
+    def still_path(self) -> Path:
+        """``<view>.still.png`` beside the panel: the image model's input it was made from."""
+        return self.path.with_name(f"{self.view}.still.png")
 
     @property
     def label(self) -> str:
@@ -109,6 +123,16 @@ def subject_panels(project: Project, name: str) -> list[Panel]:
     return [Panel(name, view, spec, source, folder / f"{view}.png") for view, source in zip(spec.view_names, spec.views)]
 
 
+def contact_path(project: Project, name: str) -> Path:
+    """``sheets/<name>/contact.png``: subject ``name``'s panels and their stills, to look at before approving."""
+    return project.root / SUBJECTS_DIR / name / CONTACT_NAME
+
+
+def approve_command(names: Sequence[str]) -> str:
+    """The command that approves the panels of the subjects ``names``."""
+    return "vidgen generate subjects" + "".join(f" --approve {name}" for name in dict.fromkeys(names))
+
+
 def shot_panels(project: Project, names: Sequence[str]) -> list[Panel]:
     """The panels of the subjects ``names``, in order (a shot's sheet)."""
     return [panel for name in names for panel in subject_panels(project, name)]
@@ -138,10 +162,15 @@ def read_record(panel: Panel) -> dict[str, Any]:
     return doc if isinstance(doc, dict) and doc.get("version") == RECORD_VERSION else {}
 
 
+def is_approved(panel: Panel) -> bool:
+    """Whether the author approved the panel as its record now stands (a remade panel has a new record)."""
+    return read_record(panel).get("approved") is True
+
+
 def panel_record(panel: Panel, source: dict[str, Any], still_sha256: str, *, seconds: float | None, usage: dict[str, Any] | None,
                  made: str) -> dict[str, Any]:
-    """The record written beside a panel. ``source`` is what decides whether it is current; a later
-    ``approved`` flag goes beside it at the top level (not in ``source``), so approving changes nothing else."""
+    """The record written beside a panel. ``source`` is what decides whether it is current; the
+    ``approved`` flag (:func:`set_approval`) goes beside it at the top level, so approving changes nothing else."""
     return {
         "version": RECORD_VERSION, "subject": panel.subject, "view": panel.view, "model": PANEL_MODEL, "prompt": panel.prompt,
         "seed": panel.seed, "size": list(PANEL_SIZE), "source": source, "still_sha256": still_sha256,
@@ -182,6 +211,11 @@ class PanelSources:
             self._scenes[scene_id] = {"scene_fingerprint": digest, "render": [size.width, size.height, size.fps]}
         return self._scenes[scene_id]
 
+    def forget(self, scene_id: str) -> None:
+        """Take the scene's fingerprint again next time (after its render: a first render records
+        what its page loaded, which is part of the fingerprint)."""
+        self._scenes.pop(scene_id, None)
+
     def source(self, panel: Panel) -> dict[str, Any]:
         """The panel's current source (a missing picture file: its SHA-256 is ``None``)."""
         view = panel.source
@@ -216,11 +250,50 @@ def panel_lines(project: Project, sources: PanelSources) -> list[str]:
     """The plan's lines about the subjects' panels."""
     lines = ["subjects (sheet panels; `vidgen generate subjects` makes them with the image model on the ComfyUI server):"]
     for name in project.config.subjects:
+        waiting = False
         for panel in subject_panels(project, name):
             why = sources.state(panel)
             shown = panel.path.relative_to(project.root).as_posix()
-            lines.append(f"  {panel.label}: {shown} " + ("(current)" if why is None else f"- {why}"))
+            if why is None:
+                approved = is_approved(panel)
+                waiting = waiting or not approved
+                lines.append(f"  {panel.label}: {shown} (current, {'approved' if approved else 'not approved'})")
+            else:
+                lines.append(f"  {panel.label}: {shown} - {why}")
+        if waiting:
+            contact = contact_path(project, name).relative_to(project.root).as_posix()
+            lines.append(f"  {name}: look at {contact}, then `{approve_command([name])}`")
     return lines
+
+
+def set_approval(project: Project, names: Sequence[str], view: str | None = None, *, approve: bool = True) -> list[Panel]:
+    """Approve the panels of the subjects ``names`` (all when empty; ``view``: only that view of
+    the one subject), or with ``approve`` false take the approval back. Only current panels can be
+    approved: a missing or out-of-date one is a :class:`VidgenError` and nothing is changed."""
+    from vidgen.videogen import did_you_mean
+
+    if view is not None and len(names) != 1:
+        raise VidgenError("--view names a view of one subject: give one --approve NAME or --reject NAME with it")
+    panels = select_panels(project, names)
+    if view is not None:
+        views = [p.view for p in panels]
+        if view not in views:
+            raise VidgenError(f"subject {names[0]} has no view {view!r}{did_you_mean(view, views)}; views: {', '.join(views)}")
+        panels = [p for p in panels if p.view == view]
+    if approve:
+        sources = PanelSources(project)
+        waiting = [f"{p.label}: {why}" for p in panels if (why := sources.state(p)) is not None]
+        if waiting:
+            raise VidgenError(f"only current panels can be approved ({'; '.join(waiting)}): run `vidgen generate subjects` first, "
+                              "look at the subject's contact.png, then approve")
+    for panel in panels:
+        record = read_record(panel)
+        if approve:
+            record["approved"] = True
+        elif record.pop("approved", None) is None:
+            continue
+        _write_record(panel, record)
+    return panels
 
 
 # ----- the stills ----------------------------------------------------------------------------------
@@ -259,6 +332,7 @@ def write_still(project: Project, sources: PanelSources, panel: Panel, dest: Pat
             from vidgen.videogen.inputs import frame_at
 
             video = (render or _rendered_scene)(sources.still_project, view.from_.scene)
+            sources.forget(view.from_.scene)
             frame = Path(scratch) / "frame.png"
             frame_at(find_ffmpeg(), video, frame, view.from_.at)
         else:
@@ -298,10 +372,12 @@ class PanelOutcome:
 
 @dataclass
 class PanelsResult:
-    """What :func:`make_panels` did; ``batch_seconds``: the image model's batch, door to door."""
+    """What :func:`make_panels` did; ``batch_seconds``: the image model's batch, door to door;
+    ``contacts``: each subject's contact picture."""
 
     outcomes: list[PanelOutcome] = field(default_factory=list)
     batch_seconds: float | None = None
+    contacts: list[Path] = field(default_factory=list)
 
 
 def select_panels(project: Project, names: Sequence[str]) -> list[Panel]:
@@ -319,7 +395,8 @@ def make_panels(
 ) -> PanelsResult:
     """Make the panels of the subjects ``names`` (all when empty) that are not current (all with
     ``force``) in one batch on the ComfyUI server (``transport`` replaces it in tests): unload the
-    models, run every panel's job, unload the image model once after the last."""
+    models, run every panel's job, unload the image model once after the last. Then write each
+    subject's contact picture (:func:`write_contact`)."""
     panels = select_panels(project, names)
     settings = project.config.videogen.comfyui
     sources = PanelSources(project)
@@ -329,12 +406,14 @@ def make_panels(
         for panel in panels:
             why = "made again (--force)" if force else sources.state(panel)
             if why is None:
+                if not panel.still_path.is_file():   # for its contact picture
+                    write_still(project, sources, panel, panel.still_path, render)
                 result.outcomes.append(PanelOutcome(panel, "kept"))
                 out(f"{panel.label}: {panel.path.relative_to(project.root).as_posix()} is current (kept, no GPU time)")
                 continue
             if settings is None:
                 raise VidgenError("the panels are made on the ComfyUI server: set videogen.provider: comfyui and videogen.comfyui (url: or colab:)")
-            still = Path(scratch) / f"vidgen_{panel.subject}_{panel.view}_still.png"
+            still = panel.still_path
             write_still(project, sources, panel, still, render)
             record = read_record(panel)
             source = sources.source(panel)
@@ -350,16 +429,51 @@ def make_panels(
         if todo:
             assert settings is not None
             begin = clock()
-            result.outcomes += _run_batch(project, settings, sources, todo, out=out, transport=transport, sleep=sleep, clock=clock)
+            result.outcomes += _run_batch(project, settings, sources, todo, Path(scratch), out=out, transport=transport, sleep=sleep, clock=clock)
             result.batch_seconds = round(clock() - begin, 1)
             out(f"{len(todo)} panel(s) made in one batch in {result.batch_seconds:g} s; the image model was unloaded after the last one")
+    for name in dict.fromkeys(p.subject for p in panels):
+        contact = write_contact(project, name)
+        result.contacts.append(contact)
+        state = "approved" if all(is_approved(p) for p in subject_panels(project, name)) else f"then `{approve_command([name])}`"
+        out(f"{name}: look at {contact.relative_to(project.root).as_posix()} (its panels, the stills they were made from underneath); {state}")
     return result
 
 
-def _run_batch(project: Project, settings: Any, sources: PanelSources, todo: Sequence[tuple[Panel, Path]], *, out: Callable[[str], None],
-               transport: Any, sleep: Callable[[float], None], clock: Callable[[], float]) -> list[PanelOutcome]:
-    """Run ``todo`` (panel, its still) one job after another; the first unloads the models before
-    it, the last unloads them after it."""
+def write_contact(project: Project, name: str) -> Path:
+    """Write and return subject ``name``'s contact picture: its panels side by side with their
+    view names, the stills they were made from underneath (half size; a missing file is a black tile)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    from vidgen.fonts import SANS_FAMILY, bundled_font_file
+
+    font_file = bundled_font_file(SANS_FAMILY)
+    font = ImageFont.truetype(str(font_file), CONTACT_FONT) if font_file is not None else ImageFont.load_default()
+    panels = subject_panels(project, name)
+    tile_w, tile_h = PANEL_SIZE[0] // 2, PANEL_SIZE[1] // 2
+    band = CONTACT_FONT + 12
+    sheet = Image.new("RGB", (len(panels) * tile_w, 2 * (tile_h + band)), (24, 24, 24))
+    draw = ImageDraw.Draw(sheet)
+    for row, (label, path_of) in enumerate((("{}", lambda p: p.path), ("{}: the still it is made from", lambda p: p.still_path))):
+        for k, panel in enumerate(panels):
+            path = path_of(panel)
+            x, y = k * tile_w, row * (tile_h + band)
+            if path.is_file():
+                with Image.open(path) as opened:
+                    picture = opened.convert("RGB")
+                sheet.paste(picture.resize((tile_w, tile_h), Image.BOX) if picture.size != (tile_w, tile_h) else picture, (x, y))
+            text = label.format(panel.view) + ("" if path.is_file() else " (not made yet)")
+            draw.text((x + 6, y + tile_h + 5), text, fill=(235, 235, 235), font=font)
+    dest = contact_path(project, name)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(dest, format="PNG", compress_level=3)   # a picture to look at: fast to write, small enough
+    return dest
+
+
+def _run_batch(project: Project, settings: Any, sources: PanelSources, todo: Sequence[tuple[Panel, Path]], scratch: Path, *,
+               out: Callable[[str], None], transport: Any, sleep: Callable[[float], None], clock: Callable[[], float]) -> list[PanelOutcome]:
+    """Run ``todo`` (panel, its still) one job after another (the uploads are copies in
+    ``scratch``); the first unloads the models before it, the last unloads them after it."""
     import hashlib
     from datetime import datetime, timezone
 
@@ -376,8 +490,8 @@ def _run_batch(project: Project, settings: Any, sources: PanelSources, todo: Seq
     for k, (panel, still) in enumerate(todo):
         begin = clock()
         key = hashlib.sha256(still.read_bytes() + f"|{panel.prompt}|{panel.seed}".encode("utf-8")).hexdigest()[:16]
-        upload = still.with_name(f"vidgen_{key}_panel_in.png")
-        still.replace(upload)
+        upload = scratch / f"vidgen_{key}_panel_in.png"
+        shutil.copyfile(still, upload)
         graph = qwen_graph(f"vidgen_{key}_panel", panel.prompt, panel.seed, width=PANEL_SIZE[0], height=PANEL_SIZE[1], image=upload.name, full=False)
         last = k == len(todo) - 1
         job = PreparedJob(graph, {upload.name: upload}, output="output.png", free_before=k == 0, free_after=last)
@@ -429,8 +543,8 @@ def compose_shot_sheet(panels: Sequence[Panel], width: int, height: int, dest: P
 
 
 __all__ = [
-    "DEFAULT_SEED", "LOCATION_PROMPT", "OBJECT_PROMPT", "PANEL_MODEL", "PANEL_SIZE", "RECORD_VERSION", "SHEET_NAME", "SUBJECTS_DIR",
-    "Panel", "PanelOutcome", "PanelSources", "PanelsResult", "compose_shot_sheet", "make_panels", "panel_lines", "panel_record",
-    "place_still", "read_record", "select_panels", "sheet_panels", "sheet_source", "shot_panels", "shot_sheet_prompt", "subject_panels",
-    "write_still",
+    "CONTACT_NAME", "DEFAULT_SEED", "LOCATION_PROMPT", "OBJECT_PROMPT", "PANEL_MODEL", "PANEL_SIZE", "RECORD_VERSION", "SHEET_NAME", "SUBJECTS_DIR",
+    "Panel", "PanelOutcome", "PanelSources", "PanelsResult", "approve_command", "compose_shot_sheet", "contact_path", "is_approved",
+    "make_panels", "panel_lines", "panel_record", "place_still", "read_record", "select_panels", "set_approval", "sheet_panels",
+    "sheet_source", "shot_panels", "shot_sheet_prompt", "subject_panels", "write_contact", "write_still",
 ]

@@ -2788,7 +2788,7 @@ videogen:
   comfyui:                  # provider: comfyui only; exactly one of colab / url
     colab: ltx              # a Colab session set up with tools/colab/setup_session.py
     # url: http://127.0.0.1:8188   # or any ComfyUI server
-    units_per_hour: 1.94    # compute units per GPU hour (Colab L4), for the take's record
+    units_per_hour: 1.94    # compute units per GPU hour, for the take's record: Colab L4 1.94, G4 11.2 (`colab usage`)
   budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
   key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
   inline_media: images      # images | all (all: audio / video would go inline, which OpenRouter refuses: a plan problem)
@@ -2908,7 +2908,7 @@ subjects:                    # ltx-2.3-union-control shots: sheet panels made by
     location: false          # true: a place (one view, the place itself, not an object on black)
     seed: null               # the image model's seed; default 42
     views:                   # 1-4 panels
-      - name: rear           # the file sheets/glider/rear.png; default view1, view2, ...
+      - name: rear           # the file sheets/glider/rear.png; default view1, view2, ...; not contact
         from: {scene: chase, at: 1.5}   # the frame at 1.5 s of that scene's finished render (no overlays, no takes)
         crop: [190, 165, 260, 130]      # x, y, width, height in the still's pixels; default the whole still
         text: seen from behind and above   # what the panel shows (required)
@@ -3080,10 +3080,19 @@ scenes:
   from, the still's and the panel's SHA-256, seconds, GPU usage, time made). A panel is made again only when
   its source changed (the scene, time or crop, the picture file, `look`, `text`, `seed`) or with `--force`;
   when only the scene changed and its still is the same picture, the record is updated and nothing is sent.
-  `vidgen generate plan` lists every panel (current, not made yet, or why it is out of date) and blocks a shot
-  whose panels are not ready, naming the command; `vidgen generate run --pay` skips a blocked shot.
+  The still each panel is made from is kept beside it (`<view>.still.png`), and each run writes the
+  subject's `sheets/<subject>/contact.png`: its panels side by side with their view names, the stills
+  underneath. **Approval**: look at the contact picture, then `vidgen generate subjects --approve NAME`
+  (repeatable; `--approve-all`; `--view VIEW` for one panel of that subject); `--reject NAME [--view VIEW]`
+  takes it back. Approving sets `"approved": true` in the panel's record; a panel made again has a new
+  record and is not approved; a missing or out-of-date panel cannot be approved (an error, nothing
+  changes). `vidgen generate plan` lists every panel (current and approved or not approved, not made yet,
+  or why it is out of date) and blocks a shot whose panels are not ready or not approved, naming the
+  command; `vidgen generate run --pay` skips a blocked shot. A `sheet:` file you supply needs no approval.
+  A shot of `ltx-2.3-union-control` on the comfyui provider with neither `subjects:` nor `sheet:` gets a
+  warning in the plan (nothing keeps its subject the same across shots); it is not blocked.
   `vidgen generate inputs` composes the shot's sheet `build/videogen/<shot>/sheet.png` (free, Pillow, the same
-  bytes for the same panels): the clip's size, black, no text, at most 4 panels in the grid that shows them
+  bytes for the same panels; also before the panels are approved, so it can be looked at): the clip's size, black, no text, at most 4 panels in the grid that shows them
   largest (2 panels stacked, 3 or 4 in 2x2 at 768x448), each fitted to its cell; the plan blocks the shot
   until it is composed from the current panels. The prompt starts `Reference sheet: top left, <look>, <text>;
   top right, the same glider, <text>; ...`, then the shot's own prompt. `subjects:` and `sheet:` (or

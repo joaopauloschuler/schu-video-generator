@@ -2270,14 +2270,40 @@ def _generate_subjects(project: Project, args: argparse.Namespace) -> CommandRes
     if args.pay:
         raise VidgenError("`generate subjects` costs no money (it runs on your ComfyUI server); drop --pay")
     root = project.root
-    result = make_panels(project, args.subject or (), force=args.force, out=(lambda line: None) if args.json else print)
+    if args.approve or args.approve_all or args.reject:
+        return _approve_subjects(project, args)
+    if args.view is not None:
+        raise VidgenError("--view goes with --approve NAME or --reject NAME")
+    result = make_panels(project, args.subject or (), force=args.force, out=print)   # with --json, print goes to stderr (`vidgen remote` shows it)
     if args.json:
         return jsonout.envelope(
-            "generate", True, action="subjects", batch_seconds=result.batch_seconds,
+            "generate", True, action="subjects", batch_seconds=result.batch_seconds, contacts=[c.relative_to(root).as_posix() for c in result.contacts],
             panels=[{"subject": o.panel.subject, "view": o.panel.view, "action": o.action, "path": o.panel.path.relative_to(root).as_posix(),
                      "record": o.panel.record_path.relative_to(root).as_posix(), "usage": o.usage, "seconds": o.seconds} for o in result.outcomes],
         )
-    print("next: look at the panels in sheets/, then `vidgen generate inputs` composes each shot's sheet from them")
+    print("next: look at each subject's contact.png, approve its panels (`vidgen generate subjects --approve NAME` or --approve-all), "
+          "then `vidgen generate inputs` composes each shot's sheet from them")
+    return 0
+
+
+def _approve_subjects(project: Project, args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate subjects --approve NAME | --approve-all | --reject NAME [--view VIEW]``."""
+    from vidgen.videogen.subjects import set_approval
+
+    if sum([bool(args.approve), args.approve_all, bool(args.reject)]) != 1 or args.subject or args.force:
+        raise VidgenError("give one of --approve NAME, --approve-all or --reject NAME (not with --subject or --force; "
+                          "`vidgen generate subjects --force --subject NAME` makes a subject's panels again)")
+    if args.approve_all and args.view is not None:
+        raise VidgenError("--view goes with --approve NAME or --reject NAME")
+    approve = not args.reject
+    panels = set_approval(project, args.approve or args.reject or (), args.view, approve=approve)
+    word = "approved" if approve else "not approved"
+    if args.json:
+        return jsonout.envelope("generate", True, action="subjects", approved=approve, panels=[p.label for p in panels])
+    for panel in panels:
+        print(f"{panel.label}: {word}")
+    then = "`vidgen generate plan` shows the shots they unblock" if approve else "the shots that name them are blocked until they are approved again"
+    print(f"next: {then}")
     return 0
 
 
@@ -2859,7 +2885,8 @@ def build_parser() -> argparse.ArgumentParser:
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
         "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); subjects: make the "
         "subjects' sheet panels (sheets/<subject>/<view>.png) that are missing or out of date, all in one batch with the image model on "
-        "the ComfyUI server, which is unloaded once after the last (free); inputs: cut each "
+        "the ComfyUI server, which is unloaded once after the last (free), and write each subject's contact.png to look at; "
+        "--approve NAME / --approve-all / --reject NAME [--view VIEW] approve its panels or take that back (no GPU); inputs: cut each "
         "shot's voice (and with --guide its draft render) into build/videogen/; frames: paint each shot's starting picture from its paint_first_frame: (a dry run; --pay paints, within the budget, into assets/frames/; a shot uses it with first_frame: painted); run: generate the ready shots (a dry run; --pay pays, within "
         "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
         "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
@@ -2876,6 +2903,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
     p.add_argument("--subject", action="append", metavar="NAME", help="subjects: only this subject's panels (repeatable)")
     p.add_argument("--force", action="store_true", help="subjects: make the panels again even when they are current")
+    p.add_argument("--approve", action="append", metavar="NAME", help="subjects: approve this subject's panels after looking at its contact.png (repeatable; nothing is made)")
+    p.add_argument("--approve-all", action="store_true", help="subjects: approve every subject's panels (nothing is made)")
+    p.add_argument("--reject", action="append", metavar="NAME", help="subjects: take back the approval of this subject's panels (repeatable; --force makes them again)")
+    p.add_argument("--view", metavar="VIEW", help="subjects --approve NAME / --reject NAME: only this view of the subject")
     p.add_argument("--pay", action="store_true", help="run, sheets, frames: pay for the clips / pictures (needs a budget); without it a dry run")
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")

@@ -12,7 +12,7 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
 
 > **Keep the session between experiments, stop it when you are done.** A new session's setup takes
 > ~6 min and 35-85 GB of downloads; `python tools/colab/setup_session.py ltx` on a running `ltx`
-> takes ~20 s. An idle L4 still bills ~1.94 units an hour: when the owner says you are done,
+> takes ~20 s. An idle L4 still bills ~1.94 units an hour, a G4 ~11.2: when the owner says you are done,
 > `colab stop -s ltx` (§10).
 
 ## Recommended setup and why
@@ -26,8 +26,11 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
   the clip, ComfyUI started with `--no-comfy-compiler`): §7.1.
 - **Sheets made by vidgen** (`subjects:` at the top, `subjects: [glider, sea]` on the shot): `vidgen remote
   NAME generate subjects` makes each subject's panels with Qwen-Image-Edit on the session's ComfyUI, all in one
-  batch, then unloads the model once; `generate inputs` composes the shot's sheet from them; then `generate
-  run --pay` as above ([CONFIG.md](CONFIG.md), "Subjects and a composed sheet").
+  batch (about 10 s a panel on a G4), then unloads the model once, and writes `sheets/<subject>/contact.png`;
+  look at it, then `vidgen generate subjects --approve NAME` (a shot is blocked until its panels are
+  approved); `generate inputs` composes the shot's sheet from them; then `generate run --pay` as above
+  (about 80 s for a 5 s clip with a sheet on a G4) ([CONFIG.md](CONFIG.md), "Subjects and a composed sheet";
+  the guide's "Stylesheets").
 - **The first frame sets the look.** The CG frame 0 keeps the CG look; no first frame looks real
   but invents things (a beach, a different glider).
 - **Canny holds the layout and the horizon.** Depth alone rolls the horizon: in 1 / z depth the far
@@ -54,7 +57,8 @@ Seedance for the paid, tracked path inside vidgen.
 
 - The **`colab` CLI** (google-colab-cli 0.8.0) installed and logged in (`colab usage` prints the
   balance); `colab skill` prints its own agent guide.
-- **Compute units** on the account (an L4 is ~1.94 units an hour).
+- **Compute units** on the account (an L4 is ~1.94 units an hour, a G4 ~11.2; `colab usage` shows the
+  session's rate). On a G4 set `videogen.comfyui.units_per_hour: 11.2` (the default is the L4's).
 - OpenSSH's client (`ssh`) and the key `~/.ssh/colab_ed25519` (`setup_session.py` creates it when
   missing). Everything goes over SSH: `setup_session.py`, `vidgen remote`, the comfyui provider and
   the hand commands below.

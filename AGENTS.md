@@ -5677,7 +5677,7 @@ scenes:
   (LTX-2.3 + IC-LoRA union control: restyles the shot's `guide: canny` or `guide: depth` video, optionally
   from its `first_frame:`; no references, 512p, 1-5 s parts, seed 42 unless `seed:`). vidgen fits the inputs (960x512 for
   16:9, 8k+1 frames at 24 fps), runs the job and keeps the clip as a normal take, with its GPU seconds and
-  compute units (`videogen.comfyui.units_per_hour`, 1.94 for an L4) in the take's record. `generate run --pay` runs it
+  compute units (`videogen.comfyui.units_per_hour`, 1.94 for an L4, 11.2 for a G4) in the take's record. `generate run --pay` runs it
   ($0: no budget needed); an L4 job takes about 2-4 minutes of GPU. With `colab:` the job runs on that VM from this computer;
   vidgen run on that VM (`vidgen remote <session> ARGS`) uses its ComfyUI directly.
   The recommended shot and the commands: "Real footage from a web scene" below.
@@ -5814,26 +5814,29 @@ colab stop -s NAME                                 # only when the user says so
 - On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
 - Several sessions can run at once, each under its own name; run one `vidgen remote` at a time per project.
 
-**A stylesheet for a shot.** LTX-2.3 can follow the canny guide and a stylesheet picture in one run
-(the guide gives shapes and motion, the sheet the look). The sheet is a picture you made with an image
-model, with the clip's aspect ratio; describe its panels in `sheet_prompt:` (the prompt starts
-`Reference sheet: <sheet_prompt>. Generated video: `). Use a G4 session with ComfyUI's compiler off:
-`python tools/colab/setup_session.py NAME --gpu G4 --no-comfy-compiler` (it restarts a running ComfyUI whose compiler is on);
-`generate run --pay` refuses a sheet shot otherwise.
+### Stylesheets: one look for a subject across shots
 
-Add to the `generated_shot:` of "Real footage from a web scene" above:
+LTX-2.3 (`ltx-2.3-union-control`) can follow the canny guide and a stylesheet picture in one run:
+the guide gives shapes and motion, the sheet the look (panels of the subject from a few sides and the
+place). Without a sheet each shot invents its own subject; `generate plan` warns about such shots.
+The sheets are made by an image model and approved before any video work:
 
-```
-          size: 768x448          # the clip (multiples of 64); default 960x512 for 16:9
-          duration: 5            # seconds: 5 = 121 frames, 1 = 25; default the part's length
-          sheet: sheets/glider_768x448.png   # 768x448 too: the sheet is scaled, never cropped
-          sheet_prompt: "top left, the glider from behind and above, red wing tips; top right, the same glider in side view; bottom left, from above; bottom right, a rough open sea under a low sun"
-          # first_frame: none    # no first frame (restyled still works)
-```
-
-**Sheets vidgen makes: `subjects:`.** Instead of a hand-made sheet, name each subject or location once
-at the top of `video.yaml` and list its views (stills of your render or picture files; never a video
-model's frame); a shot names them and vidgen composes its sheet and its `sheet_prompt`:
+1. `subjects:` in `video.yaml`: each subject or location once, with its `look` and its views (a still
+   of your render, `from: {scene, at}`, or a picture file such as a `vidgen still` from another
+   camera; never a video model's frame); a shot names them in `subjects:`.
+2. `vidgen remote NAME generate subjects`: Qwen-Image-Edit makes each view a clean panel
+   (`sheets/<subject>/<view>.png`, a `.json` record beside it), all in one batch on the session's
+   ComfyUI (about 10 s a panel on a G4), then unloads the model. Only panels whose still, look, text
+   or seed changed are made again (`--force --subject NAME`: all of that subject).
+3. Look at each `sheets/<subject>/contact.png` (the panels with their view names, the stills they were
+   made from underneath).
+4. `vidgen generate subjects --approve NAME` (or `--approve-all`; `--view VIEW` for one panel;
+   `--reject NAME` takes it back). A panel made again is not approved any more; only current panels
+   can be approved. `generate plan` lists each panel `approved` / `not approved` and blocks a shot
+   until all its panels are approved, with the command to run.
+5. `vidgen remote NAME generate inputs --guide`: the canny guide, the first frame and the shot's sheet
+   `build/videogen/<shot>/sheet.png` (the panels on black, a grid at the clip's size).
+6. `vidgen remote NAME generate run --pay --shot ID`: the clip; a blocked shot is never paid for.
 
 ```
 subjects:
@@ -5841,17 +5844,31 @@ subjects:
     look: "a grey jet glider with delta wings and red wing tips"
     views:
       - {name: rear, from: {scene: chase, at: 0.5}, crop: [190, 165, 260, 130], text: "seen from behind and above"}
-      - {name: side, image: assets/glider_side.png, text: "in side view"}   # e.g. `vidgen still` with another camera
+      - {name: side, image: assets/glider_side.png, text: "in side view"}
   sea: {look: "a rough open sea", location: true, views: [{from: {scene: chase, at: 0.5}, text: "from low over the water"}]}
-# on the shot, instead of sheet: and sheet_prompt:
+...
+        generated_shot:
+          kind: establishing
+          model: ltx-2.3-union-control
+          prompt: "a grey glider flies low over a rough open sea and banks gently, the chase camera following close behind"
+          guide: canny
+          first_frame: restyled
           subjects: [glider, sea]   # at most 4 panels in all
+          size: 768x448             # the clip (multiples of 64); default 960x512 for 16:9
+          duration: 5               # seconds: 5 = 121 frames, 1 = 25; default the part's length
 ```
 
-`vidgen remote NAME generate subjects` makes the panels (`sheets/<subject>/<view>.png`, a `.json`
-record each) with Qwen-Image-Edit on the session's ComfyUI, all in one batch, then unloads the model;
-it remakes only panels whose still, look, text or seed changed (`--force`: all). Look at the panels,
-then `generate inputs` composes `build/videogen/<shot>/sheet.png` (black, a grid at the clip's size).
-`generate plan` lists the panels and blocks a shot until its panels and sheet are ready.
+- Use a G4 session with ComfyUI's compiler off: `python tools/colab/setup_session.py NAME --gpu G4
+  --no-comfy-compiler` (it restarts a running ComfyUI whose compiler is on); `generate run --pay`
+  refuses a sheet shot otherwise. On a G4, a 5 s clip with a sheet takes about 80 s door to door
+  (53 s in ComfyUI) and peaks at 42.7 GB of VRAM. A G4 bills about 11.2 compute units an hour: set
+  `videogen.comfyui.units_per_hour: 11.2` so the takes record the right units.
+- First frame: `first_frame: restyled` (sent as a frame) gives the best opening and keeps the sheet's
+  details. With a sheet a first frame is optional (`first_frame: none`). `first_frame_in: guide` runs
+  with a sheet but opened on an over-exposed frame in the one test.
+- A sheet you made yourself instead of `subjects:`: `sheet: FILE` (the clip's aspect ratio; it is scaled,
+  never cropped) with `sheet_prompt:` describing its panels (the prompt starts `Reference sheet:
+  <sheet_prompt>. Generated video: `). It needs no approval: you supplied it.
 
 ### Long films: one agent per phase
 

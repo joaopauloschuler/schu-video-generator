@@ -462,9 +462,10 @@ SHEET_ASPECT_TOLERANCE = 0.01
 
 def _subjects_sheet(project: Project, shot: Shot, panels: PanelSources, size: tuple[int, int]) -> None:
     """Set ``shot.subject_prompt`` and, once composed from current panels, ``shot.sheet``; else
-    block the shot with the command that makes what is missing."""
+    block the shot with the command that makes what is missing. Panels not approved block it too
+    (the sheet may still be composed, to look at)."""
     from vidgen.videogen.freshness import recorded_matches
-    from vidgen.videogen.subjects import SHEET_NAME, sheet_source, shot_panels, shot_sheet_prompt
+    from vidgen.videogen.subjects import SHEET_NAME, approve_command, contact_path, is_approved, sheet_source, shot_panels, shot_sheet_prompt
 
     assert shot.spec.subjects is not None
     found = shot_panels(project, shot.spec.subjects)
@@ -474,6 +475,11 @@ def _subjects_sheet(project: Project, shot: Shot, panels: PanelSources, size: tu
         shot.blocked.append(f"sheet panels not ready ({'; '.join(waiting)}): run `vidgen generate subjects` (the image model on the ComfyUI server), "
                             f"then `{inputs_command(project, False)}` composes the sheet")
         return
+    unapproved = [p for p in found if not is_approved(p)]
+    if unapproved:
+        names = list(dict.fromkeys(p.subject for p in unapproved))
+        contacts = ", ".join(contact_path(project, n).relative_to(project.root).as_posix() for n in names)
+        shot.blocked.append(f"sheet panels not approved ({', '.join(p.label for p in unapproved)}): look at {contacts}, then `{approve_command(names)}`")
     dest = project.root / INPUTS_DIR / shot.id / SHEET_NAME
     if not recorded_matches(dest, sheet_source(found, *size)):
         made = "is not composed from the current panels" if dest.is_file() else "is not composed yet"
@@ -1158,6 +1164,19 @@ def _unlisted_models(models: Iterable[str], catalog: Catalog) -> list[str]:
     return [f"videogen.models: OpenRouter lists no video model {m!r}{did_you_mean(m, known)}: its entry has no effect" for m in models if m not in known]
 
 
+def _no_sheet_warnings(project: Project, shots: Sequence[Shot]) -> list[str]:
+    """A warning for each shot of a ComfyUI workflow that takes a sheet but has no ``subjects:`` and no ``sheet:``."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    if project.config.videogen.provider != COMFYUI_PROVIDER:
+        return []
+    return [
+        f"shot {s.id}: no subjects: and no sheet:, so nothing keeps its subject looking the same across shots (`vidgen guide` Stylesheets)"
+        for s in shots
+        if s.spec.subjects is None and s.spec.sheet is None and (w := find_workflow(s.spec.model)) is not None and w.takes_sheet
+    ]
+
+
 def plan_shots(
     project: Project, *, catalog: Catalog | None = None, budget_usd: float | None = None, shot_ids: Sequence[str] = (),
     lookup: object = None,
@@ -1194,6 +1213,7 @@ def plan_shots(
         from vidgen.videogen.subjects import panel_lines
 
         plan.subject_lines = panel_lines(project, PanelSources(project))
+    plan.warnings += _no_sheet_warnings(project, shots)
     left = budget.remaining_usd - sheet_cost if budget.remaining_usd is not None else None
     sources = InputSources(project)
     for shot in shots:

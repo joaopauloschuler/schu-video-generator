@@ -22361,8 +22361,9 @@ real footage. Two shot options, any scene type:
   `references.draws_overlays(config)` is false and no take is placed in the scene: the same pixels,
   so `vidgen render` and `generate inputs --guide` share one render (a web scene on a one-CPU
   machine draws 19 s a frame at 1280x720; two renders would double that). The choice flips when a
-  take is placed in the scene: the fingerprint then differs, the guide is reported changed, and a
-  re-cut renders `_source` once.
+  take is placed in the scene; a `final` input records the scene fingerprint of `without_takes()`
+  either way (`freshness.InputSources.render`; the same picture), so placing the shot's first take
+  does not make its guide look changed. A later render then draws `_source` once.
 - **`audio: mix`** (`GeneratedShot.audio_source`: `beat`, `mix`, `none`; `wants_audio` is "not
   none"). `audio.mp3` is cut from the rendered film (`project.output_path(False)`) at the beat's
   start in `build/final/timings.json` plus the part's offset, for the part's length (the same
@@ -22565,7 +22566,7 @@ base video and a stylesheet in one run when each IC-LoRA has its own guide.
   a paid comfyui run, so the models are unloaded once, before its first job, and stay loaded between
   its shots.
 
-### 113.24 Subjects: sheet panels made by vidgen, a shot's sheet composed (Step 428)
+### 113.24 Subjects: sheet panels made by vidgen, approved, a shot's sheet composed (Steps 428-429)
 
 Rules of the owner: sheets come only from an image model (frames of vidgen's own render are valid
 inputs, never a video model's frames); they are made before any video work, on the Colab machine (no
@@ -22584,9 +22585,19 @@ hosted service), with the image model loaded once for the whole batch and unload
   after another through one transport: `free_before` on the first, `free_after` on the last only.
   Records `sheets/<subject>/<view>.json` (`panel_record`): `source` = `{still: {scene, at,
   scene_fingerprint, render | image, image_sha256; crop}, edit: {prompt, seed, model, size}, location?}`,
-  plus the still's and panel's SHA-256, seconds, usage, time. *Approval* goes in a later step as a
-  top-level `approved` key beside `source`. `PanelSources.state` compares offline; a changed scene
-  fingerprint with the same still re-records without GPU work.
+  plus the still's and panel's SHA-256, seconds, usage, time. `PanelSources.state` compares offline; a
+  changed scene fingerprint with the same still re-records without GPU work. The still is kept as
+  `<view>.still.png` (a view may not be named `contact`), and `make_panels` ends by writing each
+  selected subject's `contact.png` (`write_contact`: panels at half size with their view names, the
+  stills underneath; Pillow, no GPU).
+- **Approval** (`set_approval`; `vidgen generate subjects --approve NAME | --approve-all | --reject NAME
+  [--view VIEW]`, no GPU). A top-level `"approved": true` in the record, beside `source`; only a current
+  panel can be approved (else `VidgenError`, nothing written); a remade panel gets a new record without
+  it, a re-recorded one (same still) keeps it. `shots._subjects_sheet` blocks a shot with a panel not
+  approved, naming its contact pictures and `approve_command`; the sheet is still composed and set, so
+  it can be looked at, but the blocked shot is never paid for. A `sheet:` file needs no approval.
+  `plan_shots` adds a warning (not a block) for each comfyui shot of a `takes_sheet` workflow with
+  neither `subjects:` nor `sheet:`.
 - **The shot's sheet** (`videogen/sheet_layout.py`). `choose_grid` picks the columns x rows that shows
   the panels largest (smallest panel area; ties: fewer empty cells, fewer columns), `GAP` 4 px,
   Lanczos, row by row; `place_words` names cells ("top left", "bottom", "the whole sheet"). The sheet
