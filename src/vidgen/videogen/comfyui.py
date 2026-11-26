@@ -85,6 +85,11 @@ class Workflow:
     takes_sheet: bool = False
 
     @property
+    def controls_text(self) -> str:
+        """:attr:`controls` as messages name them (``canny, final or depth``)."""
+        return " or ".join([", ".join(self.controls[:-1]), self.controls[-1]] if len(self.controls) > 1 else self.controls)
+
+    @property
     def resolution(self) -> str:
         """The one resolution tier it makes (``512p``)."""
         return f"{self.short_side}p"
@@ -188,9 +193,9 @@ class Workflow:
 WORKFLOWS: dict[str, Workflow] = {
     "ltx-2.3-union-control": Workflow(
         id="ltx-2.3-union-control", name="LTX-2.3 IC-LoRA Union Control (ComfyUI)",
-        description="LTX-2.3 distilled-1.1 GGUF Q5_K_M + IC-LoRA union-control ref0.5: restyles a control video (the shot's canny or depth guide), "
+        description="LTX-2.3 distilled-1.1 GGUF Q5_K_M + IC-LoRA union-control ref0.5: restyles a control video (the shot's canny, final or depth guide), "
                     "optionally from a first frame and with a stylesheet (sheet:, Ingredients IC-LoRA); 8 steps, cfg 1",
-        controls=("canny", "depth"), takes_sheet=True,
+        controls=("canny", "final", "depth"), takes_sheet=True,
     ),
 }
 
@@ -214,7 +219,7 @@ def check_workflow_request(request: VideoRequest, model: VideoModel) -> RequestC
     check = RequestCheck()
     videos = [r for r in request.references if r.kind == "video"]
     if len(videos) != 1:
-        check.problems.append(f"{model.id} needs one control video: guide: {' or '.join(workflow.controls)} (it has {len(videos)})")
+        check.problems.append(f"{model.id} needs one control video: guide: {workflow.controls_text} (it has {len(videos)})")
     if any(f.frame_type != "first_frame" for f in request.frame_images):
         check.problems.append(f"{model.id} takes a first frame only, not a last frame")
     if request.resolution is not None and request.resolution.lower() != workflow.resolution:
@@ -247,7 +252,7 @@ def guide_problem(model: str, guide: str | None) -> str | None:
     workflow = find_workflow(model)
     if workflow is None or guide in workflow.controls:
         return None
-    return f"{model} takes guide: {' or '.join(workflow.controls)} as its control video, not {guide or 'no guide'}"
+    return f"{model} takes guide: {workflow.controls_text} as its control video, not {guide or 'no guide'}"
 
 
 # ----- fitting the inputs ------------------------------------------------------------------------

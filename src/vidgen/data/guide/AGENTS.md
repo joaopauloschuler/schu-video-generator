@@ -5674,7 +5674,7 @@ scenes:
 - **Your own GPU (ComfyUI, no money)**: `videogen: {provider: comfyui, comfyui: {colab: <session>}}`
   (a Colab session set up with `tools/colab/setup_session.py <session>`; always name it) or
   `{url: http://host:8188}` (any ComfyUI server), and `generated_shot.model: ltx-2.3-union-control`
-  (LTX-2.3 + IC-LoRA union control: restyles the shot's `guide: canny` or `guide: depth` video, optionally
+  (LTX-2.3 + IC-LoRA union control: restyles the shot's `guide: canny`, `final` or `depth` video, optionally
   from its `first_frame:`; no references, 512p, 1-5 s parts, seed 42 unless `seed:`). vidgen fits the inputs (960x512 for
   16:9, 8k+1 frames at 24 fps), runs the job and keeps the clip as a normal take, with its GPU seconds and
   compute units (`videogen.comfyui.units_per_hour`, 1.94 for an L4, 11.2 for a G4) in the take's record. `generate run --pay` runs it
@@ -5733,6 +5733,16 @@ scenes:
   render (same size, frames and camera), grey as 1 / distance: near white, far dark, sky black, one
   range for the shot, no film effects. For depth-control video models (an IC-LoRA's depth control).
   An orbital scene in depth slices (`vidgen/space-scale`'s default) is not drawn right yet.
+  A page that draws its picture another way (its own `EffectComposer`) draws just the depth frames
+  through one: in `frame(t, ctx)`, `if (ctx.draw_mode === "depth") { (depth ??= new Finish(renderer,
+  scene, camera, ctx)).render(t); return; }` (`import {Finish} from "vidgen/three-finish"`).
+- **Which guide on `ltx-2.3-union-control`** (`guide: canny | final | depth`, each with or without a
+  sheet, at 12 or 24 fps): change the line, `generate plan` shows the shot's new `guide:` input as not
+  made yet (only that shot), `generate inputs --guide --shot ID` cuts it from the same render. One test
+  (an 8 s escapement shot with a sheet, one seed): `final` (the colour render) kept the parts and the
+  lighting best and moved with the camera from frame 0, but kept some of the render's look (its flash,
+  its regular patterns); `depth` invented surfaces where the render had texture; `canny` invented the
+  most and held the camera still for up to 2 s at the start.
 - **An open model instead of Seedance** (by hand, outside `vidgen generate`): the shot's
   `guide.final.mp4` and `guide.depth.mp4` restyled by LTX-2.3 with its union-control IC-LoRA in
   ComfyUI on a Colab L4: docs/HOWTO-restyle-with-ltx-on-colab.md in the repository (scripts in

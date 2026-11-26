@@ -177,3 +177,38 @@ def test_the_page_packs_the_exact_distances_and_keeps_vertex_shaders(tmp_path: P
     assert not np.array_equal(np.isfinite(bent), np.isfinite(z))   # through the lens's distortion, as the colour frame
     with pytest.raises(VidgenError, match=r"guide: depth needs the page to draw through vidgen/three-finish"):
         make_web_clip(tmp_path, tmp_path / "out", "d", {"script": "depth.js", "data": {"plain": True}}, size=(32, 18), fps=10, frames=2, draw_mode="depth")
+
+
+#: A page that draws its picture itself and only its depth frames through Finish (Step 435).
+OWN_PICTURE_PAGE = """import * as THREE from "three";
+import {Finish} from "vidgen/three-finish";
+let renderer, scene, camera, depth = null;
+export function load(ctx) {
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x203040);
+  camera = new THREE.PerspectiveCamera(40, ctx.width / ctx.height, 0.1, 50);
+  camera.position.set(0, 0, 5);
+  scene.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 2), new THREE.MeshBasicMaterial({color: 0xff0000})));
+}
+export function frame(t, ctx) {
+  if (ctx.draw_mode === "depth") { (depth ??= new Finish(renderer, scene, camera, ctx)).render(t); return; }
+  renderer.render(scene, camera);
+}
+"""
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_a_page_with_its_own_picture_draws_its_depth_through_finish(tmp_path: Path) -> None:
+    from vidgen.web.entry import WebEntry
+    from vidgen.web.page import WebPage
+
+    _chromium_or_skip()
+    (tmp_path / "own.js").write_text(OWN_PICTURE_PAGE, encoding="utf-8")
+    with WebPage(tmp_path, WebEntry("script", "own.js"), scene_id="o", size=(160, 90), fps=10, frames=2) as page:
+        assert page.frame(0)[45, 80][:3].tolist() == [255, 0, 0]
+    with WebPage(tmp_path, WebEntry("script", "own.js"), scene_id="o", size=(160, 90), fps=10, frames=2, draw_mode="depth") as page:
+        z = unpack(page.frame(0))
+        assert page.depth_frames() == 1
+    assert abs(float(z[45, 80]) - 5.0) < 1e-3 and np.isinf(z[2, 2])

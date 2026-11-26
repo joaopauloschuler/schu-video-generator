@@ -578,6 +578,33 @@ split.
 - The ComfyUI must have the RIFE weights (`tools/colab/setup.sh` downloads them; a session set up before
   needs `setup_session.py NAME` again). `fps:` is for vidgen's ComfyUI workflows only.
 
+### Which guide on the LTX workflow: `canny`, `final` or `depth` (ComfyUI)
+
+`ltx-2.3-union-control` takes one of three guides as its control video, each with or without a sheet,
+at 12 or 24 fps. Change the one line; `vidgen generate plan` then says the shot's inputs are not made
+yet (only that shot; the scene's render is reused), and `vidgen generate inputs --guide --shot ID` cuts
+the new guide.
+
+```yaml
+          guide: final     # the scene's own finished render, in colour (guide.final.mp4)
+          guide: canny     # its edges, white on black (guide.canny.mp4; canny: sets the thresholds)
+          guide: depth     # its depth, near white, far dark (guide.depth.mp4; a 3d, space or three-finish web scene)
+```
+
+What one experiment measured (the escapement's 8 s at 12 fps with a sheet, one shot, one seed; GUIDE-TEST.md
+in the escapement-remake project):
+
+- **`final`** kept the parts and the lighting best (3 parts wrong, against 7-8 with canny) and moved with
+  the camera from the first frame. It can keep some of the render's look: its flash, its bloom, its regular
+  patterns.
+- **`depth`** has no texture, so the model invented surfaces where the render had them (a smooth brass
+  disc for a patterned plate, a toothed rim for a screwed one) and brightened over the clip.
+- **`canny`** invented the most (a ratchet ring for the escape wheel, a black plate) and held the camera
+  still for up to 2 s at the start before catching up.
+
+A web scene's depth needs its page to draw the depth frames through `vidgen/three-finish` (see
+"A web scene's depth" in CONFIG.md); a page that does not is refused when the inputs are cut.
+
 ## 7. Takes, QA and picking
 
 Each clip becomes `takes/<shot>/<n>.mp4` with `<n>.json` (model, cost, QA) and

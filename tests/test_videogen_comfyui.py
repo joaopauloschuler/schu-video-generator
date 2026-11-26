@@ -117,7 +117,7 @@ def test_check_estimate_and_guide_rules(tmp_path: Path) -> None:
     assert len(bad.problems) == 3
     assert estimate(ok, model).cost == 0.0
     assert guide_problem(LTX, "depth") is None and guide_problem(LTX, "canny") is None
-    assert "guide: canny or depth" in (guide_problem(LTX, "final") or "")
+    assert guide_problem(LTX, "final") is None and "guide: canny, final or depth" in (guide_problem(LTX, "outline") or "")
     assert guide_problem("bytedance/seedance-2.0-fast", "final") is None
 
 

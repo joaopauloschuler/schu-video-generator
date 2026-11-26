@@ -2810,7 +2810,7 @@ videogen:
 - **ComfyUI** (`provider: comfyui`, DESIGN.md §113.20): shots use workflows kept with vidgen as their
   `model:`, listed by `vidgen generate models`. `ltx-2.3-union-control` (LTX-2.3 distilled-1.1 GGUF
   Q5_K_M + IC-LoRA union control ref0.5, 8 steps, cfg 1, seed 42 or the shot's `seed:`) takes the shot's
-  `guide: canny` or `guide: depth` as its control video (required), its `first_frame:` (optional, strength 1.0) and the
+  `guide: canny`, `guide: final` or `guide: depth` as its control video (required; DESIGN.md §113.26), its `first_frame:` (optional, strength 1.0) and the
   prompt; no references (they are left out, with a note) and no last frame. Its shape rules: 512p,
   the long side rounded up to a multiple of 64 (16:9: 960x512), 1-5 s (longer beats are split into
   parts), 8k+1 frames at 24 fps. vidgen scales the guide and the first frame to cover that size
@@ -3018,7 +3018,9 @@ scenes:
   again (free). Both are video / audio inputs, so they need the quick tunnel.
 - **A web scene's depth** (DESIGN.md §113.19): `guide: depth` also works on a `space` scene and on
   a `web` scene whose page draws through `vidgen/three-finish` (`Finish.render(t)`; another page is
-  refused when it is drawn). The depth is the scene's own depth buffer, drawn with the **finished**
+  refused when it is drawn). A page that draws its picture another way draws only its depth frames
+  through one: `if (ctx.draw_mode === "depth") { (depth ??= new Finish(renderer, scene, camera, ctx)).render(t); return; }`
+  in `frame(t, ctx)`. The depth is the scene's own depth buffer, drawn with the **finished**
   render (the video's size and frame rate, the same camera and frames; `guide: final`'s render, so
   `vidgen render` and the pass share the colour frames) by the scene's own shaders (a sea's waves
   stay), beside it as `build/final/web/<scene>.depth.mkv` (lossless, the distance packed into the

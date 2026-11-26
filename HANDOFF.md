@@ -28946,3 +28946,39 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_colab_setup_session.py tests/test_videogen_sheet.py
   tests/test_remote.py tests/test_colab_keepalive.py tests/test_colab_rsync.py tests/test_colab_ssh.py
   tests/test_colab_transfer.py tests/test_guide.py tests/test_docs.py` (269 passed, 29 s).
+
+## Step 435 — the guide choice on the LTX workflow: canny, final, depth
+- **Built**: `ltx-2.3-union-control` (provider `comfyui`) now takes `guide: final` as its control video besides
+  `canny` and `depth` (`Workflow.controls = ("canny", "final", "depth")`). Before: `canny` and `depth` only;
+  `final` was a plan problem ("takes guide: canny or depth"). `final` is the existing name for the beat's
+  finished colour render (`guide.final.mp4`, §113.18), exactly what GUIDE-TEST.md's T1 sent; no new word.
+  Every guide keeps its existing prompt sentence (`shots.GUIDE_PROMPTS`), the graph and the sheet graph are
+  unchanged (the control video is fitted the same way whatever it shows, also at `fps: 12`), the default
+  guide, text encoder (cpu) and everything else unchanged. Messages name the controls as `canny, final or depth`.
+- **Depth for a web scene**: the existing route (§113.19, Step 403b). vidgen renders the depth pass with
+  the finished render and gives the page `ctx.draw_mode = "depth"`; a page that draws its picture its own
+  way (the escapement film's `EffectComposer`) adds two lines to `frame(t, ctx)`:
+  `if (ctx.draw_mode === "depth") { (depth ??= new Finish(renderer, scene, camera, ctx)).render(t); return; }`
+  with `import {Finish} from "vidgen/three-finish"`. Chosen because it needs no vidgen code, no new flag
+  and no author files, and gives the real depth buffer, greyed with one range per shot like every other web
+  depth (1 / distance, near white). A page that draws no depth frame is refused when drawn (existing error).
+  Checked locally in Chromium (160x90): a page drawing with `renderer.render` for colour and `Finish` for depth
+  gives 5.000 m on its plane at 5 m, nothing drawn = inf (new slow render test).
+- **Staleness**: unchanged mechanism, now tested for this route: a changed `guide:` makes that shot's guide
+  input "not made yet" and its request key new; the other shot's key is the same. `generate plan` prints
+  each shot's `guide:` input line (file and what it is).
+- **Files**: `src/vidgen/videogen/comfyui.py` (`controls`, `Workflow.controls_text`, description);
+  `tests/test_videogen_ltx_guides.py` (new: 12 parametrized combos + refusal + staleness),
+  `tests/test_videogen_comfyui.py` (assertion for `final`), `tests/test_web_depth_pass.py` (+1 slow render
+  test); `DESIGN.md` §113.26, `docs/CONFIG.md` (comfyui line, web depth), `docs/COOKBOOK-GENERATED-VIDEO.md`
+  ("Which guide on the LTX workflow"), `docs/HOWTO-restyle-with-ltx-on-colab.md` (Recommended setup),
+  guide + `AGENTS.md`, `tasklist.md`.
+- **Interfaces**: `Workflow.controls_text` (property). `ltx-2.3-union-control` accepts `guide: final`.
+- **Known gaps**: the escapement film's `extensions/escapement.js` does not have the two depth lines yet
+  (adding them changes every web scene's fingerprint there, so all 25 guides go stale once: the author's
+  choice when the depth comparison starts). Its hand depth pass (`guidetest/escapement_depth.js`) was linear
+  in z between a fixed near and far and hid see-through parts; vidgen's is 1 / z with one range per shot, so
+  a depth take will not match T2 exactly. Depth on a real GPU through vidgen: not run (see Step 436's check).
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_guide.py tests/test_videogen_ltx_guides.py
+  tests/test_videogen_comfyui.py tests/test_web_depth_pass.py` (137 passed, 17 s); the render test by node id:
+  `tests/test_web_depth_pass.py::test_a_page_with_its_own_picture_draws_its_depth_through_finish` (6.5 s).

@@ -22662,6 +22662,43 @@ RIFE 4.26 doubling to 24 fps keeps every tick on its beat, each tick spread over
   without the file refuses the graph; `comfyui.missing_weights_hint` adds the setup command to that
   error (no check before sending).
 
+### 113.26 Three guides on the LTX workflow: canny, final, depth (Step 435)
+
+Experiment 2026-11-26 on an L4 (`video-projects/escapement-remake/GUIDE-TEST.md`; one shot, the
+escapement's 8 s at 12 fps, one seed, a stylesheet): three control videos for `ltx-2.3-union-control`
+sent by hand. The scene's own colour render kept the parts and the lighting best (3 parts wrong of
+the base's, against 7-8 for canny) and moved with the camera from frame 0, but kept some of the
+render's look (its opening flash, its regular perlage); a depth guide has no texture, so the model
+invented surfaces (a brass disc, a cream plate, a toothed rim) and brightened; the canny outline
+invented the most and lagged the camera by up to 2 s at the start. The next film compares the three
+shot by shot, so vidgen sends each of them.
+
+- **The workflow's controls.** `Workflow.controls` of `ltx-2.3-union-control` is `("canny", "final",
+  "depth")` (was `canny`, `depth`); `guide_problem` and `check_workflow_request` name them
+  (`Workflow.controls_text`: `canny, final or depth`), every other guide (`true` / `render`, `outline`,
+  `mask`, none) stays a plan problem. *Why `final`, not a new name:* `guide: final` already is "the
+  beat's finished render, silent, at the film's size" (§113.18), cut to `guide.final.mp4`; it is exactly
+  the colour control video the experiment sent. Nothing else changed: the graph does not depend on
+  what the control video shows (`fit_control` scales and resamples any of them, also at `fps: 12`),
+  the sheet graph is the same, the default guide of a shot is unchanged.
+- **The prompt.** Each guide keeps its own sentence (`shots.GUIDE_PROMPTS`): canny "an edge map ... of
+  the computer render", depth "a depth map (near is white, far is dark)", final "the finished computer
+  render of this shot: keep its layout ... and remake it as real camera footage". With a sheet it
+  follows `Reference sheet: ... Generated video: ...` as before.
+- **Depth of a web scene** is the existing route (§113.19): vidgen renders the scene's depth pass with
+  the finished render, the page draws it when `ctx.draw_mode` is `"depth"` through
+  `vidgen/three-finish`'s `Finish.render(t)`. *Why no new flag or author file:* a page that draws its
+  picture another way (its own `EffectComposer`, as the escapement film's page does) needs only to
+  draw the depth frames through a `Finish` made for that (`new Finish(renderer, scene, camera,
+  ctx).render(t)` when `ctx.draw_mode === "depth"`, two lines); the depth is then the scene's real
+  depth buffer, packed and greyed as for every other web scene. A page that draws no depth frame is
+  refused when it is drawn (`guide: depth needs the page to draw through vidgen/three-finish`).
+- **Staleness.** The guide is a shot input (`guide.<guide>.mp4`) and its file and the prompt sentence
+  are in the request key: a changed `guide:` makes that shot's input "not made yet" and its key new;
+  other shots keep theirs, and the renders are reused (canny, final and a web scene's depth all come
+  from the finished render, `render_kind` `final`). `generate plan` prints each shot's `guide:` line
+  (the file and what it is).
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
