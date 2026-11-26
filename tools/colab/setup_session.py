@@ -1,7 +1,7 @@
 """Find or create a Google Colab GPU session and set it up for docs/HOWTO-restyle-with-ltx-on-colab.md.
 
     python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler]
-                                       [--no-vidgen | --vidgen-only]
+                                       [--reserve-vram GB] [--no-vidgen | --vidgen-only]
 
 Runs on your machine (standard library only, Windows too) and drives the `colab` CLI: it reuses the
 session NAME when `colab sessions` lists it (else `colab new`, retried on 503), then installs
@@ -17,9 +17,10 @@ loads. ``--via exec`` keeps the ``colab exec`` route (start_setup.py / start_com
 scripts from the Jupyter kernel).
 
 ComfyUI starts with its model compiler on; ``--no-comfy-compiler`` starts it with
-``--disable-comfy-compiler`` (needed by the node LTX Multi IC-LoRA). Over SSH a ComfyUI that runs with
-the other setting, or that ran while setup.sh added nodes, is restarted (``vidgen.colab.comfy_args``
-reads its flags on the VM).
+``--disable-comfy-compiler`` (needed by the node LTX Multi IC-LoRA); ``--reserve-vram N`` adds
+``--disable-dynamic-vram --reserve-vram N`` (an L4 then completes sheet clips of 97 frames). Over SSH a
+ComfyUI that runs with other flags than these, or that ran while setup.sh added nodes, is restarted
+(``vidgen.colab.comfy_args`` reads its flags on the VM; it is stopped by its PID, never by a pattern).
 """
 from __future__ import annotations
 
@@ -39,7 +40,7 @@ sys.path.insert(0, str(REPO / "src"))  # this checkout's vidgen.colab, also when
 
 from vidgen.colab import (  # noqa: E402
     NO_COMPILER_FLAG, VM_SOURCE_ARCHIVE, Colab as _Colab, ColabError as SetupError, CommandResult, Runner,
-    comfy_compiler_off, format_seconds, last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions,
+    comfy_args, format_seconds, last_line as _last_line, package_hash, parse_prefixed_json, parse_sessions,
     run_command, say_now, shown, source_archive, via_arg,
 )
 from vidgen import colab_ssh  # noqa: E402
@@ -68,12 +69,9 @@ SSH_CHECK = "echo vidgen-ssh-ok"
 #: ComfyUI and its VRAM sampler, as start_comfy.py starts them on the exec route.
 COMFY_COMMAND = ["python", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
 VRAM_COMMAND = ["nvidia-smi", "--query-gpu=timestamp,memory.used,utilization.gpu", "--format=csv,noheader", "-l", "1"]
-#: pkill/pgrep patterns (extended regex) of those two processes, anchored at the start of the command line
-#: (a shell whose command text names them does not match). The ComfyUI one also matches a server started
-#: by hand (``python3 main.py``, a path before either word, other flags) on port 8188, as
-#: ``vidgen.colab.comfy_args`` finds it.
-COMFY_PATTERN = r"^([^ ]*/)?python[0-9.]* ([^ ]*/)?main\.py .*8188"
-VRAM_PATTERN = "^" + " ".join(VRAM_COMMAND[:2])
+#: ComfyUI's flags for a small card (``--reserve-vram N``): no dynamic VRAM, N GB kept free for the rest.
+NO_DYNAMIC_VRAM_FLAG = "--disable-dynamic-vram"
+RESERVE_VRAM_FLAG = "--reserve-vram"
 #: The add-ons for a base video + a sheet in one LTX run (setup.sh installs them with the LTX part).
 INGREDIENTS_LORA = "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"
 ROUTING_NODE = "comfyui-hrnodes"
@@ -114,24 +112,55 @@ def setup_command(script: str, env: dict[str, str]) -> str:
         + " echo started $!"
 
 
-def comfy_command(no_compiler: bool = False) -> str:
-    """Start ComfyUI on 127.0.0.1:8188 (with ``--disable-comfy-compiler`` when ``no_compiler``) and the
-    1 s VRAM sampler over ssh (as start_comfy.py does)."""
-    command = [*COMFY_COMMAND, NO_COMPILER_FLAG] if no_compiler else COMFY_COMMAND
+def comfy_flags(no_compiler: bool = False, reserve_vram: float | None = None) -> list[str]:
+    """ComfyUI's flags after :data:`COMFY_COMMAND`: ``--disable-comfy-compiler`` when ``no_compiler``,
+    ``--disable-dynamic-vram --reserve-vram N`` with ``reserve_vram`` N (GB)."""
+    flags = [NO_COMPILER_FLAG] if no_compiler else []
+    if reserve_vram is not None:
+        flags += [NO_DYNAMIC_VRAM_FLAG, RESERVE_VRAM_FLAG, f"{reserve_vram:g}"]
+    return flags
+
+
+def running_reserve(args: list[str]) -> float | None:
+    """The ``--reserve-vram`` of a running ComfyUI's arguments when it also has ``--disable-dynamic-vram``
+    (``None``: neither; ``-1.0``: only one of them, or an unreadable number, so it never matches a request)."""
+    has_reserve, dynamic_off = RESERVE_VRAM_FLAG in args, NO_DYNAMIC_VRAM_FLAG in args
+    if not has_reserve and not dynamic_off:
+        return None
+    try:
+        value = float(args[args.index(RESERVE_VRAM_FLAG) + 1]) if has_reserve else -1.0
+    except (IndexError, ValueError):
+        value = -1.0
+    return value if dynamic_off else -1.0
+
+
+def comfy_command(no_compiler: bool = False, reserve_vram: float | None = None) -> str:
+    """Start ComfyUI on 127.0.0.1:8188 with :func:`comfy_flags` and the 1 s VRAM sampler over ssh (as
+    start_comfy.py does)."""
+    command = [*COMFY_COMMAND, *comfy_flags(no_compiler, reserve_vram)]
     return ("cd /content/ComfyUI || exit 3; " + detached(command, "/content/comfy.log", append=True) + " "
             + detached(VRAM_COMMAND, "/content/vram.csv", append=True) + " echo started $!")
 
 
-def comfy_stop_command() -> str:
-    """Stop ComfyUI and the VRAM sampler over ssh: SIGTERM, up to 30 s, then SIGKILL; prints
-    ``stopped`` only when no ComfyUI process is left."""
-    comfy, vram = shlex.quote(COMFY_PATTERN), shlex.quote(VRAM_PATTERN)
-    return (f"pkill -f {comfy}; pkill -f {vram}; for i in $(seq 30); do pgrep -f {comfy} > /dev/null || break; "
-            f"sleep 1; done; pkill -9 -f {comfy}; sleep 1; pgrep -af {comfy} || echo stopped")
+def comfy_stop_command(pids: list[int]) -> str:
+    """Stop the processes ``pids`` (ComfyUI and its VRAM sampler, from colab_vm's ``state``) over ssh by
+    their PIDs: SIGTERM, up to 30 s, then SIGKILL; prints ``stopped`` only when none of them is left."""
+    ids = " ".join(str(int(pid)) for pid in pids)
+    return (f"kill {ids} 2>/dev/null; for i in $(seq 30); do kill -0 {ids} 2>/dev/null || break; sleep 1; done; "
+            f"kill -9 {ids} 2>/dev/null; sleep 1; if kill -0 {ids} 2>/dev/null; then echo still running; else echo stopped; fi")
 
 
 def compiler_word(off: bool) -> str:
     return "off" if off else "on"
+
+
+def vram_words(reserve: float | None) -> str:
+    """How a ComfyUI's VRAM flags read in messages."""
+    if reserve is None:
+        return "dynamic VRAM (no --reserve-vram)"
+    if reserve < 0:
+        return f"only one of {NO_DYNAMIC_VRAM_FLAG} / {RESERVE_VRAM_FLAG}"
+    return f"{NO_DYNAMIC_VRAM_FLAG} {RESERVE_VRAM_FLAG} {reserve:g}"
 
 
 def ensure_key(key: Path, say: Callable[[str], None]) -> None:
@@ -170,10 +199,16 @@ class Colab(_Colab):
         self.say(f"## SSH to {self.session} works")
 
     def stop_comfy(self) -> None:
-        """Stop the VM's ComfyUI and VRAM sampler over ssh; raises when the shell did not finish."""
-        result = self.link.call(comfy_stop_command(), 60)
-        if result.returncode != 0 or "stopped" not in result.output:
-            raise SetupError(f"could not stop ComfyUI over ssh on {self.session}: {_last_line(result.output)}")
+        """Stop the VM's ComfyUI and VRAM sampler over ssh by their PIDs (colab_vm's ``state``); raises
+        when one is left or the shell did not finish."""
+        comfy = self.vm("state")["comfy"]
+        pids = [*(comfy.get("pids") or []), *(comfy.get("sampler_pids") or [])]
+        if not pids:
+            return
+        result = self.link.call(comfy_stop_command(pids), 60)
+        if result.returncode != 0 or not result.output.strip().endswith("stopped"):
+            raise SetupError(f"could not stop ComfyUI (PID {' '.join(map(str, pids))}) over ssh on {self.session}: "
+                             f"{_last_line(result.output)}")
 
     def start_detached(self, command: str, what: str) -> None:
         """Run a ``setsid nohup ... &`` command over ssh; raises when the shell did not start it."""
@@ -215,6 +250,8 @@ class Report:
     outcomes: dict[str, str] = field(default_factory=dict)
     models: dict[str, list[str] | None] = field(default_factory=dict)
     compiler_off: bool | None = None
+    #: The running ComfyUI's ``--reserve-vram`` (:func:`running_reserve`; ``None``: none).
+    reserve_vram: float | None = None
 
 
 def _log_tail(state: dict, log_name: str) -> str:
@@ -230,10 +267,11 @@ class SessionSetup:
     def __init__(self, colab: Colab, pin: bool, clock: Callable[[], float] = time.monotonic,
                  poll_seconds: float = 30.0, setup_limit_seconds: float = 45 * 60,
                  comfy_poll_seconds: float = 10.0, comfy_limit_seconds: float = 10 * 60,
-                 no_compiler: bool = False) -> None:
+                 no_compiler: bool = False, reserve_vram: float | None = None) -> None:
         self.colab = colab
         self.pin = pin
         self.no_compiler = no_compiler
+        self.reserve_vram = reserve_vram
         self.clock = clock
         self.poll_seconds = poll_seconds
         self.setup_limit_seconds = setup_limit_seconds
@@ -326,15 +364,21 @@ class SessionSetup:
             self.colab.sleep(self.poll_seconds)
 
     def restart_reason(self, state: dict, new_nodes: bool, report: Report) -> str:
-        """Why a running ComfyUI must restart ("" when it need not or cannot: only over ssh); sets
-        ``report.compiler_off`` to the running one's setting."""
+        """Why a running ComfyUI must restart ("" when it need not or cannot: only over ssh): its compiler
+        setting or its VRAM flags differ from the ones asked for, or setup.sh added nodes while it ran;
+        sets ``report.compiler_off`` and ``report.reserve_vram`` to the running one's settings."""
         comfy = state["comfy"]
-        off = comfy_compiler_off(self.colab) if comfy["up"] or comfy["running"] else None
+        args = comfy_args(self.colab) if comfy["up"] or comfy["running"] else None
+        off = None if args is None else NO_COMPILER_FLAG in args
+        reserve = None if args is None else running_reserve(args)
         report.compiler_off = self.no_compiler if off is None else off
+        report.reserve_vram = self.reserve_vram if args is None else reserve
         reason = ""
         if off is not None and off != self.no_compiler:
             reason = (f"it runs with the model compiler {compiler_word(off)}, "
                       f"{compiler_word(self.no_compiler)} was asked for")
+        elif args is not None and reserve != self.reserve_vram:
+            reason = f"it runs with {vram_words(reserve)}, {vram_words(self.reserve_vram)} was asked for"
         elif off is not None and new_nodes:
             reason = "setup.sh ran while it was running (new nodes load at start)"
         if reason and self.colab.via != "ssh":
@@ -355,18 +399,20 @@ class SessionSetup:
         begin = self.clock()
         verb = "was starting; answers"
         if reason:
-            verb = f"restarted (model compiler {compiler_word(self.no_compiler)}); answers"
+            vram = "" if self.reserve_vram is None else f", {vram_words(self.reserve_vram)}"
+            verb = f"restarted (model compiler {compiler_word(self.no_compiler)}{vram}); answers"
             self.colab.say(f"## restarting ComfyUI: {reason}")
             self.colab.stop_comfy()
-            self.colab.start_detached(comfy_command(self.no_compiler), "ComfyUI")
+            self.colab.start_detached(comfy_command(self.no_compiler, self.reserve_vram), "ComfyUI")
             report.compiler_off = self.no_compiler
+            report.reserve_vram = self.reserve_vram
             state = self.colab.probe()
             if not (state["comfy"]["up"] or state["comfy"]["running"]):
                 raise SetupError("ComfyUI stopped right after its restart; " + _log_tail(state, "comfy.log"))
         elif not comfy["running"] and self.colab.via == "ssh":
             verb = "started; answers"
             self.colab.say("## starting ComfyUI (setsid nohup python main.py)")
-            self.colab.start_detached(comfy_command(self.no_compiler), "ComfyUI")
+            self.colab.start_detached(comfy_command(self.no_compiler, self.reserve_vram), "ComfyUI")
             state = self.colab.probe()
             if not (state["comfy"]["up"] or state["comfy"]["running"]):
                 raise SetupError("ComfyUI stopped right after it started; " + _log_tail(state, "comfy.log"))
@@ -513,7 +559,8 @@ def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elap
             lines.append(f"   {PART_TITLES[part]}: {outcome}")
         compiler = "?" if report.compiler_off is None else compiler_word(report.compiler_off)
         lines.append(f"   ComfyUI:    {report.outcomes.get('comfy', '?')} on 127.0.0.1:8188 (VM), "
-                     f"model compiler {compiler}" + (f" ({NO_COMPILER_FLAG})" if report.compiler_off else ""))
+                     f"model compiler {compiler}" + (f" ({NO_COMPILER_FLAG})" if report.compiler_off else "")
+                     + (f", {vram_words(report.reserve_vram)}" if report.reserve_vram is not None else ""))
         if report.models:
             listed = ", ".join(f"{folder} {len(names)}" for folder, names in report.models.items() if names)
             lines.append(f"   models ComfyUI lists: {listed}")
@@ -565,6 +612,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-comfy-compiler", action="store_true",
                         help=f"start ComfyUI with {NO_COMPILER_FLAG} (for LTX Multi IC-LoRA); over SSH a running "
                              "ComfyUI with the other setting is restarted (without this option: compiler on)")
+    parser.add_argument("--reserve-vram", type=float, metavar="GB",
+                        help=f"also start ComfyUI with {NO_DYNAMIC_VRAM_FLAG} {RESERVE_VRAM_FLAG} GB (an L4: 10, for sheet "
+                             "clips of 97 frames); over SSH a running ComfyUI with other VRAM flags is restarted")
     which = parser.add_mutually_exclusive_group()
     which.add_argument("--no-vidgen", action="store_true", help="skip installing vidgen (this checkout's code)")
     which.add_argument("--vidgen-only", action="store_true",
@@ -576,8 +626,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("the session name must not be empty or start with '-'")
     if args.gpu == "CPU" and not args.vidgen_only:
         parser.error("a CPU session has no GPU for ComfyUI and LTX-2.3: add --vidgen-only")
-    if args.no_comfy_compiler and (args.vidgen_only or args.via == "exec"):
-        parser.error("--no-comfy-compiler needs ComfyUI over the SSH route: leave out --vidgen-only and --via exec")
+    for flag, given in (("--no-comfy-compiler", args.no_comfy_compiler), ("--reserve-vram", args.reserve_vram is not None)):
+        if given and (args.vidgen_only or args.via == "exec"):
+            parser.error(f"{flag} needs ComfyUI over the SSH route: leave out --vidgen-only and --via exec")
+    if args.reserve_vram is not None and not 0 < args.reserve_vram < 100:
+        parser.error(f"--reserve-vram is GB of VRAM kept free, above 0 and below 100, not {args.reserve_vram:g}")
     return args
 
 
@@ -614,7 +667,7 @@ def main(argv: list[str] | None = None, runner: Runner = run_command,
             early = (lambda: vidgen.begin(report)) if vidgen and args.via == "ssh" else None
             SessionSetup(colab, pin=not args.latest, clock=clock, poll_seconds=polls["setup"],
                          comfy_poll_seconds=polls["comfy"], no_compiler=args.no_comfy_compiler,
-                         ).run(parts, report, meanwhile=early)
+                         reserve_vram=args.reserve_vram).run(parts, report, meanwhile=early)
         if vidgen:
             vidgen.run(report)
     except (SetupError, KeyboardInterrupt) as exc:

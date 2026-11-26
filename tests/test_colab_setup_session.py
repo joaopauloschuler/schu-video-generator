@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -57,7 +58,13 @@ class FakeVM:
 
     def start_comfy(self, command: str) -> None:
         self.comfy["running"] = True
-        self.comfy_args = self.args_for(setup_session.NO_COMPILER_FLAG in command)
+        words = shlex.split(command) if "main.py" in command else []
+        self.comfy_args = words[words.index("main.py") + 1:words.index(">>")] if words else self.args_for(False)
+
+    @property
+    def pids(self) -> dict[str, list[int]]:
+        """The running ComfyUI's and its VRAM sampler's PIDs, as colab_vm's state lists them."""
+        return {"pids": [4242], "sampler_pids": [4243]} if self.comfy_args is not None else {"pids": [], "sampler_pids": []}
 
     def stop_comfy(self) -> None:
         self.comfy.update(up=False, running=False, models={})
@@ -127,7 +134,7 @@ class FakeColabCLI:
                     if self.vm.vidgen_polls > 1:
                         vidgen["setup_running"] = False
                         vidgen["hash"] = None if self.vm.fail == "vidgen" else vidgen["pending"]
-                reply = {"vidgen": vidgen, "comfy": {"args": self.vm.comfy_args}}
+                reply = {"vidgen": vidgen, "comfy": {"args": self.vm.comfy_args, **self.vm.pids}}
                 return setup_session.CommandResult(0, "VIDGEN_VM " + json.dumps(reply))
             if script == "start_setup.py":
                 if env["SCRIPT"].endswith("setup_vidgen.sh"):
@@ -350,7 +357,7 @@ class FakeLink:
             if not self.check_ok:
                 raise setup_session.SetupError("cannot open an SSH connection to s: Connection closed by UNKNOWN port 65535")
             return setup_session.CommandResult(0, "vidgen-ssh-ok")
-        if command == setup_session.comfy_stop_command():
+        if command == setup_session.comfy_stop_command([4242, 4243]):
             self.cli.vm.stop_comfy()
             return setup_session.CommandResult(0, "stopped")
         assert "setsid nohup" in command and command.rstrip().endswith("echo started $!"), command
@@ -478,7 +485,7 @@ def test_high_mem_on_l4_is_passed_on_with_one_ignored_line_and_cpu_needs_vidgen_
 
 
 def _comfy_starts(link: FakeLink) -> list[str]:
-    return [c for c in link.commands if "main.py" in c or c == setup_session.comfy_stop_command()]
+    return [c for c in link.commands if "main.py" in c or c == setup_session.comfy_stop_command([4242, 4243])]
 
 
 def test_no_comfy_compiler_starts_comfyui_with_the_flag_and_the_summary_says_off() -> None:
@@ -502,7 +509,7 @@ def test_rerun_switches_a_running_comfyui_compiler_both_ways_and_reuses_a_matchi
     text = "\n".join(lines)
     assert code == 0, text
     stop, start = _comfy_starts(link)
-    assert stop == setup_session.comfy_stop_command() and "--disable-comfy-compiler" in start
+    assert stop == setup_session.comfy_stop_command([4242, 4243]) and "--disable-comfy-compiler" in start
     assert "## restarting ComfyUI: it runs with the model compiler on, off was asked for" in text
     assert "restarted (model compiler off); answers" in text and "model compiler off (" in text
     code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s", "--no-comfy-compiler"])
@@ -523,7 +530,7 @@ def test_marker_from_an_older_setup_reruns_setup_sh_and_restarts_comfyui() -> No
     assert code == 0, text
     assert any("bash /content/setup.sh" in c for c in link.commands)
     assert "## restarting ComfyUI: setup.sh ran while it was running" in text
-    assert [c == setup_session.comfy_stop_command() for c in _comfy_starts(link)] == [True, False]
+    assert [c == setup_session.comfy_stop_command([4242, 4243]) for c in _comfy_starts(link)] == [True, False]
 
 
 def test_exec_route_reports_the_compiler_but_never_restarts_and_rejects_the_option() -> None:
@@ -539,19 +546,68 @@ def test_exec_route_reports_the_compiler_but_never_restarts_and_rejects_the_opti
     assert setup_session.parse_args(["s", "--no-comfy-compiler"]).no_comfy_compiler is True
 
 
-def test_the_stop_pattern_matches_every_comfyui_the_flag_check_finds() -> None:
-    """A ComfyUI started by hand (``python3 main.py``, as the sheet trial did) is stopped too, never the ssh shell."""
-    import re
-    import shlex
+def test_comfyui_is_stopped_by_its_pids_never_by_a_pattern() -> None:
+    """The stop command kills the PIDs colab_vm's state lists (never pkill -f, which can hit the ssh shell)."""
+    command = setup_session.comfy_stop_command([28547, 9])
+    assert command.startswith("kill 28547 9 2>/dev/null;") and "pkill" not in command and "pgrep" not in command
+    assert "kill -9 28547 9" in command and command.endswith("then echo still running; else echo stopped; fi")
 
-    servers = [" ".join(setup_session.COMFY_COMMAND), "python3 main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch --disable-comfy-compiler",
-               "/usr/bin/python3 /content/ComfyUI/main.py --listen 0.0.0.0 --port 8188"]
-    for line in servers:
-        assert re.search(setup_session.COMFY_PATTERN, line), line
-    for line in ["bash -c " + shlex.quote(setup_session.comfy_stop_command()), "nvidia-smi " + " ".join(setup_session.VRAM_COMMAND[1:]),
-                 "python3 main.py --port 8190"]:
-        assert not re.search(setup_session.COMFY_PATTERN, line), line
-    assert setup_session.comfy_stop_command().endswith("|| echo stopped")   # a survivor is named, not reported stopped
+
+def test_colab_vm_lists_the_comfyui_and_sampler_pids(tmp_path: Path) -> None:
+    from vidgen import colab_vm
+
+    procs = {"11": ["python3", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--reserve-vram", "10"],
+             "12": ["nvidia-smi", "--query-gpu=timestamp,memory.used,utilization.gpu", "--format=csv,noheader", "-l", "1"],
+             "13": ["bash", "-c", "for p in $(pgrep -f main.py --port 8188); do kill $p; done"],
+             "14": ["python3", "main.py", "--port", "8190"], "15": ["nvidia-smi"]}
+    for pid, argv in procs.items():
+        (tmp_path / pid).mkdir()
+        (tmp_path / pid / "cmdline").write_bytes("\0".join(argv).encode() + b"\0")
+    state = colab_vm.state({}, proc=tmp_path)["comfy"]
+    assert state == {"args": ["--listen", "127.0.0.1", "--port", "8188", "--reserve-vram", "10"], "pids": [11], "sampler_pids": [12]}
+
+
+def test_reserve_vram_reaches_the_comfyui_command_line_and_the_summary() -> None:
+    _have_key()
+    cli = FakeColabCLI(FakeVM(polls_to_finish=1, vidgen_hash="old1"))
+    code, lines, link = _run_ssh(cli, ["fresh", "--no-comfy-compiler", "--reserve-vram", "10"])
+    text = "\n".join(lines)
+    assert code == 0, text
+    [start] = _comfy_starts(link)
+    assert ("python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch --disable-comfy-compiler "
+            "--disable-dynamic-vram --reserve-vram 10 >>") in start
+    assert "model compiler off (--disable-comfy-compiler), --disable-dynamic-vram --reserve-vram 10" in text
+    assert setup_session.comfy_flags(False, 7.5) == ["--disable-dynamic-vram", "--reserve-vram", "7.5"]
+
+
+def test_a_running_comfyui_restarts_only_when_its_vram_flags_differ() -> None:
+    _have_key()
+    done = {"ltx": _part(marker=True, missing=False), "image": _part(marker=True, missing=False)}
+    vm = FakeVM(**done, comfy_up=True, compiler_off=True)
+    l4 = ["s", "--no-comfy-compiler", "--reserve-vram", "10"]
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), l4)
+    text = "\n".join(lines)
+    stop, start = _comfy_starts(link)
+    assert code == 0 and "--reserve-vram 10 >>" in start, text
+    assert ("## restarting ComfyUI: it runs with dynamic VRAM (no --reserve-vram), --disable-dynamic-vram --reserve-vram 10 "
+            "was asked for") in text
+    assert "restarted (model compiler off, --disable-dynamic-vram --reserve-vram 10); answers" in text
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), l4)   # the same flags: reused, not restarted
+    text = "\n".join(lines)
+    assert code == 0 and _comfy_starts(link) == [] and "reused (already answering)" in text
+    assert "--disable-dynamic-vram --reserve-vram 10" in text
+    vm.comfy_args = [*setup_session.COMFY_COMMAND[2:], "--disable-comfy-compiler", "--disable-dynamic-vram", "--reserve-vram", "10.0"]
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), l4)   # 10.0 is 10
+    assert code == 0 and _comfy_starts(link) == []
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), [*l4[:-1], "8"])
+    assert "it runs with --disable-dynamic-vram --reserve-vram 10, --disable-dynamic-vram --reserve-vram 8 was asked for" in "\n".join(lines)
+    code, lines, link = _run_ssh(FakeColabCLI(vm, sessions=["s"]), ["s", "--no-comfy-compiler"])
+    assert "it runs with --disable-dynamic-vram --reserve-vram 8, dynamic VRAM (no --reserve-vram) was asked for" in "\n".join(lines)
+    assert vm.comfy_args == [*setup_session.COMFY_COMMAND[2:], "--disable-comfy-compiler"]
+    assert setup_session.running_reserve(["--disable-dynamic-vram"]) == -1.0 == setup_session.running_reserve(["--reserve-vram", "x"])
+    for argv in (["s", "--reserve-vram", "10", "--via", "exec"], ["s", "--reserve-vram", "10", "--vidgen-only"], ["s", "--reserve-vram", "0"]):
+        with pytest.raises(SystemExit):
+            setup_session.parse_args(argv)
 
 
 def test_vm_state_needs_the_ingredients_lora_and_the_routing_node() -> None:

@@ -28919,3 +28919,30 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
   tests/test_videogen_shot_chain.py tests/test_videogen_chain.py tests/test_guide.py tests/test_docs.py
   tests/test_config.py` (349 passed, 50 s); `tests/test_colab_setup_session.py tests/test_videogen_fps12.py`
   (35 passed, 12 s).
+
+## Step 434 — starting ComfyUI for a small card (`setup_session.py --reserve-vram N`)
+- **Built**: `tools/colab/setup_session.py --reserve-vram GB` starts ComfyUI with `--disable-dynamic-vram
+  --reserve-vram N` in addition to `--no-comfy-compiler`'s flag. Over SSH a running ComfyUI is restarted when its
+  compiler setting or its VRAM flags differ from the asked-for ones (both ways: a re-run without `--reserve-vram`
+  restarts a ComfyUI that has them, as with the compiler); `10` and `10.0` match. The restart now stops ComfyUI and
+  the `nvidia-smi -l` sampler by their PIDs, which `colab_vm`'s `state` lists (`comfy_pids`), never by `pkill -f`
+  (`COMFY_PATTERN` / `VRAM_PATTERN` removed). `--reserve-vram` is refused with `--via exec` and `--vidgen-only`
+  (like `--no-comfy-compiler`) and outside 0-100. The summary line names the VRAM flags.
+- **Files**: `tools/colab/setup_session.py`, `src/vidgen/colab_vm.py` (`running_pids`, `comfy_pids`, `state`
+  adds `pids` / `sampler_pids`), `tests/test_colab_setup_session.py` (+4 tests, the PID stop replaces the pattern
+  test; fakes report PIDs), `tools/colab/README.md`, `docs/HOWTO-restyle-with-ltx-on-colab.md` §6.2 ("On an L4"),
+  guide + `AGENTS.md` ("On an L4"), `DESIGN.md` §113.23, `tasklist.md`.
+- **Interfaces**: `setup_session.comfy_flags(no_compiler, reserve_vram)`, `running_reserve(args)`,
+  `comfy_command(no_compiler, reserve_vram)`, `comfy_stop_command(pids)` (was without arguments),
+  `vram_words`, `Report.reserve_vram`, `SessionSetup(reserve_vram=)`; `colab_vm.comfy_pids`, `running_pids`.
+- **Real check** (`setup_session.py ltx --gpu L4 --no-comfy-compiler --reserve-vram 10`, 42 s): found the session,
+  ltx and image parts reused (markers; the new vm_state also saw the RIFE file), ComfyUI "reused (already
+  answering) ... model compiler off (--disable-comfy-compiler), --disable-dynamic-vram --reserve-vram 10": not
+  restarted. It also installed this checkout's vidgen on the VM (34 s). After: `state` lists ComfyUI PID 28547
+  (flags unchanged) and sampler PID 3134. "On an L4" numbers in the docs: L4-FIT.md (C10 run) and Step 433's run.
+- **Known gaps**: the restart path (stop by PID, start with the flags) ran only in mocked tests, not on the VM
+  (the real ComfyUI already had the right flags). 121 frames on an L4 untested. The GPU text encoder on the L4
+  (faster in FPS12.md) is not the default; unchanged by the owner's decision.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_colab_setup_session.py tests/test_videogen_sheet.py
+  tests/test_remote.py tests/test_colab_keepalive.py tests/test_colab_rsync.py tests/test_colab_ssh.py
+  tests/test_colab_transfer.py tests/test_guide.py tests/test_docs.py` (269 passed, 29 s).

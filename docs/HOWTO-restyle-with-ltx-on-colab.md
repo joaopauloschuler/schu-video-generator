@@ -193,6 +193,16 @@ ComfyUI 0.46's model compiler is on by default. With it on, `LTXMultiICLoRA` sta
 (`setup_session.py NAME --no-comfy-compiler`) runs it. The running ComfyUI's flags:
 `vm "pgrep -af 'main.py'"`.
 
+**On an L4** (22.5 GB usable), a clip with a sheet needs ComfyUI started for a small card:
+`python tools/colab/setup_session.py NAME --gpu L4 --no-comfy-compiler --reserve-vram 10` (ComfyUI gets
+`--disable-comfy-compiler --disable-dynamic-vram --reserve-vram 10`; a running one with other flags is
+restarted by its PID). Then sheet clips of 97 frames complete: 4 s at 24 fps, or 8 s with `fps: 12`.
+Measured on shot `04_escapement_2_b1` (768x448, text encoder on the CPU, 2026-11-26): peak 19.2 GB, about
+26 s a sampling step, the text step on the CPU about 150 s, about 7 min in ComfyUI; the 4 s clip at 12 fps
+(49 frames) peaked at 18.5 GB in 345 s. With dynamic VRAM (no flags) the first sampling step ran out of
+memory, with `--reserve-vram 8` the second; tiled encode is not needed. 121 frames on an L4 were not
+tried. A G4 needs none of this.
+
 ### 6.3 Canny control (VM)
 
 Upload the inputs and run the canny detached:

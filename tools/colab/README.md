@@ -7,7 +7,7 @@ the other scripts are the HOWTO's per-run steps.
 ## Set up a session
 
 ```
-python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler] [--no-vidgen | --vidgen-only] [--via exec]
+python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler] [--reserve-vram GB] [--no-vidgen | --vidgen-only] [--via exec]
 ```
 
 Runs on your machine: Python 3.10+, standard library only (Windows too), and the `colab` CLI
@@ -31,22 +31,30 @@ installed and logged in (`colab usage` prints the balance). It:
    `videogen.comfyui.units_per_hour` to set; another GPU: check `colab usage`) and the next commands.
 
 With `--via exec` it uses the exec route (below): `start_setup.py` / `start_comfy.py`, polls every 30 s.
-That route never restarts ComfyUI (it prints a note when it should) and refuses `--no-comfy-compiler`.
+That route never restarts ComfyUI (it prints a note when it should) and refuses `--no-comfy-compiler` and `--reserve-vram`.
 
 **The model compiler.** ComfyUI 0.46 compiles the model by default; with it on, the node
 `LTX Multi IC-LoRA` (class `LTXMultiICLoRA`) stalls at step 0. `--no-comfy-compiler` starts ComfyUI
-with `--disable-comfy-compiler`; without the option it starts with the compiler on. On a session
-whose ComfyUI runs with the other setting, the script stops it (`pkill`, up to 30 s, then
-`SIGKILL`, also the `nvidia-smi` sampler) and starts it with the asked-for setting, so a re-run
-switches it either way; a job running on it is lost. The running ComfyUI's flags are read from
+with `--disable-comfy-compiler`; without the option it starts with the compiler on.
+`--reserve-vram N` adds `--disable-dynamic-vram --reserve-vram N` (GB kept free; an L4 needs 10 for
+sheet clips, below). On a session whose ComfyUI runs with other flags than the asked-for ones, the
+script stops it by its PID and its `nvidia-smi` sampler's (from colab_vm's `state`; SIGTERM, up to
+30 s, then SIGKILL; never `pkill -f`) and starts it with the asked-for flags, so a re-run switches
+it either way; a job running on it is lost. The running ComfyUI's flags are read from
 `/proc` on the VM: `vidgen.colab.comfy_args(colab)` returns the arguments after `main.py` (None when
 none runs), `vidgen.colab.comfy_compiler_off(colab)` whether `--disable-comfy-compiler` is among them.
+
+**On an L4** (22.5 GB): `python tools/colab/setup_session.py NAME --gpu L4 --no-comfy-compiler
+--reserve-vram 10`. Then sheet clips of 97 frames (4 s at 24 fps, or 8 s with `fps: 12`) complete:
+measured peak 19.2 GB, about 26 s a sampling step, the text step on the CPU about 150 s (L4-FIT.md,
+2026-11-26). Without the two VRAM flags the first sampling step ran out of memory; with
+`--reserve-vram 8` the second. A G4 needs none of this.
 
 | part | script, log | what it installs |
 |---|---|---|
 | ComfyUI + LTX-2.3 | `setup.sh`, `/content/setup.log`, `/content/download.log` | ComfyUI and five custom nodes at the tested commits (`--latest`: their newest, `PIN=0`; `comfyui-hrnodes` gives `LTX Multi IC-LoRA`), their requirements without touching Colab's torch, the LTX-2.3 GGUF, VAEs, connectors, the Union-Control and Ingredients IC-LoRAs, Gemma and the RIFE 4.26 frame interpolation weights for 12 fps shots (~35 GB) |
 | image models (skip with `--no-image`) | `setup_image.sh`, `/content/setup_image.log` | Qwen-Image-Edit-2511 GGUF + Lightning LoRA + text encoder + VAE, Z-Image-Turbo + Fun ControlNet (~50 GB); runs beside `setup.sh` |
-| ComfyUI server | `setsid nohup` over SSH (exec route: `start_comfy.py`), `/content/comfy.log` | `main.py --listen 127.0.0.1 --port 8188` (`--no-comfy-compiler`: plus `--disable-comfy-compiler`), and `nvidia-smi` into `/content/vram.csv` |
+| ComfyUI server | `setsid nohup` over SSH (exec route: `start_comfy.py`), `/content/comfy.log` | `main.py --listen 127.0.0.1 --port 8188` (`--no-comfy-compiler`: plus `--disable-comfy-compiler`; `--reserve-vram N`: plus `--disable-dynamic-vram --reserve-vram N`), and `nvidia-smi` into `/content/vram.csv` |
 | vidgen (skip with `--no-vidgen`; `--vidgen-only` skips the rows above) | `setup_vidgen.sh`, `/content/setup_vidgen.log` | once: apt `ffmpeg`, LaTeX (`texlive-latex-extra`, `dvisvgm`), cairo/pango, `espeak-ng`, Playwright's Chromium with its libraries; each time the code changes: `src/vidgen` of the working tree (uncommitted changes too, uploaded as `/content/vidgen-src.tar.gz`, nothing from GitHub) installed with its dependencies into `/content/vidgen-venv` (a venv that sees Colab's torch without changing it), linked as `/usr/local/bin/vidgen`; WebGL on the GPU (below) |
 
 **WebGL on the GPU.** Colab ships the NVIDIA libraries in `/usr/lib64-nvidia` but not their vendor

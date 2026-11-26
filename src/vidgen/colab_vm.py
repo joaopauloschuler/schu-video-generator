@@ -6,7 +6,7 @@ Actions (``--env`` values stay set in the kernel, so every call passes all the k
 ``vidgen.colab.VM_KEYS``, blank when unused). Each is safe to repeat after a dropped call:
 
 - ``state``: the installed vidgen's hash, whether its setup runs, the arguments the running
-  ComfyUI was started with (:func:`comfy_args`), and with ``VIDGEN_PROJECT`` the project's files
+  ComfyUI was started with (:func:`comfy_args`) and its and its VRAM sampler's PIDs (:func:`comfy_pids`), and with ``VIDGEN_PROJECT`` the project's files
   (path -> SHA-256, ``VIDGEN_EXCLUDE`` top folders left out) and its run;
 - ``begin``: once per run id ``VIDGEN_RUN`` (a repeat only reports the run): with ``VIDGEN_HASH``,
   stop unless the installed vidgen has that hash; extract ``VIDGEN_ARCHIVE`` (.tar or .tar.gz)
@@ -360,16 +360,7 @@ def install_cloudflared(env, proc=Path("/proc")):
 
 def running_argvs(proc=Path("/proc")):
     """The argument lists of the running processes (from ``/proc/<pid>/cmdline``)."""
-    argvs = []
-    for entry in proc.iterdir():
-        if entry.name.isdigit():
-            try:
-                raw = (entry / "cmdline").read_bytes()
-            except OSError:
-                continue
-            if raw:
-                argvs.append(raw.rstrip(b"\0").decode("utf-8", "replace").split("\0"))
-    return argvs
+    return [argv for _, argv in running_pids(proc)]
 
 
 def running_commands(proc=Path("/proc")):
@@ -377,14 +368,46 @@ def running_commands(proc=Path("/proc")):
     return [" ".join(argv) for argv in running_argvs(proc)]
 
 
+def _comfy_rest(argv):
+    """The arguments after ``main.py`` when ``argv`` is a ComfyUI server on port 8188, else None."""
+    mains = [i for i, word in enumerate(argv) if word == "main.py" or word.endswith("/main.py")]
+    return argv[mains[0] + 1:] if mains and "8188" in argv else None
+
+
 def comfy_args(proc=Path("/proc")):
     """The arguments after ``main.py`` of the running ComfyUI server on port 8188 (the setup starts it
     so), or None when none runs."""
     for argv in running_argvs(proc):
-        mains = [i for i, word in enumerate(argv) if word == "main.py" or word.endswith("/main.py")]
-        if mains and "8188" in argv:
-            return argv[mains[0] + 1:]
+        rest = _comfy_rest(argv)
+        if rest is not None:
+            return rest
     return None
+
+
+def running_pids(proc=Path("/proc")):
+    """``(pid, argv)`` of the running processes (from ``/proc/<pid>/cmdline``)."""
+    found = []
+    for entry in proc.iterdir():
+        if entry.name.isdigit():
+            try:
+                raw = (entry / "cmdline").read_bytes()
+            except OSError:
+                continue
+            if raw:
+                found.append((int(entry.name), raw.rstrip(b"\0").decode("utf-8", "replace").split("\0")))
+    return sorted(found)
+
+
+def comfy_pids(proc=Path("/proc")):
+    """The PIDs of the ComfyUI servers on port 8188 and of the looping ``nvidia-smi ... -l`` VRAM
+    samplers (setup_session.py stops them by these PIDs, never by a pattern)."""
+    comfy, samplers = [], []
+    for pid, argv in running_pids(proc):
+        if _comfy_rest(argv) is not None:
+            comfy.append(pid)
+        elif Path(argv[0]).name == "nvidia-smi" and "-l" in argv:
+            samplers.append(pid)
+    return comfy, samplers
 
 
 def log_info(path, tail_lines=15, max_bytes=200_000):
@@ -447,7 +470,8 @@ def excluded(env):
 
 
 def state(env, proc=Path("/proc")):
-    reply = {"vidgen": vidgen_state(proc), "comfy": {"args": comfy_args(proc)}}
+    pids, samplers = comfy_pids(proc)
+    reply = {"vidgen": vidgen_state(proc), "comfy": {"args": comfy_args(proc), "pids": pids, "sampler_pids": samplers}}
     if env.get("VIDGEN_PROJECT"):
         project = Path(env["VIDGEN_PROJECT"])
         reply["project"] = {"exists": project.is_dir(), "files": file_hashes(project, excluded(env))}

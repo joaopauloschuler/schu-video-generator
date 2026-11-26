@@ -5866,6 +5866,11 @@ subjects:
   (53 s in ComfyUI) and peaks at 42.7 GB of VRAM with the text encoder on the GPU. A G4 bills about 11.2 compute units an hour: set
   `videogen.comfyui.units_per_hour: 11.2` so the takes record the right units. The text encoder runs on the
   CPU and in RAM (`videogen.comfyui.text_encoder: cpu`, the default); `text_encoder: gpu` puts it in VRAM.
+- **On an L4** (cheaper, 22.5 GB): `python tools/colab/setup_session.py NAME --gpu L4 --no-comfy-compiler
+  --reserve-vram 10` (ComfyUI also gets `--disable-dynamic-vram --reserve-vram 10`; a running ComfyUI with
+  other flags is restarted). Make sheet clips of 97 frames: `duration: 4` (24 fps) or `duration: 8` with
+  `fps: 12`. Measured: peak 19.2 GB, about 26 s a step, the text step on the CPU about 150 s, about 7 min a
+  clip; without the flags the first step runs out of memory. A G4 needs none of this.
 - **The sheet's background** (`sheet_background:` on the shot, or `videogen.sheet_background:` for all):
   LTX carries the sheet's overall brightness into the clip.
   - `black` (the default): right for outdoor daylight, sea and sky shots and for dark scenes (space,

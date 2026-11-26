@@ -22564,6 +22564,12 @@ base video and a stylesheet in one run when each IC-LoRA has its own guide.
   must be `True`, else a `VidgenError`
   naming `Transport.compiler_fix` (Colab: `setup_session.py NAME --no-comfy-compiler`, which restarts
   ComfyUI). The provider never restarts ComfyUI. Nothing is recorded in the ledger.
+- **A small card (Step 434).** `setup_session.py NAME --reserve-vram N` starts ComfyUI with
+  `--disable-dynamic-vram --reserve-vram N` too (`comfy_flags`); over SSH a running ComfyUI whose compiler
+  setting or VRAM flags (`running_reserve` of its `comfy_args`) differ from the asked-for ones is restarted,
+  stopped by the PIDs colab_vm's `state` lists (`comfy_pids`: the server on 8188 and the `nvidia-smi -l`
+  sampler), never by a `pkill -f` pattern (which matched the ssh shell's own command line). An L4 completes
+  97-frame sheet clips with `--reserve-vram 10` (L4-FIT.md, 2026-11-26). The provider does not check these flags.
 - **Free VRAM once per run.** A provider's first job has `PreparedJob.free_before` (`POST /free` before
   the uploads, in `HttpTransport.submit` and in `run_job` on the VM); `run_shots` makes one provider for
   a paid comfyui run, so the models are unloaded once, before its first job, and stay loaded between
