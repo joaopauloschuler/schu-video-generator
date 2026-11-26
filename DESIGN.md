@@ -22699,6 +22699,30 @@ shot by shot, so vidgen sends each of them.
   from the finished render, `render_kind` `final`). `generate plan` prints each shot's `guide:` line
   (the file and what it is).
 
+### 113.27 The WebGL backend in a render's identity (Step 436)
+
+On the escapement film's L4 (2026-11-26) the GPU WebGL left black holes in gilded parts, and
+`VIDGEN_WEBGL=swiftshader vidgen generate inputs --guide` on the VM reused the GPU render: the web
+frames' own cache key has the Chromium flags (`engine_id`), but the scene's render (`build/<kind>/scenes/
+<scene>.mp4` + its timings) was reused before the web frames were asked for, its record not naming the
+backend.
+
+- **The record.** After a worker rendered a scene drawn in Chromium (`pipeline.scene_webgl`: `3d`,
+  `web`, `space`, a type built on `web`), the pipeline adds `render.webgl` (`gpu` or `swiftshader`,
+  `chromium.webgl_backend()`, the worker runs with the pipeline's environment) to its timings
+  (`_record_webgl`). `pipeline._usable_render` reuses such a render only when it equals the backend asked
+  for now (`_same_webgl`); a render without the key (made before Step 436) counts as `swiftshader`, the
+  default, so local caches stay valid. *Why in the pipeline, not the worker:* the worker and
+  `browser/chromium.py` are render inputs (`vidgen_source_digest`); changing them would make every
+  render and every cut guide stale once; `render/pipeline.py` is not. *Why not the fingerprint:* the fingerprint is also what a shot's cut inputs record, and the plan here
+  compares it with a VM-made input's; with the backend in it every VM-made guide would read stale on
+  this computer. *Why not two caches:* one render per scene path; switching back draws the scene again
+  (the 3D frames and the web frames have their own caches keyed on the backend, but one file each).
+- **`vidgen remote`** passes this computer's `VIDGEN_WEBGL` as `VIDGEN_RUN_WEBGL` in the `begin` call
+  (a `VM_KEYS` key, blank when unset); `colab_vm.child_env` sets the run's `VIDGEN_WEBGL` from it after
+  `/content/vidgen.env` (which says `gpu` on a GPU session), so `VIDGEN_WEBGL=swiftshader vidgen remote NAME
+  ...` draws in software there; unset, the VM's own setting stays.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

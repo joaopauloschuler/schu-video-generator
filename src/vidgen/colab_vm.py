@@ -14,7 +14,8 @@ Actions (``--env`` values stay set in the kernel, so every call passes all the k
   when the project's files differ from the archive's ``.vidgen-remote/want.json`` (path ->
   SHA-256); then run ``VIDGEN_BIN`` with the JSON list ``VIDGEN_ARGS`` there, detached, with the
   ``KEY=VALUE`` lines of ``/content/vidgen.env`` (written by ``setup_vidgen.sh``, e.g.
-  ``VIDGEN_WEBGL=gpu``) added to its environment;
+  ``VIDGEN_WEBGL=gpu``) added to its environment, and ``VIDGEN_WEBGL`` set to ``VIDGEN_RUN_WEBGL``
+  when that is given (``vidgen remote`` passes this computer's ``VIDGEN_WEBGL``, :func:`child_env`);
 - ``poll``: the run's log from byte ``VIDGEN_OFFSET``, and when it is done its exit code and
   stdout; with ``VIDGEN_PACK``, also the project's files after the run and, when it succeeded, one
   ``.vidgen-remote/result.tar`` of the files to bring back (:func:`bring_back`); with
@@ -542,6 +543,14 @@ def run_env(env_file=None):
     return env
 
 
+def child_env(env, env_file=None):
+    """The run's environment: :func:`run_env`, with ``VIDGEN_WEBGL`` from ``VIDGEN_RUN_WEBGL`` when given."""
+    child = run_env(env_file)
+    if env.get("VIDGEN_RUN_WEBGL"):
+        child["VIDGEN_WEBGL"] = env["VIDGEN_RUN_WEBGL"]
+    return child
+
+
 def start(env, proc=Path("/proc")):
     project = Path(env["VIDGEN_PROJECT"])
     run_id = env["VIDGEN_RUN"]
@@ -552,7 +561,7 @@ def start(env, proc=Path("/proc")):
     (run / "run.id").write_text(run_id, encoding="utf-8")
     command = [env["VIDGEN_BIN"], *json.loads(env["VIDGEN_ARGS"])]
     child = subprocess.Popen([sys.executable, "-c", WRAPPER, str(run / "run.out"), str(run / "run.log"),
-                              str(run / "run.rc"), *command], cwd=project, env=run_env(), start_new_session=True,
+                              str(run / "run.rc"), *command], cwd=project, env=child_env(env), start_new_session=True,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     (run / "run.pid").write_text(str(child.pid), encoding="utf-8")
     return {"started": True, "run": run_status(project, proc)}

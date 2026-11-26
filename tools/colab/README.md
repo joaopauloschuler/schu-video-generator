@@ -48,7 +48,8 @@ none runs), `vidgen.colab.comfy_compiler_off(colab)` whether `--disable-comfy-co
 --reserve-vram 10`. Then sheet clips of 97 frames (4 s at 24 fps, or 8 s with `fps: 12`) complete:
 measured peak 19.2 GB, about 26 s a sampling step, the text step on the CPU about 150 s (L4-FIT.md,
 2026-11-26). Without the two VRAM flags the first sampling step ran out of memory; with
-`--reserve-vram 8` the second. A G4 needs none of this.
+`--reserve-vram 8` the second. A G4 needs none of this. Render web scenes there with
+`VIDGEN_WEBGL=swiftshader vidgen remote NAME ...`: the L4's GPU WebGL left black holes in gilded parts (2026-11-26).
 
 | part | script, log | what it installs |
 |---|---|---|
@@ -65,7 +66,9 @@ and, when the WebGL renderer names NVIDIA, writes `VIDGEN_WEBGL=gpu` (and `LD_LI
 `/content/vidgen.env`, which `vidgen remote` adds to its runs; the log shows
 `### WebGL: ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA L4 ...))`. Without a GPU or when the check
 fails, the file is not written and WebGL stays on SwiftShader. `VIDGEN_WEBGL=gpu` is part of the
-`3d`/`web` cache key, so GPU frames are their own build.
+`3d`/`web` cache key and recorded in each scene's render, so GPU frames are their own build: a scene
+rendered with one backend is drawn again with the other. `vidgen remote` passes this computer's `VIDGEN_WEBGL`
+(e.g. `swiftshader`) to the run, over the file's.
 
 The HOWTO's §4 and §6 list the repos, files and commits.
 

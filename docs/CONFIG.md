@@ -6760,7 +6760,10 @@ them. Nothing is fetched from the network while rendering: three.js (0.186.1) an
 (Inter Bold) ship with schu-video-generator, and WebGL runs on Chromium's software renderer
 (SwiftShader), so the same YAML gives the same pixels on any machine with the same Playwright version.
 `VIDGEN_WEBGL=gpu` (set on a Colab GPU session by `tools/colab/setup_vidgen.sh`) draws WebGL on the
-GPU through ANGLE's Vulkan backend instead; its frames are cached apart from SwiftShader's.
+GPU through ANGLE's Vulkan backend instead; its frames are cached apart from SwiftShader's, and a
+scene's render records its backend: a scene rendered with one is drawn again with the other (a render
+that records none counts as SwiftShader). `vidgen remote` passes this computer's `VIDGEN_WEBGL` to the run
+on the VM (`VIDGEN_WEBGL=swiftshader vidgen remote NAME render`).
 
 **Units and angles.** Positions and sizes are in scene units, y is up; the default camera stands
 at `[3, 2.5, 5]` and looks at the origin. `rotation` is in degrees about x, y and z (applied in

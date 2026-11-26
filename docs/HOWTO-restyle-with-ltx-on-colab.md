@@ -209,6 +209,11 @@ Measured on shot `04_escapement_2_b1` (768x448, text encoder on the CPU, 2026-11
 (49 frames) peaked at 18.5 GB in 345 s. With dynamic VRAM (no flags) the first sampling step ran out of
 memory, with `--reserve-vram 8` the second; tiled encode is not needed. 121 frames on an L4 were not
 tried. A G4 needs none of this.
+Render web scenes on the L4 with software WebGL: `VIDGEN_WEBGL=swiftshader vidgen remote NAME generate inputs
+--guide ...` (`vidgen remote` passes this computer's `VIDGEN_WEBGL` to the run, over the VM's `gpu`). The L4's GPU
+WebGL (Chromium, ANGLE on Vulkan) left black holes in gilded and reflective parts (up to 61 % of a frame in the
+first frames of the escapement film's cathedral scene, 2026-11-26); SwiftShader had none, at about 1.2-1.7 min
+a scene on the VM's CPU. A render made with the other backend is drawn again, not reused.
 
 ### 6.3 Canny control (VM)
 

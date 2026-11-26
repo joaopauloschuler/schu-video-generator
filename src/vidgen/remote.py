@@ -16,7 +16,9 @@ needs: the files the command's JSON document names inside the project (not under
 except the render's ``timings.json``) and the files the run created or changed outside the
 left-out folders. The tars go over ssh, or on the exec route through Cloudflare quick tunnels
 (:mod:`vidgen.colab_transfer`; the VM's one starts with the run).
-``build/`` stays on the VM as a cache. Standard library only; it never stops the session.
+``build/`` stays on the VM as a cache. ``VIDGEN_WEBGL`` set here goes with the run (:func:`run_webgl`):
+``VIDGEN_WEBGL=swiftshader vidgen remote NAME render`` draws WebGL in software on a GPU VM.
+Standard library only; it never stops the session.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import re
 import secrets
 import tarfile
@@ -38,6 +41,9 @@ from vidgen import colab_rsync
 from vidgen.colab import VM_PROJECTS, Colab, ColabError, extract_archive, format_seconds, package_hash, shown
 from vidgen.colab_rsync import ALWAYS_SKIPPED
 
+#: The environment variable of the WebGL backend (:data:`vidgen.browser.chromium.WEBGL_ENV`; this module is standard library only).
+WEBGL_ENV = "VIDGEN_WEBGL"
+
 #: Top folders of a project that are never synced (generated); ``--exclude`` adds more.
 EXCLUDED_DIRS: tuple[str, ...] = ("build", "output", "exports", "media")
 #: vidgen in the VM's venv (tools/colab/setup_vidgen.sh).
@@ -47,6 +53,12 @@ LOG_TAIL_LINES = 30
 POLL_PAUSES: tuple[float, ...] = (2.0, 5.0, 10.0)
 #: Where the VM's want-list goes in the sync archive (``colab_vm.WANT``).
 WANT = ".vidgen-remote/want.json"
+
+
+def run_webgl() -> dict[str, str]:
+    """``VIDGEN_RUN_WEBGL`` for a ``begin`` call: this computer's ``VIDGEN_WEBGL`` (e.g. ``swiftshader``),
+    which the run on the VM uses instead of the VM's own (``gpu`` after the setup); blank: the VM's."""
+    return {"VIDGEN_RUN_WEBGL": os.environ.get(WEBGL_ENV, "").strip().lower()}
 
 
 def setup_command(session: str) -> str:
@@ -216,7 +228,7 @@ class RemoteRun:
         """Check the VM's vidgen and start the run (the files are there already)."""
         self.colab.say(f"## running on {self.colab.session}: vidgen {' '.join(args)}")
         reply = self.colab.vm("begin", VIDGEN_PROJECT=self.remote_dir, VIDGEN_RUN=run_id, VIDGEN_BIN=VM_VIDGEN,
-                              VIDGEN_ARGS=json.dumps(args), VIDGEN_HASH=self.local_hash or package_hash())
+                              VIDGEN_ARGS=json.dumps(args), VIDGEN_HASH=self.local_hash or package_hash(), **run_webgl())
         if "vidgen" in reply:
             self.check_version(reply["vidgen"])
 
@@ -251,7 +263,7 @@ class RemoteRun:
             reply = self.colab.vm("begin", VIDGEN_PROJECT=self.remote_dir, VIDGEN_RUN=run_id, VIDGEN_BIN=VM_VIDGEN,
                                   VIDGEN_ARGS=json.dumps(args), VIDGEN_HASH=self.local_hash or package_hash(),
                                   VIDGEN_ARCHIVE=f"/content/{archive_name}", VIDGEN_CHECK="1",
-                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)), **self.colab.prestart_env())
+                                  VIDGEN_EXCLUDE=json.dumps(list(self.exclude)), **self.colab.prestart_env(), **run_webgl())
             if "vidgen" in reply:
                 self.check_version(reply["vidgen"])
             missing = reply.get("missing")

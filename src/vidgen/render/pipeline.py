@@ -184,7 +184,8 @@ def _usable_render(
 ) -> bool:
     """True if a previous render of the scene exists and matches the current format/audio mode
     (and, when ``frames`` stills per beat are requested, was made with them; when
-    ``guide_passes`` are requested and the scene is a ``3d`` one, it drew them and they are there)."""
+    ``guide_passes`` are requested and the scene is a ``3d`` one, it drew them and they are there;
+    a scene drawn in Chromium was drawn with the WebGL backend asked for now, :func:`_same_webgl`)."""
     video = scene_video_path(project, preview, scene_id)
     timings_file = scene_timings_path(project, preview, scene_id)
     if not (video.is_file() and timings_file.is_file()):
@@ -201,7 +202,39 @@ def _usable_render(
         and (no_audio or meta.get("audio") is True)
         and (not frames or (meta.get("frames") == frames and _has_stills(project, preview, scene_id)))
         and _has_guide_passes(project, preview, scene_id, meta, guide_passes)
+        and _same_webgl(project, scene_id, meta)
     )
+
+
+def scene_webgl(project: Project, scene_id: str) -> str | None:
+    """The WebGL backend (``gpu`` or ``swiftshader``, :func:`~vidgen.browser.chromium.webgl_backend`)
+    ``scene_id`` is drawn with now when it is drawn in Chromium (a ``3d`` scene, a web scene:
+    ``web``, ``space``, a type built on ``web``); ``None`` for every other scene (DESIGN.md §113.27)."""
+    from vidgen.browser.chromium import webgl_backend
+    from vidgen.config import is_web_scene_type
+
+    kind = project.scene(scene_id).type
+    return webgl_backend() if kind == "3d" or is_web_scene_type(kind) else None
+
+
+def _same_webgl(project: Project, scene_id: str, meta: dict[str, Any]) -> bool:
+    """Whether a render (its ``meta``) of a scene drawn in Chromium was drawn with the WebGL backend
+    asked for now (:func:`scene_webgl`; a render that records none was made before vidgen recorded
+    it and counts as SwiftShader, the default); other scenes: always true."""
+    wanted = scene_webgl(project, scene_id)
+    return wanted is None or meta.get("webgl", "swiftshader") == wanted
+
+
+def _record_webgl(project: Project, preview: bool, scene_id: str) -> dict[str, Any]:
+    """The timings the worker just wrote for ``scene_id``, with ``render.webgl`` added (and written)
+    for a scene drawn in Chromium: the backend the worker ran under (its environment is this one's)."""
+    path = scene_timings_path(project, preview, scene_id)
+    timings = json.loads(path.read_text(encoding="utf-8"))
+    webgl = scene_webgl(project, scene_id)
+    if webgl is not None and isinstance(timings.get("render"), dict):
+        timings["render"]["webgl"] = webgl
+        write_json(path, timings)
+    return timings
 
 
 def scene_pass_clips(project: Project, preview: bool, scene_id: str, passes: tuple[str, ...] | list[str]) -> dict[str, Path]:
@@ -469,7 +502,7 @@ def _render_scenes(
                 runs.warnings.append((run.scene_id, line.removeprefix("warning: ")))
                 if not live:  # re-print the worker's warnings (live output has shown them already)
                     say(line, err=True)
-        timings = json.loads(scene_timings_path(project, preview, run.scene_id).read_text(encoding="utf-8"))
+        timings = _record_webgl(project, preview, run.scene_id)
         say(
             f"[{order[run.scene_id] + 1}/{total}] {run.scene_id}: done, "
             f"{timings['duration']:.2f} s of video in {run.seconds:.1f} s"

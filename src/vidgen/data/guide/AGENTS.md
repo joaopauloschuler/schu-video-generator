@@ -5821,7 +5821,7 @@ colab stop -s NAME                                 # only when the user says so
 - Without a local `rsync` (Windows) it syncs with tar: nothing is deleted there and `build/` stays
   there, so make a shot's inputs and its clip on the same machine.
 - After vidgen's code changes, `vidgen remote` stops and prints the `--vidgen-only` setup command.
-- On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build.
+- On a GPU session, `3d` and `web` scenes draw WebGL on the GPU (`VIDGEN_WEBGL=gpu`, set by the setup); the pixels differ slightly from a local render, so they are their own build: a scene rendered with one backend is drawn again with the other (its render records which). `VIDGEN_WEBGL=swiftshader vidgen remote NAME ...` runs that command with software WebGL on the VM.
 - Several sessions can run at once, each under its own name; run one `vidgen remote` at a time per project.
 
 ### Stylesheets: one look for a subject across shots
@@ -5881,6 +5881,10 @@ subjects:
   other flags is restarted). Make sheet clips of 97 frames: `duration: 4` (24 fps) or `duration: 8` with
   `fps: 12`. Measured: peak 19.2 GB, about 26 s a step, the text step on the CPU about 150 s, about 7 min a
   clip; without the flags the first step runs out of memory. A G4 needs none of this.
+  Render the web scenes with software WebGL on the L4: `VIDGEN_WEBGL=swiftshader vidgen remote NAME generate
+  inputs --guide ...` (`vidgen remote` passes this computer's `VIDGEN_WEBGL` to the run, over the VM's `gpu`):
+  the L4's GPU WebGL left black holes in gilded and reflective parts (seen 2026-11-26). A render made with
+  the other backend is drawn again, not reused.
 - **The sheet's background** (`sheet_background:` on the shot, or `videogen.sheet_background:` for all):
   LTX carries the sheet's overall brightness into the clip.
   - `black` (the default): right for outdoor daylight, sea and sky shots and for dark scenes (space,

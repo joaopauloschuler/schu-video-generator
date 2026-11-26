@@ -28982,3 +28982,48 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_guide.py tests/test_videogen_ltx_guides.py
   tests/test_videogen_comfyui.py tests/test_web_depth_pass.py` (137 passed, 17 s); the render test by node id:
   `tests/test_web_depth_pass.py::test_a_page_with_its_own_picture_draws_its_depth_through_finish` (6.5 s).
+
+## Step 436 — the WebGL backend in a render's identity; `vidgen remote` passes `VIDGEN_WEBGL`
+- **Reproduced from the code**: `pipeline._usable_render` / `current_render` reused a scene's render when its
+  format, audio, stills, guide passes and fingerprint matched; nothing in it named the WebGL backend (only the
+  web frames' own key, `web.page.engine_id`, has the Chromium flags, and it is never reached when the scene's
+  render is reused). Also `vidgen remote` could not ask for software WebGL at all: the run's environment is
+  the VM's plus `/content/vidgen.env` (`VIDGEN_WEBGL=gpu` after setup), which overrides it; nothing from here was
+  forwarded.
+- **Fix**: after a worker rendered a scene drawn in Chromium (`3d`, `web`, `space`, a type built on `web`;
+  `pipeline.scene_webgl`) the pipeline adds `render.webgl` (`gpu` / `swiftshader`) to its timings
+  (`_record_webgl`); `_usable_render` reuses it only under the same backend (`_same_webgl`); a render without
+  the key (older) counts as `swiftshader`, so existing local caches stay valid. Switching back draws the scene
+  again (one render per scene path; not two caches). Done in `render/pipeline.py` on purpose: the worker and
+  `browser/chromium.py` are render inputs, so touching them would have made every render and every cut guide
+  stale; pipeline, colab and remote modules are not (fingerprints unchanged by Steps 435-436).
+  `vidgen remote` passes this computer's `VIDGEN_WEBGL` as `VIDGEN_RUN_WEBGL` (new `VM_KEYS` key, blank when
+  unset); `colab_vm.child_env` sets the run's `VIDGEN_WEBGL` from it after the env file:
+  `VIDGEN_WEBGL=swiftshader vidgen remote NAME generate inputs --guide ...`.
+- **Files**: `src/vidgen/render/pipeline.py`, `src/vidgen/remote.py` (`run_webgl`), `src/vidgen/colab_vm.py`
+  (`child_env`), `src/vidgen/colab.py` (`VM_KEYS`), `tests/test_render_webgl_cache.py` (new, 9 tests), `DESIGN.md`
+  §113.27, `docs/CONFIG.md`, `docs/HOWTO-restyle-with-ltx-on-colab.md` (On an L4), `tools/colab/README.md`, guide +
+  `AGENTS.md` ("On an L4", "Use a Colab session"), `tasklist.md`.
+- **Interfaces**: `pipeline.scene_webgl(project, scene_id)`, `remote.run_webgl()`, `colab_vm.child_env(env, env_file=None)`;
+  timings `render.webgl`.
+- **Real check (L4 `ltx`, escapement-remake, Step 435's `guide: final` on `04_escapement_a_b1`)**: vidgen reinstalled
+  with `setup_session.py ltx --vidgen-only` (40 s, ComfyUI untouched). `generate plan`: only that shot blocked
+  ("inputs not made yet", guide line `guide.final.mp4 ... not made yet`), the other 24 unchanged.
+  `VIDGEN_WEBGL=swiftshader vidgen remote ltx generate inputs . --guide --shot 04_escapement_a_b1`: 3 min 5 s
+  (rsync 197.7 MB up in 1 min 10 s; the scene rendered again in software, 194 web frames at 0.37 s, 87 s; 2.0 MB
+  back), then plan: 0 blocked. `generate run . --pay --shot 04_escapement_a_b1`: 449 s GPU, 0.290 units, take 2,
+  QA ok; ffprobe 768x448, 24 fps, 193 frames, 8.04 s (as T1). Stills at 0 / 4 / 7.9 s match
+  `guidetest/T1_rgb12_x2.mp4` (flash, hairspring, rim screws, perlage); mean absolute Y difference to T1 over all
+  193 frames 7.2 levels (max 12.1; GUIDE-TEST.md's same-seed P0-REF was 11-14). `video.yaml` restored byte for byte
+  (sha256 4b48058a...); take 2 stays, nothing picked. One video run.
+- **Known gaps**: why the 04_escapement_a render was drawn again on the VM is not proven (with the new code an
+  unrecorded render counts as swiftshader, which was asked; the likely cause is that the render the earlier canny
+  guide used is in another render folder or its frames' key differs; not investigated). The render it drew
+  is software (0.37 s a frame on the CPU). The GPU render's black holes were not re-checked here. A render drawn
+  under one backend and its cut guides: the guide's record does not name the backend, so a guide cut from a GPU
+  render still reads current after switching to swiftshader until it is cut again. `guide: depth` was not run
+  for real (the film's page has no depth lines yet). The comfyui transport and `generate inputs` run here do not
+  forward anything (they render locally).
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_render_webgl_cache.py tests/test_remote.py
+  tests/test_guide.py tests/test_docs.py tests/test_draft.py` (220 passed, 23 s); `tests/test_colab_setup_session.py
+  tests/test_colab_rsync.py tests/test_colab_transfer.py tests/test_colab_ssh.py tests/test_render.py -m "not render"`.
