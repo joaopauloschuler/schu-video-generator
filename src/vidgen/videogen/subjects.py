@@ -145,12 +145,39 @@ def sheet_panels(panels: Sequence[Panel]) -> list[Any]:
     return [SheetPanel(p.path, p.words(k == 0 or panels[k - 1].subject != p.subject)) for k, p in enumerate(panels)]
 
 
-def shot_sheet_prompt(panels: Sequence[Panel], width: int, height: int) -> str:
-    """The ``sheet_prompt`` of a sheet of ``panels`` at ``width`` x ``height``."""
+def sheet_background(project: Project, chosen: str | None, panels: Sequence[Panel]) -> str:
+    """What a shot's composed sheet sits on: ``black``, ``location``, a colour ``#rrggbb`` (lower
+    case) or a picture file (as written). ``chosen`` is the shot's ``sheet_background:``, else
+    ``videogen.sheet_background``; ``location`` is ``black`` when none of ``panels`` is a location's."""
+    from vidgen.config import SHEET_BACKGROUND_COLOUR
+
+    value = (chosen or project.config.videogen.sheet_background).strip()
+    if value == "location":
+        return "location" if location_panel(panels) is not None else "black"
+    if SHEET_BACKGROUND_COLOUR.fullmatch(value):
+        return value.lower()
+    return value
+
+
+def location_panel(panels: Sequence[Panel]) -> Panel | None:
+    """The first panel of a location subject among ``panels`` (the ``location`` background)."""
+    return next((p for p in panels if p.spec.location), None)
+
+
+def background_words(background: str, panels: Sequence[Panel]) -> str:
+    """The ``sheet_prompt``'s words for the background (only ``location`` has some)."""
+    where = location_panel(panels)
+    if background != "location" or where is None:
+        return ""
+    return f"the panels sit on a softly blurred {where.subject.replace('_', ' ')}"
+
+
+def shot_sheet_prompt(panels: Sequence[Panel], width: int, height: int, background: str = "black") -> str:
+    """The ``sheet_prompt`` of a sheet of ``panels`` at ``width`` x ``height`` on ``background`` (:func:`sheet_background`)."""
     from vidgen.videogen.sheet_layout import choose_grid, sheet_prompt
 
     columns, rows = choose_grid(width, height, [PANEL_SIZE] * len(panels))
-    return sheet_prompt(sheet_panels(panels), columns, rows)
+    return "; ".join(w for w in (sheet_prompt(sheet_panels(panels), columns, rows), background_words(background, panels)) if w)
 
 
 def read_record(panel: Panel) -> dict[str, Any]:
@@ -528,23 +555,44 @@ def _left_loaded(loaded: bool) -> str:
 SHEET_NAME = "sheet.png"
 
 
-def sheet_source(panels: Sequence[Panel], width: int, height: int) -> dict[str, Any]:
-    """What a shot's composed sheet is made from (the panels must exist)."""
-    return {"sheet_panels": [[p.subject, p.view, file_sha256(p.path)] for p in panels], "sheet_size": [width, height]}
+def background_picture(project: Project, background: str) -> Path | None:
+    """The picture file of a ``background`` (:func:`sheet_background`) that names one, else ``None``."""
+    if background in ("black", "location") or background.startswith("#"):
+        return None
+    return project.root / background
 
 
-def compose_shot_sheet(panels: Sequence[Panel], width: int, height: int, dest: Path) -> None:
-    """Write ``dest``: the shot's sheet of ``panels`` at ``width`` x ``height``, and record it in the shot's ``inputs.json``."""
+def sheet_source(project: Project, panels: Sequence[Panel], width: int, height: int, background: str = "black") -> dict[str, Any]:
+    """What a shot's composed sheet is made from (the panels, and a background picture, must
+    exist). A black background adds nothing (sheets composed before backgrounds stay current)."""
+    source: dict[str, Any] = {"sheet_panels": [[p.subject, p.view, file_sha256(p.path)] for p in panels], "sheet_size": [width, height]}
+    if background != "black":
+        picture = background_picture(project, background)
+        source["sheet_background"] = background if picture is None else {"picture": background, "sha256": file_sha256(picture)}
+    return source
+
+
+def compose_shot_sheet(project: Project, panels: Sequence[Panel], width: int, height: int, dest: Path, background: str = "black") -> None:
+    """Write ``dest``: the shot's sheet of ``panels`` at ``width`` x ``height`` on ``background``
+    (:func:`sheet_background`), and record it in the shot's ``inputs.json``."""
     from vidgen.videogen.freshness import record_input
-    from vidgen.videogen.sheet_layout import compose_sheet
+    from vidgen.videogen.sheet_layout import colour_background, compose_sheet, location_background, picture_background
 
-    compose_sheet(sheet_panels(panels), width, height, dest)
-    record_input(dest, sheet_source(panels, width, height))
+    behind = None
+    if background == "location" and (where := location_panel(panels)) is not None:
+        behind = location_background(where.path, width, height)
+    elif background.startswith("#"):
+        behind = colour_background(background, width, height)
+    elif (picture := background_picture(project, background)) is not None:
+        behind = picture_background(picture, width, height)
+    compose_sheet(sheet_panels(panels), width, height, dest, behind)
+    record_input(dest, sheet_source(project, panels, width, height, background))
 
 
 __all__ = [
     "CONTACT_NAME", "DEFAULT_SEED", "LOCATION_PROMPT", "OBJECT_PROMPT", "PANEL_MODEL", "PANEL_SIZE", "RECORD_VERSION", "SHEET_NAME", "SUBJECTS_DIR",
-    "Panel", "PanelOutcome", "PanelSources", "PanelsResult", "approve_command", "compose_shot_sheet", "contact_path", "is_approved",
+    "Panel", "PanelOutcome", "PanelSources", "PanelsResult", "approve_command", "background_picture", "background_words", "compose_shot_sheet",
+    "contact_path", "is_approved", "location_panel", "sheet_background",
     "make_panels", "panel_lines", "panel_record", "place_still", "read_record", "select_panels", "set_approval", "sheet_panels",
     "sheet_source", "shot_panels", "shot_sheet_prompt", "subject_panels", "write_contact", "write_still",
 ]

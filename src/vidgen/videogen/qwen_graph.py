@@ -17,18 +17,18 @@ the result is scaled back to ``width`` x ``height`` (Lanczos). Standard library 
 from __future__ import annotations
 
 #: vidgen's default edit prompt (``first_frame_prompt:`` replaces it): :data:`QWEN_PROMPT`'s wording
-#: made general: name the usual computer-graphics giveaways and ask for real, irregular detail.
+#: made general (no sea, sky or sunlight words: an indoor scene stays indoors): name the usual
+#: computer-graphics giveaways and ask for real, irregular detail. :func:`vidgen.videogen.inputs.restyle_prompt`
+#: adds the shot's own prompt as what the picture shows.
 RESTYLE_PROMPT = (
-    "Turn this computer-graphics render into a real photograph. "
+    "Turn this computer-graphics render into a real photograph of the same place. "
     "Do not move, resize, add or remove anything: every object's position, size, angle and "
-    "outline, the horizon line and the bright highlights must stay exactly where they are; add "
-    "no new objects, land, rocks or plants. "
-    "Replace the regular, repeating computer-generated patterns and textures (a uniform ripple "
-    "pattern on water, tiled ground or foliage) with real, irregular natural detail of different "
-    "sizes; water becomes real open water with swells, wind chop and a few small whitecaps. "
-    "Make smooth plastic-looking surfaces real materials with fine texture, panel lines and "
-    "subtle wear, and soften too-clean, perfectly sharp edges. Real sunlight with natural "
-    "highlights, real atmospheric haze in the distance. "
+    "outline, any horizon line and the bright highlights must stay exactly where they are; add "
+    "no new objects. Keep the picture's own setting, light and colours. "
+    "Replace the regular, repeating computer-generated patterns and textures (uniform ripples, "
+    "tiled surfaces or foliage) with real, irregular natural detail of different sizes. "
+    "Make smooth plastic-looking surfaces real materials with fine texture and subtle wear, and "
+    "soften too-clean, perfectly sharp edges. "
     "Real 35 mm photograph, natural colours, not CGI.")
 #: The input picture's size over the output size.
 UPSCALE = 1.5

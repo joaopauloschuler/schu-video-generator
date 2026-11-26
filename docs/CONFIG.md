@@ -3043,11 +3043,12 @@ scenes:
   as its own reference, scaled back to 960x512, then the models are unloaded for the video job. It is
   `first_frame.restyled.png`, made by `vidgen generate inputs --guide` (on a Colab L4 about 25 s, about
   110 s when the models load); its GPU seconds and compute units are kept in the shot's `inputs.json`.
-  The default edit instruction asks for a real photograph with everything kept in place, names the
-  usual computer-graphics giveaways (uniform repeating ripple or texture patterns, plastic surfaces,
-  too-clean edges) and asks for real irregular detail (waves with swells, chop and whitecaps; rough
-  terrain), real light and haze; `first_frame_prompt:` replaces it, e.g. to name the shot's own
-  subject and pattern. It is made again only when its source changed (a new render, a new
+  The default edit instruction asks for a real photograph of the same place with everything kept in
+  place and the picture's own setting, light and colours, names the usual computer-graphics giveaways
+  (uniform repeating patterns, plastic surfaces, too-clean edges) and asks for real irregular detail;
+  it ends with the shot's own `prompt:` ("The picture shows: ..."), so an indoor shot stays indoors.
+  `first_frame_prompt:` replaces it, e.g. to name the shot's own subject and pattern; it may stay on
+  the shot with `first_frame: none` (not used; the plan notes it). It is made again only when its source changed (a new render, a new
   first frame, prompt, seed or size); the plan reports such a change. Look at it before paying for the clip.
 - **A stylesheet for a shot** (`sheet:` + `sheet_prompt:`, model `ltx-2.3-union-control`,
   `videogen.provider: comfyui`): a picture file you made with an image model (panels that show how the
@@ -3092,9 +3093,19 @@ scenes:
   A shot of `ltx-2.3-union-control` on the comfyui provider with neither `subjects:` nor `sheet:` gets a
   warning in the plan (nothing keeps its subject the same across shots); it is not blocked.
   `vidgen generate inputs` composes the shot's sheet `build/videogen/<shot>/sheet.png` (free, Pillow, the same
-  bytes for the same panels; also before the panels are approved, so it can be looked at): the clip's size, black, no text, at most 4 panels in the grid that shows them
+  bytes for the same panels; also before the panels are approved, so it can be looked at): the clip's size, no text, at most 4 panels in the grid that shows them
   largest (2 panels stacked, 3 or 4 in 2x2 at 768x448), each fitted to its cell; the plan blocks the shot
-  until it is composed from the current panels. The prompt starts `Reference sheet: top left, <look>, <text>;
+  until it is composed from the current panels and background. **`sheet_background:`** (on the shot, or
+  `videogen.sheet_background:` for all; default `black`): `black`; `location` (the shot's location panel
+  scaled to fill the sheet, blurred (18 px at 768 wide), x1.1 brighter and blended 35 % with its own average
+  colour lifted to luma 100; the black around the panels, i.e. the gaps and each panel's near-black joined to
+  them, is replaced, the edge softened over 2 px; the sheet prompt ends `; the panels sit on a softly blurred
+  <location>`; on a shot without a location subject it is black, and on a shot itself without one it is a
+  config error); a colour `"#rrggbb"`; or a picture file (relative to the project, scaled to fill). LTX
+  carries the sheet's brightness into the clip: `location` keeps an indoor, lamp- or candle-lit scene lit
+  (black made one turn dark after frame 0); `black` suits daylight outdoor shots (the sea location made the
+  glider's clip hazy) and dark scenes. The background is part of the sheet's record (a black one adds nothing,
+  so earlier sheets stay current); changing it composes the sheet again, the panels and approvals stay. The prompt starts `Reference sheet: top left, <look>, <text>;
   top right, the same glider, <text>; ...`, then the shot's own prompt. `subjects:` and `sheet:` (or
   `sheet_prompt:`) on one shot is a config error, so is an unknown subject or a sheet of more than 4 panels.
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also

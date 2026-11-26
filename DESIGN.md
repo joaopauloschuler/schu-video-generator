@@ -22598,6 +22598,17 @@ hosted service), with the image model loaded once for the whole batch and unload
   it can be looked at, but the blocked shot is never paid for. A `sheet:` file needs no approval.
   `plan_shots` adds a warning (not a block) for each comfyui shot of a `takes_sheet` workflow with
   neither `subjects:` nor `sheet:`.
+- **Sheet background** (Step 431; `GeneratedShot.sheet_background`, `VideogenConfig.sheet_background`,
+  default `black`; `subjects.sheet_background` resolves it). `sheet_layout.on_background` replaces the
+  near-black region (r+g+b <= 14) joined to the sheet's corner (the gaps and each panel's black touching
+  them; `scipy.ndimage.label`) by a background, edge blurred 2 px: `location_background` (the first location
+  panel, cover-fitted, Gaussian blur 18 px at 768 wide, x1.1, blended 35 % with its mean colour lifted to
+  luma 100: the Orrery film's `warmsheet.py` recipe with a generic tint), `colour_background`,
+  `picture_background`. Deterministic. `sheet_source` adds `sheet_background` (a picture with its SHA-256)
+  only when it is not black, so sheets composed before stay current. `background_words` appends "the
+  panels sit on a softly blurred <location>" to the built sheet_prompt. Default black by the G4 check
+  (HANDOFF Step 431): location kept the candle-lit Orrery bright (69.5 vs 29) but washed out the glider
+  over the sea (126 vs 68, haze, a second sun).
 - **The shot's sheet** (`videogen/sheet_layout.py`). `choose_grid` picks the columns x rows that shows
   the panels largest (smallest panel area; ties: fewer empty cells, fewer columns), `GAP` 4 px,
   Lanczos, row by row; `place_words` names cells ("top left", "bottom", "the whole sheet"). The sheet

@@ -5835,7 +5835,8 @@ The sheets are made by an image model and approved before any video work:
    can be approved. `generate plan` lists each panel `approved` / `not approved` and blocks a shot
    until all its panels are approved, with the command to run.
 5. `vidgen remote NAME generate inputs --guide`: the canny guide, the first frame and the shot's sheet
-   `build/videogen/<shot>/sheet.png` (the panels on black, a grid at the clip's size).
+   `build/videogen/<shot>/sheet.png` (the panels in a grid at the clip's size, on its
+   `sheet_background:`, below).
 6. `vidgen remote NAME generate run --pay --shot ID`: the clip; a blocked shot is never paid for.
 
 ```
@@ -5863,9 +5864,39 @@ subjects:
   refuses a sheet shot otherwise. On a G4, a 5 s clip with a sheet takes about 80 s door to door
   (53 s in ComfyUI) and peaks at 42.7 GB of VRAM. A G4 bills about 11.2 compute units an hour: set
   `videogen.comfyui.units_per_hour: 11.2` so the takes record the right units.
-- First frame: `first_frame: restyled` (sent as a frame) gives the best opening and keeps the sheet's
-  details. With a sheet a first frame is optional (`first_frame: none`). `first_frame_in: guide` runs
-  with a sheet but opened on an over-exposed frame in the one test.
+- **The sheet's background** (`sheet_background:` on the shot, or `videogen.sheet_background:` for all):
+  LTX carries the sheet's overall brightness into the clip.
+  - `black` (the default): right for outdoor daylight, sea and sky shots and for dark scenes (space,
+    night). On the glider over the sea, `location` made the clip hazy and washed out (brightness 126
+    instead of 68), with a second sun and a stray line.
+  - `location`: the shot's location panel, blurred, a little brighter and tinted with its own
+    average colour, fills the sheet and the panels sit on it (the sheet prompt adds "the panels sit on
+    a softly blurred <location>"). Use it for indoor, lamp- or candle-lit scenes: on black, the
+    Orrery's candle-lit workshop turned dark grey after the first frame (brightness 54, then 25-37);
+    with `location` the same shot stayed warm and bright (67-72) with no jump. It needs a location
+    subject among the shot's `subjects:`.
+  - a colour `"#3a2a1a"` or a picture file (relative to the project, scaled to fill the sheet).
+  Changing it composes the sheet again (free, `generate inputs`); the panels and their approval stay.
+- First frame: with a sheet, prefer `first_frame: none`: the clip takes its look from the sheet and
+  the guide, with no jump at frame 1. A restyled first frame (`first_frame: restyled`) whose
+  brightness differs from what the clip becomes makes a visible jump after frame 0 (darker frame:
+  the clip lifts; brighter: it drops). `first_frame_prompt:` may stay on the shot while
+  `first_frame: none` (the plan notes it is not used). `first_frame_in: guide` runs with a sheet but
+  opened on an over-exposed frame in the one test.
+- Describe the light and look in the subjects' `look:` and the shot's `prompt:` ("bright warm
+  candlelight", "plank wall glowing orange"): the sheet prompt repeats the looks, so "at night, deep
+  shadows" in a location's look pulls the clip darker. Prompt words alone did not fix a dark sheet.
+- The guide's edges become the clip's details: in the 3D scene, keep geometry clean (no broken edges,
+  they turn into loose pins) and the background's edges sparse (dust dots and many plank edges turn
+  into stars and line patterns).
+- Keep your own sheets and pictures outside `assets/`: any file there counts as a change of every
+  scene, so every shot's inputs read out of date.
+- A second take of an unchanged shot is the first one again (`generate run` says the request is
+  unchanged): set or change the shot's `seed:` for a new take (it also restyles a restyled first
+  frame with that seed).
+- One 5 s clip per beat: a beat longer than the model's longest clip (5 s) is split into parts.
+  With silent shots, time the beat with a one-word placeholder and `pause:`, e.g. `text: "Gears."`
+  with `pause: 4.6` makes exactly 5.00 s; `generate plan` prints each shot's length.
 - A sheet you made yourself instead of `subjects:`: `sheet: FILE` (the clip's aspect ratio; it is scaled,
   never cropped) with `sheet_prompt:` describing its panels (the prompt starts `Reference sheet:
   <sheet_prompt>. Generated video: `). It needs no approval: you supplied it.

@@ -175,11 +175,13 @@ def run_shots(
                 warnings=result.warnings, opening_picture=shot.starting_picture, usage=result.job.usage if result.job else None,
                 sheet=shot.sheet,
             )
-            what = "new take" if run.new_take else "already take"
+            what = "new take" if run.new_take else "the same request as take"
             cost = f", {money(result.cost)}" if result.cost is not None else ""
             if result.job is not None and result.job.usage and result.job.usage.get("gpu_seconds") is not None:
                 cost += f", {result.job.usage['gpu_seconds']:.0f} s GPU, {result.job.usage['compute_units']:.3f} compute units"
             out(f"shot {shot.id}: {status}{cost}: {what} {run.take.number} ({run.take.path.relative_to(root).as_posix()}, {run.take.qa.get('summary')})")
+            if not run.new_take:
+                out(f"shot {shot.id}: no new take: the request is unchanged; for another take, set or change the shot's seed:")
             for warning in result.warnings:
                 out(f"shot {shot.id}: warning: {warning}")
             run.message = "; ".join(result.warnings)

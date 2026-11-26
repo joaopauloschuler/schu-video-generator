@@ -169,7 +169,7 @@ FIRST_FRAME_WITH_REFERENCES_PROBLEM = (
 )
 #: What the plan says each sound setting is.
 SOUND_WHAT: dict[str, str] = {
-    "mix": "vidgen's voice and music; the model is asked for no sound",
+    "mix": "the take plays under vidgen's own voice and music, if the film has any; the model is asked for no sound",
     "model": "the model makes the clip's own sound and vidgen keeps it",
 }
 #: Picture files a shot may name in ``refs`` / ``first_frame``.
@@ -465,11 +465,18 @@ def _subjects_sheet(project: Project, shot: Shot, panels: PanelSources, size: tu
     block the shot with the command that makes what is missing. Panels not approved block it too
     (the sheet may still be composed, to look at)."""
     from vidgen.videogen.freshness import recorded_matches
-    from vidgen.videogen.subjects import SHEET_NAME, approve_command, contact_path, is_approved, sheet_source, shot_panels, shot_sheet_prompt
+    from vidgen.videogen.subjects import (
+        SHEET_NAME, approve_command, background_picture, contact_path, is_approved, sheet_background, sheet_source, shot_panels, shot_sheet_prompt,
+    )
 
     assert shot.spec.subjects is not None
     found = shot_panels(project, shot.spec.subjects)
-    shot.subject_prompt = shot_sheet_prompt(found, *size)
+    background = sheet_background(project, shot.spec.sheet_background, found)
+    shot.subject_prompt = shot_sheet_prompt(found, *size, background)
+    picture = background_picture(project, background)
+    if picture is not None and not picture.is_file():
+        shot.problems.append(f"{shot.location}.sheet_background: {background!r} is not black, location, a colour #rrggbb or a picture file of the project")
+        return
     waiting = [f"{p.label}: {why}" for p in found if (why := panels.state(p)) is not None]
     if waiting:
         shot.blocked.append(f"sheet panels not ready ({'; '.join(waiting)}): run `vidgen generate subjects` (the image model on the ComfyUI server), "
@@ -481,7 +488,7 @@ def _subjects_sheet(project: Project, shot: Shot, panels: PanelSources, size: tu
         contacts = ", ".join(contact_path(project, n).relative_to(project.root).as_posix() for n in names)
         shot.blocked.append(f"sheet panels not approved ({', '.join(p.label for p in unapproved)}): look at {contacts}, then `{approve_command(names)}`")
     dest = project.root / INPUTS_DIR / shot.id / SHEET_NAME
-    if not recorded_matches(dest, sheet_source(found, *size)):
+    if not recorded_matches(dest, sheet_source(project, found, *size, background)):
         made = "is not composed from the current panels" if dest.is_file() else "is not composed yet"
         shot.blocked.append(f"the sheet {dest.relative_to(project.root).as_posix()} {made}: `{inputs_command(project, False)}` (free)")
         return
@@ -984,7 +991,11 @@ def _beat_shots(
             if spec.duration is not None and spec.duration < length - 1e-6:
                 shot.notes.append(f"duration: {spec.duration} s is shorter than the part ({length:.2f} s): the clip follows the start of the part's guide")
             if parts > 1 and k == 0:
-                shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({max(model.durations or [0])} s): split into {parts} parts")
+                longest = max(model.durations or [0])
+                shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({longest} s): split into {parts} parts; "
+                                  f"for one clip, make the beat at most {longest} s (its words plus pause:)")
+        if spec.first_frame == "none" and spec.first_frame_prompt is not None and k == 0:
+            shot.notes.append("first_frame_prompt: is not used with first_frame: none (kept for first_frame: restyled)")
         shots.append(shot)
     return shots
 
@@ -1072,7 +1083,7 @@ class ShotPlan:
             )
             lines += [f"    {_shown(i.path, root)} ({share_size(i)})" for i in shot.shared]
         if self.cached:
-            lines.append("  cached: the clip is already made (nothing to pay)")
+            lines.append("  cached: the clip is already made (nothing to pay); for another take, set or change the shot's seed:")
         if self.previous_job:
             lines.append(f"  job {self.previous_job} of this request was paid already: a run downloads it (not paid again)")
         if self.request_bytes is not None:

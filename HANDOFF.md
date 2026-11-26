@@ -28781,3 +28781,68 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
   tests/test_videogen_host.py tests/test_videogen_frames.py tests/test_remote.py tests/test_guide.py tests/test_docs.py`
   (339 passed, 25 s); `-m slow` on the videogen files (43 passed; `test_cli_models_from_cache_and_ledger` fails
   with and without this change: the cached catalog lists 34 models, the test expects 33).
+
+## Step 431 — a background for the composed sheet; author fixes from The Orrery
+
+- **Why**: the first film made with subjects ("The Orrery", `video-projects/orrery/NOTES.md`) found that the
+  composed sheet's black darkens LTX's clip: the candle-lit gears shot went 54 at frame 0, then 25-37. The author's
+  fix (`mysheets/warmsheet.py`: the panels on a blurred, brightened, warm-tinted workshop panel) gave bright clips.
+- **Built**: `sheet_background:` on a `generated_shot` with `subjects:` (error without them) and
+  `videogen.sheet_background:` (default `black`). Values: `black`; `location` (the shot's first location panel,
+  cover-fitted, Gaussian blur 18 px at 768 wide, x1.1, blended 35 % with its own mean colour lifted to luma 100;
+  the near-black (r+g+b <= 14) region joined to the gaps is replaced, edge blurred 2 px; a shot-level `location`
+  without a location subject is a config error, project-level falls back to black); a colour `"#rrggbb"`; a
+  picture file (cover-fitted; a missing file is a plan problem). On the Orrery panels the generic recipe gives
+  a sheet of mean luma 61.9 against the author's `gears_mid.png` 61.3 (mean pixel difference 3.3; warmsheet.py with
+  1.1/0.35 reproduces `gears_mid.png` exactly, so `_mid` is the recipe; its fixed tint rgb(150,88,40) became the
+  location's own mean colour lifted to the same luma, about 100). Deterministic (same bytes twice). The built
+  sheet_prompt ends `; the panels sit on a softly blurred <location>` (as the author's working shots did). The
+  background is in the sheet's `inputs.json` source only when not black, so existing black sheets stay current;
+  changing it makes only the sheet stale, never the panels or their approval.
+- **Default: `black`**, by the G4 check below: `location` fixed the candle-lit interior but made the daylight
+  sea shot hazy and washed out. The guide says to choose `location` for indoor, lamp- or candle-lit scenes.
+- **Fixes a-e**:
+  a. Done: `RESTYLE_PROMPT` is neutral (no sea, water, sunlight, haze, aerial words) and `restyle_prompt` adds
+     "The picture shows: <the shot's prompt>." Restyled first frames of shots without `first_frame_prompt:` read
+     changed once (one restyle, ~8 s GPU, on the next `generate inputs --guide`).
+  b. Not changed in planning (the split rule touches chained parts and lead frames): the split note now says
+     "for one clip, make the beat at most 5 s (its words plus pause:)" and the guide gives the recipe
+     (one-word placeholder + `pause: 4.6` = 5.00 s).
+  c. Done: `first_frame_prompt:` is accepted with an explicit `first_frame: none`; the plan notes it is not used.
+     With other first frames it is still an error.
+  d. The documented way is `seed:`. The plan's "cached" lines and `generate run` (“the same request as take N”,
+     then "no new take: the request is unchanged; for another take, set or change the shot's seed:") name it.
+  e. Plan sound line reworded: `sound: mix (the take plays under vidgen's own voice and music, if the film has
+     any; the model is asked for no sound)` (it is the output's sound, not the `audio:` input). `assets/` and
+     music-only loudness: not fixed (known gaps).
+- **Files**: `src/vidgen/config.py`, `src/vidgen/videogen/{sheet_layout,subjects,shots,inputs,qwen_graph,run,workflow}.py`,
+  `tests/test_videogen_subjects.py` (+3 tests, 1 slow), guide + `AGENTS.md` (Stylesheets: background, first
+  frame, look words, guide edges, assets, new takes, one 5 s clip), `docs/CONFIG.md`, `DESIGN.md` §113.24, `tasklist.md`.
+- **G4 check (2026-11-26 ~02:13-02:23 UTC, session `ltx`, compiler off; vidgen updated with
+  `setup_session.py ltx --no-comfy-compiler`)**. Mean luma (signalstats YAVG) at 0/25/50/75/100 %:
+  | clip | luma | look |
+  |---|---|---|
+  | orrery `takes/gears_b1/1.mp4` (film, black sheet) | 54 31 29 26 25 | jump after frame 0, dark grey, wall as lines and stars |
+  | orrery `takes/gears_b1/5.mp4` (film, picked: hand warm sheet + restyled) | 54 60 60 58 58 | small lift at frame 1 |
+  | orrery gears_b1, `subjects:` + `location`, `first_frame: none` (new) | 67 69 72 71 70 | warm, bright, plank wall with a candle glow, follows the dive; no jump; no panel leak; loose pins at the end (from the guide, as in take 5); spoke holes look pale |
+  | glider (footage-test-approval copy, seed 3) `black` | 67 68 67 67 69 | crisp sea, clear horizon, sun glint, one glider with the sheet's look |
+  | glider `location` (blurred sea) | 125 126 126 126 127 | hazy, washed out, horizon lost, a second sun, a white line near the end; one glider, no leak |
+  Each take 53 s GPU, 0.165 units, about 1 min 12 s door to door. Results in
+  `/home/bpsa/app/video-projects/sheet-g4-tests-2026-11-25/step431/` (`compare.png`: rows orrery take 1 / take 5 /
+  new, glider black / location, frames 0/60/120 and the sheet; the three new clips; the three sheets). The copies
+  were deleted after; their VM folders `/content/projects/orrery` and `/content/projects/glider` were overwritten
+  by the copies' sync (a VM cache; the local film folder is untouched).
+- **Known gaps**: any file under `assets/` changes every scene's fingerprint (by design of the render
+  fingerprint: assets may be used by any scene), so every shot's inputs read stale; the guide says to keep own
+  sheets elsewhere. With music only, `audio.normalize: auto` normalises the mix to -16 LUFS, so the music's
+  `volume:` does not change the final level (set `audio: {target_lufs: ...}` or `normalize: false`); changing
+  `auto` would change every music-only video. A sheet composed locally by `generate inputs` is not used by
+  `vidgen remote ... generate run` (the VM has its own `build/`): run `vidgen remote NAME generate inputs` (free)
+  after changing `sheet_background:` (seen in the check). The location background's numbers are from one interior
+  and one exterior; a very bright location gets no extra lift (tint luma is at least its own).
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_subjects.py tests/test_videogen_sheet.py
+  tests/test_videogen_comfyui.py tests/test_videogen_canny_restyle.py tests/test_videogen_shots.py tests/test_videogen.py
+  tests/test_videogen_guided_prompts.py tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py
+  tests/test_videogen_first_frame_in.py tests/test_videogen_shot_chain.py tests/test_videogen_compose.py
+  tests/test_videogen_final_guide.py tests/test_remote.py tests/test_guide.py tests/test_docs.py` (384 passed, 30 s);
+  `-m slow tests/test_videogen_subjects.py tests/test_videogen_shots.py tests/test_videogen_canny_restyle.py` (12 passed, 22 s).

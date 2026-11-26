@@ -108,7 +108,7 @@ class ClipPlan:
         r = self.request
         shown = self.path.relative_to(root).as_posix() if root is not None and self.path.is_relative_to(root) else str(self.path)
         if self.cached:
-            return [f"cached: {shown} ({r.model}; nothing to pay)"]
+            return [f"cached: {shown} ({r.model}; nothing to pay; for another take, set or change the shot's seed:)"]
         what = [r.model, f"{r.duration} s" if r.duration else None, r.resolution or r.size, r.aspect_ratio]
         if r.frame_images:
             what.append(f"{len(r.frame_images)} frame image(s)")

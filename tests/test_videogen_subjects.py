@@ -397,3 +397,77 @@ def test_generate_plan_and_run_with_json_print_their_lines_on_stderr_for_vidgen_
     captured = capsys.readouterr()
     assert "shot sea: blocked (" in captured.err and json.loads(captured.out)["shots"][0]["status"] == "blocked"
     assert "### Stylesheets" in find_topic("outputs").text   # the section the no-sheet warning names
+
+
+# ----- the sheet's background (Step 431) ---------------------------------------------------------
+
+
+def test_a_background_replaces_the_black_around_the_panels_and_keeps_the_panels(tmp_path: Path) -> None:
+    from vidgen.videogen.sheet_layout import colour_background, location_background
+
+    obj = Image.new("RGB", (180, 96), (0, 0, 0))
+    obj.paste((250, 10, 10), (65, 35, 115, 61))   # an object on black
+    obj.save(tmp_path / "obj.png")
+    Image.new("RGB", (180, 96), (60, 40, 20)).save(tmp_path / "room.png")
+    panels = [SheetPanel(tmp_path / "obj.png", "x"), SheetPanel(tmp_path / "room.png", "y")]
+    dest = tmp_path / "sheet.png"
+    compose_sheet(panels, 192, 112, dest, colour_background("#3a2a1a", 192, 112))
+    with Image.open(dest) as sheet:
+        assert sheet.getpixel((0, 0)) == sheet.getpixel((96, 1)) == sheet.getpixel((10, 20)) == (0x3a, 0x2a, 0x1a)   # gaps, the object's black
+        assert sheet.getpixel((96, 28)) == (250, 10, 10) and sheet.getpixel((96, 84)) == (60, 40, 20)   # the panels as they were
+    background = location_background(tmp_path / "room.png", 192, 112)
+    lifted = background.getpixel((10, 10))
+    assert 0.299 * lifted[0] + 0.587 * lifted[1] + 0.114 * lifted[2] > 50 and lifted[0] > lifted[2]   # brighter than the room, its colour
+    compose_sheet(panels, 192, 112, dest, background)
+    first = dest.read_bytes()
+    compose_sheet(panels, 192, 112, dest, location_background(tmp_path / "room.png", 192, 112))
+    assert dest.read_bytes() == first   # deterministic
+
+
+@pytest.mark.slow
+def test_sheet_background_is_checked_named_in_the_prompt_and_part_of_the_sheets_source(make_project: Any) -> None:
+    from vidgen.videogen.inputs import make_inputs
+    from vidgen.videogen.models import Catalog
+    from vidgen.videogen.shots import project_shots
+
+    with pytest.raises(ValidationError, match="this shot has no subjects"):
+        GeneratedShot(kind="establishing", model=LTX, guide="canny", sheet_background="location")
+    from conftest import minimal_config
+
+    shot = {"kind": "establishing", "model": LTX, "guide": "canny", "subjects": ["glider"], "sheet_background": "location"}
+    with pytest.raises(ValidationError, match="needs a location subject"):
+        VideoConfig(**minimal_config(subjects={"glider": GLIDER}, scenes=[{"id": "s1", "type": "text_card", "params": {"text": "x"},
+                                                                         "beats": [{"text": "t", "generated_shot": shot}]}]))
+    root = _project(make_project, sheet_background="location")
+    (item,) = _plan(root).shots
+    assert "over the water; the panels sit on a softly blurred sea. Generated video: " in item.shot.prompt
+    _make(root)
+    set_approval(Project.load(root), [])
+    project = Project.load(root)
+    make_inputs(project, project_shots(project, Catalog((), 0.0, "cache")), out=lambda line: None)
+    (item,) = _plan(root).shots
+    assert item.shot.sheet is not None and not any("sheet" in b for b in item.shot.blocked)
+    data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))
+    data["scenes"][0]["beats"][0]["generated_shot"]["sheet_background"] = "#102030"
+    (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    (item,) = _plan(root).shots
+    assert any("is not composed from the current panels" in b for b in item.shot.blocked) and "softly blurred" not in item.shot.prompt
+    data["scenes"][0]["beats"][0]["generated_shot"]["sheet_background"] = "nowhere.png"
+    (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    (item,) = _plan(root).shots
+    assert any("is not black, location, a colour" in p for p in item.shot.problems)
+
+
+def test_the_default_restyle_prompt_is_neutral_and_names_the_shot_and_a_prompt_may_stay_with_first_frame_none(make_project: Any) -> None:
+    from vidgen.videogen.inputs import restyle_prompt
+    from vidgen.videogen.qwen_graph import RESTYLE_PROMPT
+
+    assert not any(word in RESTYLE_PROMPT.lower() for word in ("sea", "water", "sunlight", "aerial", "haze"))
+    root = _project(make_project, first_frame_prompt="keep it dry")   # first_frame: none: kept, not used
+    (item,) = _plan(root).shots
+    assert any("first_frame_prompt: is not used with first_frame: none" in n for n in item.shot.notes)
+    shot = item.shot.model_copy() if hasattr(item.shot, "model_copy") else item.shot
+    shot.spec = shot.spec.model_copy(update={"first_frame_prompt": None})
+    assert restyle_prompt(shot).endswith("The picture shows: a grey glider flies low over the sea.")
+    with pytest.raises(ValidationError, match="first_frame_prompt: is the edit instruction"):
+        GeneratedShot(kind="establishing", model=LTX, first_frame="render", first_frame_prompt="x")

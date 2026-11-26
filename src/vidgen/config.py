@@ -1093,6 +1093,8 @@ class VideogenConfig(_Strict):
     """Where shots take their starting picture: frame (a first frame image) or guide (spliced into the guide video, for models that take a first frame or references, never both). Above it: videogen.models.<model>.first_frame_in, then a shot's first_frame_in:."""
     first_frame_dissolve: float = Field(default=0.4, gt=0, le=2)
     """Seconds the starting picture dissolves into the guide with first_frame_in: guide; the combined guide stays as long as the guide and it is the guide's dissolve, not the film's."""
+    sheet_background: str = Field(default="black", min_length=1)
+    """What the panels of a sheet composed from subjects: sit on: black, location (the shot's location panel, blurred, a little brighter and tinted with its own average colour, filling the sheet; black for a shot without a location subject), a colour "#rrggbb" or a picture file; a shot's sheet_background: overrides it."""
     models: dict[str, VideogenModelSettings] = Field(default_factory=dict)
     """Settings per video model, by its OpenRouter id, e.g. {"bytedance/seedance-2.0-mini": {sound: model, first_frame_in: guide}}; other models keep videogen.sound and videogen.first_frame_in."""
 
@@ -3394,6 +3396,8 @@ class FileRef(_Strict):
 
 #: The most panels a shot's composed sheet holds (``generated_shot.subjects``): bigger panels carry over better.
 MAX_SHEET_PANELS = 4
+#: A ``sheet_background:`` colour (the other values: black, location or a picture file).
+SHEET_BACKGROUND_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 
 
 class SceneMoment(_Strict):
@@ -3554,6 +3558,8 @@ class GeneratedShot(_Strict):
     """With sheet: what each panel of the sheet shows, e.g. "top left, a grey jet glider seen from behind...; bottom right, a rough open sea"; the prompt starts with "Reference sheet: <this>. Generated video: " before the shot's own text."""
     subjects: list[Identifier] | None = Field(default=None, min_length=1)
     """Names from subjects: whose panels vidgen composes into this shot's sheet (at the clip's size, black background, a grid of at most 4 panels) and whose views' texts make its sheet_prompt; the panels come from `vidgen generate subjects`. Instead of sheet:; ltx-2.3-union-control only."""
+    sheet_background: str | None = Field(default=None, min_length=1)
+    """With subjects: what the sheet's panels sit on: black, location (the shot's location panel, blurred, a little brighter and tinted with its own average colour, filling the sheet: an indoor, lamp- or candle-lit scene stays lit instead of turning dark), a colour "#rrggbb" or a picture file (relative to the project). Default videogen.sheet_background (black)."""
     size: str | None = Field(default=None, pattern=r"^\d+x\d+$")
     """WIDTHxHEIGHT of the clip a ComfyUI workflow makes (multiples of 64, e.g. 768x448); the guide and the restyled first frame are made at it too. Default: the workflow's size for the aspect ratio (16:9: 960x512). Not with resolution:."""
     duration: int | None = Field(default=None, ge=1)
@@ -3589,7 +3595,7 @@ class GeneratedShot(_Strict):
             raise ValueError(f"first_frame: {LAST_OF_PREFIX} needs a shot id, e.g. {LAST_OF_PREFIX}intro_b1")
         if self.canny is not None and self.guide_source != "canny":
             raise ValueError("canny: sets how the guide: canny edge video is made; this shot has no guide: canny")
-        if self.first_frame_prompt is not None and self.first_frame != RESTYLED_FIRST_FRAME:
+        if self.first_frame_prompt is not None and self.first_frame not in (RESTYLED_FIRST_FRAME, "none"):
             raise ValueError(f"first_frame_prompt: is the edit instruction of first_frame: {RESTYLED_FIRST_FRAME}; this shot has first_frame: {self.first_frame or 'its default'}")
         if self.first_frame == PAINTED_FIRST_FRAME and self.paint_first_frame is None:
             raise ValueError("first_frame: painted needs paint_first_frame: {prompt: ...} on the shot (what `vidgen generate frames` paints)")
@@ -3611,6 +3617,8 @@ class GeneratedShot(_Strict):
             raise ValueError("sheet_prompt: describes the panels of a sheet: picture; this shot has no sheet:")
         if self.sheet is not None and self.sheet_prompt is None:
             raise ValueError('sheet: needs sheet_prompt: what each panel shows, e.g. "top left, the glider from behind; bottom right, the sea"')
+        if self.sheet_background is not None and self.subjects is None:
+            raise ValueError("sheet_background: is the background of the sheet vidgen composes from subjects:; this shot has no subjects:")
         for key in ("sheet", "subjects"):
             if getattr(self, key) is not None and (workflow is None or not workflow.takes_sheet):
                 takers = ", ".join(w.id for w in WORKFLOWS.values() if w.takes_sheet)
@@ -4310,6 +4318,8 @@ class VideoConfig(_Strict):
                     continue
                 if len(set(shot.subjects)) != len(shot.subjects):
                     problems.append(f"{where}: a subject is named twice")
+                if shot.sheet_background == "location" and not any(self.subjects[n].location for n in shot.subjects):
+                    problems.append(f"{where}: sheet_background: location needs a location subject among the shot's subjects (one with location: true)")
                 panels = sum(len(self.subjects[n].views) for n in shot.subjects)
                 if panels > MAX_SHEET_PANELS:
                     problems.append(f"{where}: {panels} panels; a sheet holds at most {MAX_SHEET_PANELS} (bigger panels carry over better): name fewer subjects or views")
