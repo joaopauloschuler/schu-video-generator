@@ -5831,6 +5831,28 @@ Add to the `generated_shot:` of "Real footage from a web scene" above:
           # first_frame: none    # no first frame (restyled still works)
 ```
 
+**Sheets vidgen makes: `subjects:`.** Instead of a hand-made sheet, name each subject or location once
+at the top of `video.yaml` and list its views (stills of your render or picture files; never a video
+model's frame); a shot names them and vidgen composes its sheet and its `sheet_prompt`:
+
+```
+subjects:
+  glider:
+    look: "a grey jet glider with delta wings and red wing tips"
+    views:
+      - {name: rear, from: {scene: chase, at: 0.5}, crop: [190, 165, 260, 130], text: "seen from behind and above"}
+      - {name: side, image: assets/glider_side.png, text: "in side view"}   # e.g. `vidgen still` with another camera
+  sea: {look: "a rough open sea", location: true, views: [{from: {scene: chase, at: 0.5}, text: "from low over the water"}]}
+# on the shot, instead of sheet: and sheet_prompt:
+          subjects: [glider, sea]   # at most 4 panels in all
+```
+
+`vidgen remote NAME generate subjects` makes the panels (`sheets/<subject>/<view>.png`, a `.json`
+record each) with Qwen-Image-Edit on the session's ComfyUI, all in one batch, then unloads the model;
+it remakes only panels whose still, look, text or seed changed (`--force`: all). Look at the panels,
+then `generate inputs` composes `build/videogen/<shot>/sheet.png` (black, a grid at the clip's size).
+`generate plan` lists the panels and blocks a shot until its panels and sheet are ready.
+
 ### Long films: one agent per phase
 
 A film with generated shots takes hours, and one agent's context fills with logs until it slows

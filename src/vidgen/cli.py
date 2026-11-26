@@ -2197,7 +2197,7 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         return 0
     if args.action == "host-test":
         return _generate_host_test(args)
-    if args.action in ("plan", "sheets", "inputs", "frames"):
+    if args.action in ("plan", "sheets", "inputs", "frames", "subjects"):
         return _generate_shots(args)
     if args.action in ("run", "status", "takes", "pick"):
         return _generate_workflow(args)
@@ -2262,6 +2262,25 @@ def _use_route(project: Project, via: str) -> None:
         project.config.videogen.comfyui.use_route(via)
 
 
+def _generate_subjects(project: Project, args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate subjects [--subject NAME] [--force]``: the subjects' sheet panels, in one
+    batch with the image model on the ComfyUI server (DESIGN.md §113.24)."""
+    from vidgen.videogen.subjects import make_panels
+
+    if args.pay:
+        raise VidgenError("`generate subjects` costs no money (it runs on your ComfyUI server); drop --pay")
+    root = project.root
+    result = make_panels(project, args.subject or (), force=args.force, out=(lambda line: None) if args.json else print)
+    if args.json:
+        return jsonout.envelope(
+            "generate", True, action="subjects", batch_seconds=result.batch_seconds,
+            panels=[{"subject": o.panel.subject, "view": o.panel.view, "action": o.action, "path": o.panel.path.relative_to(root).as_posix(),
+                     "record": o.panel.record_path.relative_to(root).as_posix(), "usage": o.usage, "seconds": o.seconds} for o in result.outcomes],
+        )
+    print("next: look at the panels in sheets/, then `vidgen generate inputs` composes each shot's sheet from them")
+    return 0
+
+
 def _generate_shots(args: argparse.Namespace) -> CommandResult:
     """``vidgen generate plan | sheets | inputs | frames`` (DESIGN.md §113.3, §113.15)."""
     from vidgen.videogen.inputs import make_inputs
@@ -2284,6 +2303,8 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         return 0
     if args.action == "frames":
         return _generate_frames(project, args)
+    if args.action == "subjects":
+        return _generate_subjects(project, args)
     if args.pay:
         raise VidgenError(f"--pay is for `vidgen generate run`, `generate sheets` and `generate frames`; `generate {args.action}` never pays")
     if args.action == "inputs":
@@ -2828,15 +2849,17 @@ def build_parser() -> argparse.ArgumentParser:
         "generate",
         help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
         "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; run makes the clips (a dry run unless --pay); status, "
-        "takes and pick show and choose the takes the film shows; ledger shows the spending and budget; host-test checks the Cloudflare "
+        "takes and pick show and choose the takes the film shows; subjects makes the subjects' sheet panels with the image model on the ComfyUI server; ledger shows the spending and budget; host-test checks the Cloudflare "
         "quick tunnel that shares audio / video inputs (free); frames paints shots' starting pictures from their 3D scene and reference "
         "pictures (a dry run unless --pay)",
     )
     p.add_argument(
-        "action", choices=["models", "plan", "sheets", "inputs", "frames", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
+        "action", choices=["models", "plan", "sheets", "subjects", "inputs", "frames", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
-        "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
+        "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); subjects: make the "
+        "subjects' sheet panels (sheets/<subject>/<view>.png) that are missing or out of date, all in one batch with the image model on "
+        "the ComfyUI server, which is unloaded once after the last (free); inputs: cut each "
         "shot's voice (and with --guide its draft render) into build/videogen/; frames: paint each shot's starting picture from its paint_first_frame: (a dry run; --pay paints, within the budget, into assets/frames/; a shot uses it with first_frame: painted); run: generate the ready shots (a dry run; --pay pays, within "
         "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
         "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
@@ -2851,6 +2874,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs, frames, run, status, takes, pick: apply a named variant")
     p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs, frames, run, takes: only this shot or beat (repeatable); pick: the shot")
     p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
+    p.add_argument("--subject", action="append", metavar="NAME", help="subjects: only this subject's panels (repeatable)")
+    p.add_argument("--force", action="store_true", help="subjects: make the panels again even when they are current")
     p.add_argument("--pay", action="store_true", help="run, sheets, frames: pay for the clips / pictures (needs a budget); without it a dry run")
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")

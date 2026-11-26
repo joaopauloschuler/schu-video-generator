@@ -3392,6 +3392,73 @@ class FileRef(_Strict):
     """What the picture shows, for the prompt's role sentence ("@image1 shows Morag"): a character's name, or your own words (written as given), e.g. "the harbour"."""
 
 
+#: The most panels a shot's composed sheet holds (``generated_shot.subjects``): bigger panels carry over better.
+MAX_SHEET_PANELS = 4
+
+
+class SceneMoment(_Strict):
+    """A view's ``from:``: the frame of a scene's finished render at a time."""
+
+    scene: Identifier
+    """The scene id."""
+    at: float = Field(ge=0)
+    """Seconds from the scene's start."""
+
+
+class SubjectView(_Strict):
+    """One panel of a subject (``subjects.<name>.views[]``): a still of vidgen's own render or a
+    picture file, made into a clean picture by the image model."""
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
+
+    name: Identifier | None = None
+    """The panel's name and file name (sheets/<subject>/<name>.png); default view1, view2, ... in order."""
+    from_: SceneMoment | None = Field(default=None, alias="from")
+    """The still: {scene: chase, at: 1.5}, the frame at 1.5 s of that scene's finished render (without overlays or takes). Give from: or image:."""
+    image: str | None = Field(default=None, min_length=1)
+    """The still: a picture file (relative to the project), e.g. a frame `vidgen still` drew from another camera. Never a video model's frame."""
+    crop: list[Annotated[int, Field(ge=0)]] | None = Field(default=None, min_length=4, max_length=4)
+    """[x, y, width, height] of the still to keep, in its pixels; default the whole still."""
+    text: str = Field(min_length=1)
+    """What the panel shows, e.g. "seen from behind and above"; in the image model's prompt and the sheet_prompt."""
+
+    @model_validator(mode="after")
+    def _one_source(self) -> SubjectView:
+        if (self.from_ is None) == (self.image is None):
+            raise ValueError("a view takes its still from: {scene, at} or image: a picture file (one of them)")
+        if self.crop is not None and (self.crop[2] < 16 or self.crop[3] < 16):
+            raise ValueError(f"crop: [x, y, width, height] with width and height of at least 16 pixels, not {self.crop}")
+        return self
+
+
+class Subject(_Strict):
+    """A subject or location of the generated shots (``subjects.<name>``): what it looks like and
+    the views ``vidgen generate subjects`` makes into sheet panels with the image model."""
+
+    look: str = Field(min_length=1)
+    """What it must look like, e.g. "a grey jet glider with delta wings, red wing tips, two tail fins and two engine nozzles"."""
+    location: bool = False
+    """true: a place (the sea, a street); its one view shows the place itself, not an object on black."""
+    views: list[SubjectView] = Field(min_length=1, max_length=MAX_SHEET_PANELS)
+    """The panels: [{from: {scene, at} | image: FILE, crop, text, name}]; a location has one."""
+    seed: int | None = Field(default=None, ge=0)
+    """The image model's seed (default 42); another number makes the panels again."""
+
+    @model_validator(mode="after")
+    def _views(self) -> Subject:
+        if self.location and len(self.views) != 1:
+            raise ValueError(f"a location has one view (the place itself), not {len(self.views)}")
+        names = self.view_names
+        if len(set(names)) != len(names):
+            raise ValueError(f"view names must be unique: {', '.join(names)}")
+        return self
+
+    @property
+    def view_names(self) -> list[str]:
+        """Each view's name (``view1``, ``view2``, ... when not given)."""
+        return [v.name or f"view{k + 1}" for k, v in enumerate(self.views)]
+
+
 class PaintFirstFrame(_Strict):
     """A shot's ``paint_first_frame:`` (DESIGN.md §113.15): how ``vidgen generate frames`` paints
     its starting picture from the first frame of the beat's 3D render and reference pictures."""
@@ -3483,6 +3550,8 @@ class GeneratedShot(_Strict):
     """A stylesheet picture file (relative to the project) the video model follows together with the guide, e.g. sheets/glider.png: its panels show how things look (made by an image model); the clip follows the guide's shapes and motion and the sheet's look. vidgen's ComfyUI workflow ltx-2.3-union-control only (videogen.provider: comfyui; ComfyUI started with --disable-comfy-compiler); the picture must have the clip's aspect ratio (it is scaled to the clip's size, never cropped). Needs sheet_prompt:."""
     sheet_prompt: str | None = Field(default=None, min_length=1)
     """With sheet: what each panel of the sheet shows, e.g. "top left, a grey jet glider seen from behind...; bottom right, a rough open sea"; the prompt starts with "Reference sheet: <this>. Generated video: " before the shot's own text."""
+    subjects: list[Identifier] | None = Field(default=None, min_length=1)
+    """Names from subjects: whose panels vidgen composes into this shot's sheet (at the clip's size, black background, a grid of at most 4 panels) and whose views' texts make its sheet_prompt; the panels come from `vidgen generate subjects`. Instead of sheet:; ltx-2.3-union-control only."""
     size: str | None = Field(default=None, pattern=r"^\d+x\d+$")
     """WIDTHxHEIGHT of the clip a ComfyUI workflow makes (multiples of 64, e.g. 768x448); the guide and the restyled first frame are made at it too. Default: the workflow's size for the aspect ratio (16:9: 960x512). Not with resolution:."""
     duration: int | None = Field(default=None, ge=1)
@@ -3532,13 +3601,18 @@ class GeneratedShot(_Strict):
         from vidgen.videogen.comfyui import WORKFLOWS, find_workflow
 
         workflow = find_workflow(self.model)
+        if self.subjects is not None and self.sheet is not None:
+            raise ValueError("give subjects: (vidgen composes the sheet from their panels) or sheet: (your own picture), not both")
+        if self.sheet_prompt is not None and self.subjects is not None:
+            raise ValueError("sheet_prompt: is built from the subjects' views (their text:) on a shot with subjects:; leave it out")
         if self.sheet_prompt is not None and self.sheet is None:
             raise ValueError("sheet_prompt: describes the panels of a sheet: picture; this shot has no sheet:")
         if self.sheet is not None and self.sheet_prompt is None:
             raise ValueError('sheet: needs sheet_prompt: what each panel shows, e.g. "top left, the glider from behind; bottom right, the sea"')
-        if self.sheet is not None and (workflow is None or not workflow.takes_sheet):
-            takers = ", ".join(w.id for w in WORKFLOWS.values() if w.takes_sheet)
-            raise ValueError(f"sheet: is given to vidgen's ComfyUI workflow {takers} (videogen.provider: comfyui), not to {self.model}")
+        for key in ("sheet", "subjects"):
+            if getattr(self, key) is not None and (workflow is None or not workflow.takes_sheet):
+                takers = ", ".join(w.id for w in WORKFLOWS.values() if w.takes_sheet)
+                raise ValueError(f"{key}: is given to vidgen's ComfyUI workflow {takers} (videogen.provider: comfyui), not to {self.model}")
         for key in ("size", "duration"):
             if getattr(self, key) is not None and workflow is None:
                 raise ValueError(f"{key}: is for vidgen's ComfyUI workflows (ltx-2.3-union-control), not {self.model}")
@@ -4049,6 +4123,8 @@ class VideoConfig(_Strict):
     """Generated video shots (OpenRouter's video API): {provider (openrouter or mock), budget_usd, key_via_proxy, inline_media, poll_timeout}; `vidgen generate models` lists the models."""
     style_sheet: StyleSheet | None = None
     """The look of generated video shots {palette, era, lens, notes, references, frames, frame_prompt, seed, approved}: words in every shot prompt and generated style frames (`vidgen generate sheets`)."""
+    subjects: dict[Identifier, Subject] = Field(default_factory=dict)
+    """The subjects and locations of the generated shots, each named once {look, location, views, seed}: `vidgen generate subjects` makes each view a sheet panel with the image model on the ComfyUI server; a shot's subjects: composes its sheet from them."""
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True
@@ -4175,7 +4251,7 @@ class VideoConfig(_Strict):
                 beat_seen[beat.id] = where
         from vidgen.chapters import chapter_problems
 
-        problems = chapter_problems(self.scenes) + self._music_problems(scene_seen)
+        problems = chapter_problems(self.scenes) + self._music_problems(scene_seen) + self._subject_problems(scene_seen)
         if self.thumbnail is not None:
             problems += self.thumbnail_problems(self.thumbnail)
         first = self.scenes[0].transition
@@ -4210,6 +4286,32 @@ class VideoConfig(_Strict):
         elif thumb.beat not in ids:
             return [f"thumbnail.beat: scene '{scene.id}' has no beat '{thumb.beat}' (beats: {', '.join(ids)})"]
         return []
+
+    def _subject_problems(self, index: dict[str, int]) -> list[str]:
+        """Views take stills of scenes of this video; a shot's ``subjects:`` names subjects of
+        ``subjects:`` with at most :data:`MAX_SHEET_PANELS` panels together."""
+        problems: list[str] = []
+        for name, subject in self.subjects.items():
+            for k, view in enumerate(subject.views):
+                if view.from_ is not None and view.from_.scene not in index:
+                    problems.append(f"subjects.{name}.views[{k}].from: unknown scene '{view.from_.scene}' (scenes: {', '.join(index)})")
+        known = list(self.subjects)
+        for i, scene in enumerate(self.scenes):
+            for j, beat in enumerate(scene.beats):
+                shot = beat.generated_shot
+                if shot is None or shot.subjects is None:
+                    continue
+                where = f"scenes[{i}].beats[{j}].generated_shot.subjects"
+                unknown = [n for n in shot.subjects if n not in self.subjects]
+                if unknown:
+                    problems.append(f"{where}: unknown subject {', '.join(map(repr, unknown))}; subjects: {', '.join(known) or 'none (add subjects: at the top)'}")
+                    continue
+                if len(set(shot.subjects)) != len(shot.subjects):
+                    problems.append(f"{where}: a subject is named twice")
+                panels = sum(len(self.subjects[n].views) for n in shot.subjects)
+                if panels > MAX_SHEET_PANELS:
+                    problems.append(f"{where}: {panels} panels; a sheet holds at most {MAX_SHEET_PANELS} (bigger panels carry over better): name fewer subjects or views")
+        return problems
 
     def _music_problems(self, index: dict[str, int]) -> list[str]:
         """Cues name existing scenes, in order (``from`` not after ``to``), without overlapping."""

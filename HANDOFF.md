@@ -28587,3 +28587,82 @@ Review of `git diff d0ec91d..e73e888` against trial run T2c (`video-projects/she
   idea in RESULT.md; added to `tasklist.md` Backlog line of this step.
 - **Files**: `HANDOFF.md`, `tasklist.md` only.
 - **How to test**: manual GPU runs only (see RESULT.md); nothing added to the suite.
+
+## Step 428 — vidgen makes the stylesheets: subjects, panels by the image model on Colab, a shot's sheet composed
+
+- **Built**:
+  - **Config** (`config.py`): top-level `subjects: {NAME: {look, location, seed, views}}`; a view is
+    `{name?, from: {scene, at} | image: FILE, crop?: [x, y, w, h], text}` (`Subject`, `SubjectView`, `SceneMoment`;
+    1-4 views, a location exactly one, unique names, one source per view, crop at least 16 px). A shot's
+    `subjects: [names]` (`GeneratedShot.subjects`): only on `ltx-2.3-union-control`, not with `sheet:`/`sheet_prompt:`;
+    unknown subjects / scenes and more than `MAX_SHEET_PANELS` = 4 panels are config errors (`VideoConfig._subject_problems`);
+    another provider than comfyui is a plan problem. `subjects` is left out of the render fingerprint.
+  - **Command** `vidgen generate subjects [--subject NAME]... [--force]` (also `vidgen remote NAME generate subjects`;
+    `--json` lists each panel's action, path, record, usage, seconds and `batch_seconds`). `videogen/subjects.py`:
+    for each panel not current it takes the still (`from`: the frame at `at` of the scene's finished render by
+    `Project.without_takes()` via the new `inputs.scene_render`, reused while current; `image`: the file), crops it,
+    places it on 1440x768 (`PANEL_SIZE`; object fitted whole on black, location cover), and runs `qwen_graph`
+    (Qwen-Image-Edit-2511 GGUF Q4_K_M + Lightning, the restyle's model) with `OBJECT_PROMPT` ("clean product-style
+    photograph of <look>, <text> ... alone ... plain pure black background ... No text") or `LOCATION_PROMPT`.
+    **One batch**: one transport/provider, jobs one after another, `free_before` on the first (a video model left
+    in the GPU goes), `free_after` on the last only. A failure stops the batch and says the image model may still
+    be loaded (the next `generate run` unloads before its first job). Same-still check: when only the scene's
+    fingerprint changed and the still is the same picture, the record is updated, nothing is sent.
+  - **Panel record** `sheets/<subject>/<view>.json` (beside `<view>.png`): `version` 1, `subject`, `view`, `model`,
+    `prompt`, `seed`, `size`, `source` = `{still: {scene, at, scene_fingerprint, render: [w,h,fps] | image,
+    image_sha256; crop}, edit: {prompt, seed, model, size}, location?}`, `still_sha256`, `sha256`, `seconds`
+    (door to door), `usage` (gpu_seconds, compute_units, ...), `made`. **Approval** (next step): a top-level
+    `"approved": true` beside `source`; `PanelSources.state` compares only `source` and the PNG's SHA-256, so the
+    flag needs no rework (a remake would drop it, as it should).
+  - **Plan**: a "subjects" block lists every panel (current / not made yet / why out of date); a subjects shot is
+    blocked while a panel is missing or stale (`run vidgen generate subjects ..., then vidgen generate inputs
+    composes the sheet`) and while its sheet is not composed from the current panels (`vidgen generate inputs`,
+    free). `generate run --pay` skips blocked shots as before.
+  - **Composed sheet** (`videogen/sheet_layout.py`): `make_inputs` (with or without `--guide`) writes
+    `build/videogen/<shot>/sheet.png` at the clip's size (`guide_size`), black, `GAP` 4 px, the grid that shows the
+    panels largest (`choose_grid`: 1 = whole, 2 = stacked, 3-4 = 2x2 at 768x448), each fitted to its cell
+    (Lanczos, never cropped), deterministic bytes; recorded in `inputs.json` (panel SHA-256s + size). The
+    sheet_prompt: `<place>, <look>, <text>` for a subject's first panel, `<place>, the same <name>, <text>` after,
+    joined with "; " (places "top left", "bottom", "the whole sheet"...); prompt head as Step 425. From there the
+    shot is a `sheet:` shot (Step 425 path unchanged; explicit `sheet:`/`sheet_prompt:` untouched).
+- **Files**: `src/vidgen/config.py`, `render/fingerprint.py` (exclude `subjects`), `cli.py`,
+  `videogen/{subjects,sheet_layout}.py` (new), `videogen/{inputs,shots}.py`; `tests/test_videogen_subjects.py`
+  (new, 11 tests, 2 slow), `tests/test_docs.py` (3 models); `docs/CONFIG.md`, `DESIGN.md` §113.24,
+  `docs/HOWTO-restyle-with-ltx-on-colab.md`, guide + `AGENTS.md`; `tasklist.md`.
+- **Decisions**: action name `subjects` (not `sheets`: `generate sheets` is the OpenRouter character/style sheets).
+  Stills always from the `without_takes()` render, so placing a take never flips a panel's fingerprint (the Step 427
+  gap stays for guides). Fixed panel size 1440x768 so the layout and sheet_prompt are known in the plan before any
+  panel exists. No "view from another view" source (not needed: real CG side/top stills are cheap, below).
+  Panel files edited by hand count as stale (same rule as cut inputs).
+- **Known gaps**: no approval yet (next step). `vidgen remote ... generate subjects` adds `--json`, so the per-panel
+  lines are not printed there (the records have them). A change of vidgen's code changes the scene fingerprint: the
+  command then renders the scene again and re-records (no GPU when the still is identical). Panel prompts are fixed
+  wording (no per-view prompt key). Qwen kept faint "JK-447" letters on the top view's wings and invented red
+  trim on the tail fins in the rear view.
+- **G4 check (2026-11-26 00:2x UTC, session `ltx`, G4 RTX PRO 6000, compiler off, GGUF)**: project
+  `video-projects/footage-test-subjects` (slim copy of footage-test-sheet, no takes/caches; 0.5 MB). Glider: `rear`
+  from `{scene: chase, at: 0.5}` crop `[190,165,260,130]` (640x360 render); `side` and `top` from `vidgen still
+  --size 1280x720` of a scratch copy whose camera was `{move: wing, flight: Plane, view: {at: [30,1.5,-2], toward:
+  [-1,-0.05,0]}}` / `{at: [0,42,-3], toward: [0,-1,0.05]}` (existing machinery, ~30 s each locally, real CG
+  side/top views, nothing guessed). Sea: location from `{scene: chase, at: 0.5}`.
+  Timings: panels 10.4 / 10.0 / 10.0 / 10.0 s door to door, ComfyUI 8.9 (model load) / 5.2 / 5.2 / 5.1 s;
+  batch ~40 s; whole `remote generate subjects` 1 min 15 s (scene render 16 s, sync). The comfy log shows
+  `Requested to load QwenImage` once for the 4 prompts; the unload is the last job's `/free` (not timed
+  separately, inside its 10 s): VRAM 905 MiB after the batch and before the video run (baseline). `remote
+  generate inputs --guide` 33 s. Video run 5 s (121 frames) with the composed sheet: ComfyUI 52.3 s, door to
+  door 1 min 18 s, 0.163 units; 0 `hook error`/`skipping delta`/`Conditioning frames exceed`/OOM/Traceback.
+  **Judgement**: panels are clean, product-style, on black; the glider agrees across the three (grey, red wing
+  tips, two red bands, twin nozzles, two fins); the sea panel has no glider. The clip: one glider in the guide's
+  place for all 5 s, the sheet's look (grey, red tips, bands, twin nozzles), no panels, black areas or extra
+  gliders; very close to Step 427's T2 (hand-made sheet, same seed); new: red stripes on the tail fins from the
+  rear panel; the guide's horizon line faintly at the end as before; same mild bank. Results:
+  `/home/bpsa/app/video-projects/sheet-g4-tests-2026-11-25/step428/` (`sheet_768x448.png`, `panels/`,
+  `clip_5s_subjects.mp4`, `clip.contact.png`, `compare.png`: rows guide / Step 427 T2 / this clip at frames
+  0/60/119, right column the hand sheet and this sheet). Session left up, ComfyUI idle, compiler off, LTX (not
+  the image model) left loaded by the video run (35 GB, as Step 425 designs).
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_subjects.py tests/test_videogen_sheet.py
+  tests/test_videogen_comfyui.py tests/test_videogen_canny_restyle.py tests/test_videogen_shots.py tests/test_videogen.py
+  tests/test_videogen_guided_prompts.py tests/test_videogen_input_freshness.py tests/test_videogen_submit_safety.py
+  tests/test_videogen_first_frame_in.py tests/test_videogen_shot_chain.py tests/test_videogen_compose.py tests/test_remote.py
+  tests/test_guide.py tests/test_docs.py` (376 passed, 31 s); `-m "slow or not slow" tests/test_videogen_subjects.py`
+  (11 passed, 9 s).

@@ -80,6 +80,7 @@ from vidgen.videogen.models import (
     TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, guide_opening_template, known_first_frame_with_references, money, snap_duration,
 )
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
+from vidgen.videogen.subjects import PanelSources
 from vidgen.videogen.takes import Take, chosen_take, takes_of
 
 #: Where the cut inputs of each shot are written, relative to the project (rebuilt any time).
@@ -262,6 +263,8 @@ class Shot:
     earlier_prompt: str = ""
     #: ``sheet:``: the stylesheet picture sent with the guide (``None``: none, or the file is missing).
     sheet: Path | None = None
+    #: ``subjects:``: the sheet's panel texts, built from the subjects' views (``None``: no subjects).
+    subject_prompt: str | None = None
 
     @property
     def lead(self) -> int:
@@ -445,7 +448,8 @@ def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], 
     parts.append(NO_TEXT)
     opening = _guide_opening_sentences(shot)
     text = " ".join(_sentence(p) for p in [*opening, *parts])
-    return f"{SHEET_HEAD}{_sentence(_clean(spec.sheet_prompt))} {SHEET_TAIL}{text}" if spec.sheet_prompt else text
+    sheet_prompt = spec.sheet_prompt or shot.subject_prompt
+    return f"{SHEET_HEAD}{_sentence(_clean(sheet_prompt))} {SHEET_TAIL}{text}" if sheet_prompt else text
 
 
 #: The start of the prompt of a shot with a ``sheet:`` (trial run T2c's format, 2026-11-25):
@@ -456,14 +460,39 @@ SHEET_TAIL = "Generated video: "
 SHEET_ASPECT_TOLERANCE = 0.01
 
 
-def _sheet_input(project: Project, shot: Shot) -> None:
-    """Set ``shot.sheet`` from ``sheet:`` (a picture file with the clip's aspect ratio), else a problem."""
+def _subjects_sheet(project: Project, shot: Shot, panels: PanelSources, size: tuple[int, int]) -> None:
+    """Set ``shot.subject_prompt`` and, once composed from current panels, ``shot.sheet``; else
+    block the shot with the command that makes what is missing."""
+    from vidgen.videogen.freshness import recorded_matches
+    from vidgen.videogen.subjects import SHEET_NAME, sheet_source, shot_panels, shot_sheet_prompt
+
+    assert shot.spec.subjects is not None
+    found = shot_panels(project, shot.spec.subjects)
+    shot.subject_prompt = shot_sheet_prompt(found, *size)
+    waiting = [f"{p.label}: {why}" for p in found if (why := panels.state(p)) is not None]
+    if waiting:
+        shot.blocked.append(f"sheet panels not ready ({'; '.join(waiting)}): run `vidgen generate subjects` (the image model on the ComfyUI server), "
+                            f"then `{inputs_command(project, False)}` composes the sheet")
+        return
+    dest = project.root / INPUTS_DIR / shot.id / SHEET_NAME
+    if not recorded_matches(dest, sheet_source(found, *size)):
+        made = "is not composed from the current panels" if dest.is_file() else "is not composed yet"
+        shot.blocked.append(f"the sheet {dest.relative_to(project.root).as_posix()} {made}: `{inputs_command(project, False)}` (free)")
+        return
+    shot.sheet = dest
+
+
+def _sheet_input(project: Project, shot: Shot, panels: PanelSources | None = None) -> None:
+    """Set ``shot.sheet`` from ``sheet:`` (a picture file with the clip's aspect ratio) or from
+    ``subjects:`` (``panels``: their current sources), else a problem or a blocked reason."""
     from PIL import Image
 
     from vidgen.videogen.comfyui import find_workflow
 
     spec, where = shot.spec, f"{shot.location}.sheet"
     workflow = find_workflow(spec.model)
+    if spec.subjects is not None and workflow is not None and panels is not None:
+        _subjects_sheet(project, shot, panels, workflow.size(shot.aspect_ratio, spec.size))
     if spec.sheet is None or workflow is None:
         return
     path = _picture(project, spec.sheet, where, shot.problems)
@@ -818,8 +847,9 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
                         shot.scene_start, shot.scene_end, shot.fps = slot.start, slot.start + slot.duration, fps
                     shots += found
         _link_last_of(project, shots, parts_known=catalog is not None)
+        panels = PanelSources(project) if any(s.spec.subjects for s in shots) else None
         for shot in shots:
-            _fill_shot(project, shot, sheets)
+            _fill_shot(project, shot, sheets, panels)
     return shots
 
 
@@ -876,10 +906,10 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
         shot.last_of_take, shot.last_of_picture = take, project.root / INPUTS_DIR / shot.id / last_of_name(source, take.number)
 
 
-def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:
+def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None], panels: PanelSources | None) -> None:
     """Fill ``shot``'s inputs, its sound checks and its prompt (every shot id is known by now)."""
     _resolve_inputs(project, shot, sheets)
-    _sheet_input(project, shot)
+    _sheet_input(project, shot, panels)
     if shot.spec.paint_first_frame is not None:
         from vidgen.videogen.frames import paint_references
 
@@ -916,8 +946,9 @@ def _beat_shots(
             problems.append(f"{where}.guide: {guided}")
     if spec.first_frame == RESTYLED_FIRST_FRAME and (config.videogen.provider != COMFYUI_PROVIDER or (model is not None and model.provider != COMFYUI_PROVIDER)):
         problems.append(f"{where}.first_frame: restyled is made on the ComfyUI server: it needs videogen.provider: comfyui and a ComfyUI workflow model (ltx-2.3-union-control)")
-    if spec.sheet is not None and config.videogen.provider != COMFYUI_PROVIDER:
-        problems.append(f"{where}.sheet: the sheet goes to vidgen's ComfyUI workflow: it needs videogen.provider: comfyui")
+    for key in ("sheet", "subjects"):
+        if getattr(spec, key) is not None and config.videogen.provider != COMFYUI_PROVIDER:
+            problems.append(f"{where}.{key}: the sheet goes to vidgen's ComfyUI workflow: it needs videogen.provider: comfyui")
     names = [e.name for e in config.characters]
     speaker = _speaker(config, scene, beat)
     for name in spec.characters or []:
@@ -1024,7 +1055,8 @@ class ShotPlan:
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
             lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
         if shot.sheet is not None:
-            lines.append(f"  sheet: {_shown(shot.sheet, root)} (stylesheet, given with the guide; its panels are described at the start of the prompt)")
+            made = f"composed from subjects {', '.join(shot.spec.subjects)}, " if shot.spec.subjects else ""
+            lines.append(f"  sheet: {_shown(shot.sheet, root)} ({made}stylesheet, given with the guide; its panels are described at the start of the prompt)")
         if shot.fake_addresses and not self.cached and not self.previous_job:
             lines.append("  mock provider: these inputs stay on this machine (fake addresses; nothing is shared)")
         if shot.share_minutes is not None and not self.cached and not self.previous_job:
@@ -1083,6 +1115,8 @@ class VideoGenPlan:
     unresolved_intents: list[SubmitIntent] = field(default_factory=list)
     #: Entries of the config that have no effect (a ``videogen.models`` id OpenRouter does not list).
     warnings: list[str] = field(default_factory=list)
+    #: The subjects' sheet panels and whether each is current (none without ``subjects:``).
+    subject_lines: list[str] = field(default_factory=list)
 
     @property
     def clips_cost(self) -> float:
@@ -1102,6 +1136,7 @@ class VideoGenPlan:
         if not self.shots:
             out.append("no generated shots (add generated_shot: to a beat)")
         out += self.sheet_lines
+        out += self.subject_lines
         unknown = sum(1 for s in self.shots if s.estimate is None or s.estimate.cost is None)
         extra = f" (+ {unknown} of unknown price)" if unknown else ""
         sheets = f"; sheets: {self.sheets_todo} picture(s), estimated {money(self.sheets_cost)}" + (f" (+ {self.sheets_unknown} of unknown price)" if self.sheets_unknown else "")
@@ -1155,6 +1190,10 @@ def plan_shots(
         [], budget, sheet_cost, len(sheets.plan.todo), sheet_unknown, sheet_lines(sheets, project.root, prompts=False)[:-1] if sheets.sheets else [],
         ledger.unresolved_intents(), _unlisted_models(settings.models, catalog),
     )
+    if project.config.subjects:
+        from vidgen.videogen.subjects import panel_lines
+
+        plan.subject_lines = panel_lines(project, PanelSources(project))
     left = budget.remaining_usd - sheet_cost if budget.remaining_usd is not None else None
     sources = InputSources(project)
     for shot in shots:

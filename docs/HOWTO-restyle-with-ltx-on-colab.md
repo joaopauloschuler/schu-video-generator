@@ -24,6 +24,10 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
   `vidgen generate inputs --guide` and `vidgen generate run --pay` ([CONFIG.md](CONFIG.md)).
 - **A stylesheet with the base video** (`sheet:` + `sheet_prompt:` on the shot, `size:` / `duration:` for
   the clip, ComfyUI started with `--no-comfy-compiler`): §7.1.
+- **Sheets made by vidgen** (`subjects:` at the top, `subjects: [glider, sea]` on the shot): `vidgen remote
+  NAME generate subjects` makes each subject's panels with Qwen-Image-Edit on the session's ComfyUI, all in one
+  batch, then unloads the model once; `generate inputs` composes the shot's sheet from them; then `generate
+  run --pay` as above ([CONFIG.md](CONFIG.md), "Subjects and a composed sheet").
 - **The first frame sets the look.** The CG frame 0 keeps the CG look; no first frame looks real
   but invents things (a beach, a different glider).
 - **Canny holds the layout and the horizon.** Depth alone rolls the horizon: in 1 / z depth the far

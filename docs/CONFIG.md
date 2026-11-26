@@ -2902,6 +2902,17 @@ param, which makes a still picture). Characters get generated reference pictures
 by the top-level `style_sheet:`.
 
 ```yaml
+subjects:                    # ltx-2.3-union-control shots: sheet panels made by `vidgen generate subjects`
+  glider:
+    look: a grey jet glider with delta wings and red wing tips   # what it must look like (required)
+    location: false          # true: a place (one view, the place itself, not an object on black)
+    seed: null               # the image model's seed; default 42
+    views:                   # 1-4 panels
+      - name: rear           # the file sheets/glider/rear.png; default view1, view2, ...
+        from: {scene: chase, at: 1.5}   # the frame at 1.5 s of that scene's finished render (no overlays, no takes)
+        crop: [190, 165, 260, 130]      # x, y, width, height in the still's pixels; default the whole still
+        text: seen from behind and above   # what the panel shows (required)
+      - {name: side, image: assets/glider_side.png, text: in side view}   # or a picture file (never a video model's frame)
 style_sheet:
   palette: [slate blue, sea green, warm orange]   # words or a list (also `palette: muted blues`)
   era: present day
@@ -2962,6 +2973,7 @@ scenes:
           first_frame_in: null              # frame | guide; default videogen.models.<model>.first_frame_in, then videogen.first_frame_in (frame)
           sheet: null                       # ltx-2.3-union-control only: a stylesheet picture file followed with the guide (needs sheet_prompt)
           sheet_prompt: null                # with sheet: what each panel shows; the prompt starts "Reference sheet: <this>. Generated video: "
+          subjects: null                    # ltx-2.3-union-control only, instead of sheet: names from subjects: whose panels make this shot's sheet and its sheet_prompt
           size: null                        # ComfyUI workflows only: WIDTHxHEIGHT in multiples of 64 (e.g. 768x448); default 960x512 for 16:9
           duration: null                    # ComfyUI workflows only: seconds of the clip (1-5; 1 s = 25 frames, 5 s = 121); default the part's length rounded up
 ```
@@ -3054,6 +3066,28 @@ scenes:
   guide; the guide, its last frame held when the part is shorter, and the sheet have the clip's frame count).
   `first_frame: none` sends no first frame. On the comfyui provider, `vidgen generate run --pay` unloads
   the models (ComfyUI `POST /free`) once, before its first job, so no picture model stays in the GPU's memory.
+- **Subjects and a composed sheet** (`subjects:` at the top, `subjects: [glider, sea]` on a shot, model
+  `ltx-2.3-union-control`, `videogen.provider: comfyui`): name each subject or location once with its `look`
+  and its `views`, each a still of vidgen's own render (`from: {scene, at}`, the scene's finished render without
+  overlays or takes; `crop` in its pixels) or a picture file (`image:`, e.g. a frame `vidgen still` drew from
+  another camera). `vidgen generate subjects [--subject NAME] [--force]` (also `vidgen remote NAME generate
+  subjects`) places each still on a 1440x768 picture (an object fitted whole on black, a location filled) and has
+  Qwen-Image-Edit-2511 on the ComfyUI server make it a clean panel: the object alone on plain black,
+  product-style, or the place itself, no text (prompt from `look` and the view's `text`, `seed` default 42). All
+  panels to make go in one batch: the models are unloaded before the first job, the image model stays loaded
+  for the others and is unloaded once after the last; no hosted service. Each panel is
+  `sheets/<subject>/<view>.png` with `<view>.json` beside it (model, prompt, seed, size, the source it was made
+  from, the still's and the panel's SHA-256, seconds, GPU usage, time made). A panel is made again only when
+  its source changed (the scene, time or crop, the picture file, `look`, `text`, `seed`) or with `--force`;
+  when only the scene changed and its still is the same picture, the record is updated and nothing is sent.
+  `vidgen generate plan` lists every panel (current, not made yet, or why it is out of date) and blocks a shot
+  whose panels are not ready, naming the command; `vidgen generate run --pay` skips a blocked shot.
+  `vidgen generate inputs` composes the shot's sheet `build/videogen/<shot>/sheet.png` (free, Pillow, the same
+  bytes for the same panels): the clip's size, black, no text, at most 4 panels in the grid that shows them
+  largest (2 panels stacked, 3 or 4 in 2x2 at 768x448), each fitted to its cell; the plan blocks the shot
+  until it is composed from the current panels. The prompt starts `Reference sheet: top left, <look>, <text>;
+  top right, the same glider, <text>; ...`, then the shot's own prompt. `subjects:` and `sheet:` (or
+  `sheet_prompt:`) on one shot is a config error, so is an unknown subject or a sheet of more than 4 panels.
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
   go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
   `vidgen generate`: [HOWTO-restyle-with-ltx-on-colab.md](HOWTO-restyle-with-ltx-on-colab.md) (the

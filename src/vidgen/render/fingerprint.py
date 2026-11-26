@@ -292,8 +292,8 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
         "draft",
         # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
         "credits", "cold_open", "audio_output",
-        # generated video (§113): the provider, budget and key settings, the style sheet; the clips are files
-        "videogen", "style_sheet",
+        # generated video (§113): the provider, budget and key settings, the style sheet, the subjects' sheet panels; the clips are files
+        "videogen", "style_sheet", "subjects",
         # where web pages are served from (§123.16): the page's files are in "web" (_web_inputs)
         "web_root",
     }

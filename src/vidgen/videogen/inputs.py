@@ -53,12 +53,15 @@ import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.config import RESTYLED_FIRST_FRAME
 from vidgen.videogen.shots import INPUTS_DIR, RESTYLED_NAME, Shot, guide_name
+
+if TYPE_CHECKING:
+    from vidgen.videogen.subjects import PanelSources
 
 #: The cut voice: MP3 (small enough to send inline), mono, 44.1 kHz.
 AUDIO_ARGS = ["-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k"]
@@ -297,11 +300,16 @@ def _render_scene(project: Project, scene_id: str, passes: tuple[str, ...], kind
     """A render of ``scene_id`` for a guide of ``kind`` (:func:`render_project`) with guide
     ``passes`` (reused while current; a render without the passes is made again, reusing the 3D
     frames, DESIGN.md §114.14)."""
+    return scene_render(render_project(project, kind, scene_id), scene_id, passes)
+
+
+def scene_render(draft: Project, scene_id: str, passes: tuple[str, ...] = ()) -> SceneRender:
+    """The render of ``scene_id`` by the project ``draft`` (as loaded for it) with guide ``passes``,
+    reused while current, else rendered."""
     from vidgen import extensions
     from vidgen.render.pipeline import current_render, render_scenes, scene_pass_clips
     from vidgen.render.worker import scene_timings_path, scene_video_path
 
-    draft = render_project(project, kind, scene_id)
     with extensions.project_session(draft):
         current = current_render(draft, False, scene_id, False, guide_passes=passes)
     if not current:
@@ -425,6 +433,24 @@ def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path,
     out(f"{shot.id}: guide with its starting picture {dest.relative_to(project.root).as_posix()} ({shot.opening_dissolve_seconds:g} s dissolve)")
 
 
+def _write_subjects_sheet(project: Project, shot: Shot, panels: PanelSources, written: list[Path], out: Callable[[str], None]) -> None:
+    """Compose and record ``shot``'s sheet from its subjects' panels (``panels``: their current
+    sources), or say what it waits for."""
+    from vidgen.videogen.subjects import SHEET_NAME, compose_shot_sheet, shot_panels
+
+    assert shot.spec.subjects is not None
+    found = shot_panels(project, shot.spec.subjects)
+    waiting = [p.label for p in found if panels.state(p) is not None]
+    if waiting:
+        out(f"{shot.id}: no sheet yet: panels {', '.join(waiting)} are not made or out of date (`vidgen generate subjects` first)")
+        return
+    width, height = guide_size(shot)
+    dest = project.root / INPUTS_DIR / shot.id / SHEET_NAME
+    compose_shot_sheet(found, width, height, dest)
+    written.append(dest)
+    out(f"{shot.id}: sheet {dest.relative_to(project.root).as_posix()} ({width}x{height}, {len(found)} panel(s) of {', '.join(shot.spec.subjects)})")
+
+
 def _write_last_of_picture(ffmpeg: str, project: Project, shot: Shot, written: list[Path], out: Callable[[str], None]) -> None:
     """Cut and record the picture of a ``first_frame: last_of:`` shot, or say what it waits for."""
     from vidgen.videogen.freshness import chained_cut_at, last_of_source, record_input
@@ -530,12 +556,14 @@ def make_inputs(
     Returns the files written (the cut inputs, not ``inputs.json``)."""
     from vidgen.render.ffmpeg import find_ffmpeg
     from vidgen.videogen.freshness import InputSources, record_input
+    from vidgen.videogen.subjects import PanelSources
 
     ffmpeg = find_ffmpeg()
     sources = InputSources(project)
     written: list[Path] = []
     renders: dict[tuple[str, str], SceneRender] = {}
     passes = _passes_by_render(project, shots)
+    panels: PanelSources | None = None
     for shot in shots:
         folder = project.root / INPUTS_DIR / shot.id
         if shot.spec.wants_audio:
@@ -543,6 +571,9 @@ def make_inputs(
         chained = shot.last_of is not None or shot.spec.last_of_shot is not None
         if chained:
             _write_last_of_picture(ffmpeg, project, shot, written, out)
+        if shot.spec.subjects:
+            panels = panels or PanelSources(project)
+            _write_subjects_sheet(project, shot, panels, written, out)
         kind = shot.spec.guide_source
         restyled = shot.spec.first_frame_source == RESTYLED_FIRST_FRAME and not chained
         wants_frame = shot.spec.first_frame_source in ("render", RESTYLED_FIRST_FRAME) and not chained
@@ -621,4 +652,4 @@ def make_inputs(
     return written
 
 
-__all__ = ["CANNY_SHORT_SIDE", "CHANGE_LEVELS", "guide_size", "restyle_prompt", "restyle_seed", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "film_sound", "make_opening_guide", "make_overlay", "render_kind", "render_project"]
+__all__ = ["CANNY_SHORT_SIDE", "CHANGE_LEVELS", "guide_size", "restyle_prompt", "restyle_seed", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "film_sound", "make_opening_guide", "make_overlay", "render_kind", "render_project", "scene_render"]

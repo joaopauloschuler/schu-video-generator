@@ -22565,6 +22565,37 @@ base video and a stylesheet in one run when each IC-LoRA has its own guide.
   a paid comfyui run, so the models are unloaded once, before its first job, and stay loaded between
   its shots.
 
+### 113.24 Subjects: sheet panels made by vidgen, a shot's sheet composed (Step 428)
+
+Rules of the owner: sheets come only from an image model (frames of vidgen's own render are valid
+inputs, never a video model's frames); they are made before any video work, on the Colab machine (no
+hosted service), with the image model loaded once for the whole batch and unloaded after it.
+
+- **Config.** Top-level `subjects: {name: Subject}`: `look`, `location` (one view), `seed`, `views`
+  (1-4 `SubjectView`: `name`, `from: {scene, at}` or `image:`, `crop: [x, y, w, h]`, `text`). A shot's
+  `subjects: [names]` (only on a `takes_sheet` workflow; not with `sheet` / `sheet_prompt`; at most
+  `MAX_SHEET_PANELS` = 4 panels together; unknown names and scenes are config errors). `subjects` is
+  left out of the render fingerprint.
+- **Panels** (`videogen/subjects.py`). The still: `from` is the frame at `at` of the scene's finished
+  render by `Project.without_takes()` (always that project, so placing a take never makes a panel stale;
+  `inputs.scene_render`); `image` a file. It is cropped and placed on `PANEL_SIZE` 1440x768 (object:
+  fitted whole on black; location: cover). `qwen_graph` (Qwen-Image-Edit-2511 GGUF + Lightning) with
+  `OBJECT_PROMPT` / `LOCATION_PROMPT`. `make_panels` runs the panels that are not current one job
+  after another through one transport: `free_before` on the first, `free_after` on the last only.
+  Records `sheets/<subject>/<view>.json` (`panel_record`): `source` = `{still: {scene, at,
+  scene_fingerprint, render | image, image_sha256; crop}, edit: {prompt, seed, model, size}, location?}`,
+  plus the still's and panel's SHA-256, seconds, usage, time. *Approval* goes in a later step as a
+  top-level `approved` key beside `source`. `PanelSources.state` compares offline; a changed scene
+  fingerprint with the same still re-records without GPU work.
+- **The shot's sheet** (`videogen/sheet_layout.py`). `choose_grid` picks the columns x rows that shows
+  the panels largest (smallest panel area; ties: fewer empty cells, fewer columns), `GAP` 4 px,
+  Lanczos, row by row; `place_words` names cells ("top left", "bottom", "the whole sheet"). The sheet
+  prompt is `<place>, <look>, <text>` for a subject's first panel, `<place>, the same <name>, <text>`
+  after. `make_inputs` composes `build/videogen/<shot>/sheet.png` at `guide_size` and records it in
+  `inputs.json` (the panels' SHA-256 and size); `shots._subjects_sheet` sets `Shot.sheet` only when
+  that record matches, else blocks the shot (panels: `vidgen generate subjects`; sheet: `generate
+  inputs`). From there it is a `sheet:` shot (§113.23).
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
