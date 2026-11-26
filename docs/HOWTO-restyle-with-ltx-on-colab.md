@@ -35,10 +35,13 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
   invented surfaces where the render had texture and brightened; `canny` invented the most and lagged the
   camera by up to 2 s at the start. A web scene's depth needs its page to draw through
   `vidgen/three-finish` when `ctx.draw_mode` is `"depth"` (CONFIG.md, "A web scene's depth").
-- **Sheets made by vidgen** (`subjects:` at the top, `subjects: [glider, sea]` on the shot): `vidgen remote
-  NAME generate subjects` makes each subject's panels with Qwen-Image-Edit on the session's ComfyUI, all in one
-  batch (about 10 s a panel on a G4), then unloads the model once, and writes `sheets/<subject>/contact.png`;
-  look at it, then `vidgen generate subjects --approve NAME` (a shot is blocked until its panels are
+- **Sheets made by vidgen** (`subjects:` at the top, `subjects: [glider, sea]` on the shot): write each view
+  as a `prompt:` (the picture in words); `vidgen remote NAME generate subjects` has Z-Image-Turbo draw each
+  panel from the words alone on the session's ComfyUI (no picture of yours goes in; on an L4 about 25 s a
+  panel, plus about 70 s for the first), all in one batch, then unloads the model, and writes
+  `sheets/<subject>/contact.png`. A view made from a still (`from:` / `image:` with `text:`) is repainted by
+  Qwen-Image-Edit instead (about 10 s a panel on a G4); a batch of both runs one model's panels, unloads it,
+  then the other's. Look at the contact picture, then `vidgen generate subjects --approve NAME` (a shot is blocked until its panels are
   approved); `generate inputs` composes the shot's sheet from them; then `generate run --pay` as above
   (about 80 s for a 5 s clip with a sheet on a G4) ([CONFIG.md](CONFIG.md), "Subjects and a composed sheet";
   the guide's "Stylesheets").

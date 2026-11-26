@@ -3412,26 +3412,36 @@ class SceneMoment(_Strict):
 
 
 class SubjectView(_Strict):
-    """One panel of a subject (``subjects.<name>.views[]``): a still of vidgen's own render or a
-    picture file, made into a clean picture by the image model."""
+    """One panel of a subject (``subjects.<name>.views[]``): a picture the image model draws from
+    the view's ``prompt:`` alone, or a still of vidgen's own render or a picture file, made into a
+    clean picture by the image model."""
 
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
     name: Identifier | None = None
     """The panel's name and file name (sheets/<subject>/<name>.png; not contact); default view1, view2, ... in order."""
+    prompt: str | None = Field(default=None, min_length=1)
+    """The picture in words: the image model (Z-Image-Turbo) draws the panel from this text alone, sent as written; no picture of yours goes in. Give prompt:, from: or image:."""
     from_: SceneMoment | None = Field(default=None, alias="from")
-    """The still: {scene: chase, at: 1.5}, the frame at 1.5 s of that scene's finished render (without overlays or takes). Give from: or image:."""
+    """The still: {scene: chase, at: 1.5}, the frame at 1.5 s of that scene's finished render (without overlays or takes). Give prompt:, from: or image:."""
     image: str | None = Field(default=None, min_length=1)
     """The still: a picture file (relative to the project), e.g. a frame `vidgen still` drew from another camera. Never a video model's frame."""
     crop: list[Annotated[int, Field(ge=0)]] | None = Field(default=None, min_length=4, max_length=4)
     """[x, y, width, height] of the still to keep, in its pixels; default the whole still."""
-    text: str = Field(min_length=1)
-    """What the panel shows, e.g. "seen from behind and above"; in the image model's prompt and the sheet_prompt."""
+    text: str | None = Field(default=None, min_length=1)
+    """What the panel shows, e.g. "seen from behind and above"; in the sheet_prompt and, for a still, in the image model's prompt (needed with from: or image:)."""
 
     @model_validator(mode="after")
     def _one_source(self) -> SubjectView:
-        if (self.from_ is None) == (self.image is None):
-            raise ValueError("a view takes its still from: {scene, at} or image: a picture file (one of them)")
+        given = [key for key, value in (("prompt", self.prompt), ("from", self.from_), ("image", self.image)) if value is not None]
+        if len(given) != 1:
+            raise ValueError("a view is drawn from prompt: (the picture in words; the image model draws it from the text alone) or made "
+                             "from a still, from: {scene, at} or image: a picture file: give one of them"
+                             + (f", not {' and '.join(given)}" if given else ""))
+        if self.prompt is not None and self.crop is not None:
+            raise ValueError("crop: cuts a still (from: or image:); a prompt: view has no still")
+        if self.prompt is None and self.text is None:
+            raise ValueError("a view made from a still needs text: what the panel shows, e.g. \"seen from behind and above\"")
         if self.crop is not None and (self.crop[2] < 16 or self.crop[3] < 16):
             raise ValueError(f"crop: [x, y, width, height] with width and height of at least 16 pixels, not {self.crop}")
         return self
@@ -3446,7 +3456,7 @@ class Subject(_Strict):
     location: bool = False
     """true: a place (the sea, a street); its one view shows the place itself, not an object on black."""
     views: list[SubjectView] = Field(min_length=1, max_length=MAX_SHEET_PANELS)
-    """The panels: [{from: {scene, at} | image: FILE, crop, text, name}]; a location has one."""
+    """The panels: [{prompt: TEXT | from: {scene, at} | image: FILE, crop, text, name}]; a location has one."""
     seed: int | None = Field(default=None, ge=0)
     """The image model's seed (default 42); another number makes the panels again."""
 

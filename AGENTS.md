@@ -5831,15 +5831,18 @@ the guide gives shapes and motion, the sheet the look (panels of the subject fro
 place). Without a sheet each shot invents its own subject; `generate plan` warns about such shots.
 The sheets are made by an image model and approved before any video work:
 
-1. `subjects:` in `video.yaml`: each subject or location once, with its `look` and its views (a still
-   of your render, `from: {scene, at}`, or a picture file such as a `vidgen still` from another
-   camera; never a video model's frame); a shot names them in `subjects:`.
-2. `vidgen remote NAME generate subjects`: Qwen-Image-Edit makes each view a clean panel
-   (`sheets/<subject>/<view>.png`, a `.json` record beside it), all in one batch on the session's
-   ComfyUI (about 10 s a panel on a G4), then unloads the model. Only panels whose still, look, text
-   or seed changed are made again (`--force --subject NAME`: all of that subject).
-3. Look at each `sheets/<subject>/contact.png` (the panels with their view names, the stills they were
-   made from underneath).
+1. `subjects:` in `video.yaml`: each subject or location once, with its `look` and its views; a shot
+   names them in `subjects:`. Write each view as a `prompt:`: the picture in words. The image model
+   invents the look from the words alone (no picture of yours goes in), and the panel then guides the
+   video model. Describe the whole picture, light and style ("cinematic film still, dramatic low
+   sunlight, deep space").
+2. `vidgen remote NAME generate subjects`: Z-Image-Turbo draws each `prompt:` view
+   (`sheets/<subject>/<view>.png`, 1440x768, a `.json` record beside it), all in one batch on the
+   session's ComfyUI, then unloads the model. On an L4: about 25 s a panel, plus about 70 s for the
+   first (loading the model). Only panels whose prompt, look, text or seed changed are made again
+   (`--force --subject NAME`: all of that subject); for another picture from the same words, change
+   the subject's `seed:`.
+3. Look at each `sheets/<subject>/contact.png` (the panels with their view names).
 4. `vidgen generate subjects --approve NAME` (or `--approve-all`; `--view VIEW` for one panel;
    `--reject NAME` takes it back). A panel made again is not approved any more; only current panels
    can be approved. `generate plan` lists each panel `approved` / `not approved` and blocks a shot
@@ -5854,9 +5857,9 @@ subjects:
   glider:
     look: "a grey jet glider with delta wings and red wing tips"
     views:
-      - {name: rear, from: {scene: chase, at: 0.5}, crop: [190, 165, 260, 130], text: "seen from behind and above"}
-      - {name: side, image: assets/glider_side.png, text: "in side view"}
-  sea: {look: "a rough open sea", location: true, views: [{from: {scene: chase, at: 0.5}, text: "from low over the water"}]}
+      - prompt: "a grey jet glider with delta wings and red wing tips seen from behind and above, cinematic film still"
+      - {prompt: "the same grey jet glider in side view, nose to the left, cinematic film still", text: "in side view"}
+  sea: {look: "a rough open sea", location: true, views: [{prompt: "a rough open sea from low over the water, late afternoon sun, cinematic film still"}]}
 ...
         generated_shot:
           kind: establishing
@@ -5927,6 +5930,12 @@ subjects:
   look); the cost: each tick or sudden step is spread over 2 frames (a made-up in-between frame).
   Keep `fps: 24` (the default) for fast, finely detailed motion. The RIFE weights come with
   `tools/colab/setup.sh`.
+- A panel from a still instead of a prompt: `from: {scene, at}` (a frame of your render, `crop:
+  [x, y, w, h]` in its pixels) or `image: FILE` (a picture file such as a `vidgen still` from another
+  camera; never a video model's frame), with `text:` saying what it shows. Qwen-Image-Edit repaints it as
+  a clean panel (the object on plain black, or the place itself; about 10 s a panel on a G4) and the
+  contact picture shows the still under it. It keeps your render's shapes, and also its computer-made
+  look. A view has exactly one of `prompt:`, `from:` and `image:`.
 - A sheet you made yourself instead of `subjects:`: `sheet: FILE` (the clip's aspect ratio; it is scaled,
   never cropped) with `sheet_prompt:` describing its panels (the prompt starts `Reference sheet:
   <sheet_prompt>. Generated video: `). It needs no approval: you supplied it.

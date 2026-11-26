@@ -1,14 +1,16 @@
-"""The ComfyUI API-format graphs that make a photoreal version of a shot's first frame
-(``first_frame: restyled``, DESIGN.md §113.21), shared by vidgen and
-``tools/colab/build_image_workflow.py`` (which loads this file by its path).
+"""The ComfyUI API-format graphs of the image models: a photoreal version of a shot's first frame
+(``first_frame: restyled``, DESIGN.md §113.21) and the subjects' sheet panels (§113.24), shared by
+vidgen and ``tools/colab/build_image_workflow.py`` (which loads this file by its path).
 
-Two routes (both models ungated on Hugging Face; files from tools/colab/setup_image.sh):
+Three routes (all models ungated on Hugging Face; files from tools/colab/setup_image.sh):
 
 - :func:`qwen_graph`: Qwen-Image-Edit-2511 (GGUF Q4_K_M) + the 4-step Lightning LoRA, an
   instruction edit ("make this a real photo, keep everything in place"); the input picture is
   the reference latent and sets the output size, so the layout stays. vidgen's restyled frame;
 - :func:`zimage_graph`: Z-Image-Turbo + Fun ControlNet Union 2.1 (canny or depth of frame 0) as
-  img2img at ``denoise`` < 1 (tried in Step 405; it changed the aircraft's shape).
+  img2img at ``denoise`` < 1 (tried in Step 405; it changed the aircraft's shape);
+- :func:`zimage_text_graph`: Z-Image-Turbo from a prompt alone (an empty latent, no input
+  picture, no control): a subject's ``prompt:`` view.
 
 The input picture is the frame at 1.5x the output size (1440x768 for 960x512; multiples of 16);
 the result is scaled back to ``width`` x ``height`` (Lanczos). Standard library only.
@@ -53,6 +55,8 @@ ZIMAGE_PROMPT = (
     "haze over a straight flat horizon, pale sky. Painted metal aircraft with panel lines, two "
     "engine nozzles, red wing-tip lights. 35 mm photo, natural colours, sharp, photographic.")
 NEGATIVE_ZI = "cgi, 3d render, video game, cartoon, illustration, painting, blurry"
+#: Sampling steps of :func:`zimage_text_graph` (ComfyUI's Z-Image-Turbo template: 8, cfg 1, res_multistep).
+ZIMAGE_TEXT_STEPS = 8
 
 
 def qwen_graph(run: str, prompt: str = RESTYLE_PROMPT, seed: int = 42, denoise: float = 1.0, width: int = 960, height: int = 512,
@@ -96,11 +100,7 @@ def zimage_graph(run: str, prompt: str, seed: int, denoise: float, width: int, h
                  control: str, strength: float, steps: int, image: str = INPUT) -> dict:
     """Z-Image-Turbo + Fun ControlNet Union 2.1, img2img from ``image``."""
     g: dict = {
-        "1": {"class_type": "UNETLoader", "inputs": {
-            "unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "default"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {
-            "clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "device": "default"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
+        **_zimage_loaders(),
         "4": {"class_type": "ModelPatchLoader", "inputs": {
             "name": "Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors"}},
         "5": {"class_type": "LoadImage", "inputs": {"image": control}},
@@ -120,6 +120,34 @@ def zimage_graph(run: str, prompt: str, seed: int, denoise: float, width: int, h
     return _tail(g, "15", "3", run, width, height)
 
 
+def zimage_text_graph(run: str, prompt: str, seed: int, width: int, height: int, steps: int = ZIMAGE_TEXT_STEPS) -> dict:
+    """Z-Image-Turbo text to image (ComfyUI's own Z-Image-Turbo template): ``prompt`` alone, an empty
+    ``width`` x ``height`` latent, no input picture; output ``<run>_00001_.png``."""
+    g: dict = {
+        **_zimage_loaders(),
+        "7": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 3.0}},
+        "8": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+        "9": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["8", 0]}},
+        "11": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+        "15": {"class_type": "KSampler", "inputs": {
+            "model": ["7", 0], "seed": seed, "steps": steps, "cfg": 1.0,
+            "sampler_name": "res_multistep", "scheduler": "simple", "positive": ["8", 0],
+            "negative": ["9", 0], "latent_image": ["11", 0], "denoise": 1.0}},
+    }
+    return _tail(g, "15", "3", run, width, height, full=False)
+
+
+def _zimage_loaders() -> dict:
+    """Nodes 1-3 of the Z-Image graphs: the diffusion model, its text encoder (Qwen3-4B) and the VAE."""
+    return {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
+    }
+
+
 def _tail(g: dict, sampler: str, vae: str, run: str, width: int, height: int, full: bool = True) -> dict:
     """Decode, scale to the LTX size and save as <run>_00001_.png (``full``: also unscaled)."""
     g["20"] = {"class_type": "VAEDecode", "inputs": {"samples": [sampler, 0], "vae": [vae, 0]}}
@@ -132,4 +160,4 @@ def _tail(g: dict, sampler: str, vae: str, run: str, width: int, height: int, fu
     return g
 
 
-__all__ = ["INPUT", "QWEN_PROMPT", "RESTYLE_PROMPT", "UPSCALE", "ZIMAGE_PROMPT", "qwen_graph", "zimage_graph"]
+__all__ = ["INPUT", "QWEN_PROMPT", "RESTYLE_PROMPT", "UPSCALE", "ZIMAGE_PROMPT", "ZIMAGE_TEXT_STEPS", "qwen_graph", "zimage_graph", "zimage_text_graph"]

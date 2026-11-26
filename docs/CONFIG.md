@@ -3080,21 +3080,25 @@ scenes:
   the models (ComfyUI `POST /free`) once, before its first job, so no picture model stays in the GPU's memory.
 - **Subjects and a composed sheet** (`subjects:` at the top, `subjects: [glider, sea]` on a shot, model
   `ltx-2.3-union-control`, `videogen.provider: comfyui`): name each subject or location once with its `look`
-  and its `views`, each a still of vidgen's own render (`from: {scene, at}`, the scene's finished render without
-  overlays or takes; `crop` in its pixels) or a picture file (`image:`, e.g. a frame `vidgen still` drew from
-  another camera). `vidgen generate subjects [--subject NAME] [--force]` (also `vidgen remote NAME generate
-  subjects`) places each still on a 1440x768 picture (an object fitted whole on black, a location filled) and has
-  Qwen-Image-Edit-2511 on the ComfyUI server make it a clean panel: the object alone on plain black,
-  product-style, or the place itself, no text (prompt from `look` and the view's `text`, `seed` default 42). All
-  panels to make go in one batch: the models are unloaded before the first job, the image model stays loaded
-  for the others and is unloaded once after the last; no hosted service. Each panel is
+  and its `views`. The first way: a view with only `prompt:` (the picture in words): `vidgen generate subjects
+  [--subject NAME] [--force]` (also `vidgen remote NAME generate subjects`) has Z-Image-Turbo on the ComfyUI
+  server draw it at 1440x768 from that text alone, sent as written (no picture of yours goes in; `text:` is
+  optional and only adds words to the sheet prompt). Otherwise a view is made from a still of vidgen's own
+  render (`from: {scene, at}`, the scene's finished render without overlays or takes; `crop` in its pixels) or
+  a picture file (`image:`, e.g. a frame `vidgen still` drew from another camera), with `text:`: the still is
+  placed on a 1440x768 picture (an object fitted whole on black, a location filled) and Qwen-Image-Edit-2511
+  makes it a clean panel: the object alone on plain black, product-style, or the place itself, no text (prompt
+  from `look` and the view's `text`). A view takes exactly one of `prompt:`, `from:` and `image:`; `seed`
+  (per subject) default 42. All panels to make go in one batch, one image model's panels after the other's:
+  the models are unloaded before the first job, an image model stays loaded for its other panels and is
+  unloaded after its last; no hosted service. Each panel is
   `sheets/<subject>/<view>.png` with `<view>.json` beside it (model, prompt, seed, size, the source it was made
   from, the still's and the panel's SHA-256, seconds, GPU usage, time made). A panel is made again only when
-  its source changed (the scene, time or crop, the picture file, `look`, `text`, `seed`) or with `--force`;
+  its source changed (the prompt, the scene, time or crop, the picture file, `look`, `text`, `seed`) or with `--force`;
   when only the scene changed and its still is the same picture, the record is updated and nothing is sent.
   The still each panel is made from is kept beside it (`<view>.still.png`), and each run writes the
   subject's `sheets/<subject>/contact.png`: its panels side by side with their view names, the stills
-  underneath. **Approval**: look at the contact picture, then `vidgen generate subjects --approve NAME`
+  underneath (a `prompt:` panel has none). **Approval**: look at the contact picture, then `vidgen generate subjects --approve NAME`
   (repeatable; `--approve-all`; `--view VIEW` for one panel of that subject); `--reject NAME [--view VIEW]`
   takes it back. Approving sets `"approved": true` in the panel's record; a panel made again has a new
   record and is not approved; a missing or out-of-date panel cannot be approved (an error, nothing

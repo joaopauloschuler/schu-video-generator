@@ -37,6 +37,7 @@ class FakeTransport:
     def __init__(self, fail: int | None = None) -> None:
         self.events: list[str] = []
         self.prompts: list[str] = []
+        self.jobs: list[Any] = []
         self.fail = fail
 
     def check(self) -> None:
@@ -45,7 +46,9 @@ class FakeTransport:
     def submit(self, job: Any) -> str:
         if job.free_before:
             self.events.append("free")
-        self.prompts.append(job.graph["9"]["inputs"]["prompt"])
+        self.jobs.append(job)
+        prompt = job.graph["9"]["inputs"].get("prompt")   # Qwen's edit; Z-Image's text to image has it on node 8
+        self.prompts.append(job.graph["8"]["inputs"]["text"] if prompt is None else prompt)
         self.events.append(f"job{len(self.prompts)}")
         if job.free_after:
             self.events.append("free")
@@ -193,7 +196,7 @@ def test_a_changed_seed_text_or_picture_remakes_only_those_panels_and_force_rema
     Image.new("RGB", (160, 90), (9, 9, 9)).save(root / "stills" / "side.png")
     sources = PanelSources(Project.load(root))
     states = {p.label: sources.state(p) for name in ("glider", "sea") for p in subject_panels(Project.load(root), name)}
-    assert states == {"glider/rear": None, "glider/side": "its still changed (the scene, its time or crop, or the picture)", "sea/view1": "its look, text or seed changed"}
+    assert states == {"glider/rear": None, "glider/side": "its still changed (the scene, its time or crop, or the picture)", "sea/view1": "its prompt, look, text or seed changed"}
     fake = FakeTransport()
     assert [o.action for o in _make(root, fake).outcomes] == ["kept", "made", "made"] and fake.events == ["free", "job1", "job2", "free"]
     forced = FakeTransport()
@@ -244,6 +247,69 @@ def test_panels_need_the_comfyui_server(make_project: Any) -> None:
         _make(root, names=["boat"])
 
 
+# ----- a view drawn from its prompt alone ------------------------------------------------------
+
+SHIP = {"look": "a slender ivory starship", "views": [{"prompt": "a slender ivory starship with swept crescent wings, cinematic film still"}]}
+PICTURE_NODES = {"LoadImage", "VAEEncode", "ModelPatchLoader", "ZImageFunControlnet", "QwenImageDiffsynthControlnet", "ReferenceLatent"}
+
+
+def test_the_text_to_image_graph_takes_no_picture_and_no_control() -> None:
+    from vidgen.videogen.qwen_graph import zimage_text_graph
+
+    graph = zimage_text_graph("run", "a ship", 7, *PANEL_SIZE)
+    kinds = {node["class_type"] for node in graph.values()}
+    assert not kinds & PICTURE_NODES and not any("Control" in k for k in kinds)
+    assert {"UNETLoader", "CLIPLoader", "VAELoader", "EmptySD3LatentImage", "KSampler", "SaveImage"} <= kinds
+    sampler = graph["15"]["inputs"]
+    assert graph[sampler["latent_image"][0]]["class_type"] == "EmptySD3LatentImage" and sampler["denoise"] == 1.0 and sampler["seed"] == 7
+    assert graph["11"]["inputs"]["width"] == PANEL_SIZE[0] and graph["8"]["inputs"]["text"] == "a ship"
+
+
+def test_a_view_is_drawn_from_its_prompt_or_made_from_one_still(make_project: Any) -> None:
+    assert Subject(**SHIP).view_names == ["view1"]
+    for view, match in (({"text": "t"}, "give one of them \\["), ({"prompt": "p", "image": "a.png"}, "not prompt and image"),
+                        ({"prompt": "p", "crop": [0, 0, 32, 32]}, "has no still"), ({"image": "a.png"}, "needs text:")):
+        with pytest.raises(ValidationError, match=match):
+            Subject(look="x", views=[view])
+    with pytest.raises(VidgenError, match="a view is drawn from prompt:"):
+        Project.load(_project(make_project, {"glider": {"look": "x", "views": [{"name": "rear"}]}, "sea": SEA}))
+
+
+def test_prompt_panels_are_drawn_without_a_picture_in_their_own_model_batch(make_project: Any) -> None:
+    from vidgen.videogen.subjects import TEXT_PANEL_MODEL
+
+    root = _project(make_project, {"sea": SEA, "ship": SHIP}, subjects=["ship", "sea"])
+    fake = FakeTransport()
+    _make(root, fake)
+    assert fake.events == ["free", "job1", "free", "job2", "free"]   # Qwen's sea, unload, Z-Image's ship, unload
+    drawn = fake.jobs[1]
+    assert drawn.uploads == {} and not {n["class_type"] for n in drawn.graph.values()} & PICTURE_NODES
+    assert fake.prompts[1] == SHIP["views"][0]["prompt"]   # sent as written
+    panel = subject_panels(Project.load(root), "ship")[0]
+    record = read_record(panel)
+    assert record["model"] == TEXT_PANEL_MODEL and record["still_sha256"] is None and record["source"]["still"] is None
+    assert not panel.still_path.exists() and (root / "sheets" / "ship" / "contact.png").is_file()
+    assert panel.words(True) == "a slender ivory starship"
+    assert [o.action for o in _make(root).outcomes] == ["kept"] * 2
+
+
+def test_a_changed_prompt_or_seed_draws_the_panel_again_under_a_new_key(make_project: Any) -> None:
+    root = _project(make_project, {"glider": GLIDER, "ship": SHIP, "sea": SEA})
+    first = FakeTransport()
+    _make(root, first, names=["ship"])
+    data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))
+    keys = [first.jobs[0].graph["22"]["inputs"]["filename_prefix"]]
+    for change in ({"seed": 3}, {"views": [{"prompt": "a dark red starship"}]}):
+        data["subjects"]["ship"].update(change)
+        (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+        panel = subject_panels(Project.load(root), "ship")[0]
+        assert PanelSources(Project.load(root)).state(panel) == "its prompt, look, text or seed changed"
+        fake = FakeTransport()
+        assert [o.action for o in _make(root, fake, names=["ship"]).outcomes] == ["made"]
+        keys.append(fake.jobs[0].graph["22"]["inputs"]["filename_prefix"])
+    assert len(set(keys)) == 3
+
+
 # ----- the shot ----------------------------------------------------------------------------------
 
 
@@ -279,7 +345,7 @@ def test_a_shot_is_blocked_until_its_panels_are_made_and_its_sheet_composed(make
     data["subjects"]["glider"]["look"] = "a white glider"
     (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     (item,) = _plan(root).shots
-    assert item.shot.sheet is None and any("glider/rear: its look, text or seed changed" in b for b in item.shot.blocked)
+    assert item.shot.sheet is None and any("glider/rear: its prompt, look, text or seed changed" in b for b in item.shot.blocked)
 
 
 def test_a_project_without_subjects_plans_as_before(make_project: Any) -> None:
@@ -326,7 +392,7 @@ def test_panels_are_approved_after_their_contact_picture_and_a_remade_panel_is_n
     data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))
     data["subjects"]["glider"]["views"][1]["text"] = "side view, nose to the right"
     (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
-    with pytest.raises(VidgenError, match="glider/side: its look, text or seed changed"):
+    with pytest.raises(VidgenError, match="glider/side: its prompt, look, text or seed changed"):
         set_approval(Project.load(root), ["glider"])
     assert [(o.panel.label, o.action) for o in _make(root).outcomes] == [("glider/rear", "kept"), ("sea/view1", "kept"), ("glider/side", "made")]
     rear, side = subject_panels(Project.load(root), "glider")

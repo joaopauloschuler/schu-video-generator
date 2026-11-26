@@ -29027,3 +29027,51 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_render_webgl_cache.py tests/test_remote.py
   tests/test_guide.py tests/test_docs.py tests/test_draft.py` (220 passed, 23 s); `tests/test_colab_setup_session.py
   tests/test_colab_rsync.py tests/test_colab_transfer.py tests/test_colab_ssh.py tests/test_render.py -m "not render"`.
+
+## Step 437 — sheet panels from a text prompt alone (Z-Image-Turbo text to image)
+- **Why**: the owner's rule: "The image model creates stylesheets for the video model. We do not guide the image
+  model. The image model guides images." Panels repainted from a still of the scene kept the render's look.
+- **Built**: `SubjectView.prompt`. A view with only `prompt:` is drawn by Z-Image-Turbo on the ComfyUI server from
+  that text alone, sent as written: `qwen_graph.zimage_text_graph` (ComfyUI's own Z-Image-Turbo template, node
+  names and the three weight files checked against the L4 VM's `/object_info`, ComfyUI 0.46.0): UNETLoader
+  `z_image_turbo_bf16.safetensors`, CLIPLoader `qwen_3_4b.safetensors` (lumina2), VAELoader `ae.safetensors`
+  (shared with `zimage_graph` via `_zimage_loaders`), ModelSamplingAuraFlow 3, CLIPTextEncode, ConditioningZeroOut,
+  EmptySD3LatentImage 1440x768, KSampler 8 steps cfg 1 res_multistep/simple denoise 1. No LoadImage, VAEEncode,
+  ControlNet or patch; nothing is uploaded. A view takes exactly one of `prompt:`, `from:`, `image:` (none or two:
+  config error naming all three); `crop:` only with a still; `text:` needed with a still, optional with a prompt
+  (it then only adds words to the sheet prompt). Records: `model` `TEXT_PANEL_MODEL`, `source.still` null,
+  `still_sha256` null, no `<view>.still.png`; the contact picture's still row says "drawn from its prompt alone".
+  Staleness: a changed prompt or seed reads "its prompt, look, text or seed changed" (message gained "prompt");
+  the job key hashes model, prompt and seed. Approval, plan listing, blocking unchanged; `generate subjects`
+  stays free (no `--pay`, no ledger, as before). `_run_batch` orders panels by model and unloads after each
+  model's last job (a mixed batch: Qwen, free, Z-Image, free).
+- **Files**: `src/vidgen/config.py`, `src/vidgen/videogen/{qwen_graph,subjects}.py`, `tests/test_videogen_subjects.py`
+  (+4 tests; FakeTransport reads Z-Image's prompt from node 8), guide + `AGENTS.md` (Stylesheets: prompt views
+  first, still views as the alternative, example rewritten), `docs/CONFIG.md`, `DESIGN.md` §113.24 + new §113.28,
+  `docs/HOWTO-restyle-with-ltx-on-colab.md`, `tasklist.md`. CHANGELOG not touched (it stops at Step 416).
+- **Interfaces**: `qwen_graph.zimage_text_graph(run, prompt, seed, width, height, steps=8)`, `ZIMAGE_TEXT_STEPS`;
+  `subjects.TEXT_PANEL_MODEL`, `Panel.from_prompt`, `Panel.model`; `panel_record(still_sha256=None)` allowed;
+  `SubjectView.text` is now optional (required by the validator for still views).
+- **Real check (L4 `ltx`, ComfyUI `--disable-comfy-compiler --disable-dynamic-vram --reserve-vram 10`, not
+  restarted)**: `setup_session.py ltx --vidgen-only` (43 s), scratch project with two prompt-only subjects,
+  `vidgen remote ltx generate subjects .`: starship 92.8 s GPU (100 s door to door, includes loading Qwen3-4B
+  and Z-Image), gas giant 24.8 s GPU (25.3 s); batch 125 s, about 0.05 + 0.01 units. Both 1440x768. Starship:
+  an ivory swept-wing craft with teal-glowing engine nacelles, cockpit, panel lines, warm low sun flare, stars;
+  reads as a film still (a little aircraft-like). Gas giant: banded amber/cream planet with broad icy-grey rings,
+  violet nebula top right; painterly-cinematic. A `--force` re-make of one panel: 67.7 s GPU (with loading).
+- **Found, not fixed (pre-existing, affects every comfyui job)**: the `/free` after a batch's last job did not
+  always unload. VM sampler (`/content/vram.csv`): the two-panel batch ended at 21:46:08 with 7557 MiB held by
+  ComfyUI (the log: "7068.75 MB remains loaded" of the Z-Image model after the decode) and stayed there until a manual `POST /free` at 21:54 (379 MiB);
+  the 21:33 LTX `generate run` likewise left 10.5 GB until this batch's `free_before`. The one-panel re-run at
+  22:05 did unload (379 MiB 8 s after). Likely cause, read in the VM's ComfyUI `main.py`/`execution.py`: `/free`
+  only sets a flag and `notify()`s the queue's condition; the worker reads the flags after a job, then runs gc
+  and waits in `PromptQueue.get(timeout=1000)` without checking flags first, so a `/free` landing in that
+  window is lost until the next prompt or up to 1000 s. Suggested fix (not done: other module, not asked):
+  send `/free` again a few seconds later, or check `/system_stats` VRAM after the free and repeat. At the end
+  of this step the VM's ComfyUI held 379 MiB.
+- **Known gaps**: no mixed batch (Qwen + Z-Image) run for real (only mocked); the Qwen3-4B text encoder runs on
+  the GPU (`device: default`; `videogen.comfyui.text_encoder` is LTX-only); no G4 timing; panels not yet used
+  in a video clip.
+- **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_subjects.py tests/test_videogen_canny_restyle.py
+  tests/test_videogen_sheet.py tests/test_videogen_comfyui.py tests/test_guide.py tests/test_docs.py tests/test_config.py`
+  (264 passed, 21 s); `-m slow tests/test_videogen_subjects.py` (6 passed, 11 s).

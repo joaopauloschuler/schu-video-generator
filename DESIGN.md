@@ -22582,7 +22582,8 @@ inputs, never a video model's frames); they are made before any video work, on t
 hosted service), with the image model loaded once for the whole batch and unloaded after it.
 
 - **Config.** Top-level `subjects: {name: Subject}`: `look`, `location` (one view), `seed`, `views`
-  (1-4 `SubjectView`: `name`, `from: {scene, at}` or `image:`, `crop: [x, y, w, h]`, `text`). A shot's
+  (1-4 `SubjectView`: `name`, exactly one of `prompt:` (§113.28), `from: {scene, at}` and `image:`,
+  `crop: [x, y, w, h]` (a still only), `text` (needed with a still)). A shot's
   `subjects: [names]` (only on a `takes_sheet` workflow; not with `sheet` / `sheet_prompt`; at most
   `MAX_SHEET_PANELS` = 4 panels together; unknown names and scenes are config errors). `subjects` is
   left out of the render fingerprint.
@@ -22722,6 +22723,34 @@ backend.
   (a `VM_KEYS` key, blank when unset); `colab_vm.child_env` sets the run's `VIDGEN_WEBGL` from it after
   `/content/vidgen.env` (which says `gpu` on a GPU session), so `VIDGEN_WEBGL=swiftshader vidgen remote NAME
   ...` draws in software there; unset, the VM's own setting stays.
+
+### 113.28 Panels drawn from a prompt alone (Step 437)
+
+Rule of the owner: "The image model creates stylesheets for the video model. We do not guide the
+image model. The image model guides images." A sheet panel made by repainting a still of the scene
+(§113.24) kept the render's look; a view with `prompt:` is drawn from words alone, and that panel
+then guides the video model. It is the first way to make a sheet.
+
+- **Config.** `SubjectView.prompt` (text). `_one_source` takes exactly one of `prompt`, `from`,
+  `image` (none or two: a config error naming the three); `crop` only with a still; `text` optional
+  for a `prompt:` view, needed for a still. The shortest view is `- prompt: "..."`.
+- **Graph** (`qwen_graph.zimage_text_graph`). ComfyUI's own Z-Image-Turbo template, node names checked
+  against the L4 VM's `/object_info` (ComfyUI 0.46.0): `UNETLoader` `z_image_turbo_bf16.safetensors`,
+  `CLIPLoader` `qwen_3_4b.safetensors` (type `lumina2`), `VAELoader` `ae.safetensors` (nodes 1-3, shared
+  with `zimage_graph` by `_zimage_loaders`), `ModelSamplingAuraFlow` shift 3, `CLIPTextEncode` with the
+  prompt as written, `ConditioningZeroOut` as the negative, `EmptySD3LatentImage` at `PANEL_SIZE`
+  1440x768, `KSampler` 8 steps, cfg 1, `res_multistep` / `simple`, denoise 1, the subject's seed;
+  `VAEDecode`, `SaveImage`. No `LoadImage`, `VAEEncode`, ControlNet or model patch: nothing is uploaded.
+- **Panels** (`subjects.py`). `Panel.from_prompt`, `Panel.model` (`TEXT_PANEL_MODEL`), `Panel.prompt`
+  is the view's prompt stripped. Its source is `{still: null, edit: {prompt, seed, model, size},
+  location?}`, so a changed prompt or seed makes it stale ("its prompt, look, text or seed changed")
+  and gives a new job key (SHA-256 of model, prompt and seed); the record's `still_sha256` is null and
+  no `<view>.still.png` is written; the contact picture's still row says "drawn from its prompt alone".
+  The sheet prompt's words are the look (or "the same <name>"), plus `text` when given. Approval,
+  the plan's listing and blocking are unchanged; `generate subjects` stays free (no `--pay`, no ledger).
+- **One model at a time.** `_run_batch` orders the panels by model (in their first appearance) and
+  sets `free_after` on each model's last job, so a batch of both models unloads Qwen-Image-Edit
+  before Z-Image-Turbo loads, and nothing stays in VRAM after the batch.
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
