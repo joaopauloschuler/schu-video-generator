@@ -18,7 +18,7 @@ contract after the Step 7 review, plus the roadmap steps 8–60 (version 0.2.0) 
 changed for users of 0.1; `CHANGELOG.md` lists what changed from 0.2.0 to 0.3.0). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
 each step made it precise, and where a refinement differs from the text above it, the
 refinement is what the code does. Changing a public interface requires updating this file in
-the same commit and noting it in HANDOFF.md. User documentation: README.md, docs/CONFIG.md
+the same commit. User documentation: README.md, docs/CONFIG.md
 (every config key, checked by `tests/test_docs.py`) and docs/EXTENDING.md.
 
 ---
@@ -413,7 +413,7 @@ docs/
   gallery/                # scene gallery written by `vidgen gallery`: README.md, <type>.md, media/ (§60)
     web/                  # the web gallery: types drawn in headless Chromium, README.md, <type>.md, media/ (§123.1)
 AGENTS.md                 # the author guide for agents *using* vidgen (copy of data/guide/AGENTS.md, §59)
-DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
+DESIGN.md  CLAUDE.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
 ```
 
 ## 3. Project folder layout

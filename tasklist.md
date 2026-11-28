@@ -6,7 +6,7 @@ Guiding idea: the AI author cannot watch the video. Prioritise features that let
 output, catch its own mistakes, and build from tested parts instead of raw Manim.
 
 Work is split into **steps**. One agent does one step, in order, following `CLAUDE.md`
-(tests pass, `HANDOFF.md` section appended, one commit `Step N: ...`). Each step is small and
+(tests pass, one commit `Step N: ...`). Each step is small and
 bounded: if a step turns out larger than expected, the agent finishes a coherent part, marks the
 rest `[~]` with a note, and the remainder becomes a follow-up step. Agents tick boxes here as
 part of their commit.
@@ -2607,3 +2607,4 @@ Nice-to-have / performance
 - [x] **Step 438 (Opus 5.5) — the generated video cookbook renamed.** `docs/COOKBOOK-GENERATED-VIDEO.md` is now `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` (`git mv`, content unchanged); every live link and mention follows (README, CONFIG, the cookbooks, guide + `AGENTS.md`, DESIGN, the 3d-to-video example, tests); past entries in HANDOFF, CHANGELOG and ticked tasklist lines keep the old name
 - [x] **Step 439 (Fable 5.2) — the LTX run log removed.** `docs/howto/ltx-colab-runlog.md` (the raw lab log of the first Colab tests) is deleted at the owner's request, with the folder `docs/howto/`; the HOWTO's two links to it are gone.
 - [x] **Step 440 (Opus 5.5) — the LTX HOWTO renamed.** `docs/HOWTO-restyle-with-ltx-on-colab.md` is now `docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md` (`git mv`, content unchanged); every live link and mention follows (CONFIG, guide + `AGENTS.md`, `tools/colab/README.md`, `tools/colab/setup_session.py`); past entries in HANDOFF, CHANGELOG and ticked tasklist lines keep the old name.
+- [x] **Step 441 (Fable 5.2) — HANDOFF.md removed.** The per-step log is deleted at the owner's request (too much overhead); `CLAUDE.md` no longer asks for a handoff section; a step ends with its `tasklist.md` line and one commit. The log up to Step 440 is in the git history.

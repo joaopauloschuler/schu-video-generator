@@ -7,7 +7,7 @@
 > change a command, scene type or param that `AGENTS.md` names, update the guide in
 > `src/vidgen/data/guide/AGENTS.md` and copy it to `AGENTS.md` (`tests/test_guide.py` checks both).
 
-Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) before changing code.
+Read `DESIGN.md` (the contract) before changing code.
 Follow `docs/CODING-AND-COMMUNICATION-GUIDE.md`: when to write code, naming, reuse, how to run
 tests on a small machine (memory cap, timeout, one at a time), progress reports, and how to write
 to the user.
@@ -54,11 +54,6 @@ to the user.
 
 - Do not commit generated media (`build/`, `media/`, `*.mp4`, `*.wav`, `*.srt` outputs, `__pycache__`).
   Exception: the kphi3 example's narration MP3s/hashes under `examples/kphi3/audio/` ARE committed.
-
-## Handoff
-At the end of your step, append a section to `HANDOFF.md`:
-`## Step N — <title>` with: what was built, files touched, public interfaces added/changed,
-decisions/deviations from DESIGN.md (and why), known gaps / TODOs for later steps, how to test.
 
 ## Task list
 `tasklist.md` is the roadmap. Each step is done by one agent, in order. Tick the boxes of your
