@@ -4732,1493 +4732,572 @@ Since Step 379 the types drawn in a web page have a gallery of their own, `docs/
 
 ## 69. Characters (Step 67, character model: vector parts with pivots)
 
-The base of Phase H (cartoons). Later steps build on these names: the parametric generator (Step
-68) and imported SVGs (Step 69) produce `CharacterPart` lists; poses and expressions (Step 70)
-are `PartPose` tables applied with `set_state`; lip sync (Step 71) and blinking (Step 72) swap
-shapes; the `stage` scene (Step 73) places characters by `feet()`; acting actions (Step 78+)
-take `CharacterName` options.
+`cartoon/character.py`. The generator (§69.1) and SVGs (§69.2) produce `CharacterPart` lists;
+poses (§69.3) are `PartPose` tables applied with `set_state`; lip sync and blinks (§69.4–69.5)
+swap shapes; the `stage` (§69.6) places characters by `feet()`.
 
-- **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
-  brows, mouth, accessory` (Step 92 adds `leg_left`, `leg_right` and the lower segments
-  `arm_left_lower`, `arm_right_lower`, `leg_left_lower`, `leg_right_lower`, §69.26; Step 114 an
-  animal's `tail`, parent `body`, draw order 5, §69.48; Step 124 a robot's `antenna`, parent `head`,
-  order 49, and a `cape`, parent `body`, order 3, §69.58); `REQUIRED_PARTS` all but `legs`, `accessory`, `tail`, `antenna` and `cape` (`Character(...,
-  required=)` overrides it: an imported SVG needs only `body`, §69.2). A part is a
-  `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
-  `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
-  Step 71 adds viseme shapes the same way), `pivot` an (x, y) point. Parents default to
-  `DEFAULT_PARENTS` (body is the root; head, arms, legs hang from body; eyes, brows, mouth,
-  accessory from head); a custom `parent` must be a part the character has, without cycles.
-  Draw order defaults to `DEFAULT_DRAW_ORDER` (arm_right 10, legs 20, body 30, arm_left 40, head
-  50, eyes / mouth 60, brows 70, accessory 80; ties by `PART_NAMES`), so facing right the
-  character's right arm is the far arm behind the body. `arm_left` / `arm_right` are the
-  character's own left / right (as in anatomy), so `arm_left` is on the screen's right in the
-  rest view. Bad part sets raise `VidgenError` naming the character and the parts.
-- **Character units**: parts are drawn with the origin between the feet, `y` up, 1 = the top of
-  the character. `Character(parts, name=, height=3.0, facing="right", voice=None)` scales them to
-  `height` Manim units; `feet()` is the origin on screen (the ground point a stage uses).
-- **State and redraw**: the character keeps a copy of every rest shape and one
-  `PartPose(angle, scale, shift, shape)` per part (frozen dataclass; angle in degrees
-  counterclockwise as drawn facing right, scale (x, y) about the pivot, shift in character
-  units). `refresh()` writes each live part's points as `screen · mirror · world(part) ·
-  rest_points`, where `world(part) = world(parent) · pose(part)` and `pose = T(shift) · T(pivot) ·
-  R · S · T(-pivot)`. So a part's pose moves its children and nothing else, and poses never
-  accumulate rounding: every redraw starts from the rest shape. Styles of the live parts
-  (colour, opacity) are not touched; only a shape swap replaces a part's child with a copy of
-  the new shape (its rest style). `pivot(part)` gives the pivot on screen now.
-- **Placement**: `submobjects[0]` is an invisible anchor of three points (feet, feet + 0.05
-  right, feet + 0.05 up, in character units, inside the figure's box so `get_center` / `width` do
-  not change). Manim's `shift`, `scale`, `rotate`, `move_to` move it with the parts, and
-  `refresh()` reads the placement back from it, so poses set after a move land where the
-  character is. No overrides of Manim's transforms were needed.
-- **Facing**: `face("left")` mirrors the whole character about the vertical line through its
-  feet (in character units, before the placement); `turn()` toggles. The draw order is kept (a
-  mirror image), and part names keep their meaning (the left arm stays `arm_left`).
-  `face("front")` shows the front view (Step 111, §69.44).
-- **API**: `set_part(part, angle=, scale=, shift=, shape=)` (values not given keep the pose),
-  `swap(part, shape)`, `reset(part=None)`, `face`, `turn`, `state()` → `CharacterState(facing,
-  parts)`, `set_state(state)`, `pose_of`, `shape_names`, `parent_of`, `has_part`, `draw_order`,
-  `parts` (name → live `VGroup`; since §69.22 one child per shape, only the shown one has points). All changes return the character (chainable). Animate poses by
-  calling `set_part` / `set_state` from an updater, or with `PoseChange` (§69.3);
-  `.animate.set_part(...)` would interpolate points linearly (a chord, not an arc).
-  `copy()` is a deep copy with its own poses.
-- **The default look** (`generate_parts(CharacterLook(), colors)`, §69.1; Step 67 called it the
-  basic figure, `basic_parts`): a round head on an oval body, sleeves with round hands, two legs,
-  dot eyes (`open` / `closed`), line brows, a smile arc or an open mouth; the face sits 0.025 to
-  the right so facing is visible.
-- **Stroke widths** (Step 68): parts are drawn with `OUTLINE_WIDTH = 4` for a character
-  `REFERENCE_HEIGHT = 3` units tall. `Character.__init__` multiplies every stroke width of its
-  rest shapes by `height / REFERENCE_HEIGHT` and keeps each at least one pixel wide in the current
-  Manim config (`100 * frame_height / pixel_height`, as Cairo draws width `w` as `w * 0.01` frame
-  units). Since the frame's shorter side is always 8 units (§5), the outline is a fixed fraction
-  of the character and of the frame at any resolution and aspect. Manim's own `scale()` of a
-  character afterwards does not scale strokes (as for any `VGroup`).
-- **Config** (`config.py`): `characters: list[CharacterEntry]` at the top level;
-  `CharacterEntry(name: Identifier, voice: Identifier | None, look: CharacterLook, colors:
-  CharacterColors)`; `CharacterLook` holds the generator's parameters (§69.1) or `svg:` (§69.2); `CharacterColors(skin = secondary, clothes = primary, outline = features =
-  CHARACTER_INK #1F2430, hair = accent, accessory = highlight)` as `ColorRef`s. A list (not a mapping) so that a repeated name is a
-  clear error (YAML mappings silently keep the last duplicate key): `VideoConfig` raises
-  `duplicate character name 'pip' (characters[0] and characters[1])`.
-- **Checks**: `voices.voice_reference_problems` also checks `characters[k].voice` (a config
-  error from `parse_config`, so variants too). `cartoon/cast.py` (no manim): `character_names`,
-  `find_character` (raises with `unknown_character_message`: did-you-mean and the known names,
-  or "the video declares no characters"), `character_color_problems` (run by
-  `cli.project_problems`, i.e. `vidgen validate`), `check_character_name`.
-- **`CharacterName`** (`scene.py`, exported): `Annotated[str, pattern ID_PATTERN,
-  AfterValidator]`; like `IconName`, it checks the name only when the validation context has a
-  theme (`vidgen validate`, scene build) and a project is active, against that project's
-  `characters:`. It works in scene `Params` and action `Options` alike. It is not given an enum
-  in `vidgen schema` (the schema is per video, not per project yet).
-- **`character(name, height=3.0, facing="right")`** (exported): the active project's character,
-  coloured with the current theme (`build_character(entry, theme=, height=, facing=)`).
-- **Fingerprint**: `characters` is not excluded from `scene_fingerprint`'s config part, so editing
-  a character re-renders every scene (conservative; Step 87, §69.20, did not narrow it to
-  scenes that use characters: not one of its items).
-- **Layout dump**: a `Character` is one object of kind `character` named after it (Step 73,
-  §69.6).
-- **Not done here**: no scene type draws characters yet (the `stage` scene type, Step 73, §69.6).
+- **Parts**: `PART_NAMES = body, legs, leg_left, leg_left_lower, leg_right, leg_right_lower,
+  arm_left, arm_left_lower, arm_right, arm_right_lower, head, eyes, brows, mouth, accessory, tail,
+  antenna, cape, cheeks, bristles` (§69.26, §69.48, §69.58, §69.59). `REQUIRED_PARTS = body,
+  arm_left, arm_right, head, eyes, brows, mouth` (`Character(..., required=)` overrides; an SVG
+  needs only `body`). Legs are one `legs` part or `SINGLE_LEG_PARTS`. `CharacterPart(name, shapes,
+  pivot, parent=None, order=None)`: `shapes` maps names to `VMobject`s, the first is the rest shape.
+  Parents default to `DEFAULT_PARENTS` (body is the root; a missing default parent is replaced by
+  its own parent; no cycles); draw order to `DEFAULT_DRAW_ORDER` (ties by `PART_NAMES`), so facing
+  right the character's right arm is behind the body. `arm_left` / `arm_right` are the
+  character's own sides. Bad part sets raise `VidgenError` naming the character and parts.
+- **Units**: origin between the feet, `y` up, top = 1. `Character(parts, name=, height=3.0,
+  facing="right", voice=None)` scales to `height` Manim units; `feet()` is the origin on screen.
+- **Redraw**: one frozen `PartPose(angle, scale, shift, shape)` per part (degrees
+  counterclockwise as drawn facing right; scale about the pivot; shift in character units).
+  `refresh()` sets each part's points to `screen · mirror · world(part) · rest_points`,
+  `world(part) = world(parent) · pose(part) · overlay(part)`, `pose = T(shift) · T(pivot) · R · S
+  · T(-pivot)`: a pose moves its children only, and every redraw starts from the rest shape (no
+  accumulated rounding). Live styles are not touched. `parts[name]` holds one live child per
+  shape for the character's whole life; only the shown one has points (§69.22).
+- **Placement**: `submobjects[0]` is an invisible three-point anchor (feet, +0.05 right, +0.05
+  up) inside the figure's box; Manim's `shift` / `scale` / `rotate` / `move_to` move it and
+  `refresh()` reads the placement back from it. No Manim transform is overridden.
+- **Facing**: `face("left")` mirrors about the feet's vertical line; `turn()` toggles; draw
+  order and part names are kept. `face("front")`: §69.44.
+- **API**: `set_part(part, angle=, scale=, shift=, shape=)`, `swap`, `reset(part=None)`, `face`,
+  `turn`, `state()` → `CharacterState(facing, parts)`, `set_state`, `pose_of`, `shape_names`,
+  `parent_of`, `has_part`, `draw_order`, `pivot(part)`, `parts`; chainable; `copy()` is deep.
+  Animate via updaters or `PoseChange`, not `.animate.set_part` (straight chords, not arcs).
+- **Strokes**: drawn at `OUTLINE_WIDTH = 4` for `REFERENCE_HEIGHT = 3`; `Character.__init__`
+  scales rest strokes by `height / REFERENCE_HEIGHT`, at least one pixel (`100 * frame_height /
+  pixel_height`), so outlines are a fixed fraction of the character at any resolution. A later
+  Manim `scale()` does not scale strokes.
+- **Config**: top-level `characters: list[CharacterEntry(name, voice, look: CharacterLook,
+  colors: CharacterColors)]`; `CharacterColors(skin = secondary, clothes = primary, outline =
+  features = CHARACTER_INK #1F2430, hair = accent, accessory = highlight)`. A list, not a mapping,
+  so a duplicate name is an error rather than YAML silently keeping the last.
+- **Checks**: `voices.voice_reference_problems` covers `characters[k].voice`. `cartoon/cast.py`
+  (no manim): `character_names`, `find_character` (did-you-mean), `character_color_problems`
+  (`cli.project_problems`), `check_character_name`.
+- **`CharacterName`** (`scene.py`, exported): an identifier checked against the active project's
+  `characters:` only when the validation context has a theme and a project (like `IconName`); no
+  enum in `vidgen schema` (the schema is per video).
+- **`character(name, height=3.0, facing="right")`** (exported): the project's character in the
+  current theme (`build_character(entry, theme=, height=, facing=)`).
+- **Fingerprint**: `characters` is in the config part of every scene's fingerprint (editing one
+  re-renders all scenes). Layout dump: one object of kind `character` (§69.6).
 
 ### 69.1 The character generator (Step 68)
 
-`cartoon/generator.py`: `generate_parts(look, colors, *, outline_width=OUTLINE_WIDTH) ->
-list[CharacterPart]`, the parts `build_character` (and so `character(name)`) uses for every
-`characters:` entry. `colors` maps `COLOR_KEYS` (`skin, clothes, outline, features, hair,
-accessory`, and since Step 113 `trim`) to Manim colours. Step 113 added more bodies, hair,
-accessories and the clothes (§69.47); the values below are those of Step 68.
+`cartoon/generator.py`: `generate_parts(look, colors, *, outline_width=OUTLINE_WIDTH)`; `colors`
+maps `COLOR_KEYS` (`skin, clothes, outline, features, hair, accessory, trim`). Option sets: §69.47.
 
-- **Parameters** (`CharacterLook`, all optional): `body` (`round | tall | square | bean`; sizes in
-  `BODY_SIZES`), `head_size` (0.6–1.6, radius 0.2 × it), `eyes` (`dot | oval | round | sleepy`),
-  `nose` (`none | dot | round | triangle`), `hair` (`none | short | spiky | long | bun | curly`),
-  `ears` (`none | round | pointy | floppy`), `accessories` (subset of `glasses, hat, scarf, bag`,
-  no repeats: a config error), `seed` (int or none).
-- **Proportions** (`resolve_proportions(look) -> Proportions`, no drawing): head radius, body
-  width and height, leg and arm length, eye gap, eye size and mouth width. With a `seed`, each is
-  multiplied by `0.92 + 0.16 × random.Random(seed).random()` in field order (`SEED_VARIATION`);
-  Python guarantees that `Random(int).random()` gives the same sequence on every platform and
-  version (`uniform` is not covered by that promise, so it is not used), so a look always gives
-  the same figure. Without a seed: no variation.
-- **Layout** (character units before scaling): legs from 0 to `leg_length`; the body from
-  `leg_length - 0.06` up `body_height`; shoulders (arm pivots) at `(±body_width/2, body_top -
-  0.08)`; the head centred `head_radius - 0.02` above the body top, its pivot at the neck; the
-  face 0.125 × the head radius to the right (facing right), eyes 0.15 r above the head centre.
-  The finished parts are then scaled about the feet so the top of the tallest shape (hair, bun,
-  ears or hat included) is at 1 (`_scaled_to_unit_height`); the default look is already 1 tall.
-- **Where things go**: hair (back pieces for `long` / `bun` / `curly`, then ears, the head
-  circle, the hair cap in front, the nose) is drawn inside the `head` part, so it turns with the
-  head; `scarf` and `bag` inside `body`; `glasses` and `hat` make the optional `accessory` part
-  (parent `head`, drawn on top). Shape names are the same for every look: eyes `open` /
-  `closed`, mouth `smile` / `open` (and, since Step 71, the viseme shapes `A E O U M F L W`, §69.4),
-  so Steps 70–72 swap them on any generated character.
-- **Originality**: every shape is a primitive (circle, ellipse, rounded rectangle, polygon, line,
-  arc); no option names or imitates a known character.
+- **Proportions**: `resolve_proportions(look)` (no drawing). With `look.seed`, each proportion is
+  multiplied by `0.92 + 0.16 × random.Random(seed).random()` in field order; only `random()` is
+  used because Python guarantees its sequence across platforms (`uniform` is not). No seed: none.
+- **Drawing**: parts are scaled about the feet so the tallest shape tops at 1. Hair, ears and
+  nose are inside `head`; `scarf` / `bag` inside `body`; `glasses` / `hat` form `accessory`.
+  Shape names are the same for every look (eyes `open` / `closed`, mouth `smile` / `open` and
+  visemes `A E O U M F L W`). Every shape is a primitive; no option imitates a known character.
 - **`vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]`**
-  (`cli.cmd_character`): with the project's extensions active (so project theme presets work),
-  prints `cast.character_lines(entry, theme)` (voice, every `look` value, every colour with its
-  resolved hex). `--png` calls `still.write_character_png(project, entry, theme, path,
-  facing=)`: Manim's camera draws the character `0.8 × 8` units tall, centred, on the theme
-  background, in the final format's aspect ratio with its shorter side 720 px; default file
-  `exports/character_<name>.png` (`default_png_path`). No `--json`: Step 83's
-  `vidgen character-sheet` (§69.16) is the agent tool, with `--json` and over MCP.
+  (`cli.cmd_character`): prints `cast.character_lines` (voice, look, colours with hex); `--png`:
+  `still.write_character_png`, shorter side 720 px, default `exports/character_<name>.png`. No
+  `--json` (`character-sheet`, §69.16, is the agent tool).
 
 ### 69.2 Characters from SVG files (Step 69)
 
-`look: {svg: FILE}` (`CharacterLook.svg`, a path relative to the project folder ending in `.svg`;
-any other `look` key with it is a config error) draws the character from an SVG instead of the
-generator. `build_character(entry, root=)` (root default: the active project's folder; `character()`
-and `still.write_character_png` pass it) calls `cartoon/svg_look.py`.
+`look: {svg: FILE}` (relative to the project, no other `look` key); `cartoon/svg_look.py`;
+`build_character(entry, root=)`.
 
-- **Splitting** (`split_character_svg(data, where) -> SvgCharacter`, `read_character_svg(path,
-  where)`; no manim): the file goes through `svgclean.sanitize_svg` (§65; `currentColor` black),
-  then every drawn element (`path rect circle ellipse line polyline polygon use`, not inside
-  `defs` / `symbol`) is marked with its owner: the nearest enclosing element whose id names a part
-  (`part_key`: `<part>` → the rest shape, `<part>_<shape>` → another shape; the longest part name
-  wins, so `arm_left_up` is arm_left's `up`). An id of the same part inside its element does not
-  start a new shape (`head_outline` in `head` is a piece of the head). Shapes with no owner belong
-  to `body` (rest), except shapes hidden in the file there (`display: none` / `visibility:
-  hidden`, inherited), which are dropped; hiding is reset inside a part element (alternatives are
-  hidden in the file). Rest names: `REST_SHAPE_NAMES` (`eyes` → `open`, `mouth` → `smile`, as the
-  generator), else `rest`. Each (part, shape) becomes its own document: a copy of the sanitised
-  file with the other owners' shapes removed and its element and ancestors un-hidden, so
-  inherited styles and transforms and the viewBox box stay. Parts keep the order of their first
-  drawn shape in the file; the rest shape first, then the others in file order.
-- **Pivots**: `data-pivot="x y"` (or `x,y`) on a part's element, in viewBox coordinates (the
-  rest element's wins over an alternative's). Without it, `default_pivot` from the rest shape's
-  box in character units: head / body bottom centre, legs top centre, an arm the top corner
-  nearer the body's centre, others the centre. `pivot_warnings` names `TURNING_PARTS` (head, arms,
-  legs) without one.
-- **Problems** (`VidgenError`): a missing / unreadable file, what the sanitiser refuses, two
-  elements naming the same (part, shape), a `data-pivot` that is not two numbers, no body.
-  **Warnings** (`SvgCharacter.warnings`): ids that look like misspelt part names (`_near_miss`:
-  lower case / `-` → `_` names a part, or difflib ≥ 0.8: `Mouth`, `arm-left`, `eye`), a non-rest
-  shape the file shows, a part element that draws nothing.
-- **Shapes** (`svg_character_parts(path, where) -> list[CharacterPart]`, manim): each document
-  is parsed with `vector_mobject.svg_shapes` (factored out of `load_vector`: `SVGMobject` of the
-  work copy, the invisible box first) and moved so its viewBox's top-left corner is the origin
-  (Manim flips y about each drawing's own centre, so documents are aligned by their box). The
-  rest shapes' union box gives the character units: bottom = feet height, x = the middle of the
-  `legs` box (else `body`), top → 1. Stroke widths: `vector_mobject.set_svg_stroke` (also
-  factored out of `load_vector`) with the factor for a character `REFERENCE_HEIGHT` tall, so
-  `Character` scales them with `height` like a generated outline; fill-only shapes get a zero
-  outline in their fill colour. Parent: `DEFAULT_PARENTS`, walking up to a part the file has (no
-  head: the eyes hang from the body). Draw order: the file's order (`order = 10 × index`). The
-  SVG's colours are kept (`colors:` unused). `Character(..., required=SVG_REQUIRED_PARTS)` (only
-  `body`).
-- **Actions a character cannot do** (`cast.ACTION_NEEDS`: action → alternatives of parts or
-  `part.shape`; `unavailable_actions(part_shapes)`, `missing_needs(part_shapes, action)`): `say`
-  mouth (Step 69 called it `say (lip sync)`), `blink` eyes.closed, `look_at` head, `emote` eyes or
-  brows or mouth, `gesture: point` / `wave` an arm, `shrug` both arms, `nod` / `shake_head` head.
-  Actions name their entry with `Action.character_needs()` and skip what a character lacks;
-  `vidgen validate` warns per use (§69.11).
-- **Validate**: `cast.character_look_problems(config, root)` (in `cli.project_problems`:
-  `characters[k].look.svg: ...`); `cast.character_look_warnings(config, root)` (in
-  `cli.validate_warnings`): the sanitiser's warnings, the split warnings, guessed pivots,
-  `colors` given (unused), a mouth with one shape (it will not move when speaking), and
-  `character 'x' (FILE): actions unavailable: gesture: wave (needs arm_left or arm_right); ...`.
-- **`vidgen character NAME`**: for an svg look prints `look: svg FILE`, `parts: arm_right, legs,
-  body, ..., eyes (open, closed), mouth (smile, A, E, O, M)` (`character_lines(entry, theme,
-  root)`) and `colors: the SVG's own`; `--png` works unchanged.
-- **Fingerprint**: a file under `assets/` is part of every scene's fingerprint (its stat); a
-  file elsewhere is not (documented: keep it under `assets/`).
-- **Example**: `examples/svg_character` (`assets/sprout.svg`, an original figure: every part,
-  `eyes_closed`, `mouth_A` / `_E` / `_O` / `_M`, pivots), with a generated character beside it.
-  Tests: `tests/test_cartoon_svg.py`.
+- **Splitting** (`split_character_svg`, `read_character_svg`; no manim): after
+  `svgclean.sanitize_svg` (§65), each drawn element belongs to the nearest enclosing element
+  whose id names a part (`part_key`: `<part>` rest, `<part>_<shape>` another shape; longest part
+  name wins). Unowned shapes go to `body` unless hidden in the file (then dropped). Rest names
+  `REST_SHAPE_NAMES` (`eyes` → `open`, `mouth` → `smile`, else `rest`). Each (part, shape) becomes
+  its own document (others removed, its ancestors un-hidden, viewBox kept).
+- **Pivots**: `data-pivot="x y"` in viewBox units (rest element's wins), else `default_pivot`
+  from the rest box; `pivot_warnings` for `TURNING_PARTS` without one.
+- **Errors** (`VidgenError`): unreadable file, sanitiser refusal, duplicate (part, shape), bad
+  `data-pivot`, no body. **Warnings**: near-miss ids, a non-rest shape shown in the file, an empty
+  part element.
+- **Shapes** (`svg_character_parts`): `vector_mobject.svg_shapes` per document, aligned by viewBox
+  top-left (Manim flips y about each drawing's centre); the rest shapes' union box defines
+  character units (x = middle of `legs`, else `body`). Strokes via `set_svg_stroke` at the
+  `REFERENCE_HEIGHT` factor. Draw order = file order. The SVG's colours are kept (`colors:` unused).
+- **`cast.ACTION_NEEDS`** (action → alternatives of parts or `part.shape`; `unavailable_actions`,
+  `missing_needs`): `say` mouth, `blink` eyes.closed, `look_at` head, `emote` eyes / brows /
+  mouth, `gesture: point` / `wave` an arm, `shrug` both arms, `nod` / `shake_head` head. Actions
+  declare `Action.character_needs()` and skip what a character lacks.
+- **Validate**: `cast.character_look_problems` / `character_look_warnings` (sanitiser and split
+  warnings, guessed pivots, unused `colors`, one-shape mouth, unavailable actions).
+- **Fingerprint**: an SVG under `assets/` is in every scene's fingerprint; elsewhere it is not.
+  Example: `examples/svg_character`.
 
 ### 69.3 Poses and expressions (Step 70)
 
-Named poses and expressions are tables of part settings, applied with `set_state`; a change
-between two of them is the `PoseChange` animation.
-
-- **Tables** (`cartoon/poses.py`, no manim): `POSES` (`stand, pointing, waving, thinking, shrug,
+- **Tables** (`cartoon/poses.py`): `POSES` (`stand, pointing, waving, thinking, shrug,
   arms_crossed, sitting`) and `EXPRESSIONS` (`neutral, happy, sad, angry, surprised, worried,
-  thinking`; since Step 125 `laughing, blushing, tongue_out, crying, dizzy, frightened`, §69.59),
-  each name -> part -> `PartPoseEntry(angle, scale, shift, shape)` (the config model of
-  `poses:`, so built-in and own entries are one type). A pose sets `POSE_PARTS` (`body, legs,
-  arm_left, arm_right, head, accessory`), an expression `EXPRESSION_PARTS` (`eyes, brows, mouth`;
-  since Step 125 `cheeks, bristles`),
-  so one of each combines; the parts of its group an entry does not name go back to rest (`stand`
-  is empty: everything at rest). Values are relative to the rest drawing: arms hang down, so
-  `pointing` turns `arm_left` (the near arm facing right) +88°; `sitting` lowers `body` 0.1 and
-  turns `legs` +80°; the rest mouth is a smile, so `sad` / `angry` / `worried` flip it with a
-  negative y scale. `shape` is a list of choices (`surprised`: mouth `open`, `O`, `A`): the first
-  the character has (`chosen_shape`), else the rest shape. A part the character lacks is skipped.
-  So every entry works on generated characters (brows gain the shapes `angry` / `sad`, inner ends
-  low / high) and on SVGs (`brows_angry` if the file has it; otherwise only the shift).
-- **Character** (`cartoon/character.py`): `Character(..., poses=, expressions=)` takes the
-  character's own tables; `names(kind)` (built-in first, then own; an own entry with a built-in
-  name replaces it), `posed_state(pose=None, expression=None) -> CharacterState` (the current
-  state with the entries applied; nothing drawn), `set_pose(name)`, `set_expression(name)`.
-  Unknown names raise `VidgenError` from `poses.find_entry`: `character 'pip': unknown pose
-  'pointng'; did you mean 'pointing'? poses: stand, pointing, ...`. `build_character` passes the
-  entry's `poses` / `expressions`.
-- **Own entries** (`characters[].poses` / `.expressions`, config): name -> part -> `{angle, scale,
-  shift, shape}`; a part outside the group, a zero scale or an unknown key is a config error.
-  `vidgen validate`: `cast.character_pose_problems` (a `shape` none of whose choices the
-  character has: `characters[0].expressions.grin.mouth.shape: character 'pip': part 'mouth' has
-  no shape 'wide' (shapes: smile, open, A, E, O, U, M, F, L, W)`) and `character_pose_warnings` (a part the character
-  does not have). Shapes are known without drawing: an svg look's from `read_character_svg`, a
-  generated one's from `cast.GENERATED_SHAPES` (a test keeps it equal to the generator's).
-  `vidgen character NAME` lists the known names (`cast.pose_lines`; own ones marked `*`).
+  thinking` and §69.59's), name → part → `PartPoseEntry(angle, scale, shift, shape)`. A pose sets
+  `POSE_PARTS` (`body, legs, arm_left, arm_right, head, accessory`), an expression
+  `EXPRESSION_PARTS` (`eyes, brows, mouth, cheeks, bristles`), so one of each combines; unnamed
+  parts of the group return to rest. Values are relative to the rest drawing. `shape` is a list:
+  the first the character has (`chosen_shape`), else rest; missing parts are skipped.
+- **Character**: `Character(..., poses=, expressions=)`; `names(kind)` (built-in, then own; an own
+  entry with a built-in name replaces it), `posed_state(pose=None, expression=None)`, `set_pose`,
+  `set_expression`; unknown names raise from `poses.find_entry` with did-you-mean.
+- **Own entries** (`characters[].poses` / `.expressions`): a part outside the group, zero scale
+  or unknown key is a config error; `cast.character_pose_problems` / `_warnings` check shapes and
+  parts without drawing (`cast.GENERATED_SHAPES`, kept equal to the generator's by a test).
 - **`PoseChange(character, *, pose=None, expression=None, state=None, facing=None,
   lag_ratio=0.15, part_rate_func=smooth, **animation_kwargs)`** (`cartoon/transition.py`,
-  exported): the target is resolved when it is created, the start when it begins. Each part
-  whose `PartPose` differs gets a window (`part_windows`: parts in `PART_NAMES` order, i.e. body,
-  legs, arms, head, then the face, each starting `lag_ratio` of a window after the previous; the
-  last ends at 1) and eases in it with `part_rate_func`; `blend_poses` mixes angle, scale and shift
-  linearly and switches the shape at the halfway point. The character is redrawn with
-  `set_state` each frame, so a turning part sweeps an arc about its pivot (not a cross-fade, not
-  `.animate`'s straight lines). `rate_func` (default `linear`) maps the animation's time first.
-  A facing change switches the mirror at the halfway point. `state=` with `pose` / `expression`
-  is a `TypeError`.
-- **Not done here**: no action uses poses yet (Step 78); the `stage` scene (§69.6) starts its
-  characters in a pose / expression. Blinking (Step 72,
-  §69.5) never shows during a `PoseChange`: `begin` calls `Character.end_blink()`. Tests: `tests/test_cartoon_poses.py`.
+  exported): target resolved at creation, start at `begin` (which calls `end_blink()`). Each
+  changed part eases in its own window (`part_windows`, `PART_NAMES` order, staggered by
+  `lag_ratio`, last ends at 1); `blend_poses` is linear and switches shape and facing at halfway;
+  redrawn with `set_state` per frame, so parts sweep arcs. `state=` with `pose` / `expression` is
+  a `TypeError`.
 
 ### 69.4 Lip sync: viseme tracks (Step 71)
 
-A beat's **viseme track** says which mouth shape shows when; a character's mouth follows it.
-`cartoon/visemes.py` (no manim) builds and stores tracks; `Character.lip_sync` plays one.
+`cartoon/visemes.py` (no manim) builds and stores tracks; `Character.lip_sync` plays them.
 
-- **Visemes** (`VISEMES`): `rest, A (also I), E (and most consonants), O, U, M (M B P), F (F V),
-  L (L, TH), W (W Q)`, the nine Preston Blair groups; their names are the SVG mouth shape names
-  of §69.2. `VISEME_SHAPES` gives each viseme's mouth shapes in order of preference (`U`: `U, O,
-  W, open`; `M`: `M` only; `F`: `F, E, M`; ...); none present (and `rest`) shows the rest shape.
-  Generated characters (§69.1) gain the mouth shapes `A E O U M F L W` (filled ellipses in the
-  `features` ink, `M` a line), so every viseme has its own shape; `cast.GENERATED_SHAPES` follows.
-- **Phonemes -> visemes** (`PHONEME_VISEMES`, one code point each): IPA from espeak-ng / misaki
-  and misaki's diphthong letters (`I` = aɪ -> `A, E`, `O` = oʊ -> `O, U`, `W` = aʊ -> `A, U`, `Y`
-  = ɔɪ -> `O, E`, `A` = eɪ -> `E`). Stress and length marks, `h`, the glottal stop and anything not
-  listed take no time. `phoneme_units` gives (viseme, weight): vowels 2, consonants 1 (a
-  diphthong splits its 2), a space a `rest` of 0.5. **Letter fallback** (`letter_units`): digraphs
-  (`th` L, `ph` F, `sh` / `ch` / `ck` / `ng` E, `wh` / `qu` W, `oo` U, `ee` E, `gh` silent), then
-  letters (`a` A; `e i y` E; `o` O; `u` U; `m b p` M; `f v` F; `l` L; `w q` W; `h` silent; other
-  Latin letters E; digits and other scripts A), a silent final `e` dropped where
-  `language_rules(...).silent_final_e` (checked before accents are removed: a final `é` is said).
-- **Phoneme sources** (`SOURCES`): `kokoro` — `KokoroProvider.last_phonemes`, set by every
-  `synthesize_timed`: `(token.phonemes, start, end)` per timed token (English), else `(result.phonemes,
-  chunk start, chunk end)` per chunk. Otherwise the spoken text, word by word, through
-  `text_g2p(language)`: the first of `G2P_BACKENDS` that loads — `misaki` (English: `en.G2P(trf=False,
-  british=en-GB/IE/AU/NZ, fallback=None)` only when `en_core_web_sm` is importable, since misaki
-  would pip-install it; other languages: `espeak.EspeakG2P` when `espeakng_loader` is importable),
-  then `espeak` (the `espeak-ng` program on `PATH`: `-q --ipa -v <voice> <word>`, voice = the tag
-  lower-cased, `en` -> `en-us`) — else `letters`. A word the G2P fails on or gives nothing for
-  uses its letters. Nothing is installed by schu-video-generator; none is needed (tests mock them).
-- **Timing** (`TIMINGS`): Kokoro's token times (`kokoro`), else the words of
-  `speech.beat_word_times(audio_dir, beat, spoken_text, 0, duration, language)` — the stored
-  alignment (`alignment`: ElevenLabs timestamps or Kokoro's `.align.json`), else the estimate
-  within the MP3's speech (`speech`), else over the beat (`estimate`). Each word's (or token's)
-  units share its time by weight (`cues_from_units`); `rest` fills the time between words and
-  around them, 0 .. the beat's duration (the MP3's length).
-- **Merge rule** (`merge_short_cues`, `MIN_CUE_SECONDS = 0.07`, two frames at 30 fps): neighbours
-  of one viseme join; then, shortest first, a cue shorter than the minimum goes to its longer
-  neighbour (the earlier on a tie), joining again, until none is short or one cue remains. A short
-  `M` is instead lengthened to the minimum from its longer neighbour when that one stays at least
-  the minimum (closed lips that never show read as mumbling). The cues stay contiguous.
-- **Storage** (`.visemes.json` next to the MP3, `write_visemes` / `read_visemes`): `{version: 1,
-  text (spoken), audio_sha1, source, timing, cues: [[start, end, viseme], ...]}` (seconds, 4
-  decimals). Like `.align.json`, it is used only while the MP3's sha1 and the spoken text match
-  (`speech.audio_digest`, made public; reads cached by mtime). `vidgen tts` (`run.py`) writes it
-  for every voiced or copied beat **when the video declares `characters:`** (`_store_visemes`: a
-  copied beat's stored track is copied; else built with Kokoro's phonemes or from the text), and
-  after the run writes the missing tracks of up-to-date beats (`_store_missing_visemes`: "wrote
-  viseme tracks (lip sync) for N beat(s) already voiced"; a beat whose MP3 cannot be read gets a
-  `note:`). The beat's `.hash` is unchanged (the track never re-voices a beat).
-- **Reading** (`beat_visemes(project, beat_id, duration=None) -> VisemeTrack`; scene shortcut
-  `NarratedScene.beat_visemes(beat)` with `beat_duration`): the stored track while current, else
-  built from the spoken text in memory (not written, so rendering never changes the inputs of its
-  own fingerprint). `VisemeTrack(cues, source, timing)`: `duration`, `at(seconds)` (`rest`
-  outside the cues).
-- **Fingerprint**: in a video with `characters:`, each scene's fingerprint has `visemes`: the
-  stat of every beat's `.visemes.json` and `.align.json` (videos without characters keep their
-  fingerprints' shape).
-- **Character** (`cartoon/character.py`): `viseme_shape(viseme)` (the first of `VISEME_SHAPES` it
-  has, or `None`; an unknown viseme is a `VidgenError`), `show_viseme(viseme, rest=None)` (sets
-  the mouth's pose shape; swaps only when the shape changes), `lip_sync(track, *, start=0.0,
-  clock=None)`: adds the updater `Character._lip_sync_step` (a plain method, like idle's) that
-  shows `track.at(seconds)`; `seconds` is `clock()` when a clock is given (Step 78: the scene's
-  time since the beat started, `NarratedScene.beat_clock`), else `start` plus the frames' `dt`.
-  The viseme's shape is a layer over the mouth's pose (`_spoken`, shown by `_shape_name`), so the
-  pose (the expression's shape, scale and angle: a `sad` flipped mouth speaks flipped) is never
-  changed; `rest`, or a viseme without a shape, shows the pose's shape, also one set while
-  speaking. It replaces a running lip sync; `stop_lip_sync()` removes the layer; `lip_sync_track`
-  is the running track; `sync_mouth()` shows the viseme for the clock now. No mouth: all do
-  nothing (`ACTION_NEEDS["say"]`). Manim suspends a mobject's updaters while an `Animation` plays
-  on it: `PoseChange` calls `sync_mouth()` on every frame, so with a clock the mouth stays in
-  step through a pose change; other animations on the character hold it, and it catches up when
-  they end (Step 72 left this open: the `dt` clock fell behind by every such animation).
-- **API**: `vidgen.api` exports `VISEMES`, `VisemeCue`, `VisemeTrack`; `Character.lip_sync`,
-  `stop_lip_sync`, `show_viseme`, `viseme_shape`; `NarratedScene.beat_visemes`.
-- **Also**: `audio_duration` moved from `scene.py` to `speech.py` (no manim; `scene` re-imports
-  it), so `vidgen tts` measures MP3s without loading Manim.
-- **Speaking** (Step 78, §69.11): a `stage` makes the characters with the beat's voice speak; the
-  `say` action picks them instead. No per-language phoneme tables beyond IPA; no coarticulation (each
-  phoneme is one shape). Tests: `tests/test_cartoon_visemes.py`.
+- **Visemes** (`VISEMES`): `rest, A, E, O, U, M, F, L, W` (Preston Blair groups; also the SVG
+  mouth shape names). `VISEME_SHAPES` lists each viseme's shapes by preference; none present
+  shows the rest shape.
+- **Phonemes → visemes**: `PHONEME_VISEMES` (IPA and misaki's diphthong letters; marks, `h`, the
+  glottal stop and unknown symbols take no time); `phoneme_units` weights vowels 2, consonants 1,
+  a space `rest` 0.5. Fallback `letter_units` (digraphs, then letters; a silent final `e` per
+  `language_rules(...).silent_final_e`).
+- **Sources** (`SOURCES`): `kokoro` (`KokoroProvider.last_phonemes` from `synthesize_timed`), else
+  per word through `text_g2p(language)`: the first loadable of `G2P_BACKENDS` — `misaki`
+  (English only when `en_core_web_sm` is importable, since misaki would pip-install it; other
+  languages when `espeakng_loader` is), `espeak` (`espeak-ng` on `PATH`) — else `letters`.
+  Nothing is installed; tests mock them.
+- **Timing** (`TIMINGS`): Kokoro token times, else `speech.beat_word_times` (`alignment`,
+  `speech`, `estimate`); units share their word's time by weight; `rest` fills the gaps, 0 .. the
+  MP3's length.
+- **Merge rule** (`merge_short_cues`, `MIN_CUE_SECONDS = 0.07`): equal neighbours join; shortest
+  first, a cue under the minimum goes to its longer neighbour (earlier on a tie), except a short
+  `M` is lengthened from its longer neighbour if that stays ≥ the minimum. Cues stay contiguous.
+- **Storage**: `.visemes.json` next to the MP3: `{version: 1, text, audio_sha1, source, timing,
+  cues: [[start, end, viseme], ...]}` (4 decimals); valid only while the MP3's sha1 and spoken
+  text match. `vidgen tts` writes it for voiced or copied beats when the video declares
+  `characters:`, and writes missing tracks of up-to-date beats; the beat's `.hash` is unchanged.
+- **Reading**: `beat_visemes(project, beat_id, duration=None) -> VisemeTrack(cues, source,
+  timing)` (`at(seconds)`, `duration`): the stored track, else built in memory and not written (a
+  render never changes its own fingerprint inputs).
+- **Fingerprint**: with `characters:`, each scene's fingerprint has `visemes` (stats of every
+  beat's `.visemes.json` and `.align.json`); without characters the shape is unchanged.
+- **Character**: `viseme_shape`, `show_viseme`, `lip_sync(track, *, start=0.0, clock=None)` (a
+  plain-method updater; time = `clock()` or `start` + frame `dt`s), `stop_lip_sync`,
+  `lip_sync_track`, `sync_mouth`. The viseme is a layer over the mouth's pose (`_spoken`): the
+  pose's scale and angle stay (a flipped `sad` mouth speaks flipped); `rest` shows the pose's
+  shape. No mouth: no-ops. Manim suspends updaters during an animation on the mobject, so
+  animations call `sync_mouth()` each frame to keep a clocked mouth in step.
+- **API**: `VISEMES`, `VisemeCue`, `VisemeTrack` exported. `audio_duration` is in `speech.py` (no
+  manim).
 
 ### 69.5 Automatic life: blinking and idle motion (Step 72)
 
-A character from `characters:` breathes, sways its head slightly and blinks on its own, so it
-does not freeze between actions. The motion is a layer on top of the poses, driven by one
-updater, so `PoseChange` (§69.3) and `lip_sync` (§69.4) never fight with it.
+Breathing, head sway and blinks as one updater-driven layer over the poses.
 
-- **Schedule** (`cartoon/idle.py`, no manim): blinks start `next_blink_gap(rng)` apart on the
-  character's *idle clock*, uniform in `BLINK_GAP_SECONDS = (2, 6)` from `random.Random(seed)`
-  (`random()` only, as in §69.1, so a seed gives the same blinks on every Python version), the
-  first one a gap after the clock starts; each keeps the eyes `closed` for `BLINK_SECONDS = 0.15`.
-  The seed defaults to `idle_seed(name)` (CRC-32 of the name), so two characters do not blink
-  together. Breathing: `breath_scale(seconds, seed)` scales the body about its pivot (the bottom
-  of the body; its children follow) by at most `BREATH_SCALE = (0.006, 0.015)` (x, y), one breath
-  every `BREATH_SECONDS = 3.6`; head sway: `sway_angle(seconds, seed)` turns the head by at most
-  2 × `SWAY_DEGREES = 1.5`° every `SWAY_SECONDS = 5.5`. Both are 0 at the clock's start (the
-  phases come from the seed), so a still at time 0 is the plain pose.
-- **Idle clock and pose changes**: the clock advances by each frame's `dt` in the updater, and
-  Manim suspends a mobject's updaters while an animation plays on it, so the clock stops during a
-  `PoseChange` (and any other animation played on the character): no blink starts there, and the
-  breath and sway hold. `PoseChange.begin` calls `Character.end_blink()`, so a blink running when
-  it starts ends at once (it is not resumed). `blink_times(seed, duration, *, pose_changes=())`
-  gives exactly this schedule in scene seconds, `(start, end)` per blink, without drawing: the
-  idle clock mapped past each pose change window (a blink due at a window's start comes after
-  it), a blink cut at the start of the next window. `IdleClock` (seed, `seconds`, `advance(dt)`,
-  `is_blinking`, `end_blink()`) is the running state the updater keeps; a test checks it against
-  `blink_times` frame by frame.
-- **Character** (`cartoon/character.py`): `start_idle(seed=None)` adds the updater
-  `Character._idle_step` (a plain method, so `copy()` gets its own clock), `stop_idle()` removes
-  it and the layer, `end_blink()`, `is_idle`, `shown_shape(part)` (the shape on screen, a blink
-  included). The layer is `_overlays`: part -> `PartPose` (body: scale; head: angle; eyes: shape
-  `closed` while blinking), applied after the part's pose about the same pivot (`world(part) =
-  world(parent) · pose(part) · overlay(part)`); an overlay's shape is shown instead of the
-  pose's. `state()` / `set_state()` / `posed_state()` hold the poses only, so `PoseChange` blends
-  and stores no idle values, an expression set during a blink shows once the blink ends, and the
-  mouth (lip sync) is never touched by the layer. A character without `head` does not sway;
-  without an `eyes` shape `closed` it does not blink (`ACTION_NEEDS["blink"]`, §69.2).
-- **Config**: `characters[].idle: bool = True`; `build_character` (so `character(name)`) calls
-  `start_idle()` unless it is false. A `Character` built directly from parts does not idle until
-  `start_idle()`.
-- **Per scene**: the `stage` scene's `idle: false` calls `stop_idle()` on its characters (§69.6).
-- **Not done here**: `PoseChange`, `Walk`, `Gesture` and `Jump` (§69.12) end a running blink;
-  another animation played on the character (e.g. `.animate.shift`) holds the eyes as they are
-  until it ends. Lip sync (§69.4) has
-  its own clock (the scene's time since Step 78), so it does not fall behind during an animation.
-  Tests: `tests/test_cartoon_idle.py`.
+- **Schedule** (`cartoon/idle.py`, no manim): blink gaps uniform in `BLINK_GAP_SECONDS = (2, 6)`
+  from `random.Random(seed)` (`random()` only), each `BLINK_SECONDS = 0.15`; seed default
+  `idle_seed(name)` (CRC-32), so characters do not blink together. `breath_scale` and
+  `sway_angle` are periodic and 0 at the clock's start (a still at time 0 is the plain pose).
+- **Idle clock**: advances by `dt` in the updater, so it stops during any animation on the
+  character. `PoseChange`, `Walk`, `Gesture`, `Jump` end a running blink at `begin`.
+  `blink_times(seed, duration, *, pose_changes=())` gives the schedule in scene seconds without
+  drawing; `IdleClock` is the running state (a test checks both agree frame by frame).
+- **Character**: `start_idle(seed=None)` (a plain-method updater, so `copy()` gets its own clock),
+  `stop_idle`, `end_blink`, `is_idle`, `shown_shape(part)`. The layer is `_overlays` (body scale,
+  head angle, eyes `closed`), applied after the pose; `state()` / `set_state()` hold poses only,
+  and the mouth is never touched. No `head`: no sway; no `eyes.closed`: no blink.
+- **Config**: `characters[].idle: bool = True` (`build_character` starts it); stage `idle: false`
+  stops it. A `Character` built from parts does not idle until `start_idle()`.
 
 ### 69.6 The `stage` scene type (Step 73)
 
-A built-in scene type (`scenes/stage.py`) that puts the video's characters on a set: a
-background, a ground line, named marks and depth. Its geometry lives in `cartoon/stage.py` (no
-manim), so it is tested without rendering and later steps (props, Step 75; walking, Step 79;
-lint, Step 84) reuse it.
+`scenes/stage.py`; geometry in `cartoon/stage.py` (no manim). Keys: docs/CONFIG.md#stage.
 
-- **Geometry** (`cartoon/stage.py`): x positions are fractions of the frame width (0 = left
-  edge), the ground line's height a fraction of the frame height above the bottom edge, sizes
-  fractions of the frame's shorter side (8 units in every aspect, so a character is as tall in 9:16
-  as in 16:9). `MARKS` = `far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9`; a
-  stage's own `marks` are added (same name: its own wins). `mark_x(at, marks)` (a mark or an x in
-  0..1; `ValueError` with did-you-mean and the known marks otherwise). Depth 0..1:
-  `depth_scale(d) = 1 - (1 - FAR_SCALE) d` (`FAR_SCALE = 0.55`), the feet `FAR_RISE = 0.12` × the
-  frame height higher at depth 1 (`feet_point`). `draw_order(depths)`: deeper first, ties in list
-  order. `stage_layout(items, marks=, ground=, size=, frame_width=, frame_height=) ->
-  [StagePlacement]` in draw order: `StageItem(name, kind, at, depth, scale, lift=0)` in, `StagePlacement(name, kind,
-  index, x_fraction, depth, feet, height)` out (`height = size × short side × scale ×
-  depth_scale`; `lift`, Step 75, raises the feet by that fraction of the frame height). `kind`
-  is `character` or `prop` (§69.8); both sort together by depth. `facing_towards_centre(x)`: `right` on the left half and in
-  the middle, else `left`.
-- **Params** (`Stage.Params`): `image` (a file, checked by `image`'s `check_image`; raster via
-  `load_image`, `.svg` via `load_vector`) or `generate` (a top-level `GenerateImage`, so `vidgen
-  imagegen` finds it like `image`'s; a placeholder until made) — both scaled to cover the frame,
-  centred, named `background`; else `background`: a colour or a list of two or more (a vertical
-  gradient: one `Rectangle` filled with the colours, `sheen_direction` DOWN, first colour at the
-  top); none: nothing drawn (the theme's background). `image` with `generate`, or either with
-  `background`, is an error. `ground` (0..0.6, default 0.2); `ground_color` (a band from the
-  bottom edge up to `ground_top(ground, items)`: the ground line, or the line where the deepest
-  character or prop on the ground stands, §69.22; named `ground`; default `surface` without a picture, nothing
-  with one; `false`: nothing). `marks` (identifier -> 0..1). `size` (0.45). `idle` (true). `cartoon_motion` (none: the video's; §69.13).
-  `characters: list[StageCharacter]` (a string is the name): `name: CharacterName`, `at` (mark or
-  x), `depth` 0..1, `scale` (0, 3], `facing` `auto | right | left`, `pose`, `expression` (none:
-  rest). A name twice or an unknown mark is a params error (`characters[k].at: unknown mark ...`).
-  `validate_project` checks the image file and each pose / expression with
-  `cast.pose_name_problem` (exported; the built-in and the character's own tables) (`characters[0].pose: character 'kit': unknown pose 'pointng';
-  did you mean 'pointing'? poses: ...`); the name itself is the `CharacterName` check.
-- **Construct**: `stage_layout` with the frame size; each character is `character(name,
-  height=placement.height, facing=...)` (the theme's colours, idle running unless the entry says
-  `idle: false`), then `set_pose` / `set_expression`, `stop_idle()` when the scene says `idle:
-  false`, and shifted so `feet()` is the placement's feet. **Starting state** is this minimal
-  pose / expression / facing per character; actions change it later (Step 78). One reveal step:
-  the backdrop parts fade in with every character's entrance (targets registered back to front,
-  so the fade-ins add, and Manim draws, them in that order); later beats hold (idle motion
-  runs); `finish()` fades out (outro 0.5 s).
-- **Targets**: each character by its name (`target_patterns = ("<character>",)`), so `dim`,
-  `highlight`, `zoom`, `reveal` and `callout` work on characters today.
-- **Layout dump / lint**: `introspect` reports a `Character` as one object of kind `character`
-  whose `name` is the character's (its box: every drawn part; the invisible anchor has opacity 0
-  and is left out); the picture or colour is `background`, the band `ground`. `lint`'s
-  `describe` names it `character 'pip'`, and `lint_ignore` matches it by that name. The rules specific to characters are §69.12's
-  `walk_overlap` and §69.17's.
-- **Guide and gallery**: the author guide's `scenes` topic has a `# cartoons` block that is a
-  config (`characters:` + `scenes:`), since a stage needs declared characters. `gallery.guide_samples`
-  reads such a block as one sample per scene, shown whole, with `Sample.characters`;
-  `work_config` adds the samples' characters to the work project. `tests/test_guide.py` accepts
-  both block forms.
-- **Hooks for Step 78+**: `Stage.cast` (name -> `Character`, back to front) is set in
-  `construct`. Step 78 (§69.11) built speaking (`Stage.narrate`) and the acting actions on it;
-  walking (Step 79, §69.12) moves the feet along the ground line at the character's depth (it
-  keeps its depth, so the draw order stays).
-- **Not done here**: props (Step 75), speech and acting (Steps 78–79, §69.11), cartoon lint
-  rules (Step 84). Parallax layers, a stage wider than the frame and the camera actions are Step 74 (§69.7).
-  Tests: `tests/test_cartoon_stage.py`.
+- **Geometry**: x is a fraction of the stage width, the ground line a fraction of the frame
+  height, sizes fractions of the frame's shorter side (8 units in every aspect). `MARKS` =
+  `far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9` plus the stage's own (own
+  wins); `mark_x` raises `ValueError` with did-you-mean. Depth 0..1: `depth_scale(d) = 1 - (1 -
+  FAR_SCALE) d` (`FAR_SCALE = 0.55`), feet `FAR_RISE = 0.12` frame heights higher at depth 1.
+  `stage_layout(items, marks=, ground=, size=, frame_width=, frame_height=, stage_width=)`:
+  `StageItem(name, kind, at, depth, scale, lift=0)` → `StagePlacement(name, kind, index,
+  x_fraction, depth, feet, height)` in draw order (deeper first, ties in list order); `kind`
+  `character` or `prop`. `facing_towards_centre(x)`.
+- **Params** (`Stage.Params`): `image` or `generate` (a top-level `GenerateImage`, so `vidgen
+  imagegen` finds it) or `background` (colour or vertical gradient), mutually exclusive;
+  `ground` (0..0.6, 0.2), `ground_color` (band up to `ground_top`, §69.22; default `surface`
+  without a picture, none with one), `marks`, `size` (0.45), `idle`, `cartoon_motion`,
+  `characters: list[StageCharacter]` (`name`, `at`, `depth`, `scale` (0, 3], `facing` `auto |
+  right | left`, `pose`, `expression`). Duplicate names and unknown marks are params errors;
+  `validate_project` checks images and `cast.pose_name_problem` (exported).
+- **Construct**: each character is `character(name, height=placement.height, facing=)`, posed
+  and moved so `feet()` is at the placement. One reveal step fades in backdrop and characters
+  (registered back to front, which is Manim's draw order); `finish()` fades out (0.5 s).
+- **Targets**: characters by name (`target_patterns = ("<character>",)`), so generic actions work
+  on them. `Stage.cast` (name → `Character`, back to front).
+- **Layout dump / lint**: a `Character` is one object of kind `character` (box over drawn parts,
+  anchor excluded); the picture or colour is `background`, the band `ground`; lint names it
+  `character 'pip'` and `lint_ignore` matches that.
+- **Guide and gallery**: the guide's `# cartoons` block is a whole config (`characters:` +
+  `scenes:`); `gallery.guide_samples` reads one sample per scene with `Sample.characters`.
 
 ### 69.7 Parallax layers and the camera on a stage (Step 74)
 
-A `stage` can be wider than the frame and have layers (pictures or shapes) that move by a
-*parallax factor* when the camera moves. The camera moves with beat actions: the existing `zoom`
-and the new `pan` and `follow`, which are generic (any scene type) and reuse `MoveCamera`.
-
-- **Layer offsets** (`cartoon/stage.py`, no manim): a layer is drawn for the camera's *home view*
-  (centre at the origin = the stage's centre, zoom 1). `layer_transform(factor, camera_center,
-  zoom) -> (scale, (dx, dy))` gives the move that makes it appear moved by `factor` × the
-  camera's move and magnified by `zoom ** factor` (zoom = frame width / view width): a home point
-  `b` is put at `k b + c (1 - factor k)`, `k = zoom ** (factor - 1)`, so it shows at `zoom **
-  factor (b - factor c)` from the view's centre. Factor 1 (the stage, its ground and characters):
-  no change; 0: fixed on screen; < 1 far, > 1 near. `layer_half_extent(factor, stage_width=,
-  frame_width=, frame_height=, max_zoom=MAX_ZOOM (8))` is the half size a layer must cover so no
-  view inside the stage at zoom 1–8 shows its edge (`half view / z ** factor + factor × the
-  farthest view centre`, maximised over a 64-step grid of `z`; a test checks random views).
-  `LAYER_PLACES = (background, middle, foreground)`, `DEFAULT_FACTORS` 0.3 / 0.6 / 1.4.
-- **Camera bounds** (`camera.py`, no manim): `view_center_within(bounds, center, width, height)`
-  clamps a view's centre into `(left, right, bottom, top)` (the bounds' middle on an axis where
-  the view is larger). `NarratedScene.camera_bounds()` is the frame; `Stage` returns its width ×
-  the frame height. `zoom` now clamps with it (was the frame), so a zoom on a wide stage stays on
-  the stage.
-- **Stage params** (§69.6 plus): `width` (1–4 frame widths; marks and x are fractions of the
-  stage, `stage_layout(..., stage_width=)`; a reframing stage in a frame narrower than 16:9
-  counts in 16:9 frame widths, §69.30; sizes still follow the frame's shorter side; the
-  picture covers the stage, the colour / gradient and ground band span it), `camera_at` (a mark
-  or x: the view's centre at the start, clamped), `layers: [StageLayer]` = `{name, place,
-  factor, image | shapes, bottom}` (one of `image` / `shapes`; names default to
-  `<place>_layer`, then `_2`...; a name twice is an error; `validate_project` checks layer
-  images with `check_image`). An image layer is scaled to the layer's width (`2 × half extent`)
-  with its bottom edge at `bottom`; shapes (`LayerShape`: `rect`, `ellipse`, `triangle` at `x`
-  of the stage and bottom `y` of the frame height, `width` / `height` of the short side, `color`;
-  `hills`: `hill_outline`, a row of sine-arc hills over the layer's whole width filled down to
-  its lower extent). Draw order: picture / colour, background then middle layers, ground band,
-  characters (back to front), foreground layers; the entrance fades them in in that order.
-  `Stage.layers` (name -> mobject) like `Stage.cast`. Each layer mobject is named after it
-  (layout dump, lint).
-- **Moving the layers**: the stage keeps every layer member's points at the home view
-  (`_Parallax`) and, when some factor is not 1, registers `_move_layers` with
-  `NarratedScene.add_camera_listener`: on every frame each member's points are set to `home ×
-  scale + shift` for the camera now. Starting from the home points (not the last frame's) means
-  an animation of the layer (its fade-in copies points) can never shift it.
-- **Camera driver** (`NarratedScene`): `follow_with_camera(x_of)` (a callable giving the x to
-  follow; `None` stops; `camera_following` reads it) and `add_camera_listener(callback)` share
-  one scene updater, `_camera_step`: first the follow (the frame's centre x set to `x_of()`
-  inside `camera_bounds` at the view's size), then the listeners. A scene updater runs after
-  every animation and mobject updater of the frame, and Manim never suspends it (a `MoveCamera`
-  suspends the frame's own updaters), so layers move during a zoom or pan and never lag a frame.
-  While the camera follows something, `get_moving_mobjects` returns every mobject: otherwise
-  Manim draws the ones before the first moving mobject once into a static image, for the camera
-  as it was (with listeners only, Step 87 lets Manim keep that image; §69.20).
-- **`pan`** (`scenes/actions.py`; run_time 1.5, reversible, not temporary, `needs_target =
-  False`, moves_camera): option `to` (a mark name or an x 0..1 of `camera_bounds`' width) or a
-  target (one of the two: `problems`). Ends a `follow`, then a `MoveCamera` keeping the view's
-  size and y (Step 96: `cut: true` moves the frame at once, §69.30). `until` moves back to the view before. Marks: the new classmethod
-  `NarratedScene.camera_place(params, place)` (a number is itself, a name `ValueError`; `Stage`:
-  `mark_x` with its own marks), checked at validate time through the new hook
-  `Action.scene_problems(scene_cls, params)` (called by `scene_actions` when params are valid).
-- **`follow`** (run_time 1.0, reversible, moves_camera; one target pattern): pans to the target
-  (`_MoveThenFollow`, a `MoveCamera` that calls `follow_with_camera` in
-  `clean_up_from_scene`, so it starts after the move, also when the runner applies it without
-  animation) and then follows it to the end of the scene; `until` stops following (the camera
-  stays), unless a later `follow` took over. A `Character` is followed by its `feet()` x (a
-  pointing arm does not move the camera), anything else by its centre.
-- **`zoom` coming back**: `revert` returns to the view *before the zoom* (`camera_view` /
-  `move_camera_back`), not to the whole frame. Without other camera moves it is the same; after
-  a `pan` or on a stage with `camera_at`, the camera no longer jumps home.
-- **Lint**: `StillContext.camera_moved` (zoomed, or the view's centre away from the frame's
-  centre); `off_frame` and `safe_area` skip such stills (they skipped zoomed ones).
-- **Not done here**: a followed character that walks (§69.12) is followed by x only (the view's
-  y and zoom stay; a `follow` due with a walk plays with it and catches up, §69.12); `zoom` on another character while following keeps the followed one in the
-  middle. An image layer's bottom stays at `bottom`, so a near layer (factor > 1) zoomed in at the
-  bottom of the stage can show a sliver below it. No vertical pan. Layers are not action targets.
-  Tests: `tests/test_cartoon_parallax.py`.
+- **Layer math** (`cartoon/stage.py`): layers are drawn for the home view (stage centre, zoom
+  1). `layer_transform(factor, camera_center, zoom) -> (scale, (dx, dy))` puts a home point `b`
+  at `k b + c (1 - factor k)`, `k = zoom ** (factor - 1)`: factor 1 moves with the stage, 0 is
+  fixed on screen, < 1 far, > 1 near. `layer_half_extent(..., max_zoom=MAX_ZOOM 8)` is the half
+  size that never shows an edge for views inside the stage at zoom 1–8. `LAYER_PLACES =
+  (background, middle, foreground)`, `DEFAULT_FACTORS` 0.3 / 0.6 / 1.4.
+- **Camera bounds** (`camera.py`): `view_center_within(bounds, center, width, height)`;
+  `NarratedScene.camera_bounds()` is the frame, `Stage`'s its width × frame height; `zoom` clamps
+  with it.
+- **Stage params**: `width` (1–4 frame widths; a reframing stage narrower than 16:9 counts in
+  16:9 widths, §69.30), `camera_at`, `layers: [StageLayer{name, place, factor, image | shapes,
+  bottom}]` (names default `<place>_layer`, `_2`...; `LayerShape` `rect`, `ellipse`, `triangle`,
+  `hills`). Draw order: backdrop, background and middle layers, ground band, characters,
+  foreground layers. `Stage.layers`; each layer mobject is named after it.
+- **Moving layers**: home points are kept (`_Parallax`); `_move_layers`, registered with
+  `NarratedScene.add_camera_listener` when a factor is not 1, sets `home × scale + shift` each
+  frame (from home points, so a layer's own animation never shifts it).
+- **Camera driver**: `follow_with_camera(x_of)` (`None` stops; `camera_following`) and
+  `add_camera_listener` share the scene updater `_camera_step` (follow first, then listeners).
+  Scene updaters run after all mobject updaters and are never suspended, so layers never lag.
+  While following, `get_moving_mobjects` returns every mobject (§69.20).
+- **`pan`** (`scenes/actions.py`; 1.5 s, reversible, no target needed, moves the camera): `to` a
+  mark / x of `camera_bounds` or a target (exactly one); ends a `follow`; keeps view size and y;
+  `cut: true` jumps (§69.30). Marks resolve via classmethod `NarratedScene.camera_place(params,
+  place)`, checked at validate by the hook `Action.scene_problems(scene_cls, params)`.
+- **`follow`** (1.0 s, reversible; one target): pans to the target (`_MoveThenFollow`, which
+  starts following in `clean_up_from_scene`) and follows its x to the scene's end (a `Character`
+  by `feet()` x); `until` stops unless a later `follow` took over.
+- **`zoom` revert** returns to the view before the zoom (`camera_view` / `move_camera_back`).
+- **Lint**: `StillContext.camera_moved`; `off_frame` and `safe_area` skip such stills.
+- **Limits**: no vertical pan; layers are not targets; a near image layer zoomed in low can show
+  a sliver below its `bottom`.
 
 ### 69.8 Props (Step 75)
 
-Things on a stage that are not characters: built-in props drawn from primitives, or SVG files.
-They are placed by the same `stage_layout` as the characters and sort with them by depth.
-
-- **Built-in props** (`cartoon/props.py`): `PROP_KINDS = table, chair, tree, bush, house, door,
-  lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup` (and `basket, umbrella,
-  napkin` since Step 103, §69.37; twelve pieces of furniture since Step 110, §69.43). Each is drawn in *prop
-  units* (feet at the origin, `y` up, top at 1) from rectangles, rounded rectangles, circles,
-  ellipses, polygons (some with rounded corners), lines and `Union`s of circles (a tree's crown,
-  a bush, a cloud: one outline). Colours: two per prop, `main` and `detail` (`PROP_COLORS`, theme
-  tokens, except the cloud's fixed light `#F4F6FA` and the window glass `GLASS`), plus shades of
-  them (`SHADE` 0.25 towards black, `LIGHT` 0.4 towards white) and the characters' outline ink
-  `CHARACTER_INK`, stroke `OUTLINE_WIDTH`. Every shape is original; no option names or imitates
-  a known design.
-- **`Prop(VGroup)`**: `name`, `kind` (a `PROP_KINDS` name or `svg`), `facing`; `feet()` is the
-  middle of its bottom edge. `draw_prop(kind, *, height, theme, name=None, main=None,
-  detail=None, facing="right", character_height=None)` scales the drawing to `height` and its
-  strokes like a character's of `character_height` (`scale_strokes` / `one_pixel_stroke` of
-  `character.py`, made public for this), so a cup and a house next to a character share its
-  outline width; `facing="left"` mirrors it. `svg_prop(path, *, height, name, theme=None,
-  recolor="none", facing="right", where=None)` loads the file with `load_vector` (sanitised by
-  `svgclean`, sanitiser warnings logged; `recolor: theme` maps colours to the theme's) and stands
-  it on the bottom edge of its `viewBox`.
-- **Sizes**: `PROP_HEIGHTS` gives each prop's height relative to a character (the stage's
-  `size`): table 0.42, chair 0.26, tree 1.7, bush 0.35, house 1.6, door 1.0, lamp 1.5, sign 0.75,
-  box 0.155, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.155, plant 0.4, laptop 0.14, cup 0.09,
-  basket 0.2, umbrella 0.6, napkin 0.05 (chair 0.5, box 0.3, rock 0.22 before Step 102, §69.36);
-  an SVG `SVG_PROP_HEIGHT` 0.5. The stage passes `height factor × scale` as the item's `scale`.
-  `PROP_LIFTS`: `cloud`, `sun`, `moon` hang 0.5 of the frame height above the ground line unless
-  `lift` says otherwise.
-- **Stage params**: `props: list[StageProp]`; a string is a built-in prop's name. `StageProp`:
-  `prop` (one of `PROP_KINDS`) or `svg` (a `.svg` file relative to the project; one of the two),
-  `name`, `at` (mark or x), `depth`, `scale` (0, 5], `lift` (0..1 or default), `facing` (`right`
-  | `left`), `color` / `detail` (built-in props only), `recolor` (`none` | `theme`, SVG only).
-  Names default to the prop's name (an SVG: its file stem made an identifier), numbered from the
-  second (`tree`, `tree_2`, `Params.prop_names`). Errors: a name twice, a prop named like a
-  character on the stage, an unknown mark (`props[k].at: ...`), both or neither of `prop` / `svg`.
-  `validate_project` checks SVG files with `image`'s `check_image` (missing, sanitiser refusal).
-- **Construct**: `Params.items()` lists the props first, then the characters (`StageItem(name,
-  "prop", at, depth, height factor, lift)`), so at the same depth a character is drawn in front of
-  a prop (a character behind a table: give it a larger depth). Each placement builds its prop or
-  character; all are registered as targets back to front (they fade in with the set at step 1).
-  `Stage.props` (name -> `Prop`, back to front) next to `Stage.cast`.
-- **Targets**: `target_patterns = ("<character>", "<prop>")`; `target_names` = the characters,
-  then the props. `dim`, `highlight`, `zoom`, `pan` / `follow` (by its centre) work on props.
-- **Layout dump / lint**: `introspect` reports a `Prop` (an SVG one too, not a `vector`) as one
-  object of kind `prop` named after it; `describe` gives `prop 'tree'`.
-- **Gallery still**: `still.write_props_png(theme, path, width=960, height=540)` draws every
-  built-in prop with its name in a 6-column grid, a prop with shapes once per shape (`umbrella`,
-  `umbrella (open)`; 64-colour palette PNG, about 20 KB):
-  `docs/gallery/media/props.png`, shown in CONFIG.md.
-- **Not done here**: putting a prop on another one (`lift` is in frame heights: a laptop on a
-  table needs the table's height worked out by hand); props do not move or animate (Step 79's
-  motion, Step 76's particles; Step 93's characters carry and throw them, §69.27). An SVG prop outside `assets/` is not in the scene fingerprint.
-  Tests: `tests/test_cartoon_props.py`.
+- **Built-in props** (`cartoon/props.py`): the set is `PROP_KINDS`, heights relative to a
+  character in `PROP_HEIGHTS` (SVG `SVG_PROP_HEIGHT` 0.5), colours `PROP_COLORS` (`main`,
+  `detail` theme tokens), `PROP_LIFTS` (`cloud`, `sun`, `moon` hang 0.5 frame heights up). Drawn
+  in prop units (feet at origin, top 1) from primitives in `CHARACTER_INK` outline; all original.
+  Gallery image: `still.write_props_png` → `docs/gallery/media/props.png`.
+- **`Prop(VGroup)`** (`name`, `kind`, `facing`, `feet()`): `draw_prop(kind, *, height, theme,
+  name=None, main=None, detail=None, facing="right", character_height=None)` scales strokes like
+  a character of `character_height` (`scale_strokes` / `one_pixel_stroke`); `svg_prop(path, *,
+  height, name, theme=None, recolor="none", facing="right", where=None)` (sanitised; stands on
+  its viewBox bottom).
+- **Stage `props`** (`StageProp`: `prop` or `svg`, `name`, `at`, `depth`, `scale` (0, 5], `lift`,
+  `facing`, `color` / `detail`, `recolor`; a string is a built-in name). Names default to the kind
+  (SVG: file stem), numbered from the second (`tree_2`); duplicates and names clashing with
+  characters are errors. `Params.items()` lists props before characters, so at equal depth a
+  character is in front. `Stage.props`; `target_patterns = ("<character>", "<prop>")`.
+- **Layout dump**: kind `prop` (`prop 'tree'`). An SVG prop outside `assets/` is not in the
+  fingerprint.
 
 ### 69.9 Particles (Step 76)
 
-Rain, snow, sparkles, dust, confetti, smoke and bubbles: a field of small shapes that falls,
-drifts, spins or rises over a scene. On a `stage` for the whole scene (`particles` param); on any
-scene type from a beat (the `particles` beat action). Nothing like it existed before (the
-cookbook's `_looping_particles` is an example file, not library code), so the step adds the model
-and reuses the action machinery rather than overlays. (Step 105 makes rain on a `stage` end on
-its ground and shelters, with splashes, puddles and a rain sound bed: §69.39.)
-
 - **Model** (`particles.py`, no manim): `PARTICLE_KINDS = rain, snow, sparkles, dust, confetti,
-  smoke, bubbles` (Step 104 adds `leaves` and `streaks`, §69.38); `KINDS` (kind -> `ParticleKind`: shape `streak | dot | star | chip | ring`,
-  `count` per whole frame at density 1, size range, `fall` (negative: rises), speed range,
-  `drift` (rain's slant, or a random one for dust), sway amplitude / Hz, `spin`, `twinkle`,
-  `grow`, opacity, default colours). Sizes and speeds are fractions of the frame's shorter side
-  (per second). `particle_seeds(kind, count, seed, colors)` draws each particle's start from
-  `numpy.random.default_rng([seed, kind index])` once; `particle_states(seeds, t, width, height)`
-  is a pure function of the time: positions are fractions of the area (`y` from the top, like a
-  callout's area), wrapped into 0..1 (a particle leaving one edge comes back at the other), faded
-  within `EDGE_FADE` 0.06 of the area's edges; rain is tilted along its fall, confetti spins and
-  tumbles (`flip`, a width factor), sparkles twinkle (`sin²`), smoke grows by `grow` and thins out
-  as it rises. `particle_count(kind, density, area_share, preview=)` = the kind's count × density
-  × the area's share of the frame, at most `MAX_PARTICLES` 300, at preview quality
-  `PREVIEW_SHARE` 0.5 of that (rounded up), at least 1. `check_area` checks `[x, y, w, h]`.
-- **Drawing** (`particle_field.py`): `ParticleField(VGroup)` holds one `VMobject` per particle
-  with the unit shape's points; `draw_at(now)` sets every particle's points (unit points scaled,
-  flipped, rotated, moved) and fill / stroke alpha from `particle_states` at `now - start`, over
-  the part of the scene the camera shows (`scene_view`: the `camera.frame`), sizes scaled with the
-  view, so particles stay on screen and the same size through a `zoom`, `pan` or `follow`. Its
-  clock is the scene's `renderer.time`, so the look at a frame does not depend on how often the
-  updater ran. A time-based updater calls `draw_at` (a wait with a field draws every frame);
-  `suspend_updating` is a no-op, so an animation of the field (the outro's fade) never freezes
-  it. Fade in: `FADE_IN` 0.5 s from its start; fade out: `fade_out_animation()` (`_FieldFadeOut`,
-  a remover that takes `level` to 0 while the particles keep moving). `helpers.fade_out` uses a
-  mobject's own `fade_out_animation` when it has one, so `clear_all` / `finish()` fade fields that
-  way. `particle_field(scene, kind, settings)` builds a field for a running scene (count from
-  `scene.is_preview`, colours resolved with the theme, `z_index` one above everything on screen).
-  `ParticleSettings` (a pydantic model): `density` (0, 4], `area`, `color` (one or a list; each
-  particle picks one by its seed), `seed`.
-- **Preview quality**: `NarratedScene.is_preview` (default `False`) is set by the render worker
-  (`render_scene`) before the scene renders; preview and final renders live in separate build
-  folders, so it needs no fingerprint entry.
-- **The `particles` action** (`scenes/particles_action.py`; run_time 0.6 = the fade out,
-  reversible, `until_next_beat`, `needs_target = False`, `needs_visible = False`, `scene_targets =
-  False`): `- particles: snow` or `kind:`; `Options(ParticleSettings, ActionOptions)` + `kind`,
-  `keep`. `apply` adds the field and returns no animation (it fades itself in); `revert` fades it
-  out. `problems()`: kind given twice, more than one, none, unknown (did-you-mean), `keep` with
-  `until`. The runner (`ActionRunner._resolve`) now resolves no targets for actions with
-  `scene_targets = False` (until now only the non-animating `sfx` had it). Works on every scene
-  type; particles for a whole scene of any type: `keep: true` on the first beat.
-- **Stage** (§69.6): `particles: list[StageParticles]` (`ParticleSettings` + `kind`; a string is
-  the kind); the fields are made before the entrance step (they fade in on their own) and drawn in
-  front of everything, foreground layers included; `Stage.particles` (list of `ParticleField`).
-- **Layout dump / lint**: `introspect` reports a field as one object of kind `particles` named
-  after its kind; `describe` gives `particles 'snow'`; `off_frame` skips it (particles cross the
-  edges on purpose). Other rules see it like any shape group (`covered_text` measures its pixels).
-- **Why not an overlay**: overlays are composited per distinct state with two whole-frame Manim
-  cameras (§41); particles change on every frame, so that would cost two extra full renders per
-  frame, and overlays cannot start at a beat's `at`.
-- **Not done here**: a `place: behind` (particles between the backdrop and the characters); wind
-  or speed options; particles reacting to the stage (rain stopping at the ground line). Tests:
-  `tests/test_particles.py`.
+  smoke, bubbles, leaves, streaks` (§69.38, rain on a stage §69.39), each a `ParticleKind` in
+  `KINDS`. `particle_seeds` draws once from `numpy.random.default_rng([seed, kind index])`;
+  `particle_states(seeds, t, width, height)` is a pure function of time (positions wrapped in
+  0..1, faded near edges). `particle_count` = count × density × area share, at most
+  `MAX_PARTICLES` 300, half (`PREVIEW_SHARE`) at preview, at least 1.
+- **Drawing** (`particle_field.py`): `ParticleField(VGroup)`; `draw_at(now)` uses the scene's
+  `renderer.time` and the camera's current view, so a frame's look is independent of updater
+  calls and particles stay steady through camera moves. `suspend_updating` is a no-op;
+  `fade_out_animation()` (used by `helpers.fade_out`) fades while particles keep moving.
+  `particle_field(scene, kind, settings)`; `ParticleSettings`: `density` (0, 4], `area`,
+  `color`, `seed`.
+- **Preview**: `NarratedScene.is_preview`, set by `render_scene`; preview and final builds use
+  separate folders, so no fingerprint entry.
+- **`particles` action** (`scenes/particles_action.py`; 0.6 s fade out, reversible,
+  `until_next_beat`, `scene_targets = False`, so the runner resolves no targets): `kind`, `keep`,
+  settings; whole scene: `keep: true` on the first beat. Stage param `particles:
+  list[StageParticles]` (drawn in front of everything; `Stage.particles`).
+- **Lint**: kind `particles`; `off_frame` skips it. Not an overlay because overlays composite per
+  distinct state (§41) and particles change every frame.
 
 ### 69.10 Shared style for generated backgrounds (Step 77)
 
-A cartoon's stages should look like one world. `cartoon_style:` (top level, `VideoConfig`; a
-non-empty string, none by default) holds style words added to every `generate:` prompt of
-`stage` scenes, e.g. "flat colours, thick outlines, soft shadows".
-
-- **Which scene types**: a scene type opts in with the class attribute
-  `NarratedScene.uses_cartoon_style` (`False`; `Stage` sets `True`). `find_images` (so `vidgen
-  imagegen`, `validate`, orphans and `used_keys`) reads it from the registry entry's class, and
-  the scene's `generated_picture(generate)` (= `generated_image(project, generate, theme,
-  cartoon=self.uses_cartoon_style)`) uses it when rendering, so both resolve the same request.
-  The `image` scene and extension types keep their prompts unless they opt in. Stage `layers`
-  take only files (no `generate:`), so the background's `generate` is the only stage prompt.
-- **Prompt** (`image_request(project, generate, *, cartoon=False)`): the style part is
-  `"; ".join` of the style words (`generate.style` or `imagegen.style`, §58) and
-  `cartoon_style_words` (spaces collapsed, a final full stop dropped), each once. So the text sent
-  is `<prompt>. Style: <style words>; <cartoon style>. Avoid: <negative>.`; `style: none` drops
-  the style words but not the cartoon style. `ImageRequest.style` and the sidecar's `style` hold
-  the joined words.
-- **Cache key**: unchanged formula (§58, `KEY_VERSION` 1); the cartoon style is in the text, so
-  it changes the key of stage pictures only. Without `cartoon_style`, or for other scene types,
-  the request and its key are exactly what they were (the keys pinned in
-  `test_imagegen_openrouter.test_openai_keys_are_unchanged` and `tests/test_cartoon_style.py`).
-- **Variants**: a top-level key, so a variant may set another style (or `null`) by the usual
-  deep merge; its stage pictures get their own keys, and `used_keys` counts them, so neither set
-  is reported as unused.
-- **Fingerprint**: `cartoon_style` is in the dumped config like `imagegen`, so changing it makes
-  every scene's render stale (not only stages); accepted, as for `imagegen.style`.
-- **Docs**: CONFIG.md "Generated backgrounds (`cartoon_style`)" under `stage`, with how to write
-  a background prompt that leaves room for the characters (an empty middle, the ground visible,
-  no people or text, calm detail, wide stages). Tests: `tests/test_cartoon_style.py`.
+`cartoon_style:` (top level, default none): style words added to every `generate:` prompt of
+scene types with `NarratedScene.uses_cartoon_style = True` (`Stage`). `find_images` reads the
+attribute from the registered class and `generated_picture` uses it at render, so both resolve
+the same request. `image_request(project, generate, *, cartoon=False)` joins the style words and
+`cartoon_style_words` with `"; "`: `<prompt>. Style: <style>; <cartoon style>. Avoid:
+<negative>.` (`style: none` drops only the style words). Cache key formula unchanged (§58); keys
+of scenes without it stay identical (pinned by tests). `cartoon_style` is in the dumped config,
+so changing it re-renders every scene. User docs: CONFIG.md "Generated backgrounds".
 
 ### 69.11 Acting actions, part 1: speaking and looking (Step 78)
 
-Characters speak and act during beats: who speaks follows the beat's voice; six beat actions
-(`scenes/acting.py`, written against `vidgen.api` only) change a character's state with
-`PoseChange` (§69.3).
+`scenes/acting.py` (against `vidgen.api` only).
 
-- **Who speaks** (`cartoon/cast.py`, no manim): `beat_voice(scene, beat)` = the beat's `voice`,
-  else the scene's, else `default`; `speaking_characters(config, voice, names)` = the characters
-  among `names` whose `voice` is it (none without a voice). `Stage.narrate` (a context manager
-  around `NarratedScene.narrate`) makes those characters on the stage speak for the beat
-  (`self.speak(c)` on entering, `stop_lip_sync()` after the beat's `d + pad`, unless a later lip
-  sync took over: `lip_sync_track` is no longer the one it started), except in a beat with a `say`
-  action (`beat_action_names(beat)`), where the `say` picks the speakers. `shared_voice_warnings`
-  (`vidgen validate`): characters sharing a voice all speak its beats.
-- **Timing**: `NarratedScene.beat_clock()` returns a callable giving `renderer.time` minus the
-  scene time the current beat started (`narrate` records it); `speak(character)` =
-  `character.lip_sync(self.beat_visemes(current_beat), clock=self.beat_clock())`. The mouth is
-  thus a function of the scene time from the audio's start, whatever runs meanwhile (§69.4); a
-  `say` applied at `at: 0.5` or after the stage's entrance starts mid-track, in step.
-  `NarratedScene.current_beat` is the beat being narrated.
-- **Actions** (all target characters; `_Acting` base: a target name of the scene that is not a
-  declared character is a problem from `scene_problems`, `'tree' is not a character; emote acts on
-  characters`; at render time a non-character target is logged and skipped; `_change` records,
-  per character, the parts and facing a `PoseChange` changes and `_undo` puts back just those,
-  so later changes to other parts stay):
-  - `say` (run_time 0.4 = the bubble's fade-in; reversible, `until_next_beat`; needs `say`):
-    options `bubble` (`false`; `true`: the beat's text; a string: that text, `TranslatableStr`;
-    empty is a problem), `color` (`#FFFFFF`), `size` (`caption`). `apply` calls `scene.speak` on
-    each character and draws a bubble; `revert` stops the lip sync it started (not a later one)
-    and fades the bubble out. `scene_problems`: `say_problem` (a character without `voice`).
-    On the scene's last beat nothing reverts it: the mouth rests after the track and the bubble
-    goes with the scene's fade-out.
-  - `look_at` (0.5; reversible; needs `look_at`): `to` = a target name (a character or prop), a
-    mark or x (through `camera_place`, like `pan`), or `camera`; checked in `scene_problems`. The
-    geometry is `cartoon/acting.py` (no manim): `look_pose(dx, dy, facing)` from the looker's head
-    centre to the other's head (a prop's centre; a mark at the looker's head height): faces that
-    way unless `|dx| < SAME_X` (0.05 units), the head angle `atan2(dy, max(|dx|, SAME_X))` capped at
-    `LOOK_MAX_DEGREES` 20 (positive tilts up in both facings: the mirror), the eyes shifted
-    `LOOK_EYES_AHEAD` 0.008 forward and up / down with the angle; `camera_look(facing)`: head
-    straight, eyes `CAMERA_EYES_BACK` 0.025 back (the middle of a generated face). Applied with
-    `looked_state` (head angle and eyes shift set in the pose; missing parts skipped). A later
-    `pose` / `emote` sets the head / eyes again.
-  - `turn` (0.4; reversible): `to` `left` | `right` (default: the other way); a `PoseChange` with
-    the same parts and another facing (the mirror switches halfway).
-  - `emote` (0.5; reversible; needs `emote`): `to` an expression; `pose` (0.8; reversible): `to`
-    a pose. Both checked with `pose_name_problem` (built-in and the character's own names).
-  - `react` (0.6; reversible, `until_next_beat`): `expression` and / or `pose` (neither: a
-    problem); needs `emote` when it has an expression.
-  Several on one character in a beat play one after another (the runner's batches by target).
-- **Speech bubble** (`speech_bubble(text, anchor, *, color, size, bounds, avoid, scale, theme)`):
-  reuses the callout helpers: `callout_label` (text wrapped to a third of the frame, readable size,
-  ink that reads on `color`) and `label_spot` (`side: top`, `straight`, gaps `BUBBLE_GAPS` 0.25 /
-  0.45 / 0.8 × scale) above the speaker's head region, inside `label_bounds` (the safe area, or the
-  zoomed / panned view) clear of `label_avoid` (text, callouts, other small targets such as the
-  other characters, overlays) and earlier bubbles; these three helpers of `callout_action.py`
-  were made public for it (they were `_view`, `_bounds`, `_avoid`). The tail (`bubble_tail`: a
-  triangle from the plate's edge facing the head, `TAIL_HALF_WIDTH` 0.14, at most `TAIL_LENGTH`
-  0.4 or `TAIL_REACH` 0.6 of the way; counterclockwise like the plate, since Manim's `Union` joins
-  only paths turning the same way) and the plate are one `Union` filled with `color` and outlined
-  in the text's ink (`BUBBLE_STROKE` 3). It is a `Callout` of kind `label` (so later callouts and
-  bubbles avoid it), fading in (`callout_fade`), one z-index level above everything like a callout.
-- **Validate**: problems as above, plus the usual unknown target (an unknown character name) and
-  option errors. Warnings (`cast.acting_warnings(project)`, run by `cli.validate_warnings` in a
-  project session so project actions count): for each action use whose `character_needs()` names
-  an `ACTION_NEEDS` entry, each declared character its targets match (`fnmatch`) whose parts
-  (`character_part_shapes`) lack it: `scenes[0].beats[0].actions[1]: character 'blob' cannot
-  look_at (needs head); the action does nothing for it`.
-- **Not done here**: gestures, walking, entering and leaving are §69.12 (which also makes a bubble
-  follow its speaker); a long beat text makes a large bubble (use a short `bubble` text); a
-  `say` by a character whose voice differs from the beat's is allowed (its mouth follows the
-  beat's audio) and not warned about; a shape swap still resets the mouth's style, so a dimmed
-  character's speaking mouth shows at full opacity (Step 67 gap). Tests:
-  `tests/test_cartoon_acting.py`.
+- **Who speaks** (`cast.beat_voice`: beat, scene, `default`; `speaking_characters`):
+  `Stage.narrate` lip-syncs them for the beat and stops after `d + pad` unless a later lip sync
+  took over; in a beat with a `say` action, `say` picks the speakers. `shared_voice_warnings`.
+- **Timing**: `NarratedScene.beat_clock()` (time since the current beat started) and
+  `speak(character)` = `lip_sync(beat_visemes(current_beat), clock=beat_clock())`, so the mouth
+  follows the audio whatever else runs.
+- **`_Acting` base**: targets must be declared characters (`scene_problems`; at render skipped);
+  `_change` / `_undo` restore only the parts and facing changed.
+- **Actions**: `say` (0.4 s; `bubble` false / true (beat text) / text, `color` `#FFFFFF`, `size`
+  `caption`; `say_problem` without a voice; `revert` stops only its own lip sync), `look_at` (0.5
+  s; `to` a target, mark / x, or `camera`; `cartoon/acting.py` `look_pose` caps head tilt at
+  `LOOK_MAX_DEGREES` 20, `camera_look`), `turn` (0.4 s), `emote` (0.5 s), `pose` (0.8 s),
+  `react` (0.6 s, `until_next_beat`; `expression` and / or `pose`). All reversible; several on
+  one character play in sequence.
+- **Speech bubble** (`speech_bubble`): uses the public callout helpers `callout_label`,
+  `label_spot`, `label_bounds`, `label_avoid`; plate and tail are one `Union` (both
+  counterclockwise, since Manim's `Union` joins only same-direction paths); a `Callout` of kind
+  `label`; `follow_speaker` keeps it at its offset from the speaker's feet.
+- **Validate**: `cast.acting_warnings(project)` warns per action use on a character lacking its
+  `ACTION_NEEDS` parts. A `say` by a character whose voice is not the beat's follows the beat's
+  audio.
 
 ### 69.12 Acting actions, part 2: moving (Step 79)
 
-Five beat actions (`scenes/moving.py`, against `vidgen.api` only, on the `_Acting` base of §69.11:
-targets must be declared characters, a prop is a problem from `scene_problems`) move characters:
-`walk_to`, `enter`, `exit`, `gesture`, `jump`. As in §69.11 the character is the target and the
-new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave`).
+`scenes/moving.py`: `walk_to`, `enter`, `exit`, `gesture`, `jump` (none reversible).
 
-- **Motion without manim** (`cartoon/acting.py`): `walk_seconds(distance, speed=WALK_SPEED 2.5)`
-  = |distance| / (speed × (1 − `WALK_EASE` 0.15)): the walk speeds up evenly over the first 15 %
-  of its time, goes at `speed` (Manim units per second), slows down evenly over the last 15 %
-  (`walk_progress(t)`, the share of the distance at time share `t`; `walk_amplitude(t)`, the speed
-  as a share of the full one). `walk_cycle(steps, amplitude)` gives the pose change after
-  `steps` steps (one per `STEP_LENGTH` 0.35 character heights walked, so the feet keep pace):
-  legs turned ±`WALK_LEG_DEGREES` 10 and arms ±`WALK_ARM_DEGREES` 16 (the far arm the other way)
-  furthest at a footfall (`sin(π steps)`), the legs `WALK_LEG_SQUEEZE` 0.3 narrower and the body
-  `WALK_BOB` 0.02 higher as the legs pass (`1 − sin²`); scaled by the amplitude, so a walk starts
-  and ends in the pose. Entrances and exits: `nearer_side(x, left, right)`, `offstage_x(side,
-  left, right, half_width)` (wholly beyond that edge, `OFFSTAGE_GAP` 0.25 away), `enter_path(side,
-  to_x, view, half_width)` → (side, start, end), `exit_path(side, from_x, view, half_width)` →
-  (side, end). Gestures (`GESTURES`: point, wave, shrug, nod, shake_head; `GESTURE_SECONDS`
-  1.2 / 1.6 / 1.0 / 0.9 / 1.1): `gesture_moves(kind, t, arm)` → part → `PartMove(angle, weight,
-  turn, shift)` (turn `weight` of the way from the pose's angle to `angle`, plus `turn`, plus
-  `shift`), with `gesture_weight(t)` easing in and out over `GESTURE_EASE` 0.25 (smoothstep): point
-  the near arm to 88°; wave to 145° ± 20° three times; shrug both arms ±45° and 0.02 up; nod the
-  head down 12° twice (`sin²(2πt)`); shake_head the head 0.012 sideways twice and the eyes as far
-  again (a flat figure cannot turn its head in depth). The near arm is `arm_left`, else
-  `arm_right` with mirrored angles. `jump_lift(t, height)` = 4 h t (1 − t), `JUMP_HEIGHT` 0.4
-  character heights, `JUMP_SECONDS` 0.6.
+- **Motion** (`cartoon/acting.py`, no manim): `walk_seconds(distance, speed=WALK_SPEED 2.5)`
+  with even ease-in / out over `WALK_EASE` 0.15 of the time; `walk_cycle` (a step per
+  `STEP_LENGTH` 0.35 heights; scaled by the walk's amplitude, so a walk starts and ends in the
+  pose); `offstage_x`, `enter_path`, `exit_path`; `GESTURES` (point, wave, shrug, nod,
+  shake_head) with `GESTURE_SECONDS`, `gesture_moves`; `jump_lift` (`JUMP_HEIGHT` 0.4 heights,
+  `JUMP_SECONDS` 0.6).
 - **Animations** (`cartoon/transition.py`, exported): `Walk(character, x, *, start_x=None,
-  park_x=None, speed=WALK_SPEED)` (run time `walk_seconds` unless given; `begin` ends a blink,
-  jumps to `start_x`, records the state, the feet and the facing towards `x`; each frame sets
-  `walking_state(base, cycle, facing)`, moves the feet's x (y kept) and calls `sync_mouth`;
-  `clean_up_from_scene` moves it to `park_x`), `Gesture(character, kind)`, `Jump(character,
-  height)`. All redraw from the state they began with and end in it (a walk with the new
-  facing). `Character.character_height` (its height in Manim units, from the anchor) scales steps
-  and jumps.
-- **Actions**: `walk_to` (`to` a mark or x, `speed` (0, 20]; class `run_time` 2.0; faces the way
-  it goes and keeps that facing); `enter` (`side`, `to` (default the character's own mark:
-  `Stage.homes`, name -> x), `speed`; starts just beyond the camera view's edge); `exit` (`to`
-  edge, `speed`; ends just beyond the view's edge, then is parked beyond the stage's edge so a
-  later pan never shows it; a `follow` of that character stops: the follow function's
-  `followed`); `gesture` (`to` one of `GESTURES`; `character_needs` = `"gesture: <kind>"`, the
-  §69.2 entries); `jump` (`height` (0, 2]). None is reversible. Places are checked like `pan`'s
-  (`camera_place`).
-- **Timing**: the new hook `Action.run_time_for(scene, targets) -> float | None` (default `None`)
-  gives a use's natural run time for its targets when it falls due; `ActionRunner._phases` uses
-  it (through `_natural`) unless the config gives `run_time` or the phase undoes something. So a
-  walk lasts its distance over its speed (the longest of several targets; all walk for that
-  time), and is shortened with the other actions when the beat has less time left (as always,
-  `rushed_animation` may report it). The estimate is taken when the batch is planned: two walks of
-  one character due on the same frame use the first one's start for both.
-- **Camera**: `Action.alters_targets` (class attribute, default `True`; `pan` and `follow`
-  `False`): such an action's targets do not count when the runner splits due actions into batches
-  of distinct targets, so a `follow` due with a `walk_to` of the same character plays with it.
-  `_MoveThenFollow` re-aims its end view at `x_of()` on every frame (inside `camera_bounds`), so
-  the pan catches up with a walking character and hands over to following without a jump.
-- **Stage**: `Stage.homes` (each character's mark x); characters an `enter` names
-  (`NarratedScene.action_uses("enter")`, the new method listing a scene's validated uses of an
-  action type) start parked beyond the stage's edge on the side of their first `enter` (else the
-  edge nearer their mark) and fade in there with the set (unseen); `off_frame` ignores objects
-  wholly outside. A walk keeps the character's depth (feet y), so the draw order never changes
-  (a walk in depth changes both: Step 111, §69.44).
-- **Speech bubble follows its speaker** (fixes §69.11's gap): `follow_speaker(bubble, speaker)`
-  (`scenes/acting.py`) adds an updater keeping the bubble at its offset from the speaker's feet,
-  so it moves with a walk or jump (it is not clamped to the view).
-- **Lint `walk_overlap`** (still rule after `overlay_overlap`, in `lint/cartoon_rules.py` since
-  Step 84, default warning, `WalkOverlapRule`
-  `min_overlap` 0.25): the walk actions set `Character.walked_in` to the current beat; `introspect`
-  writes it as `walked_in` on the character's object; at a beat-end still, a character whose
-  `walked_in` is that beat and whose box shares at least `min_overlap` of the narrower width with
-  another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
-  a pair that both walked once.
-- **Not done here**: changing depth while walking (`walk_to` keeps the depth; Step 111 adds
-  `depth`, §69.44); a path or curve
-  is `move_along` (§69.14, not a walk); foley is §69.19 (anticipation, squash and follow-through: §69.13); a single `legs`
-  part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
-  character that is on screen to the edge first; an `exit` with a camera that keeps moving can
-  end in view (it is parked off stage at its end anyway). Tests: `tests/test_cartoon_moving.py`.
+  park_x=None, speed=WALK_SPEED)`, `Gesture`, `Jump`: each redraws from its start state and ends
+  in it; `Character.character_height` scales steps and jumps.
+- **Actions**: `walk_to` (`to`, `speed` (0, 20]); `enter` (`side`, `to` default `Stage.homes`,
+  starts beyond the view edge); `exit` (ends beyond the view edge, then parks beyond the stage
+  edge; a `follow` of it stops); `gesture` (`to`; needs `gesture: <kind>`); `jump` (`height` (0,
+  2]). Characters an `enter` names (`NarratedScene.action_uses`) start parked off stage.
+- **Timing**: hook `Action.run_time_for(scene, targets) -> float | None` gives the natural run
+  time when due (unless `run_time` is set or the phase undoes); the runner still shortens to fit
+  the beat.
+- **Camera**: `Action.alters_targets` (`False` for `pan`, `follow`): such targets do not split
+  batches, so a `follow` plays with a walk; `_MoveThenFollow` re-aims each frame.
+- **Lint `walk_overlap`** (`lint/cartoon_rules.py`, `min_overlap` 0.25): a character that walked
+  in the beat (`Character.walked_in`) ending on another. Depth while walking: §69.44.
 
 ### 69.13 Animation principles built in (Step 80)
 
-Characters move with four principles of cartoon animation: anticipation, squash and stretch,
-overshoot and settle, follow-through. They are pure functions of time in `cartoon/motion.py` (no
-manim) applied inside the existing animations of `cartoon/transition.py` (`PoseChange`, `Walk`,
-`Gesture`, `Jump`; no new animation class), scaled by one setting.
+`cartoon/motion.py` (no manim): anticipation, squash and stretch, overshoot and settle,
+follow-through as pure functions of time inside `PoseChange`, `Walk`, `Gesture`, `Jump`.
 
-- **Setting**: `cartoon_motion: lively | calm | none` (`config.MotionSetting`, exported) at the
-  top level (`VideoConfig.cartoon_motion`), as a `stage` param and on a character
-  (`CharacterEntry.cartoon_motion`), all default none. The nearest wins:
-  `resolve_motion(character, scene, video)` = the first given, else `DEFAULT_MOTION` `lively`.
-  `character(name, motion=<the scene's>)` resolves the scene's against the video's;
-  `build_character(entry, motion=)` puts the entry's own first. `MOTION_LEVELS` gives the
-  strength: `lively` 1, `calm` 0.4, `none` 0. Every effect is linear in it, and at 0 every
-  function returns the plain motion of §69.3 / §69.12 (no offset, no extra time).
-- **Character** (`cartoon/character.py`): `Character(..., motion="lively")` (an unknown value is
-  a `VidgenError`), the attribute `motion` (read by the animations when they are created; a
-  `motion=` keyword on the animation wins), `motion_strength`, and `set_squash(x, y)`: a scale of
-  the whole figure about its feet, applied in `_screen` before the mirror, outside the poses
-  (`state()` never holds it; the feet stay on the ground; `set_squash()` puts it back; a call
-  with the current values does not redraw).
-- **Phases** (`Phases(before, after)`, `Phases.of(before_s, main_s, after_s)`, `split(t)` →
-  how far into the wind-up, the move and the settle): an animation with the principles has a
-  wind-up before the move and a settle after it.
-- **Anticipation and overshoot** (`motion_ease(u, strength, base=smoothstep)`, a part's or a
-  gesture's progress): the first `ANTICIPATION_SHARE` 0.2 × strength of the time goes back
-  `ANTICIPATION` 0.12 × strength of the move (`-A sin²(πx)`, flat at both ends), the middle is
-  `base`, the last `SETTLE_SHARE` 0.25 × strength passes the end by up to `OVERSHOOT` 0.1 ×
-  strength and comes back a third of that (`settle_wobble(v)`: `sin(πv) sin(2πv) e^(−3v)`
-  normalised to peak 1; 0 and flat at both ends). `PoseChange` eases each part's window with
-  `motion_ease(local, strength, part_rate_func)`; `gesture_weight(t, strength)` (and
-  `gesture_moves(..., strength)`) eases the arms in and out with it (the way out is the way in
-  reversed, so it winds up before going back and passes the pose before stopping); `nod` and
-  `shake_head` keep their own oscillation.
-- **Walk**: `walk_motion_seconds(walk_time, strength)` = the walk's time plus strength ×
-  (`WALK_WIND_UP_SECONDS` 0.25 + `WALK_SETTLE_SECONDS` 0.4) (no walk: 0); `walk_phases`. The
-  feet stand still in the wind-up and the settle; the walk cycle and `walk_progress` run in the
-  move. `walk_accent(t, phases, strength) -> BodyAccent(lean, stretch)`: the wind-up crouches
-  (`WALK_CROUCH` 0.05) and leans back (`WALK_LEAN_DEGREES` 6, body angle about its pivot) as
-  `sin²`, the settle leans on forward (`STOP_LEAN_DEGREES` 6 × `settle_wobble`). `Walk`'s run
-  time default and the actions' `run_time_for` (`walk_to`, `enter`, `exit`) use
-  `walk_motion_seconds` with the character's strength.
-- **Jump**: `jump_motion_seconds(flight, strength)` = flight (`JUMP_SECONDS` 0.6) + strength ×
-  (`JUMP_CROUCH_SECONDS` 0.18 + `JUMP_LAND_SECONDS` 0.3); `jump_phases`. The lift is
-  `jump_lift` of the move's share (0 in the crouch and the landing). `jump_stretch(t, phases,
-  strength)`: the crouch squashes to `−JUMP_SQUASH` 0.22 (`sin²(πx/2)`), the flight stretches by
-  `JUMP_STRETCH` 0.15 × `(1 − 2m)²` (most at take-off and landing, round at the top), the landing
-  squashes fully at touch-down and bounces back (`landing_bounce(v) = (1 − v)² cos(2.5πv)`).
-  `squash_scale(stretch)` = (1 / (1 + stretch), 1 + stretch): the area stays. `JumpAction` gains
-  `run_time_for`.
-- **Follow-through** (arms, head, accessory; a generated character's hair and ears are drawn in
-  its head, §69.1, so they move with it): `follow_through(position, seconds)` = the lagged body
-  speed minus the body speed (character heights per second, the speed by central difference of
-  `position`, the body's distance walked or height jumped as a function of seconds): negative
-  while the body speeds up, positive while it slows down and just after it stops, 0 at a steady
-  speed. The lag is `follow_lag(signal, seconds, spring=FOLLOW_SPRING)`, the signal as a part on
-  a damped spring sees it (§69.15; Step 80 had a first-order lag here): `FOLLOW_SPRING` =
-  `Spring.tuned(FOLLOW_SPRING_HZ 2.0, FOLLOW_DAMPING_RATIO 0.5)`, so a part trails a steady
-  speed-up by 2ζ/ω ≈ 0.08 s, passes a sudden change by about 16 % and swings back once (settled
-  to 2 % in 0.64 s). It is a pure function of time, whatever
-the frame rate. `follow_angles(forward, up, strength)` turns the parts: both arms
-  `FOLLOW_ARM_DEGREES` 30 per height/s (trailing back, at most `FOLLOW_ARM_LIMIT` 25°), head
-  `−FOLLOW_HEAD_DEGREES` 10 (tips back, at most 8°), accessory `−FOLLOW_ACCESSORY_DEGREES` 18 (at
-  most 12°); `up` raises the arms outwards (as a shrug: `arm_left` +, `arm_right` −; inwards at
-  most `FOLLOW_INWARD_LIMIT` 8°). `end_fade(t)` takes it to 0 over the last `FOLLOW_FADE_SHARE`
-  0.12, so the animation ends exactly in its state. `accented_state(base, lean, turns)` adds the
-  lean and the turns to a state (`transition.py`).
-- **Spring** (Step 82, §69.15): `follow_lag` is the only place the lag is computed, so walks and
-  jumps got the spring without other changes.
-- **Not done here**: no principle on a `PoseChange`'s facing switch (it still flips at half);
-  follow-through only on walks and jumps (not on pose changes or gestures); no squash on
-  walking footfalls; anticipation of an `enter` happens off stage (unseen, its time is spent).
-  Tests: `tests/test_cartoon_motion.py`.
+- **Setting**: `cartoon_motion: lively | calm | none` (`MotionSetting`, exported) on the video, a
+  stage and a character (all default none); `resolve_motion(character, scene, video)` takes the
+  first given, else `DEFAULT_MOTION` `lively`. `MOTION_LEVELS` 1 / 0.4 / 0; every effect is
+  linear in it and at 0 every function returns the plain motion (no offset, no extra time).
+- **Character**: `Character(..., motion="lively")` (unknown: `VidgenError`), `motion_strength`,
+  `set_squash(x, y)` (about the feet, outside the poses: `state()` never holds it).
+- **Functions**: `Phases` (wind-up, move, settle); `motion_ease(u, strength, base=smoothstep)`;
+  `walk_motion_seconds`, `walk_accent`; `jump_motion_seconds`, `jump_stretch`, `squash_scale`
+  (area kept); `follow_through` / `follow_lag` on `FOLLOW_SPRING = Spring.tuned(2.0, 0.5)`
+  (§69.15), `follow_angles` (arms, head, accessory; walks and jumps only), `end_fade` so an
+  animation ends exactly in its state. Run times of walks and jumps include the extra phases.
 
 ### 69.14 Keyframes and motion paths (Step 81)
 
-Two beat actions (`scenes/keyframes_action.py`, against `vidgen.api` only) move what the other
-actions cannot: `keyframes` (through keys) and `move_along` (along a path). They act on a
-`stage`'s characters, props and **character parts**.
+`scenes/keyframes_action.py`: `keyframes` and `move_along`, on a stage's characters, props and
+parts.
 
-- **Part targets**: the `stage` registers each part of each character as a target
-  `<character>.<part>` (`kit.arm_left`; `target_patterns` gains `"<character>.<part>"`), the
-  dotted form of other scenes' sub-targets (`col2.item3`, `cell2.4`). The target's mobject is the
-  part's live `VGroup` (`Character.parts`); its entrance is its character's. `target_names`
-  lists them after the characters and props, from `cast.part_target_names(names)` (the parts
-  each declared character has: `character_part_shapes`, an svg read from the file), only while a
-  project is active (validate, render); without one only characters and props are named. A
-  wildcard such as `*` or `k*` selects parts too: the acting and moving actions skip them
-  (`scenes/acting.py`: `is_part_target`, a name with a dot; at render silently), a part named on
-  its own is a problem for them (`'kit.mouth' is a character's part; emote acts on whole
-  characters`); `dim` and `highlight` act on parts like any target.
-- **Channels** (`cartoon/keyframes.py`, no manim): `CHANNELS = x, y, rotate, scale`. Author units:
-  a character or prop's `x` is a mark or an x 0..1 of the stage (`camera_place`, as `walk_to`),
-  `y` the height of its feet above its ground line at its depth in frame heights (`Stage.grounds`,
-  name -> the ground line's y at the item's depth, a prop's `lift` not included), `rotate`
-  degrees counterclockwise on screen about the feet, `scale` a factor of its built size; a part's
-  `x` / `y` are its pose shift in character heights, `rotate` its pose angle (as drawn facing
-  right, so mirrored with the character), `scale` its size (`KeyedMotion` keeps the signs of the
-  pose's scale, so a flipped mouth stays flipped). `rotate` and `scale` are absolute: a whole
-  target keeps its turn and size as `keyed_rotate` / `keyed_scale` on the mobject.
-- **Keys** (`KeyFrame`, pydantic, `extra=forbid`): `t` (seconds 0..600, strict, or a share of the
-  beat's narration `"40%"`, `SHARE_PATTERN`), `x` (mark or number), `y` (±2), `rotate` (±1080),
-  `scale` (0, 10], `ease`; at least one channel. `key_seconds(t, beat_seconds)`;
-  `key_time_problems(times)`: all seconds or all shares (so the order is known without the
-  audio), strictly increasing, a share ≤ 100 %. Times count from the action's start (its `at`).
-- **Interpolation** (`keyed_values(start, keys, seconds)` with `Key(seconds, values, ease)`):
-  per channel, the value before the first key that sets it is `start` (the target now); between
-  two keys that set it, the later key's ease of the elapsed share; held after the last; a key at
-  0 s sets its values at once. Only channels some key sets are animated.
-- **Eases** (`EASES`, `EASE_NAMES`, `EaseName`, `DEFAULT_EASE` `smooth`): the names of Manim's rate
-  functions, so authors who know Manim know them (`linear`, `smooth`, `rush_into`, `rush_from`,
-  `ease_in|out|in_out_sine|quad|cubic|back`, `ease_out_bounce`, `ease_out_elastic`), written out
-  without importing manim (validate stays light) and checked against `manim.utils.rate_functions`
-  by a test; plus `lively` / `calm` = `motion_ease(u, MOTION_LEVELS[...], smoothstep)` (§69.13).
-  No author-facing ease names existed before (the project's scenes use Manim's functions in
-  code), and `there_and_back`-style eases are left out (they end where they start).
-- **Paths** (`path_curve(points, smooth)`: the points, or a uniform Catmull-Rom curve through them
-  (tangent half the chord from the point before to the point after; the ends' tangent the chord
-  to their neighbour) sampled `PATH_SAMPLES` 32 per segment; `path_length`; `MotionPath(points,
-  smooth).at(share)`: the point that share of the length along, so the speed is even). Lengths
-  are in the points' units.
-- **Animation** (`KeyedMotion(mobject, values_at, *, part=None)`, `cartoon/transition.py`,
-  exported): `values_at(share)` gives the channels at each share of the run time (rate_func
-  linear). A whole target: each frame undoes the last frame's turn and size about the old feet,
-  moves the feet, applies the new turn and size about them (a `Character`'s anchor moves along,
-  so its poses, idle and later walks work from there; another mobject's feet are kept as
-  `keyed_feet`, read by `feet_of`). A part (`mobject` the `Character`): `set_part` with the
-  channels. A character ends a running blink and keeps lip sync in step, as `PoseChange`.
-- **Actions**: `keyframes` (`keys`, `ease`; class `run_time` 1.0; `run_time_for` = the last key's
-  seconds, so a configured `run_time` or a short beat stretches or squeezes the keys);
-  `move_along` (`path` `[[x, y], ...]`, `curve` `smooth | straight`, `ease`, `speed` (0, 20]
-  units per second on screen; class `run_time` 2.0; with `speed`, `run_time_for` = the longest
-  path's screen length (a part's × `character_height`) / speed). The path starts where the
-  target is (that point first, repeated points dropped); an ease past 0..1 holds at the ends
-  (`MotionPath.at` clamps). Both reversible: `until` moves each target back to the values saved
-  at `apply`, straight with `smooth`, in the use's run time. `scene_problems`: the scene type's
-  `target_patterns` must include `<character>` (else `keyframes moves the characters, props and
-  character parts of a stage`); per matched target name and per key / point, a whole target's
-  `x` through `camera_place` and |y| ≤ `WHOLE_Y_LIMIT` 1, a part's `x` a number and |x|, |y| ≤
-  `PART_SHIFT_LIMIT` 1. `problems()`: `key_time_problems` (`keys[1].t: t 0.5 is not after the key
-  before (1.0); keys go in time order`). Unknown parts are the usual unknown-target problem.
-- **Not done here**: no `cartoon_motion` on keyed moves (use `ease: lively`); a moved character
-  does not face its way (add `turn`) and walks / jumps from where it is (a lifted character walks
-  in the air); a whole-target `scale` is a Manim scale (strokes keep their width); no rotation
-  along a path's direction; keys for `depth` or opacity. Tests: `tests/test_cartoon_keyframes.py`.
+- **Part targets**: `<character>.<part>` (`target_patterns`; `cast.part_target_names`, only with
+  an active project). Wildcards select parts too; acting and moving actions skip them
+  (`is_part_target`) and reject one named alone.
+- **Channels** (`cartoon/keyframes.py`, no manim): `x, y, rotate, scale`. Whole target: `x` a
+  mark / x (`camera_place`), `y` feet height above its ground line in frame heights
+  (`Stage.grounds`), `rotate` degrees about the feet, `scale` a factor of the built size. Part:
+  pose shift, angle and scale (scale signs kept). `rotate` and `scale` are absolute.
+- **Keys** (`KeyFrame`, `extra=forbid`): `t` seconds (0..600) or `"40%"` of the narration, all
+  one kind, strictly increasing (`key_time_problems`); `x`, `y` (±2), `rotate` (±1080), `scale`
+  (0, 10], `ease`. Times count from the action's start. A channel holds `start` before its first
+  key and its last value after.
+- **Eases** (`EASES`, `EaseName`, default `smooth`): Manim's rate function names written out
+  without importing manim (a test checks them against `manim.utils.rate_functions`), plus
+  `lively` / `calm`; no `there_and_back`-style eases.
+- **Paths**: `path_curve` (Catmull-Rom, `PATH_SAMPLES` 32 per segment), `MotionPath.at(share)`
+  at constant speed, clamped.
+- **`KeyedMotion(mobject, values_at, *, part=None)`** (exported).
+- **Actions**: `keyframes` (`keys`, `ease`; `run_time_for` = last key); `move_along` (`path`,
+  `curve` `smooth | straight`, `ease`, `speed` (0, 20]); both reversible (back to the values at
+  `apply`). Limits: whole |y| ≤ `WHOLE_Y_LIMIT` 1, part |x|, |y| ≤ `PART_SHIFT_LIMIT` 1.
 
 ### 69.15 Spring physics for secondary motion (Step 82)
 
-Parts that hang on something moving (antennae, ears, tails, hair, hanging signs) lag behind it,
-pass it and wobble back. `cartoon/spring.py` (no manim, exported by `vidgen.api`) gives that as a
-pure function of time, so custom scenes and the built-in follow-through (§69.13) share one helper.
-
-- **`Spring(stiffness, damping)`** (frozen dataclass): a spring of unit mass, `x'' = stiffness·(s −
-  x) − damping·x'` (stiffness 1/s² = ω², damping 1/s = 2ζω; both > 0, else `ValueError`).
-  `Spring.tuned(frequency_hz, damping_ratio)` builds one from the undamped wobbles per second and
-  ζ. Properties: `angular_frequency` ω, `damping_ratio` ζ, `is_critical` (|ζ − 1| < 1e-9, so
-  `tuned(f, 1.0)` counts despite rounding), `decay_rate` (ζω, or ω(ζ − √(ζ² − 1)) over-damped: how
-  fast the slowest motion dies).
-- **Closed form**: `step_response(seconds)`, the spring's position after its target jumps 0 → 1
-  from rest (under-damped `1 − e^(−ζωt)(cos ω_d t + ζ/√(1−ζ²) sin ω_d t)`, critical `1 −
-  e^(−ωt)(1 + ωt)`, over-damped the two-exponential form). `overshoot()` = e^(−πζ/√(1−ζ²)) (0 when
-  ζ ≥ 1). `settle_seconds(tolerance=0.02)`: when it enters the band ±tolerance for good,
-  bisected between the last turning point outside the band and the first inside (turning points
-  at kπ/ω_d, e^(−ζω kπ/ω_d) from 1), or from 0 when ζ ≥ 1 (the response only rises).
-- **`follow(target, seconds)`**: where a part on the spring is while it follows `target(seconds)`,
-  at rest at `target(0)` before 0. It weighs the target's past by the spring's impulse response
-  (the slice weights are differences of `step_response`, exact, so they sum to 1 and a constant
-  target gives itself back), over the last 6 decay times (older weighs < e^−6, taken at the
-  oldest value) in 32..512 slices (8 per radian of ω). No state between calls: the same value at
-  any frame rate and after any seek, unlike stepping the equation frame by frame. Checked
-  against the equation stepped at 20 µs (within 0.005).
-- **Use**: follow-through (`motion.follow_lag`, §69.13). A custom scene drives a part from it, e.g.
-  an antenna's angle `k·(spring.follow(head_x, t) − head_x(t))` in an updater, `t` the seconds
-  since the motion started.
-- **`cartoon_motion: none`** still gives no offset: `follow_angles` scales by the strength (0) and
-  `Walk` / `Jump` skip follow-through at 0 (tested on a walk's head angle).
-- **Not done here**: no author-facing YAML for springs (a character has no tail or antenna part;
-  generated hair and ears are drawn in the head); follow-through stays on walks and jumps (not
-  pose changes, gestures or keyed moves). Tests: `tests/test_cartoon_spring.py`,
-  `tests/test_cartoon_motion.py`.
+`cartoon/spring.py` (no manim, exported): `Spring(stiffness, damping)` (unit mass; both > 0,
+else `ValueError`), `Spring.tuned(frequency_hz, damping_ratio)`, `angular_frequency`,
+`damping_ratio`, `is_critical`, `decay_rate`, closed-form `step_response`, `overshoot`,
+`settle_seconds(tolerance=0.02)`. `follow(target, seconds)` weights the target's past by the
+impulse response (slice weights are `step_response` differences, so they sum to 1) over the last
+6 decay times: stateless, the same at any frame rate and after any seek. Used by follow-through
+(§69.13) and custom scenes; no YAML for springs.
 
 ### 69.16 Character sheets and mid-action storyboard stills (Step 83)
 
-Two ways for an author (or an agent, which cannot watch a video) to look at cartoon work without
-rendering it whole.
-
-- **Character sheet** (`cartoon/still.py`, next to `write_character_png`):
-  `character_sheet_sections(entry, root) -> [SheetSection]` (no manim): `pose` (`merged_table`
-  names: built-in, then the character's own), `expression` (same) and `mouth` (the mouth's shape
-  names from `cast.character_part_shapes`; no section without a mouth); `own` marks the
-  character's own entries. `sheet_layout(sections, columns=SHEET_COLUMNS 8) -> SheetLayout(width,
-  height, columns, section_tops, cells)` (no drawing): a title and a note line, then per section a
-  heading line and its cells in rows of at most `columns` (fewer when no section has that many),
-  each cell `SHEET_CELL_WIDTH` 128 px wide, `SHEET_POSE_CELL_HEIGHT` 160 (whole figure) or
-  `SHEET_HEAD_CELL_HEIGHT` 128 (close-up) high, a label line under it. `write_character_sheet(project,
-  entry, theme, path=None) -> CharacterSheet(character, path, width, height, bytes, sections)`:
-  each section's cells are drawn by Manim's `Camera` at the cell's pixel size (`tempconfig`, so
-  strokes keep their one-pixel floor), facing right, on the theme background, then pasted onto a
-  white Pillow page with the storyboard's fonts and colours (`sheets.load_font`, `TEXT`, `MUTED`,
-  `BORDER`). Poses: one figure, its height chosen from a probe at height 1 so the tallest and the
-  widest pose fit (0.84 of the cell's height, 0.9 of its width), centred on its drawn parts, feet
-  near the bottom; expressions and mouth shapes (`swap("mouth", shape)`, the rest face): a figure
-  built `HEAD_FILL` 0.6 times the cell's size over its head box (`HEAD_PARTS` head, eyes, brows,
-  mouth, accessory; the whole figure if it has none) and shifted so the rest head box is centred,
-  so every close-up has the same scale. Built at the right height (not scaled afterwards), so
-  outlines stay proportional. The page is saved as a `SHEET_COLORS` 64-colour PNG without
-  dithering: a generated character is 1148 x 858 px, about 33 KB (sprout, `examples/svg_character`,
-  1148 x 696, 26 KB), drawn in about 0.5 s.
-- **`vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]`**
-  (`cli.cmd_character_sheet`): NAME, else every character (`--all PROJECT` makes the one
-  positional the project, since NAME comes first, as in `vidgen character NAME [PROJECT]`);
-  default file `exports/character_sheet_<name>.png` (`default_sheet_path`); `--output` only with a
-  NAME; no characters is a `VidgenError`. Human output: one line per sheet (path, size, counts,
-  KB). JSON (`jsonout.character_sheet_document`, in `cli.JSON_COMMANDS`): `project, variant,
-  elapsed, sheets: [{character, path, width, height, bytes, sections: [{kind, names, own}]}]`.
-- **MCP** (`mcp_server`): tool `character_sheet(project, name=None, variant=None, images,
-  image_offset)` runs `character-sheet [NAME] PROJECT` (no name: `--all`) and returns the document
-  and the sheets as pictures (paged like `storyboard`); not serialised with the rendering tools
-  (a few seconds).
-- **Mid-action stills** (`capture.py`): `NarratedScene.mid_still_actions` (class attribute, empty
-  by default; `Stage`: `walk_to, enter, exit, gesture, jump, keyframes, move_along`) names the
-  action types whose uses also get a still half-way through them. `ActionRunner._phases` labels
-  each batch with those of its (not undoing) actions (`ActionConfig.describe()`: `walk_to pip`,
-  joined by `, `); `ActionRunner._run`, right before it plays the batch for `frames` frames from
-  frame `now`, calls `FrameCapture.add_mid_still(beat, now, frames, label)` when stills are
-  captured. Which frame is the pure function `mid_action_frame(start, frames, taken, min_gap)`:
-  `start + frames // 2`, `None` for an action under two frames or within `min_gap` frames
-  (`MID_STILL_GAP_SECONDS` 0.4 s) of another still of the beat (`taken`: its planned stills and
-  planned end, and its mid stills so far); at most `MAX_MID_STILLS` 3 per beat.
-  `mid_action_frames(spans, taken, min_gap, limit)` folds it over a beat's actions in play order
-  (what the capture does one call at a time; tested without rendering). Times come from the run
-  as played (after `run_time_for` and any shortening to fit the beat), so a pure function of
-  the played spans; computing them before the render would need every walk's distance there.
-- **Records**: a mid still is a `CapturedFrame` with `k` 0 and `mid` the label; file
-  `<beat>-m<frame>.png` (`still_name`); its `index.json` entry and its layout dump frame carry
-  `mid` (absent on other stills, so their shape is unchanged). `FrameCapture.finish` drops mid
-  stills never reached. Readers: `lint` checks only `k == n` (unchanged: mid stills are skipped),
-  `deck` (slides) leaves entries with `mid` out, `gallery` takes the last still (an end still).
-  `storyboard` passes `mid` to `SheetStill.mid`; `sheets._label` writes `½ walk_to pip @ time`;
-  the subtitle adds `½ = half-way through an action` when a page shows one; the JSON frames gain
-  `mid` (null on others). Existing renders are stale anyway (capture, actions and scene code are
-  in the render fingerprint).
-- **Not done here**: no mid stills for `PoseChange`-based acting actions (`pose`, `emote`,
-  `turn`) or camera moves; the sheet shows no facing left, no blink (`eyes` `closed`) and no
-  gestures in motion (the storyboard does). Tests: `tests/test_cartoon_sheet.py`,
-  `tests/test_frames.py` (mid-action frames, the capture), `tests/test_mcp.py`.
+- **Sheet** (`cartoon/still.py`): `character_sheet_sections(entry, root)` (pose, expression,
+  mouth; `own` marked), `sheet_layout(sections, columns=SHEET_COLUMNS 8)`,
+  `write_character_sheet(project, entry, theme, path=None) -> CharacterSheet`. Cells are drawn by
+  Manim at cell pixel size (so the one-pixel stroke floor holds) at the right height, not scaled,
+  pasted on a Pillow page in the storyboard's fonts; close-ups share one scale; saved as a
+  64-colour PNG without dithering.
+- **`vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]`**:
+  default `exports/character_sheet_<name>.png`; `--output` only with a NAME; no characters is a
+  `VidgenError`. JSON (`jsonout.character_sheet_document`): `project, variant, elapsed, sheets:
+  [{character, path, width, height, bytes, sections: [{kind, names, own}]}]`. MCP tool
+  `character_sheet(project, name=None, variant=None, images, image_offset)`.
+- **Mid-action stills** (`capture.py`): `NarratedScene.mid_still_actions` (`Stage`: `walk_to,
+  enter, exit, gesture, jump, keyframes, move_along`). `ActionRunner._run` calls
+  `FrameCapture.add_mid_still` before playing a batch; frame `mid_action_frame(start, frames,
+  taken, min_gap)` = `start + frames // 2`, none under two frames or within
+  `MID_STILL_GAP_SECONDS` 0.4 of another still; at most `MAX_MID_STILLS` 3 per beat. Times come
+  from the run as played.
+- **Records**: `CapturedFrame` with `k` 0 and `mid` = label; file `<beat>-m<frame>.png`; `mid`
+  in `index.json` and the layout dump only on mid stills. `lint` reads only `k == n`, `deck`
+  skips them, `gallery` takes the end still; the storyboard labels `½ walk_to pip @ time` and
+  JSON frames carry `mid` (null otherwise).
 
 ### 69.17 Cartoon lint rules (Step 84)
 
-Six still rules in `lint/cartoon_rules.py` (with §69.12's `walk_overlap`, moved there; imported
-right after `layout_rules`, so `RULES` keeps `LINT_RULES`' order), default `warning`, one settings
-model each in `config.LintRules`. Like every still rule they read beat-end stills only (`k == n`;
-§69.16's mid-action stills stay skipped by the runner). Step 115 adds a scene rule there,
-`look_alike` (after `mouth_without_voice`; it reads the config, not a still: §69.49).
+`lint/cartoon_rules.py` (imported after `layout_rules`, so `RULES` keeps `LINT_RULES`' order),
+default `warning`, settings in `config.LintRules`, beat-end stills only. Scene rule
+`look_alike`: §69.49.
 
-- **Layout dump** (`introspect._character_keys`, read by these rules only): a `character` object
-  always has `facing` (`left` / `right`) and `speaking` (a lip sync runs:
-  `Character.lip_sync_track` is set; at a beat-end still that is the beat's speakers, `Stage.narrate`
-  stops them after it); when they apply, `face` (the box of the `head` part's drawn shapes, px),
-  `viseme` (new property `Character.spoken_viseme`: the viseme the running lip sync shows, `rest`
-  between words), `looked_at` (new attribute `Character.looked_at`: the `to` of its last
-  `look_at` when that is a name, a mark or `camera`; `LookAt.revert` puts the one before back),
-  `passage` (new attribute `Character.passage`: `enter` / `exit` while a `Walk` with `start_x` /
-  `park_x` plays; `begin` sets it, `clean_up_from_scene` clears it) and `walked_in`. The objects
-  of a speech bubble (its plate-and-tail `Union` and its text) carry `bubble`: the speaker's name
-  (`Say._bubble` sets `speech_bubble_of` on the bubble group; `LayoutRecorder._walk` copies it onto
-  the objects walked under it). A frame of a beat-end still has `narrating`: whether its time lies
-  in its beat's narration (`scene.beat_log`: `start <= time < end`, so false in the pad); other
-  stills have no such key (the beat is not logged yet).
-- **Rules**:
-  - `off_stage` (`min_hidden` 0.05): a character with at least that share of its box outside the
-    view and some of it inside; skipped with `passage` set and while the camera is zoomed in (a
-    pan still counts: the viewer sees the cut). `off_frame` now skips characters (one finding).
-    In a shot (Step 95, §69.29) only the characters the shot frames are checked.
-  - `character_overlap` (`min_overlap` 0.25 of the narrower width, as `walk_overlap`): two
-    characters at rest whose boxes share that much; a character that walked in the still's beat
-    (`walk_overlap`'s) or has `passage` set is left out.
-  - `bubble_overlap` (`min_overlap` 0.1): a bubble (union of its objects' boxes) covering that
-    share of a character's `face` box (its own speaker's too), or of the smaller of two bubbles.
-  - `facing_away`: a speaking character in view whose listener's face x lies on the side it does
-    not face (more than 0.02 of the shorter side away). The listener is the character it last
-    looked at (`looked_at`) when in view, else the nearest one by face x; `looked_at: camera`
-    means it talks to the viewer: not checked.
-  - `hidden_speaker` (`min_hidden` 0.5): the characters are flat and face left or right, so a
-    back turned to the camera does not exist; what does is a speaker the viewer cannot see:
-    the share of its `face` box covered by the boxes of objects drawn after it (`order`: a
-    character or prop nearer the camera, a foreground layer, an overlay; not text, particles or
-    bubbles), sampled on a 12 x 12 grid.
-  - `mouth_without_voice`: a frame with `narrating: false` where a character's `viseme` is not
-    `rest`: its mouth shows speech while nothing is heard (a viseme track longer than the beat's
-    audio, a custom scene's lip sync without the beat clock).
-- **Fix hints**: each message ends with the usual fix; the same in docs/CONFIG.md's rule table
-  and the guide's troubleshooting table. `lint_ignore`'s `object` also matches a bubble's
-  `bubble` (the speaker), so `{rule: all, object: pip}` covers pip's bubble too.
-- **Not done here**: depth is not in the dump, so two characters at different depths that
-  overlap are reported like two at the same depth; boxes (not drawn pixels) decide what covers a
-  face; keyed moves (§69.14) and jumps are not told apart from standing. Tests:
-  `tests/test_cartoon_lint.py`.
+- **Layout dump keys** (`introspect._character_keys`): `facing`, `speaking`, and when they apply
+  `face` (head box, px), `viseme` (`Character.spoken_viseme`), `looked_at`
+  (`Character.looked_at`), `passage` (`enter` / `exit` while that walk plays), `walked_in`.
+  Bubble objects carry `bubble` = the speaker. A beat-end still's frame has `narrating`
+  (`scene.beat_log`, false in the pad).
+- **Rules**: `off_stage` (`min_hidden` 0.05; skipped with `passage` or zoomed in; `off_frame`
+  skips characters; in a shot only framed characters, §69.29), `character_overlap`
+  (`min_overlap` 0.25; walkers and passers excluded), `bubble_overlap` (`min_overlap` 0.1, faces
+  and bubbles), `facing_away` (listener = `looked_at` in view, else the nearest; `camera` not
+  checked), `hidden_speaker` (`min_hidden` 0.5 of the face covered by later-drawn characters,
+  props, foreground layers, overlays; 12 x 12 grid), `mouth_without_voice` (a non-`rest` viseme
+  while not narrating).
+- Each message ends with its fix (also in CONFIG.md's rule table); `lint_ignore`'s `object`
+  matches a bubble's speaker. Limits: no depth in the dump; boxes, not pixels.
 
 ### 69.18 Cartoon storytelling in the guide, and `examples/cartoon` (Step 85)
 
-- **Guide topic `cartoons`** (aliases `cartoon`, `characters`, `character`, `stage`, `dialogue`,
-  `acting`), between `actions` and `overlays`: when to make a cartoon, original characters only
-  (generator or own SVG; never a known character, mascot, brand figure or logo, nor a "style of"
-  prompt), staging (marks and `facing`, depth, the set, room to move), shot variety (wide; `zoom`
-  for medium and close-up; `pan` / `follow`), reaction shots (`react`, `look_at`, `zoom` on the
-  listener, `at` near the line's end), comic timing (one short line per beat, `narration.pad` as
-  the pause, setup / pause / punchline), and the loop character sheet → validate → storyboard
-  (mid-action stills) → lint → `vidgen tts` (Kokoro) → again. One validated YAML block.
-- **Consolidated, not repeated**: the `actions` topic keeps one row per action (the test needs
-  every action there) and points to `cartoons` instead of its former dialogue bullet; the
-  `outputs` topic's cartoon-background bullet moved into "The set"; the `scenes` chooser keeps
-  the `stage` row and its snippet (the gallery sample) with a pointer; the cartoon lint rules stay
-  in `troubleshooting`, named once in the loop.
-- **`examples/cartoon`** ("The Box Kite", `output: box_kite`): two `stage` scenes, 12 beats
-  (115 words: ~44 s of narration at the word-count rate, ~54 s with pads and fades), two generated
-  characters (`dot` round with bun and scarf, `moss` tall with hat and glasses), Kokoro voices
-  (`bf_emma` narrator, `af_bella`, `am_michael`), `narration.pad: 0.7`, props, a `hills` layer,
-  a `width: 2` stage with `follow` on a flying prop (`move_along`), one close-up `zoom` per scene,
-  `react` / `emote` / `look_at` / `jump` / `gesture` / `say` with a bubble, dust and confetti
-  particles; since Step 88 also a `walk_to` and an `enter` (so footsteps and a whoosh), a bare
-  prop name (`- cloud`) and slower voices (`speed: 0.8` narrator, `0.85` characters; §69.21). No
-  audio committed: `vidgen validate` (one warning: the Kokoro extra is not
-  installed) and `vidgen lint --fail-on warning` on the preview (timed from word counts) pass with
-  no findings. The test `test_examples_validate_against_their_schema` (`tests/test_schema.py`)
-  picks it up like every example folder.
+Guide topic `cartoons` (aliases `cartoon`, `characters`, `character`, `stage`, `dialogue`,
+`acting`), between `actions` and `overlays`; it requires original characters (never a known
+character, mascot, brand figure, logo or "style of" prompt). `examples/cartoon` ("The Box Kite")
+is the reference example: no audio committed, it must pass `vidgen validate` and `vidgen lint
+--fail-on warning` on the preview.
 
 ### 69.19 Foley and music stings (Step 86)
 
-Sounds tied to what the characters do (foley), and short music stings on beats. Both are ordinary
-sound effects (§47): `SfxEvent`s in the scene's `sfx_log`, stored in its timings and placed on the
-video's one SFX track when the scenes are joined. No audio files were added and nothing is
-downloaded: the five new sounds are built-in generators like the other eleven.
+Ordinary sound effects (§47) recorded during the render: `SfxEvent`s on the one SFX track.
 
-- **New built-in sounds** (`sfx.BUILTIN_SOUNDS`, now 16; same finishing and level as §47, so
-  `test_sfx` checks them like the others): `footstep` (0.14 s: a heel knock, band noise at 260 Hz
-  plus a 95 Hz thump, then a faint scuff at 1.8 kHz), `boing` (0.5 s: a three-partial tone gliding
-  140 → 260 Hz with a 12 Hz wobble dying away), and three music stings, `sting_reveal` (1.4 s: a
-  brassy G4 pickup, then a C major chord C5 E5 G5 C6 of eight-partial brass tones with a soft C7
-  bell), `sting_comic` (1.1 s: two tom hits 200 → 130 and 150 → 100 Hz 150 ms apart, a cymbal of
-  noise around 7.5 kHz at 0.33 s) and `sting_sad` (2.2 s: four muted-horn notes B♭3 A3 A♭3 G3, ten
-  partials whose brightness opens and closes per note like a wah mute, the last long, sagging 3 %
-  with a 5.5 Hz vibrato). Searched first: whoosh, swoosh and pop were reused for enter, exit and
-  surprise; nothing could stand in for a step, a spring or a musical phrase.
-- **The schedule, without manim** (`cartoon/foley.py`, exported): `foley_cues(PlayedAction) ->
-  [FoleyCue]`. `PlayedAction(action, start, seconds, expression, heights, phases)` is one
-  character's action *as it played*: its scene start time and the seconds it took (after
-  `run_time_for` and any shortening to fit the beat), the expression an `emote` / `react` put on,
-  the walk's length in character heights and the wind-up / settle shares (`Phases`,
-  `cartoon_motion`). `FoleyCue(time, sound, gain, params, align)`.
-  - `walk_to`, `enter`, `exit`: a `footstep` on each footfall (`footfall_shares(heights, phases)`):
-    the walk cycle of §69.12 has the legs furthest apart at `k + 0.5` steps (`STEP_LENGTH` 0.35
-    heights), so a foot lands there; the share of the walk's time comes from inverting
-    `walk_progress` (its ease-in / ease-out is quadratic, so the inverse is closed-form), mapped
-    into the move between the wind-up and the settle; plus one softer step (`intensity` 0.3) when
-    the walk stops at least `LAST_STEP_MIN` 0.25 steps after the last footfall (the feet come
-    together). Feet alternate `pitch` 0 / −1.5 semitones, `intensity` 0.5 / 0.4; −5 dB.
-    `enter` adds a `whoosh` (−6 dB) at its start, `exit` a `swoosh` (−6 dB) ending (`align: end`)
-    when the walk ends, just beyond the view.
-  - `jump`: a `boing` (−3 dB) at take-off, after the crouch (`phases.before`).
-  - `emote` / `react` putting on `surprised`: a `pop` (−3 dB) at its start.
-  - Other actions: nothing. Gestures were left silent (not asked for; a wave has no natural sound).
-- **Timing from the real run**: as Step 83 found, the times an action plays are only known in
-  `ActionRunner._run` (after `run_time_for`, the batch split and the beat's shortening).
-  `_build` records each built-in action it applied with the animations it made (`_built`);
-  `_run`, right before `scene.play`, calls `scene.action_foley(name, options, animations,
-  start=now, seconds=frames / fps)` for each. Not for actions applied without animation at a
-  beat's end (they make no sound) nor for undoing. `NarratedScene.action_foley` does nothing;
-  `Stage.action_foley` builds one `PlayedAction` per animation (`Walk.heights` / `Walk.phases`,
-  `Jump.phases`, the new public read-outs of what the animations computed) and records each cue
-  with `self.sfx`, without `params` when the project's `assets/sfx` replaces that sound.
-- **Switch**: top-level `foley: true` (`VideoConfig.foley`) and a `stage` param `foley: bool |
-  None` (none: the video's). Part of the config, so of the render fingerprint (the events are
-  recorded by the render, like the `sfx` action's).
-- **Music stings**: a beat's `sting:` (`BeatConfig.sting`, `StingSetting`: a kind `reveal |
-  comic | sad` or `StingCue(kind, at, gain)`; `StingCue.placed_at`: `at`, else `start` for reveal
-  and `end` for comic / sad). `NarratedScene.narrate` records it when the beat starts:
-  `STING_SOUNDS[kind]` at the beat's start, or at start + `d` (the end of its narration, before
-  `narration.pad`), with `duck` set. Any scene type, since every beat is narrated by `narrate`.
-- **Ducking, the existing path**: `SfxEvent.duck` (JSON `duck: true` only when set, so other
-  events keep their shape). `join_scenes`, when any event ducks, computes
-  `mix.sting_ducking(project, {"scenes": ...}, samples)` = `duck_curve(speech_spans(...),
-  frames, STING_DUCK)`: the music's own curve and narration spans (§48) with
-  `STING_DUCK = {depth 6, attack 0.15, release 0.3, hold 0}`, and passes it to
-  `sfx.write_track(..., ducking_db=)`, which scales the ducked events by it (`ducked`, per sample).
-  **Decision**: lighter and quicker than the music's 12 dB / 1.5 s hold, since a sting lasts
-  1–2.5 s and with that hold it would stay down through every pause between lines. The stings stay
-  on the SFX track (not the music track): they are events at beat times, they must sound with or
-  without `music:`, and the SFX track already carries per-event gains.
-- **Docs**: CONFIG.md "Foley and music stings" (under Sound effects), the sounds table, the `foley`
-  top-level and stage rows, the beat `sting` key; guide topic `cartoons` ("Sound" bullet, a
-  `sting` in its example); EXTENDING.md (`action_foley`).
-- **Not done here**: no panning by where the character stands; footsteps do not change with
-  depth, speed or the ground; no landing sound for a jump; gestures, `pose`, `look_at`, keyed moves
-  and particles make no sound; in a preview timed from word counts every beat is "speech", so a
-  `reveal` sting at a beat's start is ducked from its first sample and an `end` sting starts ducked
-  and comes up over the 0.3 s release (checked by hand on a preview: −6.0 and −2.4 dB at the peaks). `examples/cartoon` has no
-  sting yet (its guide excerpt does). Tests: `tests/test_cartoon_foley.py`.
+- **Built-in sounds** (`sfx.BUILTIN_SOUNDS`): `footstep`, `boing`, `sting_reveal`,
+  `sting_comic`, `sting_sad` (generated, nothing downloaded); `whoosh`, `swoosh`, `pop` reused.
+- **Schedule** (`cartoon/foley.py`, exported): `foley_cues(PlayedAction(action, start, seconds,
+  expression, heights, phases)) -> [FoleyCue(time, sound, gain, params, align)]`: a `footstep` per
+  footfall of `walk_to` / `enter` / `exit` (`footfall_shares`, from inverting `walk_progress`) plus
+  a softer closing step, `whoosh` at an `enter`'s start, `swoosh` ending with an `exit`, `boing`
+  at a jump's take-off, `pop` on a `surprised` emote / react; nothing else.
+- **Timing from the real run**: `ActionRunner._run` calls `scene.action_foley(name, options,
+  animations, start=now, seconds=frames / fps)` before `scene.play` (not for undoing or for
+  actions applied without animation). `NarratedScene.action_foley` does nothing; `Stage`'s builds
+  `PlayedAction`s from `Walk.heights` / `Walk.phases` / `Jump.phases` and omits `params` when
+  `assets/sfx` replaces the sound.
+- **Switch**: top-level `foley` and stage `foley: bool | None`; in the render fingerprint.
+- **Stings**: beat `sting:` (`StingSetting`: `reveal | comic | sad` or `StingCue(kind, at,
+  gain)`; `placed_at`: `at`, else `start` for reveal, `end` (before the pad) for comic / sad),
+  recorded by `NarratedScene.narrate` with `duck` set; any scene type.
+- **Ducking**: `SfxEvent.duck` (JSON key only when set). `join_scenes` computes
+  `mix.sting_ducking` = `duck_curve(speech_spans, frames, STING_DUCK)` (`depth 6, attack 0.15,
+  release 0.3, hold 0`) and passes `ducking_db=` to `sfx.write_track`. Lighter than the music's
+  12 dB / 1.5 s hold because a sting lasts 1–2.5 s; stings stay on the SFX track so they sound
+  with or without `music:`.
 
 ### 69.20 Render speed for cartoons (Step 87)
 
-Measured first (`examples/cartoon`, preview 854x480 at 15 fps, no audio, one scene per process,
-cProfile and a per-object timer around Manim's `Camera.display_vectorized`): a scene takes 9–11 s
-for 25–29 s of video. The time goes to Manim's Cairo drawing of the characters (about 45 shapes a
-frame for two characters, 2–3 s), H.264 encoding in Manim's writer thread (2.6–3 s, overlapping
-on the second core), Manim's per-frame family walks (1.5 s), `Character.refresh` (1.25 s) and
-imports (2.7 s). Manim already draws everything before the first moving mobject (with an updater,
-in an animation) once per `play` / `wait` into a static image: on a plain stage that is the sky,
-ground band and the props behind the characters. Two caches were added where the profile showed
-time to save:
-
-- **Static stage image with parallax layers** (`NarratedScene.get_moving_mobjects`): Step 74
-  returned every mobject while `_camera_step` was installed, so a stage with layers redrew its sky,
-  layers, ground band and props on every frame (1.24 s of the `hill` scene). Now every mobject is
-  moving only while the camera follows something (`follow_with_camera` may move it on any frame);
-  a camera animation (`zoom`, `pan`) still makes Manim's `MovingCameraScene` treat every mobject
-  as moving. With listeners only, the camera stays still for the whole animation: the listeners
-  run first (so the layers stand where the camera is now) and Manim keeps the static image
-  (`hill`: those draws 1.24 → 0.39 s).
-- **Part drawings, transformed only** (`cartoon/character.py`): each part shape's points are
-  kept once per character (`shape_drawing`: the point arrays of its family members with points),
-  and the live members of each part's shown shape are found again only when the shape shown
-  changes (`_live_members`, keyed by the shown child; since §69.22 each shape keeps one live
-  copy and its members are listed once). `refresh` then only applies the matrices:
-  1.25 → 0.58 s in `yard`.
-- **Part drawings by look** (`look_parts(look, colors)`, `look_key`): the generator's parts for
-  a look in resolved colours are drawn once per process and shared (a `Character` copies the
-  shapes it is given); the key is the `look` and the colours, never the poses, expressions,
-  name, voice, height or state. At most `LOOK_CACHE_SIZE` 16 looks (the oldest dropped). A
-  render builds each character once per scene process, so this saves nothing there; `vidgen
-  character-sheet` builds each character six times (2.07 → 1.60 s for both sheets of the
-  example). SVG looks are not cached (their warnings are logged per build).
-- **Not done**: a raster cache of parts (rotating and scaling a bitmap per frame changes the
-  drawing beyond anti-aliasing; not measured); caching the subpath
-  split of each part (Manim 0.21's `get_subpath_split_indices_from_points`, 1.1 s of `yard`), which
-  needs a per-instance override of a Manim internal that Manim 0.19 does not have.
-- **Result**: the same frames (the `hill` preview decodes bit for bit as before; `yard` differs
-  only in its last 60 frames, which also differ between two runs of the unchanged code: Step 88
-  found that Manim's H.264 encoding, not the drawing, varies there, §69.21). Before /
-  after in HANDOFF.md (Step 87): `hill` −8 %, `yard` −3 % at preview, within noise end to end and
-  at the final format (encoding bound). Tests: `tests/test_cartoon_speed.py`,
-  `tests/test_cartoon_parallax.py`.
+- **Static image**: `NarratedScene.get_moving_mobjects` returns every mobject only while the
+  camera follows; with camera listeners only, Manim keeps its static image of the backdrop.
+- **Part drawings**: each shape's points are kept once (`shape_drawing`); live members are found
+  again only when the shown shape changes (`_live_members`); `refresh` only applies matrices.
+- **Look cache**: `look_parts(look, colors)` / `look_key` share generated parts per process; key =
+  look + resolved colours (never poses, name, voice, height or state); at most `LOOK_CACHE_SIZE`
+  16; SVG looks are not cached.
+- **Not done**: raster caching of parts (changes the drawing); caching Manim's subpath split
+  (needs a Manim internal missing in 0.19).
 
 ### 69.21 Review of Phase H (Step 88)
 
-- **End to end**: `examples/cartoon` through `vidgen validate`, `lint --fail-on warning`,
-  `storyboard` (4 mid-action stills before Step 88's walk and enter, 6 after), `character-sheet
-  --all` and a preview render, by the CLI and by the MCP tools `validate`, `schema`, `lint`,
-  `storyboard`, `character_sheet`, `render`: no failures. `tests/test_phase_h_review.py` repeats
-  this cheaply (a 160x90, 5 fps copy of the example, word-count timing; mocked Kokoro audio).
-- **JSON Schema of `stage`**: `StageCharacter`, `StageProp` and `StageParticles` accept a plain
-  string (a character name, a built-in prop, a particle kind) through `before` validators, which
-  `vidgen schema` did not show; each now has `__get_pydantic_json_schema__` returning `anyOf`
-  (the string form, then the object), like `bullets`' items. The example uses `- cloud` again.
-- **Real narration** (Kokoro 0.9.4, Python 3.12, Manim 0.22, not committed): `vidgen tts` wrote
-  the 12 MP3s, `.align.json` and `.visemes.json` (source and timing `kokoro`, 13–22 cues a beat
-  after merging). It was killed twice by the 1500 MB cap after three beats each (peak about 2.2
-  GB counting the page cache) and finished under 2500 MB. At `speed: 1` Kokoro reads 3.5–4.6
-  words a second, so `narration_speed` warned on 9 of 12 beats; at `speed: 0.8` / `0.85` 3 beats
-  remain just above 3.5 (3.54–3.68). The guide says so in its cartoon timing advice.
-- **The `yard` render that differed between runs** (Step 87): the raw frames Manim hands its
-  writer are bit-identical across runs (md5 of every frame), and a render whose partial movie
-  files are encoded after the scene (no thread overlap) still differs, but only in the two zoom
-  animations and only at the 854-pixel preview width: at 848x480 (a multiple of 16) three runs
-  give identical files. So libx264, as Manim calls it through PyAV, encodes a frame whose width is
-  not a multiple of 16 differently from run to run (most likely reading uninitialised padding
-  next to the frame in a long-running process; a fresh process encoding the same frames gives
-  the same bytes every time). Decoded frames of the variants are equally close to the raw frames.
-  Not fixed (Manim's encoder options are not reachable from schu-video-generator; changing the preview size
-  would change every preview): compare renders by their frames before encoding, or at sizes that
-  are multiples of 16. Backlog.
+- `StageCharacter`, `StageProp`, `StageParticles` accept a plain string; their
+  `__get_pydantic_json_schema__` returns `anyOf` (string, object) so `vidgen schema` shows it.
+- libx264 through PyAV encodes frames whose width is not a multiple of 16 (the 854-px preview)
+  differently between runs; compare renders by raw frames or at widths that are multiples of 16.
 
 ### 69.22 Fixes after the Phase H review: the ground under the set, the mouth while moving
 
-Two faults the owner saw in the Step 88 review video (`examples/cartoon` at 1280x720):
-
-- **Props standing above the ground**: a thing at `depth` d stands `FAR_RISE` × d of the frame
-  height above the ground line (`feet_point`), but the `ground_color` band ended at the ground
-  line, so the house (depth 0.7) and the tree (0.5) in `yard` stood on the sky. The band now
-  reaches up to `ground_top(ground, items)` (`cartoon/stage.py`, exported): `ground + FAR_RISE ×`
-  the largest depth of the items on the ground (`lift` 0; a lifted sun or cloud hangs in the air
-  and does not count), so everything at a depth stands inside the drawn ground and the deepest
-  thing on its top edge, as a thing at depth 0 stood on the band's edge before. The depth
-  geometry itself is unchanged (feet, sizes, `grounds` for `keyframes` y 0), so characters,
-  props, walks and lint keep their places; only the band grows, and only on stages with
-  something at a depth (the gallery's `stage` sample, `kit` at 0.3, changed a little). Chosen
-  over keeping the lift inside a fixed band (which would move every depth-0 thing down) and over
-  a band always up to depth 1 (which would change every stage). Layers: `background` and
-  `middle` layers are drawn behind the band, so its taller top covers a little more of their
-  lower part (hills keep their tops; a layer meant to sit on the horizon goes at a `y` at or
-  above `ground_top`). A picture (`image`, `generate`) has no band unless `ground_color` is
-  given (then the same rule); its own floor must reach up to where its deepest things stand.
-  Test: `tests/test_cartoon_stage.py` (every placement on the ground lies between the bottom
-  edge and the band's top, for the example's yard and two more stages) and the props render test
-  (the band's top is at or above the tree at depth 0.6).
-- **A mouth left behind**: while `dot` walked and spoke, a copy of her mouth stayed where the walk
-  began. Lip sync (and blinks, expressions) changed a part's shape by replacing the part slot's
-  child with a fresh copy of the shape. Manim lists, when an animation begins, the moving
-  mobjects as the flattened families (`Scene.get_moving_mobjects` returns family members), and
-  draws that list on every frame: the replaced child stayed in the list, no longer in the
-  character, so `shift` and `refresh` no longer moved it, and it was drawn where it was when it
-  was swapped out (the camera's follow path lists the same way). The same held for every
-  animation on a speaking or blinking character (walk, enter, exit, jump, gesture, keyframes,
-  `move_along`, pose changes). Now a `Character` keeps one live copy of every shape of every
-  part for its whole life (`parts[name]` holds them in `shape_names` order); the shapes not shown
-  have no points, so Manim draws only the shown one, and a swap only moves points (the old
-  shape's are emptied, `refresh` draws the new one). The family never changes, so any list made
-  from it stays right, and a style set on the character (a fade, `dim`) is kept by every shape.
-  Cost: a few more family members per character (the hidden shapes, not drawn). Test:
-  `tests/test_cartoon_acting.py` (for a walk, an entrance, a jump, a gesture, a keyed motion and
-  a pose change of a speaking, blinking character: what Manim would draw from the list made at
-  the start holds nothing outside the character, and every mouth point lies in the head's box;
-  it failed for all six before the fix).
-- **The review video again**: `/home/claude/work/phase-h-review/cartoon_review_v2.mp4` (the same
-  scratch copy and Kokoro audio, 1280x720, 59.93 s).
+- **Ground band**: `ground_top(ground, items)` (`cartoon/stage.py`, exported) = `ground +
+  FAR_RISE ×` the largest depth of items on the ground (lifted items excluded), so everything at
+  a depth stands inside the drawn band. Depth geometry is unchanged. A picture has no band unless
+  `ground_color` is given.
+- **One live copy per shape**: a swap only moves points between permanent children, because
+  Manim draws the family list captured when an animation begins: a replaced child would stay
+  drawn where it was. A style set on the character is kept by every shape.
 
 ### 69.23 Automatic directing, part 1: looks and reactions (Step 89)
 
-`auto_direct` adds the routine acting of a dialogue to a stage's beats: listeners look at whoever
-speaks, the speaker at the one it talks to, and listeners react after lines. The added actions
-are ordinary beat actions (`look_at`, `react`), so the action runner, foley, mid stills, the
-layout dump and lint treat them like written ones.
+`auto_direct` adds routine dialogue acting as ordinary beat actions.
 
-- **Setting** (`config.py`): `AutoDirect(looks, reactions, gestures, closeups)` (Step 107 adds
-  `effects`, §69.40) (each `True` by
-  default: a kind not given is on), `AutoDirectSetting = bool | AutoDirect`, on `VideoConfig`
-  (`False`), the stage param `auto_direct` and `BeatConfig.auto_direct` (both none: inherit).
-  `directing_kinds(beat, scene, video)`: the first setting given wins (`true` every kind of
-  `DIRECTING_KINDS`, `false` none, a mapping its true kinds); none given: off. `gestures` and
-  `closeups` are planned since Step 90 (§69.24).
-- **Planner** (`cartoon/directing.py`, no manim): `plan_directions(scene_id, cast, beats) ->
-  [DirectedBeat(beat, actions)]` is a pure function of `CastMember(name, can_look, can_emote)`
-  (stage order) and `BeatInput(id, text, speakers, actions, kinds)` (the beat's written actions,
-  resolved). It walks the beats with one `_SceneState` (who is on stage, what each looks at,
-  whom each speaker last addressed, the speakers so far and to come, each character's last
-  automatic reaction) and runs, per beat, the pass of each kind on (`_PASSES`, in
-  `DIRECTING_KINDS` order). Before the passes, `_follow_written` applies the beat's written
-  actions to the state: `enter` / `exit` (characters an `enter` of the scene names are off stage
-  until their first `enter` beat, as `Stage` keeps them), `look_at` (its `to`), and
-  `LOOK_CHANGING` (`turn`, walks, `move_along`, `keyframes`, `pose`, `emote`), after which the look
-  is unknown. A character a written action of the beat targets (by name, wildcard or part,
-  except the `FRAMING_ACTIONS` `say`, `zoom`, `pan`, `follow`, `highlight`, `dim`, `callout`) is
-  *touched*: no pass adds anything for it in that beat (written actions always win).
-  - **Looks** (`_plan_looks`): with speakers on stage, every other present character looks at
-    the first speaker, each speaker at its addressee (`_addressee`: the most recent other speaker
-    on stage, else the one it addressed before, else the next other speaker of the scene, else
-    the only other character on stage, else none); a `look_at` (at 0, run time 0.5) is added
-    unless the character is touched, has no head (`ACTION_NEEDS["look_at"]`) or already looks
-    there.
-  - **Reactions** (`_plan_reactions`): `line_cue(text)` = `question` (a `?`), else `negation` (a
-    word of `NEGATIONS`, English, curly apostrophes too), else `exclaim` (a `!`), else none. Each
-    present listener that can `emote` and is not touched gets `react` with an expression of
-    `REACTIONS[cue]` (`thinking`/`surprised`, `worried`/`sad`, `surprised`/`happy`) other than
-    its last automatic one, picked by `random.Random("<scene>/<beat>/<character>")` (seeded by
-    the names: the same in every run and process), at `REACTION_AT` 0.95 of the narration, so
-    the 0.6 s change plays in the pad (shortened by the runner when the pad is short) and the
-    runner undoes it at the next beat (`until_next_beat`).
-  - Steps 90 and 95 add passes (gestures, close-ups, shots) to `_PASSES` and fields to
-    `CastMember` / `BeatInput` (word timings, positions) as they need them.
-- **Tag**: each added action is `ActionConfig.automatic(data)` (private `_auto`, property
-  `auto`); `describe()` appends `(auto)` (log lines, mid-still labels), `shorthand()` gives the
-  `video.yaml` form (`{NAME: TARGET, ...options, at}`).
-- **Merge**: `NarratedScene.auto_actions(project, spec, params)` (class method; default none) and
-  `with_auto_actions(spec, directed)` (a copy with each beat's automatic actions after its
-  written ones). `NarratedScene.__init__` merges right after parsing the params and sets
-  `self.spec` / `self.beats` to the merged scene, before `plan_actions` and the `ActionRunner`;
-  the project's config is unchanged. `Stage.auto_actions` = `stage_directions(project, spec,
-  characters, params.auto_direct)`: speakers per beat as `Stage.narrate` picks them (`say`
-  targets, else `speaking_characters` of `beat_voice`), `can_look` / `can_emote` from
-  `character_part_shapes` and `missing_needs`, the action names from the registry (so it runs in
-  a project session). `vidgen validate` checks only written actions; the planner emits only
-  built-in actions on declared characters with built-in expressions (a test runs
-  `scene_actions` on the directed `examples/cartoon`).
-- **Fingerprint**: `auto_direct` is in the config; `cartoon/directing.py` is render code. A
-  changed setting or planner makes the scene's render stale.
-- **Visible**: `project_directions(project, scenes)` (scene id -> directed beats; each scene
-  type's `auto_actions`; `directing_used` skips the session when `auto_direct` appears nowhere
-  and no `stage` scene may reframe, §69.30).
-  `vidgen storyboard`: `SheetStill.auto` (the beat's automatic actions), a wrapped line `auto:
-  look_at kit pip · react kit thinking` (`auto_label`, at most `AUTO_LINES` 2) under the beat's
-  narration; `--json` frames gain `auto` (the shorthand forms, `[]` for none).
-  **`vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]`**
-  (`cli.cmd_direct`): without rendering, per scene and beat the added actions (`auto_label`);
-  `--print`: `directions_yaml`, a `scenes:` -> `id`, `beats:` -> `id`, `actions:` block (one flow
-  mapping per action) to paste into `video.yaml`; once pasted they are written actions, so the
-  planner adds nothing more for those characters (tested). JSON (`jsonout.direct_document`):
-  `project, variant, scenes: [{scene, beats: [{beat, actions}]}]`.
-- **Not done here**: gestures, close-ups and the lint check (Step 90, §69.24), shots (Step 95, §69.29); a negation word list for other languages; a speaker with two or more
-  listeners and no one answering looks at nobody in particular; a listener looks where the
-  speaker stands when the look starts (not where a walk ends); `examples/cartoon` unchanged
-  (with `auto_direct: true` it would add one look: its beats act on both characters); no MCP
-  tool for `direct`. Tests: `tests/test_cartoon_directing.py`.
+- **Setting**: `AutoDirect(looks, reactions, gestures, closeups, effects)` (each default `True`;
+  `effects` §69.40), `AutoDirectSetting = bool | AutoDirect` on the video (`False`), the stage and
+  the beat; `directing_kinds(beat, scene, video)` takes the first given (none: off).
+- **Planner** (`cartoon/directing.py`, no manim, pure): `plan_directions(scene_id, cast, beats,
+  stage=None) -> [DirectedBeat]` from `CastMember`s and `BeatInput`s, one `_SceneState`, passes in
+  `_PASSES` (`DIRECTING_KINDS` order). `_follow_written` applies written actions first; a
+  character targeted by a written action (except `FRAMING_ACTIONS`) is *touched* and gets nothing
+  added that beat (written actions win).
+  - **Looks**: listeners look at the first speaker, each speaker at its addressee (`_addressee`:
+    latest other speaker on stage, previous addressee, next speaker of the scene, the only other
+    character, else none); `look_at` at 0 unless touched, headless or already looking.
+  - **Reactions**: `line_cue` (`?` question, `NEGATIONS` word, `!` exclaim) → `react` with an
+    expression of `REACTIONS[cue]` other than the last, picked by
+    `random.Random("<scene>/<beat>/<character>")` (same in every process), at `REACTION_AT` 0.95
+    of the narration.
+- **Tag / merge**: `ActionConfig.automatic(data)` (`auto`; `describe()` appends `(auto)`;
+  `shorthand()`). `NarratedScene.auto_actions` (classmethod, default none) and
+  `with_auto_actions` (written first); merged in `NarratedScene.__init__` before `plan_actions`;
+  the project config is unchanged. `Stage.auto_actions` = `stage_directions(...)`. Validate checks
+  written actions only; the planner emits only built-in actions and expressions.
+- **Fingerprint**: `auto_direct` is config; `cartoon/directing.py` is render code.
+- **Visible**: `project_directions` (`directing_used` skips the session when unused); storyboard
+  `auto:` line (`auto_label`, `AUTO_LINES` 2; JSON `auto`); **`vidgen direct [PROJECT] [--print]
+  [--scene ID] [--variant NAME] [--json]`** (`--print`: `directions_yaml` to paste; pasted
+  actions are written, so nothing more is added); JSON `project, variant, scenes: [{scene,
+  beats: [{beat, actions}]}]`.
 
 ### 69.24 Automatic directing, part 2: gestures, close-ups and the lint check (Step 90)
 
-Two more passes in `cartoon/directing.py`'s `_PASSES` (after looks and reactions, in
-`DIRECTING_KINDS` order) and a lint check of what the planner adds. Still no manim and no
-rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure function.
-
-- **Inputs**: `CastMember.gestures` (the gestures of `GESTURES` whose `ACTION_NEEDS` entry
-  `gesture: <kind>` the character's parts meet); `BeatInput.seconds` and `.words` (the
-  narration's length and `WordTime`s from its start: `_beat_words`, the MP3's length else the
-  word-count estimate, `beat_word_times` as captions use them; only read for beats with
-  `gestures` or `closeups` on and a speaker). `StageFrame(frame_width, frame_height, stage_width,
-  camera_x, places, props, marks)`: the stage's geometry in Manim units, `StagePlace(x, feet_y,
-  height, facing)` per character; `stage_frame(project, params)` builds it from a `stage`'s
-  params with `stage_layout` as `Stage.construct` places them (frame size from the video's
-  `format` by `render.worker.frame_size`). `Stage.auto_actions` passes it to `stage_directions`.
-- **State**: `_SceneState` also follows each character's feet x (`None`: not known, after a
-  `move_along` / `keyframes` of the whole character), its facing and the camera's centre x
-  (`None` while it follows): `_follow_written` applies written `enter` (to `to`, else its place;
-  facing the way it walks, from the `side` or the view's nearer edge), `walk_to` (facing the way it
-  goes), `turn`, `look_at` (facing the target's x by `look_pose`), `pan` (to the targets' or the
-  place's x, kept on the stage by `view_center_within`) and `follow`. Automatic looks turn the
-  character too.
-- **Predicted stills** (`_still`): the beat's still as a lint `StillContext` built from the
-  state, 100 px per unit: a `character` object per present character whose x is known, its box
-  `FIGURE_HALF_WIDTH` 0.21 heights to each side (with an arm gesture: `GESTURE_REACH` 0.4 / 0.35
-  forward for `point` / `wave`, 0.34 to both sides for `shrug`), its `face` from `FACE_BOTTOM` 0.5
-  heights up, `facing`, `speaking` (a speaker of the beat), `looked_at`; the frame's `camera`
-  (zoom, centre). The proportions are the generator's looks measured (an SVG look is taken to be
-  alike). `still_findings(ctx)` runs the registered rules of `CHECKED_RULES` (`off_stage`,
-  `facing_away`, their default settings) and returns `(rule, object names)`; an action is added
-  only when the still with it has no finding the still without it lacks. `bubble_overlap` needs no
-  check: automatic actions draw no bubble and move no face, and no close-up goes into a beat with
-  a bubble (the bubble is placed for the view at its start). Without a `StageFrame` (or while the
-  camera follows) looks are not checked (as in Step 89), and arm gestures and close-ups are not
+- **Inputs**: `CastMember.gestures`; `BeatInput.seconds` / `.words` (`_beat_words`, read only
+  when needed); `StageFrame` / `StagePlace` from `stage_frame(project, params)` (as
+  `Stage.construct` places them). `_SceneState` tracks feet x, facing and camera x through written
+  moves.
+- **Lint check**: `_still` predicts the beat's still as a `StillContext` (figure box
+  `FIGURE_HALF_WIDTH` 0.21 heights plus `GESTURE_REACH`); `still_findings` runs `CHECKED_RULES`
+  (`off_stage`, `facing_away`); an action is added only if it adds no finding. Without a
+  `StageFrame` or while following, looks are unchecked and arm gestures and close-ups are not
   added.
-- **Gestures** (`_plan_gestures`): `stressed_word(words, seconds)`: the first `*word*`
-  (`emphasis`), else the first all-capitals word of 2+ letters (`capitals`), else the longest word
-  of `LONG_WORD_LETTERS` 6+ letters by spoken length (`longest`, only when the speaker did not
-  gesture in its previous line: `gestured_line`). `gesture_choices(word, text, seed, last)`: the
-  word's own (`NEGATIONS` shake_head, `AFFIRMATIONS` nod, `GREETINGS` wave, `POINTING` point),
-  the line's (question shrug, negation shake_head), then `EMPHASIS_GESTURES` (point, nod, shrug)
-  shuffled by `random.Random("<scene>/<beat>/<speaker>")`, the speaker's last automatic gesture
-  last. The first speaker not touched with gestures takes the first choice its parts allow, that
-  fits and passes the check (head gestures always pass): at most one per line. `at` (rounded
-  down to hundredths) starts it `GESTURE_EASE` of its length before the word, not before
-  `LOOK_SECONDS` 0.5 when the speaker got an automatic look in the beat, and so that it ends
-  within the narration; a line too short for it gets none (the action runner would rush it).
-- **Close-ups** (`_plan_closeups`): a line of at most `SHORT_LINE_WORDS` 5 words right after a
-  beat of at least `LONG_LINE_WORDS` 8 gets `zoom` on its first speaker, `scale: CLOSEUP_SCALE`
-  (2, centred on its box, kept on the stage), `run_time` `CLOSEUP_SECONDS` 0.5 when both moves fit
-  in 80 % of the narration after the speaker's look, else `CLOSEUP_CUT_SECONDS` 0.03 (a cut in and
-  back: under a frame at 25 fps, so the runner plays it at once and never rushes it; the runner
-  ends the narration's actions at its end, so a 0.5 s move into a 0.8 s line was shortened and
-  `rushed_animation` warned; since Step 95 the cut is a `shot: closeup`, §69.29). Not in the beat after a close-up or a written `zoom`, nor with a
-  written `MOVING_ACTIONS` action (walks, `enter`, `exit`, `move_along`, `keyframes`, `pan`,
-  `follow`, `zoom`), a `say` with a bubble or an automatic gesture of the speaker, nor while the
-  camera follows. The check: on the zoomed view the speaker is wholly in view (`off_stage` on the
-  view with the zoom left out of the frame's camera, since the rule skips zoomed stills), and
-  `facing_away` adds nothing (in a close-up the one it talks to may be out of view and lint then
-  takes the nearest character in view as the listener).
-- **Visible**: as §69.23 (`vidgen direct`, the storyboard's `auto:` line); MCP tool `direct`
-  (`vidgen direct --json`; read-only; `variant`, `scene`).
-- **Measured on `examples/cartoon`** (scratch copies, preview 854x480, `vidgen lint --fail-on
-  warning`): with `auto_direct: true` the planner adds a `look_at` (hill_told) and a `shake_head`
-  (yard_expert: its `say` only voices moss); lint clean. A copy with only the walks, entrance,
-  flight, pan, jump and confetti kept (and `hill_told` cut to "Told you.") gets 13 automatic
-  actions (looks, reactions, two shrugs, a cut close-up); lint clean. The committed example is
-  unchanged (its explicit actions are the guide's example of writing them).
-- **Emphasis marks** (Step 91): `BeatConfig` takes the asterisks of `*word*` out of `text` when
-  the config is read (`config.EMPHASIS`, `strip_emphasis`; one word or a few, not `2*3*4`, `a * b`
-  or `**bold**`) and keeps the written text in the private `_marked_text` (`marked_text`). So every
-  reader of `beat.text` (TTS and its hash, captions, SRT, bubbles, readback, lint, slides) gets it
-  without them; a beat without marks is unchanged (its audio hash too). `_beat_words` times the
-  plain text and gives each word its written form (same word count), `stage_directions` passes
-  `marked_text`, so `stressed_word` still finds `*word*`. The scene fingerprint adds `emphasis`
-  (beat id -> marked text) when a scene has marks, since they change the automatic gestures.
-- **Not done here**: English word lists; a close-up waits for changes to its speaker at
-  the beat's start (the undoing of the speaker's reaction of the beat before) before it moves;
-  depth and props are not in the predicted stills (`hidden_speaker`, `character_overlap` not
-  checked: automatic actions move no one); a written `zoom` with `until` is not followed (the
-  planner takes the camera as unzoomed); shots: §69.29. Tests:
-  `tests/test_cartoon_directing.py` (Step 90 part).
-
+- **Gestures**: `stressed_word` (`*word*`, else an all-capitals word, else the longest word of 6+
+  letters if the speaker did not gesture last line); `gesture_choices` (the word's own list, the
+  line's cue, then `EMPHASIS_GESTURES` shuffled by `"<scene>/<beat>/<speaker>"`); at most one per
+  line, timed to land on the word and end within the narration.
+- **Close-ups**: a line of ≤ `SHORT_LINE_WORDS` 5 words after one of ≥ `LONG_LINE_WORDS` 8 gets
+  a `zoom` on its speaker (`CLOSEUP_SCALE` 2, `CLOSEUP_SECONDS` 0.5) when both moves fit in 80 %
+  of the remaining narration, else a `shot: closeup` (§69.29); not after a close-up, not with a
+  written `MOVING_ACTIONS` action, a bubble `say` or a gesture, nor while following.
+- **MCP** tool `direct` (read-only).
+- **Emphasis marks**: `BeatConfig` strips `*word*` asterisks from `text` on read
+  (`config.EMPHASIS`, `strip_emphasis`; not `2*3*4`, `a * b`, `**bold**`) and keeps
+  `marked_text`, so TTS hashes, captions and every reader see plain text (unmarked beats
+  unchanged); the scene fingerprint adds `emphasis` when a scene has marks.
 ### 69.25 Screenplays (Step 91)
 
 `vidgen screenplay FILE [--out DIR|FILE.yaml] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]`
@@ -8061,1483 +7140,534 @@ without them renders as before.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 
-- **Formula** (`vidgen/render/jobs.py`, `jobs_for(available_bytes, cores, per_job_bytes)`):
-  `min(available_bytes // per_job_bytes, cores)`, at least 1; 1 when the memory cannot be read.
-  `choose_jobs()` reads both and returns a `JobsChoice(jobs, cores, per_job_bytes, memory)` with a
-  `reason` (`5.2 GB available (/proc/meminfo MemAvailable) / 1.5 GB per job = 3, 2 CPU cores`)
-  and `to_json()`.
-- **Available memory** (`available_memory()`, `MemoryReading(available_bytes, source)`), standard
-  library only; swap is never counted:
-  - Linux: `MemAvailable` of `/proc/meminfo`; `cgroup_headroom` walks the process's memory cgroup
-    (from `/proc/self/cgroup`) and its parents, v2 `memory.max` / `memory.current` /
-    `inactive_file`, v1 `memory.limit_in_bytes` / `memory.usage_in_bytes` / `total_inactive_file`,
-    and takes the smallest `limit - (usage - inactive file cache)`; the smaller of the two wins.
-    When the group's path from `/proc/self/cgroup` is not under the mount (a container), the
-    mount's root group is read.
-  - Windows: `ullAvailPhys` of `GlobalMemoryStatusEx` through `ctypes`.
-  - macOS: free + inactive pages of `vm_stat` (as `psutil` counts available memory).
-  - Other systems: unknown, so 1 job.
-- **Cores** (`cpu_cores()`): `len(os.sched_getaffinity(0))` where it exists, else `os.cpu_count()`.
-  A cgroup CPU quota is not read.
-- **Per-job figure** `PER_JOB_BYTES` = 1.5 GB, from measurements of one scene render at a time
-  (`--jobs 1`, `--no-audio`) in a fresh cgroup-v1 memory group, polling `memory.stat` every 50 ms
-  (peak anonymous memory of the group = the vidgen command, the worker and its ffmpeg):
-
-  | example | format | peak RSS of the group | largest process | incl. page cache | wall |
-  |---|---|---|---|---|---|
-  | `cartoon-muffin-mystery` | 640x360 @ 15 (preview) | 291 MB | 252 MB | 439 MB | 53 s |
-  | `cartoon-muffin-mystery` | 1920x1080 @ 30 | 756 MB | 717 MB | 995 MB | 191 s |
-  | `cartoon-rain-check` | 640x360 @ 15 (preview) | 288 MB | 246 MB | 557 MB | 56 s |
-  | `cartoon-rain-check` | 1920x1080 @ 30 | 790 MB | 752 MB | 1104 MB | 195 s |
-
-  (MB = MiB here; 790 MiB = 0.83 GB.) 1.5 GB is about 1.8 times the largest peak: room for
-  heavier scenes (pictures, video clips) without the 3 GB of the task list's default, which would
-  have halved the jobs on an 8 GB machine for no measured reason. Formats above 1080p are not
-  covered: memory grows with the pixel count (0.30 GB at 0.23 MP, 0.83 GB at 2.07 MP), so a 4K
-  render needs about 2.5 GB per job; the docs say to give `--jobs N` there.
-- **CLI**: every `--jobs` (`render`, `storyboard`, `lint`, `thumbnail`, `slides`, `gallery`) takes
-  `N` or `auto` (`_jobs_value`; anything else is a usage error `invalid value: 'x' (a whole
-  number, or auto)`; `0` is still the command's `--jobs must be at least 1`). `main` /
-  `_run_json` call `_resolve_auto_jobs` before the command: it replaces `auto` by the number,
-  prints `jobs: N (auto: <reason>)` on stdout (stderr with `--json`) and, with `--json`, the
-  document gets a `jobs` object (`JobsChoice.to_json()`, also on an error document). An explicit
-  number adds nothing.
-- **MCP**: the tools with `jobs` accept an int 1–16 or `"auto"` (default still 1) and pass
-  `--jobs=auto` on.
-- **Unchanged**: Kokoro `vidgen tts` has no `--jobs` and runs alone (the MCP server already runs
-  heavy tools one at a time); the Python functions (`render_project(jobs=...)` and the others)
-  take an int.
+- `vidgen/render/jobs.py`: `jobs_for(available_bytes, cores, per_job_bytes)` =
+  `min(available // per_job, cores)`, at least 1; 1 when memory is unknown. `choose_jobs()` →
+  `JobsChoice(jobs, cores, per_job_bytes, memory)` with `reason` and `to_json()`.
+- `available_memory()` → `MemoryReading(available_bytes, source)`, stdlib only, swap never
+  counted: Linux the smaller of `/proc/meminfo` `MemAvailable` and `cgroup_headroom` (v1/v2 limit −
+  (usage − inactive file cache), smallest over the group and its parents); Windows
+  `GlobalMemoryStatusEx.ullAvailPhys`; macOS free + inactive `vm_stat` pages; else unknown.
+  `cpu_cores()`: `os.sched_getaffinity(0)` else `os.cpu_count()` (no cgroup CPU quota).
+- `PER_JOB_BYTES` 1.5 GB (about 1.8x a 1080p scene render's peak; 4K needs about 2.5 GB, so docs
+  say to give `--jobs N` there).
+- Every CLI `--jobs` (`render`, `storyboard`, `lint`, `thumbnail`, `slides`, `gallery`) takes `N`
+  or `auto` (`_jobs_value`; else usage error; `0` → `--jobs must be at least 1`).
+  `_resolve_auto_jobs` (in `main` / `_run_json`) replaces `auto`, prints `jobs: N (auto:
+  <reason>)` (stderr with `--json`) and adds `jobs` to the JSON document (also on error). MCP tools
+  take int 1–16 or `"auto"` (default 1). Python functions take an int; `vidgen tts` has no `--jobs`.
 
 
 ## 71. A cartoon host beside any scene (Step 133)
 
-A character of `characters:` presents an explainer: `host:` draws it beside the content of every
-scene type that lays out in the safe area. Part 1 (this step): placement, the region split,
-speaking, idle life, layout dump and lint. Pointing, reacting, walking between sides and
-entering / leaving are Step 134 (§71.1, §71.2). Reference: docs/CONFIG.md "A host beside any
-scene".
+`host:` draws a character of `characters:` beside the content of every scene type that lays out
+in the safe area. User keys: docs/CONFIG.md "A host beside any scene".
 
-- **Config** (`config.py`): `VideoConfig.host: Identifier | HostConfig | None` (a name is
-  `{character: name}`); `HostConfig(character, side left|right = right, size (0, 0.9] | None,
-  place auto|beside|below = auto, floor = true, floor_color = dim, facing auto|left|right|front =
-  auto, speaks narrator|own = narrator, pose, expression)`. `SceneConfig.host: SceneHost | None`
-  with `SceneHost = bool | Identifier | HostOverride`: `false` none, `true` / unset the video's, a
-  name (the video's settings with that character), or `HostOverride` (every key optional; the
-  keys written, `model_fields_set`, replace the video's). Variants deep-merge as usual.
-- **Which host** (`cartoon/host.py`, no manim): `video_host(config)`, `scene_host(config, scene)`
-  (`ValueError` for `true` or a mapping without a character when the video has none).
-  `host_problems(config)` runs in `parse_config` (next to the voice references, so variants and
-  every command reject them): those two, an unknown character (did-you-mean), a pose /
-  expression the character does not know (`cast.pose_name_problem`); a scene's are checked for
-  the keys it writes (`scenes[i].host.pose`). `cli.project_problems`: `floor_color` not a theme
-  colour (`host_color_problems`) and a scene's own `host:` on a type with `takes_host = False`;
-  `validate_warnings`: `speaks: own` for a character without a voice (`host_warnings`).
-- **Which scene types**: `NarratedScene.takes_host: ClassVar[bool] = True`; `stage` (its
-  characters stand on the set) and `card` (a full-frame title card) set `False` and ignore the
-  video's host. Every other built-in lays out in `self.safe_area`; `text_card` centred its text
-  on the frame's origin and now centres it on the safe area (equal without reserved room).
-- **Geometry** (`host_layout(area, frame_width, frame_height, host, width_ratio) -> HostLayout`,
-  pure; `area` = the scene's safe area after the overlays' reserves, as a tuple): `below` when
-  `place: below`, or `auto` in a portrait frame (9:16; 16:9 and 1:1 stand beside). Height =
-  `size` or `HOST_SIZES` (landscape 0.5, square 0.42, portrait 0.36) x the shorter side (8
-  units), capped at `BESIDE_MAX_HEIGHT` 0.95 / `BELOW_MAX_HEIGHT` 0.4 of the area's height and,
-  beside, so the column is at most `BESIDE_MAX_WIDTH` 0.4 of the area's width. The column is the
-  figure's width (`width_ratio` x height, measured from the posed character) x (1 + 2 x
-  `FLOOR_OVERHANG` 0.25) with a floor, else the figure's width. **Reserve**: beside, the
-  full-height column at the area's `side`; below, the full-width band at the area's bottom (the
-  figure at its `side` end) — the whole column / band, so `overlays.avoid` always keeps the
-  content on the intended side. Feet on the area's bottom edge; `facing: auto` looks at the
-  content (`left` on the right side). `HostLayout(height, feet, figure, floor, reserve, facing,
-  below)`.
-- **Drawing** (`cartoon/host_drawing.py`): `build_host(host, entry, *, theme, area, frame_width,
-  frame_height, root, motion) -> HostFigure`: `build_character` (the theme's colours, idle per the
-  entry's `idle`) at `REFERENCE_HEIGHT` with the facing, pose and expression to measure
-  `width / REFERENCE_HEIGHT`, then built again at the layout's height (so its outline has the
-  width of a character that tall, §69.1) and shifted so its drawing's middle is on the column's
-  middle and its feet on the area's bottom (an arm held out does not push it out of its column).
-  The floor is a `Line` across the column in `floor_color`, `OUTLINE_WIDTH x height /
-  REFERENCE_HEIGHT` wide (at least a pixel). `HostFigure(VGroup)`: `floor`, `character`, `layout`,
-  `config`, `host_name`. No stage code is used (`stage_layout`, grounds, shadows untouched).
-- **In the scene** (`scene.py`): `__init__` builds the overlays, then `_build_host()`: the host in
-  `self.safe_area` (overlays already reserved, so a bottom caption band stays below it), its
-  reserve appended to `_reserved` (§41's mechanism: `safe_area` = the margins' area cut by
-  `avoid(area, box, gap=0.2)` per reserved box), so every named region and `place()` call lays
-  out beside it, unchanged scene code. `self.host` (`None` without one). `setup()` adds it with
-  `add_foreground_mobject`: Manim keeps foreground mobjects last, so while it idles or speaks
-  (time-based updaters) Manim redraws only the host each frame over a static image of the rest
-  (`get_moving_mobjects` returns the list from the first moving mobject on). Measured at preview
-  854x480: a bullets scene of 15.5 s renders in 6.4 s with the host, 5.4 s without; a bar chart
-  of 8.1 s in 5.2 s / 4.6 s.
-- **Who speaks**: `host_speaks(config, host, voice)`: the host's own voice always; with `speaks:
-  narrator` also any voice no other character owns (the narrator's, a named voice nobody
-  has); `own`: only its own. `NarratedScene.narrate` calls `_host_speak(beat)` right after the beat
-  starts (`self.speak(host.character)`: the beat's viseme track on the scene clock, §69.11) and
-  `end_lip_sync` after the beat (on under an overlapping next beat, §69.34), like
-  `Stage.narrate`. A beat in another character's voice leaves the mouth at rest.
-- **Between scenes**: on screen from frame 0. `host_continues(config, index, takes_host)`: the
-  next scene shows an equal `HostConfig` (and both types take hosts) → `finish()` keeps it out
-  of the outro's `clear_all` (as carried targets are), so it stands still across a cut. The
-  fingerprint gains `next_host` (the next scene's type and `host:`) when the video or either
-  scene sets a host.
-- **Layout dump**: `HostFigure` → one object of kind `host` named after the character, its box
-  covering the floor line; `_character_keys` (`facing`, `speaking`, `face`, `viseme`...) plus
-  `side` and `below`. Cartoon rules read kind `character` only, so they do not see the host.
-- **Lint** `host_overlap` (layout rule after `overlay_overlap`, default warning, `min_overlap`
-  0.02 of the smaller box): the host's box against every scene object and overlay object, except
-  particles, motion effects, and scene objects whose box holds the whole host box (a backdrop:
-  full-frame image, band); findings on one overlay group together. `covered_text` skips the host
-  (this rule's finding). `describe` names it `host 'dot'`.
-- **Checked by eye** (scratch project, preview, `vidgen storyboard`): bullets, bar chart, code and
-  text_card in 16:9 (also with bottom captions), 9:16 (plain: the host in a band below the
-  chart / list / listing; with karaoke captions: above the caption band), 1:1 (beside), a left
-  host facing front, happy, without floor; the code scene with `pose: thinking`. `vidgen lint`:
-  0 findings in 16:9, 16:9 captions and 9:16 karaoke. Mid-beat stills: the mouth moves in the
-  narrator's beats (`speaking: true`, visemes) and rests in a guest's.
-- **Not done**: a `zoom` / `pan` moves the host with the scene (it is a scene mobject, not an
-  overlay: the host actions need scene targets). A scene type that draws outside
-  `self.safe_area` can overlap it (`host_overlap` reports it). The host's idle motion counts as
-  change for `dead_air` (as a stage's characters). Pointing, reacting and moving: §71.1, §71.2.
+- **Config**: `VideoConfig.host: Identifier | HostConfig | None` (a name = `{character: name}`);
+  `HostConfig(character, side=right, size (0, 0.9] | None, place auto|beside|below, floor=true,
+  floor_color=dim, facing auto|left|right|front, speaks narrator|own, pose, expression,
+  auto_direct)`. `SceneConfig.host`: `false` none, `true`/unset the video's, a name, or
+  `HostOverride` (keys written, `model_fields_set`, replace the video's).
+- **Checks** (`cartoon/host.py`, no manim): `video_host`, `scene_host`; `host_problems` in
+  `parse_config` (unknown character, pose, expression; `host_action_problems`, §71.1);
+  `cli.project_problems`: `floor_color` not a theme colour, a scene `host:` on a type with
+  `takes_host = False`; `host_warnings`: `speaks: own` without a voice.
+- **Scene types**: `NarratedScene.takes_host` (ClassVar, default true); `stage` and `card` false.
+  Others lay out in `self.safe_area`.
+- **Geometry** (pure `host_layout(area, frame_width, frame_height, host, width_ratio) ->
+  HostLayout`; `area` = safe area after overlay reserves): `below` for `place: below` or `auto` in
+  portrait. Height = `size` or `HOST_SIZES` (landscape 0.5, square 0.42, portrait 0.36) × the
+  shorter side, capped by `BESIDE_MAX_HEIGHT` 0.95 / `BELOW_MAX_HEIGHT` 0.4 of the area height and
+  `BESIDE_MAX_WIDTH` 0.4 of its width. Column = figure width × (1 + 2 × `FLOOR_OVERHANG` 0.25)
+  with a floor. The **reserve** is the whole column (beside) or full-width bottom band (below), so
+  `overlays.avoid` keeps content on the other side. Feet on the area's bottom; `facing: auto` looks
+  at the content.
+- **Drawing** (`cartoon/host_drawing.py` `build_host(...) -> HostFigure`): measured at
+  `REFERENCE_HEIGHT`, rebuilt at the layout height (§69.1 outline), centred in its column; floor
+  `Line` in `floor_color`. `HostFigure(VGroup)`: `floor`, `character`, `layout`, `config`,
+  `host_name`.
+- **In the scene**: `_build_host()` after overlays appends the reserve to `_reserved` (§41), so
+  every region and `place()` lays out beside it. `self.host` (`None` without). Added with
+  `add_foreground_mobject` (Manim redraws only it over a static image while it idles).
+- **Who speaks** (`host_speaks`): its own voice, plus (with `speaks: narrator`) any voice no other
+  character owns; `narrate` calls `_host_speak` / `end_lip_sync` per beat (§69.11, §69.34).
+- **Between scenes**: on screen from frame 0; `host_continues` (next scene shows an equal
+  `HostConfig`) keeps it out of the outro's `clear_all`. The fingerprint gains `next_host` when the
+  video or either scene sets a host.
+- **Layout dump**: kind `host` (named after the character, box includes the floor) with
+  `_character_keys`, `side`, `below`; cartoon rules read kind `character` only. **Lint**
+  `host_overlap` (warning, `min_overlap` 0.02 of the smaller box): host box vs scene and overlay
+  objects, except particles, motion effects and backdrops holding the whole host box; `covered_text`
+  skips the host.
+- The host is a scene mobject (moves with `zoom`/`pan`); its idle motion counts for `dead_air`.
 
 ### 71.1 Host actions: pointing, reacting, moving (Step 134)
 
-Six built-in beat actions in `scenes/host_actions.py` (written against `vidgen.api` only) act on
-`scene.host`; the host is never a target (they name a scene target, an expression or a side).
-Reference: docs/CONFIG.md "Pointing, reacting and moving (host actions)".
+`scenes/host_actions.py` (only `vidgen.api`): `host_point`, `host_look`, `host_react`,
+`host_move`, `host_enter`, `host_exit`; they act on `scene.host`, never a target. User keys:
+docs/CONFIG.md "Pointing, reacting and moving (host actions)".
 
-- **Common** (`_HostAction(_Acting)`): `alters_targets = False` and the new
-  `Action.alters(scene) -> [scene.host]`, which `ActionRunner` adds to the mobjects an action
-  changes (`_changed`), so two host actions due together play one after the other.
-  `scene_problems`: a type with
-  `takes_host = False` (`stage`, `card`) rejects them. `cartoon/host.py`'s
-  `host_action_problems` (run by `host_problems` in `parse_config`): a host action in a scene
-  without a host, more than one move (`HOST_MOVES`: `host_move`, `host_enter`, `host_exit`) in a
-  beat, a `host_react` expression the character does not know.
-- **Pointing geometry** (pure, `cartoon/host.py`): `pointed_spot(shoulder, box)` = the point of
-  the target's box nearest the shoulder (clamped); `hand_goal(shoulder, spot, room, reach_out =
-  HAND_REACH_OUT 0.1)` = the point on the shoulder→spot line as far as the host's room (its
-  reserved column / band) grown by 0.1 allows: less than `avoid`'s 0.2 gap, so a pointing hand
-  never touches the content. `host_point` sets the look first (`_looked`: `look_pose` towards the
-  spot from the head, as `look_at`), reads the shoulder in that state, then
-  `Character.reached_parts(hand, goal)` (the two-bone solver of §69.26: elbow bent when the goal
-  is nearer than the arm is long, straight when farther) with the near arm (`left`, else
-  `right`). The target box is each target's `outline`, else its parts on screen, else its
-  mobject. One `PoseChange`; reverted at the next beat (`until_next_beat`) or `until:`.
-- **Pointer line** (`line: true`, `color` `dim`): a `Line` from the hand to `POINTER_GAP` 0.12
-  short of the spot, `POINTER_WIDTH` 3, growing in the action's second half, its start kept on
-  the hand by an updater; it fades with the revert. The layout dump records it as kind `pointer`
-  (attribute `host_pointer_of`), which `host_overlap` skips along with the host's own effect
-  symbol. Off by default and never added by automatic directing (it crosses whatever lies
-  between the hand and the target).
-- **`host_look`**: the same look without the arm. **`host_react`**: `posed_state(expression=)`
-  and, with `effect`, an effect symbol (§69.40's `show_symbol` / `hide_symbol`, factored out of
-  the `effect` action).
-- **`host_move`** (target `other_side` default, `left`, `right`; option `speed`). Decision: **the
-  content swaps side with the host.** `host_move_plan(area, feet_x, reserve, side, below, to) ->
-  HostMove(side, feet_x, reserve, content_shift)` mirrors the feet and the room within the area;
-  beside the content `content_shift` is the column's width, towards the side the host left. The
-  action moves the camera frame by `-content_shift` (`MoveCamera`, `moves_camera = True`), so
-  every scene mobject, also one revealed later, moves on screen together and the scene's own
-  layout code needs no second layout; overlays and captions are fixed in the frame and stay. The
-  host walks (`Walk`, then a `TURN_SECONDS` 0.3 turn to the content) to the mirrored feet in
-  scene coordinates (screen x minus the accumulated shift), the floor line fades out, jumps and
-  fades in. In a band below the content (9:16) only the host walks (`content_shift` 0).
-  `HostFigure` tracks `side`, `feet_x` and `room` on screen, and `content_shift`; `_room(host)`
-  gives the room in scene coordinates for `hand_goal` after a move. A `zoom` afterwards zooms
-  from the moved view. The next scene starts on its own `side`; `finish()` keeps the host on
-  through the cut only when it is `at_home` (present and on its configured side).
-- **`host_enter` / `host_exit`** (target `left` / `right`, default its side; option `speed`):
-  a walk between its place and `offstage_x(side, view edges, host.half_reach)` (`half_reach`:
-  the drawing's reach from the feet on its wider side, so an animal's tail does not stay in
-  view), the floor fading in / out. `starts_present(actions)`: a scene whose first passage is an
-  enter starts with the host parked off screen (`NarratedScene._park_host` in `setup()`); its
-  room stays reserved either way, so the layout never jumps. `host_exit` clears `pointing_at`.
-- **Layout dump**: the `host` object's `side` is `HostFigure.side` (where it stands now), plus
-  `pointing_at` while it points.
+- `_HostAction`: `alters_targets = False`; `Action.alters(scene) -> [scene.host]` joins
+  `ActionRunner._changed`, so host actions due together play in sequence. Refused on
+  `takes_host = False` types, without a host, with more than one of `HOST_MOVES` per beat, or a
+  `host_react` expression the character lacks.
+- **Point**: `pointed_spot(shoulder, box)`; `hand_goal(..., reach_out=HAND_REACH_OUT 0.1)` keeps
+  the hand inside the host's room grown by 0.1 (< `avoid`'s 0.2 gap, so it never touches content);
+  look first, then `Character.reached_parts` (§69.26) with the near arm; reverted at the next beat
+  or `until:`. `line: true` adds a pointer `Line` (`POINTER_GAP` 0.12, `POINTER_WIDTH` 3), dumped
+  as kind `pointer`, skipped by `host_overlap`; never added automatically.
+- **`host_react`**: expression and optional effect symbol (§69.40).
+- **`host_move`** (`other_side` | `left` | `right`): **the content swaps side with the host**.
+  `host_move_plan(...) -> HostMove(side, feet_x, reserve, content_shift)`; the camera frame moves
+  by `-content_shift` (`moves_camera = True`), so all scene mobjects shift together without a
+  second layout; overlays stay. Below (9:16) only the host walks. The next scene starts on its own
+  `side`; `finish()` carries the host over a cut only when `at_home`.
+- **`host_enter` / `host_exit`**: walk to/from `offstage_x(side, view, half_reach)`;
+  `starts_present` parks the host off screen when the scene's first passage is an enter; its room
+  stays reserved.
+- Layout dump: `side` is the current side; `pointing_at` while pointing.
 
 ### 71.2 Automatic host directing (Step 134)
 
-`cartoon/host_directing.py` (no manim). Reference: docs/CONFIG.md "Automatic host directing".
+`cartoon/host_directing.py` (no manim). User keys: docs/CONFIG.md "Automatic host directing".
 
-- **When**: `directing_kinds(beat.auto_direct, host.auto_direct, video auto_direct)` per beat
-  (the nearest wins; new key `auto_direct: bool` on `HostConfig` / `HostOverride`).
-  `directing_used` also looks at hosts' `auto_direct`. `NarratedScene.auto_actions` now returns
-  `host_directions(project, spec, cls, params)` by default (`stage` overrides it unchanged).
-- **What a scene reveals**: the class method `NarratedScene.reveal_steps(params) ->
-  list[RevealStep(focus, result)]`, one per step passed to `reveal()`, mapped to beats with
-  `layout.distribute` exactly as `reveal()` does. Built-ins: `bullets` `item<N>` per item
-  (`reveal: all`: `item1`); `bar_chart` per bar (`per_beat`: `value_trend` of the bar and the one
-  before; `all`: the last bar with the trend first→last) plus the `highlight` bar's step;
-  `line_chart` a series per step with its first→last trend; `code` per `highlight` entry
-  (`line<N>`, `lines:<a>-<b>` when contiguous, `error` when `has_error_text` finds error,
-  exception, traceback, fail(ed/ure/s) or panic in the marked lines; none: `listing`).
-  `value_trend`: `rise` / `fall` when last − first exceeds `TREND_SHARE` 0.05 of the largest
-  magnitude.
-- **Planner** `plan_host_directions(beats: [HostBeat(id, actions, kinds, steps)], present)`,
-  pure, simple rules per beat: skip a beat with a written move (moves are the author's: they
-  change the layout, so automatic directing **never adds a move**, which also keeps "at most one
-  move per beat") or while the host is off screen (tracked through enters / exits); `gestures`:
-  `host_point` at the first revealed focus not pointed at before in the scene (one point per
-  beat) unless a `host_point` / `host_look` is written; `looks` (when no point was added and none
-  written): `host_look` at the first target of a written `highlight` / `callout` / `zoom` at its
-  `at`, else at the beat's first focus; `reactions`: the beat's first result →
-  `host_react` `HOST_REACTIONS` (rise happy, fall worried, error surprised) at `REACT_AT` 0.4,
-  with `HOST_EFFECTS` (sparkle, sweat, exclaim) as `effect` when `effects` is on, unless a
-  `host_react` is written. Every action is `ActionConfig.automatic` (shown as `(auto)` by
-  `vidgen direct` and the storyboard).
-- **Lint-safe by construction**: the hand stays in the host's room (`hand_goal`), looks and
-  reactions change only the host, the effect symbol is the host's own (skipped by
-  `host_overlap`), no pointer line is added.
-- **Example** `examples/host-explainer` ("Why Bread Rises", about 58 s, an original mouse host):
-  `host_enter` on the title, automatic points at bullets and bars and `happy` + sparkle as the
-  bars rise, a written `host_point` with `line: true` on a `process` column, `host_move` and
-  `host_exit` on the closing `text_card`. `vidgen validate` and `vidgen lint` (preview) clean;
-  stills checked by eye. Step 144 gave its beats `emotion:` (§72) and slowed `af_heart` from 0.95
-  to 0.75 (at 0.95 the real Kokoro lines ran at 3.6–4.6 words/s, `narration_speed` warnings): 66 s
-  with Kokoro narration; `vidgen lint --readback` finds only `unclear_speech` word flags (3
-  warnings, 7 info).
-- **Not done**: no `reveal_steps` for the other built-in scene types (the host only looks at
-  their written highlights); the host does not dodge a pointer line crossing other content; a
-  walk across passes in front of the content mid-beat (by design: it lasts about two seconds);
-  a `host_enter` on a scene with its own entrance animation starts after that animation.
+- `directing_kinds(beat, host, video auto_direct)`: nearest wins. `NarratedScene.auto_actions`
+  returns `host_directions(...)` by default (`stage` overrides).
+- `NarratedScene.reveal_steps(params) -> list[RevealStep(focus, result)]`, mapped to beats like
+  `reveal()`. Built-ins: `bullets` (`item<N>`), `bar_chart` (per bar, `value_trend`), `line_chart`
+  (per series), `code` (per highlight; `error` when `has_error_text`); other types none.
+  `value_trend` rise/fall above `TREND_SHARE` 0.05 of the largest magnitude.
+- `plan_host_directions(beats, present)`, pure: skips beats with a written move (**never adds a
+  move**) or with the host off screen; adds one `host_point` at the first new focus, else a
+  `host_look` at a written highlight/callout/zoom target or the first focus, and a `host_react`
+  (`HOST_REACTIONS` rise happy, fall worried, error surprised; `HOST_EFFECTS` sparkle, sweat,
+  exclaim) at `REACT_AT` 0.4 — each unless the author wrote that kind. All are
+  `ActionConfig.automatic`. Lint-safe by construction.
+- Example: `examples/host-explainer`.
 
 ## 72. Voices with feeling, part 1: Kokoro (Step 135)
 
-Reference: docs/CONFIG.md "Voices with feeling (`emotion`)". The owner found Kokoro's lines flat
-(Juno in "Rain Check"); `emotion:` gives a line a feeling without a new model.
+User keys: docs/CONFIG.md "Voices with feeling (`emotion`)".
 
-- **Config**: `emotion: NAME | {like, speed, pitch, gain, pauses}` (`EmotionSetting`;
-  `EmotionName` literal = `emotions.EMOTION_NAMES`, a test keeps them equal; `EmotionConfig`
-  ranges speed 0.5-2, pitch -3..3 semitones, gain -12..6 dB, pauses 0.25-3) on `BeatConfig`,
-  `VoiceConfig` and `VoiceEntry`. `voices.SPEAKER_FIELDS = {"emotion"}`: `resolve_voice` does not
-  pass the base voice's emotion to a named voice (it names that speaker, like `label`).
-  `Project.beat_emotion(beat_id) -> Prosody | None`: the beat's, else its effective voice's;
-  `None` when unset or neutral. `has_own_audio` also compares the beats' emotions.
-- **Table** (`emotions.py`, no manim): `Prosody(name, speed, pitch, gain, pauses)`, frozen and
-  hashable; `EMOTIONS` 13 rows (neutral, happy, excited, sad, angry, worried, scared, surprised,
-  calm, doubtful, sleepy, whisper, shout); `prosody(setting)`; `EMOTION_WORDS` (manner words →
-  rows) and `manner_emotion(manner)`.
-- **Providers**: `get_provider(voice, emotion=None)`; `beat_providers` makes one provider per
-  (voice name, emotion) (Step 135: Kokoro only; since Step 136 every provider, §73).
-  `tts.emotion_warnings` (in `tts_warnings`): §73. The dry run names the emotion.
-- **Kokoro** (`KokoroProvider(voice, emotion=...)`): `spec()` gains `emotion: {name, speed,
-  pitch, gain, pauses}` only when there is a non-neutral emotion (so every existing hash, the
-  pinned ones included, is unchanged). `spoken_speed` = voice speed × emotion speed (clamped to
-  0.25-4) is passed to Kokoro, whose word timings already reflect it. After synthesis
-  (`tts/prosody.py`, numpy): `inner_pauses(timed)` (punctuation tokens `, ; : — – . ! ? …` with
-  a word after them; ≥ 0.02 s), `scale_pauses` (above 1: silence inserted at the pause's middle,
-  `(pauses − 1) × max(pause, natural_pause)` with `CLAUSE_PAUSE` 0.2 s / `SENTENCE_PAUSE` 0.4 s,
-  because Kokoro's own comma pause is ~0.05 s and scaling it alone is inaudible; below 1: the
-  middle `(1 − pauses) × pause` cut) returning edits, `shift_time` moving every token time and
-  every phoneme time (`last_phonemes`, so the viseme track follows), `apply_gain` (a tanh soft
-  limiter above 0.7 of full scale towards 0.98 for boosts), then `pitch_filter` →
-  `asetrate=r·2^(st/12),aresample=r,atempo=1/…` passed to ffmpeg with the MP3 encode
-  (`convert_to_mp3(..., filters=)`, `pcm_to_mp3(..., filters)`): the length is kept, so nothing
-  else moves. Pauses need the word timings: English (`a` / `b`) only.
-- **Weighted blends**: `kokoro_voices.blend_weights("af_heart+af_bella:0.6")` → `[(af_heart, 0.4),
-  (af_bella, 0.6)]` (unweighted parts share the rest; all weighted: normalised; malformed: a
-  `ValueError`, a config error from `VoiceConfig` and `voice_provider_problems`).
-  `KokoroProvider.voice_for(pipeline)` mixes `pipeline.load_single_voice(name)` packs by weight
-  once and passes the tensor as the voice (kokoro 0.9.4's `KPipeline.__call__` /
-  `load_voice` accept a `FloatTensor`); `voice_parts` strips the weights, so language and
-  validate warnings work as for `,` blends. The voice string is in the hash as written.
-- **Screenplays**: `screenplay_project` sets a line's `emotion` from `manner_emotion(manner)`
-  (not `neutral`); emotion words are no longer reported as `# TODO:` manners, and a narrator's
-  manner that is only an emotion is not either.
-- **Measured** (real Kokoro 0.9.4, `af_heart`, CPU, the 15-word line "Not a cloud in the sky, Pip.
-  I checked, and the forecast said sunshine all day."; median pitch by autocorrelation, BS.1770
-  loudness): neutral 5.20 s / 202 Hz / -25.7 LUFS / comma pause 0.05 s / sentence pause 0.12 s;
-  excited 4.85 / 228 / -22.7 / 0.03 / 0.09; sad 6.16 / 185 / -28.9 / 0.15 / 0.35; whisper 5.69 /
-  189 / -34.7 / 0.09 / 0.23; shout 5.00 / 232 / -20.7 / 0.04 / 0.10; sleepy 7.01 / 178 / -30.2 /
-  0.19 / 0.40; `af_heart+af_bella:0.5` 5.50 / 196 / -25.3. Kokoro's peaks were 0.3-0.6, so the
-  limiter did not act. 3-4 s per line after the model load.
-- **Not done**: other providers (Step 136, §73); a real whisper (no breathiness: a quieter, slower,
-  lower voice); pauses outside English; emotion inside a line (one emotion per beat).
+- **Config**: `emotion: NAME | {like, speed, pitch, gain, pauses}` on `BeatConfig`, `VoiceConfig`,
+  `VoiceEntry` (`EmotionConfig`: speed 0.5-2, pitch -3..3 semitones, gain -12..6 dB, pauses
+  0.25-3; `EmotionName` = `emotions.EMOTION_NAMES`). `emotion` is in `voices.SPEAKER_FIELDS` (not
+  inherited by named voices). `Project.beat_emotion(beat_id) -> Prosody | None` (beat's, else its
+  voice's; `None` if neutral). `has_own_audio` compares emotions.
+- `emotions.py` (no manim): `Prosody(name, speed, pitch, gain, pauses)`; `EMOTIONS` 13 rows
+  (neutral, happy, excited, sad, angry, worried, scared, surprised, calm, doubtful, sleepy,
+  whisper, shout); `EMOTION_WORDS` / `manner_emotion` (screenplay manners → `emotion`).
+- `get_provider(voice, emotion=None)`; `beat_providers` keys providers by (voice, emotion).
+- **Kokoro**: `spec()` gains `emotion: {...}` only when non-neutral (old hashes unchanged). Speed
+  = voice × emotion (clamped 0.25-4) goes into Kokoro. `tts/prosody.py` then scales inner pauses
+  (English only, needs word timings; growing inserts `(pauses − 1) × max(pause, natural)` with
+  `CLAUSE_PAUSE` 0.2 / `SENTENCE_PAUSE` 0.4 s), shifts token and phoneme times (visemes follow),
+  applies gain (tanh soft limit above 0.7), and pitch-shifts length-preserving in the MP3 encode
+  (`asetrate,aresample,atempo`). One emotion per beat.
+- **Weighted blends**: `kokoro_voices.blend_weights("af_heart+af_bella:0.6")` (unweighted parts
+  share the rest; malformed → config error); `voice_for` mixes the packs; hashed as written.
 
 ## 73. Voices with feeling, part 2: ElevenLabs and OpenRouter (Step 136)
 
-Reference: docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter". The same `emotion:`
-(§72) is spoken by every provider; without one, every request and hash is as before.
+Every provider speaks `emotion:`; without one, requests and hashes are unchanged. User keys:
+docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter".
 
-- **Table** (`emotions.py`): `NamedCues(tag, stability, style, instruction)` and `NAMED_CUES`, one
-  row per emotion but `neutral` (a test keeps the names equal to `EMOTION_NAMES`);
-  `named_cues(prosody)` looks up the emotion's **name** (a mapping's `like`), so these providers
-  ignore a mapping's numbers and `like: neutral` changes nothing for them.
-- **ElevenLabs `eleven_v3`** (`voicesounds.is_tagged_voice`: provider `elevenlabs`, model id
-  starting `eleven_v3`): `Project.spoken(beat)` inserts `"<tag> "` at position 0 of the written
-  text with `Spoken.inserted` (term `emotion`), after the voice sounds are voiced, so the tag
-  comes first and belongs to no written word: captions, SRT, karaoke timings and the viseme track
-  map the alignment past it as they do for voice-sound tags (§69.33). The tag is part of the
-  text sent and so of the hash (`cache_key(text)`); `vidgen tts --dry-run` shows it in `says:`.
-  The voice settings stay. `readback.compare_beat` drops spoken words that are bracketed audio
-  tags no written word claims (`_audio_tags`), so neither an emotion tag nor a v3 voice-sound
-  tag counts as a word missing from the transcript. Tags: `[whispers]` and `[excited]` are in
-  ElevenLabs' documented v3 tag list (with `[sighs]`, `[laughs]` of the voice sounds); `[happy]`, `[sad]`, `[angry]`,
-  `[nervous]`, `[surprised]`, `[thoughtful]`, `[shouting]` are emotion words of its examples;
-  `[calm]` and `[tired]` were chosen by analogy (v3 reads free-form tags; untested against the
-  real API, which no step may call).
-- **Other ElevenLabs models**: `ElevenLabsProvider(voice, emotion=...)` keeps `cues` (none for
-  v3); `settings` adds the row's `stability` and `style` changes to the voice's
-  `voice_settings`, each clamped to 0-1 and rounded to 3 decimals. The text is never changed.
-  The hash follows through the settings in `cache_key` (the kphi3 legacy key then no longer
-  matches, as for any other settings).
-- **OpenRouter models with instructions** (`openrouter.takes_instructions(model)`:
-  `INSTRUCTION_PREFIXES` `openai/`, `google/`): `OpenRouterTTSProvider.instructions` = the
-  voice's own `instructions` (a full stop added when it has none) + `" "` + the row's sentence, or
-  the sentence alone; `request_body` sends it. `spec()` keeps `instructions` as the voice's
-  (pinned keys unchanged) and gains `emotion: {name, instruction}`.
-- **Other OpenRouter models**: no instructions and no word timings, so `with_prosody(mp3,
-  emotion)` changes the returned audio as Kokoro's is changed, without the pauses: decoded at
-  24 kHz mono (`sfx.decode_audio`), `prosody.apply_gain` (soft-limited boost), then
-  `prosody.tempo_filter` (`atempo`, 0.5-2) and `prosody.pitch_filter` in the MP3 encode
-  (`kokoro.pcm_to_mp3`). `spec()` gains `emotion: {name, speed, pitch, gain}` (not `pauses`:
-  they change nothing here). An emotion whose speed, pitch and gain are neutral (only pauses) is
-  dropped, so it keeps the plain hash.
-- **Providers per beat**: `beat_providers` keys every provider by (voice name, emotion);
-  `tts.EMOTION_PROVIDERS` is gone. `tts.speaks_emotion_by_name(voice)`: ElevenLabs, or an
-  OpenRouter model with instructions.
-- **Validate** (`tts.emotion_warnings`, replacing Step 135's "only kokoro" warning): (1) beats
-  whose emotion's numbers differ from its named row on a name-only voice (the numbers are
-  ignored); (2) per OpenRouter model without instructions, the beats whose emotion changes only
-  speed, pitch and loudness. Kokoro and plain named emotions give no warning.
-- **Not done**: OpenRouter's own ElevenLabs models (`elevenlabs/eleven-v3`) are treated like
-  any model without instructions (post-processing), not given tags; no ElevenLabs `speed`
-  setting; tags not checked against the real API (mocked tests only).
+- `NAMED_CUES` (`NamedCues(tag, stability, style, instruction)`, every emotion but neutral):
+  looked up by **name** (`like`), so these providers ignore a mapping's numbers.
+- **ElevenLabs `eleven_v3`** (`voicesounds.is_tagged_voice`): `Project.spoken` inserts `"<tag> "`
+  at position 0 (`Spoken.inserted`, term `emotion`); it belongs to no written word (captions,
+  karaoke, visemes skip it, §69.33), is in the hash, and `readback.compare_beat` ignores unclaimed
+  audio tags. **Other ElevenLabs models**: the row's `stability` / `style` changes go into
+  `voice_settings` (clamped 0-1, 3 decimals); text unchanged.
+- **OpenRouter** with instructions (`takes_instructions`: `openai/`, `google/`): the row's sentence
+  is appended to the voice's `instructions`; `spec()` gains `emotion: {name, instruction}`.
+  Others (also `elevenlabs/eleven-v3` there): `with_prosody` post-processes gain, tempo (0.5-2)
+  and pitch (no pauses); `spec()` gains `emotion: {name, speed, pitch, gain}`; neutral in those →
+  plain hash.
+- `tts.speaks_emotion_by_name`; `tts.emotion_warnings` warns about numbers ignored by name-only
+  voices and about emotions reduced to speed/pitch/loudness.
 
 ## 74. Fast drafts: `vidgen render --draft` (Step 137)
 
-Reference: docs/CONFIG.md "Drafts". A draft is a render for checking timing and staging: small,
-slow-framed and without decoration, with every timing, position, action and the lip sync kept.
-Every scene type renders as a draft; what one gains for `web` scenes is measured in §118.18.
+A draft keeps every timing, position, action and lip sync, small and without decoration. User
+keys: docs/CONFIG.md "Drafts".
 
-- **Settings** (`config.py`): `draft: DraftConfig | None` (`width`, `height` together, `fps`, each
-  optional, sizes even). `draft_format(format, draft)`: the set values, else
-  `DRAFT_SHORT_SIDE` 240 px on the shorter side at the format's shape (the longer side rounded
-  down to even: 426x240, 240x426, 240x240, 320x240), never larger than `format`, and
-  `DRAFT_FPS` 8, never more than `format.fps`. `draft` is left out of the scene fingerprint
-  (only drafts use it; their format is checked like any render's).
-- **The project** (`project.py`): `Project.draft` (set by `Project.load(..., draft=True)`, kept by
-  `without_overlays`) wins over the `preview` argument of the path methods: `render_dir` →
-  `build/draft[_<variant>][_bare]`, `render_format` → `draft_format`, output names
-  `<output>[_<variant>]_draft` (MP4, SRT, chapter list, thumbnail, export stem). So a draft and a
-  preview or final render never share a folder or a file, even at the same size and rate, and
-  `current_render` / `_usable_render` never take one for the other.
-- **The pipeline**: `vidgen render --draft` (exclusive with `--preview`; MCP `render` `draft`,
-  which drops `preview`) loads the project as a draft and renders with `preview=True` (a draft is a
-  kind of preview: `is_preview` is true too). The worker gets
-  `--quality draft`; scene timings gain `render.draft: true`, the combined timings `draft: true`,
-  `render --json` `draft`. Hooks see `preview: true` and the draft's `render_dir`.
-- **The scene**: `NarratedScene.is_draft` (from its project, set before the host is built).
-  What a draft leaves out, each at the place that makes it: the host's and the stage
-  characters' idle motion (`stop_idle`: no breathing, swaying, blinking or mood motion); the
-  stage's wind (`StageWind` with no swaying props or trailing characters and no updater; its
-  `Wind` stays, so balloons and blown props drift as in the video); shadows (`_shadows`); motion
-  effects (`action_motion_effects`); particles (`particle_field`: a `ParticleField(drawn=False)`
-  with no particles, no ground and no updater; its start, fade out and end stay, so the rain bed,
-  storms and thunder follow it); puddles and settling snow (`particles_started`; steps still
-  splash from the puddles' start, kept in `_puddles_from`); fog (`_fog`); lightning's bolt and
-  flash (`strike_lightning` and rain storms do not reach the light; the thunder stays); the
-  light's grade (`StageLight(flat=True)`: the camera is not wrapped, flashes are 0, `changing` and
-  `settled` follow the light changes only; stars, window skies and sky bodies still follow the
-  grade's changes, so a `light` change still redraws the frame while it lasts).
-- **Kept on purpose**: living props, birds, water, rainbows, effect symbols, cards, overlays and
-  every sound. Beat starts fall on whole frames at any rate (`narrate` waits relative to the
-  beat's start), so a draft's beats may drift by a frame or two of 8 fps from the preview's over a
-  scene (measured: up to 0.15 s over 23 s and 0.18 s over 31 s).
-- **Measured** (worker wall time, one scene, `--no-audio`, two alternating runs, under the
-  1500 MB cap): `cartoon-rain-check` `storm` preview 640x360@15 21.2 / 21.8 s, draft 426x240@8
-  8.0 / 8.2 s (×2.6); `cartoon-muffin-mystery` `morning` 25.3 / 25.4 s → 12.7 / 12.8 s (×2.0);
-  peak memory of the worker processes at most 0.25 GB (muffin) and 0.28 GB (rain-check).
+- `draft: DraftConfig` (`width`+`height`, `fps`). `draft_format`: else `DRAFT_SHORT_SIDE` 240 px
+  short side at the format's shape (even), `DRAFT_FPS` 8, never above the format. `draft` is out of
+  the scene fingerprint.
+- `Project.draft` (`load(..., draft=True)`) wins over `preview` in path methods:
+  `build/draft[_<variant>][_bare]`, outputs `<output>[_<variant>]_draft*`; draft and preview/final
+  never share files.
+- `--draft` excludes `--preview` (MCP `render` `draft`); renders with `preview=True`
+  (`is_preview` true), worker `--quality draft`, timings and JSON carry `draft: true`.
+- `NarratedScene.is_draft` leaves out: idle motion, wind sway (`Wind` kept), shadows, motion
+  effects, drawn particles (their timing and sounds kept), puddles/settling snow, fog, lightning
+  bolt/flash (thunder kept), the light's grade (`StageLight(flat=True)`), shading and texture
+  (§79). Everything else and every sound stays. Beats fall on whole frames, so they may drift a
+  frame or two.
 
 ## 75. Animatic: `vidgen animatic` (Step 138)
 
-Reference: docs/CONFIG.md "Animatic". An animatic is the storyboard's stills held in time with the
-narration, with the video's audio and captions: a way to watch the pacing in seconds, made by
-ffmpeg alone once the stills are current.
+Storyboard stills held in time with the video's audio and captions. User keys: docs/CONFIG.md
+"Animatic".
 
-- **Stills** (`animatic.py`, `make_animatic`): the preview format's stills of
-  `build/preview[_<variant>]/frames/<scene>/index.json`. A scene whose stills are not current
-  (`storyboard.stills_current(..., per_beat=None)`: any count per beat, the format and the render
-  fingerprint matching) is rendered by `render_scenes(..., frames=1)`, the storyboard's call; with
-  every scene current nothing is rendered and the scenes are not checked again (they were, from
-  this config, when rendered). No Manim render is added: the animatic uses no still the storyboard
-  does not make, and `animatic.py` is left out of the render fingerprint.
-- **Timing** (pure `hold_plan(scenes, frames, fps)`): a still is held up to its time in the video
-  (scene start + its scene time), from the time of the scene's still before it, in whole frames:
-  within a beat the stills split the beat's time in order and the last (beat-end) still covers it
-  until the beat's end (the gap between beats goes to the next beat's stills, as its beat-start
-  is the previous beat's end); a scene's first still from the scene's start, the video's first
-  from frame 0; a scene's last still until the next scene's first starts (through the scene's
-  tail), the video's last to the end. Where scenes overlap (§49) a still is cut at the next
-  scene's start and one that would start at or after it is left out; a still held no frame is
-  dropped. So each beat's picture is on screen during the beat it belongs to (Step 138 first held
-  each still from its own time, which showed a beat-end still through the following beat). The
-  scene starts and the length are those of the combined timings, so beat overlaps (§69.34) and
-  word-count timing (no MP3s) need nothing of their own. No crossfade between stills or scenes:
-  the concat demuxer cannot blend, and a blend would need the filter graph `ff.join` uses for
-  scene transitions.
-- **Audio**: `render/pipeline.prepare_join` (split out of `join_scenes`, which now calls it and
-  `ff.join`) pads the scene WAVs, builds the effects track and mixes music, ambience and
-  normalisation exactly as for the video, into `build/preview[_<variant>]/animatic/audio/`; the
-  animatic's audio is the video's. `--no-audio`: a silent track.
-- **Captions** (pure `with_captions(holds, cues, fps)`; `draw_captions`): the cues of the video's
-  SRT (`pipeline.video_cues`, now also what `render_project` writes) cut the holds where they start
-  and end; each piece shows the cues spoken then (overlapping beats' cues stacked), drawn with
-  Pillow (bold font of `sheets.load_font`, `CAPTION_SIZE` 0.055 of the shorter side, white on a
-  plate of opacity `CAPTION_PLATE_ALPHA` 170, 5 % above the bottom, wrapped to 90 % of the width),
-  one PNG per still and text in `animatic/stills/`. Pillow rather than ffmpeg's `subtitles` filter:
-  that filter needs an ffmpeg built with libass, which not every Windows build has. Default on
-  unless the video has a `captions` overlay (`captions_default`).
-- **Encoding** (`render/ffmpeg.join_stills`): the concat demuxer with a `duration` per still
-  (`write_concat_list(..., durations)`, the last still listed twice), `fps`, `tpad` and
-  `-frames:v` for exactly `round(duration × fps)` frames, x264 `-tune stillimage`, the audio
-  inputs of `ff.join` (`_audio_inputs`, shared) and its partial-file replace (`_write_video`).
-  Output `Project.animatic_path()`: `<output>[_<variant>]_animatic.mp4` in `output_dir`.
-- **Interfaces**: CLI `vidgen animatic [PROJECT] [--variant] [--no-audio] [--captions |
-  --no-captions] [--jobs] [--output-dir] [--json]`; MCP tool `animatic` (`captions: null|true|false`).
-- **Measured** (copy of `examples/cartoon-music-box`, 51.1 s, 2 stage scenes, no MP3s, 21 stills,
-  under the 1500 MB cap): no stills 42 s (render of both scenes 34.7 s); stills current 7.0 to
-  9.1 s wall (profile: 2.9 s x264 for 767 frames at 640x360, 2.7 s the mix, 1.1 s of it the
-  music bed, 1.0 s loading the extensions), captions add 0.2 to 0.5 s; `--no-audio` 3.7 s.
+- `animatic.py` `make_animatic`: stills from `build/preview[_<variant>]/frames/<scene>/index.json`;
+  scenes whose stills are not current (`storyboard.stills_current(..., per_beat=None)`) are
+  rendered with `render_scenes(..., frames=1)`. `animatic.py` is out of the render fingerprint.
+- Pure `hold_plan(scenes, frames, fps)` (whole frames): each beat's stills split its time, the last
+  holding to the beat's end; scene firsts from the scene start, lasts until the next scene's first;
+  overlaps (§49) cut at the next scene start; zero-frame stills dropped. Starts and length from the
+  combined timings. No crossfades.
+- Audio: `render/pipeline.prepare_join` (shared with `join_scenes`) into `animatic/audio/`.
+- Captions: `with_captions(holds, cues, fps)` from `pipeline.video_cues`; burned in with Pillow
+  (`CAPTION_SIZE` 0.055, `CAPTION_PLATE_ALPHA` 170), not ffmpeg `subtitles` (needs libass, missing on
+  some Windows builds). Default on unless the video has a `captions` overlay.
+- `render/ffmpeg.join_stills`: concat demuxer with durations, exactly `round(duration × fps)`
+  frames, x264 `-tune stillimage`. Output `Project.animatic_path()` =
+  `<output>[_<variant>]_animatic.mp4`.
+- CLI `vidgen animatic [PROJECT] [--variant] [--no-audio] [--captions|--no-captions] [--jobs]
+  [--output-dir] [--json]`; MCP `animatic` (`captions: null|true|false`).
 
 ## 76. Ready-made sets, part 1: outdoors (Step 139)
 
-Reference: docs/CONFIG.md "Ready-made sets". `set: NAME` on a stage scene works without
-`sets:` for five built-in outdoor sets.
+User keys and set list: docs/CONFIG.md "Ready-made sets".
 
-- **Library** (`src/vidgen/data/sets/outdoors.yaml`, package data; Step 140 adds indoor files
-  beside it): every `*.yaml` there holds `sets:` in the format of a project's. `includes.builtin_sets()`
-  returns a copy (read once, `functools.cache`). Plain YAML rather than Python so a set reads like
-  the project sets it can be copied into.
-- **Lookup** (`includes.expand_sets`): the project's `sets:` (with its includes) first, else the
-  built-in set of that name; `apply_set` merges it with the scene's params by the §69.35 rules
-  unchanged. Origins: a built-in set's values are not recorded (`from_set` skipped), so a problem in
-  one keeps the scene's own location (`scenes[i].params.props[k]`) instead of pointing at a
-  `sets.NAME` the project does not have; moved scene entries are recorded as before.
-  `set_reference_problems` checks both and lists both (`sets: ...; built-in sets: city_street,
-  park, beach, forest, snowy_hills`), did-you-mean over both. Fingerprints: the expanded params
-  carry the set, so an edit of a built-in set re-renders the scenes using it; nothing else.
-- **Sets**: each has a gradient sky, a `ground_color`, background (and middle) layer shapes, its
-  props at depths, `light`, `ambience`, and marks `stand_left` / `stand_right` (two characters at
-  depth 0, clear of every prop within 0.15 of their depth, 16:9) plus marks at its props.
-  `city_street`: building blocks, two `shop`s at depth 0.9 (`shop`, `shop_2`), a flat `road` at
-  0.5 between them and the pavement, a `lamp` (the existing lamp post with its lantern serves as
-  the streetlamp: searched first, it sways and glows `on`), a `bench`, a `bus_stop`; `ambience:
-  city`. `park`: hills, a flat `path`, two `fence`s, a `tree`, a `fountain`, a `bench`, two
-  `flowers`; `ambience: auto` (birdsong by day, §69.62). `beach`: a sea band in the background
-  layer and `water: {left: 0, right: 0.3}` (§69.53's strip with waves) in front on the left, sand,
-  the `sun`, a `beach_umbrella`, two `shell`s; `ambience: false` (no sea bed exists). `forest`:
-  far pine triangles, trees and pines at depths 0.95 to 0.5, a `bush`, a `log`, `mushroom`s;
-  `light: morning`, `ambience: auto`. `snowy_hills`: two hill layers, four `pine`s, a `rock`, snow
-  `{density: 0.5, settle: true, settled: 60}` (the full layer from the start, §69.60);
-  `ambience: false`.
-- **Props** (`cartoon/props.py`, `OUTDOOR_PROPS`, 13 new; primitives and two theme colours like
-  every built-in prop, fixed hex where no token fits: asphalt, gravel, white pickets, shell pink):
-  `shop` 1.7 (sign board, upper windows, striped awning, a shop window with goods, a glazed door),
-  `bench` 0.32 (seat line at 0.4375 = 0.14 of a character, places ±0.7), `bus_stop` 1.35, `road`
-  0.12 and `path` 0.08 (flat bands ±`BAND_HALF` 40 prop units long, in `FLAT_PROPS`: no shadow,
-  no snow, left out of `prop_overlap`), `fountain` 0.75, `flowers` 0.28 (petals without outlines:
-  at that size outlined petals read as black dots), `fence` 0.42, `beach_umbrella` 1.3, `shell`
-  0.06, `pine` 1.9, `mushroom` 0.13 (two in a cluster), `log` 0.16 (seat at 0.875, places −1.3 /
-  1.2). Seats in `PROP_SEATS` / `SEAT_PLACES` (bench, log); lean edges in `PROP_LEANS` (pine
-  trunk, bus stop pole, shop wall); `SWAYS` gains `pine` (6°, 0.4 Hz) and `flowers` (10°, 1.2
-  Hz); `SHELTER_PROPS` gains `pine` and `beach_umbrella` (rain stops above them, snow lies thin
-  under them). `write_props_png` leaves `OUTDOOR_PROPS` out of its default (props.png
-  byte-identical, md5 checked); `docs/gallery/media/outdoor_props.png` (19 KB) shows them but the
-  two bands.
-- **Gallery**: `tools/make_sets_gallery.py SETS... --work DIR --out PNG` writes a project with one
-  stage per set (two generated characters on `stand_left` / `stand_right`), runs `vidgen
-  storyboard --jobs 1 --json`, tiles each scene's first still at 320x180 (3 columns, names below,
-  64 colours): `docs/gallery/media/sets_outdoors.png` (28 KB).
-- **Checked**: a scratch project with the five sets, two characters each on their marks, at
-  preview 854x480: `vidgen lint` 0 findings (first run: `off_frame` on edge trees and pines, moved
-  in); each scene renders in about 5 s (5–6 s of video), like any stage of that size; stills
-  checked by eye.
-- **Not done**: no sea or wind ambience bed (the beach and the snowy hills are silent); the road
-  and the path do not reach across a stage wider than about 1.5 frames (give them a `scale`); the
-  sets are laid out and checked for 16:9 (in a 9:16 frame the props are wider for the frame and
-  may overlap the characters' marks);
-  `vidgen screenplay`'s `set:` line does not look up built-in sets (a screenplay `set: park; ...`
-  keeps meaning a default sky with those props). Tests: `tests/test_builtin_sets.py`.
+- Package data `src/vidgen/data/sets/*.yaml` (`sets:` in project format); `includes.builtin_sets()`
+  (cached, returns a copy). `expand_sets`: project sets first, then built-ins; `apply_set` merges
+  by §69.35; built-in values get no origin. Expanded params carry the set, so editing one
+  re-renders its scenes.
+- `outdoors.yaml`: `city_street`, `park`, `beach`, `forest`, `snowy_hills`; each with marks
+  `stand_left` / `stand_right` (clear of props within 0.15 depth, laid out for 16:9).
+- `OUTDOOR_PROPS` in `cartoon/props.py`; `road`, `path` in `FLAT_PROPS` (no shadow, no snow, out of
+  `prop_overlap`). `write_props_png` leaves `OUTDOOR_PROPS` and `INDOOR_PROPS` out of its default;
+  galleries by `tools/make_sets_gallery.py` into `docs/gallery/media/`. `vidgen screenplay` does
+  not look up built-in sets. Tests: `tests/test_builtin_sets.py`.
 
 ## 77. Ready-made sets, part 2: indoors (Step 140)
 
-Reference: docs/CONFIG.md "Ready-made rooms". Five built-in sets are rooms (§69.42), read with the
-outdoor ones by §76's lookup unchanged.
-
-- **Library** (`src/vidgen/data/sets/indoors.yaml`): `classroom`, `kitchen`, `shop`,
-  `living_room`, `bedroom`. `_read_builtin_sets` reads the files sorted by name, so the rooms come
-  first in `builtin_sets()` and in validate's "built-in sets:" list. Each is a `room:` (wall
-  colour, wallpaper, flooring, one door named `door`, one window; the shop a ceiling and a wide
-  shop window without curtains), `light: day` (classroom, kitchen, shop) or `light: indoor` (living room, bedroom), `ambience: room_tone` (what `auto` picks in a
-  room, written out), marks `stand_left` / `stand_right` (two characters at depth 0, clear of
-  every prop within 0.15 of their depth; checked by `test_marks_are_inside_the_stage_and_clear_of_the_props`,
-  which now counts doors and furniture at the wall's depth through `Params.stage_props()` and checks
-  every standing prop is inside the stage) and a mark at each seat. Furniture stands `against:
-  wall` (depth 0.4, the default wall depth; nothing stands deeper, so the wall stays there);
-  pupils' desks at 0.25, the kitchen table and chairs and the shop counter at 0.2: 0.15 or more
-  from the wall's furniture, so `prop_overlap` never compares them. Things on furniture are lifted
-  (kettle 0.18, till 0.2: the counter's height × the depth scale × `size`, 16:9); the blackboard
-  and pictures hang (§69.43). The layout puts the stand marks where the wall behind is low or bare
-  (a door, a window, between furniture), so the characters hide little of the set.
-- **Props** (`cartoon/props.py`, `INDOOR_PROPS`, 5 new, primitives and two colours like every
-  built-in prop): `blackboard` 0.5 (in `PROP_HANGS` at 0.42: hangs above desks; a fixed dark-green
-  board, chalk `CHALK` lines: a triangle and three wavy lines of writing), `school_desk` 0.4 (side on
-  like `desk`, a sloping lid on metal legs, its chair on the left as drawn: seat (−0.63, 0.35) =
-  0.14 of a character, in `SEAT_BACKS`, so the sitter faces the desk; the classroom's face left,
-  towards the board), `shelf_with_goods` 0.95 (three shelves of boxes, tins and jars in the fixed
-  `GOODS_COLORS`, the same in every theme like a tree's fruit; leans ±0.45), `till` 0.26 (a cash
-  drawer, a sloping key top, a display on a stalk), `wardrobe` 1.1 (two panelled doors, a cornice;
-  leans ±0.3). Searched first: the existing `table`, `chair`, `desk` (the teacher's), `counter`
-  (kitchen and shop, recoloured), `fridge`, `kettle`, `sofa`, `armchair`, `tv`, `lamp` (the lamp
-  post, `scale` 0.5–0.6, `on`), `rug`, `picture`, `clock` and `bed` are reused; a kitchen chair is
-  the `chair`. `write_props_png` leaves `INDOOR_PROPS` out of its default (props.png unchanged);
-  `docs/gallery/media/indoor_props.png` (11 KB) shows them.
-- **Gallery**: `tools/make_sets_gallery.py ... classroom kitchen shop living_room bedroom` →
-  `docs/gallery/media/sets_indoors.png` (27 KB).
-- **Checked**: a scratch project with the five rooms, two characters on their marks, at preview
-  854x480: `vidgen lint` 0 findings; each scene renders in about 3.5 s (2 s of video); stills
-  checked by eye. Tests: each room validates with two characters, every seat is sat on (both
-  places of a sofa or bed) and every lean leaned on after a walk to its depth, sitting without the
-  walk is refused, overrides (light, room key by key, a prop changed by name), lint rules on a
-  tiny render of each, two tiny renders of characters sitting (sofa, school desk).
-- **Not done**: like §76, laid out for 16:9 only; the lifts of the kettle and the till are frame
-  fractions, so in 9:16 they float or sink (give them another `lift`); no shop bell or classroom
-  sounds; `vidgen screenplay` does not know the rooms or the new props' other words (chalkboard,
-  cash register, closet).
+`indoors.yaml`: rooms (§69.42) `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`, read
+sorted by file name (rooms list first). Each: one door `door`, one window, `ambience: room_tone`,
+stand marks and a mark per seat; wall furniture at depth 0.4, free furniture at least 0.15 in
+front. `INDOOR_PROPS`: `blackboard` (`PROP_HANGS`), `school_desk` (`SEAT_BACKS`),
+`shelf_with_goods` (fixed `GOODS_COLORS`), `till`, `wardrobe`. User keys: docs/CONFIG.md
+"Ready-made rooms".
 
 ## 78. Flag badly spoken words (Step 141)
 
-Reference: docs/CONFIG.md "Readback" (words to check) and the `unclear_speech` lint rule. A voice
-can say every word of the text and still sound wrong (the owner heard a Kokoro line as "two
-Russian words"); a word error rate of 0 misses it. The recogniser's own confidence and its word
-times show where.
+The recogniser's word confidence and timings flag words a 0 word error rate misses. User keys:
+docs/CONFIG.md "Readback" and the `unclear_speech` rule.
 
-- **Transcripts** (§57): `TranscriptWord(text, start, end, probability=None)`; faster-whisper's
-  `word.probability` is kept (ElevenLabs gives none). `Transcript.word_probabilities()` (parallel
-  to `word_texts()`), `has_probabilities`; JSON words `[text, start, end(, probability)]`, so
-  older cache files still load. `run_readback` transcribes again a cached faster-whisper
-  transcript with words but no probabilities (local and free; an ElevenLabs one is kept: no
-  probabilities to gain). `CACHE_VERSION` stays 1.
-- **Decoding**: `stt.faster_whisper.load_audio` decodes with the ffmpeg executable
-  (`render.ffmpeg.decode_mono(path, rate)`: `-ac 1 -ar 16000 -f f32le pipe:1`, 1-D float32),
-  not PyAV: no PyAV version can break it (Step 54's PyAV 19 fix decoded with `sfx.decode_audio`,
-  which stays for the other callers). Loading the model sets the `faster_whisper` logger to
-  WARNING (Step 144): `vidgen lint --readback` imports Manim, whose logging setup at INFO
-  otherwise printed faster-whisper's "Processing audio" line per beat among the progress lines.
-- **Alignment kept**: `compare_beat` stores on `BeatReadback` the `transcript` and `heard_spoken`
-  (heard word index → aligned spoken word index, `None` for an extra word; voice sounds' heard
-  words, skipped, are absent), and on each `Edit` its `heard_indices` and `written_index` (not in
-  the JSON). The helpers the flags share are public: `term_core`, `written_owner`,
-  `entries_by_word`, `entry_says`, `EDGE_CHARS`.
-- **Flags** (`speech_flags.py`, no manim): `flag_words(result, spoken, settings, pauses_before)
-  -> [WordFlag]`. Units: each compared heard word alone, or the heard words of one edit together,
-  plus edits with no heard words (deletions). Per unit: lowest probability `< min_probability`
-  → `low_probability` unclear, `< doubtful_probability` → doubtful; a pause before one of its
-  words `> max_gap` that is not expected → `gap` unclear; an edit → `mismatch`, unclear for a term
-  (`Edit.term`) or 2+ errors, else doubtful (one ordinary word heard differently with confidence
-  may be the transcriber's). The level is unclear if any reason is. A pause is **expected** (not
-  measured) after a word ending in punctuation (`, . ; : ! ? … — – - ) ] } " ' ” ’ »`) in the
-  transcript or in the spoken text (also on spoken words between the two heard ones: not heard),
-  before an opening quote / parenthesis / dash, before a written word with a voice sound before
-  it (`VoiceSound.word`), and next to skipped heard words (a laugh's "ha ha"); the first word
-  has none. Times: the unit's first start and last end in the MP3; a deletion at the end of the
-  last heard word before it (0 at the start). `detail`: the edit's `describe()` or the heard word
-  (with `(text "...")` when it differs), `heard with probability P`, `after a G s pause inside
-  the sentence`. `suggestion`: the edit's; else a pronunciation entry → respell its spoken form;
-  a hard term (`hard_term`) → add an entry with a respelling; only a gap → listen, change speed
-  or emotion or rephrase, or write a comma; else listen, change voice / speed / emotion or
-  respell the word. Each ends with `vidgen tts` (the change makes the audio stale).
-- **Settings** `lint.rules.unclear_speech` (`UnclearSpeechRule`: `min_probability` 0.5,
-  `doubtful_probability` 0.75, `max_gap` 0.5 s; ordered). The same thresholds serve
-  `vidgen readback` (`ReadbackResult.flag_settings`).
-- **Video time**: `beat_video_starts(project)` = scene start (`storyboard.scene_starts`, the
-  preview's renders, else the final format's) + the beat's start in its scene timings;
-  `set_video_times` fills `WordFlag.video_time` (`null` before a render; from the last render,
-  so stale if the audio changed since).
-- **`vidgen readback`**: always flags (no option): `BeatReadback.flags`, report section `words
-  to check: N unclear, M doubtful (thresholds)` with `level beat @ t (video t): detail` and `fix:`
-  lines. JSON: `flag_thresholds`, `summary.unclear` / `doubtful`, each beat's `flags` (`scene,
-  beat, word, written, level, reasons, time, end, video_time, probability, gap, detail,
-  suggestion`).
-- **Lint**: rule `unclear_speech` (scope `scene`, default warning, doubtful → `info`; last in
-  `LINT_RULES`, in `lint/readback_rule.py`). It runs only when asked: `lint_project(readback=True)`
-  (`vidgen lint --readback`, MCP `lint` `readback`) or a `rules` list naming it; otherwise it is
-  left out of the rules (`LintResult.rules`). Then, before rendering, `_speech_flags` runs
-  `run_readback` on the selected scenes' beats (cache reused; progress lines through `log`, the
-  CLI's stderr) and `SceneContext.speech_flags` gets each scene's beats' flags. One finding per
-  flag: time = the activity file's beat start + the flag's start; `value` / `limit` = probability
-  and its threshold, or the pause and `max_gap`. MCP `lint` with `readback` (or the rule) and a
-  paid `stt.provider` needs `confirm_cost`, like MCP `readback`.
-- **Checked** on a copy of the `cartoon-music-box` audio (Kokoro, 11 beats; Whisper `small` on
-  CPU in the Kokoro venv: ~5 s a beat, killed at 1.5 GB, ran under 2.5 GB): see HANDOFF Step 141.
-- **Not done**: no flag for a long pause at punctuation (Kokoro's sentence pauses and the
-  emotions' pauses, §72, vary too much for one threshold); the first word of a beat often comes
-  out doubtful (Whisper's start-of-clip uncertainty); no per-word audio clip to listen to; the
-  `readback` lint rule still reads only the cache.
+- `TranscriptWord(text, start, end, probability=None)`; JSON words `[text, start, end(, p)]`
+  (old files load); `run_readback` re-transcribes a cached faster-whisper transcript lacking
+  probabilities. `CACHE_VERSION` 1. `stt.faster_whisper.load_audio` decodes with the ffmpeg
+  executable (`render.ffmpeg.decode_mono`), not PyAV.
+- `compare_beat` keeps `transcript` and `heard_spoken` on `BeatReadback`, `heard_indices` /
+  `written_index` on each `Edit`.
+- `speech_flags.flag_words(result, spoken, settings, pauses_before) -> [WordFlag]` (no manim): per
+  heard word or edit, `low_probability` (`< min_probability` unclear, `< doubtful_probability`
+  doubtful), `gap` (unexpected pause `> max_gap`: not after punctuation, before an opening
+  quote/dash, before a voice sound, or next to skipped words), `mismatch` (unclear for a term or 2+
+  errors). Suggestions end with `vidgen tts`.
+- `lint.rules.unclear_speech` (`min_probability` 0.5, `doubtful_probability` 0.75, `max_gap` 0.5
+  s); also used by `vidgen readback`. `WordFlag.video_time` from `beat_video_starts` (last render;
+  `null` before one).
+- `vidgen readback` always reports flags (`words to check` section; JSON `flag_thresholds`,
+  `summary.unclear/doubtful`, per-beat `flags`).
+- Lint rule `unclear_speech` (`lint/readback_rule.py`, last in `LINT_RULES`, doubtful → `info`)
+  runs only with `lint_project(readback=True)` / `--readback` or when named in `rules`; it runs
+  `run_readback` (cache reused) before rendering. MCP with a paid `stt.provider` needs
+  `confirm_cost`.
 
 ## 79. Drawing style switch: `drawing:` (Step 142)
 
-Reference: docs/CONFIG.md "Drawing style (`drawing`)". One video-wide switch for how cartoons are
-drawn, apart from the characters' looks. `cartoon_style:` (§69.10) stays the words of generated
-background prompts; it is not reused.
+User keys: docs/CONFIG.md "Drawing style (`drawing`)". (`cartoon_style:`, §69.10, is only
+prompt words.)
 
-- **Setting**: `DrawingConfig {outline: thin | normal | bold, shading: flat | soft, texture: none |
-  paper | storybook, seed ≥ 0}`, every key optional, at the top level (`VideoConfig.drawing`; a
-  variant changes it by the usual deep merge) and as the `stage` param `drawing`.
-  `resolve_drawing(*settings) -> DrawingStyle` merges them key by key, later winning (defaults
-  `normal`, `flat`, `none`, 0). `NarratedScene.drawing_settings()` lists a scene's settings (the
-  video's; `stage` adds its param); `__init__` resolves them into `self.drawing` after the
-  overlays and the host are built and before the colour fade is attached; a draft
-  (`is_draft`, §74) keeps the outline and drops shading and texture (`DrawingStyle.for_draft`).
-- **Applied when drawn**, like the light (§69.31): nothing is recoloured or re-stroked, so the
-  generator's pinned digests (Steps 113–125), the layout dump, lint and character sheets are
-  unchanged, and a plain style installs nothing (the frames are bit-identical: checked against
-  HEAD on `cartoon-rain-check` `storm` and `host-explainer` `grow`).
-  - **Outline** (`style_camera`): the camera's `apply_stroke` is wrapped; for a stroke of width
-    `w` it scales Manim's `cairo_line_width_multiple` by `max(w·f, min(w, 1 px)) / w` (`f` =
-    `OUTLINE_FACTORS`: thin 0.6, normal 1, bold 1.7) around the original call: a thinned stroke
-    stays at least one pixel unless it was thinner. On a `stage` (`uses_drawing_style`) every
-    stroke (set, characters, props, effect symbols, motion effects, bubbles, particle rings;
-    overlays have their own camera, §41); on another scene only what `mark_outlined` marked (the
-    host's figure and floor line, §71).
-  - **Shading** `soft`: `apply_fill` is wrapped; a member marked by `mark_shaded` (the stage
-    marks every character and prop at the start; a host its character) with a one-colour fill is
-    filled with a vertical Cairo linear gradient over its own points' height: `soft_stops` =
-    the colour 14 % towards white at the top, itself half-way, 16 % towards black at the bottom.
-    The colour is read through `camera.get_fill_rgbas`, so the light's grade applies first. The
-    path, and so the silhouette, is Manim's.
-  - **Texture** (stage only): `attach_texture` wraps the renderer's `add_frame` between the
-    overlay layer (§41) and the colour fade (§49): each written frame (a frozen wait: once) is
-    multiplied by `texture_shade(texture, seed, width, height)` (cached, H × W × 4 uint16, 256 =
-    unchanged; alpha kept): a per-pixel grain (`grain_pixels` large) plus bicubic blotches from a
-    grid of `cells` across the short side, `storybook` also darker corners; seeded with
-    `numpy.random.default_rng([seed, kind])`. So it lies over everything the scene draws (bubbles
-    too) and the fade's colour, under overlays and burned-in captions; frame stills, storyboards
-    and animatics show it. It is not a mobject and not in Manim's static image (§69.20): a
-    mobject over the moving characters would be redrawn each frame anyway, and the stage's depth
-    ordering can move a walker after the last mobject.
-- **Cost** (worker, `--no-audio`, `cartoon-rain-check` `storm`, 23 s): 640x360@15 plain 20.7–22.3
-  s, thin / bold +3–5 %, soft +5 %, texture +0–8 %, all three +12–18 %; 1280x720@30 plain 56.3–56.6
-  s, bold 56.8, soft 58.6, paper 62.2 (most of it the encoder: the multiply is 1.9 ms a frame),
-  bold + soft + storybook 65.0.
-- **Not done**: no texture on non-stage scenes or under a host; the host's effect symbols and
-  pointer line keep their width; bubbles and particles are not left out of the outline weight
-  (one rule for the stage's camera); the grain is in screen space (it does not pan with the
-  camera); `vidgen character --png`, character sheets and the props galleries draw plain.
+- `DrawingConfig {outline: thin|normal|bold, shading: flat|soft, texture: none|paper|storybook,
+  seed}` at top level and as the `stage` param; `resolve_drawing(*settings) -> DrawingStyle`
+  (later wins; `NarratedScene.drawing_settings()`), resolved into `self.drawing` after host and
+  overlays, before the colour fade. Drafts keep only the outline (`DrawingStyle.for_draft`).
+- **Applied when drawn** (like §69.31): nothing is recoloured, so digests, layout dump, lint and
+  sheets are unchanged; a plain style installs nothing.
+  - Outline (`style_camera`): stroke widths × `OUTLINE_FACTORS` (0.6/1/1.7), never thinned below
+    1 px; on a `stage` every stroke, elsewhere only `mark_outlined` (the host).
+  - Shading `soft`: `mark_shaded` one-colour fills get a vertical gradient (`soft_stops`) after the
+    light's grade.
+  - Texture (stage only): `attach_texture` multiplies each written frame by
+    `texture_shade(texture, seed, w, h)` (cached; seeded `default_rng([seed, kind])`) between the
+    overlay layer (§41) and colour fade (§49): over the scene, under overlays and captions, in
+    screen space. Not a mobject (would be redrawn each frame and break depth order).
+- Character PNGs, sheets and prop galleries draw plain.
 
 
 ## 80. Dubbing: `dub:` and `--all-languages` (Step 143)
 
-Reference: docs/CONFIG.md "Dubbing (`dub`, `--all-languages`)". A dubbed video is the translated
-variant of §54 (a `language:` and a translation file); this section adds the voices, the checks
-and one command for every language.
+Voices for translated variants (§54). User keys: docs/CONFIG.md "Dubbing (`dub`,
+`--all-languages`)".
 
-- **Setting**: `dub: {LANG: VOICE | {voice, voice_id, model_id, model, instructions, speed, lang,
-  settings}}` (`DubVoice`; default none) on `VoiceConfig` and `VoiceEntry`. A string is the
-  provider's voice key (`voice_id` for ElevenLabs, else `voice`). `dub_setting` picks the most
-  specific key that `language_matches` the video's language. It sits on voices, not on
-  `characters:` (the task list's example), because beats name voices: the narrator and a host
-  are voices too, and a character speaks only through its `voice`.
-- **Rules** (`dubbing.voice_dubs(config) -> {name | None: Dub}`, no manim, nothing without a
-  `language`): a given dub wins; a named voice with no `voice` / `voice_id` (and no `lang`) of its
-  own follows the base voice's dub (`how: base`); a Kokoro voice whose language letter is not the
-  video's (`a` / `b` count as one) and that has no `lang` written gets `auto`: a voice of the
-  video's Kokoro language of the same kind (`voice_kind`: second letter `f` / `m`, the
-  `voice_kind` of §69.25 screenplays), the least used so far counting the given ones (ties: best
-  grade), never a novelty voice (`NOVELTY_VOICES`: `santa`); one source voice maps to one target
-  (`chosen`), so two named voices of one speaker stay one voice. A language without the kind
-  takes any of its voices (`kind_kept: false`). ElevenLabs and OpenRouter voices are kept (both
-  speak many languages; ElevenLabs' `language_code` already follows the language, §54).
-  `screenplay.assign_voices` was not reused: it leaves out the narrator's voice and, in a language
-  with one voice of a kind, hands a character the other kind.
-- **Applied** in `voices.resolve_voice`: the dub's fields go over the named voice's (`_merge_voice`,
-  the same rule as a named voice over the base: a Kokoro `voice` without `lang` takes its own
-  language); the resolved voice has no `dub` (`DUB_FIELDS`), so `audio_fields`, hashes and the
-  provider see only the effective voice. A base voice without a dub is returned as before (the
-  same object). So the dubbed beats differ from the base config's: the variant gets
-  `audio/<variant>/` (`has_own_audio`), `vidgen tts --variant` voices them, the viseme tracks
-  (§69.4) are written from that audio and language, and every timing (VideoPlan, overlaps,
-  interrupts, §69.34) comes from those MP3s.
-- **Checks**: `voice_provider_problems` adds `_dub_problems` (keys the provider does not use, a
-  malformed Kokoro blend). `vidgen validate` warns (`dubbing.dub_warnings`) about a voice dubbed
-  without its kind and about voices that differ in their own language but speak with one voice in
-  this one (only voices the beats use; a Kokoro blend `target+source:0.3` suggested), and prints
-  `dub [pt]: default bf_emma -> pf_dora+bf_emma:0.4 (given), ...` under the language line.
-  `kokoro_voices.voice_warnings` no longer warns about the later voices of a blend (they lend
-  timbre; the first gives the language).
-- **Every language** (`cli.each_language`): `--all-languages` on `tts`, `render` and `lint` runs
-  the command for the base config and then each `dubbing.language_variants(project)` (variants
-  whose loaded `language` differs from the base config's), sequentially, a heading line before
-  each; exit code the worst; `--json` an envelope with `languages: [documents]`. Not with
-  `--variant`. MCP `render` / `lint` pass `all_languages`. Lint per language is the existing lint
-  of each variant: its timing rules (`talked_over`, `rushed_animation`, `narration_speed`, dead
-  air) see that language's lines.
-- **Example**: `examples/cartoon-music-box` variant `pt` (pt-BR; `translations/pt.yaml`, 12 texts;
-  narrator `pf_dora+bf_emma:0.4` and Gus `pm_santa` given, Fen `pf_dora` and Bram `pm_alex`
-  automatic).
-- **Not done**: no per-language `overlap` / `interrupt` values (a variant would have to replace the
-  scene); OpenRouter voices named after a language (Voxtral `fr_marie_*`) are not swapped; voice
-  labels (`Fen:`) are not translatable; Kokoro gives word timings only for English, so a dubbed
-  interrupt without `overlap` starts `INTERRUPT_LEAD` before the line's end.
+- `dub: {LANG: VOICE | DubVoice}` on `VoiceConfig` / `VoiceEntry` (on voices, because beats name
+  voices); `dub_setting` picks the most specific matching key.
+- `dubbing.voice_dubs(config)` (no manim): a given dub wins; a named voice without its own
+  voice follows the base's (`how: base`); a Kokoro voice of another language without `lang` gets
+  `auto`: same kind (`voice_kind`), least used, never `NOVELTY_VOICES`, one target per source.
+  ElevenLabs and OpenRouter voices are kept.
+- `voices.resolve_voice` merges the dub (`_merge_voice`) and drops `dub` (`DUB_FIELDS`), so hashes
+  see only the effective voice; the variant gets `audio/<variant>/` and all timing comes from its
+  MP3s. Kokoro gives word timings only for English (dubbed interrupts without `overlap` start
+  `INTERRUPT_LEAD` before the line's end).
+- Checks: `_dub_problems` in `voice_provider_problems`; `dubbing.dub_warnings` (kind lost, two
+  voices merged); validate prints `dub [lang]: ...` lines.
+- `cli.each_language`: `--all-languages` on `tts`, `render`, `lint` runs the base then each
+  `dubbing.language_variants`, in sequence; worst exit code; `--json` envelope `languages: [...]`;
+  not with `--variant`; MCP `all_languages`.
 
 ## 81. Composed music, part 1: the `music` extra and the SoundFont (Step 145)
 
-Reference: docs/CONFIG.md "SoundFont (`soundfont`, `vidgen soundfont`)". Phase N plays music
-written as notes with symusic 0.5.9 and the GeneralUser GS SoundFont (research report and
-listening test after Step 144); this section covers what has to be installed and downloaded.
+User keys: docs/CONFIG.md "SoundFont (`soundfont`, `vidgen soundfont`)".
 
-- **Base dependency** `symusic==0.5.9` (exact: 0.6.0's `Synthesizer.render` fails with a
-  TypeError). `synth.require_symusic()` imports it or raises `VidgenError` saying
-  to reinstall schu-video-generator, also when another version is installed;
-  `synth.symusic_status()` is the one-line state for `vidgen soundfont info`. Nothing imports
-  symusic at load time. symusic's own `BuiltInSF` downloader (pySmartDL) is not used.
-- **Default SoundFont** (`vidgen/soundfont.py`): GeneralUser GS 2.0.3, `URL` =
-  `raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2`, `SIZE_BYTES`
-  32,319,396, `SHA256` `9575028c…8cfe` (upstream publishes no checksum; computed by the research
-  agent). Never in the wheel (no package data; a test checks `src/` holds no `.sf2` / `.sf3`).
-- **Cache folder** (`cache_dir()`; schu-video-generator had none before: Kokoro's model lives in the Hugging
-  Face cache): `VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` (Windows), `~/Library/Caches/vidgen`
-  (macOS), `$XDG_CACHE_HOME/vidgen` or `~/.cache/vidgen`; the file is `soundfonts/GeneralUser-GS.sf2`.
-- **Download** (`fetch(force, url, progress)`): `httpapi.stream_get` streams 1 MB chunks (stopping
-  after more than `SIZE_BYTES`) into a `mkstemp` file next to the target while hashing; size and
-  SHA-256 are compared, then `fileio.replace_file` moves it into place; the temporary file is
-  removed on every failure. Errors: offline / HTTP status → "cannot download the GeneralUser GS
-  2.0.3 SoundFont (…); connect … `vidgen soundfont fetch`, or … set `soundfont: PATH`"; mismatch →
-  the sizes and hashes, "may have changed upstream", the same `soundfont: PATH` hint. A mismatch is
-  never used.
-- **Use** (`resolve(setting, root, download=True)`): `soundfont: PATH` (relative to the project
-  folder, or absolute) must be a file with suffix `.sf2` / `.sf3` and a RIFF `sfbk` header
-  (`override_problem`; also a `vidgen validate` problem, `soundfont_problems`); else the cached
-  default, hashed before its first use in a process (then remembered by size and mtime), else
-  downloaded (or, with `download=False`, an error naming `vidgen soundfont fetch`). `soundfont` is
-  in `PATH_KEYS` (confined under `vidgen mcp`) and left out of scene fingerprints (audio only).
-- **CLI** `vidgen soundfont fetch [--force]` and `vidgen soundfont info [PROJECT]` (path, origin,
-  size, sha256, check, licence line, suggested credit, symusic state); no `--json` yet.
-- **Licences**: THIRD_PARTY_NOTICES lists symusic (MIT), Prestosynth (MIT), symusic's bundled
-  `abc2midi` / `midi2abc` (not run by schu-video-generator; licence unverified) and GeneralUser GS (licence
-  v2.0: free use in music, private or commercial; no attribution required). Suggested credit
-  (`soundfont.CREDIT`, naming the SoundFont's author, S. Christian Collins, as its licence and
-  README suggest) in THIRD_PARTY_NOTICES, CONFIG.md, the README and `vidgen soundfont info`.
+- Base dependency `symusic==0.5.9` exactly (0.6.0's render fails); `synth.require_symusic()`
+  raises `VidgenError` otherwise; never imported at load time.
+- `vidgen/soundfont.py`: default GeneralUser GS 2.0.3 (`URL`, `SIZE_BYTES` 32,319,396, `SHA256`),
+  never in the wheel (tested). `cache_dir()`: `VIDGEN_CACHE_DIR`, else the OS cache folder +
+  `vidgen`; file `soundfonts/GeneralUser-GS.sf2`. `fetch` streams to a temp file, checks size and
+  SHA-256, then `fileio.replace_file`; a mismatch is never used.
+- `resolve(setting, root, download=True)`: `soundfont: PATH` must be `.sf2`/`.sf3` with a RIFF
+  `sfbk` header (validate problem); else the cached default (hash checked once per process), else
+  downloaded. `soundfont` is in `PATH_KEYS` and out of scene fingerprints.
+- CLI `vidgen soundfont fetch [--force]`, `vidgen soundfont info [PROJECT]`. Licences and
+  `soundfont.CREDIT` in THIRD_PARTY_NOTICES.
 
 ## 82. Composed music, part 2: the score and its renderer (Step 146)
 
-- **Score** (`vidgen/score.py`, pure dataclasses, frozen, checked on creation with `VidgenError`
-  "score: ..."): `Score(tempo, parts, time_signature=(4, 4), key="C major", sections=(), length=None)`,
-  `Part(name, notes, program=0, drums=False, volume=0.0 dB, pan=0.0, reverb=0.2)`,
-  `Note(start, length, pitch, velocity=90)`, `Section(name, start, tempo=None)`. A *beat* is a
-  quarter note (`tempo` in quarter notes per minute; a 6/8 bar is 3 beats). A drum part's
-  `program` is the GM drum kit (0 standard, 40 brushes...). `length_beats` defaults to the last
-  note's end rounded up to a whole bar; a section's `tempo` changes the tempo from its start
-  (`tempo_changes()`, `seconds_at(beat)`); `key` is `"<tonic> major|minor"` with a standard
-  signature (`key_signature()` → sharps, minor; `tonic` pitch class). `fingerprint()` hashes the
-  content and `FORMAT_VERSION`.
-- **MIDI export**: `to_symusic(score, parts, controls)` builds a symusic score in ticks (480 per
-  beat): tempo changes, time and key signature, section markers, one track per part, and (with
-  `controls`) volume / pan / reverb as CC 7 (`midi_volume`: 40 log10(v/127) dB), 10 and 91.
-  `write_midi(score, path)` writes a type-1 SMF. Both need the extra.
-- **Renderer** (`synth.render_score(score, soundfont, cache_dir)`): symusic 0.5.9 ignores CC 7 / 10 /
-  91 and pitch bends, ends at the last note and returns floats above 1, so each part with notes is
-  rendered alone (48 kHz stereo, quality 0, leading silence kept) and `mix_parts` mixes them in
-  float64: gain `10^(volume/20)`, constant-power pan (`pan_gains`: √2·cos, √2·sin of (pan+1)·π/4,
-  1 and 1 at the centre), `reverb` × the part sent to one reverb bus; the bus is convolved
-  (overlap-add FFT, 2^18-sample blocks) with `reverb_impulse()`: per channel its own seeded noise
-  (`crc32("vidgen:reverb")`), low-passed at 5 kHz, 12 ms pre-delay, 60 dB decay over 1.6 s,
-  2 s long, unit energy. The mix is cut or padded to the score's length + `TAIL_SECONDS` (3 s),
-  the last 20 ms faded, set to `MUSIC_LEVEL` (−28 LUFS integrated) and, only if its true peak
-  would pass `TRUE_PEAK_CEILING` (−1 dBTP), limited by `mix.limit`. Silence is an error.
-- **Cache**: `cache_dir / "score-<render_key>.wav"` (16-bit; the returned array is always the
-  16-bit value, so a cached and a fresh render are identical); `render_key` hashes the score's
-  fingerprint, the symusic version, the SoundFont's SHA-256 (`soundfont.content_sha256`: the
-  default file's known hash once checked, others hashed once per process by size + mtime),
-  `RENDERER_VERSION` and the rate. Written to a temporary file, then moved into place. The mix
-  passes `build/music/`; the symusic `Synthesizer` is kept per SoundFont (lru 1).
-- **As a music source**: Step 146's internal hook `music.SCORES` was replaced in Step 147 by
-  `music: {compose: ...}` (§83).
-- `score.py`, `synth.py` and `soundfont.py` are in `NOT_RENDER_INPUTS` (audio only: no scene
-  re-render when they change).
-- Measured (manual, GeneralUser GS, 2 cores): a 5-part, 16-bar score at 100 BPM (38.4 s + 3 s
-  tail) renders in 2.1 s (cached read 0.08 s, identical), −28.00 LUFS, −15.6 dBTP, 376 MB peak RSS.
+- `vidgen/score.py` (frozen, checked, `VidgenError` "score: ..."): `Score(tempo, parts,
+  time_signature=(4, 4), key="C major", sections=(), length=None, balance=False)`, `Part(name,
+  notes, program=0, drums=False, volume=0.0, pan=0.0, reverb=0.2)`, `Note(start, length, pitch,
+  velocity=90)`, `Section(name, start, tempo=None, key=None, time_signature=None)`. A beat is a
+  quarter note; a section's key / time signature reach only the MIDI. `fingerprint()` includes
+  `FORMAT_VERSION`. `to_symusic` / `write_midi` (480 ticks per beat).
+- `synth.render_score(score, soundfont, cache_dir)`: each part rendered alone (symusic ignores CC
+  and ends at the last note), then `mix_parts`: with `balance` each part first at `BALANCE_LEVEL`
+  −28 LUFS measured where it sounds (`_sounding`), volume, constant-power pan, one shared seeded
+  reverb (`reverb_impulse`); length + `TAIL_SECONDS` 3; `MUSIC_LEVEL` −28 LUFS; limited only above
+  `TRUE_PEAK_CEILING` −1 dBTP. Silence is an error.
+- Cache `score-<render_key>.wav` (16-bit; the returned array is the 16-bit value, so cached =
+  fresh); `render_key` = score fingerprint, symusic version, SoundFont SHA-256, `RENDERER_VERSION`
+  (2), rate. `score.py`, `synth.py`, `soundfont.py` are in `NOT_RENDER_INPUTS`.
 
 ## 83. Composed music, part 3: the composer and its moods (Step 147)
 
-Reference: docs/CONFIG.md "Composed music (`compose`)" and "`vidgen music preview`".
+User keys: docs/CONFIG.md "Composed music (`compose`)", "`vidgen music preview`".
 
-- **Config**: a music cue takes `compose:` instead of `source:` (exactly one; `MusicCue._one_source`),
-  so composed music is a cue like a bed or a file (lists of cues with `from` / `to`, `volume`,
-  fades, ducking, scene volumes). `ComposeConfig {mood, key, tempo, instruments, seed=1, bars}`
-  (`compose: playful` is short for `{mood: playful}`); `instruments` maps a part (`melody`,
-  `chords`, `pad`, `bass`, `drums`) to a friendly name, `none` / null, or `ComposeInstrument
-  {instrument, volume, pan, reverb}`. The model validator calls `composer.settings_problems`:
-  unknown mood / instrument / part with a did-you-mean (`cartoon.poses.unknown_name_message`), a
-  drum kit outside `drums` or the reverse, a key in the other mode, bars not a multiple of 4.
-  `MusicCue.label` is `compose: <mood>` for summaries.
-- **Composer** (`vidgen/composer.py`, pure, no numpy): `compose_piece(mood, key, tempo,
-  instruments, seed, bars) -> Piece` (score, key, tempo, bars, voices, chord names per bar,
-  phrases, `harmony` as `(beat, beats, Chord)`; `chord_at(beat)`), `compose(...) -> Score`. Seeded
-  by `random.Random(crc32("vidgen-compose:<mood>:<seed>"))`, one more generator per part (so
-  changing one part's instrument leaves the other parts' notes alone).
-  - *Moods* (`MOODS`): `Mood` holds family, words, key, tempo, meter, default bars, A
-    progressions (`themes`) and B / C progressions (`contrasts`) as `Progression(question,
-    answer)` of 4 bars each in Roman numerals (a bar may hold 2-4 chords), the melody's range,
-    words, rhythm cells (`"1 .5 .5 r1 1"`: beats, `r` a rest), the cadence cells (`half`, `full`)
-    and the last bar (`turn`), articulation, the chord / bass / drum pattern names, default
-    parts (`RoleDefault` instrument, volume, pan, reverb), the fallback bed, bass and chord
-    registers. A test checks every question ends on V and every answer on I.
-  - *Chords* (`parse_chord`): case gives major / minor, `°` `ø` `+`, `7` `maj7` `6` `9` `sus2`
-    `sus4` `add9`, `/3` `/5`, `b` / `#` before the numeral; each tone is `(scale degree, pitch
-    class)`, so `Chord.scale(key)` is the key's scale with the chord's tones on their degrees (the
-    raised leading tone over V in minor, the raised fourth over II); names are spelt from the
-    key's letters (`Gb`, not `F#`, in B♭ major).
-  - *Form* (`form`): blocks of A-question, A-answer, B (C in every second block)-question,
-    A-answer; the rest A / A A / A B A; the last phrase is an answer whose last bar becomes
-    `I V7` (`i V7`). Each letter picks one progression per seed (C another than B).
-  - *Melody*: per letter a motif of three rhythm cells (bar 1, bar 2, the answer's bar 3; a
-    question repeats bar 1's cell in bar 3; a return varies bar 2 / 3 by splitting the longest
-    note or merging two) and a shape (semitone offsets per anchor, inverted on a return). The
-    first note of a bar and notes on strong beats (1 and 3 in 4/4, 1 in 3/4) are *anchors*: a
-    chord tone of the chord sounding there, nearest to an arch target (a question rises and
-    stays up, an answer comes down; B higher, C lower) plus the shape, within a sixth of the
-    previous anchor, not repeating it; an answer's cadence takes the tonic nearest below or at
-    the previous note, a question's the V chord tone nearest it. The notes between anchors
-    follow the straight line to the next anchor in steps of the chord's scale (a chord tone for a
-    leap over 4 semitones), the last ones leading back to the first note. A bar equal to the bar
-    before (cell and first pitch) takes the second-best anchor or a varied cell. The melody's
-    range is the mood's moved by octaves into the instrument's (`fit_range`).
-  - *Accompaniment*: close-position voicings with the inversion nearest the previous one
-    (`_voicing`); patterns `pad`, `block`, `arpeggio` (eighths; a shape per letter), `broken`,
-    `oompah`, `ostinato` (root / fifth / octave), `strum` (staggered 15 ms per note); a chord
-    starting off the pattern's onsets is struck there; an event is cut at a chord change.
-    Bass patterns `sustain`, `half`, `root_fifth`, `walking` (with a chromatic approach to the
-    next root), `pulse`, `pop`; the root of an inversion is its bass note. Drum patterns
-    (`DrumPattern`: hits in 4/4, the phrase-end fill from `fill_from`, a cymbal at each new section
-    when `crash`, a generic 3/4 bar from `backbeat` / `tick`). Velocities are humanised ±4 (drums
-    ±5) by the part's generator; B / C drums play 8 % harder.
-  - The score is `balance=True`, its `length` exactly the bars (notes are cut at the end), its
-    sections named `A1 question`, `B1 question`...
-- **`Score.balance`** (new field, default false): `synth.mix_parts` first sets each part's dry
-  render to `BALANCE_LEVEL` (−28 LUFS integrated; measured from its first to its last sample
-  above −120 dBFS since Step 149, §85), then applies its `volume`. GeneralUser GS's
-  instruments differ by up to ~40 dB as symusic renders them (pizzicato −59 LUFS, horn −13 LUFS
-  for the same note), so the moods' volumes are levels against the other parts. Render time
-  of a 16-bar mood: ~4.5 s (2 cores; ~2 s without the per-part loudness measurement).
-- **As a music source** (`music.Source`): `source_kind(cue)` gives `composed`, `bed` or `file`;
-  `composed_score(cue)`; the render (`render_score`, cache `build/music/`) is the piece plus
-  `TAIL_SECONDS`: looped, the tail is added circularly onto the piece's start (the last bar
-  leads back to the first), the first pass is the piece without that tail, and `start` wraps
-  around the piece; `loop: false` plays the piece and its tail once. `crossfade` does not apply.
-  Without symusic 0.5.9 (`fallback_bed(cue)`) the mood's bed plays (`Mood.bed`: calm → calm,
-  focused / tense → pulse, curious / upbeat / triumphant → bright, playful → cartoon, sleepy →
-  lullaby) with a warning saying to reinstall; the summary then says `kind: bed`,
-  `source: "compose: <mood> (bed <bed>: no symusic)"`.
-- **Instruments**: 42 friendly names → GM programs with a playable range and words, and 5 drum
-  kits. Not offered, measured with GeneralUser GS 2.0.3 and symusic 0.5.9: pizzicato strings
-  (45) and xylophone (13) render a 5 ms click and silence (FluidR3 Mono plays its pizzicato), and
-  bright piano (1) is the piano's sound. All drum keys the patterns use sound in all five kits.
-- **CLI**: `vidgen list-music` adds the moods (`composer.mood_entries`, `describe(mood)` built
-  from the parameters, so the words follow the code) and the instruments
-  (`instrument_entries`); JSON keys `moods`, `instruments`, `symusic`. `vidgen music preview`
-  (`cli.cmd_music`) composes the project's first `compose:` cue changed by `--mood`, `--seed`,
-  `--bars`, `--key`, `--tempo` (another mood starts from its defaults) or the mood alone, renders
-  it with the project's SoundFont (no cache) and writes `<mood>-seed<S>.wav` and `.mid` into
-  `--out` (default `.`).
-- `composer.py` is in `NOT_RENDER_INPUTS`. Measured samples (scratchpad, not committed): every
-  mood −28.00 LUFS, true peak −13.0 to −17.1 dBTP, 33-47 s with the tail, 4.4-6.1 s to render.
+- A music cue takes exactly one of `compose:` / `source:` (`MusicCue._one_source`).
+  `ComposeConfig {mood, key, tempo, instruments, seed=1, bars}` (`compose: MOOD` short form;
+  `config._mood_name_schema` puts the string form in the JSON Schema); `instruments` per part
+  (`melody`, `chords`, `pad`, `bass`, `drums`). `composer.settings_problems`: unknown names
+  (did-you-mean), kit/role mismatch, key in the wrong mode, bars not a multiple of 4.
+- `vidgen/composer.py` (pure): `compose_piece(mood, key, tempo, instruments, seed, bars, ending)
+  -> Piece`, `compose(...) -> Score`. Seeded by `crc32("vidgen-compose:<mood>:<seed>")`, one
+  generator per part (changing one instrument leaves other parts' notes). `MOODS` (`Mood`: key,
+  tempo, meter, A/B/C progressions in Roman numerals, rhythm cells, patterns, default parts,
+  fallback bed); a test checks questions end on V and answers on I. `parse_chord`, `form`, melody
+  and accompaniment rules live in the module. Scores are `balance=True`, `length` exactly the bars.
+- `music.Source`: `source_kind(cue)` → `composed`/`bed`/`file`; looped renders wrap the tail onto
+  the start; `loop: false` plays once; `crossfade` does not apply. Without symusic,
+  `fallback_bed(cue)` plays `Mood.bed` with a warning.
+- 42 instruments + 5 kits; pizzicato, xylophone and bright piano are not offered (render badly in
+  GeneralUser GS).
+- `vidgen list-music` lists moods and instruments (JSON `moods`, `instruments`, `symusic`);
+  `vidgen music preview` (`cli.cmd_music`; `--mood --seed --bars --key --tempo --out`) writes
+  `<mood>-seed<S>.wav` and `.mid` without cache. `composer.py` is in `NOT_RENDER_INPUTS`.
 
 ## 84. Composed music, part 4: music that follows the video (Step 148)
 
-Reference: docs/CONFIG.md "Music that follows the video".
+User keys: docs/CONFIG.md "Music that follows the video".
 
-- **Which cues.** A `compose:` cue without `bars` (`musicfit.is_fitted`) is composed in
-  `mix.plan_music` from the combined timings, when the scenes are joined; with `bars` it loops as
-  in §83. Without the extra the mood's bed plays (§83). `start` and `loop` do not apply.
-- **Inputs** (`musicfit.cue_inputs`, reads the config and the timings): a `Slot(scene, start,
-  settings, button)` per scene of the cue (seconds from the cue's start: the scene's start, plus
-  half its transition's `overlap`); reveal times (the beats in which the scene type's
-  `reveal_steps` show a step, mapped with `layout.distribute` as host directing does; written
-  `reveal` actions at their `at` share of the beat; `sting_reveal` events of the timings); pauses
-  `Pause(start, end)` (a beat's `music_pause: true`; automatically a `card` scene that is not the
-  cue's first, until its first beat ends; the cue's last beat when it has at most `PAUSE_WORDS`
-  8 words and its scene another beat, unless `music_pause: false`). That last pause adds a
-  `button` slot where the line ends (when at least `BUTTON_MIN` 0.3 s remain).
-- **Settings** (`Settings(mood, key, tempo, instruments, seed)`; `cue_settings`,
-  `scene_settings`): a scene's `SceneMusic` (new optional fields `mood`, `key`, `tempo`,
-  `instruments`, `seed`; `compose_keys`) changes the cue's for that scene: another mood starts
-  from its defaults with the cue's seed; the same mood keeps the cue's settings, replaces `key`,
-  `tempo`, `seed` and adds `instruments`. `VideoConfig._scene_compose_problems`: only under a
-  fitted cue, and the result must pass `composer.settings_problems`.
-- **Sections** (`plan_sections(slots, seconds, limit=TEMPO_LIMIT)`, pure): a slot shorter than
-  one bar at the fastest tempo joins the next (the last, or one before the button, joins the one
-  before). `_fit` picks the bar count whose tempo (`60 · Σ stretch / seconds`) is nearest the
-  settings' within ±`TEMPO_LIMIT` (8 %); when even −8 % is too fast, the tempo is −8 % and the
-  missing time is a *hold*: added to the last bar's beats with weights 1..meter (`_hold`; no beat
-  under 20 BPM, the rest spilling over the section). When one bar at +8 % is too long (a cue
-  shorter than a bar), one bar at the tempo it needs. The last section *closes*: its last bar's
-  beats last `CLOSE_STRETCH` 1.3 beats and the bar before slows by `RIT_STEP` 6 % more per beat;
-  a button is one bar of plain beats at whatever tempo fills it (20-300 BPM: under 0.8 s in 4/4
-  it runs past the cue's end, cut there). Each `FitSection` keeps its per-beat `stretch`;
-  `TempoMap.of(sections)` is the tempo of each beat, with `seconds_at` / `beat_at`.
-- **The piece** (`fit_music(sections, reveals, pauses)`, pure): each run of sections with equal
-  settings is one `compose_piece(..., bars, ending)` (new `ending`: `loop` as before, `cadence`
-  for the last run, `open` for the others; any bar count when not looping: whole phrases of
-  `form`, then a tag repeating an answer's last `bars % 4` bars). `cadence`: the last bar is the
-  tonic alone (`_Bar.closing`: the melody holds the tonic, the chords hold the chord whatever the
-  pattern, the bass holds the root, the drums play one kick and cymbal) and the bar before ends
-  on V7 if it did not end on V. Parts are merged by (role, program, drums, volume, pan, reverb);
-  another instrument for a role becomes `"<role> 2"`. Score sections: one per fit section (named
-  by its scenes) and one per tempo change inside (`hold` / `a tempo`); `length` the total beats;
-  `time_signature` and `key` the first run's, and each run's first section carries its own
-  (`Section.key` / `time_signature`, Step 149; MIDI only: the audio follows the notes).
-- **Swells**: each reveal at the nearest beat (`_swell_beats`: not before beat 1, not in the
-  closing bar, not in or one beat before a pause, `SWELL_BEATS` 2 apart); notes in the 2 beats
-  before grow to `SWELL_GAIN` ×1.2 velocity, the beat on it ×1.2, and a chord tone near E5 (not
-  one struck there already) is held 2 beats in the pad, else chords, else melody part.
-- **Pauses** (`_pause_windows`): from the last whole beat at least `PAUSE_LEAD` 0.4 s before the
-  beat to the first bar line after it ends (the closing bar at the latest); notes starting inside
-  are dropped, notes sounding into it end at its start (`_cut`).
-- **Cache**: the fitted score is hashed like any score (`render_key`), so its tempo changes and
-  notes — the section plan — are in the key: new timings compose and render again; unchanged
-  timings reuse `build/music/score-<key>.wav`.
-- **In the mix**: `Source(..., fitted=score)` plays the render once from the cue's start;
-  `Placement.fit` adds `fit: {sections, swells, pauses, closing}` to the cue's mix summary; the
-  cue's fade-out never starts before the closing chord (`FittedMusic.closing_seconds`).
-  `music.cue_scene_range` is shared by the mix and the stings.
-- **Stings** (`sting_score(kind, settings)`, pure): in the settings' key, tempo and voices —
-  reveal: melody pickup a fourth below the tonic, then the tonic held 2.5 beats with the tonic
-  chord (chords, pad), bass root, kick and cymbal; comic: toms 48, 45 and kick + crash 49 on
-  eighths with the mood's kit (standard without drums), the bass and a short tonic chord on the
-  last; sad: melody tonic+3, +2, +1, then the tonic held. `composed_stings(project, timings,
-  events, library)` (from `join_scenes` before `sfx.write_track`, new `replaced` argument; also
-  `sfx.placed(..., audio)`): for each built-in sting event in a scene under a composed cue (with
-  the extra, no project `assets/sfx/sting_*` file), the sting of that scene's settings rendered
-  (`build/music`), its tail cut to `STING_TAIL` 1.5 s with a fade, scaled to the integrated
-  loudness of the built-in sting it replaces. Its `gain`, `at` and the sting ducking stay.
-- `musicfit.py` is in `NOT_RENDER_INPUTS`; a beat's `music_pause` is left out of scene
-  fingerprints (applied when joined).
-- **Measured** (scratch copies, preview): `host-explainer` with `compose: curious` and real Kokoro
-  audio (66.1 s, 5 scenes: tempos −8 % with a hold, +0.6 %, −4.4 %, 0 %, −8 % with a hold;
-  6 swells): scene changes on bar lines within 0.01 ms (plan and symusic's own tempo map) and
-  note onsets in the render within 3.3 ms; `cartoon-rain-check` with `compose: playful` and
-  `storm` `{mood: tense}`, word-count timing (75.9 s): within 0.02 ms (plan, symusic), onsets
-  within 45 ms (a coarse onset detector), a pause and button before the last line, the comic
-  sting played by the playful instruments.
+- A `compose:` cue without `bars` (`musicfit.is_fitted`) is composed in `mix.plan_music` from the
+  combined timings; with `bars` it loops (§83). `start`, `loop` do not apply.
+- `musicfit.cue_inputs`: a `Slot` per scene (start + half its transition overlap), reveal times
+  (`reveal_steps`, `reveal` actions, `sting_reveal`), `Pause`s (`music_pause: true`; a non-first
+  `card` until its first beat ends; a last beat of ≤ `PAUSE_WORDS` 8 words unless `music_pause:
+  false`, which adds a `button` slot when ≥ `BUTTON_MIN` 0.3 s remain).
+- Per-scene `SceneMusic` `mood/key/tempo/instruments/seed` (only under a fitted cue,
+  `_scene_compose_problems`): another mood starts from its defaults with the cue's seed.
+- `plan_sections` (pure): short slots join neighbours; bar count with tempo within ±`TEMPO_LIMIT`
+  8 %, else a *hold* on the last bar; the last section closes (`CLOSE_STRETCH` 1.3, `RIT_STEP`
+  6 %); a button bar at the tempo that fills it. `TempoMap` per beat.
+- `fit_music(sections, reveals, pauses)`: one `compose_piece(..., ending)` per run of equal settings
+  (`cadence` last, `open` others); swells at reveals (`SWELL_BEATS` 2 apart, `SWELL_GAIN` 1.2);
+  notes dropped/cut in pause windows (`PAUSE_LEAD` 0.4 s to the next bar line).
+- The fitted score hashes like any score, so changed timings re-render. `Placement.fit` adds
+  `fit: {sections, swells, pauses, closing}` to the mix summary; fade-out never starts before
+  `FittedMusic.closing_seconds`.
+- Stings: `sting_score(kind, settings)`; `composed_stings` (from `join_scenes`) replaces built-in
+  stings under a composed cue (unless `assets/sfx/sting_*` exists) by a rendered sting, tail
+  `STING_TAIL` 1.5 s, matched to the built-in's loudness; `gain`, `at`, ducking stay.
+- `musicfit.py` is in `NOT_RENDER_INPUTS`; `music_pause` is out of scene fingerprints.
 
 ## 85. Composed music, part 5: tooling, examples and the review of Phase N (Step 149)
 
-- **`vidgen validate`** (`music.music_warnings(config)`, in `cli.validate_warnings`): with a
-  `compose:` cue and no usable symusic, one warning naming the extra (`synth.symusic_status()`)
-  and the bed each composed cue plays instead (and that scenes' compose settings are not
-  played); with the extra but no `soundfont:` and the default SoundFont not in the cache, one
-  warning that the first render downloads it (32.3 MB) or `vidgen soundfont fetch` does it now.
-  A missing SoundFont still downloads (or errors offline) at render time: only the extra's
-  absence falls back to the beds (§83), so a final render never silently loses its music for a
-  network problem. `music.music_summary(config)` (`{source, kind, plays, fitted, from, to,
-  scenes}` per cue) is printed as `music:` lines (`music_summary_line`) and is `validate
-  --json`'s new `music` key.
-- **Drafts, animatics, storyboards.** No code: `render --draft` and `vidgen animatic` mix through
-  `pipeline.prepare_join` like the video, so composed music (fitted to their own timings, which
-  differ from the preview's by up to a frame or two of 8 fps per beat) plays in both; the render
-  is cached in `build/music/` (shared by preview, draft and final). Measured on scratch copies:
-  host-explainer's draft (65.9 s) and animatic (66.1 s, 22 s) carry `compose: curious`;
-  composing rain-check's three-mood 93.9 s piece takes 2.0 s and rendering it 18.7 s without
-  the cache (21.8 s before the balance fix below), once per timing change, so no cheaper path for
-  drafts. Storyboards have no sound.
-- **MCP**: `list_music`'s description names the moods; new tool `music_preview` (`vidgen music
-  preview --json`, `music` added to `cli.JSON_COMMANDS`, `jsonout.music_preview_document`; `out`
-  confined, default `build/mcp/music`, a heavy call); `render` / `animatic` documents carry
-  `mix.music[].fit` as before.
-- **MIDI export of several moods** (`score.Section.key` / `time_signature`, optional, checked;
-  `to_symusic` writes a key or time signature change at a section that changes them;
-  `musicfit._score_sections` sets them at the first section of each run of settings).
-- **Fix: balance measured where a part sounds** (`synth._sounding`): `mix_parts` measured each
-  part's loudness over the whole piece; in a piece of several moods most parts play in one
-  stretch, so ~80 % of that time measured silence (13 parts × 94 s for rain-check). Only the
-  stretch from the first to the last sample above −120 dBFS is measured now; the gated loudness
-  differs only by the half-silent 400 ms blocks at its edges (≤ 0.34 dB on a 2 s tone, less on
-  real parts). `RENDERER_VERSION` 2, so cached renders are made again.
-- **Fix: `compose: MOOD` in the JSON Schema** (`config._mood_name_schema`): the short form
-  (Step 147) passed `vidgen validate` but not `vidgen schema`'s schema (`BeforeValidator` does not
-  reach the generated schema); `compose` now also accepts a string there, like `shot:`'s words.
-  Found by `tests/test_schema.py` once the examples used the short form.
-- **Examples**: `examples/host-explainer` `music: {compose: curious}`; `examples/cartoon-rain-check`
-  `music: {compose: playful, volume: -2}` with `storm` `{mood: tense, volume: -3}` (under the rain
-  bed) and `night` `{mood: sleepy, volume: -3}` (the two beds replaced); both validate and lint
-  with 0 findings on real Kokoro audio.
-- **Measured** (scratch copies with real Kokoro narration, 1280x720 @ 30, `--jobs auto`, outside
-  the repository in `/home/claude/work/phase-n-review/`): `host_explainer.mp4` 66.13 s, 3.7 MB,
-  −16.1 LUFS, −1.8 dBTP; music alone −33.0 LUFS under speech and −25.6 LUFS in the pauses (the mix
-  in speech −15.2 LUFS: the music ~18 dB under the voice, ~10 dB under it between lines); 5
-  sections (−8 % with a hold, +0.6, −4.2, 0, −8 % with a hold), 6 swells. `rain_check.mp4`
-  93.93 s, 11.4 MB, −16.1 LUFS, −1.8 dBTP; music −38.2 LUFS under speech, −29.0 LUFS in pauses
-  (plus the rain bed); sections playful −1.3 / −2.5 %, tense +2.2 %, sleepy (3/4) −3.9 %, the
-  button bar; the pause before "It rained for the rest of the week." (88.9-92.7 s) and its
-  closing chord. Scene changes on bar lines within 0.06 ms (plan and symusic's tempo map); every
-  note of the new section starts exactly there (onset detector within 3.3 ms for host-explainer;
-  for rain-check it picks an earlier woodblock pickup or the tense strings 70-78 ms before, while
-  the 5 ms levels rise at the change).
+- `music.music_warnings` (validate): no usable symusic → names the fallback beds; default
+  SoundFont not cached → first render downloads it. A missing SoundFont is fetched (or errors) at
+  render; only missing symusic falls back, so a final render never silently loses music.
+  `music.music_summary` prints `music:` lines and is `validate --json`'s `music`.
+- Drafts and animatics mix through `prepare_join`, so they carry fitted music; `build/music/` is
+  shared by preview, draft and final.
+- MCP `music_preview` (`vidgen music preview --json`, `out` confined, default `build/mcp/music`).
+- Examples: `examples/host-explainer`, `examples/cartoon-rain-check`.
 
 ## 86. Platform worlds (Phase O, Steps 150–155)
 
-Reference: docs/CONFIG.md "Platform levels (`level`)". Side-view platform scenes for kids'
-stories: a level written as a small ASCII map, walking along it and jumping between its
-platforms from the author's intent, story props, sounds, and a camera that follows the hero.
-Designed so that simple computer games could reuse the world and its rules later; games are not
-in scope.
+Side-view platform scenes for kids' stories from a small ASCII map. User keys: docs/CONFIG.md
+"Platform levels (`level`)". World and rules are game-reusable; games are out of scope.
 
 ### 86.1 Three layers
 
-1. **World model** (`vidgen/world/`, plain frozen dataclasses): a `Level` (a grid of tile kinds,
-   its `Spot`s), `Body`s (characters and props: feet `x`, `y` and `height` in *tile units*),
-   a `World` (a level and its bodies). Step 152 adds items (keys, doors, coins, stars, friendly
-   blockers) as world data beside the bodies.
-2. **Rules** (`vidgen/world/`, from Step 151; pure functions): take a world and a scripted
-   input (`walk to c`, `jump to cloud`, `pick up key`) and give the next world plus the planned
-   motion (paths, arcs, events such as take-off, landing, pickup), deterministic, with a
-   `VidgenError` when the input is impossible. A player's inputs could replace the script later;
-   no physics engine, fixed paths and simple arcs only.
-3. **Renderers**: schu-video-generator / Manim now (`vidgen/cartoon/level_stage.py` maps tile units to Manim
-   units, `vidgen/cartoon/level_drawing.py` draws the tiles, `scenes/stage.py` shows them).
+1. World model (`vidgen/world/`, frozen dataclasses): `Level` (tiles, `Spot`s), `Body`s (feet and
+   height in tile units), items (§86.8), `World`.
+2. Rules (`vidgen/world/`, pure, deterministic, `VidgenError` when impossible): input + world →
+   next world + planned motion. No physics engine.
+3. Renderer: `cartoon/level_stage.py`, `cartoon/level_drawing.py` (Pillow), `scenes/stage.py`.
 
-`vidgen.world` never imports Manim (a test imports it, `level_stage` and `level_drawing` in a
-fresh interpreter and checks `manim` is not loaded); the drawing uses Pillow only.
+`vidgen.world`, `level_stage`, `level_drawing`, `vidgen.camera`, `cartoon.foley` never import
+Manim (tested).
 
 ### 86.2 A `stage` with a `level`, not a new scene type
 
-A level is the `stage` scene's new `level:` param. The stage already has the characters, their
-lip sync, acting and walking, props, shots, the camera's `pan` / `follow` / `zoom`, reframing,
-parallax `layers`, light, foley and `sfx`; a new scene type would duplicate or re-plumb all of it.
-With a level the stage changes only where the ground is: the tiles replace the ground line and
-band, the stage is as wide as the map, and things stand on the tiles at depth 0. Sets (`set:`)
-apply as on any stage (their sky, layers, light, ambience and marks); since Step 155 a level takes
-none of a set's props (they stand at depths), water or room (`includes.LEVEL_DROPPED_KEYS`), so
-the stage's own props can stand on the tiles beside a set.
+`level:` is a `stage` param, because the stage already has characters, acting, props, shots,
+camera, layers, light and sound. Tiles replace the ground; the stage is as wide as the map. A set
+applies, minus `includes.LEVEL_DROPPED_KEYS` (props, water, room, `ground_color`; dropped, not
+refused, since set props stand at depths a level refuses).
 
 ### 86.3 The map (Step 150)
 
-- One text line per row, top row first; `.` or a space air, `#` ground, `=` platform, `~` cloud,
-  `|` ladder; a letter (ASCII, either case, each once) is a *spot*: an air cell with a name
-  (`spots: {a: start}`, else the letter itself). Symbols are tiles and (from Step 152) items;
-  letters are only ever spots. Blank lines around the map are dropped, tabs expand to 4, short
-  rows are padded with air on the right (editors strip trailing spaces). At most `MAX_COLUMNS`
-  400 by `MAX_ROWS` 40.
-- Inside the model row 0 is the bottom; a cell spans `column .. column + 1`, `row .. row + 1`.
-  `STANDABLE` = ground, platform, cloud: a body stands on the tile's top edge. Ladders are drawn
-  and parsed; climbing is Step 151's to decide. Outside the map is air (a gap goes down forever).
-- A spot stands on the first standable tile below its letter (`Level.surface_below`), so a spot
-  under a platform stands on the ground beneath it. A body asked to stand at an x instead stands
-  on the highest tile of that column (`Level.top_surface`).
-- Errors (`parse_level`, `VidgenError`) name the map's row and column from the top left, both
-  from 1, as the author reads the YAML: unknown symbol (with the symbol list), a letter twice
-  (both places), a spot with nothing below it, a map with nothing to stand on, a `spots` letter
-  not on the map, one name for two letters, too large. `StageLevel` turns them into validation
-  errors at `scenes[i].params.level`.
+- One line per row, top first: `.`/space air, `#` ground, `=` platform, `~` cloud, `|` ladder;
+  item symbols §86.8; a letter (each once) is a spot (`spots: {a: start}` names it). Tabs → 4,
+  short rows padded. Max `MAX_COLUMNS` 400 × `MAX_ROWS` 40.
+- Model row 0 is the bottom. `STANDABLE` = ground, platform, cloud. Outside the map is air. A spot
+  stands on the first standable tile below (`surface_below`); an x on the column's top
+  (`top_surface`).
+- `parse_level` errors give row and column from the top left, from 1; reported at
+  `scenes[i].params.level`.
 
 ### 86.4 Geometry on the stage (Step 150)
 
-- `CHARACTER_TILES` = 2: a character of scale 1 is two tiles tall, so the tile is
-  `size × shorter side / 2` and the characters keep the size the scene gives them. A level's
-  default `size` is `LEVEL_SIZE` 0.25 (a `mode="before"` validator fills it when the scene gives
-  none): about 8 rows by 14.2 columns in 16:9, 14.2 rows by 8 columns in 9:16. Step 154's
-  `character_size` sets this default (§86.10; `size` keeps winning when written).
-- `level_frame`: the stage is exactly as wide as the map (`Stage.stage_width`; `width` is refused
-  with a level, reframing does not change it), centred, the map's bottom edge on the frame's
-  bottom edge. Spots are stage marks at `(column + 0.5) / columns` (frame-independent, so `pan`
-  / `walk_to` / `camera_at` validate without a frame). `level_fit_problems` (in `vidgen validate`
-  and before a render): a map narrower than the frame (the camera would see past its ends). Until
-  Step 154 also tiles above the frame's top; since then the camera rises with its hero (§86.10)
-  and a portrait frame raises a short map.
-- `level_layout` replaces `stage_layout` (`Params.layout`, used by the scene, `stage_frame` and
-  `stage_reframes`): `level_world` resolves each item's `at` (a spot by name, else a mark or x
-  → tile column), `place_bodies` stands it, and the feet come out in Manim units raised by the
-  item's `lift` (frame heights) and `hang`. `Stage.grounds[name]` is the tile's top, so shadows lie
-  on the tiles. Depth is refused (characters and props) as are `room` and `water`; `ground` and
-  `ground_color` are not used.
+- `CHARACTER_TILES` 2: tile = `size × shorter side / 2`; default `size` from `character_size`
+  (§86.10; medium = `LEVEL_SIZE` 0.25).
+- `level_frame`: stage width = map width (`width` refused), map bottom on frame bottom. Spots are
+  marks at `(column + 0.5) / columns`. `level_fit_problems`: map narrower than the frame.
+- `level_layout` replaces `stage_layout`; `Stage.grounds` are tile tops. Depth, `room`, `water`
+  refused.
 
 ### 86.5 Drawing (Step 150)
 
-- `level_shapes(level, colors, outline)`: filled shapes in tile units, back to front: ladders,
-  ground, platforms, clouds. The ground is one mass: every cell in ink, then its fill inset by the
-  outline width on its open sides (an ink square in each inner corner), grass (`GRASS_DEPTH` 0.2,
-  scalloped) on every open top, a pebble in one cell of three placed by `crc32` of the cell. A
-  run of platforms is one rounded wooden slab (`PLATFORM_THICKNESS` 0.38) under the tiles' top,
-  with plank seams and a light edge; a run of clouds is one puffy cloud whose bumps reach the
-  tiles' top; other forms are drawn ink-then-shrunk-fill so the outline follows their union.
-  Outline `OUTLINE` 0.04 tile × the drawing style's `outline_factor`; ink is `CHARACTER_INK`.
-  Colours `LevelColors` (`colors:` theme tokens or #hex).
-- `draw_columns` paints columns `first..last` at `tile_pixels` per tile, `SUPERSAMPLE` 2 and a
-  box filter, so chunks drawn separately are byte-identical to one drawing (tested). The scene
-  (`Stage._level_tiles`) draws `CHUNK_COLUMNS` 8 columns per `ImageMobject` (plus one column
-  under the next chunk: the resampled edge of a picture is half transparent and showed a seam),
-  at `LEVEL_OVERSAMPLE` 1.25 × the frame's pixel density (1 in a draft; fewer pixels when the
-  pictures would pass `LEVEL_MAX_PIXELS` 24 M), up to the used rows + `TOP_ROOM` 0.25. No disk
-  cache: drawing a level takes tens of milliseconds and the scene render itself is cached.
-- `LevelTiles` (a `Group`, named `level`; chunks `level_1`...) keeps as members only the chunks
-  that overlap the camera's view (a camera listener), because Manim transforms every
-  `ImageMobject` on every frame whether it is in view or not. In the layout dump each chunk in
-  view is an `image`.
-- Behind the level: a background picture is drawn larger (`layer_half_extent`) and moves by
-  `LEVEL_PICTURE_FACTOR` 0.2 (`_move_by_parallax`, shared with `layers`); a colour or gradient
-  sky is as before (it looks the same from any camera position); `layers` as on any stage. The
-  light grades the tiles (they are in the backdrop, `mark_lit`).
-- Measured: the 42 x 6 scratch level at 854x480 renders 5.9 s of video (a pan across it) in
-  6.8 s, like a plain stage.
+- `level_shapes(level, colors, outline)` (tile units; ground mass with grass and `crc32`-placed
+  pebbles, platform slabs, clouds); outline `OUTLINE` 0.04 tile × the drawing style's factor;
+  `LevelColors`.
+- `draw_columns` supersamples so separately drawn chunks are byte-identical to one drawing.
+  `Stage._level_tiles`: `CHUNK_COLUMNS` 8 per `ImageMobject` (one column overlap), at
+  `LEVEL_OVERSAMPLE` 1.25 (1 in a draft; capped by `LEVEL_MAX_PIXELS` 24 M). No disk cache.
+- `LevelTiles` (`level`, chunks `level_1`...) keeps only chunks in view as members (Manim
+  transforms every `ImageMobject` each frame). Background picture parallax
+  `LEVEL_PICTURE_FACTOR` 0.2. Tiles are lit (`mark_lit`).
 
 ### 86.6 The rest of the phase (plan)
 
-- **Step 151, walking and jumping.** Rules: `walk` along a run of standable tiles to a spot or x,
-  stopping at an edge (a gap or a wall) with a clear error naming where it stops; `jump to <spot
-  or x>`: take-off at the edge nearest the target, an arc whose height clears the tiles between
-  (sampled against the cells, the body's height in tiles), landing on the target's surface;
-  `VidgenError` when no arc within a kid's reach (a few tiles across and up) clears. Output: a
-  path in tile units and events (`take_off`, `land`) that the renderer maps to the existing
-  `Walk` / `Jump` motion (crouch first, slower arcs, squash and wobble on landing) and the beat's
-  narration timing (a step starts at its `at` in the beat and lasts what the walking speed or the
-  arc gives).
-- **Step 152, props and reactions.** Items on the map (symbols, never letters) or listed by
-  spot: key, door, coins / stars, a friendly blocker that moves when asked; rules for pickups,
-  doors opening with the key, blockers stepping aside; reactions with the existing `react`,
-  `emote` and `effect` actions.
-- **Step 153, sounds.** The rules' events (take-off, landing, pickup, door) placed through the
-  existing `sfx` system; new synthesised sounds only where none fits.
-- **Step 154, camera and `character_size`.** The camera follows the hero sideways (the existing
-  `follow`, held inside the stage); `character_size: small | medium | large` at video level and
-  per scene (scene, then video, then medium) sets the base `size` (and so the tile size); shots
-  zoom from it; captions and on-screen text keep their size; a lint rule for a talking character
-  too small to read. Not named `characters:` (the cast list and the stage's placement list).
-- **Step 155**: a 2–3 minute original kids' story using only these features, the guide and docs,
-  and the review of the phase.
+The phase is built: §86.7–§86.11.
 
 ### 86.7 Walking and jumping (Step 151)
 
-Reference: docs/CONFIG.md "Walking and jumping on a level".
+User keys: docs/CONFIG.md "Walking and jumping on a level".
 
-- **Rules** (`vidgen/world/moves.py`, no manim): a body is a box `BODY_WIDTH` 0.4 of its height
-  wide on its feet. `SOLID` = ground and platform (they block from the side and from below); a
-  *floor* (`is_floor`) is the top of a ground, platform or cloud tile or of a ladder. A body stands
-  at a height in a column when a floor is there with room for its height above (no solid cell).
-  Walking is a cheapest-path search (Dijkstra, deterministic ties) over (column, height) states:
-  to the next column at most `STEP_TILES` 1 up or down (a flat way costs 1, a step 1.05), up a
-  ladder at its feet to the ladder's top (or onto the tile over it: a hatch) and down one under
-  it, at `CLIMB_SLOWNESS` 2 per tile. `walk_route` turns the states into a `Route` of `Leg`s
-  (`walk`, `step`: half a tile across the column edge, eased; `climb`: at the column's middle);
-  its `effort` (tiles walked, climbs doubled) sets the time. No way there: `VidgenError` naming
-  where the way stops (a gap, a drop, a wall, no room under the tiles, or the column reached only
-  at another height) and suggesting a jump.
-- **Clouds are one-way** (decided here): a body stands on a cloud's top, walks through a cloud at
-  its own height and jumps up through it from below; a falling arc that crosses a cloud's top
-  lands there, so `plan_jump` refuses one that would cross a cloud before its landing. Why: it is
-  the usual platform-game reading of a cloud, it makes "jump up onto the cloud" work from right
-  under it, and solid platforms (`=`) remain for a ceiling. Walking through a low cloud shows the
-  character inside the drawing; levels put clouds high, so this was left.
-- **Jumps** (`plan_jump`): the landing is the goal's height (a spot, a tile) or, for a mark or x,
-  the highest floor in that column a jump reaches. Take-off candidates are the states the body can
-  walk to (no ladders) at the column's middle and 0.3 towards the landing (and where it stands);
-  each is tried with the arc `y(u) = y0 + (y1 − y0) u + 4 b u (1 − u)` (x moving evenly) peaking
-  `JUMP_CLEARANCE` 0.75 over the higher end, then 0.25 higher up to `MAX_JUMP_UP` +
-  `JUMP_HEADROOM` over the take-off. An arc is clear when the body's box overlaps no solid cell at
-  samples 0.05 tiles apart and crosses no cloud top on the way down. Limits: `MAX_JUMP_ACROSS` 5,
-  `MAX_JUMP_UP` 3, `MAX_JUMP_DOWN` 8 tiles (a character is 2 tiles). The best candidate is the
-  shortest jump (at least a tile across beats straight up), then the shortest run-up, then the
-  lowest arc. No candidate: `VidgenError` with the reason from the nearest take-off. The flight
-  takes `flight_seconds`: rising and falling under `JUMP_GRAVITY` 8 tiles/s² (about half a real
-  gravity for a character two tiles tall, so arcs read slower than in a game), at most
-  `JUMP_AIR_SPEED` 4 tiles/s across, at least 0.7 s. `walk_body` / `jump_body` apply a rule to a
-  `World` (`World.moved`); a game could feed them a player's inputs.
-- **Goals and the replay** (`cartoon/level_stage.py`, no manim): `level_goal` reads a place (a
-  spot, a mark or x, a map tile `{column, row}` from the top left, from 1). `vidgen validate`
-  replays the scene's `walk_to`, `run_to`, `jump` (with `to`), `enter` and `exit` in beat and `at`
-  order (`Stage.action_sequence_problems` → `level_move_problems`) and reports each refusal at
-  `beats[j].actions[k].to` with the beat's id; a character is not followed after a refusal, an
-  exit or a keyframed / ridden move (until it enters again). `enter` / `exit` depend on the
-  camera's view, so their ways are checked when the scene renders.
-- **Renderer** (`cartoon/level_motion.py`): `RouteWalk` is a `Walk` whose `_place` hook (a small
-  refactor of `Walk.interpolate_mobject`: where the feet are and the facing at a share of the
-  distance) follows the route: facing each walking leg's way, the front on a ladder (front-view
-  walk cycle), the last side once stopped; footsteps and motion effects read its route length.
-  `ArcJump` is a `Jump` along the planned arc: it faces the landing, crouches
-  `LEVEL_JUMP_CROUCH_SECONDS` 0.32, stretches, squashes on landing and leans forward and back
-  (`settle_wobble`, `LANDING_WOBBLE_DEGREES` 7) over `LEVEL_JUMP_LAND_SECONDS` 0.55, all scaled by
-  `cartoon_motion` (`jump_phases` / `jump_motion_seconds` take the crouch and landing seconds).
-  A jump with a run-up is one `Succession(RouteWalk, ArcJump)`; foley and motion effects take its
-  parts in turn (`_timed_parts`: the run-up as a `walk_to`). Both set the character's `ground_y`
-  to the floor under it every frame (the shadow; far below over a gap), and the stage records the
-  end floor in `grounds` (`keyframes` y 0, `level_moved`).
-- **Stage** (`scenes/stage.py`): `on_level`, `level_pace` (`size / STAGE_SIZE`: default walking
-  and running speeds, and a jump's run-up, scale with the level's smaller characters, so they walk
-  as many of their heights per second as on a plain stage), `level_walk`, `level_enter`,
-  `level_exit`, `level_jump`, `level_moved`, `level_homes`. The moving actions (`scenes/moving.py`)
-  call these when `on_level`; a run time asked for while a batch is planned that the rules refuse
-  then gives the default (the batch may start after another move of the character; `apply` plans
-  again and raises naming the scene and beat). `feet_y_at` raises on a level; `walk_to` `depth`
-  is refused there.
-- **Timing**: moves keep the beat action timing (start at `at`, natural run time, sped up when
-  the beat is short). `rushed_animation` has `max_speedup` (1.5): a `RouteWalk` or `ArcJump` play
-  sped up more than that is reported (only level moves, so lint results on plain stages are as
-  before). Automatic directing (`_follow_written`, `_jumps_somewhere`) and the prop-handling
-  replay treat a jump to a spot or mark like a walk there (to a tile: the x is unknown).
-- Measured: the 47 x 6 scratch level at 854x480 renders 31 s of video (a jump with a run-up, a
-  walk over steps, a ladder climb, a jump up onto a cloud) in about 40 s; `plan_jump` takes a few
-  milliseconds per jump.
+- `vidgen/world/moves.py`: body box `BODY_WIDTH` 0.4 of its height; `SOLID` = ground, platform.
+  `walk_route`: Dijkstra over (column, height), steps up/down `STEP_TILES` 1, ladders at
+  `CLIMB_SLOWNESS` 2 → `Route` of `Leg`s (`walk`, `step`, `climb`); refusal names where it stops
+  and suggests a jump.
+- **Clouds are one-way** (stand on, pass through sideways and from below; a falling arc lands on
+  the first cloud top it crosses).
+- `plan_jump`: parabolic arcs from walkable take-offs, clearance `JUMP_CLEARANCE` 0.75, sampled
+  every 0.05 tiles; limits `MAX_JUMP_ACROSS` 5, `MAX_JUMP_UP` 3, `MAX_JUMP_DOWN` 8; prefer shortest
+  jump, then shortest run-up, then lowest arc. `flight_seconds`: `JUMP_GRAVITY` 8 tiles/s²,
+  `JUMP_AIR_SPEED` 4, ≥ 0.7 s. `walk_body` / `jump_body` apply to a `World`.
+- `level_goal` (spot, mark/x, tile `{column, row}`); validate replays `walk_to`, `run_to`, `jump`,
+  `enter`, `exit` (`level_move_problems`) and reports at `beats[j].actions[k].to`; `enter`/`exit`
+  are checked at render.
+- `cartoon/level_motion.py`: `RouteWalk` (a `Walk` following the route) and `ArcJump` (crouch
+  `LEVEL_JUMP_CROUCH_SECONDS` 0.32, landing `LEVEL_JUMP_LAND_SECONDS` 0.55, wobble 7°); run-up +
+  jump is one `Succession`.
+- `Stage`: `on_level`, `level_pace` (`size / STAGE_SIZE`), `level_walk/enter/exit/jump/moved`.
+  `feet_y_at` raises on a level. `rushed_animation`'s `max_speedup` 1.5 applies to level moves.
 
 ### 86.8 Story props and reactions (Step 152)
 
-Reference: docs/CONFIG.md "Story props on a level (keys, doors, coins, stars, blockers)".
+User keys: docs/CONFIG.md "Story props on a level (keys, doors, coins, stars, blockers)".
 
-- **World data** (`vidgen/world/items.py`, no manim): an `Item` (name, kind `key` / `door` /
-  `coin` / `star` / `blocker`, where it is in tile units, its height; a door's `key` and `open`, a
-  blocker's `aside`, the `holder` of a key or of a picked-up coin or star; `blocks`, `label`,
-  `hint`). `World.items` holds them (`item`, `with_items`; `moved` moves a blocker's item with its
-  body).
-- **Symbols versus named placements** (decided here): what a map has many of and nobody names in
-  a beat (coins, stars) is a map symbol, `$` and `*`, floating in the middle of an air cell and
-  named `coin_1`, `star_1`... in map order (the top row first). What a beat names and acts on
-  (`pick_up: gold_key`, `open: gate`, `step_aside: tobble`) is a prop or a character of the stage
-  standing at a spot like any other: its part in the rules is data on the level, `locks: {door:
-  key}` and `blockers: [name]`. This keeps Step 150's rule (letters are only spots, symbols only
-  tiles or items), reuses the stage's props (`door` with its open / closed shapes, a new `key`
-  prop held by its bow), its characters and every prop action, and puts no second placement
-  syntax into the map. Every closed `door` prop on a level is in the way (a door is a way through;
-  a free-standing door drawn shut that one walks through looked wrong); `locks` only adds the key.
-- **Rules** (`vidgen/world/moves.py`, `vidgen/world/story_props.py`, pure functions): an item
-  that `blocks` is an `Obstacle` shutting its column from its feet up to the first solid tile
-  above it (`_OPEN_SKY_ROWS` with none), so a walk or a jump never passes it but a way over the
-  tiles above it still does. `walk_route` / `plan_jump` take `obstacles`; when they refuse, the
-  same move without them is planned and the first obstacle its way runs into (or the one right
-  after where the walk stops) is named with what clears it: `the locked door 'gate' is in the way
-  at map column 14; open it first with its key 'gold_key' (- open: gate, by: <who holds
-  gold_key>)`. `route_pickups` / `jump_pickups` sample the way (every `_ARC_SAMPLE` 0.05 tiles)
-  and give each coin or star whose middle the body's box comes within `PICKUP_RADIUS` 0.3 of, in
-  order, with its share of the walk or of the flight (mid-jump). `walk_body` / `jump_body` apply
-  both (the body is never in its own way). `open_door` (a locked door only by the key's holder,
-  within `DOOR_REACH` 1.6 tiles across and `DOOR_REACH_UP` 0.5 up or down), `close_door`,
-  `step_aside`, `hold_key`.
-- **Validation** (`level_move_problems` with `LevelProps`): the replay follows the key through
-  `pick_up`, `hold`, `give`, `put_down`, `throw`, `let_go` and `blow_away`, doors through `open`
-  (with `by`) and `close`, blockers through `step_aside`, and the moves with the obstacles and the
-  pickups; each refusal names the beat (`beats[j].actions[k].to`, `.by`, `.target`, `.react`). A
-  blocker that stepped back off the path is no longer followed (it stands behind the path).
-  `StageLevel` checks that `locks` names a door prop and a prop for its key, `blockers`
-  characters, and that no prop or character takes a coin's or star's name.
-- **Renderer**: `cartoon/level_items.py` `Collectible` (a coin: a disc, a ring and a shine; a star:
-  a rounded five-point star), drawn from an updater counting its own seconds: it bobs (a coin
-  turns) while it waits, and pops (grows 1.6×, rises 0.8 tiles, fades in `POP_SECONDS` 0.35)
-  from `collect()`. The coins and stars go in the backdrop after the shadows, not graded by the
-  light (they shine at night). `RouteWalk` and `ArcJump` (a `_Cues` mixin) take `pickups`
-  (share, collectible) and call `collect()` on the frame the move's progress passes the share.
-- **Reactions** (`react: {when, expression, effect}` on `walk_to`, `run_to` and `jump` on a
-  level): a move's progress is its walk (or flight) share 0..1, then 1..2 over its settle;
-  `Reaction(at, expression, effect)` starts when the progress passes `at` (the first pickup's
-  share, `LANDED` 1, `SETTLED` 2), eases the face parts (`kind_parts("expression")`) to the
-  expression over `REACTION_BLEND_SECONDS` 0.3 by changing the base state the walk cycle or the
-  jump is drawn from (so the walk, the squash and the lip sync go on), and starts the effect
-  symbol: an `EffectSymbol` the stage adds when the move is applied (`level_moved`), hidden with
-  a very negative age until then, shrinking away by itself after `REACTION_EFFECT_SECONDS` 1.4.
-  The expression is kept (as `emote`). A run-up's pickup puts the reaction on the run-up walk.
-  The key `when` (not `on`): YAML 1.1 reads a bare `on:` key as `true`. Why inside the move, not
-  a second action at a time: the runner plays an action that changes the same character after
-  the one playing (`_changed` batches), so a separate `emote` cannot start mid-walk, and the
-  pickup's time is only known once the move is planned.
-- **Stage** (`scenes/stage.py`): `level_state` (the world as the rules see it now; `_level_now`
-  reads each key's holder from its prop), `level_pickups`, `level_walk` / `level_jump` with
-  `react`, obstacles and pickups (`walk.picked`), `level_enter` / `level_exit` with obstacles (no
-  pickups, as in the replay), `level_moved` records the pickups and adds the effect symbol,
-  `level_open` / `level_close` (called by `open` / `close` on a door), `level_step_aside` (a walk
-  to `to`, else a `Walk` in depth to `ASIDE_DEPTH` 0.3 with its feet `ASIDE_RISE_TILES` 0.3
-  higher, its draw order kept by the depth walks). `open` gained `by` (the opener turns to the
-  door and reaches for its edge with the key's hand, `_reach_low`; `alters` keeps the opener out
-  of other batches); `step_aside` is a new moving action.
-- **Step 151 gaps closed**: `walk_to` / `run_to` take a tile `{column, row}` (`MapTile`, was
-  `JumpTile`); `StageFrame.columns` lets `place_x` place a tile, so `vidgen direct` and the
-  prop-handling replay know where a walk or a jump to a tile ends.
-- Measured: the 50 x 5 scratch story at 854x480 (a key, two coin runs, a locked gate, a jump
-  over a gap catching a star, a turtle stepping aside) renders 31.5 s of video in 27 s.
+- `vidgen/world/items.py`: `Item` (kind `key`/`door`/`coin`/`star`/`blocker`, `holder`, `blocks`,
+  ...); `World.items`.
+- Coins and stars are map symbols `$` / `*` (named `coin_1`, `star_1`... in map order); keys,
+  doors and blockers are named stage props/characters at spots, with `locks: {door: key}` and
+  `blockers: [name]` on the level (letters stay spots only). Every closed `door` prop blocks.
+- `vidgen/world/story_props.py`: a blocking item is an `Obstacle` up to the first solid tile above
+  it; a refused move names the obstacle and what clears it. `route_pickups` / `jump_pickups`
+  (`PICKUP_RADIUS` 0.3). `open_door` (only the key's holder within `DOOR_REACH` 1.6 / `DOOR_REACH_UP`
+  0.5), `close_door`, `step_aside`, `hold_key`.
+- Validation replay follows the key, doors and blockers; `StageLevel` checks `locks` and `blockers`
+  names and that no prop takes a coin/star name.
+- `cartoon/level_items.py` `Collectible`: bobs, pops on `collect()` (`POP_SECONDS` 0.35), not lit.
+- `react: {when, expression, effect}` on level moves: `Reaction` at a progress (first pickup,
+  `LANDED` 1, `SETTLED` 2) inside the move (a separate action cannot start mid-move); `when`, not
+  `on`, because YAML 1.1 reads `on:` as `true`.
+- `open` takes `by`; `step_aside` is a moving action; `walk_to`/`run_to` take a tile (`MapTile`).
 
 ### 86.9 Sounds on a level (Step 153)
 
-Reference: docs/CONFIG.md "Story props on a level", **Sounds**; "Foley and music stings".
+User keys: docs/CONFIG.md "Story props on a level" (Sounds), "Foley and music stings".
 
-- **Through foley, not a new system.** A level's sounds are stage foley (§69.19): the action
-  runner calls `Stage.action_foley` with each action as it played (scene start, seconds after any
-  speed-up); `_timed_parts` splits a jump with a run-up; `_played` turns each animation into a
-  `PlayedAction`; `foley_cues` (no manim) gives the cues; `NarratedScene.sfx` records them
-  (`timings.json` `sfx`, the SFX track, the final mix with its loudness normalisation and
-  limiter). So `foley: false` (video or stage), `sfx: {gain}` and `assets/sfx/<name>.wav` control
-  them as every other foley sound, and nothing new reaches the config.
-- **Events and their times.** The rules' plan, not the frames, gives every time, so the cues are
-  known when the action starts (before any frame of it is drawn):
-  - take-off: the existing `boing` at the end of the crouch (`phases.before`), unchanged;
-  - landing: `_played` gives an `ArcJump` `lands = 1 − phases.after` (its settle starts as it
-    touches down); `landing_cues` plays a short, soft, higher `thud` and a `footstep` there, their
-    intensity 0.35 + 0.1 per character height fallen (`lift`), at most 0.7. A jump in place (a
-    plain `Jump`, also on a plain stage) keeps its boing only;
-  - pickups: `RouteWalk.pickups` / `ArcJump.pickups` hold (share of the walk's distance or of the
-    flight, collectible); `_played` passes `(share, kind)` as `PlayedAction.pickups`, and
-    `pickup_cues` maps a walk's share through the inverse of `walk_progress` (`_walk_time_share`,
-    as the footfalls) and the wind-up, a flight's linearly through the crouch: the same mapping
-    `_Cues._cue` uses to pop the collectible, so the sound falls on the frame it pops (the render
-    test checks within a frame). Coins play `coin`, stars `twinkle`; each further one of a kind in
-    one move is a semitone higher (at most 5), the usual rising run of a coin trail;
-  - door: `level_open` now returns whether a key unlocked the door (it had a `key` and was
-    closed); `Open.apply` marks its `PropReshape` `unlocks`, and `door_cues` plays `unlock` at the
-    action's start and the creak `UNLOCK_SECONDS` 0.3 later (never after the door swings at
-    `RESHAPE_SHARE`). Other doors creak as before (§69.62);
-  - a blocker stepping aside (`step_aside`, a `Walk` in depth or a `RouteWalk`): a soft low
-    `swoosh` (−12 dB, 7 semitones down) and footsteps 3 semitones lower and 3 dB softer than a
-    walk's. Not in `WALKING_ACTIONS`, so motion effects do not change.
-- **New sounds** (`sfx.py`, numpy only, through the library's `_finish`: −27 LUFS loudest 400 ms,
-  peaks at most −9 dBFS): `unlock` (a small metallic tick, then a rounder clack, low-passed at
-  5 kHz), `coin` (two soft bell notes B5 → E6), `twinkle` (a soft bell arpeggio C6–C7 with a faint
-  glitter, low-passed at 8 kHz). Bells with the soft partials of `success`, nothing above ~8 kHz
-  of note: kid-friendly, not shrill. Missing before: no lock, no coin, no star sound. The landing
-  and the blocker reuse `thud`, `footstep` and `swoosh`.
-- **Loudness.** Gains follow the foley table: pickups −4 dB (like a boing), the unlock −6, the
-  landing thud −8 with its step −5. A coin trail may overlap its sounds when run through (a coin a tile
-  apart is about 0.7 s at walking pace, 0.45 s long); the render test writes the story's SFX track and checks its peak stays
-  under −3 dBFS and its loudest 400 ms under −20 LUFS (narration is about −20; the final mix
-  normalises and limits as before).
-- Not done: a move's `react` effect symbol plays no sound (an `effect` action's does), nor does a
-  `react` expression `surprised` during a move.
+- Level sounds are stage foley (§69.19, `foley_cues`), timed from the rules' plan, so `foley:
+  false`, `sfx: {gain}` and `assets/sfx/<name>.wav` apply. Take-off `boing`; landing `thud` +
+  `footstep`; pickups `coin` / `twinkle` rising a semitone per further one (≤ 5), on the pop's
+  frame; key-opened door `unlock` then creak after `UNLOCK_SECONDS` 0.3; `step_aside` a soft
+  swoosh. A move's `react` plays no sound.
+- New `sfx.py` sounds `unlock`, `coin`, `twinkle` (−27 LUFS, peaks ≤ −9 dBFS).
 
 ### 86.10 The camera and `character_size` (Step 154)
 
-Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a level
+User keys: docs/CONFIG.md "Character size (`character_size`)", "The camera on a level
 (`follow`)", lint `small_speaker`.
 
-- **`character_size: small | medium | large`** (`config.CharacterSize`; `VideoConfig` and the
-  stage's param): the stage's default `size` times `CHARACTER_SIZE_FACTORS` 0.7 / 1 / 1.4 of its
-  medium (`STAGE_SIZE` 0.45, a level's `LEVEL_SIZE` 0.25), by the stage's `mode="before"`
-  validator (`_default_size`, which replaced `_level_size`). The scene's wins, then the video's,
-  then medium: the video's reaches the scenes as data, like a set — `includes.expand_character_size`
-  (after `expand_sets`, also after a variant's merge, so a 9:16 variant can say `large`) copies it
-  into each `type: stage` scene whose params (after its set) give neither `character_size` nor
-  `size`, with its origin at the video's key. Why data, not a lookup at render: `params.size` is
-  read by validation, `stage_frame`, `stage_reframes`, directing and lint without a scene, and
-  every one of them now sees the same number. Writing both in one scene is refused. Medium gives
-  exactly the sizes of before (tests unchanged).
-- **On a plain stage (decided)**: applied, consistently, as the named form of `size`: characters
-  and props scale (as `size` always did); the stage's width and marks, the ground line, the
-  background and the layers stay framed, and walking times between marks stay (speeds are in
-  frame units there). Why not restrict it to levels: a Short with a host on a plain stage needs
-  `large` as much (in 9:16 a size is a fraction of the frame's *width*), and one video-level
-  knob that silently skipped half the stage scenes would surprise.
-- **On a level** everything in front scales with `size`: the tile (`size × short side / 2`), the
-  props, coins and stars; `level_pace` (`size / STAGE_SIZE`) scales the default speeds, so every
-  walk, climb and jump takes the same seconds at every size (the rules plan in tiles; the foley
-  cues follow; a render test compares the SFX schedule at medium and large). The sky, the
-  background picture and the layers are *not* scaled: they are the distance (as for a camera
-  move, far things do not grow with the near ones) and a set's layers are given in frame
-  fractions; scaling them would push a set's horizon out of the frame at `large` and leave
-  gaps at `small`. Captions, on-screen text, speech bubbles, effect symbols and overlays are
-  screen-sized as before. Shots (`shot_view`) frame by the characters' size on screen, so they
-  zoom in from the base size (`MAX_SHOT_SCALE`, scale ≥ 1 as before).
-- **The following camera** (`vidgen/camera.py`, no manim): `SmoothFollow` — a dead zone of
-  `FOLLOW_DEAD_ZONE` 0.08 of the view's width either side of its centre, then `smooth_damp`
-  (a critically damped spring, `FOLLOW_SECONDS` 0.45, stable for any `dt`: a skipped animation
-  is one long step) towards the nearest view that has the hero at the zone's edge, then a hard
-  limit `FOLLOW_MAX_OFFSET` 0.3 of the width, then the bounds. Vertically it keeps
-  `FOLLOW_HEAD_ROOM` 0.08 of the view's height over the head and `FOLLOW_FEET_ROOM` 0.2 under the
-  feet, moving only to keep them (a target clamped to the bounds before smoothing, so the
-  velocity never winds up against an edge), and never lets the head within
-  `FOLLOW_MIN_HEAD_ROOM` 0.02 of the top. `NarratedScene.follow_with_camera` accepts such a
-  follower (duck-typed: `view_center(center, dt, width, height, bounds)`, `restart()`; a plain
-  `x_of` keeps the old hard follow, so plain stages and other scenes render as before);
-  `_camera_step` passes the frame's `dt`. The `follow` action asks the scene for
-  `camera_follower(mob)` (`Stage`: a `SmoothFollow` on a level, `None` elsewhere). Searched
-  first: `cartoon/spring.py`'s `Spring.follow` integrates a target known as a function of time,
-  not one read frame by frame; nothing else smoothed the camera.
-- **`level.follow: <character>`**: the hero; `Stage._follow_hero` puts the camera on it (the
-  follower's settled view, so a hero on a high plank starts in frame) and follows from the first
-  frame. A `pan` stops it, a `follow` replaces it, a `shot` stores and gives it back
-  (`shot_home`), an `exit` of the hero stops it, as for the action. `camera_at` is refused with
-  it. Directing knows it: `StageFrame.follows` (the start view is the hero's, the replay's
-  `camera_x` is `None` as after a `follow`), `reframe_path(following=True)` leaves the camera
-  alone. Not a default: without a named hero the camera stays at `camera_at` (and `reframe`),
-  since guessing the hero among the cast would move cameras of existing levels.
-- **Vertical room**: `LevelFrame.top` = max(the frame's top, the map's bottom + its used rows +
-  `CHARACTER_TILES` + `LEVEL_HEAD_ROOM` 2 tiles); `Stage.camera_bounds` uses it (the bottom stays
-  the frame's bottom). So a level taller than the frame is no longer refused, and shots can frame a
-  character high up. With a raised top: the colour / gradient sky moves with the camera
-  (parallax factor 0: it looks the same from every height); `layer_half_extent(stage_top=...)`
-  makes the background picture and the layers cover every view up to it (`reach_y = top −
-  frame_height / 2z`; without `stage_top` the old formula, so plain stages are unchanged); the
-  tiles are drawn up to their used rows (no longer cut at the frame's height).
-- **A short map in a portrait frame** (decided: portrait only, so every landscape level renders as
-  before): `level_raise` raises it by whole rows until the empty sky over its used rows and a
-  character is at most `PORTRAIT_SKY_SHARE` 0.4 of the frame, by at most `PORTRAIT_MAX_RAISE` 0.3
-  of it. `LevelFrame.below` rows of ground are drawn under the map (`level_shapes(below=)`: the
-  bottom row's ground cells run on down, with pebbles; gaps stay open; `draw_columns(below=)`), and
-  `LevelFrame.bottom` rises by them, so every placement, goal and replay follows. The background
-  picture and the layers rise with it (`Stage._level_lift`, and their cover extends down by as
-  much), so the hills stand behind the raised ground as behind a landscape level's. Why rows of
-  ground rather than a camera rule: the camera's bounds stay the map's frame, and nothing
-  "under" the map needed inventing.
-- **Lint**: `small_speaker` (cartoon still rule, default warning, `min_face` 0.075 of the shorter
-  side): a speaking character in view whose head box (as seen, so a shot counts) is smaller; it
-  suggests `shot: closeup <name>` / `medium` or `character_size: large`. Measured: the head is
-  about 0.38 of a character's height, so a level character is 0.095 at medium, 0.067–0.07 at
-  small (always reported), 0.13 at large; a plain stage's 0.17. `off_frame` skips objects with
-  `scenery: true` in the layout dump: an `ImageMobject` with `scenery = True` (the level's tile
-  chunks) — the Step 152 gap.
-- Measured: the 30 x 8 test level at 160x90 with two jumps up, a close-up and a follow renders
-  in about a second; a scratch 42 x 8 level with `set: park` at 854x480 (11.6 s of video) in 23.6 s.
+- `character_size: small|medium|large` (video and stage param) = default `size` ×
+  `CHARACTER_SIZE_FACTORS` 0.7/1/1.4 (`STAGE_SIZE` 0.45, `LEVEL_SIZE` 0.25). Scene > video >
+  medium; `includes.expand_character_size` copies the video's into stage params as data, because
+  `params.size` is read without a scene. Both keys in one scene is refused. On plain stages it
+  scales characters and props only; on a level tiles, props and items, with `level_pace` keeping
+  move durations. Sky, background, layers, captions and overlays are not scaled.
+- `vidgen/camera.py` `SmoothFollow` (no manim; dead zone `FOLLOW_DEAD_ZONE` 0.08, spring
+  `FOLLOW_SECONDS` 0.45, `FOLLOW_MAX_OFFSET` 0.3, vertical head/feet room). `follow_with_camera`
+  takes it (duck-typed `view_center`, `restart`); `Stage.camera_follower` gives it on a level.
+- `level.follow: <character>` follows the hero from frame 0 (`pan` stops, `shot` restores,
+  `camera_at` refused); no default hero.
+- `LevelFrame.top` rises for tall maps (`LEVEL_HEAD_ROOM` 2 tiles); skies, layers and stars
+  (`LEVEL_STAR_SKY` 0.45) follow. A short map in portrait is raised by ground rows
+  (`level_raise`, `PORTRAIT_SKY_SHARE` 0.4, `PORTRAIT_MAX_RAISE` 0.3); landscape unaffected.
+- Lint `small_speaker` (`min_face` 0.075 of the shorter side); `off_frame` skips `scenery: true`
+  objects (tile chunks).
 
 ### 86.11 The example, the guide and the review of the phase (Step 155)
 
-- **The example** (`examples/platform-story`, "Nutmeg and the Moon Picnic", 9.8 KB): three levels
-  (a meadow: a ladder up to a plank with the key, a jump down and one over a gap with a coin in
-  the air; a garden: a locked gate opened with the key, a grumpy snail on the path who steps
-  aside when asked nicely, close-ups and a two-shot for the dialogue, a jump catching a star, a
-  run through coins; the sky: cloud steps, a star caught in mid-air, the hero's granny on a
-  plank, a pan to the picnic, night falling), `level.follow`, the `cartoon` music bed,
-  `set: park` on two levels, a 9:16 variant with `character_size: large`. Word-count timing
-  (no audio committed, as every example): 2:50 at preview.
-- **A `snail` species** (decided: cheap, on the turtle's machinery): two feelers with knobs
-  (`FEELERS`, swaying in the wind like a rabbit's ears), a round shell high on the back with a
-  spiral (`snail_shell`, `SNAIL_SHELL`, `colors.hair`; `SHELLED_SPECIES` in the config for the
-  contrast and the random cast), shorter legs and arms, no tail (`SPECIES_WITHOUT_TAIL`), the
-  slowest walk (`SpeciesMotion` speed 0.35); `turtle` and `snail` are one contrast family
-  ("shelled"). The Step 123 drawings are unchanged (pinned digests).
-- **A set on a level** (Step 150 gap): a stage with a `level` takes none of the set's
-  `LEVEL_DROPPED_KEYS` (props, water, room, ground_color) in `includes.apply_set`; the sky,
-  layers, light, ambience, particles and marks stay. Why drop rather than refuse: a set's props
-  stand at depths, which a level refuses, so a set with props could not be used on a level at all
-  (the scene had to write `props: []` and could then add none of its own).
-- **`vidgen screenplay` with a level** (cheap enough to do): a `set:` line may name a set of the
-  front matter's `sets:` (before: only `--cast`'s); `screenplay.stage_marks` adds a level's spots
-  to the marks the set line and the directions place by; `X jumps / hops / leaps [up / down /
-  across / over] to / onto Y` is a `jump` with `to` on a level (elsewhere a `# TODO:`). A bug on
-  the way: `plan_yaml._literal` wrote every multi-line string as `|-`, so a map's final line break
-  was lost and `commented_yaml`'s round-trip check raised `AssertionError` (a traceback from the
-  CLI); now `|`, `|-` or `|+` by the string's ending.
-- **Stars over a tall level**: the night's stars were kept clear of the heads at the start, which
-  on a level the camera rises over can be above the frame (no stars at all), and they stayed in
-  the stage while the camera rose. With a raised top the stars fill the top `LEVEL_STAR_SKY` 0.45
-  of the view and move with the camera (parallax factor 0, like the colour sky).
-- **Portrait shots** (found by the example's 9:16 lint, not a Phase O bug): `frame_shot` framed a
-  one-character shot by its height span only, so a portrait close-up was 0.41 of the character's
-  height wide and cut a snout or a beak. `SHOT_MIN_WIDTHS` keeps a close-up at least 0.55 and a
-  medium / over-the-shoulder 0.7 of its height wide (landscape views are wider anyway: unchanged).
-  The kid mouse's head with its big ears is 0.78 wide: its portrait close-up still cuts an ear, so
-  the example frames its line as a two-shot.
-- **Review** (the whole phase's code and docs; HANDOFF Step 155): the three layers hold
-  (`vidgen.world`, `level_stage`, `level_drawing`, `vidgen.camera` and `cartoon.foley` import no
-  manim, now all in the test); a refusal said `(a blockers: ...)` (now `(blockers: ...)`);
-  `items.py` named a module `vidgen.world.props` that is `story_props`.
-- Measured (854x480 @ 15, no audio): meadow 55.9 s of video in 63 s, garden 60.6 s in 49 s, sky
-  (40 x 11, the camera rising) 47.9 s in 113 s: 85 of 131 profiled seconds are Manim's PIL
-  transform drawing the tile chunks (about 0.05 s per chunk per frame). Backlog: draw the chunks
-  in view into one picture per frame, or cut chunks by rows too.
-- **`vidgen.api` exports the level layers** (fixed in Step 157: `scenes/stage.py` imported them
-  directly, against §6.4, and `test_builtins_use_only_the_public_api` failed): the world model
-  and rules (`Level`, `World`, `COIN`, `KEY`, `parse_level`, `walk_route`, `plan_jump`,
+- Example `examples/platform-story` (three levels, `level.follow`, a 9:16 variant with
+  `character_size: large`). `snail` species on the turtle's machinery ("shelled" contrast family).
+- `vidgen screenplay` on levels: set lines may name front-matter sets, spots are marks, "X jumps
+  to Y" is a `jump`.
+- `SHOT_MIN_WIDTHS` (`cartoon/shots.py`: closeup 0.55, medium / over_shoulder 0.7 of the
+  character's height) keeps portrait shots wide enough.
+- **`vidgen.api` exports the level layers** (`scenes/stage.py` imports them only from there,
+  §6.4): `Level`, `World`, `COIN`, `KEY`, `parse_level`, `walk_route`, `plan_jump`,
   `reversed_route`, `route_pickups`, `jump_pickups`, `obstacles_in`, `step_aside`, `open_door`,
-  `close_door`, `hold_key`), the stage geometry (`level_stage`: `LevelFrame`, `LevelProps`,
-  `LevelStep`, `LEVEL_MOVES`, `LEVEL_PROP_ACTIONS`, `LEVEL_SIZE`, `LEVEL_UNTRACKED`,
-  `CHARACTER_SIZE_FACTORS`, `character_size_default`, `level_frame`, `level_layout`,
-  `level_world`, `level_goal`, `level_fit_problems`, `level_move_problems`), the drawing
-  (`CHUNK_COLUMNS`, `LevelColors`, `draw_columns`, `drawn_rows`, `level_shapes`, `COIN_COLOR`,
-  `STAR_COLOR`, `Collectible`), the motion (`ArcJump`, `RouteWalk`, `Reaction`, `LANDED`,
-  `SETTLED`), `SmoothFollow` and the config's `CharacterSize`. None shadows a manim name.
-
+  `close_door`, `hold_key`; `LevelFrame`, `LevelProps`, `LevelStep`, `LEVEL_MOVES`,
+  `LEVEL_PROP_ACTIONS`, `LEVEL_SIZE`, `LEVEL_UNTRACKED`, `CHARACTER_SIZE_FACTORS`,
+  `character_size_default`, `level_frame`, `level_layout`, `level_world`, `level_goal`,
+  `level_fit_problems`, `level_move_problems`; `CHUNK_COLUMNS`, `LevelColors`, `draw_columns`,
+  `drawn_rows`, `level_shapes`, `COIN_COLOR`, `STAR_COLOR`, `Collectible`; `ArcJump`, `RouteWalk`,
+  `Reaction`, `LANDED`, `SETTLED`; `SmoothFollow`; `CharacterSize`. None shadows a manim name.
+- Drawing the tile chunks dominates a level's render time.
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
 Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line`, `bar_chart` / `line_chart` "Values that
@@ -11329,1886 +9459,738 @@ iso-story differs from the pre-Phase-R stills only in Step 172's intended rain a
 
 ## 91. Documentary music beds (Step 179)
 
-Five more built-in beds, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, for
-documentaries and explainers that need more drive than §48's `pulse` / `bright`. The owner
-listened to six prototypes (rendered outside the repo with `music-candidates/newbeds.py`) and
-approved five; `investigation` (E minor with a Phrygian F, 92 BPM, a heartbeat kick and a ticking
-clock) was not approved and is not added.
+Five built-in beds with more drive than §48's `pulse` / `bright`: `discovery` (D minor, 104 BPM,
+24 bars), `breakthrough` (C minor → E-flat major, 112 BPM, 24 bars, lift at 25.714 s: `start:
+25.7 − T` puts it T s after the cue starts), `enigma` (B minor, 96 BPM, 20 bars), `momentum` (G
+minor, 120 BPM, 24 bars, a 3+3+2 sixteenth ostinato), `lab` (F minor, 108 BPM, 20 bars). All 4/4,
+a chord every two bars; `Bed.description` gives instruments, ranges and chords. User docs:
+docs/CONFIG.md#background-music-music.
 
-- **Made like the other beds** (`music.py`): numpy only, no recordings, no samples, seeded
-  `crc32("music:<name>")`, rendered circularly, `_finish`ed to `MUSIC_LEVEL` −28 LUFS
-  integrated; `Bed` entries after `lullaby`, so the listing order of the first five is kept.
-  Used like any bed: `music: discovery`, `{source: momentum, volume: -2}`, `start`, lists of
-  cues; `bed_loop` makes the loop when the video is joined (1.7–4.2 s each here; the older beds
-  1.1–1.6 s).
-- **New voices**: `_kick` (a sine gliding to 42–50 Hz in ~35 ms, a faint click low-passed at
-  2.5 kHz), `_synth_bass` (10 harmonics at 1/h through `_partials`, the upper ones dying faster),
-  `_hat` (noise 4.5–9 kHz), `_clock` (a short tick with a ring), `_piano` (stretched partials),
-  `_fm_pluck` (two-operator FM, falling index); and tools: `_pump` (a side-chain gain curve
-  dipping after each beat, built circularly), `_riser` (a swept noise swell), `_echoed`
-  (ping-pong echoes), `_hits`, `_circular_smooth`, `_tone_filter` (a high-pass at 32 Hz and a
-  gentle low-pass, as an FFT over the whole loop, so the seam is filtered like any other point)
-  and `_opening_pads` (a dark and an open `_pads` render cross-faded along a curve).
-- **The beds** (all 4/4, a chord every two bars, `Bed.description` gives the instruments, ranges
-  and chords):
-  - `discovery`: D minor, 104 BPM, 24 bars (55.384 s). Kick on every beat, pulsing eighth-note
-    synth bass A1–F2, a plucked minor arpeggio, off-beat hats, a pad that opens over the loop
-    (`_bump` peaking 72 % through).
-  - `breakthrough`: C minor → E-flat major, 112 BPM, 24 bars (51.428 s). Bars 1–12 tense (kick on
-    1 and 3, staccato bass quarters, a dark arpeggio, a sixteenth tick growing, a riser); at
-    25.714 s the lift (a 2.5 s low boom, four-on-the-floor, eighth bass, the arpeggio an octave
-    up, the pad opens and starts pumping, hats); its last chord, G, turns back to C minor.
-    `start: 25.7 − T` puts the lift T seconds after the cue starts.
-  - `enigma`: B minor with suspended chords and a Neapolitan C, 96 BPM, 20 bars (50 s). A sub
-    pulse on every beat (A1–G2), a felt kick on 1 and 3, a pad low-passed at 1.4 kHz, a piano
-    motif B3–C#5 (`_ENIGMA_MOTIF`) with ping-pong echoes, a bell B5 / F#5 every eight bars.
-  - `momentum`: G minor, 120 BPM, 24 bars (48 s). A sixteenth-note synth ostinato accented 3+3+2,
-    kick on every beat, off-beat bass, a clap on 2 and 4, sixteenth hats, the pad pumping 45 %,
-    a riser into the top.
-  - `lab`: F minor, 108 BPM, 20 bars (44.443 s). Kick on every beat, a syncopated synth bass, FM
-    plucks E4–G5 with ping-pong echoes, glitchy clicks on seeded sixteenth slots (a stutter every
-    fourth bar), a snap on 2 and 4, a thin pad pumping 50 %.
-- **Bass weight, measured on the approved WAVs**: 57 % (`discovery`), 59 % (`breakthrough`), 65 %
-  (`enigma`), 61 % (`momentum`), 67 % (`lab`) of the power is under 150 Hz (`pulse` 36 %); the
-  300 Hz–3 kHz band is 2.0–3.7 dB under `pulse`'s, which leaves room for the voice. On phone and
-  laptop speakers they sound lighter; CONFIG, the guide and the cookbooks say so. True peak
-  −15.4 to −17.1 dBTP; tempo detected from the low band within 1.1 BPM of the nominal one; 3 s
-  loudness −28.9 to −27.0 LUFS; the sample step at the seam 0.16–0.34 of the loop's
-  99.9th-percentile step.
-- **Same as approved**: the port is the prototype's code moved into `music.py` (same helpers, same
-  order of operations, same seeds); its float32 loops equal the prototype's sample for sample, and
-  written with `write_wav` from a float64 copy (as the prototype wrote them) they are
-  byte-identical to the five approved WAVs (`<scratchpad>/s179/match_check.py`). The older five
-  beds' float32 loops hash as before the change.
-- **Regression test**: `tests/test_music.py::test_bed_sounds_as_approved` stores, per bed, the
-  loop length and three projections of the loop on seeded Gaussian noise, within 0.01. Float
-  rounding on another platform moves them by about 1e-4, one added 0.25 s note at −40 dBFS by
-  about 1.5 (both estimated, from √n × the sample change). The parametrized bed tests (determinism, −28 ± 0.05 LUFS,
-  headroom, little above 5 kHz or below 35 Hz, stereo width, seam) run on all ten beds; `vidgen
-  validate` suggests the nearest bed for a misspelt source (`did you mean 'discovery'?`).
-- **Not done**: no time-signature or "lift" field on `Bed` (the lift time is in the
-  description); the beds were not re-balanced for small speakers (approved as heard).
+- **Made like the other beds** (`music.py`): numpy only, no samples, seeded `crc32("music:<name>")`
+  (or `Bed.seed`, §91.1), rendered circularly, `_finish`ed to `MUSIC_LEVEL` −28 LUFS; `Bed`
+  entries after `lullaby` (listing order kept); `bed_loop` makes the loop at the join. Private
+  helpers include `_kick`, `_synth_bass`, `_hat`, `_clock`, `_piano`, `_fm_pluck`, `_pump`
+  (side-chain gain curve), `_riser`, `_echoed`, `_opening_pads` and `_tone_filter` (32 Hz
+  high-pass plus a gentle low-pass as one FFT over the whole loop, so the seam is filtered like
+  any other point).
+- **Invariant**: every bed's float32 loop is locked by
+  `tests/test_music.py::test_bed_sounds_as_approved` (loop length and three projections on seeded
+  noise, tolerance 0.01); a helper change must keep it. Parametrised bed tests (determinism,
+  −28 ± 0.05 LUFS, headroom, little above 5 kHz / below 35 Hz, width, seam) run on every bed.
+  `Bed` has no time-signature or lift field (the lift time is in the description).
 
 ### 91.1 Energetic beds (Step 181)
 
-Four more built-in beds inspired by `momentum` (its 3+3+2 sixteenth accent, `_ACCENTS`, and
-sixteenth figure, `_FIGURE`; a steady low pulse; an off-beat or rolling bass). The owner listened
-to six prototypes (`music-candidates2/beds2.py`, outside the repo) and approved four, renamed:
-`trance_a` → `ascent`, `trance_b` → `horizon`, `pulsar_a` → `beacon`, `night_drive_a` → `neon`.
-`pulsar_b` ("deep field") and `night_drive_b` ("afterglow") were not approved and are not added.
+`ascent` (A minor, 136 BPM, 32 bars, lift at 28.235 s), `horizon` (D minor → F major, 132 BPM, 32
+bars, lift at 29.088 s), `beacon` (E minor, 120 BPM, 24 bars), `neon` (F-sharp minor, 116 BPM, 24
+bars), built on `momentum`'s accent (`_ACCENTS`) and figure (`_FIGURE`).
 
-- **Seeds**: a bed's generator is seeded `crc32("music:<name>")`; renamed beds would get other
-  random phases and sound different, so `Bed` gained `seed: str | None = None`, the name to seed
-  with when it is not the bed's own (`bed_loop` uses `bed.seed or name`). The four keep their
-  prototype names as seeds; the older ten have none.
-- **Grid**: `_grid(tempo)` gives `(beat, bar, chord segment, sixteenth)` with the beat rounded down
-  to whole sixteenths (132 BPM: 21816 samples, not 21818; 116 BPM: 24824, not 24827), so the
-  sixteenth grid is exact; `_grid_seconds` gives the loop length on it. `Bed.tempo` stays the
-  nominal tempo (132.01 and 116.01 BPM in fact).
-- **New voices and tools** (only those the four use): `_saw_chords` (supersaw-like chords: a
-  PADsynth wave of saw harmonics `_SAW` / `_SOFT_SAW` spread 22–45 cents, independent phases per
-  channel), `_sweep_mix` (a filter sweep as an equal-power cross-fade of a dark and a bright
-  render), `_section_curve` (a periodic per-sample curve through `(bar, value)` points, smoothed
-  circularly), `_gate` (a sixteenth-note trance gate), `_analog_bass` (two detuned saws through a
-  falling two-pole low-pass), `_square_pluck`, `_gated_snare` (crack, body and a held noise room
-  cut after 0.24 s), `_add_stereo`, `_pulsar_pulse` (a dispersed chirp plus a burst of
-  band-limited static), `_static` (band-limited noise whose level wanders), and `_clap` (moved
-  out of `_momentum`, which now uses it and `_ACCENTS` / `_FIGURE`; its loop is bit-identical).
-  Left in the prototype: `_soft_lead` (only `night_drive_b` used it).
-- **The beds** (all 4/4, a chord every two bars; `Bed.description` gives the instruments, ranges,
-  sections and chords):
-  - `ascent`: A minor, 136 BPM, 32 bars (56.469 s). Groove (bars 1–12), build (13–16: the
-    supersaw's filter opens, a 4-bar riser, a clap roll, the last kick dropped), lift at 28.235 s
-    (a boom, F–C–G–Am colours, rolling bass, an FM arpeggio on the accents with echoes, sixteenth
-    hats; bars 17–28), settle (29–32).
-  - `horizon`: D minor → F major, 132 BPM, 32 bars (58.176 s). A gated supersaw (accents 1.0,
-    other sixteenths 0.38); groove (1–8), build (9–16: the bass rests, an 8-bar riser, sixteenth
-    kicks in the last half bar), lift at 29.088 s (the gate an octave up and bright, a soft
-    supersaw pad, the bass back), C7sus4 back to the top.
-  - `beacon`: E minor, 120 BPM, 24 bars (48 s). Pulsar pulses on the accents (the main pulse
-    centred on 1 and 3, interpulses ±0.35), a deep kick on every beat, off-beat sub (C2–B2), a low
-    soft ostinato, a pad low-passed at 1.3 kHz, a two-octaves-up shimmer swelling twice, faint
-    static (1.8–4.2 kHz, level 0.006 against the pad's 0.34).
-  - `neon`: F-sharp minor, 116 BPM, 24 bars (49.648 s). Kick on every beat, a gated snare on 2
-    and 4, analog octave bass on the eighths (C#2–B3), a square-pluck arpeggio on `_FIGURE`
-    (turned around in the second bar), soft-saw pads pumping 30 %, sixteenth hats.
-- **Bass weight and voice range** (Step 179's measure): 71 % (`ascent`), 78 % (`horizon`, now the
-  most), 72 % (`beacon`), 71 % (`neon`) of the power under 150 Hz; the 300 Hz–3 kHz band 2.7, 2.4,
-  4.7 (`beacon`, now the quietest there) and 3.6 dB under `pulse`'s. `enigma`'s description no
-  longer calls it the most bass-heavy or the quietest in the voice's range, and `momentum` is now
-  "the most energetic documentary bed" (the trance beds are faster); descriptions only.
-- **Same as approved**: the port is the prototype's code (same helpers, same order of operations,
-  same seeds); its float32 loops equal `beds2.loop(<prototype name>)` sample for sample, and
-  written with `write_wav` from a float64 copy they are byte-identical to `1_trance_a.wav`,
-  `2_trance_b.wav`, `3_pulsar_a.wav`, `5_night_drive_a.wav` (`<scratchpad>/s181/match_check.py`).
-  The ten older beds' float32 loops hash as before the change. `test_bed_sounds_as_approved`
-  stores the four new fingerprints; `test_energetic_beds_facts` checks tempo, key, grid, length,
-  seed, chords and descriptions without making audio.
-- **Cost**: `beacon` and `neon` take ~3 s to make, `horizon` ~7 s, `ascent` ~17 s: its loop,
-  2710528 = 2^10 × 2647 samples, has a large prime factor, so its whole-loop FFTs (`_section_curve`,
-  `_tone_filter`) are slow. Not changed (another length would change the bed); `vidgen
-  list-music`, which makes every loop, now takes about a minute.
+- **Seeds**: `Bed.seed: str | None = None` is the name to seed with when not the bed's own
+  (`bed_loop` uses `bed.seed or name`); these four seed with their prototype names (`trance_a`,
+  `trance_b`, `pulsar_a`, `night_drive_a`). Changing a seed changes the sound.
+- **Grid**: `_grid(tempo)` returns `(beat, bar, chord segment, sixteenth)` with the beat rounded
+  down to whole sixteenths (an exact sixteenth grid); `_grid_seconds(tempo, bars)` the loop length.
+  `Bed.tempo` stays nominal.
+- New helpers: `_saw_chords`, `_sweep_mix` (equal-power cross-fade of a dark and a bright
+  render), `_section_curve`, `_gate`, `_analog_bass`, `_square_pluck`, `_gated_snare`,
+  `_add_stereo`, `_pulsar_pulse`, `_static`, `_clap` (shared with `momentum`).
+- `ascent`'s loop (2^10 × 2647 samples) has a large prime factor, so its whole-loop FFTs are slow
+  (~17 s); not changeable without changing the bed. `vidgen list-music` makes every loop (about a
+  minute).
 
 ## 92. The Listen page (Step 183)
 
-The README leads with schu-video-generator's own music and sound synthesis (a bold headline under the tagline,
-a "Music and sound" block after the gallery strip, written as a bold-titled paragraph rather than
-a `##` heading so the README's intro that follows it stays outside it) and links a page where
-people can hear it: `docs/music/README.md`, committed with its media.
+`docs/music/README.md` and its media, linked from the README, let people hear the built-in music
+and sounds. User docs: docs/CONFIG.md#listen-page-vidgen-music-page.
 
-- **Decision: a sibling generator, `vidgen music page`** (`vidgen/listen.py`, `make_listen_page`),
-  not part of `vidgen gallery`: the gallery renders scenes with Manim (minutes, a work project),
-  the page only synthesises audio (no Manim, no project) and belongs with the `music` command
-  next to `music preview`. Like the gallery, the page is never edited by hand; its first comment
-  says so, and `tests/test_listen.py` fails when the committed text differs from what the code
-  writes (all but the composed clips' table, which needs the SoundFont).
-- **What it writes** (`--out`, default `docs/music`): per built-in bed a 15 s clip
-  (`CLIP_SECONDS`) of its loop from `bed_clip_start` — the top, or for a bed whose best part is
-  later (`CLIP_MOMENTS`: the lift of `breakthrough`, `ascent`, `horizon` halfway through the loop,
-  `momentum`'s riser into the top, `discovery`'s pad at its brightest) 6 s before it, wrapping
-  past the loop's end as the bed does in a video — with 0.2 s / 1.5 s raised-cosine fades; six
-  `SOUND_ROWS` clips that together play every `BUILTIN_SOUNDS` entry at listed times (a test keeps
-  the set complete); one clip of the six ambience beds, 3.5 s each, cross-faded; and, when symusic
-  and the cached default SoundFont are there (`composed_available`; the page never downloads),
-  the first 15 s of `curious` and `playful` at their default settings. `--no-composed` leaves
-  them out; the page then says why.
-- **Levels**: music clips +12 dB (`MUSIC_GAIN_DB`: −28 → −16 LUFS, a finished video's level),
-  effects +8 dB, ambience +12 dB, each lowered if a sample would pass −1.5 dBFS.
-- **Files**: MP3 by FFmpeg's libmp3lame, CBR 128 kbps stereo (music, ambience) or 96 kbps mono
-  (effects, made mono), with `-map_metadata -1`, bitexact flags, no ID3 and no Xing header, so the
-  same samples give the same bytes (a bed clip is 240,384 bytes). Spectrograms: palette PNGs (64
-  "inferno" steps plus a grey for the dotted 100 Hz and 1 kHz lines), 32 px per second × 120 px,
-  40 Hz–8 kHz on a log scale, −95 to −10 dB (a full-scale sine at 0 dB), a 4096-point Hann FFT per
-  column of the mono mix; 4.5–45 KB each. The −10 dB top was chosen by looking: at −25 dB the
-  beds' bass rows were a flat saturated band.
-- **Deterministic**: three runs (two in fresh processes) gave byte-identical files, composed clips
-  included. The bytes depend on the schu-video-generator, FFmpeg / LAME, Pillow and symusic versions, as the
-  gallery's do; a regeneration elsewhere may change the MP3s without a change in the sound.
-- **Size**: 5.51 MB (14 bed clips 3.37 MB, 2 composed 0.48 MB, 6 effect clips 0.71 MB, ambience
-  0.34 MB, spectrograms 0.6 MB); tested under 6.5 MB, bed and composed clips 200–320 KB, PNGs
-  ≤ 80 KB.
-- **Not done**: no per-clip loudness readout on the page; no clip of composed music following a
-  video (mood changes, swells), only fixed moods; the page lists the moods but plays two.
+- **Generator**: `vidgen music page` (`vidgen/listen.py`, `make_listen_page`), not part of `vidgen
+  gallery` (which renders scenes with Manim in a project; the page only synthesises audio). Never
+  edited by hand; `tests/test_listen.py` fails when the committed text differs from what the code
+  writes (except the composed clips' table, which needs the SoundFont).
+- **Content** (`--out`, default `docs/music`): per bed a 15 s clip (`CLIP_SECONDS`) from
+  `bed_clip_start` — the loop's top, or 6 s before the moment in `CLIP_MOMENTS` (a loop fraction),
+  wrapping — with 0.2 s / 1.5 s raised-cosine fades; six `SOUND_ROWS` clips covering every
+  `BUILTIN_SOUNDS` entry (a test keeps the set complete); one clip of the six ambience beds; when
+  symusic and the cached default SoundFont are present (`composed_available`; never downloads),
+  15 s of `curious` and `playful` (`--no-composed` leaves them out); the score-format section
+  (§93.14) and a studio paragraph (`listen.page_text`).
+- **Levels**: music +12 dB (`MUSIC_GAIN_DB`: −28 → −16 LUFS), effects +8 dB, ambience +12 dB, each
+  lowered if a sample would pass −1.5 dBFS.
+- **Files** (deterministic for fixed vidgen, FFmpeg / LAME, Pillow, symusic): `listen.write_mp3`
+  — libmp3lame CBR 128 kbps stereo (music, ambience) or 96 kbps mono (effects), `-map_metadata -1`,
+  bitexact, no ID3, no Xing header. Spectrograms: palette PNGs (64 inferno steps plus a grey for
+  dotted 100 Hz / 1 kHz lines), 32 px/s × 120 px, 40 Hz–8 kHz log, −95 to −10 dB, 4096-point Hann
+  FFT of the mono mix. Size budget (tested): page under 6.5 MB, music clips 200–320 KB, PNGs ≤ 80 KB.
 
 ## 93. Music agents can write: score files (Phase S, Steps 184–191; follow-up 192)
 
-Goal: AI agents make new music the way the Steps 179 / 181 agents made the beds, without
-editing vidgen's Python: a piece written as a YAML **score file**, an instrument library,
-templates made from the built-in beds, analysis reports in words (agents cannot listen), and
-pieces used in videos like beds. Quality without ears: templates, measurements, spectrograms,
-plain-language advice; a human makes the final choice.
+Agents (and people) make music without editing vidgen's Python: a piece is a YAML **score file**
+played by vidgen's own synthesizer, with an instrument library, templates of the beds, a check
+that reports in words, and pieces used in videos like beds. A human chooses by listening.
 
-Term: a **score file** (YAML, this section; class `MusicScore`) is not the composer's
-`vidgen.score.Score` (§82, a note list played with a SoundFont). The code says "score file" or
-`MusicScore` for the YAML; the docs say "score file".
+Term: a **score file** (YAML; class `MusicScore`) is not the composer's `vidgen.score.Score`
+(§82, a note list played with a SoundFont).
+
+User documentation of the format, instruments, effects and commands:
+docs/CONFIG.md#score-files-vidgen-music-render and its sub-sections (templates, check, project
+pieces); craft notes: docs/COOKBOOK-MUSIC.md. This section keeps the developer contract.
 
 ### 93.1 The phase (plan)
 
-- **184 Score format and rendering** (this step, §93.2–93.6): the YAML, its checks, a starter
-  instrument set, `vidgen music render`.
-- **185 Instrument library** (done, §93.4, §93.7): today's building blocks as named, adjustable
-  instruments (analog bass, square pluck, gated snare, music box, pizzicato, woodblock, soft lead,
-  pulsar tick, radio static, piano, bells...) and track effects: filter sweeps along sections,
-  side-chain ducking to the kick (`_pump`), trance gate (`_gate`), echo (`_echoed`), reverb,
-  stereo spread and width, volume curves; `vidgen music patches` (+ `--json`) describes every
-  instrument, setting and effect in words. The new keys go on a track (and in its `sections:`
-  changes), next to `volume` / `pan`.
-- **186 Templates from the 14 beds** (done, §93.8): `vidgen music template <bed> --out
-  my_theme.yaml`, a close re-creation of each bed as an editable score file (not bit-identical;
-  the beds stay unchanged); tested by measurements (tempo, key / chroma, loudness curve, spectrum
-  balance, clean loop).
-- **187 Analysis** (done, §93.9): `vidgen music check <score|audio>`: loudness and steadiness,
-  true peak, clipping, tempo, loop seam, voice-range share, bass weight, harsh highs, key, section
-  energy (does the lift lift?), a spectrogram with section marks, a demo under narration, advice
-  naming score keys (tracks measured one by one), compare two.
-- **188 Using it** (done, §93.10): `assets/music/*.yaml` used like beds (`music: my_theme`),
-  rendered at the join with caching; list-music / validate / lint; MCP tools; the author-guide
-  recipe.
-- **189 Example and craft notes** (done, §93.11): `examples/gps-time-of-flight` with an
-  agent-made piece, `docs/COOKBOOK-MUSIC.md`, the Listen page's score-format row.
-- **190 Two score pieces as built-in beds** (done, §93.12; added to the plan after the owner
-  listened to the demos): `tidewater` and `skyline`.
-- **191 Review** (done, §93.13): fixes and small additions found by the review (holds across
-  sections, ducking by level, a cue's `section`, names in the commands, the check's per-chord
-  fit and lift / riser advice, lint on the part played, faster sweeps, a beat on its planned
-  frame); beds, scores and existing projects byte-identical; determinism; phase tests.
-- **192 Time of Flight as a built-in bed** (done, §93.14; a follow-up after the owner listened):
-  Step 189's piece becomes the bed `time_of_flight`.
-
-Compatibility: additive and opt-in. Nothing that exists plays differently; the 14 beds stay
+Built: format and `vidgen music render` (§93.3–§93.6), instruments and effects (§93.4, §93.7),
+templates (§93.8), the check (§93.9), project pieces (§93.10), example and craft notes (§93.11),
+score beds (§93.12, §93.14), review rules (§93.13). Rule: additive; every bed stays
 byte-identical (`tests/test_music.py` fingerprints).
 
 ### 93.2 Where it lives
 
-`src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render,
-templates, measure, check; the templates in `beds/`, the check's narration sample in `data/`,
-the Listen page's score pieces were in `pieces/` from Step 189 until Step 192 made the only one
-a bed).
-Self-contained: it
-imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...,
-and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters, `decode_audio`),
-`vidgen.loudness` and `vidgen.errors`; never manim, scenes, the project or the render pipeline
-(`tests/test_studio.py::test_studio_imports_no_video_code`: since Step 191 it imports every
-module of the package and allows only those four and what they import themselves —
-`vidgen.config`, `languages`, `textnorm`, `voicesounds`, `word_anchors`, through `music`'s cue
-settings — so a package of its own would take `music`'s building blocks and not its cues), so it
-can become a package of its own (the MP3 writer, `listen.write_mp3`, is called by the command, not by `studio`). Public
-through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
-`parse_music_score(data, origin)`, `render_music_score(score)`, `patch_catalog()` (185),
-`music_template_text(bed)`, `music_template_catalog()` (186), `check_music_score(score)`,
-`check_music_audio(samples, name)`, `music_check_text(check)`, `MusicCheck` (187).
+`src/vidgen/studio/`: `theory`, `patterns`, `events`, `instruments` (and the families `additive`,
+`brass`, `organ`, `strings`, `percussion`, `choir`, `singing`), `effects`, `patches`,
+`score_file`, `render`, `templates`, `measure`, `check`; package data `beds/` (templates and score
+beds) and `data/` (the check's narration sample).
+
+- **Self-contained** (decision: it could become its own package): imports only `vidgen.music`'s
+  building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`…, `BUILTIN_BEDS` for template
+  names), `vidgen.sfx`, `vidgen.loudness`, `vidgen.errors` and what they import (`vidgen.config`,
+  `languages`, `textnorm`, `voicesounds`, `word_anchors`) — never manim, scenes, the project or the
+  render pipeline. `tests/test_studio.py::test_studio_imports_no_video_code` imports every module
+  and is an allow-list. The MP3 writer (`listen.write_mp3`) is called by the commands, not `studio`.
+- **Public through `vidgen.api`**: `MusicScore`, `load_music_score(path)`,
+  `parse_music_score(data, origin)`, `render_music_score(score)`, `patch_catalog()`,
+  `music_template_text(bed)`, `music_template_catalog()`, `check_music_score(score)`,
+  `check_music_audio(samples, name)`, `music_check_text(check)`, `MusicCheck`.
 
 ### 93.3 The format
 
 Decision: one small, regular vocabulary an agent can write correctly the first time — named
-things are mappings (tracks by name), every bar of a pattern is a string of steps, chords are
-written the way musicians write them, and everything has a default. Example (the demo,
-`tests/data/studio/tidewater.yaml`, shortened):
+things are mappings, every bar of a pattern is a string of steps, chords are written as musicians
+write them, everything has a default. Syntax: docs/CONFIG.md#score-files-vidgen-music-render;
+reference demo `tests/data/studio/tidewater.yaml`.
 
-```yaml
-version: 1                    # optional
-title: Tidewater
-key: E minor                  # A minor, Am, F# major, Bb, D dorian (major, minor, dorian, phrygian, lydian, mixolydian)
-tempo: 108                    # quarter notes per minute, 40-240
-time: 4/4                     # n/2, n/4 or n/8
-seed: 3                       # pads' random phases; same score + seed = same samples
-loop: true                    # false: one pass that keeps the notes' tails (an ending)
-progression: "i VI III VII"   # Roman numerals of the key or chord names; repeated to fill each section
-chord_bars: 2                 # bars per chord (a whole number of beats: 0.5 in 4/4 is fine)
-sections:                     # or `bars: 16` for one section called main
-  - {name: intro, bars: 4}
-  - {name: build, bars: 8}
-  - {name: lift, bars: 8, progression: "VI VII i i"}   # a section may have its own progression, key, chord_bars
-  - {name: outro, bars: 4}
-tracks:
-  pad:   {instrument: pad, play: chords, settings: {tone: 1800, air: 0.3},
-          sections: {lift: {settings: {tone: 3200}, volume: 1}}}
-  kick:  {instrument: kick, steps: "x... x... x... x...", rest: [intro]}
-  hat:   {instrument: hat, steps: "..x. ..x. ..x. ..x.", only: [build, lift]}
-  bass:  {instrument: synth_bass, steps: "1..1 ..1. 1..1 ..8.", rest: [intro]}
-  arp:   {instrument: pluck, steps: "1358 5315 1358 5318", accent: "3+3+2", volume: -4, pan: -0.2}
-  melody:
-    instrument: bell
-    only: [lift]
-    steps: ["E5 - - - G5 - . . | C6 - - - B5 - . .", "A5 - - - F#5 - - . | D5 - - - . . . ."]
-  riser: {instrument: riser, only: [build], steps: ". | . | . | . | . | . | x | -"}
-```
-
-- **Top level**: `key`, `tempo`, `tracks` required; `bars` or `sections`; `progression` needed
-  when a pitched track plays (a drums-only score has none); `master: {lowpass: 4500, highpass:
-  32}` (the beds' final filter, the defaults). Allowed keys: `version title description key tempo
-  time seed loop bars sections progression chord_bars tracks master`.
-- **Sections**: `{name, bars, key?, progression?, chord_bars?}`; names lower-case. A section's
-  chords start again at its first bar (the progression repeats, the last chord cut at the end).
-- **Chords** (`theory.parse_chord`): Roman numerals — upper case major, lower case minor, then
-  `°` / `dim`, `ø`, `+` / `aug`, `7`, `maj7`, `9`, `6`, `sus2`, `sus4`, `add9`, `#11`...; `b` / `#`
-  before the numeral (`bVII`); `/3`, `/5`, `/7` or `/E` for the bass. Chord names — `Am`,
-  `Fmaj7`, `Dm(add9)`, `G7sus4`, `Cmaj7(#11)`, `C6/9`, `Bm7b5`, `A5`, `C/E`. A progression item
-  may be a mapping `{chord: Dm(add9), notes: [D3, A3, D4, E4, F4], bass: D2}` to write the voicing
-  and bass out (what templates of the beds use).
-- **Tracks** (by name): `instrument` (required); `steps` (a string or a list of strings, played
-  in turn) or `play: chords` (pads: each chord held, cross-faded 1.6 s, the same chord twice in a
-  row held on); `accent` (`"3+3+2"`: the steps where each group starts are accented, the groups
-  repeated to fill the bar; it must fit every bar); `octave` (the chord's root in that octave, C4
-  middle C; defaults per instrument: bass 2, sub 1, pluck / piano / FM pluck 4, bell 5, pads 3,
-  where a chord's lowest note sits, voice-led to the nearest inversion); `transpose` (semitones,
-  also to written notes); `volume` (dB); `pan` (−1 left .. 1 right); `settings` (the
-  instrument's, range-checked); `rest: [sections]` or `only: [sections]`; `sections: {name:
-  {steps, accent, octave, transpose, volume, pan, settings}}` changes for one section. Step 185
-  adds the effect keys `spread width lowpass highpass duck gate echo reverb` (and curves for
-  `volume`) on a track and in its section changes (§93.7).
-- **Steps** (`patterns.parse_steps`): `|` between bars; each bar is split into as many equal steps
-  as it has symbols (16 = sixteenths in 4/4, 12 = triplet eighths, 1 = the whole bar), bars may
-  differ; the pattern repeats from each section's start. `x` hit (a pitched instrument plays the
-  chord's bass note), `X` accent (+3.5 dB), `o` soft (−6 dB), `.` rest, `-` holds the note
-  before it a step longer (also across `|`, so `"x | - | - | -"` is a four-bar note), `*` the
-  whole chord (voiced in the track's octave, or the written `notes`), `1`–`9` chord degrees (1
-  root, 3 third, 5 fifth, 7 seventh, 8 octave, 9 ninth; the chord's own tone, a sus chord's 3 is
-  its suspended tone, else the key's scale tone; `'` / `,` after it an octave up / down), notes
-  with octave (`E5`, `F#3`, `Bb4`); `!` / `?` after a hit accent / soften it. Spaces only help
-  reading. Step 186 adds (for the templates, §93.8): `v1`–`v9` the notes of the chord's voicing
-  counted from the lowest (the written `notes`, else the voicing `*` plays in the track's octave,
-  voiced once per chord; `vN` past the top starts again an octave up; `'` / `,`), so a figure
-  can follow each chord's own voicing (the beds' `sorted(notes)[2]`); `+` joins notes, degrees
-  and voicing notes into one step played together (`v2+v3+v4`, `C4+E4+G4`; a marked part sets
-  the gain); `x'` / `x,` the bass note an octave up / down (a pitch: a drum may not have it).
-- **Timing**: the beat is `int(48000 · 60 / tempo)` rounded down to a multiple of 4 (as
-  `_grid` since Step 181), so sixteenths are whole samples; a bar is the beat × `n · 4 / d`; a
-  step starts at `round(k · bar / steps)`. The loop is exactly `bars × bar` samples.
+- **Top-level keys**: `version title description key tempo time seed loop bars sections
+  progression chord_bars tracks master`; `key`, `tempo`, `tracks` required; `bars` or `sections`;
+  `progression` only when a pitched track plays; `master` default `{lowpass: 4500, highpass: 32}`.
+  Section names lower case; a section's chords restart at its first bar.
+- **Parsers**: chords `theory.parse_chord` (an item may be `{chord, notes, bass}`); steps
+  `patterns.parse_steps`. Degrees count from the track's `octave` (voice-led to the nearest
+  inversion); `vN` counts the voicing from its lowest note (written `notes`, else what `*` plays),
+  past the top an octave up. A drum given a pitch, `octave` or `transpose` is a problem; `play:
+  chords` is for pads only.
+- **Timing** (determinism contract): the beat is `int(48000 · 60 / tempo)` rounded down to a
+  multiple of 4 (as `_grid`), a bar the beat × `n · 4 / d`, step k of a bar at `round(k · bar /
+  steps)`; a loop is exactly `bars × bar` samples. Same text and `seed` → same samples.
 
 ### 93.4 Instruments (the library, Steps 184–185)
 
-`instruments.INSTRUMENTS`: 27 instruments in six families, each a thin wrapper over a
-`vidgen.music` function with its defaults (the beds' values), every setting with a range and a
-sentence (`vidgen music patches`):
+`instruments.INSTRUMENTS` (with the family modules) is the set; `patch_catalog()` / `vidgen music
+patches [--json]` describes every instrument, setting (range, default, words) and effect.
 
-- **drums**: `kick` (high, low, decay, click), `clap` (tone), `hat`, `open_hat` (decay, tone),
-  `gated_snare` (gate, body; stereo, `_gated_snare`), `snap` (tone, decay; Step 186: band-passed
-  noise, 80 ms, new code in `instruments.py` standing for `cartoon`'s tick and `lab`'s snap,
-  which `music.py` builds inline), `tick` (tone; `_clock`), `boom` (low, decay);
-- **noises**: `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise,
-  tone; `_pulsar_pulse`), `static` (low, high, wander, fade; `_static` for its held steps, a sine
-  fade-in and a cosine fade-out after them, so back-to-back holds join at constant power);
-- **basses**: `synth_bass`, `analog_bass` (tone → closed cutoff, snap, detune; `_analog_bass`),
-  `sub` (+ second, third harmonic levels);
-- **plucks and keys**: `pluck` (bright), `fm_pluck` (index), `square_pluck`, `pizzicato`,
-  `music_box`, `woodblock` (tone only, 60 ms), `bell`, `piano`;
-- **leads**: `soft_lead` (attack, vibrato, tone, ring) — new code, not a bed function (Step 181
-  left `_soft_lead` out of `music.py`): harmonics at 1/h^1.5 shaped by `_shape`, a 5 Hz vibrato
-  fading in over 0.35 s, a cosine release over `ring`; it sustains while held;
-- **pads**: `pad` (`_WARM`), `supersaw` (`_SAW`), `saw_pad` (`_SOFT_SAW`, the synthwave pad),
-  `glass` (near-sines spread 45 cents, octave 5: `beacon`'s shimmer); all with tone, air, sub,
-  attack, release, `detune` (the PADsynth spread in cents, was a fixed width) and `fade` (the
-  `play: chords` cross-fade, was a fixed 1.6 s; `saw_pad` 0.5, `glass` 0.8). Step 186: `swell`
-  (bars of one swell of the airy layer, `air · (0.5 − 0.5 cos(2π t / (swell · bar)))` with `t`
-  from the piece's start, the beds' `air_cycles`; 0 steady, the default, renders as before); the
-  `sub` plays the chord's written `bass` note when there is one (else the bass in octave 2, as
-  before) and is the same wave on both sides (centred, as the beds' `_pads`; it was a different
-  phase per side, which cancels to −3 dB in mono: a fix, see §93.8). Step 190: `sub_width`
-  (default 0) set to 1 brings the per-side sub back exactly, for the `skyline` bed (§93.12).
-
-Notes play `held + ring` seconds (`ring` 0 for instruments without it). Each instrument has a
-`level` (its normal hit's amplitude before the piece is set to −28 LUFS), so the default balance
-is the beds' (kick 0.75, hat 0.06, bass 0.45, pad 0.3, static 0.008...). A drum given a degree, a
-note, `*`, `octave` or `transpose` is a problem ("hat has no pitch"); `play: chords` is for pads
-only (others play `*` in steps). Decision: the instruments wrap the bed functions rather than
-moving them into `studio/`, so `music.py` (and the 14 beds) are untouched. Step 184's scores
-render byte-identically (the pads' `detune` / `fade` defaults are the old fixed values; checked
-on the `tidewater` demo, loop and one-shot).
+- **Decision**: bed-derived instruments wrap `vidgen.music` functions with the beds' defaults
+  instead of moving that code, so `music.py` and the beds are untouched; the rest live in `studio`.
+- Each instrument has a `level` (its normal hit's amplitude before the piece is set to −28 LUFS),
+  so the default balance is the beds'. Notes play `held + ring` seconds.
+- **Pads**: `detune` / `fade` defaults are the beds' fixed values (`fade` 1.6 s, `saw_pad` 0.5,
+  `glass` 0.8); `swell` 0 is steady. The pad `sub` plays the written `bass` note when given and is
+  one wave on both sides; `sub_width` (0–1, default 0) at 1 reproduces the per-side sub exactly
+  (only the `skyline` bed uses it, §93.12).
 
 ### 93.5 Checks
 
-`score_file.parse_music_score` reads everything and raises one `VidgenError` listing every
-problem as `where: what` (`tracks.bass.steps: unknown symbol 'a' at 6 ... (notes start with a
-capital letter: A4, not a4)`), with did-you-mean for keys, instruments, settings, sections and
-modes, and the allowed values. After a bad key / tempo / time the rest is still checked with
-stand-ins. Limits: tempo 40–240, 512 bars, 600 s.
+`score_file.parse_music_score` raises one `VidgenError` listing every problem as `where: what`
+(`tracks.bass.steps: unknown symbol 'a' at 6 ...`), with did-you-mean for keys, instruments,
+settings, sections and modes; after a bad key / tempo / time the rest is still checked with
+stand-ins. Limits: tempo 40–240, `MAX_BARS` 512, `MAX_SECONDS` 600 s.
 
 ### 93.6 Rendering
 
-`render.render_music_score`: each track's events (from its steps per section, accents applied,
-holds extending the note) are synthesised one by one with its instrument (`_partials`-based notes
-of `held + ring` seconds; drums as they are; pads from `_pad_wave` tables of 2^18 samples with
-independent phases per channel, seeded `crc32("studio:<seed>:<track>:...")`, so a track's sound does not
-depend on the other tracks; only the final level does), panned with the beds' `(1 − pan, 1 + pan)`, and summed.
-A loop is summed circularly and filtered by `_tone_filter` over the whole loop, so the seam is
-an ordinary point; a one-shot is summed linearly with 8 s for the tails, filtered with a second
-of silence after it, cut 50 ms after the last sample above −80 dB of its peak (not before its last
-bar) with 5 ms / 50 ms fades. Then `_finish`: −28 LUFS integrated, float32, read-only. Measured on
-the demo (24 bars, 53.3 s, 2.6 s to render): −28.00 LUFS, true peak −14.6 dBTP, the seam's sample
-step 0.07–0.12 of the 99.9th-percentile step, the 50 ms RMS across it within 1.2 dB; sections
-−29.4 (intro), −28.3 (build), −27.0 (lift), −28.4 LUFS (outro); 39 % of the power under 150 Hz,
-little above 5 kHz (−48.6 dB); the spectrogram shows the kick and bass entering after the intro,
-the riser in the last two bars of the build, the pad opening and the bell line in the lift.
+`render.render_music_score(score, warnings=None)`:
 
-- **How the beds fit** (Step 186): `momentum`'s ostinato is `steps: "8 5' 8' 3' ..."`-style
-  degrees on the sixteenth grid with `accent: "3+3+2"`; its off-beat bass `".1.1.1.1"` in
-  eighths; kick / clap / hats as drum strings; `ascent`'s groove / build / lift / settle are
-  sections, its build's clap roll a `sections: {build: {steps: ...}}` change, the riser and boom
-  held / single steps, its dropped kick a `.` in the build's last bar; the supersaw's opening
-  filter and the pumping pads need Step 185's sweeps and ducking. `neon`'s octave bass is
-  `"1 8 1 8 ..."`, its square-pluck figure turned around in the second bar a two-bar pattern, the
-  gated snare and analog bass Step 185 instruments. Exact voicings and absolute bass notes
-  are written with `{chord, notes, bass}`.
-- **Command** (decision: under `vidgen music`, beside `preview` and `page`): `vidgen music
-  render SCORE.yaml [--out FILE.wav] [--json]` writes the WAV (default `<score>.wav` in the
-  current folder) and prints the facts, the sections (start, bars, key, chords), the tracks and
-  the measured loudness and true peak; `--json` adds them to the document (`action: render`).
-- **Not done here** (later steps): effects, the full instrument library (both Step 185, §93.7),
-  templates, analysis, project pieces in videos, MCP tools; no humanising; a hold cannot run past
-  its section's end (it can since Step 191, §93.13); notes outside 20 Hz–12 kHz are skipped (with
-  a warning since Step 185).
+- Tracks' events are synthesised one by one; pads from `_pad_wave` tables of 2^18 samples with
+  independent phases per channel seeded `crc32("studio:<seed>:<track>:...")`, so a track's sound
+  never depends on other tracks (only the final level does). Pan `(1 − pan, 1 + pan)`; summed.
+- **Loop**: summed circularly and filtered by `_tone_filter` over the whole loop (the seam is an
+  ordinary point). **One-shot**: summed linearly with 8 s for tails, filtered with a second of
+  silence after, cut 50 ms after the last sample above −80 dB of its peak (not before its last
+  bar), 5 ms / 50 ms fades. Then `_finish`: −28 LUFS, float32, read-only.
+- Notes outside 20 Hz–12 kHz are left out and reported per track and section in `warnings`
+  (stderr; `--json` as `{scene: null, message}`).
+- `vidgen music render SCORE|NAME [--out FILE.wav|FILE.mp3] [--json]` (`action: render`; MP3 via
+  `listen.write_mp3`); names: §93.13.
 
 ### 93.7 Effects and movement (Step 185)
 
-Every key goes on a track and in its `sections: {name: {...}}` changes (`none` / `off` / `false`
-/ `null` there switches an effect off); `effects.EFFECTS` describes them for `vidgen music
-patches`. Example (`tests/data/studio/skyline_lift.yaml`, shortened):
+Keys `spread width lowpass highpass duck gate echo reverb` (and `volume` curves) go on a track and
+in its section changes, where `none` / `off` / `false` / `null` switches one off. Fields and
+defaults: docs/CONFIG.md#score-files-vidgen-music-render (and `effects.EFFECTS`); demo
+`tests/data/studio/skyline_lift.yaml`. Internals:
 
-```yaml
-saws:
-  instrument: supersaw
-  play: chords
-  lowpass: {from: 600, to: 1000}             # a ramp over each section
-  duck: {to: kick, depth: 0.55, release: 0.13}
-  sections:
-    build:
-      lowpass: [[0, 1000], [8, 3600]]        # [bar from the section's start, Hz] points
-      gate: {steps: "X..x..x.X..x..x.", duty: 0.5, floor: 0.08}
-    lift: {lowpass: 4000, volume: 2, width: 1.4}
-    outro: {lowpass: {from: 3000, to: 600}, volume: {from: 0, to: -10}}
-arp:  {instrument: fm_pluck, steps: "1 5 8 1 5 8 5 3 ...", echo: {delay: 0.75, feedback: 0.35, repeats: 2}}
-lead: {instrument: soft_lead, reverb: {size: 2.8, mix: 0.3}, steps: ["F5 - - - D5 - - - | ..."]}
-hat:  {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
-roll: {instrument: kick, steps: ". | ... | .... .... x.x. xxxx", volume: [[7.5, -14], [8, -3]]}
-```
-
-- **Curves** (`volume` dB, `width`, `lowpass` / `highpass` Hz): a number; `{from, to}` (straight
-  over the section); `[[bar, value], ...]` points (bars from the section's start, fractions
-  allowed, not going back), straight between them — in octaves for frequencies — and held outside
-  them. Section by section the curve jumps; jumps are smoothed over 20 ms. A constant `volume`
-  scales each note as before (Step 184 scores unchanged); a moving one is applied to the track's
-  sound.
-- **`spread`** (0–1): odd steps (`k % 2`) sit `spread` right of `pan`, even ones as far left (the
-  beds' alternating hats and ostinatos). **`pan`** as before.
-- **`width`** (0 mono .. 1 as is .. 2): mid / side, the side times the curve.
-- **`lowpass` / `highpass`**: the beds' gentle second-order zero-phase filters. A moving cutoff
-  is done as the beds' `_sweep_mix` generalised: the track's sound filtered (one FFT over the
-  whole buffer, circular for a loop) at cutoffs half an octave apart over the curve's range, the
-  neighbouring two cross-faded along the curve. A section without the filter passes the sound
-  unfiltered (cross-faded in 20 ms).
-- **`duck`**: `{to: <track> | beat, depth 0.45, release 0.15 s}` or `duck: kick`. At every hit of
-  the trigger track (its notes' starts; chord starts for `play: chords`; every beat for `beat`)
-  that falls in a section that ducks, `_pump`'s dip (8 ms attack, exponential release, at most
-  two beats long) is subtracted from 1; the gain is clipped at 0 and circular for a loop. A
-  missing / misspelt trigger track or the track itself is a problem with did-you-mean.
-- **`gate`**: `{steps, duty 0.55, floor 0.08}` or `gate: "x.x."`: a drum pattern (repeating like
-  steps); each hit opens `_gate`'s window (3 ms attack, open `duty` of its last step — `-` keeps it
-  open longer — 18 ms release), `x` / `X` fully, `o` / `x?` to 0.4; `floor + (1 − floor) ·
-  window` in the gated sections, 1 elsewhere, smoothed over 3 ms (no click at section edges).
-- **`echo`**: `{delay 0.75 beats, feedback 0.35, repeats 2, pingpong true}` (or `echo: true`, or a
-  number: the delay). Repeat k is the track's sound `k · delay` later times `feedback^k`, with
-  left and right swapped on odd repeats when ping-pong (the beds' `_echoed` mirrors the pan).
-- **`reverb`**: `{size 1.8 s, mix 0.2, tone 4000 Hz, predelay 0.02 s}` (or `reverb: true`, or a
-  number: the mix). Each side is convolved (FFT) with its own seeded decaying noise (−60 dB at
-  `size`, 5 ms onset, unit energy, so the tail's level is `mix` of the sound's), low-passed at
-  `tone` and high-passed at 120 Hz; circular for a loop, the tail kept for a one-shot.
-- **Processing order** (decision): a track with any bus effect is rendered onto its own buffer —
-  its notes summed per (echo, reverb) setting, so each section's notes get their own echo /
-  reverb and the tails carry on into the next section — then filters, gate, ducking, volume curve
-  and width are applied along the piece, and the result is added to the mix. A track with none
-  is summed straight into the mix, as in Step 184.
-- **Warnings**: notes (and chord tones) outside 20 Hz–12 kHz are still left out, now reported per
-  track and section (`render_music_score(score, warnings)`; `vidgen music render` prints them on
-  stderr, `--json` puts them in `warnings` as `{scene: null, message}`).
-- **MP3**: `vidgen music render ... --out FILE.mp3` writes an MP3 through `listen.write_mp3`
-  (ffmpeg with libmp3lame, 128 kbps CBR, at the same −28 LUFS as the WAV).
-- **How the beds map** (Step 186 writes the templates): `momentum` — pad `duck: {to: kick, depth:
-  0.45, release: 0.14}`, hats with `spread: 0.25`, the ostinato with `spread: 0.15` and
-  `accent: "3+3+2"`, a riser in a last section; `ascent` — `supersaw` with a `lowpass` curve
-  (900 → 3200 Hz over the groove and build, open in the lift, closing in the settle), `duck: {to:
-  beat, depth: 0.55}`, the open hat's and clap's level by section, the clap roll a track with a
-  `volume` ramp, the arp lead `fm_pluck` with `echo: {delay: 0.75, feedback: 0.35, repeats: 2}`;
-  `horizon` — the gated supersaw `gate: {steps: "XooXooXoXooXooXo", duty: 0.5, floor: 0.05}`
-  with `octave: 4` and its sweep, `saw_pad` with a `volume` lift, the sixteenth kick build a
-  track with a `volume` ramp; `beacon` — `glass` (octave 5) with `volume` points for its slow
-  swell, `static`, `pulsar` on the accents with `spread`, `sub` with `third`; `neon` — `saw_pad`
-  (fade 0.5), `analog_bass` `"1 8 1 8 ..."`, `gated_snare`, `square_pluck` with `spread: 0.3`.
-  Not expressible exactly in Step 185: a pad's `air` swell (`_pads`' `air_cycles`) and
-  voicing-relative figure tones (`sorted(notes)[2]`); Step 186 adds both (`swell`, `v3`).
-- **Measured** on the demo (`skyline_lift`, D minor, 128 BPM, 32 bars, 60 s; 14 tracks; render
-  12 s, twice identical): −28.00 LUFS, true peak −14.8 dBTP; seam step 0.11–0.12 of the
-  99.9th-percentile step; sections intro −29.8, build −29.2, lift −26.2, outro −30.0 LUFS; 63 %
-  of the power under 150 Hz, 300 Hz–3 kHz 16 %, above 5 kHz −42.8 dB; L/R correlation 0.37; in
-  the lift the 300 Hz–3 kHz band is 1.6 dB down in the first sixteenth after each beat (the
-  pump). The spectrogram shows the dark intro, the gate's sixteenth stripes and the sweep opening
-  through the build with the riser in its last four bars, the bright pumping lift, and the filter
-  closing in the outro. Two thirds of the render time are the filter sweeps (full-length FFTs per
-  half-octave); fine for pieces of a minute. (With Step 186's centred pad sub: true peak −14.9
-  dBTP, 64 % under 150 Hz, 300 Hz–3 kHz 15 %, L/R correlation 0.41; the rest unchanged.)
+- **Curves**: a number, `{from, to}` over the section, or `[[bar, value], ...]` points (straight
+  between, in octaves for frequencies, held outside); jumps between sections smoothed over 20 ms.
+  A constant `volume` scales each note; a moving one the track's sound.
+- **Filters**: the beds' second-order zero-phase filters. A moving cutoff (`effects.swept_filter`,
+  `_sweep_mix` generalised): copies filtered (one whole-buffer FFT, circular for a loop) at cutoffs
+  half an octave apart, the two neighbours cross-faded along the curve; a section without the
+  filter is unfiltered (20 ms cross-fade). Copies run on `SWEEP_THREADS` (≤ 4) threads, channel by
+  channel, at most `SWEEP_MEMORY` (400 MB) at once, each adding only where its weight is not 0,
+  in a fixed order — bit-identical to a serial run.
+- **`duck`**: at each trigger hit (note starts; chord starts for `play: chords`; every beat for
+  `beat`) in a ducking section, `_pump`'s dip (8 ms attack, exponential release, ≤ two beats) is
+  subtracted from 1, clipped at 0, circular for a loop; `follow: true` scales it by the hit's gain
+  (`X` 1.5, `x` 1, `o` / `?` 0.5). A muted trigger still pumps. A missing trigger or the track
+  itself is a problem.
+- **`gate`**: `_gate`'s window (3 ms attack, open `duty` of the step, 18 ms release) per hit;
+  `floor + (1 − floor) · window` in gated sections, 1 elsewhere, smoothed over 3 ms. A gate
+  pattern may not start with `-`.
+- **`echo`**: repeat k is the sound `k · delay` later × `feedback^k`, sides swapped on odd repeats
+  when ping-pong. **`reverb`**: each side convolved (FFT) with its own seeded decaying noise
+  (−60 dB at `size`, 5 ms onset, unit energy), low-passed at `tone`, high-passed at 120 Hz;
+  circular for a loop, tail kept for a one-shot. **`spread`**: odd steps right of `pan`, even
+  left. **`width`**: mid / side.
+- **Processing order** (decision): a track with a bus effect is rendered on its own buffer — notes
+  summed per (echo, reverb) setting so each section gets its own and tails carry into the next —
+  then filters, gate, ducking, volume curve and width along the piece, then added to the mix.
+  Other tracks are summed straight into the mix. Quick FFT lengths: studio only (§94.19).
 
 ### 93.8 Templates of the built-in beds (Step 186)
 
-`vidgen music template` lists the 14 templates (key, tempo, time, bars, seconds, sections);
-`vidgen music template BED [--out FILE.yaml] [--force] [--json]` writes one (default
-`<bed>.yaml` here; an existing file is kept unless `--force`; JSON `action: template`,
-`templates`, and `template` + `path` when one was written). The templates are package data,
-`studio/beds/<bed>.yaml`; `studio/templates.py` lists and reads them (`template_path` with
-did-you-mean, `music_template_text`, `music_template_catalog`).
+`vidgen music template [BED [--out FILE.yaml] [--force] [--json]]` lists or writes one (user
+docs: docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template). Package data
+`studio/beds/<bed>.yaml`; `studio/templates.py` (`template_path` with did-you-mean,
+`music_template_text`, `music_template_catalog`).
 
-- **What a template is** (decision): a close re-creation of the bed in the score format, not the
-  bed (which stays byte-identical, still generated by `music.py`): the same key, tempo, bars,
-  chords with the bed's voicings and bass notes written out (`{chord, notes, bass}`; chord
-  names corrected where the bed's label did not match its notes, e.g. `calm`'s "D/F#" is
-  `F#m7`), sections where the bed has them (`breakthrough` tension / release with its own key,
-  `ascent` / `horizon` groove / build / lift / settle, `momentum` drive / turn, `cartoon`'s six
-  phrases, `lullaby`'s four), every part as a track at the bed's level (`volume` dB =
-  `20 log10(bed level / instrument level)`), the bed's random choices (arpeggio figures per
-  bar, `bright`'s bell) written out as the steps the bed played, and comments saying what each
-  part does and how to change it. Each file starts `# <Name>: a score-file template of schu-video-generator's
-  built-in bed ...`.
-- **What differs**: the pads' random phases (another seed scheme), the noises' seeds (riser,
-  clicks), some per-note levels (accents are ×1.5 or ×0.5, the beds use e.g. ×0.72; chosen to
-  keep the average), a few note lengths (a step's length plus `ring`), the old beds' beat (not a
-  whole number of sixteenths: up to 0.01 % shorter), `ascent`'s ostinato an octave low on its
-  two C chords (degrees count from the track's octave), `lab`'s click pans (two tracks for five
-  slots), the strum of `cartoon`'s chords (60 samples) and the beds without a final filter
-  (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`: `master: {lowpass: 16000, highpass: 10}`).
-- **Filter openings** are written as the beds make them: a dark and a bright copy of the pad
-  (`discovery`, `breakthrough`) or supersaw (`ascent`, `horizon`: the bright one an octave up in
-  `horizon`) cross-faded with equal-power `volume` curves (`20 log10(cos / sin(π/2 · open))` at
-  a few bars) — closer than a `lowpass` sweep (which takes the highs away the bed keeps at
-  `sin` level) and cheaper. The `lowpass` sweep stays for new pieces.
-- **What the format gained** (§93.3, §93.4): voicing notes `v1`–`v9` (the beds' figures pick
-  voicing notes: `sorted(notes)[2]`, `sorted(notes)[1:]`), `+` stacks (`cartoon`'s oom-pah
-  `v2+v3+v4`, `beacon`'s shimmer `v3''+v4''+v5''` on `glass`), `x'` (`discovery`'s octave on the
-  last eighth, `horizon`'s pickup), pad `swell` (the beds' `air_cycles`), the `snap` drum
-  (`cartoon`'s tick, `lab`'s snap). Fixes: the pad's `sub` was a different phase per channel
-  (mono-summed −3 dB, wide where the beds keep it centred) and ignored a written `bass`: now one
-  wave on both sides on the written bass note (Step 185 scores with a pad `sub` render
-  differently: `skyline_lift` measured above; `tidewater` has none and is byte-identical).
-  Not needed: holds across sections (every held note of the beds fits in its section), faster
-  sweeps, level-dependent ducking.
-- **Measurements** (`studio/measure.py`, used by the tests; Step 187 builds on it):
-  `tempo` (the onset envelope's autocorrelation peak, 70–180 BPM: a 3+3+2 bed can show 2/3 of
-  its tempo, `lab` 72, `beacon` 80, and `lullaby` its eighths, 128), `chroma` (power per pitch
-  class, 60 Hz–2.5 kHz), `key_fits` / `key` (Krumhansl-Kessler correlations), `loudness_curve`
-  (LUFS per block), `band_balance` (dB share of 20–150, 150–300, 300–1000, 1000–3000, 3000–6000,
-  6000–20000 Hz). The test (`tests/test_music_templates.py`) renders each template once and
-  compares it with the bed's kept measurements (`tests/data/studio/bed_measures.json`, made from
-  the fingerprinted beds; one bed is measured again to keep it current): length, −28 LUFS, a
-  clean seam, the detected tempo within 1 %, chroma cosine ≥ 0.97 (per chord ≥ 0.95 on average),
-  the bed's key fitting the template within 0.1 of how it fits the bed, the loudness of every
-  two bars within 2 dB (0.75 dB on average), the bands below 6 kHz within 1.5 dB and above
-  within 5 dB (the test file says why each limit is what it is). Measured:
-
-| bed | tempo (detected) | chroma | per chord | key fit bed / template | 2-bar loudness max / mean dB | bands < 6 kHz max dB | > 6 kHz dB | seam |
-|---|---|---|---|---|---|---|---|---|
-| calm | none | 0.998 | 0.990 | 0.84 / 0.84 | 0.30 / 0.11 | 0.3 | −0.1 | 0.14 |
-| pulse | none | 0.995 | 0.990 | 0.91 / 0.93 | 0.47 / 0.17 | 0.4 | −0.7 | 0.03 |
-| bright | 120.0 / 120.0 | 0.999 | 0.991 | 0.84 / 0.83 | 0.40 / 0.20 | 0.2 | −0.1 | 0.08 |
-| cartoon | 127.9 / 127.9 | 1.000 | 0.992 | 0.91 / 0.92 | 0.32 / 0.15 | 0.4 | −0.2 | 0.11 |
-| lullaby | 127.9 / 127.9 | 0.998 | 0.986 | 0.95 / 0.94 | 0.61 / 0.36 | 0.4 | −0.5 | 0.27 |
-| discovery | 103.9 / 103.9 | 0.991 | 0.968 | 0.94 / 0.95 | 0.90 / 0.38 | 0.3 | +0.3 | 0.34 |
-| breakthrough | 111.9 / 111.9 | 0.993 | 0.980 | 0.80 / 0.78 | 1.02 / 0.39 | 0.4 | +0.0 | 0.06 |
-| enigma | none | 0.996 | 0.993 | 0.72 / 0.72 | 0.63 / 0.26 | 0.4 | −0.4 | 0.22 |
-| momentum | 120.0 / 120.0 | 0.996 | 0.987 | 0.62 / 0.66 | 0.41 / 0.21 | 0.7 | +0.1 | 0.26 |
-| lab | 72.1 / 72.1 | 0.980 | 0.968 | 0.78 / 0.70 | 1.00 / 0.33 | 0.3 | −3.7 | 0.07 |
-| ascent | 136.1 / 136.1 | 0.998 | 0.990 | 0.61 / 0.66 | 0.57 / 0.26 | 0.2 | −0.0 | 0.05 |
-| horizon | 132.1 / 132.1 | 0.999 | 0.991 | 0.81 / 0.83 | 0.51 / 0.15 | 0.2 | +0.4 | 0.07 |
-| beacon | 80.0 / 80.0 | 0.995 | 0.977 | 0.76 / 0.73 | 1.35 / 0.46 | 0.7 | +0.1 | 0.09 |
-| neon | 115.8 / 115.8 | 0.990 | 0.970 | 0.65 / 0.64 | 0.46 / 0.16 | 0.2 | −2.2 | 0.40 |
-
-  (seam: the step across the loop's end over the 99.9th-percentile step; under 1 is clean.)
-  Bed-against-template spectrograms of all 14 were looked at: the same parts in the same places
-  (the build-up and lift of `ascent` and `horizon`, `beacon`'s pulses, `cartoon`'s phrases,
-  `lullaby`'s bass notes). Rendering a template takes 2–7 s; the closeness test about 90 s
-  (`slow`).
+- **Decision**: a template is a close re-creation of a Python bed, not the bed (still made by
+  `music.py`): same key, tempo, bars, the bed's voicings and bass written as `{chord, notes,
+  bass}`, its sections, every part a track at the bed's level (`volume` = `20 log10(bed level /
+  instrument level)`), its random choices written out as steps, comments per part. Header `#
+  <Name>: a score-file template of schu-video-generator's built-in bed ...`. For score beds
+  (§93.12, §93.14) the template is the bed.
+- **Known differences**: pad phases and noise seeds, some accent levels (×1.5 / ×0.5), a few note
+  lengths, the old beds' beat (not whole sixteenths), small voicing / pan details; beds without a
+  final filter get `master: {lowpass: 16000, highpass: 10}`. Filter openings are dark and bright
+  copies cross-faded with equal-power `volume` curves (closer and cheaper than a sweep).
+- **Measurements** (`studio/measure.py`, also used by the check): `tempo` (onset autocorrelation,
+  70–180 BPM; 3+3+2 can read as 2/3), `chroma` (60 Hz–2.5 kHz), `key_fits` / `key`
+  (Krumhansl-Kessler), `loudness_curve`, `band_balance` (20–150, 150–300, 300–1000, 1000–3000,
+  3000–6000, 6000–20000 Hz).
+- **Closeness test** (`tests/test_music_templates.py`, `slow`) against
+  `tests/data/studio/bed_measures.json`: same length, −28 LUFS, clean seam, tempo within 1 %, chroma
+  cosine ≥ 0.97 (per chord ≥ 0.95 mean), key fit within 0.1, 2-bar loudness within 2 dB (0.75 mean),
+  bands < 6 kHz within 1.5 dB, above within 5 dB.
 
 ### 93.9 Checking a piece (Step 187)
 
-`vidgen music check SCORE.yaml|AUDIO [--narration FILE] [--compare OTHER] [--out DIR] [--json]`
-(`cli._music_check`, `jsonout.music_check_document`, `studio/check.py`): how a piece will sit
-under narration, for agents who cannot listen — a report in words (and JSON) with a verdict,
-advice naming the score keys to change, a spectrogram PNG and a demo MP3. A human listens and
-chooses; the check only says what the numbers say.
+`vidgen music check SCORE|AUDIO|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]`
+(`cli._music_check`, `jsonout.music_check_document`, `studio/check.py`): verdict, findings with
+advice naming score keys, a spectrogram PNG and a demo MP3 under narration. User docs:
+docs/CONFIG.md#checking-a-piece-vidgen-music-check.
 
-- **Track by track** (decision): a score is played by `render.render_music_stems` — each track on
-  its own canvas, handed to a callback before the master filter and the final level (one track's
-  buffer at a time, so memory stays that of a render), then summed, filtered once and set to −28
-  LUFS as `render_music_score` does (the same within 1e-5: another summing order; tested). The
-  stems' bands are measured with the master filter's power response and the final gain applied.
-  So every problem is put down to the tracks causing it, with the dB to change. An audio file is
-  measured as schu-video-generator plays it (scaled to −28 LUFS), in 2 s blocks instead of bars.
-- **Measures**: per 50 ms frame (4096-sample Hann; wrapped round for a loop) the power in 20–150
-  Hz (bass), 300 Hz–3 kHz (voice range), 2–20 kHz (brightness), 5–20 kHz (highs) and all, per bar;
-  K-weighted power once (integrated loudness, 3 s loudness every 0.5 s, sections, half-sections,
-  bars); true peak (`peak_envelope`); `measure.tempo` against the score's tempo — ×1, ×2, ×½, ×⅔,
-  ×3⁄2, ×4⁄3, ×¾ within 2 % are the same beat, said in words (a 3+3+2 figure makes the onsets
-  repeat in threes: `lab` is heard at 72 for 108); the seam step over the 99.9th-percentile step
-  (the level either side is not compared: a downbeat hit makes it jump on purpose, up to 11.7 dB
-  in `horizon`); the chroma of the pitched tracks only (drums' noise spreads over every pitch
-  class), the share on the key's scale per section (section keys honoured) and the best
-  Krumhansl-Kessler key; sections named `lift` / `drop` / `chorus` / `climax` / `peak` / `high`
-  against the section before (louder or brighter), `build` / `buildup` / `rise` / `riser` /
-  `climb` second half against first.
-- **Limits** (`check.LIMITS`), calibrated on the 14 beds (as audio) and their 14 templates (as
-  scores; `<scratchpad>/s187/calibrate.py`): every one passes with no note. Ranges measured →
-  limit: 3 s loudness range 0.5–1.8 dB (skyline_lift 4.1) → 8; peak over loudness 10.8–14.5 →
-  19; seam 0.03–0.44 → 1; loudest voice-range bar −35.0 … −27.2 dB (`lullaby`, a music box) →
-  −26, voice-range share 7–63 % → 72 %; bass 23–78 % → 85 % (under 5 %: a note); highs −94 …
-  −34.8 dB (`bright`) → −30, brightest bar up to −28.6 → −24; on the key's notes 0.90–1.00 →
-  0.75; demo voice-range clearance 17.6–26.2 dB → 15; lift +0.3 dB louder but +1.9 dB brighter
-  in `ascent` → 0.5 dB louder or 1.5 dB brighter; build +0.2 dB, +1.3 dB brighter in `tidewater`
-  → 0.5 dB or 1 dB. Deliberately bad scores (`<scratchpad>/s187/bad/`) are all flagged, each for
-  its fault only: a loud piano and lead in the voice range (94 %, bars up to −23.9 dB), a boomy
-  kick, sub and boom (97 % bass), open master filter with loud hats (highs −18 dB), chords and
-  melody outside the key (23 % on C major's notes), a lift quieter than its build and a flat build,
-  a near-silent intro before a loud lift (28.8 dB swing); a clipped WAV with a click at its seam.
-- **Advice**: the fewest of the tracks holding a band (up to three) lowered together by the same
-  whole dB (at most 20) to bring the band under its limit — computed from their shares — written
-  as the score change: `` `kick.volume: -5` (now 6) `` when it covers every section the track
-  plays at one level, else `` `piano: sections: {main: {volume: -1}}` (−5 dB) ``; with another
-  way (an octave up out of the voice's core for notes, `tone` / `lowpass` for pads, a shorter
-  `decay`, `lowpass: 5000` for hats, the master `lowpass`). A lift that does not lift: tracks
-  quieter there than before, its main part raised, a part that rests there brought in, the
-  section before made smaller; a build: a `volume` ramp, a `lowpass` sweep, a riser; unsteady:
-  tracks much quieter in the quiet sections, parts only in the loud one. Audio files get generic
-  advice (EQ, re-export with headroom, cross-fade the seam).
-- **Narration demo** (decision): the sample shipped as package data (`studio/data/
-  narration_sample.mp3`, 160 KB, 20 s mono, 64 kbps): two original lines spoken by Kokoro
-  (`af_heart`, speed 0.9; Kokoro-82M and its voices are Apache-2.0, so the recording can ship),
-  at 2.0–8.1 s and 10.6–15.8 s, set to −21.5 LUFS as stereo (the level schu-video-generator's narration sits at,
-  §48); made by `<scratchpad>/s187/make_narration.py`. `--narration FILE` uses another at its own
-  level (schu-video-generator plays narration as recorded), up to 60 s, 3 s of music after it. The music plays
-  from its start at volume 0 with a 1.5 s fade-in and a 2 s fade-out, ducked by
-  `check.duck_gain_db` — `mix.duck_curve` re-written in `studio` (which may not import `mix`)
-  with `DuckConfig()`'s numbers (12 dB, 0.4 s, 1 s, 1.5 s hold; a test keeps both equal) over the
-  speech found in 10 ms frames within 40 dB of the loudest — then set to −16 LUFS, true peak at
-  most −1.5 dBTP (scaled, no limiter), written by `listen.write_mp3`. It reports the voice's
-  loudness, the music's under it and alone, and how far the voice's 300 Hz–3 kHz stands over the
-  music's while it speaks.
-- **Pictures**: one row per piece (two with `--compare`, on one time scale: 20 columns a second
-  up to 80 s, at most 1600): a title with the verdict; the spectrogram (30 Hz–16 kHz log, the
-  same −105 … −30 dB scale for every piece, an inferno-like palette) with labelled section lines,
-  the 300 Hz / 3 kHz lines dotted blue, 10 s ticks; a lane under it with each bar's voice-range
-  level (blue, red over the limit) and the limit line.
-- **Speed**: `tidewater` (53 s, 9 tracks) 7.9 s for the command (render track by track 3.7 s);
-  `skyline_lift` (60 s, 14 tracks with filter sweeps) 15.1 s (render 11.7 s, the sweeps); a
-  template 4–15 s; an audio file of 40 s 4.8 s. The analysis itself is 2–4 s for a minute.
-- **Not done**: no per-track picture; the key check is per section, not per chord (per chord
-  too since Step 191); a lift is judged against the section just before it only (Step 191 adds
-  a note against earlier sections); audio files have no sections (the check does not guess them); level-dependent masking (a real psychoacoustic model) is out of scope — the
-  voice-range level per bar and the demo's clearance stand in for it.
+- **Track by track** (decision: so each problem is put on the tracks causing it, with the dB to
+  change): `render.render_music_stems` renders each track alone and hands it to a callback (one
+  buffer at a time), then mixes as §94.14. Stem bands use the master filter's power response and
+  the final gain. Audio files are scaled to −28 LUFS, measured in 2 s blocks, no sections, generic
+  advice.
+- **Measures**: per 50 ms frame (4096-sample Hann) power in 20–150 Hz (bass), 300 Hz–3 kHz (voice
+  range), 2–20 kHz (brightness), 5–20 kHz (highs), per bar; K-weighted loudness (integrated, 3 s,
+  sections, half-sections, bars); true peak; tempo (×1, ×2, ×½, ×⅔, ×3⁄2, ×4⁄3, ×¾ within 2 % = same
+  beat); seam step over the 99.9th-percentile step; pitched tracks' share on the key's scale per
+  section and best key; per chord ≥ 0.5 s, each pitched track with ≥ 5 % of the pitched sound
+  there, its share on the scale or chord tones — worst under 25 % is a `key` fix (decision: per
+  track; a clashing line barely moves the mix's figure).
+- **Sections by name**: `lift` / `drop` / `chorus` / `climax` / `peak` / `high` against the section
+  before (round the loop for the first) — louder or brighter — plus a `note` when an earlier
+  section is ≥ 1 dB louder and as bright; `build` / `buildup` / `rise` / `riser` / `climb`: second
+  half against first.
+- **Limits** (`check.LIMITS`): calibrated so every bed (as audio) and template (as a score)
+  passes with no note.
+- **Advice**: the fewest tracks (≤ 3) holding a band lowered together by one whole dB (≤ 20),
+  written as a score change, plus alternatives (octave up, `tone` / `lowpass`, `decay`, master
+  `lowpass`). A resting part is proposed for a lift only if it plays outside a build and is not in
+  `TRANSITION_INSTRUMENTS`. Mechanical lines carry studio edits (§94.15).
+- **`CHECK_VERSION`** (2): bump when findings change; it is in every kept check's cache name.
+- **Narration demo**: `studio/data/narration_sample.mp3` (`check.NARRATION_SAMPLE`; 20 s, Kokoro
+  `af_heart`, Apache-2.0 so it can ship; −21.5 LUFS, §48). `--narration FILE` plays as recorded
+  (≤ 60 s, 3 s of music after). Music from its start, 1.5 s fade-in, 2 s fade-out, ducked by
+  `check.duck_gain_db` — `mix.duck_curve` re-written (studio may not import `mix`) with
+  `DuckConfig()`'s numbers, a test keeps them equal — over `check.speech_spans`; then −16 LUFS,
+  true peak ≤ −1.5 dBTP (scaled, no limiter).
+- **Picture**: a row per piece (two with `--compare`, one time scale, 20 columns/s, ≤ 1600):
+  spectrogram 30 Hz–16 kHz log on a fixed −105 … −30 dB scale, section lines, dotted 300 Hz / 3 kHz,
+  and a lane of each bar's voice-range level against its limit.
 
 ### 93.10 Project pieces: score files in a video (Step 188)
 
-A score file in `assets/music` is a **project piece**, played by the `music:` cues like a bed
-(`src/vidgen/music_pieces.py`; `vidgen.music` calls it, never the other way round at import;
-`studio` stays free of video code).
+A score file in `assets/music` is a **project piece**, played by `music:` cues like a bed
+(`src/vidgen/music_pieces.py`; `vidgen.music` calls it, never the other way round at import).
+User docs: docs/CONFIG.md#project-pieces-score-files-in-a-video.
 
-```yaml
-music: my_theme                               # assets/music/my_theme.yaml (or .yml)
-music: {source: my_theme, volume: -2}         # every cue key: start, loop, fades, duck, from, to
-music: [{source: my_theme, to: part2}, {source: assets/music/outro.yaml, from: results}]
-```
-
-- **Names** (decision): a cue's `source` is a score when it ends `.yaml` / `.yml` (a path under
-  the project, the path form) or has no suffix and is not a built-in bed — then it names
-  `assets/music/<source>.yaml` (`.yml`), sub-folders with `/` (`themes/night`); `..` refused. A
-  suffix-less source that is an existing file under the project stays a music file (as before
-  this step). `music.source_kind(cue, root)` returns `score` for them.
-- **Conflict** (decision: a clear problem, not a silent precedence): a built-in bed's name with a
-  project piece of the same name (`music: calm` and `assets/music/calm.yaml`) is reported by
-  `music.config_problems` (so by `vidgen validate` and the render's pre-check): rename the piece,
-  or write the path form (which plays the piece). Unknown names: did-you-mean across the beds and
-  the pieces, both listed.
-- **Rendering at the join**: `music.Source` (the mix's place for beds, files and composed music)
-  renders the piece with `studio.render_music_score` (−28 LUFS, the music level) through
-  `music_pieces.piece_audio`, cached as `build/music/piece-<key>.npy` (float32, exact; written
-  atomically) and per process (4 renders). Key: SHA-256 of `{score: sha256 of the file's bytes,
-  renderer: PIECE_RENDER_VERSION (1; bump when the studio's sound changes), vidgen: __version__,
-  rate}`. Out-of-range notes are logged as warnings. Measured with the `momentum` template as a
-  piece under a 60 s video: the first join 4.6 s, a cached one 2.3 s (the mix itself).
-- **Loop or one pass**: a `loop: true` piece under a looping cue is seamless like a bed (`start`
-  wraps); with the cue's `loop: false` it plays once from `start` (wrapped). A `loop: false`
-  piece (with its ending) always plays once — `start` must be inside it — and the cue's rules
-  apply (silence after it; the fade-out ends at the cue's end).
-- **Reporting**: `timings.json` / `render --json` `mix.music[].kind` `score`, `source` the name;
-  `vidgen validate` prints `music: my_theme, a project piece (score file, rendered at the join)`
-  and its JSON `music[].kind` / `plays` `score`.
-- **Validation**: `config_problems` reads every played piece (`load_music_score`, no render) and
-  adds each problem as `music.source: assets/music/x.yaml: <where>: <what>`; `piece_warnings`
-  (a `vidgen validate` warning) reads the pieces the video does not play.
-- **list-music**: entries with origin `score` (`music_pieces.piece_entry`): name, path, title,
-  description (the score's `title` / `description`), key, tempo, time, bars, chords (in order,
-  without repeats), loop, `loop_seconds` or `duration`, sections, loudness −28, and `problems`
-  (the file's `where: what` lines, the rest `null`). The score is read, not rendered (fast).
-- **Lint** (`lint/music_rule.py`, rule `music_check`, last in `LINT_RULES`, scope `scene`,
-  default warning): for each cue playing a piece, on the cue's first scene, the findings of
-  `check.check_music_score` (no demo, no picture) whose topic is in `topics` (default `voice
-  range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`: what matters under a voice; `key`,
-  `sections`, `tempo` can be added): `fix` at the rule's severity, `note` as info, with the first
-  two suggested changes. The report is cached as `build/music/piece-<key>-check.json`
-  (`music_pieces.piece_check`): the `momentum` template 4.4 s the first time, nothing after.
-- **MCP** (`mcp_server.py`): `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`,
-  `force`; no bed lists them), `music_patches`, `music_render` (`score`, `out` default
-  `build/mcp/music/<score>.mp3`), `music_check` (`source`, `compare`, `narration`, `out` default
-  `build/mcp/music`; returns the spectrogram as a picture); render and check are heavy (one at a
-  time).
-- **Guide**: the "Making music" recipe in the audio topic (template → one change at a time →
-  check and compare → spectrogram → room for the voice → `music: my_theme` → a human chooses),
-  `momentum` still the first suggestion.
-- `music_pieces.py` and `studio/` are in `render.fingerprint.NOT_RENDER_INPUTS` (they change no
-  scene's picture). No new `vidgen.api` names (the pieces are used through the config).
-- **Compatibility** (checked): mixes of `gradient-descent` and `iso-web-page` (beds),
-  `host-explainer` (composed) and a project with a music file and `momentum` are byte-identical
-  to Step 187's (`<scratchpad>/s188/mixcompare.py` with HEAD's `src` and this step's); the 14
-  beds' fingerprints pass.
-- **Not done**: no per-scene `music: {mood}`-like changes for pieces (a scene's `volume` and
-  `false` work); a piece cannot follow the video's timings (composed music does; Step 191: a
-  cue's `section` lands a section on a scene); the lint check runs on the whole piece, not on the
-  part the video plays (it does since Step 191).
+- **Names** (decision): `source` is a score when it ends `.yaml` / `.yml` (a path under the
+  project) or has no suffix and is not a bed — then `assets/music/<source>.yaml` (`.yml`),
+  sub-folders with `/`, `..` refused; a suffix-less existing file stays a music file.
+  `music.source_kind(cue, root)` → `score`.
+- **Clash** (decision: a problem, not a silent precedence): a bed's name with a piece of the same
+  name is a `music.config_problems` problem (`bed_conflict` reads `BUILTIN_BEDS`); use the path
+  form or rename. Unknown names: did-you-mean across beds and pieces.
+- **Join**: `music.Source` renders via `music_pieces.piece_audio` (`render_music_score`), cached as
+  `build/music/piece-<key>.npy` (float32, atomic) and per process (4). **Key**: SHA-256 of
+  `{score: sha256 of the file's bytes, renderer: PIECE_RENDER_VERSION (1; bump when the studio's
+  sound changes), vidgen: __version__, rate}`.
+- **Loop**: a `loop: true` piece under a looping cue is seamless (`start` wraps); cue `loop: false`
+  plays it once from `start`. A `loop: false` piece always plays once (`start` inside it).
+- **`section`** (`MusicCue.section`; `music_pieces.cue_score`, `section_start`, `section_problem`):
+  a piece or score bed starts at that section, `start` counted from it. Decision: no re-timing of
+  a written piece to scenes. Other sources or a missing section: a `music[k].section` problem.
+- **Reporting**: `mix.music[].kind` `score` in `timings.json` / `render --json`; `vidgen validate`
+  prints `music: my_theme, a project piece (score file, rendered at the join)`.
+- **Validation**: `config_problems` parses every played piece (no render) and reports
+  `music.source: assets/music/x.yaml: <where>: <what>`; `piece_warnings` covers unplayed pieces.
+  `list-music` entries with origin `score` (`piece_entry`, read not rendered): name, path, title,
+  description, key, tempo, time, bars, chords, loop, `loop_seconds` / `duration`, sections,
+  loudness, `problems`.
+- **Lint** (`lint/music_rule.py`, rule `music_check`, last in `LINT_RULES`, scope `scene`, warning;
+  project pieces only): findings of `check_music_score` (no demo, no picture) whose topic is in
+  `topics` (default `voice range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`), on the
+  cue's first scene, with two suggestions. Judged on the part played (`played_bars`, `_heard`):
+  an uncrossed seam, unreached sections and unplayed loud bars are dropped ("the video plays bars
+  1-2 of its 4"). Cached as `build/music/piece-<key>-check<CHECK_VERSION>.json` (`piece_check`).
+- **MCP** (`mcp_server.py`): `music_template`, `music_patches`, `music_render` (default out
+  `build/mcp/music/<score>.mp3`), `music_check` (default out `build/mcp/music`; returns the
+  spectrogram); render and check run one at a time.
+- `music_pieces.py` and `studio/` are in `render.fingerprint.NOT_RENDER_INPUTS`. No `vidgen.api`
+  names.
 
 ### 93.11 The example, the craft notes and the Listen row (Step 189)
 
-- **The recipe as a test**: an agent followed the guide's "Making music" recipe literally — the
-  `momentum` template, nine versions, one change each, `vidgen music check vN --compare v(N-1)`
-  after each, spectrograms looked at — and turned it into *Time of Flight* (B minor, 108 BPM, 24
-  bars in intro / build / lift / settle, an FM-pluck arpeggio with a filter opening through the
-  build, a tick "ping" with echoes, a soft lead in the lift). The log is in the example's README.
-  What the run showed and what changed: a template's progression is written out in the bed's key
-  (`{chord, notes, bass}`), so the key cannot change alone (guide and CONFIG now say: rewrite the
-  progression in Roman numerals); only sections named like `build` / `lift` are judged (the guide
-  names them); a track under about 1 % of the tracks table is inaudible (the guide says raise it
-  4–8 dB); `vidgen music check`'s `--out` defaults to the current folder (the guide passes
-  `--out build/music-check`); `vidgen music template` printed "change one thing at a time and
-  listen" — it now prints the check-and-compare command first (and the render one after); the
-  check's tempo note said "the 3+3+2 accents" for any ratio of 2/3 even in a piece without
-  them — now "accents or figures grouped in threes, such as 3+3+2". No change to the score format
-  or the measurements.
-- **The example** (`examples/gps-time-of-flight`): six scenes (title, three `stat`, `process`,
-  `icon_grid`), Kokoro `af_heart` at 0.8 (at 0.9 and 0.85 `narration_speed` flagged short beats),
-  `music: time_of_flight` from `assets/music/time_of_flight.yaml`. Rendered 16:9 in the scratchpad
-  (no media committed): 88.7 s, −16.0 LUFS, true peak −1.8 dBTP, LRA 3.0 LU; `validate` and `lint`
-  clean (the `music_check` rule included). Tested by `tests/test_music_pieces.py` (validates a copy
-  of the example, the piece's sections / key / tempo; `slow`: the check finds nothing to fix and
-  the build builds, the lift lifts).
-- **Craft notes** (decision: a separate `docs/COOKBOOK-MUSIC.md`, linked from the cookbook, the
-  README, CONFIG, the guide recipe and the Listen page, rather than a section of the long video
-  cookbook): room for the voice, energy curves, loop design, using check and compare, five genre
-  sketches (documentary, uplifting trance, synthwave, cosmic, cartoon) as complete score files —
-  each checked `fine under narration`, measured numbers beside each, and parsed by
-  `tests/test_docs.py` — and a table of common mistakes and fixes. Original material only.
-- **The Listen page row** (§92): `listen.SCORE_PIECES` (`ScorePiece`: name, the section the clip
-  leads into, what is heard there, how it was made, the example), the score files shipped as
-  package data `studio/pieces/<name>.yaml` (the page must not depend on the repository's
-  `examples/`; a test keeps the copy byte-equal to the example's). A "Made with the score format"
-  section after the beds, linking the score-file, template, check and project-piece docs and the
-  craft notes; one row per piece with its key, tempo and length, how it was made, a spectrogram
-  and a 15 s clip from 6 s before the section (`piece_clip_start`), rendered with
-  `render_music_score` and treated as a bed's clip (fades, +12 dB). The page grew 0.27 MB to
-  5.78 MB (budget 6.5 MB); every other file is byte-identical; a second run gave identical piece
-  files.
-- **Known**: the overlay-plan warning seen on the final render ("'four' starts at 50.37 s, planned
-  50.47 s") — the 16:9 render's scene lengths differ by 2–3 frames from the plan's; pre-existing,
-  not music-related (captions 0.07–0.1 s off), left for review.
+- `examples/gps-time-of-flight`: six narrated scenes with `music: time_of_flight` (the bed,
+  §93.14); its README keeps the agent's iteration log. Tests: `tests/test_music_pieces.py`.
+- `docs/COOKBOOK-MUSIC.md` (decision: separate from the video cookbook): craft notes and genre
+  sketches as complete score files (parsed by `tests/test_docs.py`); original material only.
+- Listen page row: §93.14.
 
 ### 93.12 Two score pieces as built-in beds (Step 190)
 
-The owner listened to the two demos written in the score format and approved both as built-in
-beds ("Tidewater is an absolute piece of art and must be included as an option in the
-software"): `tidewater` (Step 184's demo) and `skyline` (Step 185's `skyline_lift`; the short
-name, as no bed, sound, mood, ambience or piece uses it). They are in `BUILTIN_BEDS` after the
-14, so they work wherever a bed does: `music: tidewater`, `{source: skyline, volume: -2}`, cue
-lists, `vidgen list-music` (+ `--json`, MCP `list_music`), did-you-mean, the schema's `source`
-text, the Listen page.
+`tidewater` (E minor, 108 BPM, 24 bars, lift at 26.664 s) and `skyline` (D minor, 128 BPM, 32
+bars = 60 s, lift at 30 s) are beds written as score files, in `BUILTIN_BEDS` after the 14 Python
+beds; they work wherever a bed does.
 
-- **Mechanism** (decision): the score file is the bed. It ships as package data
-  `studio/beds/<bed>.yaml` — the folder of the templates, so `vidgen music template tidewater`
-  writes the very score the bed plays (a template that is the bed, sample for sample; the 14
-  others stay close re-creations). `Bed.score: bool` marks them; their generator,
-  `music._score_bed(name)`, imports `vidgen.studio` when called (music.py never imports studio
-  at import time: studio imports music) and returns `render_music_score(load_music_score(...))`
-  — float32, read-only, −28 LUFS, a seamless loop; the `rng` argument is not used, `seed` stays
-  `None` (the score's own `seed:` sets the pads' phases). Rendered at the join like every bed and
-  kept per process by `bed_loop`'s cache (`tidewater` 2 s, `skyline` 9 s: the filter sweeps);
-  not on disk — the other beds are not either (`ascent` takes 17 s), and `bed_loop` has no
-  project folder. The YAML data are the test demos' (`tests/data/studio/tidewater.yaml`,
-  `skyline_lift.yaml`; only comments added: the template header, what each part does);
-  `test_score_beds_facts` checks the parsed data are equal (but skyline's `sub_width`, below) and that the `Bed` facts (tempo,
-  key, length, chords in loop order, the lift time in the description) match the score.
-- **Name clash**: the Step 188 rule covers them (`bed_conflict` reads `BUILTIN_BEDS`): a
-  project's `assets/music/tidewater.yaml` with `music: tidewater` is a problem — rename the piece
-  or use the path form. CONFIG says to save a template copy under a name of one's own.
-- **The skyline render: Step 185's, sample for sample** (decision): Step 186 centred a pad's sub
-  (one wave on both sides), so `skyline_lift` renders differently from Step 185 (63 → 64 %
-  under 150 Hz, true peak −14.8 → −14.9 dBTP, L/R correlation 0.37 → 0.41). The owner approved
-  the Step 185 render (a +12 dB copy made at 14:17, after Step 185's commit; the
-  `s185/out/skyline_lift*.mp3` files dated 15:13 were rewritten during Step 186 with the centred
-  sub). So the pads gained a setting, `sub_width` (0–1, default 0: the centred sub, every
-  existing score unchanged; 1: the right side's sub drawn from its own channel's generator after
-  the airy layer, exactly as Step 185 did; between, a straight cross-fade of the two), and the
-  bed's score sets `sub_width: 1` on its pad (the only difference from
-  `tests/data/studio/skyline_lift.yaml`, which keeps the centred sub). Verified: the bed loop
-  and its template's render equal, sample for sample, Step 185's render of
-  `skyline_lift.yaml` (`src/` of `0d1b854f` extracted with `git archive` into the scratchpad;
-  `<scratchpad>/s190/ref185.py`, `verify185.py`); its MP3 through `listen.write_mp3` is
-  byte-identical to Step 185's `skyline_lift-cli.mp3`; against the approved MP3
-  (`/mnt/user-data/outputs/skyline_lift_step185.mp3`), the bed +12 dB encoded the same way and
-  decoded matches its decode at 43.0 dB SNR, equal peaks, no lag (both MP3s are 25.6 dB from
-  the exact samples, the MP3's own error; the centred-sub render is 13.8 dB from it). Every
-  other score renders byte-identically before and after the setting (SHA-256 of the 15 other
-  templates, the piece, the two test demos and the five cookbook sketches;
-  `<scratchpad>/s190/hashes.py`). `tidewater` has no pad sub and is byte-identical since Step 184.
-- **Facts**: `tidewater` E minor, 108 BPM (beat 26664 samples), 24 bars = 53.328 s, intro /
-  build / lift (26.664 s) / outro; 39 % of the power under 150 Hz, the 300 Hz–3 kHz band 0.2 dB
-  under `pulse`'s, true peak −14.6 dBTP, L/R correlation 0.37. `skyline` D minor, 128 BPM, 32
-  bars = 60 s, intro / build (15 s) / lift (30 s) / outro (52.5 s); 63 % under 150 Hz, 2.9 dB
-  under `pulse` in the voice's range, −14.8 dBTP, 0.37. Both `vidgen music check` "fine under
-  narration" as scores and as audio. The descriptions give the parts, ranges (read from the
-  renderer's voicing: bass C2–G3, arpeggio C4–G5, bell D5–E6; bass C2–B♭2, FM arpeggio C4–B♭5,
-  lead G4–C6), sections and times in words.
-- **Fingerprints** (`tests/test_music.py`): the two loops' projections are stored like the 14's
-  (unchanged), so their samples are locked from now on; the parametrised bed tests (determinism,
-  −28 LUFS, headroom, highs, rumble, width, seam, `Source` tiling) run on all 16. The template
-  closeness test runs on the 14 Python beds; `test_score_bed_is_its_template` checks the two
-  are equal to their templates' renders.
-- **Listen page**: rows, spectrograms and 15 s clips for both, each 6 s before its lift
-  (`CLIP_MOMENTS` 0.5: `tidewater` from 20.66 s, the riser and the lift with the bell melody;
-  `skyline` from 24 s, the end of the build — riser, kick roll — and the lift); a sentence above
-  the table names the score beds and the template command. 6.33 MB (budget 6.5 MB); every other
-  file byte-identical; a second run into the scratchpad identical.
-- **Docs**: README (16 beds; the list), CONFIG (the beds table, intro, bass-weight paragraph, the
-  `music` / `source` rows, templates, check), the guide's bed alternatives (`momentum` still the
-  first suggestion), the cookbooks, the MCP `music_template` text (16 templates).
+- **Mechanism** (decision: the score file is the bed): `studio/beds/<bed>.yaml` (so `vidgen music
+  template tidewater` writes what the bed plays). `Bed.score: bool`; generator
+  `music._score_bed(name)` imports `vidgen.studio` when called (studio imports music) and returns
+  `render_music_score(load_music_score(...))`; `rng` unused, `Bed.seed` `None`. Cached per process
+  by `bed_loop`, not on disk.
+- **Data**: the YAML equals `tests/data/studio/tidewater.yaml` / `skyline_lift.yaml` plus comments,
+  except `skyline`'s pad `sub_width: 1` (the approved sound; the test demo keeps the centred sub).
+  Tests: `test_score_beds_facts` (data and `Bed` facts), `test_score_bed_is_its_template`, the
+  bed fingerprints.
 
 ### 93.13 Review of Phase S (Step 191)
 
-What the review changed, each opt-in or a fix; every score, bed and mix that existed renders to
-the same samples (below).
-
-- **Holds across sections** (`render._track_events`, `_events_and_last`;
-  `patterns.parse_steps(lead_hold=True)` for a track's steps; `score_file._check_lead_holds`). A
-  track's steps may start with `-`: the note sounding when the section starts (the last note of
-  the section before, or round a loop's end for the first section) goes on, with the sound of the
-  section it started in. Before, a pattern starting with `-` was an error, so no existing score
-  changes. A leading hold needs the track to play in the section just before (round the loop for
-  the first section of a loop); else a problem at `tracks.T.steps` or
-  `tracks.T.sections.S.steps`: "starts the piece (loop: false)" / "the track rests in 'X' just
-  before". Gates keep the old rule (a gate pattern may not start with `-`).
-- **Ducking by level**: `duck: {follow: true}` scales each dip by the trigger hit's gain (`X`
-  1.5, `x` 1, `o` / `?` 0.5; chord starts and `beat` 1); the gain is still clipped at 0. Default
-  `false` (every hit as deep — a muted trigger still pumps, which the templates use).
-- **A cue's `section`** (`MusicCue.section`; `music_pieces.cue_score`, `section_start`,
-  `section_problem`): a project piece or a score bed (`tidewater`, `skyline`, read from
-  `studio/beds/`) starts at that section, `start` counted from it. Decision: this, not fitting a
-  piece to the scenes as composed music is (a score's sections are its own; fitting would mean
-  re-timing a written piece) — with cue lists it lands a section on a scene, which is what the
-  Step 188 "cannot follow the video" gap was about. Another source, or a section the piece lacks
-  (did-you-mean), is a `music[k].section` problem in `config_problems`. Without `section` the
-  code path computes the same offset (mixes byte-identical).
-- **Names in the commands** (`music_pieces.music_source`): `vidgen music render` and `check`
-  (`--compare` too) take a path (as before) or a name: a built-in bed (the two score beds as their
-  score files; another bed as its loop — `render` writes it with its facts and the template hint,
-  `check` measures it as audio), or a project piece in the current folder's `assets/music`. A
-  name that is both a bed and a piece is refused (give the path). MCP `music_render` /
-  `music_check` pass a name (`MUSIC_NAME`: words joined by `/`, no suffix, no `..`) through when
-  no such file is under the root; the command runs in the root. `render --json` for a code bed:
-  `bed`, `bars` / `seed` null, no sections or tracks.
-- **The check** (`CHECK_VERSION` 2; `piece_check`'s cache file is `piece-<key>-check2.json`):
-  - per chord: for every chord of at least 0.5 s, each pitched track holding at least 5 % of the
-    pitched sound there (its chroma, measured on its stem) and its share on the key's scale or the
-    chord's own notes (chord tones, written voicing and bass); the worst under 25 % is a `key` fix
-    naming the track, the chord and bar, the notes off it and the chord's notes (`facts.in_chord_min`).
-    Decision: per track, not the mix — a clashing bell line over an F chord was 1 % in tune on its
-    own but only moved the mix from about 0.93 to 0.77 (good pieces go down to 0.80: saws'
-    overtones); per track the shipped scores' worst part is 0.39 (`skyline`'s analog bass) to
-    0.99, the clashing lines 0.006 and 0.039.
-  - a lift against earlier sections: still judged against the section before (for a loop's first
-    section the last one, round the loop); a `note` when an earlier section is 1 dB louder or more
-    and at least as bright ("may not feel like the high point"; its advice only when the lift
-    passed).
-    None of the shipped scores has it.
-  - lift advice brings in a resting part only if it plays elsewhere in a section that is not a
-    build and is not a riser or boom (`TRANSITION_INSTRUMENTS`) — Step 189's run was told to bring
-    in the riser; build advice, when a riser plays in the build, says how many dB under the rest of
-    the second half it sits and how far to raise it (to a tenth of the power, at most 20 dB; a
-    riser at its normal level was 30–40 dB under).
-- **Lint `music_check` on the part played** (`lint.music_rule.played_bars`, `_heard`): the bars
-  the cue plays from the video plan's scene times, `start` / `section` and loop (and whether it
-  crosses the seam). When it plays only part of the piece: a seam it never crosses, a section
-  finding about a section it never reaches and a voice-range finding whose loud bars it does not
-  play are dropped; the message says "(the video plays bars 1-2 of its 4)". Whole-piece measures
-  (steadiness, peaks, bass, highs) stay.
-- **Faster sweeps, the same samples** (`effects.swept_filter`): the filtered copies (one
-  full-length FFT each) run in a thread pool of up to four (`SWEEP_THREADS`; numpy's FFT
-  releases the GIL) and each adds only where its weight is not 0, summed in the same order —
-  bit-identical (tested against the Step 185 loop). Two cores: `skyline` 9.1 → 7.9 s,
-  `time_of_flight` 8.9 → 6.6 s, `swept_filter` itself 3.9 → 2.3 s; faster with more cores. The
-  rest of a render is the pads' PADsynth tables and reverb FFTs.
-- **Module boundary**: the test imports every module of `studio` (it only imported the package)
-  and is an allow-list (above, §93.2); `studio` imports nothing new.
-- **The caption offset of Step 189** (a real bug, not music): `NarratedScene.narrate` waited
-  `round((window − elapsed) · fps)` frames, the plan counts `round(window · fps)`. On a half-frame
-  window (Kokoro lines of whole frames plus the 0.35 s pad = x.5 frames at 30 fps; word-count
-  timings at many pads) the two differ by a frame whenever the beat's animations took an odd
-  number of frames (banker's rounding of 211.5 vs 210.5). In `gps-time-of-flight` three scenes
-  ran a frame short, so the later captions were 0.1 s early against the plan (the "starts at
-  50.37 s, planned 50.47 s" warning). Now the wait ends on the window's whole frames from the
-  beat's start, as the plan counts; the three scenes re-rendered match the plan exactly, no
-  warning, 88.80 s. Scenes with such a beat now last a frame more or less than before (no frame of
-  the Phase Q baseline changed). This was the backlog's Step 100 item.
-- **Not changed**: the beds; `PIECE_RENDER_VERSION` (no valid score renders differently). Still
-  open: a written piece is not re-timed to scenes (only a section start); the check judges
-  sections by name; a riser still measures little at its normal level (the advice says so);
-  score beds are rendered per process, not cached on disk; Roman-numeral chord names are spelled
-  by key signature.
-- **Checked**: SHA-256 of the 16 templates, the piece, the two test demos, the five cookbook
-  sketches and the 16 beds' loops — HEAD (Step 190, `git archive`) and this step, separate
-  processes — all equal; mixes of six projects (a file + `momentum`, `tidewater` + `skyline`,
-  `gradient-descent`, `iso-web-page`, `host-explainer`, `gps-time-of-flight`) byte-identical; the
-  Listen page made again equals `docs/music`; the Phase Q baseline's 31 frames identical.
+- **Holds across sections** (`render._track_events`, `_events_and_last`,
+  `patterns.parse_steps(lead_hold=True)`, `score_file._check_lead_holds`): steps starting with `-`
+  continue the note sounding when the section starts (round a loop's end for the first section),
+  with the sound of the section it started in. The track must play in the section just before;
+  else a problem ("starts the piece (loop: false)" / "the track rests in 'X' just before").
+- **Names in the commands** (`music_pieces.music_source`): `render` and `check` (and `--compare`)
+  take a path or a name: a bed (score beds as their files; a Python bed as its loop — `check`
+  measures it as audio; `render --json` gives `bed`, `bars` / `seed` null, no sections or tracks)
+  or a piece in the current folder's `assets/music`; a name that is both is refused. MCP
+  `music_render` / `music_check` pass a name (`MUSIC_NAME`: words joined by `/`, no suffix, no
+  `..`) when no such file is under the root.
+- Roman-numeral chord names are spelled by key signature.
 
 ### 93.14 Time of Flight as a built-in bed (Step 192)
 
-The owner listened to *Time of Flight* (Step 189's agent-made piece) and approved it as the 17th
-built-in bed, exactly as it sounds: `time_of_flight` (the piece's file name; no bed, sound, mood,
-ambience or piece uses it). It is a score bed like `tidewater` and `skyline` (§93.12): in
-`BUILTIN_BEDS` after `skyline`, `Bed.score`, generator `music._score_bed`, the score shipped as
-`studio/beds/time_of_flight.yaml` (also its template: `vidgen music template time_of_flight`
-writes the score the bed plays). So it works wherever a bed does: `music: time_of_flight`, cue
-keys including `section: lift`, `vidgen list-music` (+ `--json`, MCP `list_music`), did-you-mean,
-the schema's `source` text, `vidgen music render` / `check` by name, the Listen page.
+`time_of_flight` (§93.11's agent-made piece; B minor, 108 BPM, 24 bars; build from 8.9 s, lift at
+26.7 s, settle at 44.4 s) is a score bed like §93.12, after `skyline`, in
+`studio/beds/time_of_flight.yaml`.
 
-- **Sample-identical** (checked): the shipped file is the example's score with a template header
-  in place of its first comment lines (the data from `version: 1` on copied unchanged by a
-  script); its render equals the render of `examples/gps-time-of-flight/assets/music/time_of_flight.yaml`
-  at 24b9a8f8 sample for sample, and the bed loop's fingerprint is locked in `tests/test_music.py`
-  (the 16 others unchanged). `vidgen music check time_of_flight --compare momentum.yaml` gives the
-  example README's report line for line.
-- **Facts** (description and use in words, tested against the score): B minor, 108 BPM (beat
-  26664 samples), 24 bars = 53.328 s; intro (bars 1–4) / build (5–12, from 8.9 s) / lift (13–20,
-  26.7 s) / settle (21–24, 44.4 s); chords Bm(add9) F#m7 · Gmaj7 Em9 · Gmaj7 A Bm(add9) D ·
-  Gmaj7 F#sus4, a chord every two bars; ranges as the renderer voices them: arpeggio D3–D5, bass
-  D2–B2, lead C#5–D6; −28.00 LUFS, true peak −15.5 dBTP, 54 % of the power under 150 Hz, the voice
-  band 1.6 dB under `pulse`'s, highs −44.2 dB, L/R correlation 0.50; renders in about 7 s (two
-  cores). Use: science and tech explainers, discovery and measurement stories, maps and
-  navigation, how-things-work videos.
-- **The example** (decision): it plays the bed and its project copy is gone — with the copy, the
-  Step 188 name-clash rule would make `music: time_of_flight` a problem, and the copy would be a
-  second source of truth. `video.yaml` keeps `music: time_of_flight` (now kind `bed`); the README
-  keeps the iteration log and the check report, says the piece was a project piece and is now
-  the bed, and gives the commands by name (`vidgen music template / check / render
-  time_of_flight`). The `music_check` lint rule checks project pieces only, so it no longer runs
-  on the example (as for every bed). Its mix (six 15 s scenes, ducking beats) is byte-identical
-  to Step 191's (SHA-256 of the mix and of the loop the cue plays; `<scratchpad>/s192/mixgps.py`).
-- **`studio/pieces/` removed**: its only file was the example's copy, now the bed's score; the
-  package-data entry is gone.
-- **The Listen page** (decision): the bed's row in the beds table, its clip 6 s before the lift
-  (`CLIP_MOMENTS` 0.5: from 20.66 s, the end of the build, the riser and the lift with its lead) —
-  the same start as the Step 189 piece clip, so `bed-time_of_flight.{mp3,png}` are the old
-  `piece-time_of_flight` files byte for byte (renamed). The "Made with the score format" section
-  stays as the showcase of how such a piece is made: the links to the score-file, template,
-  check and project-piece docs and the craft notes, and one row per author-made piece that became
-  a bed (`listen.SCORE_PIECES`: name, how it was made, the example with its log) whose "hear it"
-  column links the bed's clip — no second copy of the media, no spectrogram repeated. A piece is
-  on the page only once it is a bed (`piece_score` reads `studio/beds`); `piece_clip`,
-  `piece_clip_start` and `PIECES_DIR` are gone. 6.33 MB (unchanged; budget 6.5 MB); every other
-  file byte-identical; a second run into the scratchpad identical.
-- **Not changed**: the other 16 beds (fingerprints), the renderer, `PIECE_RENDER_VERSION`, the
-  check's limits (`time_of_flight` was in Step 191's calibration as "the piece").
+- The example plays the bed and has no project copy (decision: a copy would clash by §93.10 and be
+  a second source of truth), so the `music_check` lint rule does not run on it.
+- **Listen page** (`listen.SCORE_PIECES`, `ScorePiece`): a "Made with the score format" section
+  after the beds links the score-file, template, check and project-piece docs and the craft
+  notes, one row per author-made piece that became a bed (how it was made, the example); "hear it"
+  links the bed's own clip (no second copy). `piece_score` reads `studio/beds`. Score-bed clips
+  start 6 s before the lift (`CLIP_MOMENTS` 0.5).
 
 ## 94. vidgen studio: a local music workstation (Phase T, Steps 193–201)
 
-Goal: people (not only agents) make music with the score format. `vidgen studio [PROJECT]
-[--port N] [--no-browser]` starts a small web app on 127.0.0.1 and opens it in the browser:
-load any of the 17 built-in beds as an editable score file (its template, §93.8), change it,
-listen, check it, keep versions, export YAML / MP3 / WAV or save it into a project's
-`assets/music/`. **The sound is always schu-video-generator's own renderer** (`vidgen.studio`, the one videos
-use); the browser only plays rendered audio and never synthesises sound itself.
+`vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` serves a web app on 127.0.0.1 and
+opens it: load a built-in bed's template (§93.8), edit, listen, check, keep versions, export YAML /
+MP3 / WAV, or save into a project's `assets/music/`. **The sound is always vidgen's own renderer**
+(`vidgen.studio`); the browser only plays rendered audio. User docs (page, controls, keyboard,
+themes, disk): docs/CONFIG.md#music-studio-vidgen-studio.
 
-Terms (a collision, guide rule 14): **the studio** is this web app — the `vidgen studio`
-command and the package `vidgen.studio_app`; `vidgen.studio` (§93) is the score-file package
-(format, instruments, renderer, check) it calls. The package name `studio_app` exists only
-because `studio` was taken. A **session** is one piece being worked on (a folder); a **version**
-is one state of its score file (a file in that folder, never changed once written); a
-**render** is the audio of a version (in the session's render cache); a **preset** is a
-built-in bed's template.
+Terms: **the studio** is the app (package `vidgen.studio_app`, so named because `studio` was
+taken); `vidgen.studio` (§93) is the score-file package. A **session** is one piece (a folder); a
+**version** one state of its score file (never changed once written); a **render** a version's
+audio; a **preset** a built-in bed's template.
 
 ### 94.1 The phase (plan)
 
-- **193 Architecture and skeleton** (done, §94.2–§94.7, §94.11): the command, the server, the
-  JSON API (presets, patches, load, validate, render whole or a section, audio with range
-  requests), sessions on disk, the page: top bar with the preset picker, song strip, transport,
-  timeline, track list, a read-only inspector, the score file highlighted; load a preset and play
-  its render.
-- **194 Song strip, timeline, track list** (done, §94.12): chords in Roman numerals with names, live; loop the
-  whole piece or a section; playhead; energy curve (from the render's loudness per bar); drag a
-  section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern
-  text editable in place, level meters; `[+ track]`.
-- **195 Inspector and editing** (done, §94.13): instrument picker; sliders from `patch_catalog()` (ranges,
-  units, hover help); octave, accent; effects as chips; per-section changes; a step grid synced
-  both ways with the steps text; the YAML editable both ways (type YAML, the controls follow);
-  inline problems with the CLI's did-you-mean messages — a bad edit never stops playback (the
-  last good render keeps playing).
-- **196 Fast re-render** (done, §94.14): per-track stem cache, re-render only changed tracks and remix;
-  section-only render (measured, not worth it: §94.14); playback continues at the same moment; the "under narration" toggle;
-  level meters from real data; latency of typical edits measured and reported.
-- **197 Check, versions, exports** (done, §94.15): the check panel (`check.check_music_score`: verdict, headline
-  numbers, spectrogram with section marks, advice with [Apply] where the fix is mechanical,
-  the full report); versions, undo / redo, A/B against the original preset and any version
-  (§94.4); exports YAML / MP3 / WAV and save to a project's `assets/music/` with the Step 188
-  name-clash rule (a bed's name is refused).
-- **198 Listening notes and "Ask an agent"** (done, §94.16; plan §94.8).
-- **199 Variations** (done, §94.17; plan §94.9).
-- **200 Docs and polish** (done, §94.18): CONFIG, guide (agents may be handed studio sessions through MCP),
-  README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
-  (inspector and check as tabs below the track list in narrow windows), the light theme,
-  keyboard shortcuts (space play / stop, Ctrl+Z), accessibility basics (labels, focus, contrast).
-- **201 Review** (done, §94.19): a critical review with fixes; security (localhost only, no path traversal,
-  safe file writes, no code run from requests), compatibility, determinism; the phase's tests
-  and related suites; `tests/test_mcp.py` in full.
-
-Compatibility (hard rule): additive. The 17 beds' fingerprints, the templates' renders, existing
-projects' mixes, the Listen page and every existing command stay unchanged. The studio writes
-only inside its session folders, a chosen export path, or a project's `assets/music/` when the
-person asks (Step 197).
+Built: server, API, sessions, page (§94.2–§94.7); song strip and tracks (§94.12); inspector and
+typed YAML (§94.13); fast re-render (§94.14); check, versions, exports (§94.15); notes and agents
+(§94.16); variations (§94.17); polish and disk rule (§94.18); review rules (§94.19). Rule:
+additive — beds, templates, project mixes, the Listen page and other commands are unaffected; the
+studio writes only in its session folders, chosen exports, or `assets/music/` when asked.
 
 ### 94.2 Process and server
 
-- **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`: the command's loop),
-  `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
-  `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
-  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `inspector.py` 195, `stems.py` and `narration.py` 196,
-  `exports.py` and `checks.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
-  router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
-  `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
-- **Server** (decision: the standard library, no new dependency): `http.server.ThreadingHTTPServer`
-  bound to `127.0.0.1` only, port 0 by default (the OS picks a free one) or `--port N` (a port in
-  use is a `VidgenError` that says to pick another; on Windows `SO_EXCLUSIVEADDRUSE`, so no other
-  process shares it). `webbrowser.open` 0.3 s after the server is bound (Windows, macOS, Linux);
-  `--no-browser` only prints the address. Ctrl+C stops it (`studio stopped`), removing
-  `open.json` (§94.3). Each request runs on its own thread; renders take a lock (one at a time:
-  the development machine has 3 GB), session changes another.
-- **Guards**: the `Host` header must be `127.0.0.1:<port>` or `localhost:<port>` (403 otherwise:
-  no DNS rebinding); a POST must be `Content-Type: application/json` (415 otherwise — a cross-site
-  form cannot send that without a CORS preflight, which the server never answers) and, when it has
-  an `Origin`, from this server (403); bodies at most 2 MB. Files are served only from
-  allow-lists: the page's files (the `static/` folder listed once at start), three bundled fonts,
-  and renders whose names match `<20 hex>.wav` or `<20 hex>-<section>.wav` in the open session's
-  `renders/` — no path from a request reaches the file system. Every response has
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and a CSP of `'self'` only
-  (no inline script, no `eval`; styles set from JS through the CSSOM). A dropped connection (the
-  browser seeking) is ignored, an unexpected error is logged and answered with 500 — one bad
-  request never stops the studio.
-- **Errors**: a `VidgenError` (a score's problems, an unknown preset with did-you-mean) is HTTP
-  400 with its message; the page shows it in the status line.
+- **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`, `clean_studio_folder`),
+  `app.py` (`StudioApp`: every API call without HTTP; tests call it directly), `server.py`
+  (`StudioServer`, a thin router), `session.py`, `edits.py`, `song.py`, `inspector.py`, `stems.py`,
+  `narration.py`, `checks.py`, `exports.py`, `notes.py`, `agent.py`, `variations.py`,
+  `cleanup.py`, `static/`. `vidgen.studio` never imports `studio_app` (§93.2).
+- **Server** (decision: standard library): `http.server.ThreadingHTTPServer` on `127.0.0.1` only,
+  port 0 (OS picks) or `--port N` (in use: a `VidgenError`; Windows `SO_EXCLUSIVEADDRUSE`);
+  `webbrowser.open` 0.3 s after binding. Ctrl+C stops it (`app.close()` stops late facts too) and
+  removes `open.json`. One thread per request; one lock for renders (one at a time), one for
+  session changes.
+- **Guards**: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>` (403: no DNS rebinding); POST
+  only `Content-Type: application/json` (415; a cross-site form cannot send it without a preflight,
+  which is never answered) and, with an `Origin`, from this server (403); bodies ≤
+  `MAX_BODY_BYTES` 2 MB (413, nothing read; negative `Content-Length` 400); every 4xx / 5xx closes
+  the connection; JSON numbers finite, whole where whole is expected. Files only from allow-lists:
+  `static/` (listed at start), three bundled fonts, and session files whose names match patterns
+  (`<20 hex>.wav`, `<20 hex>-<section>.wav`, …). Every name that reaches the disk (render, picture,
+  export names, session / batch / note ids, letters, keys, score section and track names via
+  `vidgen.studio`'s `_NAME`) matches a pattern ending in `\Z` with ASCII `[0-9]`; URL paths are
+  never decoded. Headers: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, CSP
+  `'self'` only (no inline script or style, no `eval`). A dropped connection is ignored; an
+  unexpected error is logged and answered 500. A `VidgenError` is 400 with its message.
 
 ### 94.3 Sessions on disk
 
 ```
-<studio>/open.json                         the running studio: url, session id, pid, started
-<studio>/sessions/<id>/session.json        format, id, created, preset, title, current, versions
-<studio>/sessions/<id>/versions/v0001.yaml  each version's score text, exactly as written
-<studio>/sessions/<id>/renders/<key>.wav    a render (audition level), <key>.json its facts,
-                                            <key>-<section>.wav a section cut from it
+<studio>/open.json                          the running studio: url, session id, pid, started
+<studio>/sessions/<id>/session.json         format 1: id, created, preset, title, current, redo, revision, versions
+<studio>/sessions/<id>/versions/v0001.yaml  each version's text, exactly as written
+<studio>/sessions/<id>/renders/<key>.wav    a render; <key>.json facts; <key>-<section>.wav;
+                                            <key>.m<tag>.wav listening mix; ….n.wav under narration
+<studio>/sessions/<id>/checks/ exports/ variations/<batch>/ inbox/ notes.json request.json proposals.json
 ```
 
-- **Where** (`session.studio_dir`): a project's `build/studio/` (the project is `PROJECT` or the
-  current folder when it holds a `video.yaml`; found with `project.find_config_file`, the config
-  is not read, so a broken `video.yaml` does not stop the studio), else `studio/` in vidgen's
-  cache folder (`soundfont.cache_dir()`: `VIDGEN_CACHE_DIR`, `%LOCALAPPDATA%\vidgen`,
-  `~/Library/Caches/vidgen`, `~/.cache/vidgen`). `build/` is a cache by the project's rules
-  (never committed); a person keeps a piece by exporting it (197).
-- **Sessions**: loading a preset (or a score's text) starts a new session (id
-  `YYYYMMDD-HHMMSS-xxxx`, checked by a pattern before any path is built from it); older sessions
-  stay on disk (Step 197 lists and reopens them). `session.json` (format 1) holds the facts and the
-  version list `{number, parent, origin, label, created}`; `origin` is `preset` or `text` in Step
-  193, then `edit` (195), `agent` (198), `variation` (199). All writes are atomic
-  (`fileio.write_text_atomic`).
-- **`open.json`** (decision, for Step 198): the running studio writes its URL, open session and
-  pid; it removes the file on exit only if its pid is still the one in it (a second studio may
-  have replaced it). MCP tools read it to find "the open session".
-- Later steps add, per session: `notes.json`, `request.json` (the last hand-off),
-  `proposals.json` and `inbox/` (agent proposals waiting to be picked up) (198; `revision` in
-  `session.json`, bumped by every change),
-  `variations/<batch>/` (199), `checks/` and `exports/` (197; `redo` and each version's
-  `starred` in `session.json`, origin `check`). Stems (196) are kept in the studio's memory,
-  not on disk (§94.14); `renders/` gains listening mixes under narration (`….n.wav`).
+- **Where** (`session.studio_dir`): the project's `build/studio/` (`PROJECT`, or the current
+  folder with a `video.yaml`, found by `project.find_config_file` without reading it), else
+  `studio/` in `soundfont.cache_dir()`. It is a cache; a person keeps a piece by exporting or saving.
+- **Sessions**: loading a preset or text starts one (id `YYYYMMDD-HHMMSS-xxxx`, pattern-checked
+  before a path is built). Versions `{number, parent, origin, label, created, starred}`; `origin`
+  `preset | text | edit | check | agent | variation`; `revision` bumped by every change. Text stored
+  with `\n` (`session.normal_text`). Writes atomic (`fileio.write_text_atomic`).
+- **`open.json`**: removed on exit only if its pid is still this one. MCP tools read it (§94.16).
 
 ### 94.4 Versions, undo / redo and A/B (plan for Steps 195 and 197)
 
-- **The score text is the source of truth** and keeps its comments: a version is the text as
-  written. Controls never rewrite the whole file: Step 195's `edits.py` changes one value in
-  place, finding it with `yaml.compose`'s node marks (start / end offsets) and replacing that
-  span with the new value written in flow style — a key added to a block or flow mapping is
-  inserted next to its siblings. So a slider move changes one line of the YAML view, and typing
-  YAML is the same operation the other way round (the page re-reads the text through
-  `/api/validate` and the controls follow).
-- **Every committed edit is a new version** (a slider's release, a step grid click, typed YAML
-  once it is valid for 0.8 s); invalid text is never a version — the page keeps it as a draft
-  with its problems and the last good render keeps playing. Versions are a few KB.
-- **Undo / redo** move the session's `current` pointer: undo to the current version's parent,
-  redo back down the branch last undone (a `redo` list in `session.json`); a new edit after an
-  undo starts a branch (nothing is deleted). The page's "v3 ▾" lists versions with their labels.
-- **A/B**: A is the preset's template (or version 1 for a score given as text), B the current
-  version or any picked one; both rendered, the player swaps sources at the same moment
-  (`Player.setSource` keeps the position). Every render plays at the same audition gain, so A/B
-  is level-matched.
+- **The score text is the source of truth** and keeps its comments; controls never rewrite the
+  file — they edit one value in place (§94.12), and typed YAML is the same operation reversed.
+- **Every committed edit is a new version** (slider release, grid click, typed YAML valid for
+  0.8 s); invalid text is a draft, never a version, and the last good render keeps playing.
+- **Undo / redo** move `current` (rules §94.15); a new edit after an undo starts a branch; nothing
+  is deleted.
+- **A/B**: A the first or a picked version, B the current or a picked one; `Player.setSource` keeps
+  the position and every render plays at the same audition gain (level-matched).
 
 ### 94.5 The JSON API
 
-Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<message>"}` (HTTP
-400 for a `VidgenError`, 403 / 404 / 415 / 416 for the guards, 500 for a bug).
+Answers are `{"ok": true, "result": ...}` or `{"ok": false, "error": "..."}` (400 `VidgenError`;
+403 / 404 / 413 / 415 / 416 guards; 500 bug). Routes (`server.py`; behaviour in `StudioApp`):
 
-| Call | Step | What it does |
-|---|---|---|
-| `GET /api/info` | 193 | vidgen version, project, studio folder, default preset (`momentum`), audition gain, open session id |
-| `GET /api/presets` | 193 | the 17 beds in order: name, title, `one_line` (the description's first clause, ≤ 110 characters), `bed_description`, `use`, key, tempo, time, bars, seconds, sections, tracks, `score_bed` |
-| `GET /api/patches` | 193, 195 | `vidgen.studio.patch_catalog()` (instruments, settings with ranges and words, effects), each ranged field with `unit`, `scale` and `integer` (195) |
-| `GET /api/session` | 193 | the open session (`session.json` + folder) and its current version's score, or nulls |
-| `GET /api/score?version=N` | 193 | a version: text, outline (`score_outline` + per track the steps text, volume, pan and settings as written; each section's first bar; the progression when it is one string), problems, render key |
-| `POST /api/load {preset} \| {text}` | 193 | a new session whose version 1 is the preset's template or the text (bad text refused with its problems) |
-| `POST /api/validate {text}` | 193 | `ok`, problems `{where, message, line}` (did-you-mean as the CLI; YAML syntax errors with their line), outline |
-| `POST /api/render {version?, section?, mute?, narration?}` | 193, 194, 196 | render a version (default current) or one section; `mute`: tracks left out (a listening mix, §94.12); `narration`: under the narration sample (196); `{key, url, seconds, samples, loop, audition_gain_db, warnings, render_seconds, mix_gain, meters, meter_seconds, pass_samples, bar_samples, cached, section, muted, narration, timing, facts_pending}` and, once worked out, `loudness, true_peak, energy` (196: §94.14) |
-| `GET /api/facts?key=K` | 196 | the late facts of render `K` (`loudness, true_peak, energy`), waiting for them; `{pending: true}` when another render was asked for meanwhile |
-| `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>][.n]-<section>.wav`, `/audio/<key>.m<tag>.wav`, `….n.wav` | 193, 194, 196 | the render (or a listening mix, either under narration `.n`), with `Range` (206, `Content-Range`; 416 outside the file) |
-| `POST /api/edit {version?, ops, label?, dry_run?}` | 194, 195 | a new version from value edits (paths like `tracks.bass.volume`; `unset` 195) and song edits (§94.12; `change_instrument`, `play_mode`, `section_plays` 195, §94.13); `{ok: false, problems}` writes nothing; `dry_run` checks only; `notes`: what changes beyond the value named |
-| `POST /api/text {version?, text}` | 195 | a new version from typed text (`origin: edit`); `{ok: false, problems}` writes nothing; the same text `unchanged` |
-| `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version; the session carries `redo`, `can_undo`, `can_redo` |
-| `POST /api/version {version, label?, starred?}` | 197 | rename / star a version |
-| `GET /api/sessions`, `POST /api/open {session}` | 197 | the studio's sessions (newest first), reopen one |
-| `POST /api/check {version?, wait?}`; `GET /media/<key>-check.png` | 197 | the version's check (§94.15): `{status: done, …}`, `pending`, `superseded`; its spectrogram |
-| `POST /api/check/apply {version, key, edit}` | 197 | a check's advice `edit` (`<finding>.<k>`) as the next version (`origin: check`) |
-| `POST /api/export {version?, format, length?, count?, level?}`; `GET /download/<name>` | 197 | YAML / WAV / MP3 into the session's `exports/`, downloaded as an attachment |
-| `POST /api/save {version?, name, overwrite?}` | 197 | save into the project's `assets/music/<name>.yaml` (§94.15) |
-| `GET /api/session?since=R` | 198 | polled every 1.5 s: picks up the inbox; `{revision, unchanged}` or the whole state with `made` (every session state carries `notes`, `proposals`, `revision`) |
-| `POST /api/notes {version?, seconds, text}`, `/api/notes/update {id, text?, status?, delete?}` | 198 | listening notes (§94.16) |
-| `POST /api/ask {version?}` | 198 | write the hand-off: `{request, prompt, provider, file}` |
-| `POST /api/proposal/paste {reply}`, `/api/proposal/send {model}`, `/api/proposal/decide {id, keep}` | 198 | a pasted reply or OpenRouter's as a proposal; keep / discard |
-| `POST /api/variations {version? \| batch, letter; shuffle?}`, `GET /api/variations?batch=B` | 199 | four siblings of a version (or "more like" a candidate), rendered and checked in the background: the batch document (§94.17) |
-| `POST /api/variations/keep {batch, letter}`; `/api/render {variation: "b0001/c"}` | 199 | a candidate as the next version (`origin: variation`); a candidate played like a version |
-| `GET /api/variations` (no `batch`), `GET /api/ask` | 200 | the session's batches, newest first; the last hand-off (or `null`) |
-| `GET /api/disk`, `POST /api/cleanup` | 200 | renders and exports in bytes (the session's, the studio's); remove old ones by the rule (§94.18) |
+| Call | What it does |
+|---|---|
+| `GET /api/info` | version, project, studio folder, default preset (`momentum`), audition gain, open session, `provider {name, key_env, key_set, model, model_env}` |
+| `GET /api/presets` | the beds in order with facts, `one_line` (≤ 110 chars), `score_bed` |
+| `GET /api/patches` | `patch_catalog()` plus `unit`, `scale`, `integer` (`inspector.studio_catalog`) |
+| `GET /api/session[?since=R]` | open session and current score; with `since`: picks up the inbox, `{revision, unchanged}` or the whole state |
+| `GET /api/score?version=N` | text, outline, problems, render key |
+| `POST /api/load {preset} \| {text}` | new session, version 1 |
+| `POST /api/validate {text}` | `ok`, problems `{where, message, line}`, outline |
+| `POST /api/render {version? \| variation?, section?, mute?, narration?}` | render facts (`key`, `url`, `mix_gain`, `meters`, `timing`, `facts_pending`, …) |
+| `GET /api/facts?key=K` | late facts (waits); `{pending: true}` if superseded |
+| `GET /audio/<key>[.m<tag>][.n][-<section>].wav` | render / mix / section with `Range` (206, 416) |
+| `POST /api/edit {version?, ops, label?, dry_run?}` | value and song edits as a new version; `{ok: false, problems}` writes nothing |
+| `POST /api/text {version?, text}` | typed text as a new version (`unchanged` when equal) |
+| `POST /api/undo`, `/api/redo`, `/api/current {version}`, `/api/version {version, label?, starred?}` | versions |
+| `GET /api/sessions`, `POST /api/open {session}` | list / reopen sessions |
+| `POST /api/check {version?, wait?}`, `GET /media/<key>-check.png`, `POST /api/check/apply {version, key, edit}` | check, spectrogram, apply advice |
+| `POST /api/export {version?, format, length?, count?, level?}`, `GET /download/<name>` | exports (attachment) |
+| `POST /api/save {version?, name, overwrite?}` | save to `assets/music/<name>.yaml` |
+| `POST /api/notes`, `/api/notes/update` | listening notes |
+| `POST /api/ask {version?}`, `GET /api/ask` | write / read the hand-off |
+| `POST /api/proposal/paste {reply}`, `/api/proposal/send {model, confirm: true}`, `/api/proposal/decide {id, keep}` | proposals |
+| `POST /api/variations`, `GET /api/variations[?batch=B]`, `POST /api/variations/keep {batch, letter}` | variations |
+| `GET /api/disk`, `POST /api/cleanup` | sizes; clean by the rule |
 
 ### 94.6 Renders and playback
 
-- **A render** (`StudioApp.render`): `render_music_score` of the version's score (−28 LUFS,
-  float32), written as a 16-bit WAV (`sfx.wav_bytes`, added for this: `write_wav` now writes its
-  bytes, the same file as before) at the **audition level**: +12 dB (`listen.MUSIC_GAIN_DB`, the
-  Listen page's −16 LUFS), clipped at full scale (the beds' true peaks are −14 to −16 dBTP, so
-  nothing clips), the same gain for every version. Its facts (`<key>.json`): seconds, samples,
-  loop, loudness and true peak of the −28 LUFS render, warnings (notes out of range), render
-  time.
-- **The cache key** (`render_key`): SHA-256 of `{score: the YAML's data, renderer:
-  STUDIO_RENDER_VERSION (1), vidgen: __version__}` — so comments and layout do not re-render,
-  and a new schu-video-generator does. The cache lives in the session (no sharing between sessions in Step 193).
-- **A section** is cut from the whole render, bit-exact (`_slice_wav`), from the section's first
-  sample for its bars (the last section of a one-pass piece keeps the tail): it sounds as in the
-  piece, with the notes ringing on from before it. Step 196 decides whether rendering only the
-  section's notes is worth it (measured).
-- **Playback** (`static/player.js`): an `<audio>` element on the render's URL, streamed with range
-  requests so seeking works without loading everything; `loop` for a loop piece. Decision: not
-  the Web Audio API in Step 193 — `<audio>` streams and seeks for free; Step 194 may move section
-  loops to an `AudioBufferSourceNode` (sample-exact `loopStart` / `loopEnd`) if the `<audio>`
-  loop's gap is audible, keeping the same server files. `setSource` keeps the playing position,
-  which is how a re-render (196) and A/B (197) continue at the same moment.
-- **Stems (Step 196's plan; what was built and where it differs: §94.14)**: `render.render_music_stems` already renders each track alone
-  (before the master filter and final level) and sums them. The studio factors the per-track part
-  into a function `vidgen.studio` exposes (bit-identical, tested) and caches each track's stem as
-  float32 in `stems/<track key>.npy`; the track key hashes the score's shared data (key, tempo,
-  time, seed, loop, sections, progression, chord_bars), the track's own spec and, for `duck`, the
-  trigger track's spec. A change to one track re-renders that track and remixes (sum, master
-  filter, `_finish`), the same within 1e-5 as `render_music_score` (as the check's stems are);
-  exports render with `render_music_score` itself. Mute / solo remix the cached stems at the full
-  mix's gain (muting a part does not make the rest louder). Level meters: each stem's RMS per
-  50 ms, sent with the render. "Under narration": a second WAV of the render with the shipped
-  narration sample ducked by `check.duck_gain_db`, as the check's demo; the player swaps to it at
-  the same moment. Target: an edit of one track plays in about the time to render that track plus
-  a remix (well under the 1.2–2.2 s of a whole template).
+- **A render** (`StudioApp.render`): the score mixed from stems (§94.14) to −28 LUFS, written as
+  16-bit WAV (`sfx.wav_bytes`, also used by `write_wav`) at the **audition level** +12 dB
+  (`listen.MUSIC_GAIN_DB`, `audition_gain_db()`), clipped at full scale, the same for every
+  version. Facts in `<key>.json`.
+- **Render key** (`render_key`): first 20 hex of SHA-256 of `{score: parsed YAML data, renderer:
+  STUDIO_RENDER_VERSION (3), vidgen: __version__}` (comments and layout do not re-render). Bump
+  `STUDIO_RENDER_VERSION` when the 16-bit render or its facts change.
+- **Sections** are cut bit-exact from the whole render (`_slice_wav`, under the render lock; the
+  last section of a one-pass piece keeps the tail). Renders are content-named and never replaced,
+  so a streamed file is never overwritten (Windows).
+- **Playback** (`player.js`): `<audio>` with range requests (decision: not Web Audio — it streams
+  and seeks for free); `setSource` keeps the position.
 
 ### 94.7 The page
 
-- **Files** (`studio_app/static/`, package data): `index.html`, `studio.css`, ES modules `app.js`
-  (the page), `api.js` (the JSON calls), `player.js` (playback), `yaml_view.js` (the highlighted
-  score file), `favicon.svg`; Step 194 adds `strip.js` (key, tempo, seed, chords), `timeline.js`
-  (sections, energy, loops, the section bar) and `tracks.js` (the track list); Step 195 `inspector.js`,
-  `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed); Step 197
-  `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`; Step 198
-  `notes.js` (notes, the Notes tab, Ask an agent, proposals, polling); Step 199 `variations.js`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
-  JetBrains Mono come from schu-video-generator's bundled fonts at `/fonts/...`), so it works offline.
-- **Look** (decision: schu-video-generator's own): the `dark_tech` theme's colours (background `#0E1116`,
-  surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
-  #F2A541 #C792EA #83C167` for sections and tracks) and, for the light option (a toggle kept in
-  `localStorage`, polished in Step 200), `light_academic`'s. Layout as agreed: top bar (brand,
-  preset picker, A/B, versions, undo / redo, YAML toggle, Export, theme), song strip (key,
-  tempo, time, seed, bars and length, the progression as written and the chord names of the
-  section under the playhead), transport (play / pause, stop, loop, "under narration", position
-  slider, time), timeline (sections coloured, sized by bars, playhead; click to seek), then three
-  columns — tracks, inspector, score file — and the check panel at the bottom with the status
-  line. Under 980 px wide the columns stack and the page scrolls.
-- **Step 193's state of each part**: the preset picker works (a listbox: name, key, tempo,
-  length and the one-line description; arrow keys, Enter, Escape); play / pause / stop, seek and
-  timeline clicks work; tracks show name, instrument, volume bar, pan knob and the steps text
-  (M / S disabled); the inspector shows the selected track's instrument (its words from
-  `patch_catalog`), what it plays, sections, effects as chips and its settings as disabled
-  sliders at the written or default values; the score file is shown highlighted with line
-  numbers (problem lines marked). A/B, versions, undo / redo, export, loop by section, "under
-  narration", `[+ track]` and the check are visible but disabled, with a title naming their step.
-- On opening, the page shows the open session (a reload keeps the piece) or loads the default
-  preset (`momentum`) and renders it; playing needs a click (browsers' autoplay rule).
+`studio_app/static/` (package data): `index.html`, `studio.css`, ES modules (`app.js`, `api.js`,
+`player.js`, `yaml_view.js`, `yaml_edit.js`, `strip.js`, `timeline.js`, `tracks.js`,
+`inspector.js`, `stepgrid.js`, `versions.js`, `check.js`, `exports.js`, `notes.js`,
+`variations.js`), `favicon.svg`. Vanilla JS, no build step, no CDN, fonts from vidgen's bundled
+fonts at `/fonts/...`: works offline. Colours from the `dark_tech` theme, the light option from
+`light_academic`. With no open session the page loads `momentum`. `data-busy`, `data-draft`,
+`data-ab`, `data-checking`, `data-variations`, `data-switching` on `<body>` are the browser tests'
+hooks (pytest marker `ui`, skipped without Playwright).
 
 ### 94.8 Listening notes and agents (plan for Step 198; what was built: §94.16)
 
-- **Notes**: clicking the timeline while playing pins a note `{seconds, bar, text, version}` to
-  the session (`notes.json`), shown as markers on the timeline and as comments; notes stay with
-  the version they were made on and carry over to its descendants.
-- **MCP** (decision: through the disk, not the studio's HTTP): `vidgen mcp` tools `studio_sessions`
-  (the sessions under the root's `build/studio/` and the cache folder's `studio/`, the open one
-  from `open.json`), `studio_read` (a session's current score, its notes, the last check report,
-  the patches summary) and `studio_propose` (score text plus one line per note on what changed and
-  why; validated with `check_text`, then written atomically as `sessions/<id>/inbox/<n>.json`). The
-  running studio turns inbox files into versions (`origin: agent`, parent the version the agent
-  read) when the page polls `/api/session`, so the proposal appears in the studio for the person
-  to A/B. Why the disk: no port or token to discover, it works when the studio is closed (picked up
-  when it opens), and the MCP server's root policy already confines what it may write.
-- **Optional provider**: "Ask an agent" with OpenRouter (the provider schu-video-generator already supports,
-  key from `OPENROUTER_API_KEY`, sent through `httpapi.post_with_retries`), a model the person
-  names; the prompt holds the score, the notes, the check report and the patches summary; the
-  reply (YAML + one line per note) goes through the same validation as an MCP proposal. Never
-  called in development or tests (mocked).
+See §94.16. Decision: agents reach sessions through the disk (MCP tools reading sessions and
+writing `inbox/` files), not the studio's HTTP — no port or token to find, works while the studio
+is closed, and the MCP root policy already confines writes.
 
 ### 94.9 Variations (plan for Step 199; what was built: §94.17)
 
-One click makes four siblings of the current version by fixed, deterministic edits of its data
-(the same version always gives the same four, no random numbers): another `seed` (the pads'
-phases and noises); an altered ostinato (the busiest pitched step pattern turned by a step or
-its degrees swapped); another voicing (pitched pads and plucks an octave or an inversion apart);
-a darker or brighter mix (the master `lowpass` and the pads' `tone` down or up). Each is written
-as a candidate (`variations/<batch>/a.yaml`...), rendered (one at a time, the stems reused) and
-checked, and shown side by side to listen and pick; picking one makes it the next version
-(`origin: variation`, parent the version varied).
+See §94.17.
 
 ### 94.10 Not done in Step 193
 
-Editing, mute / solo, loops by section, the energy curve, meters, the check panel, versions,
-undo / redo, A/B, exports, notes, agents and variations (Steps 194–199, above). No session
-list or reopening of older sessions yet (197). Renders are not pruned (a minute of music is
-about 11 MB of WAV per version rendered; 197 adds a limit).
+Nothing here remains open; the later sections describe the features (pruning: §94.18).
 
 ### 94.11 Step 193: facts
 
-- Measured (two cores): the page's first load with `momentum` (load, render 1.8 s, page ready)
-  3.4 s; templates render in 1.2 s (`pulse`) to 2.2 s (`tidewater`); a cached render answers at
-  once; the catalogue of the 17 presets 0.2 s.
-- Public: no new `vidgen.api` names (the studio is a command, not an extension surface); new
-  `vidgen.sfx.wav_bytes`; `studio_app` is in `render.fingerprint.NOT_RENDER_INPUTS` (it changes
-  no scene's picture); package data `studio_app/static/*`; pytest marker `ui` (browser tests,
-  skipped without Playwright).
+No `vidgen.api` names (the studio is a command, not an extension surface); `studio_app` is in
+`render.fingerprint.NOT_RENDER_INPUTS`; package data `studio_app/static/*`.
 
 ### 94.12 Step 194: song strip, timeline, track list
 
-- **Edits** (`studio_app/edits.py`, §94.4 made real one step early, since every control here
-  edits): `set` (replace a value, a quoted string keeping its quotes; a missing key, and its
-  missing parent mappings, added after its siblings — in a flow mapping before its `}`, in a block
-  one as a new line at its indentation; a block value replaced by a flow one after the key's
-  `:`), `delete` (a key or list item with the comment lines just above it; in a flow collection
-  with its comma), `insert` (a list item, block or flow), `rename` (a key). Nodes are found with
-  `yaml.compose` marks; a block collection's text ends at its last value (its end mark is after
-  the comments that follow). New strings are written plain only when they are a name or a key
-  (`fm_pluck`, `G minor`), else double-quoted, as the templates write steps and progressions.
-- **Song edits** (`studio_app/song.py`), turned into value edits against the text as it is when
-  their turn comes: `add_track` (name = the instrument, or `_2`...; a default pattern per
-  instrument for the time signature — kick on the beats, clap on 2 and 4, hats on the off-beat,
-  bass roots on 1 and 3, a sub and a piano held, plucks a broken chord `1 3 5 8` in eighths,
-  music box and bell sparse, a riser held and `only` in the last section, pads `play: chords`;
-  `volume: -6`), `delete_track` (not the last), `add_section` (4 bars after the one selected,
-  named `part`, `part_2`...; it takes the chords of the section before when the score has no
-  progression; a track whose steps are all written per section gets it in `rest`),
-  `remove_section` (not the last; its name leaves `only` / `rest` / per-section changes; a track
-  that plays only there is removed with it and the label says so), `rename_section` (everywhere
-  the name appears). A score that gives `bars:` instead of a section list allows only its bars.
-- **`POST /api/edit`** (`StudioApp.edit`): the edits applied to the version edited (default
-  current); a valid result is the next version (`origin: edit`, `parent` the version edited, a
-  label like `tempo 96` or `+ track bell (bell)`) and the current one; problems write nothing
-  (`{ok: false, problems}` shown by the control, the last good render keeps playing); `dry_run`
-  checks (the chords' names while typing, the steps' problem while typing); an unchanged text is
-  `{unchanged: true}`. The page sends edits one at a time, each on the version before.
-- **Chords** (decision: analysed in Python, `song.roman_numeral`): the root's degree in the key
-  (`b` / `#` outside the scale), lower case when minor (a third of 3 semitones and no 4, or a
-  name written `m...`), then the name's suffix and a slash bass as written (`Gm(add9)` →
-  `i(add9)`, `Dsus4(add9)` → `Vsus4(add9)`, `D/F#` → `V/F#`). Every chord of the 17 templates
-  reads back as the same notes (tested). The outline gives the score's progression and each
-  section's (`own_progression`, `{text, written, chords: [{symbol, numeral, name}]}`; `written`
-  `voicings` when items are `{chord, notes}`: typing replaces them with plain chords, the hint
-  says so). The strip shows the section looped, else the one under the playhead (its own
-  chords when it has them, tagged with its name), the chord playing lit; clicking edits the
-  text (the section's own progression or the score's) with the names shown while typing.
-- **Energy curve**: the render's loudness per bar (`measure.loudness_curve` of the −28 LUFS
-  audio, one pass; silent bars −70), in the render's facts (`STUDIO_RENDER_VERSION` 2); drawn
-  under the section names, the loudest bar at the top, 6–24 LU tall.
-- **Loops**: the whole piece (`<audio loop>` when the score loops) or one section — the section
-  file cut from the render (§94.6) with `<audio loop>`; the player keeps the piece's time
-  (`offset`), so switching between whole and section, and a re-render, continue at the same
-  moment; seeking outside a looped section plays the whole piece. Clicking a section's name
-  loops it and selects it in the section bar (name, bars, own chords or the score's, loop, add
-  after, remove); clicking it again plays the whole. Dragging a section's right edge (or the
-  arrow keys on it) changes its bars (1–64), shown live, written on release.
-- **Mute / solo** (decision: a listening aid, never the score; exports in Step 197 render the
-  score as written): the page's state, sent with each render as `mute` (the muted tracks and,
-  with any solo, every track not soloed). A **listening mix** `<key>.m<tag>.wav` (`tag` 10 hex
-  of the sorted names) sums the other tracks' stems (`render_music_stems`), through the master
-  filter, at the whole mix's gain — muting a part never makes the rest louder; a one-shot's
-  tails after its last bar are left out of a mix. Each mix renders every stem again (about 2×
-  a render); Step 196 caches stems. The tracks heading names what is left out, "the score keeps
-  it". To make it permanent the person deletes the track or lowers its volume.
-- **Track list**: volume bar (−30 to +6 dB, drag or arrows, 0.5 dB steps; a volume curve is
-  shown hatched and edited in the score file), pan knob (drag up / down, arrows, double-click
-  centre; steps of 0.05), steps text edited in place (a list of strings is shown and written
-  back joined by `|`, which reads the same; problems under the row while typing; Enter keeps
-  it, Escape or a bad text leaves it), delete (×, Delete key), `[+ track]` (instruments by kind
-  with their words). **Meters** are rough until Step 196: from the score (`levels` in the
-  outline: each step's gain with accents, 0 a rest, −1 a hold), the step under the playhead
-  decaying after its hit, times the volume; a pad is steady while it plays.
-- **Rendering state**: an edit shows its version at once (the changed YAML lines flash), then
-  renders the whole piece (or the section looped, or the mix) while the last render keeps
-  playing; a "rendering…" badge and a sweep on the timeline after 120 ms; `data-busy` on
-  `<body>` while an edit or render is under way (the browser tests wait on it).
-- Not yet: undo / redo and the version list (197) — every edit is already a version on disk;
-  meters from the audio and fast stems (196); the inspector's controls (195).
+- **Value edits** (`edits.py`): `set` (a quoted string keeps its quotes; missing keys and parents
+  added after their siblings — before `}` in a flow mapping, a new line at the indentation in a
+  block one), `delete` (with the comment lines just above; with its comma in flow), `insert`,
+  `rename`, `unset` (§94.13). Nodes found by `yaml.compose` (`SafeLoader`) marks; new strings plain
+  only when a name or key, else double-quoted.
+- **Song edits** (`song.py`), turned into value edits on the text as it then is: `add_track`
+  (default pattern `song.default_steps`, `volume: -6`), `delete_track` (not the last),
+  `add_section` (4 bars, `part`, `part_2`…), `remove_section` (not the last; cleans `only` /
+  `rest` / per-section changes; a track playing only there goes too), `rename_section`. A `bars:`
+  score allows only its bars (1–64 from the page).
+- **`StudioApp.edit`**: a valid result is the next version (`origin: edit`, parent the edited
+  version) and current; problems write nothing; `dry_run` only checks.
+- **Chords** (decision: in Python, `song.roman_numeral`): root degree in the key (`b` / `#`
+  outside), lower case when minor, the name's suffix and slash bass kept (`Gm(add9)` →
+  `i(add9)`). Outline: `{text, written, chords: [{symbol, numeral, name}]}` per progression
+  (`own_progression` per section).
+- **Energy curve**: `measure.loudness_curve` per bar of the −28 LUFS render (silence
+  `ENERGY_FLOOR` −70), a late fact.
+- **Mute / solo** (decision: a listening aid, never the score): sent as `mute`; a listening mix
+  `<key>.m<tag>.wav` (`tag` 10 hex of the sorted names) remixes the other stems at the whole mix's
+  gain and length (muting never makes the rest louder; a one-shot keeps its tails).
 
 ### 94.13 Step 195: the inspector, the step grid, the score file typed
 
-- **Where the controls write** ("Edit for"): the whole track (`tracks.<t>.<key>`) or one section
-  (`tracks.<t>.sections.<s>.<key>`, a `PART_KEYS` change). In a section the controls show the
-  section's own value where it has one (labels in the section's colour) and the track's
-  otherwise; ↺ removes the section's value (back to the track's). A banner names the section;
-  a section where the track rests shows "rests in …" and [Play in …].
-- **`unset`** (`edits.py`): removes a key — nothing when it is not there — and the mappings it
-  leaves empty, keeping the first `keep` parts of the path (default 2, the track): a reset of
-  `tracks.pad.sections.b.settings.tone` removes `settings`, `b` and `sections` when they hold
-  nothing else; a kept mapping left empty is written `{}` (an effect's last field reset).
-- **Sliders** are generated from `/api/patches`: the catalogue with `unit` (from the words: cents,
-  Hz, s, bars, beats, dB), `scale` (`log` for a frequency spanning two octaves or more) and
-  `integer` (`studio_app.inspector.studio_catalog`; `music patches --json` is unchanged). A range
-  input of 0..1000 maps to the value (log or linear; rounded to 3 significant figures on a log
-  scale, else to a step of about 1/200 of the range), a tick marks the default, a number field
-  takes a typed value (checked by the score: out of range is refused by the control with the
-  score's message), the help line under the group shows the words, range and default of the
-  setting under the pointer or focus. **One version per drag**: written on `change` (the
-  release), keyboard steps 0.35 s after the last.
-- **Instrument change** (`inspector.change_instrument`, op `change_instrument`): settings the new
-  instrument also has are kept (moved into its range when outside it), the others dropped —
-  for the track and each section's changes; a drum loses `octave`, `transpose`, pitched steps
-  (a first pattern of the new drum instead, `song.default_steps`) and pitched section steps; a
-  pad's `play: chords` becomes a first pattern on an instrument that cannot hold chords. The
-  page shows the dry run's notes ("keeps decay, ring · drops index (sub has no such setting) ·
-  tone 5800 → 1500 (sub's range is 200 to 1500)") with [Change to …] / [Keep …] before the version is made.
-- **Notes** (octave, transpose, accent with common groups offered) and **play** for a pad
-  (`play_mode`: chords ↔ steps, steps `* - - -` in x/4; back to chords drops the steps).
-- **Effects as chips** (summary on the chip: `echo 0.75 beat ×2`, `lowpass 1.2→2.6 kHz`): click
-  opens its editor — sliders for the ranged fields, `duck`'s track or every beat and `follow`,
-  `echo`'s `pingpong`, `gate`'s own small step grid (click a step: open / closed) and its text;
-  curves (`lowpass`, `highpass`, `width`, `volume`) as fixed / ramp over the section / points,
-  drawn over the section's bars. [+ effect] adds one with the catalogue's defaults (duck under
-  the score's kick, else every beat). Shorthands (`duck: kick`, `gate: "x.x."`, `echo: true`)
-  are read as their fields; a field edit on a shorthand writes the whole effect as a mapping,
-  else only that field. In a section, × on the track's effect writes `none` (off there; shown
-  struck through with ↺), on the section's own removes it; a section that changes an inherited
-  effect's field gets a copy of the track's effect with the change.
-- **Per section** (table): plays (a switch → `section_plays`: written as the track writes it,
-  `only` when it lists where it plays, else `rest`; never nowhere; resting drops that section's
-  changes, which would never play), the changes there in words, × (remove them), [edit] (the
-  section as "Edit for").
-- **The step grid** (`stepgrid.js`): the steps text read with the same tokens as
-  `studio.patterns` (one cell per step; `+` stacks are one cell) into bars, each bar a row whose
-  cells share its width (bars of 1, 8 or 16 steps line up in time), grouped by beat, accent
-  dots from `accent`, holds drawn as the note going on, degrees and note names written in the
-  cell. Editing replaces **only the cell's characters** in the text, so spacing, `|` and the
-  rest stay as written. Brushes: `x X o - .` (drums) plus `* 1-9` and any one step typed
-  (`A4`, `5'`, `v2`, `C4+E4`) for pitched tracks; click paints (the brush again: a rest), drag
-  paints one version; keys: arrows move, a symbol writes it (a burst = one version 0.7 s after
-  the last), Backspace a rest. + bar copies the last bar, − bar removes it; a bar's step count
-  (1–32) resamples it (a step on the new grid keeps its symbol, a new step inside a note holds
-  it on pitched tracks and the riser / static, else rests; a hold after a rest rests). A text
-  field under the grid shows the steps: typing shows them in the grid at once, Enter or leaving
-  keeps them. While playing, the step under the playhead is outlined (when the grid shows the
-  steps that play there). Problems (e.g. an accent that no longer fits) show under the grid
-  with the score's message and the grid goes back to the version's.
-- **The score file typed** (`yaml_edit.js`): a transparent textarea over the highlighted text
-  (same font and metrics; the line numbers stay), re-highlighted on each key; 0.3 s after the
-  last key `/api/validate` marks bad lines (the message as their tooltip) and lists the
-  problems above with their line (click: the caret goes there) — the CLI's messages with
-  did-you-mean, YAML syntax errors with their line. Valid text unchanged for 0.8 s in all
-  becomes a version through `/api/text` and every control follows. **Text with problems is a
-  draft**: never a version; the last good version keeps playing; `data-draft` on `<body>` dims
-  and disables the controls that edit (track list, inspector, song strip, section bar) with a
-  note, until the text is fixed or [Revert to vN]. A new version from a control replaces the
-  editor's text unless the person is typing a different text there.
-- **Outline**: each track carries `spec`, the track as written (JSON-safe), which the inspector
-  reads (written vs default values, sections' changes, effects as written).
-- Not in this step: the re-render stays whole-piece (196); undo / redo and the version list
-  (197). Effects written as a mapping of two or more fields into a block track are added as
-  block lines (as `edits.py` writes new mappings), into a flow track inline.
+- Controls write the track (`tracks.<t>.<key>`) or one section (`tracks.<t>.sections.<s>.<key>`,
+  `PART_KEYS`).
+- **`unset`**: removes a key and the mappings it leaves empty, keeping the first `keep` path parts
+  (default 2); a kept empty mapping is written `{}`.
+- **Sliders** from `/api/patches`: `unit` from the words, `scale` `log` for frequencies spanning
+  ≥ 2 octaves, `integer`; one version per drag (on `change`).
+- **`change_instrument`** (`inspector.change_instrument`): shared settings kept (clamped into
+  range), others dropped, per track and section; a drum loses pitch keys and pitched steps (gets
+  `song.default_steps`); `play: chords` becomes a pattern where chords cannot be held. The dry
+  run's `notes` say what changes. **`play_mode`** (chords ↔ steps `* - - -`), **`section_plays`**
+  (written as `only` or `rest` as the track does; never nowhere; resting drops that section's
+  changes).
+- **Effects**: shorthands read as fields; editing a field of a shorthand writes the whole mapping.
+  In a section, removing the track's effect writes `none`; changing an inherited effect writes a
+  changed copy.
+- **Step grid** (`stepgrid.js`): same tokens as `studio.patterns`; an edit replaces only the
+  cell's characters (spacing and `|` stay). Changing a bar's step count (1–32) resamples it.
+- **Typed YAML** (`yaml_edit.js`): validated 0.3 s after the last key; valid and unchanged for
+  0.8 s → a version via `/api/text`; text with problems is a draft that disables the editing
+  controls.
 
 ### 94.14 Step 196: fast re-render, playing on, under narration, meters
 
-- **Stems** (`vidgen.studio.render`): `render_track_stem(score, name)` → `TrackStem` (the track
-  alone on the piece's canvas, float64, before the master filter and the level; the notes it
-  left out for the warnings); `mix_track_stems(score, stems, warnings, whole=None, threads=1)`
-  → `(float32 audio, MixFacts(gain, samples))`: the stems summed in the order given, the master
-  filter, the level measured on the mix (`music._level_gain`, `_finish` now takes a gain) —
-  with `whole` (a listening mix) the whole piece's gain and length instead, a one-shot cut at
-  the whole's end with the same fades (its tails kept). `render_music_stems` is built on them
-  (the same samples as before). Not in `vidgen.studio`'s `__all__` (the studio's helpers).
-- **Exactness (decision, measured)**: `render_music_score` is **unchanged** — it adds a plain
-  track's notes straight into the piece one by one, a stem sums them first, so the remix differs
-  in the order floats are added. Reproducing that order needs every overlapping note kept
-  (measured: 280 MB for `tidewater`'s arp alone; the "layers" an ordered sum would need chain
-  through all notes), so instead the tolerance is stated and tested: on the 17 templates, the
-  two test scores and four edited ones (one-shots, notes out of range), the remix equals
-  `render_music_score` in all samples but 0–3 (one-shot fades: 125 samples of ~1e-16),
-  at most **4.7e-10 apart** (−187 dBFS; the test allows 1e-9), with the same warnings, and the
-  **16-bit WAV the studio plays is byte-identical** (`tests/test_studio_stems.py`, the 17 as
-  a `slow` test). Changing `render_music_score` to sum stems would have moved 1–2 samples of
-  three templates by one float32 step (`tidewater`, a bed itself, among them); the beds,
-  templates and projects' music stay as they were
-  (bed fingerprints and template renders checked byte for byte against the code before).
-- **Loudness**: the stems are never normalised; the mix is set to −28 LUFS by measuring the
-  mix itself (as `render_music_score`); listening mixes reuse that gain (`mix_gain` in the
-  render's facts). Threads: the master filter's two channels and the loudness's 10 s blocks on
-  two threads (numpy's FFT releases the GIL; bit for bit the same as one thread, tested), the
-  mix ~0.45–0.85 s instead of ~1.2 s. Tracks render one at a time (two heavy tracks at once
-  peaked at 2.8 GB on a tempo change).
-- **The stem key** (`studio_app.stems.track_keys`): SHA-256 of the score's top-level data but
-  `title`, `description`, `master`, `tracks`; the track's name and spec; for a track that ducks
-  under another, that track's **hit inputs** only (`steps`, `accent`, `play`, `rest`, `only`,
-  each section's `steps` / `accent`: when it hits, not how it sounds — the kick's volume does
-  not re-render the pad); `STEM_RENDER_VERSION` (1) and schu-video-generator's version. A **volume-only
-  change** of a track whose volume is one number (no curve, no section changing it:
-  `plain_volume`) scales a kept rendered stem by the gain between them (every note is scaled
-  by the volume and every effect after is linear) — 10 ms instead of the track's render; the
-  remix stays within the tolerance (tested).
-- **The cache** (`StemCache`): in memory, least recently used out past 768 MB (`STEM_CACHE_BYTES`,
-  about two versions of a 50 s piece of nine tracks, 41 MB a stem); room is made before
-  rendering; a mix's own stems always stay. Decision: not on disk — float64 stems (the
-  tolerance needs them) would be ~370 MB a version, and a restarted studio pays one render.
-  Each stem also keeps its power per 50 ms.
-- **A render** (`StudioApp.render`): parse, stems (kept / scaled / rendered), mix, WAV, facts
-  file; `timing` (`tracks` rendered now with seconds, `scaled`, `stems`, `mix`, `write`,
-  `listening_mix`, `narration`, `total`). **Late facts**: the loudness, true peak and energy
-  curve (1.6 s of work) are worked out after the answer, on one worker, bar by bar and block by
-  block, giving way to any render (it waits until none has run for 0.3 s; only the render last
-  asked for: older jobs are dropped) — `GET /api/facts` waits for them; the page dims the last
-  energy curve meanwhile. `STUDIO_RENDER_VERSION` 3.
-- **Mute / solo** remix the kept stems at the whole's gain and length: a one-shot's tails stay
-  (fixes Step 194's gap). **Under narration** (`studio_app/narration.py`): `<name>.n.wav` from
-  the render or listening mix (its WAV read back, at −28 LUFS): the shipped narration sample
-  (`check.NARRATION_SAMPLE`, 20 s) repeated from the piece's start, the music ducked with
-  `check.duck_gain_db` (schu-video-generator's default ducking) over `check.speech_spans`, voice and music at
-  a video's balance, both raised by one gain that puts the voice's true peak at −1.5 dBTP
-  (+3.5 dB; the same for every version: A/B under narration is level-matched). The status line
-  says so. Sections and loops work as without it (`<name>.n-<section>.wav`).
-- **Meters** from the audio: each stem's RMS per 50 ms (`meters` in the render's facts, dBFS as
-  heard: stem × mix gain × audition gain, before the master filter; floor −60), drawn −48..−6 dB
-  with a fast rise and a 0.8 fall per frame; a muted track's meter rests.
-- **Playing on** (`player.js`): a new source while playing is loaded in a second `<audio>`,
-  seeked 0.15 s ahead of the moment playing, started when the playing one gets there and
-  cross-faded over 60 ms; the playing element always has the id `audio` (the other
-  `audio-next`). Measured offset between the two at the fade: within ±10 ms in all 30 swaps of
-  the measurement below. Stopped, or a seek, switches at once as before. `data-switching` /
-  `data-swaps` / `data-swap-drift` on `<body>` for tests.
-- **Section-only render (decision: not built)**: a looped section is cut from the whole remix
-  (instant once mixed); rendering only a section's notes would not sound as in the piece at its
-  edges (tails, holds, the circular reverb and filters of a loop) and would compete with the
-  whole's render for the two cores. The slow case is a heavy track (a filtered pad: 1–2.4 s
-  alone); a preview of it is a later option.
-- **Latency** (two cores; "server": the edit and render calls, no browser; "heard": from the
-  click or Enter in headless Chromium on the same cores until the new audio plays at the same
-  moment; `<scratchpad>/s196/latency.py`, `shots.py`):
-
-| edit | momentum server / heard | tidewater | time_of_flight |
-|---|---|---|---|
-| load (every track) | 1.8 s / 4.0 s page | 2.0 / 4.4 | 6.6 / 9.6 |
-| slider on a light track (hat decay) | 0.57 / 1.11 | 0.84 / 1.59 | 0.95 / 1.55 |
-| slider on the heaviest track (pad tone) | 1.53 / 2.11 | 1.33 / 2.05 | 3.21 / 4.38 |
-| steps of one track (a kick cell) | 0.62 / 1.28 | 0.90 / 1.48 | 0.90 / 1.70 |
-| volume of a track (kept stem scaled) | 0.60 / 1.13 | 0.83 / 1.53 | 0.81 / 1.64 |
-| mute | 0.32 / 0.68 | 0.48 / 0.93 | 0.47 / 0.91 |
-| solo | 0.29 / 0.61 | 0.39 / 0.91 | 0.41 / 0.91 |
-| back to a mix made before | 0.01 / 0.41 | 0.01 / 0.39 | 0.01 / 0.38 |
-| under narration on | 0.67 / 0.99 | 0.70 / 0.70 | 0.69 / 0.67 |
-| tempo +4 (every track) | 3.1 / 4.1 | 3.1 / 4.1 | 17.2 / 21.8 |
-
-  Before (Step 194): every edit a whole render (momentum 3.1 s, time_of_flight 9.2 s; 5–7 s
-  with the browser), every mute 2.3–8.2 s. Single-track edits now play in 1.1–1.7 s with the
-  browser (0.6–0.95 s of server work), under the 1.5 s aim for momentum and at it for the
-  53 s pieces, whose mix alone is ~0.75 s (their length, 2,559,744 samples, has the factor 101:
-  a slower FFT). A heavy track's own render stays (time_of_flight's pad 2.4 s, arp 1.8 s). **A
-  finding for later**: tempos whose piece length has a large prime factor make every FFT of the
-  renderer 5–12× slower (time_of_flight at 112 BPM: 2,468,352 = 2⁹·3·1607; the swept filters
-  then take 4–5 s a track and 2.2 GB) — the 17 s above; it affects every render of such a
-  score (videos too), not only the studio.
+- **Stems** (`vidgen.studio.render`, not in `__all__`): `render_track_stem(score, name,
+  fast_fft=False)` → `TrackStem` (the track alone, float64, before master filter and level; its
+  left-out notes); `mix_track_stems(score, stems, warnings=None, whole=None, threads=1,
+  fast_fft=False)` → `(float32 audio, MixFacts(gain, samples))`: summed in the order given, master
+  filter, level measured on the mix (`music._level_gain`; `_finish(x, gain)`); with `whole` (a
+  listening mix) the whole piece's gain and length. `render_music_stems` is built on them.
+- **Exactness** (decision): `render_music_score` stays unchanged (it adds plain tracks' notes
+  straight into the piece; stems sum first, so only addition order differs). Contract: the remix
+  equals `render_music_score` within **1e-9** with the same warnings, and the **studio's 16-bit
+  WAV is byte-identical** (`tests/test_studio_stems.py`). Exports, videos and beds use
+  `render_music_score` itself; making it sum stems would move bed and template samples.
+- **Loudness**: stems are never normalised; the mix is measured (−28 LUFS); listening mixes reuse
+  its gain (`mix_gain`). The master filter's two channels and the loudness's 10 s blocks run on two
+  threads (bit-identical); tracks render one at a time (memory).
+- **Stem key** (`stems.track_keys`): SHA-256 of the score's top-level data except `title`,
+  `description`, `master`, `tracks`; the track's name and spec; for a ducking track the trigger's
+  **hit inputs** only (`steps`, `accent`, `play`, `rest`, `only`, sections' `steps` / `accent`);
+  `STEM_RENDER_VERSION` (1); vidgen's version. A **volume-only change** of a plain volume
+  (`plain_volume`) scales the kept stem (everything after volume is linear).
+- **Cache** (`StemCache`): in memory, least recently used out past `STEM_CACHE_BYTES` (768 MB); a
+  mix's own stems stay. Decision: not on disk (float64 stems are hundreds of MB a version). A score
+  whose stems do not fit is **streamed** (`score_stems`, `StemSet.streamed`, `get`): mix and check
+  take one stem at a time.
+- **Late facts** (loudness, true peak, energy) are computed after the answer on one worker that
+  gives way to renders (waits until none ran for 0.3 s; only the latest render's).
+- **Under narration** (`narration.py`): `<name>.n.wav`: `check.NARRATION_SAMPLE` repeated, music
+  ducked by `check.duck_gain_db` over `check.speech_spans`, both raised by one gain putting the
+  voice's true peak at −1.5 dBTP (level-matched across versions).
+- **Meters**: each stem's RMS per 50 ms as heard (× mix gain × audition gain, before the master
+  filter; floor −60).
+- **Playing on** (`player.js`): a new source loads in a second `<audio>` (`audio-next`), seeked
+  0.15 s ahead, started at that moment, cross-faded over 60 ms; the playing one is always id
+  `audio`.
+- **Section-only render** (decision: not built): it would not sound as in the piece at its edges
+  and would compete with the whole's render.
 
 ### 94.15 Step 197: the check panel, versions, A/B, exports
 
-- **Advice as edits** (`vidgen.studio.check`): a line of advice may be a `Fix` — a `str` (the
-  words exactly as before) carrying `edits`, `(label, ops)` pairs whose ops are value edits
-  `{op: set, path, value}` (paths as a problem's `where`, the studio's `edits.py` vocabulary).
-  `Finding.edits` collects them as `{fix, label, ops}` (`fix`: the line's index). Mechanical
-  advice only: a track's volume (whole or per section, as `_volume_text` words it; none when a
-  volume curve is in the way), an octave up (when every part plays one octave, ≤ 8), a
-  `lowpass` / `highpass` on a track (when no part has one), `master.lowpass: 6000`, a build's
-  volume ramp or filter sweep, a riser added (`riser`, else `riser_2`… at volume 6), a riser
-  raised. "Bring in a part", "add a part", a shorter decay are words only. **The CLI is
-  unchanged**: `music_check_text` and `check_dict` (the `--json`) give the same output (checked
-  byte for byte on the 17 templates and eight bad scores before and after,
-  `<scratchpad>/s197/baseline.py`); the edits are read from `Finding.edits` by the studio.
-- **Entry point** (decision): `check_music_score(score, hop, tracks=None, mix=None,
-  between=None)` — `tracks`: the stems already rendered (`render_track_stem`, score order) so
-  nothing is rendered again; `mix`: their mix and gain when made; `between`: called between the
-  check's steps (each track, the measures, tempo, key) and may raise to stop. Without them it is
-  the check as before; with them the same report (tested equal, `check_dict` minus timings).
-- **The studio's checker** (`studio_app/checks.py`, `Checker`): one worker; `POST /api/check`
-  asks for a version's check (`wait` long-polls up to 60 s): kept in `checks/<render key>.json`
-  + `-check.png` it answers at once (`CHECK_VERSION` and `STUDIO_CHECK_FORMAT` must match),
-  else the job starts once no render has run for 0.4 s, takes the kept stems under the render
-  lock (rendered only if the cache dropped them) and the mix of the last two renders
-  (`StudioApp._mixes`), and between its steps waits while a render runs and stops
-  (`superseded`) as soon as another version's check is asked for — so a check never competes
-  with an edit's render and a burst of edits checks only the last version. Measured on
-  `momentum`: the check 2.8 s after the render (the CLI's 4.1 s includes rendering), a kept one
-  10 ms. The page asks 0.5 s after a render of the current version plays (not for A).
-- **The panel**: verdict (✓ / • / !) and headline numbers (voice range share, bass share, highs
-  dB, each lift / build's dB, loudness; coloured by their finding's level, the finding's words
-  as the tooltip); **details** (remembered) shows the spectrogram (`spectrogram_image`, its
-  natural size, at most the column's width) with the section marks and a playhead (`image.left`,
-  `px_per_second` in the answer; a click seeks), the advice per finding with one **Apply:
-  <label>** button per edit (disabled when the check is of another version), the full report
-  (`music_check_text`). An older check stays dimmed (`.stale`) while the new one is made;
-  `data-checking` on `<body>`. **Apply** (`POST /api/check/apply {version, key, edit}`): the
-  kept check's ops applied to that version (its notes must still have the key) as the next
-  version, `origin: check`, label `check: <label>`.
-- **Versions** (`session.py`): `undo` (to the parent; the version left pushed on `redo`),
-  `redo` (only when the top of `redo` is a child of the current one), `set_current` (keeps the
-  redo trail only when it is its next step), `add_version` clears `redo` (a branch; nothing is
-  deleted), `update_version` (label 1–120 characters, `starred`). The page's menu: newest first,
-  label, time, "from vN" when the parent is not the version before, versions off the current
-  branch dimmed, ★ / ✎ / A/B per row, earlier sessions below (`list_sessions`, reopened by
-  `POST /api/open`). Undo / redo buttons and Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside text fields.
-- **A/B** (the page): A is the session's first version (the preset's template or the text
-  given) or the version picked with the row's A/B; the top-bar button toggles A and B; the
-  badge next to it says `A v1 original` or `B v5 current`; `data-ab` on `<body>`. A plays
-  through the same render call (`playingVersion()`), so the player swaps at the same moment and
-  every render is level-matched; a new version, undo or redo goes back to B.
-- **Exports** (`studio_app/exports.py`): `render_music_score` itself (the video's samples, under
-  the render lock); length `once` (a loop's pass, a one-pass piece with its ending), `loops` N
-  (1–64, loop pieces only: tiled exactly), `seconds` N (1–1800: looped, or a one-pass piece cut
-  or padded; a 2 s fade-out when the music goes on past the end); level `video` (−28 LUFS) or
-  `listening` (+12 dB, lowered to keep the true peak ≤ −1 dBTP). Files go only to the session's
-  `exports/` (names `<title slug>-v<N>[-<length>-<level>].<ext>`, matched by a pattern before
-  serving; MP3 through `listen.write_mp3` to a `.partial-` name, then renamed) and are served
-  by `GET /download/<name>` with `Content-Disposition: attachment`; the browser saves them
-  where the person says. YAML: the version's text as written.
-- **Save to project** (`save_to_project`): no project → a `VidgenError` that says how to start
-  the studio with one; the name `^[a-z0-9][a-z0-9_-]{0,63}$`; a built-in bed's name refused
-  with the reason (Step 188: `music: <bed>` would be ambiguous) and a suggestion (`<bed>_mine`);
-  an existing `assets/music/<name>.yaml` (or `.yml`, which is then the file written) only with
-  `overwrite` (the page asks); `assets/music` must resolve inside the project (links followed);
-  written atomically; the answer carries the snippet `music: <name>` (the page offers Copy).
-- **Fixes on the way**: menus closed by a click whose target was re-rendered (now judged by
-  `composedPath()`); a rename being typed survives the menu re-rendering.
-- Not done: renders and exports are not pruned (§94.10); the check is of the score as written
-  (mute / solo / narration are listening aids); a check made while an older stem was scaled for
-  a volume edit differs from a fresh one within the stems' tolerance (§94.14).
+- **Advice as edits** (`vidgen.studio.check`): an advice line may be a `Fix` (a `str` carrying
+  `edits`: `(label, ops)` with `{op: set, path, value}`); `Finding.edits` lists `{fix, label,
+  ops}`. Only mechanical advice: a volume (not past a volume curve), an octave up (one octave
+  everywhere, ≤ 8), a track `lowpass` / `highpass` (when none), `master.lowpass: 6000`, a build's
+  ramp or sweep, a riser added (`riser`, `riser_2`…, volume 6) or raised. CLI output unchanged.
+- **`check_music_score(score, hop=None, tracks=None, mix=None, between=None)`**: reuse rendered
+  stems / mix; `between` is called between steps and may raise to stop. Same report either way.
+- **Checker** (`checks.py`): one worker; kept as `checks/<render key>.json` + `-check.png` while
+  `CHECK_VERSION` and `STUDIO_CHECK_FORMAT` (1) match; starts once no render ran for 0.4 s, uses
+  kept stems under the render lock, yields to renders, stops (`superseded`) when another version's
+  check is asked; `wait` ≤ 60 s. Apply → next version, `origin: check`, label `check: <label>`.
+- **Versions** (`session.py`): `undo` (to the parent, pushed on `redo`), `redo` (only when the top
+  of `redo` is a child of current), `set_current` (keeps the trail only when it is its next step),
+  `add_version(current=True)` clears `redo`, `update_version` (label 1–120 chars, `starred`),
+  `list_sessions`.
+- **Exports** (`exports.py`): `render_music_score` itself under the render lock; `length` `once`,
+  `loops` (1–`MAX_LOOPS` 64, loop pieces only, tiled exactly) or `seconds` (looped, or cut /
+  padded; 2 s fade-out when the music goes on); at most `MAX_SECONDS` 600 s; `level` `video`
+  (−28 LUFS) or `listening` (+12 dB, lowered to keep true peak ≤ −1 dBTP); made block by block into
+  one float32 array. Names `<title slug>-v<N>[-<length>-<level>].<ext>` in `exports/`; MP3 via
+  `listen.write_mp3` to a `.partial-` name then `replace_file` (retried on Windows; partial removed
+  on failure); served as attachments. YAML is the version's text.
+- **Save to project** (`save_to_project`): no project → `VidgenError`; name
+  `^[a-z0-9][a-z0-9_-]{0,63}\Z`, not a Windows device name (`exports.WINDOWS_RESERVED`), not a bed
+  (§93.10; suggests `<bed>_mine`); existing `.yaml` / `.yml` only with `overwrite`; `assets/music`
+  must resolve inside the project; atomic; answers with `music: <name>`.
+- The check is of the score as written (mute / solo / narration are listening aids).
 
 ### 94.16 Step 198: listening notes and "Ask an agent"
 
-- **Notes** (`studio_app/notes.py`, `NoteBook`, the session's `notes.json`): `{id n1.., text (1–500
-  characters), seconds, bar, beat, section, bar_in_section, frac, version, created, status
-  open|resolved, answers}`; `locate(outline, seconds)` finds bar / beat / section from the
-  outline (the page shows the same before saving). **Carried over** (decision): notes belong
-  to the session, not a version; every state places them in the version shown (`at`, by
-  `place`): the same bar of the same section at the same point in the bar, so a note follows
-  its music when a section before it changes length; its section shorter → its last bar; its
-  section removed → the same bar number of the piece (or the last). `moved` says so in words
-  ("was bar 24 on v1; the sections before it changed length", "the b is 1 bar now: moved to its
-  last bar", "the b is gone: kept at bar 4 (in the c)").
-- **The page**: a notes lane under the timeline (click: a note at that moment; pins coloured by
-  section, hollow when resolved, a dot when an agent answered), **+ note** and the **N** key
-  (the moment playing, playing goes on); an editor popover (Enter keeps, Esc closes; for a
-  note: ▶ from here, resolve, delete); the third column has tabs **Score file | Notes n**: the
-  notes in the piece's order with their place, `moved`, the agents' lines (`proposed in v7`,
-  `kept in v7`, `discarded`), ▶ (from 1.5 s before), ✓, ✎, ×. Notes are made on the version
-  heard (A while A/B plays A).
-- **The hand-off** (`studio_app/agent.py`, `POST /api/ask`, the session's `request.json`, id
-  `r<time>-<hex>`): base version, its score text, the open notes placed in it, the kept check of
-  it (`check_summary`: verdict, level, headline, findings with advice, the report text — `null`
-  when not checked yet), the parent → base diff (unified, ≤ 80 lines, with the parent's label),
-  the instruction (one focused change per note, keep the rest and the comments, one line per
-  note, full score, don't make the check worse) and the reply format. `prompt_text` makes it
-  one Markdown prompt for chat assistants and the provider.
-- **Proposals** (`make_proposal`, `proposals.json`): every answer is validated with `check_text`.
-  A valid score that differs from its base becomes a version (`origin: agent`, parent the base,
-  label `agent: <summary>`) added **without** becoming current (`add_version(current=False)`),
-  its lines attached to the notes (`answers`, status pending); anything else is an `invalid`
-  proposal with its problems (no version; "the same as vN" and "holds no score" included).
-  **Keep** makes its version current and resolves the notes it explained; **Discard** renames
-  the version `discarded · …` (versions are never deleted); an invalid one can only be
-  dismissed. The banner above the tracks shows pending and invalid proposals: "An agent
-  proposed v7 from v6 · through MCP (claude) · 'summary'", one line per note with the note's
-  place and words, notes it left without a line, **▶ A/B v7 vs v6** (A = the proposal, B = the
-  current version, the Step 197 A/B), **Keep v7**, **Discard**.
-- **MCP** (decision kept from §94.8: through the disk). Four tools in `vidgen mcp`, run in the
-  server's process (file reads and one atomic write; no Manim) through `anyio.to_thread`:
-  `studio_sessions` (`agent_sessions`: sessions of `studio_folders(root)` — the root's
-  `build/studio`, `build/studio` of each folder directly under the root (not through a link out
-  of it) and the cache folder's `studio/` — the open one first, with open notes, the hand-off
-  and whether it was answered, pending proposals, the studio's address), `studio_read`
-  (`agent_read`: the hand-off of the request's base, else the current version, with the
-  version list and how to answer), `studio_check` (writes the score to `build/mcp/studio/` under
-  the root and runs `vidgen music check` like `music_check`, `compare` against the base), and
-  `studio_propose` (`agent_propose`: note ids checked, the score validated — problems come back
-  as the tool's error and nothing is written — an unchanged score refused, then
-  `inbox/<time>-<hex>.json` written atomically; the answer names notes left without a line and
-  whether a studio has the session open). **The root policy** (§62) confines every other tool
-  to the root; these four also reach the cache folder's `studio/`, where a studio started
-  without a project keeps its sessions, and write only `inbox/` files there (session ids are
-  checked by pattern before a path is built).
-- **Polling** (`GET /api/session?since=R`, every 1.5 s while the tab is visible): `poll` turns
-  inbox files into proposals (oldest first; an unreadable one becomes an invalid proposal
-  saying so; each file is removed once recorded) and answers `{revision, unchanged}` or the
-  whole state. `revision` lives in `session.json` and every save bumps it (`touch` for notes and
-  proposals). The page keeps the version shown when the current one did not change (only the
-  version list, notes and proposals are redrawn) and ignores answers older than what it shows.
-- **Copy prompt / Paste reply**: the prompt to the clipboard (a textarea fallback); the reply
-  read by `parse_reply`: the ```yaml block (else the largest code block, else the whole text
-  when it reads as a score with `tracks`), `n1: …` lines in the usual shapes (`- **n1**:`,
-  `n2 —`), `summary:`.
-- **The provider** (optional): OpenRouter, the LLM provider vidgen already has (pictures,
-  voices). `ask_openrouter` posts to `/chat/completions` through `httpapi.post_with_retries`
-  (retries, the key scrubbed from errors) with the key from `OPENROUTER_API_KEY` read at that
-  moment (`read_api_key`); the model is typed on the page (remembered in `localStorage`) or
-  given by `VIDGEN_STUDIO_MODEL`. `/api/info` carries `provider {name, key_env, key_set, model,
-  model_env}` (the key's presence only). Without the key the Send button is disabled with how
-  to set it; with it, Send asks to confirm the cost first. Never called in tests (mocked).
-- Public: no `vidgen.api` names; MCP tools `studio_sessions`, `studio_read`, `studio_check`,
-  `studio_propose`; `checks.kept_check`; `StudioSession.add_version(current=)`, `revision`,
+- **Notes** (`notes.py`, `NoteBook`, `notes.json`): `{id n1.., text (1–500 chars), seconds, bar,
+  beat, section, bar_in_section, frac, version, created, status open|resolved, answers}`;
+  `locate(outline, seconds)`. Decision: notes belong to the session; `place` puts them in the
+  version shown at the same bar of the same section and point in the bar (shorter section → its
+  last bar; removed section → the same bar of the piece), `moved` says so.
+- **Hand-off** (`agent.py`, `request.json`, id `r<time>-<hex>`): base version and text, open notes
+  placed in it, its kept check (`check_summary` or `null`), the parent → base diff (≤ 80 lines),
+  the instruction (one focused change per note, keep the rest and comments, a line per note, full
+  score, don't worsen the check), the reply format; `prompt_text` makes one Markdown prompt.
+- **Proposals** (`make_proposal`, `proposals.json`): validated with `check_text`; a valid, changed
+  score becomes a version (`origin: agent`, parent the base, label `agent: <summary>`) **not**
+  made current (`add_version(current=False)`); anything else is an `invalid` proposal. Keep makes
+  it current and resolves its notes; Discard relabels it `discarded · …` (versions are never
+  deleted).
+- **MCP tools** (`vidgen mcp`, via `anyio.to_thread`): `studio_sessions` (`agent_sessions` over
+  `studio_folders(root)`: the root's `build/studio`, each direct sub-folder's `build/studio` (no
+  links out), the cache folder's `studio/`), `studio_read` (`agent_read`), `studio_check` (writes
+  only `<root>/build/mcp/studio/<id>-v<N>.yaml` / `-proposal.yaml`), `studio_propose`
+  (`agent_propose`: note ids and score checked — problems are the tool's error, nothing written —
+  unchanged refused, then `inbox/<time>-<hex>.json` written atomically), `studio_variations`
+  (§94.17). Beyond the root policy (§62) they reach only the cache folder's `studio/`, writing only
+  `inbox/` there; ids are checked before paths are built; a session folder linking out of its
+  studio folder is refused (`agent._contained`).
+- **Polling** (`?since=R`, 1.5 s while visible, 4 s offline): `poll` turns inbox files into
+  proposals oldest first (unreadable → invalid proposal) and removes each once recorded; `touch`
+  bumps `revision`.
+- **Paste reply** (`parse_reply`): the ```yaml block, else the largest code block, else the whole
+  text if it reads as a score with `tracks`; `n1: …` lines; `summary:`.
+- **Provider** (optional, OpenRouter): `ask_openrouter` → `/chat/completions` via
+  `httpapi.post_with_retries` (`secret=` scrubbed); `OPENROUTER_API_KEY` read when sending
+  (`read_api_key`), never stored, logged or sent to the page (`provider_info` only says whether it
+  is set); model from the page or `VIDGEN_STUDIO_MODEL`. `/api/proposal/send` needs `confirm:
+  true`. Never called in tests (the tests clear the key and stub the call).
+- Public: the MCP tools; `checks.kept_check`; `StudioSession.add_version(current=)`, `revision`,
   `touch`.
 
 ### 94.17 Step 199: variations
 
-- **Operators** (`studio_app/variations.py`): pure functions `op(piece, v)` of the parsed score
-  (`Piece`: text, data, checked score) giving a `Variation(kind, name, label, ops)` or `None`
-  when they change nothing for the piece; `ops` are `edits.py` value edits, so comments and
-  layout stay (a list of steps strings is edited item by item). `v` (0–2) picks a variant. No
-  random numbers: the same text gives the same variations. Four kinds:
-  - **harmony**: `revoice` (every written voicing `{chord, notes}`: the lowest note an octave up,
-    or the top one down; the spelling kept, a chord whose moved note would double another left
-    alone), `substitute` (one numeral of a progression written as text — not the first —
-    replaced by a relative sharing two tones: minor `VI↔iv`, `VII↔v`, `III→v`, `i→VI`; major
-    `IV↔ii`, `V↔iii`, `vi→IV`, `I→vi`; its suffix dropped), `invert` (a chord with a real third
-    in first inversion, `VI → VI/3`), `reseed` (another seed when a pad or a reverb uses it);
-  - **pattern** on the **figure** (the busiest pitched track with its own steps that is not a
-    pad or the bass — a bass instrument in octave 2 or lower, a `sub`, or named `bass` —
-    degrees or voicing notes ranked before note names, at least four notes a bar): `rotate`
-    (each bar's cells turned 1–3 steps; the accents then fall on other notes), `reaccent`
-    (`3+3+2`, `4+4+2+3+3`, `3+3+3+3+4`, `2+2+3+3+2+2+2`, `4`: the first that fills its bars and
-    differs), `swap_degrees` (3↔5, 5↔8, v2↔v3, 1↔8: the first that changes it), `hat_touch` (soft
-    ghost notes on a hat's free off-sixteenths, or its soft hits taken out);
-  - **mix**: `tone` (darker: master low-pass ×0.72, at most 6000; pads' `tone` ×0.7; the hat −2
-    dB — brighter: ×1.4 / ×1.4 / +1.5 dB; the other way when one has no room; frequencies
-    rounded to 10 / 50 Hz, kept in the settings' ranges), `balance` (the top voice +2.5 dB and
-    the pads −2 dB, or the other way; only tracks whose volume is one number);
-  - **energy**: `sparser_intro` (the beat drums — and with `v` 1 the bass — rest in the first
-    section, when it is at most half the piece and something pitched still plays; each track
-    only if the score stays valid), `stronger_lift` (the peak — a section named lift, drop,
-    release, chorus, peak, else the one where most tracks play, never the first — its drums
-    +2 dB there, hats only when nothing else; or the pads' tone ×1.5 there), `build_in` and
-    `breathe` (one-section pieces written with `bars:`: the drums fade in from 18 dB under over
-    the first half — a volume curve; the pads dip 5 dB to the middle and back).
-  **Tempo and key are never changed** (a tempo whose length has a large prime factor makes the
-  renderer's FFTs 5–12× slower, §94.14; a tempo change also re-renders every track).
-- **Choosing four** (`make_variations(text, shuffle, first)`): per kind, every valid candidate
-  (each operator's first variant, then their second ones...; applied, checked with `check_text`,
-  a render key different from the base's, no duplicate text), turned by `shuffle`; then one per
-  kind in the order harmony, pattern, mix, energy (`first`: that kind first — "more like this"
-  starts with the kind of the candidate it varies), then the kinds' next ones when a kind has
-  none. Measured: 0.1–1.7 s for a template (`check_text` of each candidate). All 17 templates get
-  four valid, different variations of at least three kinds (tested), e.g. `momentum`: chords
-  re-voiced (G2 → G3), ostinato turned by a step, darker mix (low-pass 4500 → 3250, pad tone
-  2600 → 1800, hat −2 dB), stronger turn (kick, clap +2 dB); `tidewater`: the lift's i → VI
-  (Em → C), the arp turned, darker, stronger lift. `calm` (one pad) gets re-voiced, darker, the pad
-  breathing and another seed.
-- **Batches** (`VariationBatches`, the session's `variations/b0001/`: `a.yaml`…`d.yaml` and
-  `batch.json` — root version, base (`{version}` or `{batch, letter}`), shuffle, the chain of
-  labels it descends from, state `running | done | stopped`, progress, per candidate
-  `{letter, kind, name, label, status waiting|rendering|rendered|checking|done|failed, key,
-  render, check, kept}`, timing). One worker thread: a new batch stops the one under way at its
-  next step. It renders the four first (so they play as soon as possible), each through
-  `_render_whole` into the session's render cache — the stems of unchanged tracks are reused,
-  a volume-only change scales a kept stem (§94.14) — without asking for the late facts (they
-  would push the playing render's aside), then checks each through a **second `Checker`**
-  (the current version's check and a batch's never supersede each other; both give way to
-  renders), kept in `checks/` like any check (`check_brief`: verdict, level, headline,
-  picture, counts).
-- **Keep** (`keep_variation`): the candidate's text as the next version, `origin: variation`,
-  parent the batch's root version (also for "more like this" chains), label `variation: <the
-  chain's labels>; <its label>`, current; the batch records `kept` (a second Keep goes to it).
-  **Decision: candidates not kept never become versions** (the version list stays the person's
-  history; the candidates stay on disk in `variations/`). A candidate plays through
-  `/api/render {variation}` like a version (sections, mutes, narration work), `version` `null`.
-- **The page** (`variations.js`): **Variations** in the top bar; a panel under the timeline:
-  "Variations of v1" (or "more like c of b0001", "after: <chain>", "shuffle N"), progress
-  ("rendering b (2/4)", then "done · rendered in 5.5 s, checked in 13.2 s"), **Shuffle**, ×; a
-  card per candidate coloured by kind (a class: the CSP allows no inline styles): letter, kind,
-  label, verdict and headline numbers, the spectrogram (58 px, cropped), what was rendered,
-  **▶ Play** / **■ back** (`state.variation`: the player swaps at the same moment, the A/B badge
-  says "▶ variation b · …", `data-ab="V"`), **Keep** (then "Go to vN"), **More like this**. Polls
-  `GET /api/variations` every 0.6 s while running; `data-variations` on `<body>`. A new version,
-  undo / redo, A/B or a new batch stops playing a candidate.
-- **MCP**: `studio_variations(session?, version?, shuffle?)` (`agent_variations`): the four as
-  whole scores with labels; nothing rendered or written — a starting point to change further
-  and `studio_propose`.
-- **Timings** (two cores, headless Chromium, `<scratchpad>/s199/shots.py`, `smoke.py`):
-  `momentum` from the click: the first card playable 3.5 s, all four 6.5–7 s, all checked
-  19–20 s (renders 4.4–5.5 s: re-voiced 1.7 s — every track, as any chord change —, ostinato
-  0.5 s, darker 1.5 s, stronger turn 0.6 s; checks 2.7–3.8 s each); "more like this" and
-  shuffle 20–21 s; `tidewater` renders 4.9 s, checks 20 s (4–6 s each). A candidate already
-  rendered plays at once (from the cache) and the playing position carries over.
-- Public: no `vidgen.api` names; MCP tool `studio_variations`; `StudioApp.render(variation=)`,
-  `make_variations`, `variation_batch`, `keep_variation`.
+- **Operators** (`variations.py`): pure `op(piece, v)` on the parsed score (`Piece`) →
+  `Variation(kind, name, label, ops)` or `None`; `ops` are value edits; `v` (0–2) a variant. **No
+  random numbers.** Kinds: **harmony** `revoice`, `substitute` (a non-first numeral of a text
+  progression to a relative sharing two tones: minor `VI↔iv`, `VII↔v`, `III→v`, `i→VI`; major
+  `IV↔ii`, `V↔iii`, `vi→IV`, `I→vi`), `invert`, `reseed`; **pattern** on the figure (busiest
+  pitched non-pad, non-bass track with ≥ 4 notes a bar) `rotate`, `reaccent`, `swap_degrees`,
+  `hat_touch`; **mix** `tone` (darker ×0.72 master low-pass ≤ 6000, pads ×0.7, hat −2 dB; brighter
+  ×1.4 / ×1.4 / +1.5 dB), `balance`; **energy** `sparser_intro`, `stronger_lift`, `build_in`,
+  `breathe`. **Tempo and key are never changed** (every track re-renders; slow FFT lengths).
+- **Choosing four** (`make_variations(text, shuffle, first)`): valid candidates per kind (applied,
+  `check_text`, a new render key, no duplicate text), turned by `shuffle`, one per kind in the
+  order harmony, pattern, mix, energy (`first` leads: "more like this"), then the kinds' next.
+  Every template gets four valid, different variations of ≥ 3 kinds (tested).
+- **Batches** (`VariationBatches`, `variations/b0001/`: `a.yaml`…`d.yaml`, `batch.json` with root
+  version, base, shuffle, label chain, state `running | done | stopped`, per candidate `{letter,
+  kind, name, label, status waiting|rendering|rendered|checking|done|failed, key, render, check,
+  kept}`). One worker; a new batch stops the old. Renders all four first (`_render_whole`, stems
+  reused, no late facts), then checks through a **second `Checker`** (never supersedes the
+  current version's check; both yield to renders). A batch left `running` by a closed studio reads
+  `stopped`.
+- **Keep** (`keep_variation`): next version (`origin: variation`, parent the batch's root, label
+  `variation: <chain>; <label>`), current. **Decision: candidates not kept never become versions**
+  (they stay in `variations/`). A candidate plays via `/api/render {variation: "b0001/c"}`.
+- MCP `studio_variations(session?, version?, shuffle?)` (`agent_variations`): the four scores;
+  nothing rendered or written.
+- Public: `StudioApp.render(variation=)`, `make_variations`, `variation_batch`, `keep_variation`.
 
 ### 94.18 Step 200: docs and polish
 
-- **Keyboard** (`app.js` `wireKeys`, the list in `#shortcuts`, **?**): Space play / pause, N a
-  note (`notes.js`), L loop the section under the playhead (again: the whole piece), M / S
-  mute / solo the selected track, V variations, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (`versions.js`),
-  ? the list, Esc closes it. None act while focus is in an input, textarea, select or
-  contenteditable. **Decision: Space plays unless the focused control was reached with the
-  keyboard** — tracked by the last pointer press vs Tab / arrow key (`focusByPointer`), not by
-  `:focus-visible`, which Chrome turns on at any key press and so cannot tell; a mouse-clicked
-  button's Space keyup is cancelled so it is not pressed too. A track row reached with Tab keeps
-  Space to select itself.
-- **Window sizes** (`studio.css`): ≥ 1320 px three columns; 980–1320 px the tracks beside a pane
-  with tabs **Inspector / Score file / Notes** (`#pane-tabs`, `data-pane` on `.work`, remembered
-  in `localStorage`, ← → between tabs); < 980 px one column, the tabs below the tracks, the page
-  scrolls. The studio grid gives the work row at least 300 px, so with a proposal, variations
-  and the check details open on a short window the page scrolls instead of squeezing the tracks
-  away (a bug the 1440 × 900 screenshots showed). Checked at 1920, 1440, 1280, 1024 and 420 px:
-  no sideways scroll.
-- **Contrast**: an in-page audit (every visible text against its first opaque background,
-  WCAG ratio) over both themes, every width and the panels (variations, a proposal, check
-  details, export, notes): no text under 4.5:1 after darkening the light theme's secondary /
-  tertiary (`#B13C0B`, `#136F37`), comments (`#636A74` light, `#8B94A2` dark), and removing an
-  `opacity` on the inspector's group notes. Light-theme sections and the energy area are
-  lighter tints. Every control has a name (an audit found none without); `:focus-visible`
-  outlines in `--focus`.
-- **First-run hint** (`#hint`, four steps: preset and Space, change one thing, check and A/B,
-  notes / agent / variations / export): shown until **Got it** (`localStorage`
-  `vidgen-studio-hint-seen`).
-- **The server gone** (`api.js` `onConnection`): a `fetch` that fails (not an HTTP error) marks
-  the studio offline: a banner says it is not answering, how to start it again, that versions
-  are on disk, with **Retry now**; the notes poll keeps looking every 4 s (1.5 s otherwise, none
-  while the tab is hidden). When it answers, a studio started again (no session open) reopens
-  the page's session (`reconnect`), so the piece carries on. A render error says "could not
-  render: …" and the last good render keeps playing.
-- **Gaps of 199 closed**: the open batch is remembered per session (`localStorage`) and shown
-  again after a reload; a batch a closed studio left `running` reads as `stopped` (its
-  candidates still play: rendered on demand); `GET /api/variations` (no `batch`) lists the
-  session's batches, newest first, with what they varied and what was kept — **Batches ▾** on
-  the panel and the version menu show them, so candidates not kept can be heard and kept later.
-  The last hand-off is shown again after a reload (`GET /api/ask` → `last_handoff`), with **Ask
-  again (about vN)**.
-- **Disk rule** (`studio_app/cleanup.py`; decision: renders are a cache, nothing else is): a
-  session keeps the renders (all files whose name starts with the render key: the WAV, its
-  facts, sections, listening mixes) of its current, first and starred versions, its last
-  `KEEP_VERSIONS` (8) versions and its newest batch's candidates, most wanted first, capped at
-  `CAP_BYTES` (1 GB; the current, first, starred and just-played renders are never dropped by
-  the cap); exports older than a day go (`EXPORT_AGE`). Run after a new render at most once a
-  minute (`_auto_clean`, under the render lock); at start for every session with no recent
-  versions kept; **Clean up** in the version menu (`POST /api/cleanup`: the open session by the
-  rule, the others by the start rule, exports older than an hour; `GET /api/disk` the sizes);
-  `vidgen studio --clean [PROJECT]` (`clean_studio_folder`) without a server. Never removed:
-  versions, notes, hand-offs, proposals, candidates' texts, checks, `session.json`. A file that
-  cannot be removed (streamed, on Windows) is counted as busy and left for next time.
-- **Docs**: CONFIG "Music studio" (start, the page, editing, keyboard, disk, sizes and themes,
-  errors, security), the author guide (when to suggest the studio; sessions handed over MCP),
-  README (a section and `docs/images/studio.png`, 1440 × 900 quantised to 160 colours, 74 KB;
-  no GIF: a still says it and stays light), COOKBOOK-MUSIC §7 (a person and an agent: preset →
-  notes → ask → A/B → variations → save), the Listen page (a paragraph after the score pieces,
-  in `listen.page_text` and the committed page alike), CHANGELOG "Unreleased".
-- Public: no `vidgen.api` names; `vidgen studio --clean`; `vidgen.studio_app.clean_studio_folder`;
-  `StudioApp.last_handoff`, `disk`, `clean_up`, `variation_batches`; API rows `GET /api/ask`,
-  `GET /api/disk`, `POST /api/cleanup`, `GET /api/variations` without `batch`.
+- **Keyboard** (`app.js` `wireKeys`; list in CONFIG): none act in an input, textarea, select or
+  contenteditable. Decision: Space plays unless the focused control was reached by keyboard
+  (`focusByPointer`; `:focus-visible` cannot tell).
+- **Widths** (`studio.css`): ≥ 1320 px three columns; 980–1320 px tracks beside a tabbed pane
+  (`#pane-tabs`, `data-pane`); < 980 px one column; the work row ≥ 300 px tall. Text contrast ≥
+  4.5:1 in both themes; every control named.
+- **Offline** (`api.js` `onConnection`): a failed `fetch` shows a banner; a restarted studio with
+  no open session reopens the page's (`reconnect`). The open batch and last hand-off
+  (`last_handoff`) return after a reload.
+- **Disk rule** (`cleanup.py`; decision: renders are a cache, nothing else is): a session keeps
+  the renders (files starting with the render key) of its current, first and starred versions,
+  its last `KEEP_VERSIONS` (8), its newest batch's candidates and the last `KEEP_PLAYED` (6)
+  renders asked for, capped at `CAP_BYTES` (1 GB; current, first, starred and just-played never
+  dropped); exports older than `EXPORT_AGE` (a day) go. Runs after a render at most once a minute
+  (`_auto_clean`, render lock), at start, on **Clean up** (`POST /api/cleanup`: exports older than
+  `ASKED_EXPORT_AGE`, an hour) and with `vidgen studio --clean [PROJECT]` (`clean_studio_folder`);
+  start-up and `--clean` skip the session a running studio has open (`_running_session`). Never
+  removed: versions, notes, hand-offs, proposals, candidates' texts, checks, `session.json`. Files
+  in use (Windows) are left for next time.
+- Public: `vidgen studio --clean`; `vidgen.studio_app.clean_studio_folder`;
+  `StudioApp.last_handoff`, `disk`, `clean_up`, `variation_batches`.
 
 ### 94.19 Step 201: the review of Phase T
 
-- **Security, checked one attack at a time** (`tests/test_phase_t_review.py`; each is a test):
-  Host must be `127.0.0.1:<port>` / `localhost:<port>` exactly (other names, ports, `[::1]`,
-  case, a missing Host: 403); a POST with an `Origin` from anywhere else (`null`, another port,
-  look-alike names: 403) or not JSON (415); bodies at most 2 MB (413, read nothing) — **fixed**:
-  a negative `Content-Length` made `rfile.read(-1)` wait for the client to close, unbounded
-  (now 400); every 4xx / 5xx answer closes the connection (its body may be unread, so the
-  connection cannot carry another request). **Fixed**: JSON numbers must be finite (Python's
-  JSON reads `NaN` / `Infinity`; a note at NaN seconds made `notes.json` unreadable to strict
-  readers) and whole numbers whole (`version: 1.5`, `true`, `Infinity` were cast or crashed with
-  500). Names that reach the disk: render, picture and export names, session ids, batch ids,
-  letters, note ids, render keys — every pattern now ends in `\Z` (a `$` let a trailing newline
-  through; a query string is decoded, so `?key=…%0A` reached it) and uses ASCII `[0-9]` (`\d`
-  matched other scripts' digits); a section or track name in a score likewise (`vidgen.studio`'s
-  `_NAME`: a name is used in file names). URL paths are never decoded, so `%2e%2e`, `..\`,
-  `C:\`, `\\server\share` and the like all miss the allow-lists (tested on every prefix).
-  **Save to project**: piece names were already plain; **fixed**: Windows device names (`con`,
-  `nul`, `aux`, `prn`, `com0-9`, `lpt0-9`) are refused (`assets/music/con.yaml` is the console
-  on older Windows); a link from `assets/music` out of the project was already refused.
-  **YAML**: `check_text` reads with the safe loader (no object tags) — **fixed**: it looks at
-  the composed document first and refuses one whose anchors / aliases stand for more than
-  `MAX_YAML_NODES` (200 000) values (ten lines of nested aliases as a title took 30 s and
-  gigabytes in the score's checks) and one nested too deeply (a `RecursionError` was a 500);
-  `yaml.compose` (edits, problem lines) now names `SafeLoader` too (nodes only either way).
-  **Fixed**: steps written as a list of lists were a `TypeError` in `patterns.parse_steps` (a
-  500; a traceback in the CLI) — now the steps problem. No shell anywhere; files written
-  atomically (`fileio`), MP3 exports now through `replace_file` (retried while Windows holds the
-  last download) and their partial file removed on failure.
-- **MCP studio tools** (§94.16): they read sessions under the root's `build/studio`, its
-  folders' (links out of the root not followed) and the cache folder's `studio/` — ids checked
-  before any path; **fixed**: a session folder that is itself a link out of its studio folder is
-  refused (`agent._contained`; an agent writes `inbox/` files there). `studio_check` writes only
-  `<root>/build/mcp/studio/<id>-v<N>.yaml` / `-proposal.yaml`.
-- **OpenRouter**: the key is read from the environment when sending, sent only to
-  `openrouter.ai` (`httpapi.post_with_retries`, `secret=` scrubbed from errors), never stored,
-  logged or given to the page (`provider_info` says only whether it is set; tested on `/api/info`,
-  `/api/session`, `/api/ask`). **Fixed**: `POST /api/proposal/send` needs `confirm: true` (the
-  page sends it only from **Send now**), so a cost is never incurred by a request the person did
-  not confirm; and `test_studio_agent.test_routes` could have called the real provider on a
-  machine with `OPENROUTER_API_KEY` set — it now clears the variable and stubs the call.
-- **Windows**: paths are `pathlib` throughout; the browser through `webbrowser`; port 0 with
-  `SO_EXCLUSIVEADDRUSE`; renders are content-named and never replaced, so a file being streamed
-  is never overwritten — **fixed**: a section cut is now made under the render lock (two
-  requests at once wrote it twice; the second replace fails on Windows while the first is being
-  sent); cleaning counts a file in use as busy. **Fixed**: text arriving with `\r\n` (a reply
-  pasted on Windows) is stored with `\n` (`session.normal_text`), so a version reads back as
-  written and "unchanged" is found; exports are the version's text (LF; Notepad reads it).
-  Ctrl+C: measured on Linux with a check under way, the process is gone in 0.14 s (`app.close()`
-  now also stops the late facts at their next block).
-- **Cleaning races** (Step 200's gap): **fixed**: `vidgen studio --clean` and a studio's start-up
-  clean leave alone the session a running studio has open (`open.json`, `_running_session`);
-  the automatic clean keeps the last `KEEP_PLAYED` (6) renders asked for, not only the newest,
-  so an A/B side or a candidate being played is not removed under the page.
-- **Quick FFT lengths (Step 196's finding)**. A circular filter over a buffer of `n` samples is
-  numpy's FFT of length `n`; with a prime factor above ~400 that is 2–5× slower than the same
-  convolution on a quick length (`n = 2⁹·3·1607`, time_of_flight at 112 BPM: 2.7 s a stereo round
-  trip against 0.8 s) and takes far more memory. **Byte-identity is impossible** for a different
-  FFT length (or even scipy's FFT of the same length: other rounding), and the shipped scores use
-  slow lengths themselves (`ascent` 2647, `breakthrough` 1607, a cookbook sketch 2857), so no
-  rule on the length could keep videos' samples. **Decision**: the quick lengths are the
-  **studio's choice only** (`fast_fft`, default off): `effects.CircularFFT(n, fast)` zero-pads
-  to `m = fast_fft_length(2n)` (or 3n for a loop's reverb, whose two buffers both fill `n`),
-  transforms and folds the result back around `n` (what spilled past the end added at the start,
-  what spilled before the start — a zero-phase filter reaches both ways — at the end); the same
-  circular convolution, its error the filters' response beyond `n/2` samples: 5e-15 of the
-  loudest sample on time_of_flight at 112 BPM, ≤ 1e-9 at worst (white noise at the shortest
-  folded length). Used only when `slow_fft_length(n)` (a prime factor above `SLOW_FFT_PRIME` =
-  500; at 101–307 the exact length is still quicker) and `n ≥ 65536`: `swept_filter`, `reverb`,
-  the mix's master filter (`render_track_stem(..., fast_fft)`, `mix_track_stems(..., fast_fft)`;
-  the studio passes `stems.FAST_FFT`). Exports, checks made by the CLI, videos and beds render
-  exactly. Measured: the studio's audition WAV equals the one made from `render_music_score`
-  byte for byte (time_of_flight 112, ascent, breakthrough, tidewater 112, a short test score);
-  the stems' mix equals `render_music_score` within Step 196's 1e-9 (tested).
-  `STUDIO_RENDER_VERSION` not bumped: the 16-bit renders are the same.
-- **Bit-identical memory savings in the renderer** (every template, bed loop, cookbook sketch,
-  test demo and project mix compared by SHA-256 before / after): `swept_filter` works channel
-  by channel (numpy's FFT along an axis is each column's FFT, to the bit) and runs at most
-  `SWEEP_MEMORY` (400 MB) of copies at once (a 5-minute piece's copies one at a time; a
-  50-second piece's still four); `_render_bus` lets go of its groups' buffers once summed
-  (`_Canvas.release`) and blends / applies the gain in place (the same operations).
-- **Long pieces** (a score may be 10 minutes): a 5-minute time_of_flight (×5.7 bars) was killed
-  at 3 GB both in the studio (all nine 235 MB stems held for the mix) and by
-  `render_music_score` itself. Now `score_stems` **streams** a score whose stems do not fit the
-  768 MB cache together (`StemSet.streamed`, `get`): the mix, a listening mix and the check
-  take one stem at a time (kept ones from the cache, others rendered then and kept while they
-  fit, the check's under the render lock): the studio renders it in 73 s with a 2.3 GB peak
-  (its check: 2.8 GB, over a minute); `render_music_score` 88 s, 2.75 GB. Heavy 10-minute
-  pieces still need more than 3 GB (documented).
-- **Exports**: a 30-minute listening-level export was killed at 3 GB (the whole piece tiled,
-  scaled and clipped as float64 copies). Now made block by block into one float32 array (peak
-  measured per block with the margins `loudness.blocks` uses: the same numbers), the same
-  samples as before (14 cases incl. a limited peak, compared by SHA-256 and in a test against
-  the Step 197 code), and capped at `MAX_SECONDS` = 600 (10 minutes, N loops too; was 1800):
-  600 s listening MP3 803 MB peak.
-- **Timings** (two cores; `<scratchpad>/s201/latency.py`, HEAD vs this step): time_of_flight
-  tempo 108 → 112 22.1 → 9.1 s (peak 2187 → 1271 MB), then a pad filter edit 8.8 → 3.8 s; first
-  load 8.1 → 6.2 s; ascent load 7.7 → 5.6 s (1441 → 989 MB); tidewater tempo +4 4.0 → 2.8 s;
-  momentum tempo +4 4.4 → 3.1 s (1352 → 988 MB).
-- Public: no `vidgen.api` names. `vidgen.studio.effects`: `CircularFFT`, `slow_fft_length`,
-  `fast_fft_length`, `SLOW_FFT_PRIME`, `FAST_FFT_MIN`, `SWEEP_MEMORY`; `fast` / `fast_fft`
-  keywords on `swept_filter`, `reverb`, `render_track_stem`, `mix_track_stems` (default off).
-  `studio_app`: `stems.FAST_FFT`, `StemSet.streamed` / `get`, `app.MAX_YAML_NODES`,
-  `expanded_nodes`, `KEEP_PLAYED`, `session.normal_text`, `exports.WINDOWS_RESERVED`; API: `confirm`
-  on `/api/proposal/send`; export length at most 600 s.
+Security rules are in §94.2, §94.15 and §94.16 (tests: `tests/test_phase_t_review.py`). Also:
 
+- **YAML**: `check_text` uses the safe loader and refuses documents whose anchors / aliases
+  expand past `MAX_YAML_NODES` (200 000; `expanded_nodes`) or that nest too deeply; steps written
+  as a list of lists are a steps problem. No shell anywhere; writes atomic (`fileio`).
+- **Quick FFT lengths** (decision: **studio only**; a different FFT length cannot be
+  byte-identical and shipped scores use slow lengths, so videos, beds, exports and CLI checks
+  render exactly): `effects.CircularFFT(n, fast)` zero-pads to `fast_fft_length(2n)` (3n for a
+  loop's reverb) and folds the result back around `n` — the same circular convolution within 1e-9
+  of the loudest sample. Used when `slow_fft_length(n)` (a prime factor above `SLOW_FFT_PRIME`
+  500) and `n ≥ FAST_FFT_MIN` (65536), in `swept_filter`, `reverb` and the master filter (`fast` /
+  `fast_fft`, default off; the studio passes `stems.FAST_FFT` True). The studio's 16-bit WAV stays
+  byte-identical to `render_music_score`'s.
+- **Memory** (bit-identical): `_render_bus` releases summed buffers (`_Canvas.release`) and
+  applies gains in place; stems stream (§94.14); exports are block by block (§94.15). Heavy
+  10-minute pieces still need more than 3 GB.
+- Public (`vidgen.studio.effects`): `CircularFFT`, `slow_fft_length`, `fast_fft_length`,
+  `SLOW_FFT_PRIME`, `FAST_FFT_MIN`, `SWEEP_MEMORY`. `studio_app`: `stems.FAST_FFT`,
+  `StemSet.streamed` / `get`, `app.MAX_YAML_NODES`, `expanded_nodes`, `KEEP_PLAYED`,
+  `session.normal_text`, `exports.WINDOWS_RESERVED`.
 ## 95. Cell biology in physical scale (Phase U, Steps 202–211)
 
 Reference: docs/CONFIG.md `cell`. 2D cell-biology presentations at university and research
@@ -15026,1630 +12008,545 @@ reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssu
 
 ## 97. Science foundation: scientific charts and worked calculations (Phase W, Steps 222–228)
 
-A shared foundation for every science domain — genetics and cell biology now, orbital mechanics
-and particle physics next: **one chart core** (an axes engine and plot primitives) instead of each
-domain scene drawing its own axes, and **worked calculations with units** (a `calculation` scene
-and a lint comparing narrated numbers with computed ones). Written by AI authors in YAML,
-validated with did-you-mean `VidgenError`s, linted, readable on phones in 16:9 and 9:16.
-Additive and opt-in: existing projects, chart scenes, domain scenes, gallery frames, audio and the
-studio unchanged unless a step deliberately moves a scene onto the core (then with a before /
-after report and its tests kept); after a shared-code change the Phase Q baseline (31 frames)
-must stay identical.
+One chart core shared by science scenes, and worked calculations with units (the `calculation`
+scene and a lint comparing narrated numbers with computed ones). User guide:
+`docs/COOKBOOK-SCIENCE-CHARTS.md`; keys: docs/CONFIG.md#plot, docs/CONFIG.md#calculation.
 
 ### 97.1 The phase (plan)
 
-- **Step 222, the plan and the chart core** (this section): the survey of today's charts (§97.2),
-  the design (§97.3), the core `vidgen.plotcore` (no manim) and its drawing layer
-  `vidgen.plot_draw`, and a first scene type `plot` (§97.4): line / point series from inline
-  numbers or a CSV, linear / log / symlog / reversed / broken axes, scientific notation and SI
-  prefixes, units, gridlines, a legend, panels sharing an axis, an equal aspect.
-- **Step 223, data features**: error bars (symmetric / asymmetric, x and y, with their meaning:
-  SD, SEM, CI), confidence and prediction bands, fitted curves (linear, polynomial, exponential,
-  power, logistic, Gaussian, a custom expression through `vidgen.mathexpr`) with parameters ±
-  uncertainties and R², a residual panel (a panel sharing x, §97.3 figure layout); histograms
-  with binning rules (Sturges, Freedman–Diaconis, explicit) and fitted distributions;
-  annotations tied to data (point labels, arrows, shaded regions, reference lines) placed
-  without overlaps; units in CSV headers (done in Step 222) used by the fits.
-- **Step 224, live and animated plots**: series that grow as data or a simulation advances (a
-  generic, seeded time-series generator: an ODE written as safe expressions, or a callable
-  registered through `vidgen.api`), axes rescaling smoothly, panels with a shared time axis,
-  highlight and zoom on a region, actions timed to beats and words (grow, reveal series, fit,
-  annotate, zoom).
-- **Step 225, units and `calculation`**: a quantities engine (pint as an optional extra if it is
-  light enough on Windows / Python 3.12, else a small own engine; decided and recorded then) with
-  SI and common units, conversions and dimensional analysis; the `calculation` scene: a formula in
-  TeX, a symbol table (name, value, unit), the substitution shown, step-by-step evaluation (exact
-  fractions for exact inputs, significant figures otherwise), units simplified and converted,
-  results highlighted, chains referencing earlier results, actions on beats and words.
-- **Step 226, lint**: numbers in narration and on screen against computed results (tolerance,
-  units, "about"), unit mismatches, overstated significant figures; chart rules: an axis without
-  the unit its data declares, a log axis with non-positive data, error bars without a stated
-  meaning, unlabelled series, a truncated y axis on bar-like data (info).
-- **Step 227, adoption, example, docs, gallery**: suitable Phase U / V domain plots moved onto
-  the core where it is a clear improvement and visually compatible (each reported with before /
-  after; their tests kept); an example (a short narrated explainer with plots and calculations:
-  radioactive decay or drug clearance, a fit and a worked calculation); guide topic `science`,
-  CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG.
-- **Step 228, review**: accuracy of fits and statistics against numpy / scipy references in
-  tests, units and calculations, compatibility, the phase's tests and related suites,
-  `tests/test_mcp.py` in full.
+Done: §97.3–§97.12, with the review folded in (§97.13).
 
 ### 97.2 How charts are drawn today (survey, Step 222)
 
-Two families exist. **`vidgen.charts`** (§33–34, exported) gives chart scenes a `ChartAxis`
-(linear or log, domain = data rounded out to ticks), `chart_axes` (tick labels, titles,
-gridlines, label thinning), `auto_legend`, markers, `linear_fit`, colour scales. **`math_axes`**
-(§87.6–87.8, `scenes/math_axes.py`) draws maths axes crossing at the origin for `function_plot`
-and `number_line`. Several domain scenes draw their own axes by hand.
-
-| scene / plot | file | axes and features it needs |
-|---|---|---|
-| `bar_chart` | `scenes/bar_chart.py` | categories, no value axis (value labels on bars), changes between beats |
-| `line_chart` | `scenes/line_chart.py` | categorical or numeric x, linear y via `value_axis` + `chart_axes`, legend, end labels, a rescaling y axis (`chart_changes`), a cursor |
-| `scatter` | `scenes/scatter.py` | linear or log x / y (`value_axis(log=)`), both gridlines, markers by series, a least-squares trend with its equation and R², point labels placed without overlaps |
-| `histogram` | `scenes/histogram.py` | bins (`auto`, `sturges`, `sqrt`, `fd`, nice widths), counts from 0, percent, mean / median markers, a compared distribution |
-| `heatmap`, `map` | `scenes/heatmap.py`, `scenes/world_map.py` | colour scales (sequential / diverging, OKLab) with a colour bar |
-| `pie` | `scenes/pie.py` | no axes |
-| `function_plot`, `number_line` | `scenes/function_plot.py`, `scenes/number_line.py`, `scenes/math_axes.py` | maths axes through the origin, a fixed aspect, sampled curves from `mathexpr`, dots, tangents, areas, geometry marks |
-| action-potential inset (`molecule`, Phase U) | `scenes/molecule.py` (`_ApAxes`, `_ap_plot`) | fixed ranges (mV against ms), a trace that grows live with the process (`molecule_runtime`) |
-| cyclin–CDK plot (`cell_cycle`, Phase U) | `scenes/cell_cycle.py` (`_build_plot`) | x = share of the cycle with coloured phase bands and phase names, levels in a.u. without ticks, smooth curves labelled at their peaks |
-| PCR temperature trace (`dna_lab`, Phase V) | `scenes/dna_lab.py` (`_pcr_trace`), `scenes/molecular_draw.py` (`plot_axes`) | hand-placed ticks (cycle numbers; the three temperatures in °C), a step-shaped trace, stage names |
-| Sanger chromatogram (`dna_lab`) | `scenes/dna_lab.py` (`_sanger_trace`) | a baseline only: one peak per base, called bases under it |
-| agarose gel (`dna_lab`) | `scenes/dna_lab.py`, `genetics/dna_lab.py` (`migration`) | a log-linear axis in disguise (migration linear in log₁₀ size), ladder sizes as tick labels, readings in a margin |
-| NGS coverage (`dna_lab`) | `scenes/dna_lab.py` (`_build_ngs`) | bars per base, no numeric axis |
-| allele-frequency plot (`population`, Phase V) | `scenes/population.py` | `chart_axes`: generations × frequency 0–1, lines growing over generations, a shaded bottleneck band, a dashed reference, end dots; a second, stacked heterozygosity plot with its own axes (shared x drawn twice) |
-| Manhattan, QQ, regional plots (`gwas`, Phase V) | `scenes/gwas.py` | categorical genome axis (chromosomes), −log₁₀ p (a log scale computed by hand), threshold lines labelled in a margin, overflow triangles, an equal-ish QQ plot with a diagonal, a regional plot in Mb with r² colour bins |
-| chi-square tables (`cross`, `population`) | `scenes/cross_draw.py`, `scenes/population.py` | tables, not plots (unchanged by Phase W) |
-
-**What the coming domains need** (Ideas for future phases): orbital mechanics — trajectories at an
-**equal aspect** (an ellipse must look like one), energies over time in J (**powers of ten in the
-title**), log–log period against semi-major axis (Kepler's third law: a fitted slope of 3/2, Step
-223), panels sharing a time axis (energy and distance), **symlog** for quantities crossing zero
-over decades, insets and "not to scale" notes; particle physics — **invariant-mass histograms**
-with fitted peaks over a background (Step 223), event counts on a **log y**, masses in GeV via
-**SI prefixes** on eV, √N error bars, a ratio / residual panel sharing x, a resonance emerging as
-events accumulate (live, Step 224). Also stellar magnitudes and depths (**reversed** axes) and data
-with a gap (**broken** axes).
+`vidgen.charts` (§33–34, public, used by extensions) serves `bar_chart`, `line_chart`, `scatter`,
+`histogram`, `heatmap`, `map`, `pie`, `population`, `gwas`; `scenes/math_axes.py` (§87.6–87.8,
+axes through the origin) serves `function_plot` and `number_line`. Lab pictures draw their own
+(action-potential inset in `molecule`, cyclin curves in `cell_cycle`, Sanger / gel / coverage in
+`dna_lab`). The core (`plotcore`) serves `plot`, the PCR trace (§97.12) and `orbit` (§98).
 
 ### 97.3 The design
 
-**Two layers.** `vidgen/plotcore/` decides everything that can be decided without drawing: tick
-values, labels, axis domains and the mapping of data to the frame, the layout of panels, labels
-and titles, the parts of a line inside a plot. It imports no manim (a test imports it in a fresh
-interpreter) and is deterministic: the same inputs give the same layout, so tests check layouts
-without rendering. Text sizes come from a callback (`Measure: text -> (width, height)`):
-`plot_draw.text_measure` measures real `Text` in the theme font (cached), tests use
-`approx_measure`. `vidgen/plot_draw.py` turns a laid-out panel into manim objects and nothing
-else. Both are exported by `vidgen.api` as the modules `plotcore` and `plot_draw` (built-in
-scenes import only `vidgen.api`, §6.4).
+**Two layers.** `vidgen/plotcore/` decides everything that needs no drawing (ticks, labels,
+domains, data-to-frame mapping, panel layout, clipping); it imports only `vidgen.errors` and
+`vidgen.mathexpr` (no manim, no scipy; a test imports it in a fresh interpreter) and is
+deterministic, so tests check layouts without rendering. Text sizes come from a callback
+(`Measure: text -> (width, height)`): `plot_draw.text_measure` (real `Text`, cached) or
+`approx_measure` in tests. `vidgen/plot_draw.py` only turns layouts into manim objects. Both are
+`vidgen.api` modules (`plotcore`, `plot_draw`); public names are `plotcore.__all__`.
 
 - **Ticks** (`plotcore.ticks`). Linear: the smallest step of 1, 2, 2.5 or 5 × 10ᵏ giving at most
-  `max_ticks` ticks from a multiple at or below the data to one at or above (the rule of
-  `layout.nice_ticks`), values cleaned to 12 significant digits (`0.3`, never
-  `0.30000000000000004`), a single value widened (`5..5` -> `4.5..5.5`); `inside=True` for a
-  fixed domain: the densest round step with at most `max_ticks` ticks inside it. Log (base 10):
-  decades, every k-th when there are more than `max_ticks`; within two decades 1-2-5 ticks when
-  they fit; minor ticks 2–9 × 10ᵏ (unlabelled tick marks, gridlines with `grid: both`) when every
-  decade is labelled. Symlog: linear within ±`linthresh` (mapped to ±1), one unit per decade
-  beyond (`sign(v)(1 + log₁₀(|v|/linthresh))`); ticks 0 and ±linthresh × 10ᵏ, thinned by decade;
-  default `linthresh` the decade of the smallest non-zero magnitude, at most 1/1000 of the largest.
-- **Numbers** (`plotcore.numbers`), plain Unicode so no LaTeX: the minus sign U+2212, superscript
-  exponents, `×`, `µ`. Tick formats: `auto` — linear: plain with the decimals the ticks need while
-  the largest tick lies in [10⁻³, 10⁵), else divided by 10ⁿ (n a multiple of 3) with the power in
-  the title (`distance (10⁶ km)`, `count (× 10³)`), or every tick in full for a narrow window far
-  from 0 (10⁹ … 10⁹ + 3); log / symlog: plain from 0.001 to 10 000, else `10⁻⁹`; `plain`; `sci`
-  (`2.5 × 10⁻³`, a mantissa of 1 left out: `10⁶`); `si` — linear: one prefix for the axis, chosen
-  by its largest tick, in the title (`time (µs)`), log / symlog: per tick (`10 kHz`); it needs a
-  base unit (`prefixed_unit_problem`: `km` refused, "write m"); a `str.format` pattern. The axis
-  title is `label (unit)`.
-- **Axes** (`plotcore.axis`). `AxisSpec` (what the author asks: scale, `lo` / `hi`, `reversed`,
-  `linthresh`, `breaks`, `format`, `unit`, `label`, `max_ticks`, `include_zero`, `exact` +
-  `margin`) checks itself against the data it must show (`problems(values, name)`: a log scale with
-  a value ≤ 0, data past `min` / `max` — never clipped silently —, a value inside a break, breaks
-  overlapping or without data on both sides, `linthresh` off symlog, `si` with a prefixed unit).
-  `build_axis(values, spec, lo=, hi=)` → `Axis` (domain, ticks, labels, minor ticks, title,
-  segments); without fixed ends the domain reaches the outer ticks (the chart scenes' rule), with
-  them (or `exact`) ticks lie inside. `Axis.fraction(v)` maps a value to 0..1 along the drawn
-  axis: through the scale's transform, reversed (`1 − f`), and across breaks (each break takes
-  `BREAK_GAP` = 4 % of the length; the pieces share the rest in proportion to their spans).
+  `max_ticks` from a multiple at or below the data to one at or above (`layout.nice_ticks`'s
+  rule), values cleaned to 12 significant digits, a single value widened (`5..5` → `4.5..5.5`);
+  `inside=True` (fixed domain): the densest round step with ≤ `max_ticks` inside. Log 10:
+  decades (every k-th beyond `max_ticks`), 1-2-5 within two decades, minor 2–9 × 10ᵏ when every
+  decade is labelled. Symlog: linear within ±`linthresh` (→ ±1), then `sign(v)(1 +
+  log₁₀(|v|/linthresh))`; default `linthresh` the decade of the smallest non-zero magnitude, at
+  most 1/1000 of the largest.
+- **Numbers** (`plotcore.numbers`): plain Unicode, no LaTeX (minus U+2212, superscripts).
+  `auto`: linear plain while the largest tick is in [10⁻³, 10⁵), else ÷10ⁿ (n multiple of 3) with
+  the power in the title (`distance (10⁶ km)`), or full ticks for a narrow window far from 0;
+  log / symlog plain from 0.001 to 10 000, else `10⁻⁹`. Also `plain`, `sci`, `si` (linear: one
+  prefix in the title; log: per tick; needs a base unit, `km` refused), a `str.format` pattern.
+  Axis title `label (unit)`.
+- **Axes** (`plotcore.axis`). `AxisSpec` (scale, `lo`/`hi`, `reversed`, `linthresh`, `breaks`,
+  `format`, `unit`, `label`, `max_ticks`, `include_zero`, `exact`, `margin`, `tight`, `ticks`);
+  `problems(values, name)`: log with a value ≤ 0, data past `min`/`max` (never clipped
+  silently), a value in a break, bad breaks, `linthresh` off symlog, `si` with a prefixed unit.
+  `build_axis(values, spec, lo=, hi=)` → `Axis`: free ends reach the outer ticks; fixed ends (or
+  `exact`) keep ticks inside; `tight` (`plot` uses 0.08) takes the next round tick only when it
+  adds ≤ 8 % of the span, else `TIGHT_PAD` 4 % past the data. `Axis.fraction(v)`: transform,
+  reversal (`1 − f`), breaks (each `BREAK_GAP` = 4 % of the length).
 - **Figures** (`plotcore.figure`). `layout_figure(area, panels, measure, arrange, share, gap, top,
-  aspect, weights)` → one `PanelLayout` per panel (plot `Rect`, axes, the tick labels kept,
-  titles). The chart scenes' style (§33): y tick labels right-aligned left of the plot, the y
-  title above them left-aligned (horizontal, readable on phones; no rotated text), x labels and
-  title below. `rows`: panels stacked; with `share` one x axis built from every panel's x values,
-  only the lowest panel labelled, every plot with the same left and right edges (the widest y
-  labels decide). `columns`: side by side sharing y, only the first panel labelled. Labels that
-  would touch are thinned to every k-th (`label_stride`, moved here from `charts._stride`, which
-  now imports it; `keep_last`: the axis' end keeps its label). `aspect: equal` (one panel, linear
-  axes): the axis with room to spare widens about its middle (iterated: the new ticks can change
-  the label widths), or, when its ends are fixed, the plot narrows instead. `clip_polyline` keeps
-  the parts of a line inside the plot (Liang–Barsky per segment; `nan` breaks a line).
-- **Tables** (`plotcore.data`). `read_table(text, source)`: comma, semicolon or tab separated
-  (picked from the header line), `#` comment lines, the header naming the columns with units as
-  `name (unit)` (a space before the parenthesis, so `f(x)` stays a name), `name [unit]` or
-  `name / unit`; numbers with `.` decimals, `−` accepted; blank / `NA` / `NaN` cells are gaps.
-  Errors name the file, line and column (`'2,5' is not a number (use a dot for decimals)`), a row
-  of the wrong length, a repeated or nameless column, a file without rows or a column without
-  numbers; `Table.column(name)` takes the name or the whole header and suggests the closest
-  (`did_you_mean`, own `difflib` helper so the core needs nothing else).
-- **Drawing** (`plot_draw`). `draw_panel(layout, size, color, axis_color, grid)`: axis lines
-  (left and bottom, cut at breaks with `//` marks), outward tick marks at major ticks (shorter at
-  minor ones), dashed gridlines at the labelled ticks (stroke 1, opacity 0.4 as `chart_axes`),
-  faint solid minor gridlines (opacity 0.16) with `grid: both`, labels at `chart_label_size`
-  (never below the readable size). `series_line` (clipped runs, optionally dashed),
-  `series_markers` (`chart_marker`s with a background-coloured outline, those inside the plot).
-  Legends reuse `charts.auto_legend` / `chart_legend`.
+  aspect, weights)` → `PanelLayout`s in the chart scenes' style (§33): y labels right-aligned left
+  of the plot, horizontal y title above (no rotated text), x labels and title below. `rows`
+  stacked (with `share` one x axis, only the lowest labelled, equal edges); `columns` sharing y.
+  Touching labels thinned (`label_stride`, also used by `charts`). `aspect: equal` (one panel,
+  linear): the roomier axis widens about its middle (iterated) or, with fixed ends, the plot
+  narrows; both axes take the larger step (`_common_step`). `clip_polyline` (Liang–Barsky; `nan`
+  breaks a line). `layout_axes(area, x, y, measure, top=)`: one panel from caller-built `Axis`es.
+- **Tables** (`plotcore.data`). `read_table(text, source)`: `,` `;` or tab (from the header), `#`
+  comments, header units `name (unit)` (space before the bracket, so `f(x)` is a name), `name
+  [unit]`, `name / unit`; `.` decimals; blank / `NA` / `NaN` are gaps. Errors name file, line and
+  column; `Table.column` has did-you-mean (own `difflib` helper).
+- **Drawing** (`plot_draw`): `draw_panel(layout, size, color, axis_color, grid, cache=)` (axes cut
+  at breaks with `//`, dashed gridlines opacity 0.4, minor 0.16, labels at `chart_label_size`),
+  series lines / markers, `error_bars` (on log a bar to ≤ 0 runs to the edge), `band`, `bars`,
+  `plate`, `reference_line`, `span`, `leader`, `flat`, `morph_into`; legends via
+  `charts.auto_legend` / `chart_legend` (swatches `dashed`, `band`).
 
-**Existing scenes and the core (compatibility rule).** The chart scenes keep `vidgen.charts`
-(public, used by extensions) and draw exactly as before; the only shared change in Step 222 is
-`label_stride` moving into the core (same code; the Phase Q baseline 31/31 identical). A scene
-moves onto the core only in Step 227, only where it is a clear improvement and looks the same or
-better (each reported with before / after stills, its tests passing); candidates: the
-`population` frequency and heterozygosity plots (two panels sharing x), the `gwas` QQ plot (equal
-aspect) and the PCR trace (`molecular_draw.plot_axes`, hand-made axes); not candidates: the
-cyclin plot (no numeric axes), the Sanger trace, gel and coverage (pictures of lab results, not
-charts), `function_plot` / `number_line` (maths axes through the origin are another convention),
-and `bar_chart` / `line_chart` / `scatter` / `histogram` (stable, with their own changes and
-targets; `plot` covers the scientific cases they do not).
+**Compatibility rule**: chart scenes keep `vidgen.charts` and draw as before; a domain plot moves
+onto the core only when clearly better and visually equal (§97.12).
 
 ### 97.4 The `plot` scene type (Step 222)
 
-Name: **`plot`** (`scenes/plot.py`). Checked for clashes: no scene type or action is called
-`plot`; the word is a target name inside `cell_cycle` and `population` and a `gwas` param (`plot:
-manhattan | qq | both`) — other namespaces, so the type keeps the plain name; the docs say "the
-`plot` scene type" where both senses are near. `function_plot` stays for functions of x (maths
-axes); `plot` is for data and models on scientific axes.
+**`plot`** (`scenes/plot.py`; mixins `PlotFigure` in `plot_figure.py`, `LivePlot` in
+`plot_live.py`; params in `plot_parts.py`, `plot_models.py`): data and models on scientific axes
+(`function_plot` stays for functions of x). Params: docs/CONFIG.md#plot.
 
-```yaml
-- id: decay
-  type: plot
-  params:
-    title: "Activity of an iodine-131 sample"
-    data: assets/decay.csv            # time (d), activity (Bq), model (Bq)
-    y: {scale: log}                   # label and unit from the column: "activity (Bq)"
-    series:
-      - {name: measured, x: time, y: activity, style: points}
-      - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
-- id: energy
-  type: plot
-  params:
-    data: assets/energy.csv
-    panels:                           # stacked, sharing the x axis
-      - y: {label: energy}
-        series: [{name: kinetic, x: time, y: kinetic}, {name: potential, x: time, y: potential}]
-      - series: [{name: distance, x: time, y: distance}]
-```
-
-- **Params**: `series` (one panel) or `panels` (`{series, x, y, weight}`), `data` (a CSV in the
-  project; renders follow its changes under `assets/`, the fingerprint's folder), `x` / `y`
-  (`PlotAxis`: `label`, `unit`, `scale`, `min`, `max`, `reversed`, `format`, `linthresh`,
-  `breaks`), `arrange` (`rows` | `columns`), `share`, `aspect` (`auto` | `equal`), `grid`
-  (`major` | `both` | `x` | `y` | `none`), `legend`, `reveal` (`series` | `all`), `point_radius`,
-  `label_size`, `title`, `caption` and their sizes / colours. A series: `name`, `x` / `y` (column
-  names or lists; `null` in y is a gap) or `points`, its own `data`, `style` (`line` | `points` |
-  `both`), `color`, `marker` (auto by position among the series with markers), `dashed`, `width`.
-- **Labels and units from the data**: an axis without `label` takes the first series' column
-  name, without `unit` the unit in that column's header; a column in another unit than the axis
-  states, or two series in different units on one axis, is an error naming both.
-- **Checks**: at param validation for inline data (no file to read), at `vidgen validate`
-  (`validate_project`) when a CSV is named: series names unique, one of `series` / `panels`,
-  `x` + `y` or `points`, equal lengths, columns named only with a data file, unknown columns with
-  did-you-mean, the axis problems of §97.3, a panel's own x when stacked panels share x, `aspect:
-  equal` with one panel and linear axes, a gap only in y.
-- **Layout**: the title (`chart_title`), caption, and `layout_figure` over the body; ticks at
-  most 7 on x and 6 on y in 16:9 (4 and 7 in 9:16); with `aspect: equal` the domains are the data
-  with a 6 % margin, widened to the plot's shape. **Legends** per panel (`_legend_panels`, static
-  so `target_names` knows them): `legend` if given, else a panel with several series, or — in a
-  figure of several panels — a panel whose single series its own axis title does not name; in a
-  free corner of the panel (`auto_legend`), else one row of all those entries above the figure
-  (the layout makes room). Series colours from the palette by position, lines 4 px, markers sized
-  by the number of points (0.1 … 0.035 units).
-- **Steps and targets**: the axes (lines drawn, the rest faded in) and legends with the first
-  step; `reveal: series` one series per beat (line runs drawn from their first point, markers
-  popping in, in data order), `all` everything at once. Targets `title`, `axes`, `panel<N>` (with
-  several panels), `legend`, `series<N>`, `series:<name>`.
-
-Public: `vidgen.api` gains the modules `plotcore` and `plot_draw` (DESIGN §6.4's rule: the
-names extensions need); scene type `plot`; no config key, no action. No new dependency (pint is
-Step 225's decision).
-
-**Gaps after Step 222** (planned for 223–227): no error bars, bands, fits, histograms, annotations
-or live series yet; a dashed series' legend swatch is solid; the equal-aspect axes choose their
-tick steps independently (x and y may step by 2 and by 1); a line crossing a break is drawn
-straight across it; no inset plots; panel titles are the axis titles only; the legends appear with
-the axes, not with their series. (Step 223 fixed the dashed swatch, the line across a break and
-the legends' timing, §97.6.)
+- **Labels and units from the data**: an axis without `label` / `unit` takes the first series'
+  column name / header unit; a column in another unit, or two units on one axis, is an error.
+- **Checks** at param validation (inline data) or `vidgen validate` (`validate_project`, CSV or
+  model): unique series names, `series` xor `panels`, `x` + `y` or `points`, equal lengths,
+  did-you-mean columns, axis problems, no own x on shared stacked panels, `aspect: equal` only
+  with one linear panel, gaps only in y. A CSV lives under `assets/` (the fingerprint's folder).
+- **Layout**: at most 7 x / 6 y ticks in 16:9 (4 / 7 in 9:16); `aspect: equal` domains are data +
+  6 %. Legends per panel (`_legend_panels`, static so `target_names` knows them): `legend`, else
+  panels with several series (or one its axis title does not name); in a free corner, else a row
+  above. Palette colours by position, lines 4 px, markers 0.1 … 0.035 units by count.
+- **Steps**: axes with the first step; `reveal: series` one series per beat (legend entry and
+  error bars with it), then fits, then annotations; `reveal: all` one step. Targets an action
+  names leave the steps; entrances nest (fit → series → axes; `_batch` builds each once per step).
+  Targets: `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`,
+  `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>`.
 
 ### 97.5 Data features (Step 223)
 
 **Fits** (`plotcore.fit`, numpy only). `make_model(kind, degree, background, expr, params,
-guesses, units)` → `Model` (YAML names, shown labels `μ σ Γ x₀ b₁`, the shown formula, f(x, p),
-a design matrix for models linear in p, a starting guess from the data, each parameter's unit
-from the axes' units: `unit_ratio("Bq", "d")` = `Bq/d`, `d⁻¹`). Kinds: `linear` (a + b·x),
-`poly` (c₀ … cₙ, n ≤ 6), `exponential` (A·exp(k·x); guess: a line through ln y), `power` (A·xᵏ,
-x > 0; guess: log–log), `logistic` (L, k, x₀; guess: the logit line), `gaussian` and
-`breit_wigner` (A, μ/M, σ/Γ, plus `background: n` → b₀ … bₙ; guess: peak height, position and
-FWHM above a line through the edges), `custom` (an expression through
-`mathexpr.parse_model(text, parameters)`: the safe parser with named parameters that may shadow
-a constant (`tau`), unknown names with did-you-mean, an unused parameter refused). Aliases:
-`cauchy` / `lorentzian` → `breit_wigner`, `polynomial`, `exp`, `gauss`, `sigmoid`.
-`fit_curve(x, y, model, y_err, x_err)`: models linear in p by weighted `lstsq`; others by
-Levenberg–Marquardt (Marquardt's diagonal scaling, central-difference Jacobian with an absolute
-step for a parameter at 0, λ ×4 / ÷3). Covariance (JᵀWJ)⁻¹ — absolute with y errors, scaled by
-SSR/(n − p) without (as `curve_fit`'s `absolute_sigma`); x errors by effective variance σ² = σ_y²
-+ (f′(x)σ_x)², four re-weightings. `FitResult`: params, errors, cov, χ², χ²/ν (with errors), R²
-(unweighted 1 − SSR/SST), RMSE, residuals, `band(xs, level, kind)` (delta method gᵀCg; the
-prediction band adds σ² interpolated between the data's errors or SSR/(n − p); Student's t with
-n − p, the normal quantile with known errors), `parameter_lines` (`A = 985 ± 19 Bq`). Errors:
-too few points (n ≤ p), a power law with x ≤ 0, non-positive y errors, a rank-deficient JᵀJ, a
-model undefined at the start. Distribution functions in `plotcore.stats` (normal CDF / quantile:
-Acklam + Newton; Student's t through the regularized incomplete beta, the quantile solved on the
-tail so 1 − p loses nothing; χ² survival through the incomplete gamma), ≤ 1e-9 from scipy.
+guesses, units)` → `Model` (labels, formula, f(x, p), design matrix when linear in p, a guess from
+the data, parameter units from the axes via `unit_ratio`). `MODEL_KINDS`: `linear`, `poly` (n ≤
+6), `exponential` A·exp(k·x), `power` A·xᵏ (x > 0), `logistic`, `gaussian` / `breit_wigner`
+(`PEAK_KINDS`, `background: n`), `custom` (`mathexpr.parse_model`: parameters may shadow
+constants, unused ones refused). `MODEL_ALIASES`: `cauchy`/`lorentzian`, `polynomial`, `exp`,
+`gauss`, `sigmoid`. `fit_curve(x, y, model, y_err, x_err, poisson=)`: weighted `lstsq` when
+linear in p, else Levenberg–Marquardt (Marquardt scaling, central differences, λ ×4 / ÷3).
+Covariance (JᵀWJ)⁻¹: absolute with y errors, × SSR/(n − p) without (`curve_fit`'s
+`absolute_sigma`); x errors by effective variance σ_y² + (f′σ_x)², four re-weightings. **Counts**
+(`y_err: sqrt`, histogram curve fits) use Poisson maximum likelihood: least squares re-weighted by
+the fitted curve until it settles (Fisher errors, Pearson χ², 0 counts allowed) — √N weights from
+observed counts bias decays low. `FitResult`: params, errors, cov, χ², χ²/ν, R² (unweighted),
+RMSE, residuals, `band(xs, level, kind)` (delta method; Student's t with n − p, normal with known
+errors), `parameter_lines`. Errors: n ≤ p, power with x ≤ 0, y errors ≤ 0, rank-deficient JᵀJ, a
+model undefined at the start. `plotcore.stats`: normal CDF / quantile, Student's t, χ² survival,
+≤ 1e-9 from scipy.
 
-**Why no scipy.** scipy is installed wherever schu-video-generator is (manim requires it), but schu-video-generator does not
-list it and the core must import without it (and fast); the fits above are short and match
-`scipy.optimize.curve_fit` to 1e-3 of a standard error (tests, when scipy is importable — else
-the closed-form tests run). No new dependency, nothing for the owner to install on Windows.
+**No scipy**: the core must import without it (schu-video-generator does not list it); tests
+compare with scipy when importable (`tests/test_science_review.py`).
 
-**Histograms** (`plotcore.hist`). `rule_width` = numpy's `histogram_bin_edges` widths (Sturges,
-Freedman–Diaconis, Scott with σ over n, square root, `auto` = the smaller of Sturges and FD);
-`bin_edges(values, bins, width, lo, hi, nice)`: a rule's width rounded to 1 / 2 / 2.5 / 5 × 10ᵏ
-with edges on its multiples (`nice`, the default: round tick-like edges), else numpy's edges
-exactly; `integers` (k ± ½), a count, explicit edges; at most 400 bins. `histogram()` → counts
-(the last bin closed), density, √N errors, values outside counted. `fit_distribution(hist,
-kind)`: maximum likelihood on the raw values — `normal` (mean, σ with 1/N; errors σ/√N,
-σ/√2N), `exponential` (λ = 1/mean, λ/√N), `poisson` (mean, √(μ/N); whole numbers, `bins:
-integers`) — as a `FitResult` whose model gives heights in the histogram's units (N·width·pdf),
-with Pearson's χ² over the bins and its degrees of freedom (bins − 1 − p). Peaks (`gaussian`,
-`breit_wigner` + background) on a histogram are least-squares fits of the heights with σ = √N
-(an empty bin: one count's error).
+**Histograms** (`plotcore.hist`): `rule_width` = numpy's `histogram_bin_edges` (`BIN_RULES`
+sturges, fd, scott, sqrt, `auto` = min(sturges, fd)); `bin_edges(values, bins, width, lo, hi,
+nice)`: `nice` (default) rounds the width to 1/2/2.5/5 × 10ᵏ with edges on its multiples;
+`integers` (k ± ½), a count, explicit edges; ≤ 400 bins; outer edges always cover the data
+(`_cover`). `histogram()`: last bin closed, √N errors. `fit_distribution` (`DISTRIBUTIONS`
+normal with 1/N, exponential, poisson): maximum likelihood on the raw values, heights
+N·width·pdf, dof bins − 1 − p.
 
-**Numbers**. `value_with_error(v, e, unit)`: the error rounded by the PDG rule (three leading
-digits 100–354: two significant digits; 355–949: one; 950–999: up to 1000, two), the value to
-the same place (halves away from 0), a power of ten outside brackets beyond [10⁻³, 10⁵): `(2.510 ±
-0.031) × 10⁻⁴ s`; an error of float noise (an exact fit) writes the value alone.
+**Numbers**: `value_with_error(v, e, unit)` rounds the error by the PDG rule (leading digits
+100–354: two digits; 355–949: one; 950–999: up to 1000, two), the value to the same place,
+power of ten outside brackets beyond [10⁻³, 10⁵): `(2.510 ± 0.031) × 10⁻⁴ s`.
 
-**Annotations** (`plotcore.annotate`, deterministic). A candidate box costs 1000 per unit area
-outside the plot, 10 per data point it covers (markers, samples every 0.1 along lines and fit
-curves, bar interiors, error-bar ends), and 1000 + 5000 × area per text box it touches (text
-over text is worse than text over a few points); the cheapest wins, ties to the first listed.
-`place_near` (8 directions × 3 rings around a point; off the first ring a leader line),
-`place_in_plot` (corners, then edge middles), `place_on_hline` / `place_on_vline` (along the
-line, at its ends or middle), `place_in_span` (inside a shaded range, else beside it).
+**Annotations** (`plotcore.annotate`, deterministic): cost 1000 per unit area outside the plot, 10
+per covered data point (markers, line samples every 0.1, bars, error-bar ends), 1000 + 5000 ×
+area per touched text box; cheapest wins, ties to the first. `place_near` (8 directions × 3
+rings, leader off the first), `place_in_plot`, `place_on_hline` / `vline`, `place_in_span`.
 
 ### 97.6 The `plot` scene's data features (Step 223)
 
-Params (`scenes/plot_parts.py`: `PlotSeries`, `PlotErrorPair`, `PlotFit`, `PlotFitParam`,
-`PlotAnnotation`, the resolution into `Resolved` — a list of panels with `.fits`): series
-`y_err` / `x_err` (number, column, list, `{minus, plus}`, `sqrt`) and `error` (`sd`, `sem`,
-`ci95`, `range`, `poisson`, `other`, shown in the legend entry: `measured (± SEM)`); histogram
-series (`values`, `bins`, `bin_width`, `bin_range`, `nice_bins`, `density`; `style: bars | step |
-points`; y from 0, titled `count` / `density`); `fits` (`series` and the annotations' `series` are
-`TextRef`s: a translated series name is followed); `annotations` (`label`, `arrow`, `hline`,
-`vline`, `xrange`, `yrange`, `note`; `panel`, `color`, `id`). Fits are computed at validation
-(inline data) or `vidgen validate` (a CSV), so a fit that fails names itself (`fits[1] (power
-fit): a power fit needs positive x values`).
-
-Layout. The figure is the data panels, each followed by the residual panels of its fits
-(weight 0.4, sharing x; y titled `residual (unit)` or `(y − fit)/σ`, ticks from 0). Axes:
-`AxisSpec.tight = 0.08` — a free end goes to the next round tick only when that adds at most
-8 % of the span, else 4 % past the data (`plotcore.TIGHT_PAD`); error-bar ends and the fitted
-curve count as data the axis shows (when it can: positive on log, inside fixed ends and not in
-a break). Placement loop: each panel's legend in a free corner (`auto_legend`), each fit box
-and note in a free spot (`place_in_plot` at cost 0); whatever finds none moves to a **side
-group** — a column on the right of the figure in 16:9 (the figure narrows; the column top at
-the first plot's top), above the figure in 9:16 (side by side when the items fit the width) —
-and the layout is redone (at most fits + notes + 3 rounds). Annotations are placed last, in
-order, inside their panel, against the data and every box placed so far. Text: `label_size`
-default `body` in a landscape frame and `caption` in portrait (the large scale's 30 pt), never
-below `min_font`; the title sits 0.35 above the body (was 0.45).
-
-Drawing (`plot_draw`): `error_bars` (caps where a bar ends inside; on a log axis a bar to ≤ 0
-runs to the edge), `band` (one polygon per x piece between breaks, clamped to the plot), `bars`,
-`text_lines`, `label_text`, `plate` (a rounded box in the background colour, z above the data),
-`reference_line`, `span`, `leader` (a line or an arrow, stopping short of the point);
-`PanelLayout.frame_line` puts a gap where neighbours lie on different sides of a break.
-`charts.chart_legend` gained the swatches `dashed` and `band` (additive; the chart scenes do
-not use them).
-
-Steps and targets. Series (with their legend entry — the legend's frame comes with the first —
-and their error bars unless an action reveals `errors:<name>`), then each fit (`fit<N>`,
-`fit:<name>`: band, curve, legend entries, box, residual panel; the series first), then each
-annotation (`annotation<N>`, `annotation:<id>`); `reveal: all` puts them in one step. Targets an
-action (`reveal`, `fit`, `annotate`) names are left out of the steps. Entrances nest (a fit brings
-its series, a series the axes): `Plot.entrance` builds each entrance once per step (`_batch`).
-Actions `fit` and `annotate` (`scenes/plot_actions.py`): plot scenes only (`plot_actions =
-True`), targets checked with did-you-mean; they play the target's entrance (1.6 s, 1 s).
-
-Public: `vidgen.api.plotcore` gains `fit_curve`, `make_model`, `Model`, `FitResult`,
-`MODEL_KINDS`, `MODEL_ALIASES`, `PEAK_KINDS`, `histogram`, `Histogram`, `bin_edges`,
-`rule_width`, `fit_distribution`, `poisson_pmf`, `BIN_RULES`, `DISTRIBUTIONS`, `normal_cdf`,
-`normal_ppf`, `t_cdf`, `t_ppf`, `chi2_sf`, `value_with_error`, `error_digits`, `pretty_name`,
-`unit_power`, `unit_ratio`, the placement functions and `Placement`, `TIGHT_PAD`;
-`AxisSpec.tight`, `Axis.piece`, `PanelLayout.frame_line`; `vidgen.api.plot_draw` the drawing
-functions above; `vidgen.mathexpr.parse_model` / `ModelExpression` (not re-exported). Actions
-`fit`, `annotate`. No new dependency, no config key.
-
-**Gaps after Step 223**: no live series (224); fits of 2-D data, global fits sharing parameters
-across series, and a likelihood fit of binned counts (Poisson likelihood instead of √N weights)
-are not there; an annotation cannot point into another panel; a crowded 16:9 figure (two panels,
-a fit with residuals, a long legend) gets small plots at `body` text — authors can set
-`label_size: caption` or move the legend with `legend: false`.
+Series errors (`y_err`, `x_err`, meaning `error`: `sd`, `sem`, `ci95`, `range`, `poisson`,
+`other`), histogram series, `fits` (series refs are `TextRef`s), `annotations`. Fits are computed
+at validation / `vidgen validate`, so a failing fit names itself (`fits[1] (power fit): …`).
+Layout: each data panel followed by its fits' residual panels (weight 0.4, shared x; normalized
+ones symmetric about 0, ticked ±2, points without bars, counts with σ = √fit). Error-bar ends and
+fit curves count as axis data. Placement loop: legends, fit boxes and notes in free spots, else a
+**side group** (right column in 16:9, above in 9:16), layout redone (≤ fits + notes + 3 rounds);
+annotations last. `label_size` default `body` landscape, `caption` portrait, never below
+`min_font`. Actions `fit`, `annotate` (`scenes/plot_actions.py`, plot scenes only) play the
+target's entrance (1.6 s, 1 s).
 
 ### 97.7 Models and live plots in the core (Step 224)
 
-**Integrators** (`plotcore.integrate`, numpy only, deterministic). `rk4(f, t0, y0, t1, step,
-samples)`: classical RK4, the last step shortened to end on `t1`, outputs thinned to about
-`samples` evenly spaced steps (`output_times`; more than 2·10⁶ steps is refused). `rk45(f, t0,
-y0, t1, times, rtol, atol, first_step, max_step)`: Dormand–Prince 5(4) with scipy's tableau and
-RMS error norm, steps clamped to end on each output time (exact outputs, no dense
-interpolation; the natural step is kept across the clamp), growth ×0.2…×5 with safety 0.9;
-stiffness by Hairer's test — h·|k₇ − k₆|/|y₇ − y₆| (≈ h|λ|) above 2.5 on 30 accepted steps (six
-calm steps in a row reset the count) — raised only when the rest of the span would still need
-more than 20 000 steps (a short stiff stretch is merely slow), and more than 10⁵ steps is
-refused as stiff too. `verlet(accel, t0, x0, v0, t1, step, samples)`: velocity Verlet
-(kick–drift–kick leapfrog): symplectic, time-reversible, energy error bounded (O(h²),
-oscillating). Every integrator raises `IntegrationError` (a `VidgenError` with `kind`
-`blow_up` / `stiff` / `steps`, the time and the variable) when the state is not finite or
-exceeds 10¹² × max(1, |y₀|).
+**Integrators** (`plotcore.integrate`, deterministic). `rk4(f, t0, y0, t1, step, samples)`: last
+step ends on `t1`, outputs thinned to ~`samples`, > 2·10⁶ steps refused. `rk45(f, t0, y0, t1,
+times, rtol, atol, first_step, max_step)`: Dormand–Prince 5(4), scipy's tableau and RMS norm
+(error < `atol + rtol·|y|`), outputs from the fourth-order dense output, growth ×0.2…×5, safety
+0.9; stiffness by Hairer's test (h·|k₇ − k₆|/|y₇ − y₆| > 2.5 on 30 accepted steps, six calm steps
+reset) raised only when the rest needs > 20 000 steps; > 10⁵ steps refused. `verlet(accel, t0, x0,
+v0, t1, step, samples)`: kick–drift–kick, symplectic, bounded O(h²) energy error. All raise
+`IntegrationError` (`VidgenError`, `kind` `blow_up` / `stiff` / `steps`) when the state is not
+finite or exceeds 10¹² × max(1, |y₀|).
 
-**Models** (`plotcore.models`) return a `Simulation`: ordered columns (the first is the
-progress column, `t` or `n`), units, and `drift` of the quantities declared `conserved`
-(`conservation_drift`: max |q − q₀| / max(|q₀|, max |q|)). `simulate_ode(equations, initial,
-params, t, step, method, rtol, samples, quantities, conserved, units)`: equation keys `x`,
-`dx/dt`, `x'` (`equation_variable`), right sides compiled by `mathexpr.parse_system` (the
-safe parser with every name a slot: state variables, parameters, `t`; `x` is an ordinary name
-there; a name may shadow a constant; unknown names with did-you-mean; `SystemExpression.scalar`
-evaluates plain floats fast inside one `np.errstate`); default step span/1000, at most a
-quarter of the span; `leapfrog` needs every equation of the form `x' = v` (`leapfrog_pairs`)
-or an acceleration not reading any velocity. Messages name the model and say what to try
-(`model 'osc': x blows up near t = 1.005 …: try a smaller step (now 0.005) or method: rk45`).
-`simulate_recurrence` (keys `x`, `x_next`, `x[n+1]`; `n` available; a non-finite value names
-the step). `random_walk` and `poisson_process` draw from `SplitMix64` (Steele–Lea–Flood; the
-reference vector `0xE220A8397B1DCDAF` for seed 0): the same seed gives the same walk with any
-numpy version (numpy's streams are not promised stable); lattice walks ±step (1-D with `p`, 2-D
-four directions), Gaussian walks (Box–Muller), Poisson events by exponential gaps (a staircase
-`count` column, ≤ 50 000 events). `register_model(name)` / `run_registered` (exported by
-`vidgen.api`): `fn(params, seed) -> {column: values}`, checked (a mapping of equal-length
-numeric columns, a non-decreasing first column; an exception becomes a `VidgenError` naming
-the function). Derived `quantities` (expressions of columns and params, vectorised) work for
-every kind.
+**Models** (`plotcore.models`) → `Simulation` (first column the progress `t` / `n`, units,
+`drift` of `conserved` quantities = max |q − q₀| / max(|q₀|, max |q|)). `simulate_ode`: keys `x`,
+`dx/dt`, `x'`; right sides by `mathexpr.parse_system`; default step span/1000, ≤ span/4; rk45
+`atol` = rtol × 10⁻³ × largest initial |value|; `leapfrog` needs `x' = v` pairs or accelerations
+not reading velocities; errors name the model and what to try. `simulate_recurrence` (`x_next`,
+`x[n+1]`). `random_walk`, `poisson_process` (≤ 50 000 events) draw from `SplitMix64` (seed 0 →
+`0xE220A8397B1DCDAF`), not numpy streams, so results are stable across numpy versions.
+`vidgen.api.register_model(name)` / `run_registered`: `fn(params, seed) -> {column: values}`,
+checked (equal-length numeric columns, non-decreasing first; exceptions become a `VidgenError`).
 
-**Live logic** (`plotcore.live`, pure functions of the progress, so a frame never depends on
-the frames before it). `grown(times, xs, ys, until)` (points reached plus the head interpolated
-between two points; a gap stays a gap), `segment` (a trail's recent stretch), `value_at`,
-`time_like` (values that never decrease: a time axis, shown whole). `rescale_schedule(times,
-values, final, fixed_lo, fixed_hi)` → `(first domain, [Stop(start, end, lo, hi)])` in
-transform space: the first domain covers the first 12 % of the progress with 30 % headroom of
-the data's span; whenever the running extent would leave the domain shown, it grows to cover it
-with that headroom (clipped to `final`, ends within 15 % of the final end snap to it, fixed ends
-stay); each growth eases in (smoothstep) over 7 % of the progress range and **ends when the data
-arrive** (so data never leave the plot), growths closer than that merge; the last stop ends on
-`final` at the end. `domain_at(first, stops, progress)` evaluates it; `blend` eases a zoom.
-`axis_for(static, spec, lo, hi)` builds the axis for such a domain (ticks inside, the static
-axis' `linthresh`; the static axis itself for its own domain) and `figure.relabel(lay, x, y,
-measure)` lays its labels out on the same plot rectangle (the plot does not move while its
-axes rescale). `readout_text(label, value, unit, integer=)`: three significant digits, plain
-from 10⁻³ to 10⁵, a whole number written whole.
+**Live logic** (`plotcore.live`): pure functions of the progress, so a frame never depends on
+earlier frames (`grown`, `segment`, `value_at`, `time_like`). `rescale_schedule(times, values,
+final, fixed_lo, fixed_hi)` → first domain + `Stop`s in transform space: first domain covers 12 %
+of progress with 30 % headroom; growths with that headroom when data would leave it (clipped to
+`final`, ends within 15 % snap to it, fixed ends stay), each easing over 7 % of progress and
+**ending when the data arrive** (data never leave the plot). `domain_at`, `blend`, `axis_for`,
+`figure.relabel` (same plot rectangle while rescaling). `readout_text`: 3 significant digits,
+plain from 10⁻³ to 10⁵.
 
 ### 97.8 Live and animated `plot` scenes (Step 224)
 
-```yaml
-- id: oscillator
-  type: plot
-  params:
-    models:
-      osc: {kind: ode, equations: {x: v, v: "-k*x - c*v"}, params: {k: 4, c: 0.3}, initial: {x: 1, v: 0}, t: [0, 20], units: {t: s, x: m}}
-    arrange: columns
-    share: false
-    panels:
-      - series: [{name: position, x: t, y: x, readout: true}]
-      - series: [{name: phase, x: x, y: v, trail: 3}]
-  beats:
-    - text: "Each swing is smaller than the one before."
-      actions: [{grow: axes, to: 10}]
-    - text: "Zoom in on the first swings."
-      actions: [{grow: axes}, {zoom: panel1, x: [0, 5], at: "@first"}]
-```
+`models: {name: PlotModel}` (`kind` `ode`, `recurrence`, `random_walk`, `poisson`, `function`;
+unknown keys name the kind; `method` aliases `verlet`/`symplectic` → `leapfrog`, `adaptive` →
+`rk45`), cached by the model's JSON; a model's columns are a `Table` (`model:<name>`). Series
+`model`, `live`, `head`, `readout`, `trail`; `rescale` (default `true`); `Params.conservation()`
+for lint. Keys: docs/CONFIG.md#live-plots-models-and-grow.
 
-**Params** (`scenes/plot_models.py`): `models: {name: PlotModel}` — `kind` (`ode`,
-`recurrence`, `random_walk`, `poisson`, `function`) with the keys of each kind (any other key
-is an error naming the kind; a missing `equations` / `initial` / `rate` / `function` too);
-`method` aliases (`verlet`, `symplectic` → `leapfrog`, `adaptive` → `rk45`); results cached by
-the model's JSON (validation, `vidgen validate` and the render resolve the plot more than
-once). Series gain `model` (default: the plot's only model when there is no `data`; set by the
-plot's validator), `live` (default with a model), `head`, `readout` (`true` or a label),
-`trail`; a model's columns are a `Table` (`model:<name>`), so labels and units come from it as
-from a CSV. `rescale` (default `true`). `Params.conservation()` → `(model, quantity, drift)`
-for lint (Step 226); the scene keeps it as `conservation`.
+**Drawing while playing** (`LivePlot`): everything that changes is a **flat** group re-shaped in
+place each frame (`plot_draw.morph_into`). Animations and the growth updater act on an empty
+**clock** mobject (z −1000), not on a group of parts: adding a group with members of another
+top-level group makes manim dissolve the latter, losing its updater.
 
-**Drawing while playing** (`scenes/plot_live.py`, the mixin `LivePlot`). Everything that changes
-during a play or a wait — a rescaling or zoomed panel's axes, a growing series (line, markers,
-error bars, head), the readout, fit curves and bands of a zoomed panel, a residual panel — is a
-**flat** group (`plot_draw.flat`) re-shaped in place each frame (`plot_draw.morph_into`: each
-member takes the points, style and z-index of one part of the new drawing; members are added or
-emptied as the count changes). Animations and the growth updater act on an empty **clock**
-mobject (z −1000) instead of a group of those parts: manim then redraws the whole frame while
-it moves, and no group is dissolved when a part is added on its own (adding a group that
-contains members of another top-level group makes manim dissolve the latter, losing its
-updater). Members added mid-play may be drawn in any order among equal z-indices: text sits a
-z-index above its plate, lines above gridlines.
-
-**Steps and timing.** Consecutive free live series of one model are one step: its axes and
-legend entries come in (up to 0.8 s), then the series grow by an updater over the rest of the
-step's slot (`GROW_SHARE` = 92 %; `play_steps` remembers the slot) while the narration goes on
-and beat actions play in the waits; growth is linear in the model's time; a mid still is
-planned half-way (storyboards). `reveal: all` grows every live series in the first step, with
-the static parts; fits and annotations on live data follow in a second step. The action `grow`
-(`scenes/plot_actions.py`, targets live series, `axes`, `panel<N>`; option `to`) grows from
-where the series are, lasting until the beat's next action (`ActionRunner.time_left(next_action
-=True)`, `NarratedScene.beat_time_left`) or the beat's end; a later `grow` continues; the
-plot's own steps leave its series (and a panel's / all with `axes`) to it. `reveal` of a live
-series grows it over the rest of the beat (`entrance_time`). Fits on a live series, and
-annotations on one or in a rescaling panel, first finish its growth (a `Succession`: the fit
-appears once the data are complete). `settle()` finishes any growth still running when the
-scene ends.
-
-**Rescaling** applies to a data panel whose series are all live on one progress (one model, or
-a single live series), with `rescale: true`, not `aspect: equal`, for each axis not shared
-across panels, without breaks, not fixed at both ends, and not time-like; the schedule is built
-from the row-wise extent of the panel's series. The panel's static layout is the final domain,
-so legends, fit boxes, notes and readouts are placed once against all the data.
-
-**Filling histograms.** A histogram series with `live` (or of a model's column) fills as its
-values arrive in their order: the progress counts values (`times` = 0 … N), the bins are those of
-all the values (so the static layout, fits and legends hold), each frame bins the first ⌊u⌋
-values (`np.bincount` of each value's bin, cached) with √N error bars; an empty bin shows no
-marker yet; its y axis widens from the running highest bar (`fixed_lo`: from 0); its readout
-counts the values (`events = 1303`). A fit on it waits until all values are in.
-
-**Readouts** are boxes sized to their widest text over the whole growth (the time column once
-per model, then `label = value unit` per series; a step count and whole-number values written
-whole, the last step reached for recurrences, walks and live data), placed like notes: in a
-free spot of their panel, else in the side column (16:9) or above the figure (9:16).
-
-**Zoom.** The built-in `zoom` action gained `x` / `y` (`[from, to]` in data units; not with
-`scale`): on a `plot` (`scene_problems`: plot scenes only) the camera stays and the targets'
-panels (`axes`, `panel<N>`, a series' panel; x also every panel sharing it and residual panels)
-ease their domains in transform space (`blend`); annotations of those panels fade out and come
-back with the zoom's undoing (`temporary`: at the beat's end or `until`); while zoomed a growth
-keeps drawing into the zoomed view and its rescaling waits until the zoom is over. A broken axis
-is refused.
-
-**Choices.** No scipy (§97.5's reasons) and no new dependency: RK4 / RK45 / Verlet are short and
-tested against analytic solutions. Rescaling eases ahead of the data rather than after (data
-never poke out of the plot); the price is a domain that moves a moment before the head reaches
-its edge. Readouts are not tied to the head (moving text is hard to read on a phone).
-
-Public: `vidgen.api.register_model`; `plotcore`: `simulate_ode`, `simulate_recurrence`,
-`random_walk`, `poisson_process`, `register_model`, `registered_models`, `run_registered`,
-`Simulation`, `SplitMix64`, `conservation_drift`, `ODE_METHODS`, `METHOD_ALIASES`, `rk4`,
-`rk45`, `verlet`, `IntegrationError`, `grown`, `segment`, `value_at`, `time_like`,
-`rescale_schedule`, `Stop`, `domain_at`, `blend`, `axis_for`, `readout_number`,
-`readout_text`, `relabel`; `plot_draw.flat`, `morph_into`, `head_marker`, `draw_panel(cache=)`;
-`mathexpr.parse_system` / `SystemExpression` (not re-exported); `NarratedScene.beat_time_left`;
-action `grow`; `zoom` options `x`, `y`; `plot` params `models`, `rescale`, series `model`,
-`live`, `head`, `readout`, `trail`. `scenes/plot.py` was split: the drawing helpers moved to
-`scenes/plot_figure.py` (mixin `PlotFigure`).
-
-**Gaps after Step 224**: a rescaling panel needs all its series on one progress (a filling
-histogram alone in its panel); bins of a filling histogram are fixed by all its values; readouts show values, not their uncertainties; zooming a
-broken axis is refused; an annotation cannot follow the head; adaptive RK45 has no dense output
-(steps end on the sample times, so `samples` bounds the largest step) — dense output added in
-Step 228 (§97.13).
+**Timing**: consecutive free live series of one model form one step: axes and legend (≤ 0.8 s),
+then growth over `GROW_SHARE` = 92 % of the slot, linear in model time. Action `grow` (targets
+live series, `axes`, `panel<N>`; `to`) lasts until the beat's next action
+(`ActionRunner.time_left(next_action=True)`, `NarratedScene.beat_time_left`) or the beat's end.
+Fits and annotations on live data wait for the growth; `settle()` finishes it at scene end.
+**Rescaling** only for a panel whose series share one progress, `rescale: true`, not `aspect:
+equal`, per unshared, unbroken, not doubly fixed, not time-like axis; the static layout is the
+final domain (boxes placed once). **Filling histograms**: bins of all values, each frame bins the
+first ⌊u⌋. **Readouts**: sized to their widest text over the growth, placed like notes.
+**Zoom**: the `zoom` action's `x` / `y` (data units, not with `scale`, plot scenes only) eases the
+panels' domains (camera still), annotations fade out until undone; broken axes refused.
 
 ### 97.9 Quantities with units (Step 225)
 
-**Decision: an own engine, no pint.** pint would cover units and conversions, but not what the
-`calculation` scene needs most — exact fractions through a chain (2/3 × 1/25 × 1/4 = 1/150),
-significant figures carried by the school rules, TeX of every step, explanations of dimension
-errors in the author's words — and it is a dependency with its own registry files and parser to
-keep in step on the owner's Windows / Python 3.12 install. The engine is small (≈ 2 000 lines
-in `vidgen/quantities/`, stdlib only: `fractions`, `decimal`), deterministic and tested against
-textbook values; pint is not needed even as an optional extra. No new dependency.
+**Own engine, not pint**: calculations need exact fractions through a chain, school
+significant-figure rules, TeX of every step and dimension errors in the author's words.
+`vidgen/quantities/` is stdlib only (`fractions`, `decimal`), imports only `vidgen.errors` /
+`vidgen.mathexpr`, deterministic. Exported as `vidgen.api.quantities`.
 
-**Units** (`quantities.units`). A dimension is seven `Fraction` exponents (m, kg, s, A, K, mol,
-cd; a fractional power is possible: √m). A `UnitDef` is an SI factor — a `Fraction` when the unit
-is defined exactly (km, h, eV from e, au, ly = Julian year × c, atm, bar, mmHg, cal = 4.184 J, Da
-from CODATA 2022), a float when π is involved (deg, pc = 648 000/π au) — a dimension, an offset
-(°C, °F only) and whether SI prefixes may precede it (2022 set, `u`/`μ` for µ, `da`, `h`, `c`,
-`d`). `parse_unit(text)` (cached): symbols, then a prefix + a prefixable unit (`Pa`, `cd`, `min`,
-`mol` win over prefix readings; `ft` is refused, not femtotonnes), products (`*`, `·`, `.`, a
-space), `/` dividing the next factor, powers (`^2`, `**2`, `²`, `⁻¹`, `^(1/2)`), brackets, a
-leading `1` (`1/s`); an offset unit must stand alone (`°C/s` refused, "write K/s"); did-you-mean
-over the symbols. `Unit.text` / `.tex` write it (one negative factor after a slash: `km/s`,
-`m/s²`, `GeV/c²`; else negative powers: `J·mol⁻¹·K⁻¹`). `si_unit(dim)`: a named derived unit when
-one matches exactly (N, J, W, Pa, C, V, Ω, F, T, Wb, H; J·s for an action; s⁻¹ is left alone —
-Hz or Bq), else the base units, kg first. `describe_dim`: `energy (kg·m²·s⁻², J)`, `speed
-(m·s⁻¹)`, or the base units for unnamed ones.
-
-**Constants** (`quantities.constants`): the SI 2019 defining constants exact (c, h, e, k_B, N_A;
-ħ, R = N_A·k_B, σ derived, ħ and σ kept as floats), CODATA 2022 (G, m_e, m_p, m_u, ε₀, μ₀), g_n
-(CGPM 1901, exact), the au (IAU 2012, exact), IAU 2015 nominal (GM)☉, (GM)⊕ and R⊕ (equatorial),
-M☉ and M⊕ as those parameters over CODATA G (six figures). Each with its TeX, meaning and source
-(shown in the table), aliases (`kB`, `Msun`, `eps0`...) and did-you-mean.
-
-**Quantities** (`quantities.quantity`). `Quantity(value, dim, sig)`: an SI value, a `Fraction`
-while exact and rational, else a float; `sig` its significant figures, `None` exact. Written
-values (`written`): a fraction is exact; a whole number without a unit is exact (a count); other
-numbers are measured with `count_sig` figures (leading zeros never, trailing zeros after a point,
-not in a whole number: `1500` → 2); `sig` rounds to the stated figures; `exact: true`. A value
-in °C converts to kelvin keeping its resolution (25.0 °C → 298.2 K). Arithmetic: `add` (dims
-must agree, error naming both sides and dimensions; the result keeps the coarser resolution,
-10^(decade − sig + 1), so cancellation loses figures), `mul` / `div` (fewest figures of the
-measured operands; division by zero named), `power` (a dimensioned base needs an exact rational
-exponent; exact roots of perfect powers stay exact: √(1/2500) = 1/50), `call` (`sqrt`, `abs`,
-`min`/`max` with equal dims, and the transcendental functions on pure numbers; figures of the
-argument). `decimal_text(value, sig, mode)`: rounded half away from zero (`Decimal`), plain in
-[10⁻³, 10⁵) when no digit left of the point is uncertain (29 800 to 3 figures → `2.98 × 10⁴`,
-240 to 3 → `2.40 × 10²`), else scientific — the plot core's bounds; Unicode and TeX.
-`fraction_text` for exact fractions; `nice_fraction`: numerator and denominator ≤ 100 000.
-
-**Expressions** (`quantities.expr`): the grammar of `mathexpr` (same tokens, implicit products,
-right-associative `^`) parsed into a tree (`Node`), plus a number with a unit in brackets (`9.81
-[m/s^2]`); numbers written in a formula are exact. `evaluate(node, env)` on quantities; `pi`,
-`e`, `tau` unless a symbol shadows them. `to_tex(node, leaf, replace, values, stack)` writes it
-with precedence-aware brackets (`\frac`, `\sqrt`, `e^{}`, `\ln 2`, products of symbols side by
-side with a thin space after a subscript, ×  between numbers and substituted values), a name
-written by `leaf` (a symbol, or a value with its unit), sub-trees replaced (`replace`: an
-evaluated part), and `stack` putting the outermost product on two lines (an `array`) for narrow
-frames. Not `mathexpr`'s closures: one tree serves evaluation and every TeX step; `mathexpr` is
-unchanged.
-
-**Worked calculations** (`quantities.calc`). `work(symbols, calcs, wrap, lenient)`: symbols
-(`SymbolInput`: value | constant | imported result) and calculations (`CalcInput`: name, expr,
-unit, convert, sig, format, tex, symbol, intermediate, substitute) in order; each result becomes
-a name for later ones (an earlier name used before it is computed: "computed by calculations[3],
-after this one"; a constant's key not in the table: "add {name: G, constant: G}"). A
-`CalcResult` has its value (`SymbolValue`: quantity, display unit, number as text / TeX, the SI
-value for substitutions without units), the steps (`Step`: kind formula | substitute |
-intermediate | result | convert, TeX after the relation `=` / `\approx`; the substitution in four
-variants: with units / SI numbers, on one line / two), the names used, conversions and
-warnings (a `sig` claiming more than the inputs give — for lint, Step 226). Names: identifiers,
-not function names, unique; `name_tex` writes them (`M_sun` → `M_{\odot}`, `k_B`, `lambda`,
-`t_half` → `t_{1/2}`, `p1` → `p_1`). The result's display: `unit` (checked) or `si_unit`; formats
-`auto` (an exact rational: a fraction when nice, then its decimal — exact when it terminates
-within six figures, `= 1/50 = 0.02`, else `≈ 0.00667`; exact irrational: 4 figures after ≈;
-measured: its figures), `decimal`, `sci`, `fraction` (exact results only), `percent` (pure
-numbers). The intermediate (default on) is the outer function's or power's non-trivial argument
-evaluated, with one guard figure beyond an explicit `sig`. Later calculations use full values.
-`wrap(key, tex)` lets the scene mark each symbol occurrence (dvisvgm groups) for highlights.
+- **Units** (`units`): a dimension is seven `Fraction` exponents (m, kg, s, A, K, mol, cd). A
+  `UnitDef` has an SI factor (a `Fraction` when exact: km, h, eV, au, ly, atm, bar, mmHg, cal =
+  4.184 J, Da; a float with π: deg, pc), a dimension, an offset (°C, °F only), prefixability.
+  `parse_unit` (cached): symbols before prefix readings (`Pa`, `min`, `mol`; `ft` refused),
+  products, `/`, powers (`^2`, `²`, `⁻¹`, `^(1/2)`), brackets, leading `1`; offset units alone
+  (`°C/s` refused, "write K/s"). `si_unit(dim)`: a named derived unit on exact match (N, J, W, Pa,
+  C, V, Ω, F, T, Wb, H; J·s; s⁻¹ left alone), else base units, kg first.
+- **Constants** (`constants`): SI 2019 exact (c, h, e, k_B, N_A; R = N_A·k_B), CODATA 2022 (G,
+  m_e, m_p, m_u, ε₀, μ₀), g_n, au (IAU 2012), IAU 2015 nominal (GM)☉, (GM)⊕, R⊕; M☉, M⊕ = GM /
+  CODATA G. Each with TeX, meaning, source, aliases, did-you-mean.
+- **Quantity** (`quantity`): `Quantity(value, dim, sig, temperature)`; value a `Fraction` while
+  exact, else float; `sig` None = exact. A written fraction or unit-less whole number is exact;
+  others get `count_sig` figures (`1500` → 2). °C → K keeps resolution (25.0 °C → 298.2 K). `add`:
+  dims must agree, result keeps the coarser resolution (cancellation loses figures); `mul`/`div`:
+  fewest figures; `power`: a dimensioned base needs an exact rational exponent, exact roots stay
+  exact. **Temperatures**: `"point"` (written in °C/°F) or `"difference"`; adding two readings is
+  refused, a difference cannot be shown in °C/°F, T + ΔT is a reading, K values are plain.
+  `decimal_text`: half away from zero, plain in [10⁻³, 10⁵) when no digit left of the point is
+  uncertain, else scientific.
+- **Expressions** (`expr`): `mathexpr`'s grammar as a tree (`Node`) plus `9.81 [m/s^2]`; formula
+  numbers are exact. `evaluate`; `to_tex(node, leaf, replace, values, stack)` with `stack` 0 / 1 /
+  2 (2: one factor of the outer product per line, a bare number kept with the next factor).
+- **Worked calculations** (`calc`): `work(symbols, calcs, wrap, lenient)` over `SymbolInput`s and
+  `CalcInput`s in order; each result names a value for later ones (use before computation, unknown
+  constants: errors saying the fix). `CalcResult`: value, `Step`s (formula | substitute |
+  intermediate | result | convert; substitution variants §97.10; `Step.values` of an
+  intermediate line), conversions, warnings (`sig` beyond the inputs). `name_tex` (`M_sun` →
+  `M_{\odot}`, `t_half` → `t_{1/2}`). Formats `auto` (a nice fraction then its decimal, exact if it
+  terminates within six figures; exact irrational: 4 figures after ≈; measured: its figures),
+  `decimal`, `sci`, `fraction` (exact only), `percent`. Intermediates carry one guard figure; later
+  calculations use full values. No ± propagation.
 
 ### 97.10 The `calculation` scene (Step 225)
 
-Name: **`calculation`** (no scene type, action or common target has it). It replaces neither
-`equation` (a formula that morphs) nor `equation_derivation` (algebra with reasons); it is the way
-to show worked numbers — the Hardy–Weinberg and pedigree-risk cards of Phases U / V wrote theirs
-as Pango text with `Fraction`s, which those scenes keep (compatibility); new worked numbers use
-`calculation`.
+**`calculation`** (`scenes/calculation.py`) shows worked numbers (`equation` and
+`equation_derivation` stay for formulas and algebra). Params: docs/CONFIG.md#calculation. The
+validator runs `work(lenient)`, so every param error surfaces in `validate_params` / `vidgen
+validate`; `from_scene` (`scene_id` or `scene_id.result`, also an orbit scene's `calc_values`,
+§98.5) is resolved by `validate_project` and at render (`resolve_imports`, recursive, loops
+refused).
 
-Params (`scenes/calculation.py`): `symbols` (`CalcSymbol`: `name`, exactly one of `value` /
-`constant` / `from_scene`, `unit`, `sig`, `exact`, `digits`, `tex`, `meaning`, `source`, `color`,
-`show`), `calculations` (`CalcStep`: `name`, `expr`, `meaning`, `unit`, `convert`, `sig`,
-`format`, `tex`, `symbol`, `substitute`, `intermediate`, `units: auto | always | never`), `table`
-(`auto | side | top | none`), `results_in_table`, `size` (72), `table_size` (40), `color`,
-`result_color`, `meaning_color`, `title`, `caption`. The params validator runs `work(lenient)`:
-every error a param can cause is reported by `validate_params` / `vidgen validate`;
-`from_scene` (`scene_id` or `scene_id.result`) is resolved by `validate_project` and at render
-(`resolve_imports`: the other scene's params parsed and worked, recursively; unknown scene /
-result with did-you-mean; a loop refused).
+**Layout.** Table beside the work in 16:9 (0.6 / 0.4), above in 9:16 (≤ half the body); rows
+`symbol = value unit` over `meaning · source`. One calculation at a time, lines aligned at the
+relation (group `vgrel`). `_fit`: a too-tall block shrinks its largest lines first to a common cap
+(bisection), no line more than `SPREAD` = 1.6 × the smallest, then a uniform shrink if too wide.
+Substitution variants in order: full units (one line, two lines, one factor per line), **common
+unit** (`Step.common` / `common_stacked`: when every value with a unit has the result's dimension,
+each is written in the result's unit with the unit once at the end, `(√(2.945² + 10.93²) − 7.726)
+km/s`; `common_bare` when the unit cancels ranks with SI), SI numbers (one / two lines). `_choose`
+judges final sizes: the most explicit units variant at least `NEARLY` 0.8 × the largest wins when ≥
+`KEEP_UNITS` = 1.2 × the readable size, else the first ≥ 0.8 × the largest or ≥ `LARGE` = 2 ×
+readable. `units: always` / `never` restrict the variants. Lines still below the readable size
+warn. Symbol colours: `color`, else a `terms:` colour with the same TeX, on every occurrence.
 
-Layout. The table beside the work in 16:9 (columns 0.6 / 0.4), above it in 9:16 (its natural
-height, at most half the body; two columns when the rows are short); a row is `symbol = value
-unit` (MathTex at `table_size`, ×1.15 in portrait) over `meaning · source` (readable caption
-text); results of all calculations but the last have rows from the start (hidden until their
-calculation leaves). The work area shows one calculation at a time: its lines aligned at their
-relation (a dvisvgm group `vgrel`), the block centred; each line scaled on its own to the width
-(at most `size`), then all together when the block is too tall (gaps excluded from the shrink).
-A substitution picks the first of its variants (units; units on two lines; SI numbers; SI on two
-lines) whose size is at least 80 % of the largest variant's or twice the readable size —
-explicit when it fits, readable when it does not. A warning when a line still ends below the
-readable size (lint's measure: the 75th percentile of glyph heights). The result line gets a
-`result_color` box. Symbol colours: `color`, else a concept colour (`terms:`) whose TeX equals
-the symbol's, applied to every occurrence (groups) in lines and table. The layout dump's math
-text is the TeX without the group markers.
-
-Steps. Calculations ≥ beats: calculations distributed over beats, each beat playing its
-calculations' lines; fewer: beats distributed over calculations, each calculation's lines over
-its beats. Lines an action names (`substitute` / `compute` / `convert` on `calc<N>`, `reveal` of
-a line or `calc<N>`) and the lines after them are left to the actions; an entrance brings the
-lines before it not yet shown and the following lines no action names; the first entrance of a
-calculation sends the previous one away (its rows fade, its result row fades into the table)
-and brings the title, caption and table. (Nested `Succession`s shrank a row in manim — the result
-box is created alongside the row's fade-in instead.)
-
-Targets: `title`, `table`, `symbol:<name>` (every occurrence: table, lines, substituted values),
-`row:<name>`, `calc<N>` / `calc:<name>`, `formula<N>`, `substitution<N>` (a formula of numbers
-only: the formula), `result<N>` / `result:<name>`, `conversion<N>`. Actions
-(`scenes/calculation_actions.py`): `substitute`, `compute`, `convert` — calculation scenes only
-(`calculation_actions = True`), targets `calc<N>` / `calc:<name>` checked with did-you-mean
-(`convert` needs `convert:` units); they play `Calculation.calculation_step(target, action)`.
-
-Public: `vidgen.api.quantities` (module); scene type `calculation`; actions `substitute`,
-`compute`, `convert`. No config key, no dependency.
-
-**Gaps after Step 225**: the narration lint against computed results is Step 226 (results and
-warnings are ready: `Params.worked(project)`); temperatures are absolute (a difference of two
-°C values is right in K, but adding two absolute temperatures is not refused); units in
-`[brackets]` inside an expression are not converted for an SI substitution; no uncertainties
-(± propagation) — significant figures only; a long formula is shrunk or stacked, not broken at
-`=` signs; Phase U / V cards keep their own worked-number text.
+**Steps.** Calculations spread over beats (or beats over a calculation's lines); lines an action
+names, and those after, wait for the action. A new calculation sends the previous away in
+`LEAVE_SHARE` = 0.5 of a step (result row into the table). Targets: `title`, `table`,
+`symbol:<name>`, `row:<name>`, `calc<N>` / `calc:<name>`, `formula<N>`, `substitution<N>`,
+`result<N>` / `result:<name>`, `conversion<N>`. Actions `substitute`, `compute`, `convert`
+(`scenes/calculation_actions.py`, calculation scenes only; `convert` needs `convert:`).
 
 ### 97.11 Lint for calculations and plots (Step 226)
 
-Ten rules (scene scope, configurable in `lint.rules` like the others, last in `LINT_RULES`):
-`calc_numbers`, `calc_units`, `calc_sigfigs` (info) and `plot_units`, `plot_log`,
+Ten scene-scope rules (last in `LINT_RULES`; models `CalcNumbersRule` … `PlotFitClaimsRule`):
+`calc_numbers`, `calc_units` (`tolerance` 0.05), `calc_sigfigs` (info), `plot_units`, `plot_log`,
 `plot_errors`, `plot_series`, `plot_truncated` (info), `plot_conserved` (`tolerance` 0.01),
-`plot_fit_claims` (`sigmas` 2, `tolerance` 0.05); `calc_numbers` / `calc_units` take `tolerance`
-(0.05). Like the `science_*` / `genetics_*` rules they read the config, not the stills: the
-runner appends `calc_issues` (`lint/calc_rule.py`) and `plot_issues` (`lint/plot_rule.py`) to
-`SceneContext.science` (`ScienceIssue`s, reported by `science_rule._issues`).
+`plot_fit_claims` (`sigmas` 2, `tolerance` 0.05). They read the config, not stills:
+`lint/calc_rule.py` and `lint/plot_rule.py` append to `SceneContext.science`.
 
-**Knowledge** (`vidgen/quantities/accuracy.py`, no manim; reuses `cellworld.accuracy.plain` /
-`Claim` and `genetics.accuracy.HYPOTHETICAL`): `said_values(sentence)` → `SaidValue`s — numbers
-in digits (`2,500`, `29.8`, `3.73 × 10⁻¹⁹`, `6.674e-11`, `1.5 million`, `1/25`) and in words with
-a strict whole-number grammar (`words_value`: "three hundred sixty-five", "a hundred and fifty";
-"two and three" is not a number), decimals said with "point" ("eight point oh four"), spoken
-powers of ten ("times ten to the minus nineteen"), fractions with ordinal denominators ("three
-halves", "forty-nine fiftieths", "one twenty-fifth", "one and a half"), shares ("one person in
-twenty-six", "1 out of 3"); each with its resolution (half its last written place; a whole
-number's trailing zeros allow rounding by up to a tenth of it — "thirty" covers 29.8, "two
-hundred" not 150), significant figures (sure only with a decimal point or a non-zero last
-digit), "about" (also "near", "≈"), a bound ("more than"), a range ("400 to 700", "between 3 and
-5", "two or three"). Units after a number: spoken (`UNIT_WORDS` with prefixes, "square" /
-"cubic" / "squared", "per", "an hour" for times: "kilometres per second", "metres per second
-squared", "micrograms per litre", "degrees Celsius") or symbols parsed by `parse_unit` (a
-stop-list keeps "5 am", "2 as" out; three-letter lowercase words are not units); "in kilograms"
-earlier in the sentence gives unit-less numbers a unit. `agrees(said, actual_si, tolerance,
-sigma)` compares in SI (shares on N); "about" also accepts rounding to 1–2 significant figures
-or `tolerance`. `mixup_power` finds a factor 10^(3k) that would make it agree.
-`dimension_claims`: a quantity word linked to a value ("a speed of", "the half-life is") whose
-unit has another dimension (masses and momenta may be in eV, a frequency a share).
-`fit_quantities(kind, names, params, errors, units, x_unit)` → `FitQuantity`s with propagated
-errors (exponential: half-life ln2/|k|, lifetime 1/|k|, rate; growth: doubling time; the
-exponential distribution 1/λ; power: exponent; linear: slope, intercept; gaussian / normal:
-centre, σ, FWHM; Breit–Wigner: M, Γ; logistic: L, x₀, k; Poisson: mean; custom: parameters by
-name); `fit_claims` reads "<word> (of|is|at|…) <value>" and accepts the value within `sigmas`
-standard errors plus its rounding (in the parameter's unit, converted from the said one).
-`error_meaning_claims`: in a sentence about bars / errors, a meaning (standard deviation, SEM,
-confidence interval, range, Poisson) other than the declared ones.
+**Number reader** (`vidgen/quantities/accuracy.py`, not re-exported): `said_values(sentence)`
+reads digits, number words (strict grammar), spoken decimals and powers of ten, ordinal fractions,
+shares, each with a resolution (half the last place; trailing zeros allow up to a tenth: "thirty"
+covers 29.8, "two hundred" not 150), figures, "about", bounds, ranges and units (spoken
+`UNIT_WORDS` or `parse_unit` symbols). `agrees(said, actual_si, tolerance, sigma)`; `mixup_power`
+(a 10^(3k) slip); `fit_quantities` / `fit_claims` (derived fit values such as half-life ln2/|k|,
+within `sigmas` errors); `error_meaning_claims`.
 
-**Which value a number refers to** (`calc_rule`). Candidates are every calculation scene's
-symbols and results (`Params.worked(project)`, imports resolved; a result shown in its first
-conversion), with the content stems of their `meaning` (number words left out). A number with a
-unit: its own scene's values of that dimension — any it agrees with is fine (and then
-`calc_sigfigs` checks a result's figures), else the one the sentence names, else the scene's only
-value of that dimension (a result); `mixup_power` makes it `calc_units`, else `calc_numbers`. A
-pure number or share: only a value the sentence names (its name, or two meaning words — all when
-the meaning has one), the number containing or nearest after the mention (shares, fractions,
-percentages and decimals before bare whole numbers); in its own scene one meaning word no other
-value has also names it, but then only a share / fraction / percentage / decimal is taken.
-Another scene's results only in scenes without numbers of their own (not a calculation, not a
-plot with fits: those have their own values and `plot_fit_claims`) and only when named. A unit of
-another dimension for a named value is `calc_units`. Texts: beats, and on screen the params
-`title`, `subtitle`, `heading`, `caption`, `text`, `body`, `lines`, `bullets`, `items`, `points`,
-`note`, `footer`, a plot's annotation texts and callout labels (`calc_rule.screen_texts`).
-`CalcResult.warnings` (a `sig` beyond the inputs) are `calc_sigfigs`.
-
-**Plots** (`plot_rule`, the plot resolved with the project's CSVs and models as at render):
-`plot_units` — an axis title naming a physical quantity (`QUANTITY_UNITS`) with no unit and no
-"relative / count / (…) / per …"; a fit with parameter units on a unitless x. `plot_log` — on a
-log axis: error bars' lower ends ≤ 0, a fit curve over its range or its band ≤ 0, an hline /
-vline / range ≤ 0; and a resolve error about a log scale (data from a CSV or a model that
-validation of inline data could not see). Validation already refuses inline data ≤ 0 and a
-histogram on log y (its bars start at 0). `plot_errors` — `y_err` / `x_err` without `error`;
-narration naming another meaning. `plot_series` — a panel of several series whose legend is off
-(`Plot._legend_panels`) where label / arrow annotations do not name them all; placeholder names.
-`plot_truncated` — a bars histogram on a y axis with `breaks` (a linear `min` above 0 is refused
-by validation), a `bar_chart` with `baseline` ≠ 0 and every value on one side. `plot_conserved` —
-`Params.conservation()` above `tolerance`, suggesting leapfrog (or, with leapfrog, half the step).
-
-**Narration–picture rules.** `SHOWING_ACTIONS` gains `fit`, `annotate`, `grow`, `substitute`,
-`compute`, `convert`; `Plot.target_text` (series name, a named fit, an annotation's text, the
-title) and `Calculation.target_text` (a `row:` / `symbol:` target's table note "meaning ·
-source", the title; formulas are math, not text labels).
-
-**Choices.** English only, as the other accuracy rules. Narrow by design (a false finding teaches
-authors to ignore lint): negations, questions, comparisons ("than"), hypotheticals, bounds and
-ranges are not read; a pure number needs its name in the sentence; cross-scene matching only from
-scenes without numbers of their own. The trailing-zero rule (a tenth at most) is the compromise
-between "thirty" for 29.8 (fine) and "two hundred" for 150 (wrong). `plot_conserved`'s 1 %:
-leapfrog on the Step 224 pendulum drifts 0.02 %, RK4 with a coarse step 8 %.
-
-Public: lint rules and their config models (`CalcNumbersRule` … `PlotFitClaimsRule`); module
-`vidgen.quantities.accuracy` (reached as `vidgen.api.quantities.accuracy` after import; not
-re-exported); scene classmethods `Plot.target_text`, `Calculation.target_text`. No dependency.
-
-**Gaps after Step 226**: a calculation's chain is compared value by value (a number said for an
-intermediate step is not read); a pure number in a sentence that does not name its value ("two
-thirds times one twenty-fifth times one quarter is one in two hundred") is not read; units in
-words after a symbol number ("90 km an hour") keep only the symbol; no checks of numbers on
-`bar_chart` / `line_chart` labels against their data; `plot_fit_claims` reads the plot scene's
-own fits only.
+**Matching** (`calc_rule`): candidates are calculation scenes' symbols and results
+(`Params.worked(project)`) with their `meaning`, plus unnamed intermediate values (never blamed).
+A number with a unit agrees with any same-dimension value of its scene, else is checked against the
+named / only one (`calc_units` on a power slip, else `calc_numbers`); a pure number only against a
+value the sentence names; other scenes' results only from scenes without own numbers, when named.
+Texts: beats and on-screen params (`calc_rule.screen_texts`). **Plots** (`plot_rule`, resolved as
+at render): physical-quantity titles without units (`QUANTITY_UNITS`), non-positive things on log
+axes, errors without meaning, unnamed series with the legend off, truncated bars, conservation
+drift (suggesting leapfrog or half the step). `SHOWING_ACTIONS` includes `fit`, `annotate`,
+`grow`, `substitute`, `compute`, `convert`. **Narrow by design** (false findings teach authors to
+ignore lint): English; negations, questions, comparisons, hypotheticals, bounds are not checked.
 
 ### 97.12 Adoption, the substitution layout, the example and the docs (Step 227)
 
-**Adoption of the core by the Phase U / V plots** (the rule of §97.3: only where clearly better
-and visually compatible, with before / after stills; stills in the scratchpad's `s227/before16`,
-`before916` and `adopt/build/...`):
-
-| plot | decision | why |
-|---|---|---|
-| PCR temperature trace (`dna_lab`) | **adopted** | it drew its own axes (`molecular_draw.plot_axes`, now removed): a rotated "°C", "denature" printed over the 95 tick label and the trace. On the core (`plotcore.layout_axes` with hand-built `Axis`es, `plot_draw.draw_panel`): a horizontal title "temperature (°C)", the three temperatures as the y ticks named by their stage ("denature 95", "extend 72", "anneal 50") with dashed gridlines, "cycle k" under each cycle; the stage names no longer sit inside the plot. Labels the core would thin are spread apart instead (`dna_lab._all_y_labels`: each temperature names a stage). The plot is a little shorter (the title row); the gallery entry `dna_lab` was regenerated (GIFs 110 / 120 KB) |
-| allele-frequency and heterozygosity plots (`population`) | skipped | already drawn with `vidgen.charts.chart_axes`, the style the core copies: the core would draw the same picture; the risk (lines growing per generation, the bottleneck band, the stacked H plot and their tests and gallery entry) buys nothing visible |
-| Manhattan, QQ and regional plots (`gwas`) | skipped | `chart_axes` too; the Manhattan x axis is categorical (chromosomes), which the core does not do; the QQ plot's square ranges (both axes to the same ceiling) already give the equal aspect |
-| cyclin–CDK curves (`cell_cycle`) | skipped | no numeric axes (levels in a.u. without ticks, phase bands): not a chart (§97.3) |
-| action-potential inset (`molecule`) | skipped | a small inset in a side panel with units at the axis ends and a threshold line; the core's layout spends a title row above and a label row below, which the inset cannot spare, and the core has no inset plots yet (§97.4 gaps) |
-| Sanger trace, gel, NGS coverage | not candidates | pictures of lab results (§97.3) |
-
-`plotcore.layout_axes(area, x, y, measure, top=)` (new, exported): one panel laid out like
-`layout_figure`'s from axes the caller built (`Axis` with its own ticks and labels) — for domain
-plots whose ticks mean something other than round numbers.
-
-**Substitutions keep their units** (reviewer's note on Step 225). The orbit's substitution fell
-back to SI numbers without units even in 16:9: the rule wanted a variant at least 80 % as large
-as the largest (the SI one) or twice the readable size, and the block's uniform shrink made every
-line small. Now (`scenes/calculation.py`): (1) when the block is too tall, the largest lines
-shrink first, down to a common size (`_fit`: a cap found by bisection; then no line more than
-`SPREAD` = 1.6 times the smallest, so the lines read as one block; then a uniform shrink if the
-aligned block is too wide) — a big formula gives way before a long substitution; (2) a third
-way with units, one factor of the outermost product per line (`Step.deep`, `expr.to_tex(stack=2)`;
-a bare number stays with the factor after it: `2 × G`, not `2` alone); (3) each way is judged by
-its final size in the block, and the units ways win when the most explicit of them that is nearly
-as large as the largest is at least `KEEP_UNITS` = 1.2 × the readable size (`_choose`), else the
-old rule over all ways. Results: orbit (√(G M☉ / r)) keeps units in 16:9 and 9:16, escape
-(√(2 G M / R)) in 16:9 (SI in 9:16, where G's unit is too wide), the photon's E = hc/λ in both.
-`Step.unit_variants()`; `units: always` now includes the one-per-line way. Lines of one block can
-now differ in size (within `SPREAD`); a formula that used to stand twice as large as a long
-substitution now comes down towards it (the orbit, the photon); the gallery entry `calculation`
-was regenerated.
-
-**The example** `examples/radioactive-decay` (2:52, Kokoro `af_heart` at 0.85, the `beacon` bed at
-−8 dB, no captions overlay: the plots need the height): a live Monte Carlo (CSV series with `live:
-true`; 1000 and 20 nuclei beside exp(−λt), fixed axes), counts with √N bars on a log axis fitted
-by `model: custom` `A*exp(-lambda*x)` (λ itself in the box; the built-in exponential shows k = −λ)
-with a confidence band and normalized residuals, a zoom on the tail, the half-life with its
-uncertainty and its distance from the tabulated value in standard errors (uncertainty as a
-calculation of its own: the engine carries significant figures, not ±), carbon-14 dating as a
-chain. Data from `make_data.py` (standard library, `random.Random(227)`: stable across Python
-versions), labelled "simulated" on screen. Lint clean in 16:9 and 9:16 with the real narration.
-
-**Docs.** Guide topic `science` (aliases plots, plot, calculations, calculation, units, fits,
-physics, data; the alias `science` left the `biology` topic, which keeps cell-biology, lecture,
-research); the guide's chooser snippets of `plot` and `calculation` moved into their own block
-`# science charts`, so the gallery index has a section "Science charts" (`gallery.SECTION_NOTES`
-links the example and the cookbook); `docs/COOKBOOK-SCIENCE-CHARTS.md`; CONFIG's calculation
-layout paragraph; the CONFIG completeness test now covers `plot` and `calculation`.
-
-Public: `plotcore.layout_axes`; `quantities.Step.deep`, `Step.unit_variants`;
-`expr.to_tex(stack=)` takes 0 / 1 / 2 (a bool still works). No config key, no dependency.
-
-**Gaps after Step 227**: the population, GWAS, cyclin and action-potential plots keep their own
-drawing (above); `layout_axes` has no shared-axis variant; a substitution whose single factor is
-wider than the frame (G's unit in 9:16) still falls back to SI numbers; in 16:9 a crowded fit
-figure needs `label_size: caption` for a readable residual panel; a live CSV series has no head
-readout of its own time unless `readout:` is set.
+Only the PCR trace (`dna_lab`) is on the core (`layout_axes` with hand-built axes; y ticks the
+three stage temperatures, `dna_lab._all_y_labels`); `population` / `gwas` stay on
+`charts.chart_axes`, the other lab pictures on their own drawing. Substitution layout: §97.10.
+Example `examples/radioactive-decay` (data from `make_data.py`, `random.Random(227)`, stable
+across Python versions, labelled "simulated"). Guide topic `science` (aliases plots, plot,
+calculations, calculation, units, fits, physics, data), gallery section "Science charts"; the
+CONFIG completeness test covers `plot` and `calculation`.
 
 ### 97.13 Review of Phase W (Step 228)
 
-**Accuracy, checked against numpy / scipy** (scratchpad `s228/probe*.py`; kept as tests in
-`tests/test_science_review.py`, the scipy comparisons skip without scipy):
-
-| what | reference | finding |
-|---|---|---|
-| weighted / unweighted lines, polynomials | `curve_fit`, `numpy.polyfit(cov=...)`, `linregress` | parameters 1e-10, errors 1e-8 to 1e-15, R² and χ² exact |
-| confidence and prediction bands of a line | the textbook formulas with Student's t | 1e-15 |
-| exponential, Gaussian, logistic, power (weighted and not), their bands | `curve_fit` + the delta method | parameters ≤ 3e-7, errors ≤ 1e-5 (numerical Jacobian) |
-| x errors (effective variance) | `scipy.odr` | parameters within 0.06 σ, errors 0.1 %: an approximation of orthogonal regression, kept and documented |
-| binning rules sturges / fd / scott / sqrt / auto | `numpy.histogram_bin_edges` | same edges (1e-12) |
-| **histogram with a number of bins or a rule's exact edges** | `numpy.histogram` | **bug, fixed**: the 12-digit cleaning of the edges could move the outer edge past the smallest or largest value, which was then dropped (`outside`); with 50 random values and `bins: 7` it happened in most samples. `hist._cover` keeps the outer edges at the data's ends |
-| maximum-likelihood normal / exponential / Poisson | `scipy.stats.*.fit`, `poisson.pmf` | exact |
-| **counts fitted with √N weights** | a Poisson likelihood minimised by `scipy.optimize.minimize` | **bias, fixed**: weights from the observed counts (Neyman's χ²) pull a decay low where counts are few; for the example's data λ came out 0.47 σ high on average (300 simulated data sets). Counts — `y_err: sqrt` on a series, or a histogram's curve fit — are now fitted by Poisson maximum likelihood: least squares re-weighted with the fitted curve's variance until it settles (`fit_curve(poisson=scale)`; the fixed point solves the likelihood equations; errors from the Fisher information; χ² is Pearson's; a 0 count is a point like any other instead of an error). The example's λ: 0.276 → 0.274 ± 0.004 min⁻¹ (scipy's likelihood minimum to 1e-8) |
-| normal / t quantiles, χ² tail | `scipy.stats` | 1e-9 or better |
-| RK45 | `solve_ivp` (RK45, DOP853) | the same error; **inefficiency, fixed**: steps ended on every output time (2401 right-hand-side calls for 400 samples of an oscillator; scipy 716). Now the steps follow the error control and the outputs come from the method's dense output (scipy's interpolant): 709 calls, the same accuracy. **The absolute tolerance** was rtol × 10⁻³ whatever the model's scale (a concentration of 10⁻⁷ mol/L was integrated to an absolute 10⁻⁹): now scaled by the largest initial value |
-| RK4 / leapfrog drift | closed forms | Kepler e = 0.5 over 30: RK4 2e-8, leapfrog 3e-4 (bounded, O(step²)) as documented |
-| SplitMix64 | the reference sequence (seed 1234567) | identical |
-| constants | `scipy.constants` (CODATA 2022), IAU | identical; R = N_A·k_B exactly, M☉ and M⊕ from IAU GM / CODATA G |
-| units | conversion factors | ly, pc, au, Torr, mmHg, cal, Da: as defined |
-
-**Units: temperatures on an offset scale** (the gap of Step 225). `Quantity.temperature`:
-`"point"` for a value written in °C / °F (a reading), `"difference"` for a difference of two
-readings. In kelvin the arithmetic is right either way, so nothing changes in value; the marks
-catch the two slips: adding two readings is refused ("write a change of temperature in K, or the
-readings in K to average them"), and a difference cannot be written in °C / °F ("10 K would read
-as −263 °C"). A difference scaled by a pure number stays one; a reading times anything is no
-longer a reading; T + ΔT is a reading. Readings written in K are plain values (a K value may be a
-temperature or a change), so averages in K work.
-
-**Known gaps of 222–227, decided:**
-
-| gap | decision |
-|---|---|
-| equal-aspect axes with independent tick steps | fixed: both axes take the larger step (`figure._common_step`) inside the equal-aspect loop (square gridlines) |
-| RK45 without dense output | fixed (above) |
-| normalized residual panels hard to read | fixed: symmetric about 0, ticked at ±2 (`AxisSpec.ticks`, caller-chosen linear ticks), the points without bars (each is ±1 by definition, the bars only took room); counts use σ = √fit, as their χ² |
-| intermediate calculation steps not seen by the lint | improved: an `intermediate` line keeps its evaluated parts (`Step.values`); the lint takes them as candidates without a name: a number said for one agrees, none is ever blamed |
-| a calculation's slow fade when the next starts (it read as a ghost behind the new formula) | fixed: the leaving calculation takes `LEAVE_SHARE` = 0.5 of a step against 1 per line coming |
-| a single factor wider than the frame falls back to SI numbers | stays: breaking a unit or a value across lines would mislead; SI numbers with the units in the table are honest |
-| crowded 16:9 fit figures need `label_size: caption` | stays documented (an automatic switch would change existing plots) |
-| rescaling only when every series of a panel shares one progress | stays (a panel with two clocks has no single domain at a time) |
-| zoom on a broken axis refused | stays (a zoom inside one piece would need the break logic per frame) |
-| 9:16 long fit box reserves room above the figure from the start | stays (the layout is static; moving the plot when the box appears would jump) |
-| `bar_chart` / `line_chart` value labels not compared with narration | stays (their labels come from their own data; a narration check would be a chart-scene rule) |
-| Phase U / V domain plots not adopted | the decisions of §97.12 stand |
-
-**Module boundaries.** `vidgen.plotcore` and `vidgen.quantities` import only `vidgen.errors` and
-`vidgen.mathexpr` (no manim, no scipy, no scenes; checked in a fresh interpreter).
-`quantities.accuracy` (the lint's knowledge, not re-exported) imports the sentence helpers of
-`cellworld.accuracy` / `genetics.accuracy`, which loads those pure-Python packages; acceptable for
-a lint module, noted for a later move of the shared sentence helpers into a neutral module.
-
-**Compatibility.** Phase Q baseline: 31 frames, max difference 0 (`phase-q-baseline/check228`).
-Changed on purpose: fits of counts (`y_err: sqrt`, histogram curve fits) by Poisson likelihood
-(only `examples/radioactive-decay` uses them: narration and the `half` scene updated to λ = 0.274,
-t½ = 2.53 min, σ = 0.041 min, z = 0.5; three beats re-voiced with Kokoro), normalized residual
-panels, equal-aspect tick steps, RK45 samples (dense output: differences within the tolerance),
-the calculation hand-over timing. The gallery is unchanged (no gallery scene uses any of them).
-
-Public (additive): `plotcore.fit_curve(..., poisson=)`, `AxisSpec.ticks`,
-`quantities.Quantity.temperature`, `quantities.Step.values`. No config key, no dependency.
+Fixes folded into §97.3–§97.10; accuracy tests in `tests/test_science_review.py`. Kept by decision:
+rescaling only on one shared progress; no zoom on broken axes; a 9:16 fit box reserves its room from
+the start (static layout); crowded 16:9 fit figures need `label_size: caption`; `bar_chart` /
+`line_chart` labels are not compared with narration. `quantities.accuracy` imports the sentence
+helpers of `cellworld.accuracy` / `genetics.accuracy`.
 
 ## 98. Orbital mechanics (Phase X, Steps 229–236)
 
-Orbital-mechanics videos at university level (and for science YouTube): real physics, computed
-exactly, honest about scale, in schu-video-generator's flat style, 16:9 and 9:16. The phase **builds on Phase
-W** and re-implements none of it: axes, equal aspect, ticks in AU / km and line clipping come from
-`vidgen.plotcore` / `vidgen.plot_draw` (§97.3); n-body motion from its integrators (`verlet`,
-`rk45`, §97.7); values with units and the IAU / CODATA constants from `vidgen.quantities`
-(§97.9); worked Δv budgets are `calculation` scenes (§97.10); the accuracy lint extends the
-`calc_*` / `plot_*` machinery (§97.11). Additive and opt-in: a new package and a new scene type;
-existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q baseline
-31/31 after Step 229).
+Real two-body and n-body physics, computed exactly and honest about scale, on Phase W: axes and
+equal aspect from `plotcore` (§97.3), integrators `verlet` / `rk45` (§97.7), units and constants
+from `quantities` (§97.9), Δv budgets as `calculation` scenes (§97.10), lint on the `calc_*`
+machinery (§97.11). User guide: `docs/COOKBOOK-ORBITS.md`; keys: docs/CONFIG.md#orbit.
 
 ### 98.1 The phase (plan)
 
-- **Step 229, plan and orbital model** (this section): the model package `vidgen.orbits` (no
-  manim, §98.2), the `orbit` scene type (§98.3) with bodies, conic orbits, motion in correct
-  timing, trails, an equal-aspect frame, scale ticks / a scale bar, a time readout with the
-  speed-up, a view following a body, `dynamics: nbody`; validation with clear errors.
-- **Step 230, Kepler's laws and orbital speed**: on the `orbit` scene, overlays drawn from the
-  same `Elements`: the ellipse's geometry (foci, a, b, e, periapsis / apoapsis marks), equal areas
-  as shaded sectors between clock times (`System.position` at the sector's two times; the area
-  from `swept_area`), velocity vectors and a speed readout (vis-viva), Newton's cannonball (one
-  start point, speeds circular / elliptic / escape / hyperbolic: `Elements.from_state`); orbit
-  actions timed to beats and words (the clock is `Playback`: an action can pause, slow or jump it,
-  which is why the motion lives in one updater driven by the scene clock). T² ∝ a³ is a `plot`
-  (log–log, a fitted slope 3/2, §97.5) fed from the presets' `a` and `period`.
-- **Step 231, manoeuvres**: impulsive burns as a sequence of Kepler arcs (a burn changes v at a
-  time: the next arc is `Elements.from_state(r, v + Δv)`; the scene draws Δv arrows), Hohmann
-  (Δv₁, Δv₂, transfer time = half the transfer ellipse's period, phase angle, synodic period),
-  bi-elliptic, plane change (2 v sin(Δi/2)), raising / lowering, phasing; gravity assists by
-  patched conics (a hyperbola in the planet's frame from v∞ and periapsis: turning angle
-  2 asin(1/e), velocity addition in the Sun's frame). Validation: a burn whose new periapsis lies
-  inside a body (the same check as §98.3), an arc that hits the planet. Δv budgets as
-  `calculation` scenes (`from_scene` reads the manoeuvre's computed values).
-- **Step 232, many bodies**: the circular restricted three-body problem in the rotating frame
-  (the view rotates with the primaries: a `follow`-like frame transform in `OrbitModel.view`),
-  Lagrange points L1–L5 (roots of the collinear quintic for a mass ratio; L4 / L5 at 60°; the
-  Routh stability condition μ < 0.0385), Trojan-like motion, resonances (Io–Europa–Ganymede
-  1:2:4), the figure-eight solution (Chenciner–Montgomery initial values), energy drift readouts
-  leapfrog against RK45 (both already here, §98.2), tides as a schematic.
-- **Step 233, the Solar System on a date**: the presets' JPL Table 1 elements gain their rates
-  (per century) and a `date:` (validity 1800–2050, refused outside), true-scale and log-radial
-  views, insets, "sizes not to scale" labels (already shown by §98.3 when bodies are enlarged),
-  synodic periods, conjunctions / oppositions by root finding on the angle between two planets.
-- **Step 234, accuracy lint**: narration and labels against the model — periods against
-  semi-major axes (Kepler III with the right μ), speeds (vis-viva), Δv, transfer times, escape
-  speeds, distances, scale claims, energy drift of a declared-conserved run, a periapsis inside a
-  body; on `calc_numbers` and `plot_conserved`'s machinery, with `target_text` (§98.3) for names.
-- **Step 235, example, docs, gallery**: "How to get to Mars" (Hohmann Earth → Mars, computed Δv
-  budget and ~259-day transfer, ~44° phase angle, ~26-month synodic period), Kokoro narration,
-  16:9 and 9:16; guide topic `orbits`; CONFIG; `docs/COOKBOOK-ORBITS.md`; the gallery section
-  "Orbital mechanics" (started in Step 229 with `orbit`; the gallery is at 12.9 of 13 MB after
-  it, so 235 must optimize or record a budget change); README; CHANGELOG.
-- **Step 236, review**: physics against independent calculations (constants, published elements,
-  Kepler solver, conversions), compatibility, the phase's and related suites, `tests/test_mcp.py`.
+Done: §98.2–§98.9, with the review folded in (§98.10).
 
 ### 98.2 The model: `vidgen.orbits` (Step 229)
 
-A package without manim (checked in a fresh interpreter by a test), exported by `vidgen.api` as
-the module `orbits` (like `plotcore` and `quantities`). SI throughout: m, s, rad, μ = GM in m³ s⁻².
+No manim (a test imports it in a fresh interpreter); exported as `vidgen.api.orbits`, public names
+`orbits.__all__`. **SI throughout**: m, s, rad, μ = GM in m³ s⁻².
 
-| module | contents |
-|---|---|
-| `kepler` | Kepler's equation for every conic, element-wise on floats or arrays: elliptic `M = E − e sin E` (Newton from Danby's start E₀ = M + 0.85 e sign(sin M), in the same turn as M), hyperbolic `M = e sinh H − H` (Newton), parabolic Barker `M = D + D³/3`, D = tan(ν/2), in closed form (Cardano, written without cancellation); `E − e sin E` and `e sinh H − H` are evaluated as `(E − sin E) + (1 − e) sin E` with a series for small arguments, so the solvers stay at rounding level near e = 1 (tests: e = 0.999999 and 1.000001 to 1e-13). `true_from_mean`, `mean_from_true` (refusing ν beyond a hyperbola's asymptotes), `mean_motion` (√(μ/|a|³); 2√(μ/p³) for Barker's convention), `kind_of` (a parabola within `PARABOLIC_TOLERANCE` = 1e-9) |
-| `elements` | `Elements(mu, p, e, i, raan, argp, nu)`: stored by the semi-latus rectum p so one representation serves ellipse, parabola and hyperbola. Constructors `from_a`, `from_periapsis`, `from_apsides`, `from_state(mu, r, v)` (2 or 3 components; a radial trajectory refused); `state()` / `state_at_anomaly` / `states(t)` / `positions(t)` (perifocal → reference rotation R₃(−Ω) R₁(−i) R₃(−ω)); derived `a`, `b`, `periapsis`, `apoapsis`, `period`, `mean_motion`, `energy` (−μ/2a), `angular_momentum` (√(μp)), `v_infinity`, `nu_limit`, `radius_at`, `speed_at` (vis-viva), `time_of_flight`, `at(t)`, `conic(samples, r_max)` (an ellipse sampled evenly in E, an open conic in its anomaly out to r_max). Conventions for degenerate cases: equatorial → Ω = 0 (ω is the longitude of periapsis), circular → ω = 0 (ν is the argument of latitude / true longitude). Functions `vis_viva`, `period`, `semi_major_axis` (from a period), `circular_speed`, `escape_speed`, `specific_energy` |
-| `bodies` | `Body(name, gm, radius, color, source)`; `BODIES` (Sun, Mercury … Neptune, Moon) and `ORBITS` presets (the planets on JPL's Table 1 J2000 mean elements, ω = ϖ − Ω, M = L − ϖ, the Earth's being the Earth–Moon barycentre's; the Moon at 384 400 km, e = 0.0549, i = 5.145°; `iss` circular at 420 km, 51.64°; `geo` from one sidereal day; `halley` with rounded 1986 elements, "for illustration"); the sources in the module docstring: IAU 2015 B3 nominal GM☉, GM⊕, R☉, R⊕ via `quantities.constants`; DE440 planetary GM (planet systems from Mars outwards); IAU WGCCRE 2015 radii. `body_preset`, `orbit_preset` with did-you-mean |
-| `values` | `value_si(value, kind, where)`: an author's value with its unit (`'1.5 AU'`, `'7.8 km/s'`, `'92 min'`, `'3.986e14 m^3/s^2'`, `'5.97e24 kg'`; angles: a bare number is degrees) through the units engine of `quantities`, the dimension checked and explained; `length_unit` (AU above 0.05 AU in auto), `time_unit` (min / h / d / yr), `speedup_text` (`× 6.1 million`); `G` (CODATA 2022), `AU` (IAU 2012), `DAY`, `YEAR` (Julian) |
-| `system` | `Orbiter(name, body, elements, parent)` and `System(central, orbiters)`: hierarchical Kepler motion (the Moon around the Earth around the Sun: positions added up the parent chain); `Playback(start, seconds, span)`: video time → simulated time at one constant speed-up; `swept_area` (Kepler II check) |
-| `nbody` | `simulate(system, span, method, step, samples)` → `NBodyRun`: every body with gm > 0 pulls on every other (gm 0: test particles), from the Kepler states at t = 0, in the barycentre, integrated in scaled units (the largest starting separation; the time in which the total mass turns a body one radian there) with Phase W's `verlet` (leapfrog, default step 1/1000 of the shortest 2π√(q³/μ)) or `rk45` (rtol = atol = 1e-10); outputs relative to the central body, Hermite-interpolated between samples; the total energy (Σ½GMᵢvᵢ² − ΣGMᵢGMⱼ/rᵢⱼ, i.e. the energy times G) or, with one massive body, the test particles' specific energies; `drift` |
+- `kepler`: Kepler's equation for every conic, element-wise on arrays: elliptic (Newton from
+  Danby's E₀ = M + 0.85 e sign(sin M)), hyperbolic (Newton), parabolic Barker `M = D + D³/3` in
+  closed form; `E − e sin E` and `e sinh H − H` evaluated as `(E − sin E) + (1 − e) sin E` with a
+  small-argument series, so solvers stay at rounding level near e = 1. `kind_of`: parabola within
+  `PARABOLIC_TOLERANCE` = 1e-9.
+- `elements`: `Elements(mu, p, e, i, raan, argp, nu)` **stored by the semi-latus rectum p**, so one
+  representation serves every conic (a parabola has no finite a). `from_a`, `from_periapsis`,
+  `from_apsides`, `from_state(mu, r, v)` (radial refused); rotation R₃(−Ω) R₁(−i) R₃(−ω);
+  equatorial → Ω = 0, circular → ω = 0; `conic(samples, r_max)`; free functions `vis_viva`,
+  `period`, `semi_major_axis`, `circular_speed`, `escape_speed`, `specific_energy`.
+- `bodies`: `BODIES` / `ORBITS` presets (planets from `ephemeris.TABLE1`; Moon 384 400 km, e =
+  0.0549, i = 5.145°; `iss`, `geo`, `halley`, Galilean moons, Pluto); sources in the module
+  docstring (IAU 2015 nominal GM☉, GM⊕, R☉, R⊕; DE440 GM; IAU WGCCRE radii; JPL Galilean GM).
+  `body_preset`, `orbit_preset`, `planet_preset`, `preset_on(key, jd)` with did-you-mean.
+- `values`: `value_si(value, kind, where)` (`'1.5 AU'`, `'92 min'`; a bare angle is degrees; mass
+  `'2 Msun'` = nominal GM / G) via `quantities`, dimension checked; `length_unit` (AU above 0.05
+  AU), `time_unit`, `speedup_text`.
+- `system`: `Orbiter(name, body, elements, parent, trajectory)`, `System` (positions summed up the
+  parent chain), `Playback` (§98.5), `swept_area`.
+- `nbody`: `simulate(system, span, method, step, samples, initial=)` → `NBodyRun`: bodies with gm >
+  0 attract, gm 0 are test particles; barycentric, in scaled units; `verlet` (default step 1/1000
+  of the shortest 2π√(q³/μ)) or `rk45` (rtol = atol = 1e-10); outputs relative to the central
+  body, Hermite-interpolated (`velocity` its derivative); energy (× G) and angular-momentum drift
+  (`angular_scale` = Σ|r||v| so a zero total has a meaningful error).
 
-**μ for a body's orbit** is G(M + m): the parent's GM plus the body's own (the Moon's month uses
-GM⊕ + GM☾: 27.28 d at the mean distance 384 400 km). A planet preset's orbit therefore uses
-GM☉ + GM_planet, which is what Table 1's mean motions assume to within their accuracy.
-
-**Why stored by p**: a parabola (the escape case of Newton's cannonball, Step 230) has no finite
-a; with p every conic has the same formulas for r(ν) = p / (1 + e cos ν) and the perifocal velocity
-√(μ/p) (−sin ν, e + cos ν).
+**μ for a body's orbit is G(M + m)** (the Moon's month uses GM⊕ + GM☾; planets GM☉ + GM_planet,
+as Table 1 assumes).
 
 ### 98.3 The `orbit` scene type (Step 229)
 
-Name checked: no scene type, param or target is called `orbit` (`orbit:<name>` is the scene's own
-target). `scenes/orbit.py` (drawing, timing) and `scenes/orbit_parts.py` (the YAML bodies:
-`OrbitCentral`, `OrbitBody`, `build_system`, `resolve_model` → `OrbitModel`).
+`scenes/orbit.py` (drawing, timing), `scenes/orbit_parts.py` (`OrbitCentral`, `OrbitBody`,
+`build_system`, `resolve_model` → `OrbitModel`); mixins for §98.4–§98.7. Params:
+docs/CONFIG.md#orbit.
 
-- **Bodies**: a preset, elements (the size one way: `a` with `e`, `periapsis` with `apoapsis` or
-  `e`, `apoapsis` with `e`, `altitude`; then `i`, `raan`, `argp`, `nu` or `mean_anomaly`), or a
-  state `r`, `v`; `around` another body listed before (a preset's primary is found by itself when
-  listed). Elements written next to a preset override it.
-- **Timing**: the first beat's entrance (frame, title, central body, orbits drawn, bodies) takes at
-  most 1.2 s; then one updater on a z-first clock mobject reads the scene's clock
-  (`renderer.time`, not a sum of dt: manim gives the first frame of every play a dt of 0) and maps
-  it through `Playback` from that moment to the scene's last frame (the beats' windows in whole
-  frames, as `narrate` waits them) onto 0 … `span`. Equal video times are equal simulated times,
-  so Kepler's second law shows unforced (tested on the rendered scene's own clock: equal areas to
-  1e-4). `span` (a time) or `orbits` (periods of the first body; refused for an open orbit).
-- **Picture**: the view's extent covers every body's path over the span (in the view's frame) and
-  the closed orbits around a still centre, open orbits capped at 3 × the rest (a lone flyby: 3 ×
-  its periapsis); a 6 % margin; `frame: axes` is a `plotcore.layout_figure` panel with
-  `aspect="equal"` and ticks in AU or km (10³ moved into the title by the core), `scale_bar` a
-  1-2-5 bar, `none`. The readout box sits beside the plot in 16:9 and above it in 9:16, sized
-  for the widest time it will show (no re-layout while it plays). Bodies drawn at true size when
-  that is at least 0.12 (central) / 0.075 (orbiter) Manim units, else enlarged to it, and then the
-  readout says "sizes not to scale". Orbits: thin conics in the body's colour (dashed when open),
-  around their parent's current position. Trails: 8 pieces fading to the tail (a quarter orbit by
-  default; a share; a time). Labels pick the first of eight sides free of other bodies, labels and
-  the readout, keeping their side while it stays free (no jumping). A body outside the plot is
-  hidden with its label. (Step 230 revised the picture's layout and the labels: §98.4.)
-- **Follow**: positions are shown relative to the followed body (`OrbitModel.view`); its
-  satellites' conics stay still, everything else moves with the view.
-- **n-body**: `dynamics: nbody` integrates once at validation (cached by the params' JSON, the 32
-  most recent kept), the readout adds ΔE/E at the nearest output; the conics drawn are the
-  osculating starting orbits, the trails show the real paths.
-- **Validation** (`VidgenError` → `ValidationError` at `vidgen validate`): units of the right kind,
-  unit-less lengths, negative masses, e < 0, two ways of giving a size, periapsis inside the body
-  orbited ("it would crash", with both distances), `orbits` of an open orbit, a preset whose primary
-  is missing, unknown presets / bodies / `follow` with did-you-mean, radial velocities, ν beyond
-  the asymptotes, `energy` / `method` / `step` without n-body, duplicate names.
-- **Targets**: `title`, `frame`, `central`, `body:<name>` (dot, label, trail), `orbit:<name>`,
-  `readout`; `target_text` gives on-screen names for the narration lint. Actions: the generic
-  ones; Step 230 adds overlay targets and the actions `sweep` and `launch` (§98.4).
-
-**Public (additive)**: `vidgen.api.orbits` (the module above); the scene type `orbit`. No config
-key outside the scene's params, no dependency.
-
-**Known gaps after Step 229** (planned later in the phase): no sectors, vectors or orbit actions
-(230); no burns or transfers (231); no rotating frame (232); presets at J2000 only, no dates (233);
-no orbit lint rules (234). Inclined orbits are drawn as their projection on the reference plane
-(the view from above; documented). A scene of only open orbits frames 3 × the periapsis: bodies
-leave the view at the end of a long span unless `extent` is set.
+- **Bodies**: a preset, elements (size one way only), or a state `r`, `v`; `around` a body listed
+  before. Elements next to a preset override it.
+- **Timing**: entrance ≤ 1.2 s; then one updater on a clock mobject reads `renderer.time` (not a
+  sum of dt: manim gives a play's first frame dt 0) and maps it through `Playback` onto 0 …
+  `span` up to the last frame (beat windows in whole frames, as `narrate` waits them). Within a
+  stretch equal video times are equal simulated times, so Kepler II shows unforced. `span` or
+  `orbits` (refused for open orbits).
+- **Picture**: the extent covers every path over the span in the view's frame; open orbits capped
+  at 3 × the rest (a lone flyby: 3 × periapsis; `extent` overrides); margin 6 % (13 % with burns).
+  `frame: axes` (`layout_figure`, `aspect="equal"`, AU / km), `scale_bar` (1-2-5), `none`. Bodies
+  at true size when ≥ 0.12 (central) / 0.075 (orbiter) units, else enlarged and the panel says
+  "sizes not to scale". Inclined orbits drawn projected on the reference plane. Trails 8 fading
+  pieces. `follow` shows positions relative to a body.
+- **n-body** (`dynamics: nbody`): integrated once at validation (cached by params JSON, 32 kept);
+  conics are the osculating start orbits; burns refused (burns are Kepler arcs).
+- **Validation** (`VidgenError`): wrong unit kinds, unit-less lengths, negative masses, e < 0, two
+  sizes, periapsis inside the body ("it would crash"), missing primary, did-you-mean names, radial
+  velocities, ν beyond the asymptotes, n-body keys without n-body, duplicate names.
+- **Targets**: `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `readout`, plus the
+  overlays'; `Orbit.target_text` names them for the lint.
 
 ### 98.4 Kepler's laws and orbital speed (Step 230)
 
-**Layout fixes first** (the reviewer's notes on 229's stills: the picture used a third of the
-frame, labels crowded the Sun and the Earth, a tall picture left the 16:9 sides empty):
+**Layout.** No axis titles: the length unit is written once (after the x ticks in 16:9, above the
+y ticks in 9:16). The round picture takes the full height under the title in 16:9; the caption
+sits in the side column under the panel (wrapped to ≥ `COLUMN_CAPTION_WIDTH` 4.4, `CAPTION_GAP`
+0.25), else under the picture. The **side panel** (beside in 16:9, above in 9:16) is `Slot` rows
+sized once from probed texts (no re-layout while playing); row choice §98.7. **Labels**
+(`orbit_overlays.place`): 8 directions × rings 0 / 0.3 / 0.65 / 1.1; cost overlap × 10 (panel,
+column caption, dots incl. its own, earlier labels), outside the plot × 20, orbit points × 0.004,
+0.12 per unit of ring; the previous candidate kept while within 0.03 of the best (no jumping).
 
-- The axes carry **no titles**: both axes are lengths in one unit, written once — after the x tick
-  labels in 16:9 (the layout is redone in an area grown by the two title rows and narrowed by the
-  unit's width), above the y ticks in 9:16 (the x title's row goes to the picture). Title and
-  caption gaps 0.3 / 0.2. The picture now takes the whole height between title and caption in
-  16:9 (tested: plot height > 0.6 of the frame) and the whole width in 9:16.
-- The readout box is a **side panel** of rows (`Slot`: probed texts sizing it once — no re-layout
-  while it plays —, a dynamic value by the simulated time, a colour swatch, or the velocity key's
-  arrow): time, speed-up, ΔE/E, the overlays' values, and a **legend** of the bodies with their
-  periods (`legend: auto` = two or more bodies), so the room a tall picture leaves beside it in
-  16:9 holds information. Beside the picture in 16:9 (level with its middle), above it in 9:16; it
-  drops its last row when no size is enlarged ("sizes not to scale" absent); an empty row keeps
-  its height (the probe's text at opacity 0: a text without points would break `arrange`).
-- **Labels** (`orbit_overlays.place`): candidates in 8 directions × rings 0 / 0.3 / 0.65 / 1.1
-  units further out; the cost is the overlap with obstacles (the panel, every other body's dot,
-  labels placed before, the overlays' labels, the cannon) × 10, the area outside the plot × 20,
-  orbit-line points under it × 0.004, 0.12 per unit of ring; the previous candidate is kept while
-  within 0.03 of the best (no jumping). Beyond ring 0 a thin leader line joins label and dot. A
-  central body drawn large (wider than 1.4 × its label) carries its name on itself, in the
-  background colour. Tested: no label overlaps another label, a dot or the panel.
+**Model** (`orbits.laws`): `ellipse_geometry` (e < 1), `apsis_names` (perihelion, perigee, perilune,
+perijove…), `area_between` (Gauss–Legendre, 48 nodes per ≤ 45°, from the shape), `sector_times` /
+`sector_areas` (times from Kepler's equation, areas from the shape: Kepler II checked, not
+assumed). `cannon_shots` → `Shot`s, `classify` by ε = v²/2 − μ/r: parabolic within 10⁻⁹ μ/r (e set
+to 1), so only `escape` (√2 × circular exactly) is parabolic; suborbital impact at ν = −acos((p/R −
+1)/e). `kepler_planets()` is the plot model **`kepler_planets`** (`kind: function`): Kepler III as
+a `plot` with a `power` fit.
 
-**Model** (`vidgen.orbits.laws`, no manim): `ellipse_geometry(el)` (a, b, c = ae, q, Q, the centre,
-the empty focus, the apsides, an end of the minor axis, the perifocal unit vectors; refused for
-e ≥ 1); `apsis_names(body)` (perihelion / aphelion, perigee / apogee, perilune / apolune, perijove
-/ apojove, else periapsis / apoapsis); `area_between(el, ν₁, ν₂)` = ½ ∫ r(ν)² dν by Gauss–Legendre
-(48 nodes per ≤ 45° piece) — from the shape alone; `sector_times` / `sector_areas(el, count,
-start)`: the anomalies at equal times come from Kepler's equation, the areas from the shape, so
-their equality (to 1e-11 in the tests, Halley included) is Kepler's second law checked rather than
-assumed; `cannon_shots(mu, radius, r0, speeds, angle, clockwise)` → `Shot` (speed, multiple of
-the circular speed, elements from the state, kind, energy, impact time) with `classify` by the
-specific energy ε = v²/2 − μ/r: parabolic within 10⁻⁹ μ/r of zero (then e set to exactly 1),
-hyperbolic above, else suborbital when the periapsis lies inside the planet, circular (e = 0 from
-`from_state`) or elliptical — so 1.414 × v_circ is honestly elliptical and only `escape` (√2
-exactly) parabolic; a suborbital shot's impact at the inbound crossing ν = −acos((p/R − 1)/e)
-through `time_of_flight`, the ball held there afterwards; `named_speed` (`circular`, `escape`);
-`kepler_planets()` (a in AU, T in Julian years with μ = G(M☉ + m), T without the planet's mass,
-a³, T²) registered as the plot model **`kepler_planets`** (`kind: function`), so Kepler III is a
-Phase W `plot` with a `power` fit (exponent 1.50008 ± 0.00004: the planets' masses) — no new plot
-code.
-
-**Scene** (`scenes/orbit_overlays.py`, a mixin of `Orbit`; `scenes/orbit_actions.py`):
-
-- A body's `geometry` (`true` or some of `foci`, `axes`, `apsides`; refused on an open orbit):
-  F′ ring and C cross; the major axis dashed, a (centre → apoapsis) and b (centre → minor end) solid
-  with their lengths; apsis dots with "perihelion 0.586 AU" (in km around a body with a radius:
-  "(420 km up)"). Overlay labels are placed once by the same `place` with the ellipse and the axis
-  lines as heavy point obstacles (0.05 each), the tick labels as obstacles, and the whole picture
-  area (not only the plot) allowed. Targets `geometry:<name>` and `foci:`, `axes:`, `periapsis:`,
-  `apoapsis:`; `e = …` in the panel.
-- `sectors` (`count` 2–36, `show: alternate | all`; refused on an open orbit and with n-body):
-  polygons focus → arc (48 samples between the sector's two times) → focus, redrawn each frame
-  from the sweep's start; the panel lists Δt and the latest 4 areas (from `sector_areas` with the
-  actual start). Target `sectors:<name>`.
-- `velocity` (`live`, `along` 0–24, `readout`; refused with n-body): arrows in the text colour, one
-  scale for the scene (the fastest periapsis speed = ⅕ of the plot's shorter side), a 1-2-5 key
-  (≤ 0.6 × the fastest, ≤ 1.1 units) in the panel, the speed now and its max / min with the apsis
-  names. Target `velocity:<name>`.
-- `cannonball` (scene param; `bodies` may then be empty; refused with n-body, without a radius,
-  under the surface): a grey mountain and a barrel, shots coloured by kind (falling red, circular,
-  elliptical, parabolic, hyperbolic yellow; later shots of a kind lighter), paths drawn from the
-  launch to now (220 samples, clipped), a × at the impact; the view centred on the planet,
-  covering the closed and falling shots (at least 1.6 r₀), open ones leaving it; default span the
-  longest closed shot's period (≤ 4 circular periods). Targets `cannon`, `shot:<n>`.
-- **Held targets**: an overlay named by a `reveal`, `sweep` or `launch` of the scene starts hidden;
-  everything else enters with the first beat. Overlays of a satellite whose parent moves in the
-  view are `Pinned`: their points re-set from the parent's position each frame (so a FadeIn's
-  interpolation cannot leave them behind).
-- **Actions** `sweep` and `launch` (`animates = False`): the runner calls `cue(scene, time)` when
-  their beat starts with the frame time they are due; the scene stores that video time and maps it
-  through `Playback` when it draws (the first beat's cue comes before the motion's clock exists),
-  and adds the group to the scene. Their `scene_problems` check the scene type and the targets.
-  Tested on a render: the sweep starts at its word, both alternate sectors complete with areas
-  πab/4 (the drawn polygons too, to 1 %), the arrow's length is the speed × the scale, shots
-  launch in order and a falling one lies on the ground.
-
-**Public (additive)**: in `vidgen.api.orbits` the functions and classes above (`EllipseGeometry`,
-`ellipse_geometry`, `apsis_names`, `APSIS_NAMES`, `area_between`, `sector_times`, `sector_areas`,
-`Shot`, `SHOT_KINDS`, `classify`, `cannon_shots`, `named_speed`, `kepler_planets`,
-`kepler_planet_names`); the plot model `kepler_planets`; the `orbit` params `cannonball`,
-`legend`, `bodies[].geometry`, `sectors`, `velocity`; the actions `sweep`, `launch`. No
-dependency, no config key.
-
-**Not done**: pausing or slowing the clock on an action (the speed-up stays constant, which is
-what makes the equal areas honest; Step 231 added clock stretches, §98.5); n-body
-sectors / vectors; the orbit gallery media still show 229's layout (Step 235 renders the
-section).
-
+**Overlays** (`scenes/orbit_overlays.py`, actions in `orbit_actions.py`): `bodies[].geometry`
+(foci, axes, apsides; closed orbits), `sectors` (`count` 2–36; closed, not n-body), `velocity`
+(one arrow scale per scene: fastest periapsis speed = ⅕ of the plot's shorter side; not n-body),
+`cannonball` (needs a radius; not n-body). An overlay named by `reveal`, `sweep` or `launch` starts
+hidden; overlays of a moving parent's satellite are `Pinned`. Actions `sweep`, `launch`
+(`animates = False`): the runner `cue`s them with their due frame time, mapped through `Playback`
+at draw time.
 
 ### 98.5 Manoeuvres and gravity assists (Step 231)
 
-**Approximations, stated**: two-body Kepler arcs; burns are impulsive (Δv at an instant);
-transfers between circular coplanar orbits (an eccentric or inclined target is refused with the
-reason and the way to state the approximation: `e: 0`, `i: 0`); gravity assists by patched
-conics (the planet's gravity alone near it, its velocity constant during the pass).
+**Approximations, stated**: Kepler arcs, impulsive burns, transfers between circular coplanar
+orbits (an eccentric or inclined target is refused, suggesting `e: 0`, `i: 0`), patched-conic
+flybys shown in the planet's frame with a Sun-frame vector diagram.
 
-**Model** (no manim):
-
-| module | contents |
-|---|---|
-| `manoeuvres` | `local_frame(r, v)` (prograde along v, radial = prograde × normal — in the plane, outwards —, normal along r × v), `burn_vector` / `burn_components`, `direction_name` (a component ≥ 90 % of Δv names it, else "prograde + normal"); `BurnPlan(at, components, label)` (`at` seconds or `periapsis` / `apoapsis`: the next one, strictly after the burn before), `Burn` (time, position, velocity before / after, Δv, components, orbits before / after), `Arc`, `Trajectory` (arcs between burns; `states(t)` by arc, `elements_at`, `total_dv`); `fly(start, plans, radius, body, horizon)` — each burn adds Δv to the velocity there, the next arc is `Elements.from_state`; refuses burns out of order, an apsis of a circle, and an arc that reaches the surface moving inwards before the next burn (`crash_time`: the inbound crossing ν = −acos((p/R − 1)/e) through `time_of_flight`; the last arc to `horizon`, default for ever). `Hohmann` / `hohmann(mu, r1, r2, mu_target, mu_from)` (a, e, circular and transfer speeds, Δv₁, Δv₂, time = π√(a³/μ), phase = π − n₂ t wrapped to (−π, π] with n₂ from the target's own μ, synodic 2π/|n₁ − n₂|), `window_wait(now, needed, n_from, n_to)` (the next time the lead angle equals the needed one), `synodic_period`; `BiElliptic` / `bielliptic(mu, r1, r2, rb)` (rb beyond both orbits), `bielliptic_thresholds()` — bisection: 11.938765 (Hohmann = the rb → ∞ limit (√2 − 1)(1 + 1/√R) in units of v₁) and 15.58172 (d total / d rb = 0 at rb = r₂); `plane_change(v, Δi)` = 2 v sin(Δi/2), `combined_plane_change` (law of cosines); `Phasing` / `phasing(mu, r, angle, revolutions, radius)` (T_ph = T(1 − θ/2πk); refuses a phasing orbit into the planet: "take more revolutions") |
-| `flyby` | `turning_angle(mu, v∞, r_p)` = 2 asin(1/(1 + r_p v∞²/μ)); `Flyby` / `flyby(mu, v∞, r_p, radius, atmosphere, direction, clockwise)` — the hyperbola from its periapsis state (the incoming asymptote at π/2 − δ/2 from the periapsis direction), e, δ, v_p, a < 0, the aiming distance b, the centre where the asymptotes cross (|a| e beyond the periapsis), v∞ in / out; refuses a periapsis inside the planet or its atmosphere; `GravityAssist` / `gravity_assist(mu, v_planet, v∞_in, r_p, side)` — of the two ways past (clockwise, counterclockwise) the one on `side`: the pull turns v∞ by Δv∞ pointing from the periapsis to the planet, so the energy change v_planet · Δv∞ is positive exactly when the periapsis lies behind (r̂_p · v̂_planet < 0); a direction of arrival from which both ways go behind (or in front) is refused with the reason; speeds before / after, `gain`, `energy_change` (= ½(v_after² − v_before²), tested) |
-
-`Orbiter.trajectory` (optional) makes `System.position` / `state` follow the burns; `Orbiter.states`,
-`positions`, `elements_at`.
-
-**Scene** (`scenes/orbit_manoeuvres.py`, a mixin of `Orbit`; params in `orbit_parts.py`):
-
-- `bodies[].burns: [{at, prograde | retrograde | radial | anti_radial | normal | anti_normal, label}]`
-  (positive speeds; a minus sign is refused: "use the opposite direction"); `bodies[].alongside:
-  Earth` — the body starts at that body's state, the same circle under its own μ (a spacecraft
-  leaving with its planet; one label for both while they coincide).
-- `transfer: {kind: hohmann | bielliptic | phasing, ship, to, depart, apoapsis, revolutions}` —
-  `to` a body (same parent, circular within 1e-6, planes within 1e-6 rad) or a radius; `depart:
-  window` (default) = `window_wait` from the lead angle at t = 0 (0 for a radius or phasing), or a
-  time (then the panel says how far the target is missed). The transfer becomes the ship's burns
-  (Hohmann: prograde / retrograde Δv₁ at departure, Δv₂ after half the ellipse; bi-elliptic: three;
-  phasing: two opposite burns `revolutions` phasing periods apart, the lead angle at departure
-  closed). Default span: arrival + 20 % of the transfer time. `TransferInfo` keeps what the panel
-  shows. Refused: a ship with burns of its own, a non-circular ship, `apoapsis` without bi-elliptic,
-  a radius inside the planet, the same orbit ("use kind: phasing"), burns after the span.
-- `flyby: {v_inf, periapsis | altitude, side, angle, planet_speed, atmosphere, name, reach,
-  vectors}` — the probe is a body the scene adds (`OrbitModel.extra_bodies`; `Params.body_specs()`
-  is the bodies as written plus it) starting `reach` periapsis distances out (default max(6 r_p,
-  1.6 × the asymptotes' crossing) so the crossing is in the picture); the planet's motion is +x;
-  `planet_speed` defaults to a planet preset's √(G(M☉ + m)/a). Default span: the whole pass.
-- **Drawing**: a ship's orbits arc by arc (the current one solid, earlier ones faint and dashed,
-  later ones not yet); Δv arrows on one scale (the largest Δv = 0.16 of the plot's shorter side,
-  at least 0.12 units) with a ring and a label placed once (obstacles: panel, central body ×3,
-  ticks, other burns' labels and arrows; orbit lines); the transfer's planned path dashed with a
-  ring at the arrival (`transfer`); the phase angle (`phase`): lines from the centre towards ship
-  and target (stopping short of them), an arc and θ, live until departure, then held. The flyby:
-  asymptotes (dashed, clipped), δ at their crossing, v∞ arrows at 10 % / 90 % of the pass along the
-  asymptotic directions, the periapsis "400,000 km up", a dashed atmosphere ring, the planet's
-  motion in the plot corner the path and asymptotes keep away from; the **vector diagram** in a box
-  under the panel (16:9) or under the picture (9:16): V from O, v∞ in / out from its tip on a dashed
-  circle of radius v∞, before / after from O with their speeds.
-- **Panel**: a transfer's kind and target, Δv₁ … , total, transfer time, "Mars leads by 52.0°"
-  (live until departure), "window at 44.3°, every 780 d", the mission line ("next: Δv₂ in 3.3 h",
-  "next: Δv₁ now", "all burns done"); plain burns are listed with "Δv spent … of …"; a flyby's v∞,
-  δ and e, the side, the Sun-frame speeds and the gain. In 9:16 a panel of more than five rows is
-  set in two columns, wider rows scale the panel down with them, and the legend (`auto`) is left
-  out when a body burns.
-- **The clock** (the 230 gap): `Playback` gains inner `knots` (video s, simulated s) and
-  `Playback.timed(start, seconds, span, events, holds)`: fixed points at each event (a burn's
-  simulated time on its word, the flyby's periapsis passage), and between two of them one speed-up
-  over the time not held; holds (a `pause` until the next `coast`, else its beat's end) keep the
-  simulated time still. Refused with the reason: an event before the motion starts or after it
-  ends, events out of order, a hold over an event's word, holds leaving no time to move. A burn
-  at t = 0 on a later word makes the clock wait at 0 (and the burn happens on the word, not at the
-  start). The video times come from `NarratedScene.action_times(name, start)` (new, additive:
-  the frame each use falls due at, counted as `narrate` and the runner count them), computed when
-  the motion starts; the panel's speed-up row shows the current stretch's rate ("clock paused").
-  Within a stretch equal video times are still equal simulated times, so Kepler II stays honest.
-- **Actions** (`orbit_actions.py`, cues): `burn` (target `burn:<n>`), `flyby`, `pause`, `coast`
-  (no target: `- action: pause`; checked: the scene type, a flyby for `flyby`, no target given).
+- `orbits.manoeuvres`: `local_frame(r, v)` (prograde along v, normal along r × v, radial outwards),
+  `BurnPlan(at, components, label)` (`at` seconds or the next `periapsis` / `apoapsis`), `fly` (each
+  burn adds Δv; next arc `Elements.from_state`; refuses burns out of order, an apsis of a circle, an
+  arc reaching the surface inbound). `hohmann` (time π√(a³/μ), phase π − n₂t wrapped to (−π, π]
+  with n₂ from the target's own μ, synodic 2π/|n₁ − n₂|), `window_wait`, `bielliptic`,
+  `bielliptic_thresholds()` (11.938765, 15.58172), `plane_change` = 2v sin(Δi/2),
+  `combined_plane_change`, `phasing` (T(1 − θ/2πk); refuses orbits into the planet).
+- `orbits.flyby`: `turning_angle` = 2 asin(1/(1 + r_p v∞²/μ)); `flyby` (refuses a periapsis inside
+  planet or atmosphere); `gravity_assist(..., side)`: energy change v_planet · Δv∞ is positive
+  exactly when the periapsis lies behind (r̂_p · v̂_planet < 0); an arrival where both ways are on
+  one side is refused.
+- **Scene** (`scenes/orbit_manoeuvres.py`): `bodies[].burns` (positive speeds by direction name;
+  minus refused), `bodies[].alongside`, `transfer` (`hohmann` | `bielliptic` | `phasing`; `to` a
+  sibling circular within 1e-6 and coplanar within 1e-6 rad, or a radius; `depart: window` default;
+  becomes the ship's burns; default span arrival + 20 %), `flyby` (probe added as
+  `OrbitModel.extra_bodies`, `Params.body_specs()`). Δv arrows on one scale (largest = 0.16 of the
+  shorter side, ≥ 0.12 units).
+- **Clock**: `Playback(start, seconds, span, knots)` / `Playback.timed(..., events, holds)`: fixed
+  points at events (a burn on its word, flyby periapsis), one speed-up between them, holds (`pause`
+  … `coast`) keep simulated time still; refused: events outside the motion or out of order, a hold
+  over an event, holds leaving no time. Video times from `NarratedScene.action_times(name, start)`.
+  Actions `burn` (`burn:<n>`), `flyby`, `pause`, `coast`.
 - **Δv budgets**: `Orbit.calc_values(params)` → {name: (SI value, unit)} (`dv1`, `dv2`, `dv3`,
   `dv_total`, `t_transfer`, `r1`, `r2`, `v1`, `v2`, `phase_angle`, `synodic_period`, `wait`, `dv`,
   `t_phasing`, `dv_burn<n>`, `dv_spent`, `v_inf`, `r_p`, `e`, `delta`, `v_planet`, `v_before`,
-  `v_after`, `gain`); `calculation`'s `from_scene` reads them from a scene type that has
-  `calc_values` (4 significant figures), with the same did-you-mean errors.
-- Layout additions on the way: a margin of 13 % (instead of 6 %) when bodies burn (room for the
-  arrows' labels); the scale bar takes the plot corner the paths keep away from and lies over the
-  orbits and sectors (the 230 lint warning of a comet crossing it).
-
-**Public (additive)**: in `vidgen.api.orbits` the names of `manoeuvres` and `flyby` above;
-`Playback.knots`, `Playback.timed`, `rate`, `rates`; `Orbiter.trajectory`;
-`NarratedScene.action_times`; the `orbit` params `bodies[].burns`, `bodies[].alongside`,
-`transfer`, `flyby`; its targets and actions above; `from_scene` on orbit scenes. No dependency,
-no config key. Phase Q baseline 31/31 identical.
-
-**Not done**: n-body with burns (refused); the flyby is shown in the planet's frame only (no
-heliocentric before / after orbits; the vector diagram carries the Sun's frame); a plane change
-is seen from above as its projection (its Δv is right; a 3D view is not planned); finite burns;
-the orbit gallery media (Step 235).
+  `v_after`, `gain`), read by `calculation`'s `from_scene` (4 significant figures).
 
 ### 98.6 Many bodies (Step 232)
 
-**Approximations, stated**: the restricted problem is *circular* (the secondary on a circle at
-the mean distance: the Moon's e = 0.055 is left out) and its small bodies are massless; the
-Galilean moons are on circles in Jupiter's equator around a point-mass Jupiter (J2 neglected), at
-phases that give the Laplace angle 180°, not their positions on a date; the tides are a schematic
-(the static equilibrium tide; no oceans' dynamics, Love numbers, the bulges' lead or the Sun's
-tide).
+**Approximations, stated**: circular restricted problem with massless small bodies; Galilean moons
+on circles at phases giving the Laplace angle 180°; tides a static equilibrium schematic.
 
-**Model** (no manim):
-
-| module | contents |
-|---|---|
-| `threebody` | normalised rotating frame (separation 1, Ω = 1, the primaries at −μ and 1 − μ): `collinear_gamma(μ, point)` — the real positive root of Szebehely's quintic (`numpy.roots`, then Newton on the quintic), `lagrange_points(μ)` (L4 / L5 at (½ − μ, ±√3/2)), `ROUTH_MU` = (1 − √(23/27))/2 = 0.038 520 9 and `routh_stable`, `potential` Ω, `jacobi` C = 2Ω − v², `jacobi_inertial` (the same from inertial positions and velocities about the barycentre), `lagrange_jacobi`, `zero_velocity_segments` (vectorised marching squares on 2Ω = C, saddles paired by the centre's sign), `equations` / `integrate` (the rotating-frame equations on Phase W's RK45, rtol 10⁻¹¹: the Coriolis term depends on the velocity, so leapfrog is not symplectic there), `coorbital_angles` / `coorbital_kind` (tadpole L4 / L5, horseshoe, passing); `Restricted(key, primary, secondary, separation)` with `mu`, `omega`, `period`, `points()`, `distances()`, `with_mu`; presets `RESTRICTED`: `earth_moon` (384 400 km), `sun_earth` (the Sun with the Earth–Moon barycentre's GM, 1 AU), `sun_jupiter` (Table 1's a) |
-| `manybody` | `figure_eight(gm, length)` (Simó's values as quoted by Chenciner–Montgomery, scaled: T = 6.32591398 √(L³/GM)), `barycentre`, `binary_shares`, `nearest_ratio`, `laplace_angle`, `conjunctions` (zeros of the angle between two bodies, bisection; not its ±π jumps), `bends_toward` (sign(v × a) = sign(v × s)), `tidal_acceleration`, `equilibrium_tide` ((M_s/M_p) R⁴/d³) |
-
-Also: the Galilean moons in `BODIES` and `ORBITS` (GM from JPL's satellite ephemeris, JUP310
-values — **for the owner to check**; their sum is DE440's Jupiter-system GM minus the planet's;
-published sidereal periods; a from Kepler III with the `jupiter` preset's GM: within 0.03 % of the
-published mean distances); `value_si(..., "mass")` reads `'2 Msun'` / `'3 Mearth'` as that many
-nominal GM☉ / GM⊕ over G; `simulate(..., initial=)` takes starting states that replace bodies'
-Kepler states (the figure-eight: B's velocity relative to A is radial, no conic), and every run
-records the angular momentum (`angular`, `angular_scale` = Σ|r||v| with the same weights, so a
-total of zero — the figure-eight's — has a meaningful error; `angular_drift`, `angular_error`)
-and gives velocities (`NBodyRun.velocity`: the Hermite interpolant's derivative).
-
-**Checks against published values** (tests): Earth–Moon μ = 0.012 150 6, γ₁ = 0.150 934, γ₂ =
-0.167 833, L3 at −1.005 063 (Koon, Lo, Marsden & Ross 2011); L1 / L2 at 326 400 / 448 900 km from
-the Earth; Sun–(Earth + Moon) γ₁ = 0.010 011, γ₂ = 0.010 078: L1 / L2 at 1.4976 / 1.5077 million
-km from the Earth ("about 1.5 million km" verified); every point an equilibrium (∇Ω = 0 by finite
-differences, independent of the quintics); C₁ > C₂ > C₃ > C₄ = C₅ = 3 − μ(1 − μ); Routh
-27 μ(1 − μ) = 1; the figure-eight back at its start after T to 10⁻⁶ AU; Europa/Io = 2.0073,
-Ganymede/Europa = 2.0147, n_I − 3 n_E + 2 n_G = 0 to 10⁻⁸ rad/d, Io–Europa conjunctions every
-3.5256 d with Ganymede 90° away each time (and Io 180° from every Europa–Ganymede conjunction);
-the Earth–Moon barycentre 4 671 km from the Earth's centre, the Sun–Jupiter one outside the Sun;
-the tidal acceleration 2GMR/d³ ≈ 1.1 × 10⁻⁶ m/s² (1/29 of the Moon's pull), the equilibrium
-tide 0.36 m.
-
-**Scene** (`scenes/orbit_systems.py`: params and resolution; `scenes/orbit_many.py`: a mixin
-of `Orbit`, the drawing; `ManySpec` carries the params into `resolve_model`):
-
-- `system`: a restricted pair becomes the central body (the primary) and a first body (the
-  secondary on a circle at ν = 0, so the rotating frame's +x is the secondary at t = 0); the run
-  is n-body (the restricted problem is n-body with massless bodies) — RK45 by default with a pair
-  (a small body may pass close to the secondary; leapfrog's fixed step fails there), with output
-  samples scaled to the span (96 per turn of the pair, ≤ 40 000). `figure_eight`: A central, B
-  and C with stand-in Kepler orbits and their true states passed as `initial`; leapfrog at T/4000.
-- **The view** (`OrbitModel.view`): with `origin: barycentre` positions are taken from the
-  barycentre of the massive bodies, then turned by `turn` × θ(t) — θ the pair's angle, unwrapped
-  (Ω t corrected to the run's own positions, so the secondary sits exactly on +x). `turn` (0 the
-  inertial view, 1 the rotating frame) is set by the scene each frame from `view` and the actions
-  `corotate` / `inertial` (smoothstep over `run_time`, default 2 s); `from_rotating` places
-  rotating-frame points (Lagrange points, zero-velocity curves) in the view. The view's extent
-  covers the paths in every view the scene uses (a disc when it switches). Trails are sampled
-  64 per turn of the pair (≤ 2 400) so a many-turn trail redraws correctly in the turning frame;
-  Kepler conics are not drawn about the barycentre (they are not the paths there) except a
-  binary's two ellipses (each the relative orbit scaled by the other's mass share).
-- Overlays: Lagrange × marks (labels under them, L1's and L2's on the sides facing away from each
-  other, kept in the plot), the secondary's circle (dashed, clipped), a turning-arrow badge in the
-  least crowded plot corner while the frame turns (the words in the panel), the zero-velocity
-  curve (computed once in the rotating frame over the view, turned in the inertial view),
-  conjunction lines (always with points, hidden by opacity, so a reveal's fade keeps its shape),
-  the barycentre mark, the pointer to an off-plot central body (moved off a Lagrange mark).
-- Panel rows: μ, Routh, the frame shown, L1 / L2 distances, each `near` body's Jacobi constant
-  and ΔC/C, its angle ahead of / behind the secondary and its co-orbital kind over the span; the
-  figure-eight's T and return; a binary's mass ratio and barycentre; resonance ratios, the
-  Laplace angle (1:2:4), conjunction counts; curvature; ΔL/L with ΔE/E. The legend in 9:16 is
-  left out with a pair or a resonance (labels name the bodies).
-- `tides`: its own layout (no axes): the planet large, the satellite on a schematic circle at
-  its real angle and time, the real tidal geometry (d ≫ R) for the arrows: pull at `points`
-  surface points (scaled so the centre's pull is 0.55 units), the centre's pull, the difference
-  (scaled so the longest is 0.5 units; the panel gives the factor, ×27 for the Moon), a bulge
-  ellipse along the line, the near-side mark (locked: it faces the planet; `locking: false` keeps
-  it fixed in space). Labels placed by `place` off the panel and the planet.
-- **Performance** (shared code, output unchanged): the panel reuses each row's cached text in
-  place and restores its points after drawing (copying every row each frame was most of a
-  long scene's render time); a trail run wholly inside the plot skips the per-segment clipping.
-
-**Public (additive)**: in `vidgen.api.orbits` the names of `threebody` (`integrate` as
-`integrate_restricted`, `potential` as `restricted_potential`) and `manybody`, `GALILEAN_PERIODS`,
-`GALILEAN_PHASES`; `NBodyRun.angular / angular_scale / angular_drift / angular_error /
-velocity`; `simulate(initial=)`; the `orbit` params `system`, `view`, `origin`, `lagrange`,
-`zero_velocity`, `resonance`, `center`, `tides`, `bodies[].near / shift / drift / curvature`; the
-targets `lagrange`, `lagrange:L1`…, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`,
-`pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`; the actions `corotate`, `inertial`. No
-dependency, no config key.
-
-**Not done**: n-body with burns (refused); the forbidden regions are drawn as their boundary only;
-the bulges' lead and the planet's spin; resonances with eccentricities (the conjunctions' slow
-drift here comes from the period ratios alone); the gallery media (Step 235).
+- `orbits.threebody` (rotating frame, separation 1, Ω = 1, primaries at −μ and 1 − μ):
+  `collinear_gamma` (Szebehely's quintic, `numpy.roots` then Newton), `lagrange_points`, `ROUTH_MU`
+  = (1 − √(23/27))/2, `jacobi` C = 2Ω − v², `zero_velocity_segments` (marching squares),
+  `integrate` (RK45, rtol 10⁻¹¹: the Coriolis term makes leapfrog non-symplectic here),
+  `coorbital_kind`; `Restricted` presets `RESTRICTED` (`earth_moon`, `sun_earth`, `sun_jupiter`).
+  Exported with `integrate` as `integrate_restricted`, `potential` as `restricted_potential`.
+- `orbits.manybody`: `figure_eight` (Simó's values, T = 6.32591398 √(L³/GM)), `barycentre`,
+  `laplace_angle`, `conjunctions` (bisection on zeros, not ±π jumps), `tidal_acceleration`,
+  `equilibrium_tide` ((M_s/M_p) R⁴/d³); `GALILEAN_PERIODS`, `GALILEAN_PHASES`.
+- **Scene** (`scenes/orbit_systems.py`, `scenes/orbit_many.py`, `ManySpec`): `system` makes the
+  pair the central body and a first body at ν = 0 (+x of the rotating frame), run n-body, RK45 by
+  default (96 samples per turn, ≤ 40 000); `figure_eight` uses leapfrog at T/4000. **View**: with
+  `origin: barycentre`, positions turned by `turn` × θ(t) (θ the pair's unwrapped angle from the run
+  itself, so the secondary sits exactly on +x); `turn` 0 inertial … 1 rotating, eased by actions
+  `corotate` / `inertial` (default 2 s). Trails 64 samples per turn (≤ 2 400). Kepler conics not
+  drawn about the barycentre, except a binary's two ellipses. `tides` has its own layout (no axes).
+- **Performance**: panel rows reuse cached text in place; trails wholly inside skip clipping.
 
 ### 98.7 The Solar System on a date, and the compact panel (Step 233)
 
-**The compact side panel first** (the reviewer's note on 232's stills: 10–15 rows of small text,
-unreadable on a phone, crowding the picture). Every panel row (`Slot`) now has a `name` and a
-`rank`: 0 always shown, 1 then 2 while there is room, `DIAGNOSTIC` (9) only on request.
-`choose_rows(slots, mode, budget)`: `compact` (default) keeps rank 0, then fills ranks 1 and 2 in
-the scene's order — a name's rows together (a legend, the areas) — up to `PANEL_BUDGET` = 6 rows
-in 16:9 / 5 in 9:16 besides the "not to scale" notes; `full` every row (the panel as before,
-including 9:16's two columns); `none` only the notes; a list of names (`PANEL_ROWS`, checked with
-did-you-mean). Compact and listed rows are set at least at scale 1 (the label size, never under
-the readable minimum) in one column. What each scene is about decides the ranks: time and
-speed-up 0; ΔE/E, ΔL/L, the Jacobi constant's drift and the figure-eight's return error are
-diagnostics (`energy: true` makes ΔE/E and ΔL/L rank 0); a transfer's Δv rows, total, time and live
-phase angle 0, the window and kind 2; a flyby's v∞, δ, Sun-frame speeds and gain 0; a pair's μ, the
-frame, the co-orbital kind 0, Routh's test 0 when L4 / L5 matter, the L1 / L2 distances 0 unless
-it is a Trojan scene; the legend 2 (`legend: true`: 0); tides: the pull, tidal acceleration, the
-arrows' factor 0, the tide and locking 1, the speed-up 2. The lint gets the diagnostics from the
-model, whatever the panel shows: `Orbit.diagnostics(params)` → `energy_drift`, `angular_drift`,
-`jacobi_drift:<name>`, `closure` (largest relative errors over the run; Step 234 reads them). The
-229–232 scratch projects lint clean after it (s232's mid-turn warning gone).
+**Compact panel.** Each `Slot` has a `name` and `rank` (0 always, 1 and 2 while room, `DIAGNOSTIC`
+9 only on request). `choose_rows(slots, mode, budget)`: `compact` (default) up to `PANEL_BUDGET` =
+6 rows (16:9) / 5 (9:16) besides the scale notes; `full`; `none`; or a list of names (`PANEL_ROWS`).
+Drift rows are diagnostics (`energy: true` promotes ΔE/E, ΔL/L); a transfer's Δv₁ / Δv₂ are rank 1
+in 9:16 (burn labels carry them). `Orbit.diagnostics(params)` (`energy_drift`, `angular_drift`,
+`jacobi_drift:<name>`, `closure`) feeds the lint regardless of the panel.
 
-**Model** `vidgen.orbits.ephemeris` (no manim): E. M. Standish's *Keplerian Elements for
-Approximate Positions of the Major Planets* (JPL SSD), **Table 1** — a, e, I, L, ϖ, Ω at J2000 and
-their rates per Julian century, mean ecliptic and equinox of J2000, valid 1800–2050 — for Mercury …
-Neptune (the Earth's row is the Earth–Moon barycentre) and Pluto. `TABLE1` is the one copy (the
-presets in `bodies` read their J2000 values from it). `julian_date` (Gregorian dates and times,
-taken as TT; 2000-01-01 12:00 = 2451545.0), `calendar`, `date_text` (the day it falls on);
-`check_valid` refuses 1800-01-01 ≤ JD < 2051-01-01 violations for a start and an end;
-`mean_elements` (J2000 + rate × T), `heliocentric` (the document's method: M = L − ϖ, Kepler's
-equation, the orbit plane rotated by ω, I, Ω; vectorised), `longitude`, `distance`, `elongation`;
-`sidereal_period` (360°/L̇) and `planet_synodic_period`; `next_event(kind, observer, target,
-after)` — opposition / conjunction (outer target), inferior / superior conjunction (inner target),
-aligned — the root of the wrapped difference of heliocentric longitudes (0° or 180°) bracketed on
-1/24 of the synodic period and bisected to 10⁻⁵ d, refused outside the validity; `events_between`.
-`bodies`: `planet_preset` (from Table 1 values), `preset_on(key, jd)`, Pluto's body (GM of the
-Pluto–Charon system 975.5 km³ s⁻², radius 1 188.3 km — **for the owner to check**) and preset;
-`kepler_planets` stays the eight planets.
+**Ephemeris** (`orbits.ephemeris`): Standish's JPL **Table 1** (a, e, I, L, ϖ, Ω at J2000 and rates
+per Julian century, J2000 ecliptic, valid 1800–2050) for Mercury … Neptune (Earth = Earth–Moon
+barycentre) and Pluto. `TABLE1` is the one copy (all 108 numbers pinned in
+`tests/test_orbit_sky.py`). `julian_date` (Gregorian, as TT), `check_valid` (1800-01-01 ≤ JD <
+2051-01-01, start and end), `heliocentric` (Standish's method; geometric positions, J2000 frame),
+`next_event` (root of the wrapped longitude difference, bracketed on 1/24 synodic period, bisected
+to 10⁻⁵ d), `events_between` (searches on from a day after each event). Exported renames:
+`ecliptic_longitude`, `planet_distance`, `TABLE1_SOURCE`. Periods come from Kepler III on Table 1's
+a, consistently.
 
-**Checks against independent values** (tests): the Earth at the 2020 and 2021 March and the 2022
-September equinoxes and 1900's March one at heliocentric longitude 180° / 0° of date minus the
-precession since J2000 (50.29″/yr) within 0.03° — the J2000 frame is why the raw value is
-179.72° in 2020; every planet's distance within its perihelion–aphelion over 1800–2050; Mars's
-J2000 distance against Kepler's equation by hand; the sidereal year 365.2564 d; synodic periods
-Mars 779.94 d, Venus 583.92 d, Jupiter 398.88 d, Mercury 115.88 d, Saturn 378.1 d; Mars oppositions
-2018-07-27, 2020-10-13, 2022-12-08, 2025-01-16, Venus inferior conjunctions 2020-06-03 and
-2023-08-13, Jupiter's 2023-11-03 and Saturn's 2023-08-27 oppositions within ±2 d (they come out
-within hours: 2020-10-13 23:24, 2022-12-08 05:32 TT); the scene's Kepler motion from the date's
-elements within 2 × 10⁻⁴ AU of the table's positions over its span.
-
-**Scene** (`scenes/orbit_sky.py`: params, resolution and the mixin `OrbitSky`):
-
-- `date`: `build_system(..., jd)` gives Table 1 planets their elements on the day (`dated_preset`);
-  another preset needs `nu` / `mean_anomaly`. The model's `sky` (`SkyInfo`) keeps the start's JD;
-  the span's end is checked too. The panel's first row is the date (`date`), the time row drops to
-  rank 2.
-- `event: {kind, of, observer}`: `next_event` after the date (both bodies of the scene); default
-  span 1.15 × the time to it (at least 30 d); drawn once as the dashed line from the Sun through
-  both planets' positions at the event (rings on them; for a conjunction from the near planet
-  through the Sun's side), the kind's name placed by `place`; rows `event` (`Mars opposition
-  2020-10-13`), `distance` (live), `synodic`.
-- `radial: log`: positions drawn at log₁₀(1 + r/r₀) along their direction (r₀ = ⅓ of the smallest
-  perihelion), in `_frame_point(s)` and the extent, so conics, trails and labels follow; no axes
-  (`frame: axes` refused) but dashed rings at 0.1 / 0.3 / 1 / 3 / 10 / 30 / 100 AU (those ≥ 0.5
-  units and 0.35 apart), labelled along the ray the bodies cross least, on a plate over the orbits;
-  every body a dot; the note "distances compressed (log)" is always in the panel. Refused with any
-  overlay that measures lengths or speeds, n-body, transfers, flybys, systems, `follow`.
-- `inset`: the box of a flyby's vector diagram (`_vector_box_size`; 3.7 × 3.7 beside, under the
-  picture in 9:16) holds the bodies whose orbits lie within the radius (`true`: 1.08 × the largest
-  aphelion below 2 AU), their conics and dots moving, labels placed by `place` inside; their labels
-  and the Sun's leave the main picture (named in the inset); the region is a dashed circle there.
-- `sizes`: a picture of its own (`_construct_sizes`, like the tides): discs of the bodies' radii to
-  one scale chosen by bisection so discs and labels fit (16:9 a row with labels in two staggered
-  rows — the row's ends keep their whole label inside —; 9:16 a column with the text beside), the
-  Sun's limb (the same scale, clipped to the frame's edge) first in 16:9 and at the foot in 9:16,
-  "radii to scale (distances are not)". Refused with anything else of the scene's motion.
-
-**Public (additive)**: in `vidgen.api.orbits` the names of `ephemeris` (`longitude` as
-`ecliptic_longitude`, `distance` as `planet_distance`, `SOURCE` as `TABLE1_SOURCE`),
-`planet_preset`, `preset_on`; the preset `pluto` (body and orbit); `Orbit.diagnostics`; the
-`orbit` params `panel`, `date`, `event`, `radial`, `inset`, `sizes`; targets `event`, `inset`,
-`rings`. Changed defaults (visible): orbit panels are compact — ΔE/E and the other diagnostics are
-off unless asked for; `panel: full` restores the old panel. No dependency, no config key; shared
-code untouched (only the orbit scene and `vidgen.orbits`), so the Phase Q baseline was not re-run.
-
-**Not done**: the Moon's (and other satellites') positions on a date; dwarf planets other than
-Pluto (Ceres is not in Table 1); Table 2a (3000 BC – 3000 AD with Jupiter–Pluto's extra terms);
-light-time, aberration and the equinox of date (positions are geometric, J2000 frame); greatest
-elongations; the gallery media (Step 235).
+**Scene** (`scenes/orbit_sky.py`, `OrbitSky`): `date` (Table 1 planets on the day; others need
+`nu` / `mean_anomaly`), `event` (default span 1.15 × time to it, ≥ 30 d), `radial: log` (log₁₀(1 +
+r/r₀), r₀ = ⅓ smallest perihelion; rings 0.1 … 100 AU; refused with length / speed overlays, n-body,
+transfers, flybys, systems, `follow`), `inset` (`true`: 1.08 × the largest aphelion below 2 AU),
+`sizes` (radii to one scale by bisection; refused with motion). Targets `event`, `inset`, `rings`.
 
 ### 98.8 Orbital accuracy lint (Step 234)
 
-**A data fix first** (the reviewer's comparison of `TABLE1` with an independent transcription of
-JPL's Table 1): Neptune's rate of Ω had been entered as Pluto's (−0.01183482); it is
-−0.00508664 deg/century. Neptune's heliocentric direction moves by at most 1.2″ over 1800–2050
-(computed), below the table's accuracy; the event tests were unaffected. `tests/test_orbit_sky.py`
-now pins all 108 numbers (9 bodies × 6 values and 6 rates) against a transcription in the test.
+Nine rules (last in `LINT_RULES`, warning; models `OrbitPeriodRule` … `OrbitCrashRule`):
+`orbit_period`, `orbit_speed`, `orbit_dv`, `orbit_transfer`, `orbit_distance` (`tolerance` 0.05),
+`orbit_date` (`days` 3), `orbit_scale`, `orbit_conserved` (`tolerance` 0.01), `orbit_crash`;
+`lint/orbit_rule.py` appends to `SceneContext.science`.
 
-Nine rules (scene scope, last in `LINT_RULES`, default warning): `orbit_period`, `orbit_speed`,
-`orbit_dv`, `orbit_transfer`, `orbit_distance` (each with `tolerance` 0.05 for "about"),
-`orbit_date` (`days` 3), `orbit_scale`, `orbit_conserved` (`tolerance` 0.01), `orbit_crash`. Like
-the `calc_*` / `plot_*` rules they read the config, not the stills: the runner appends
-`orbit_issues` (`lint/orbit_rule.py`) to `SceneContext.science`; `science_rule._issues` reports.
+**Knowledge** (`vidgen/orbits/accuracy.py`, not re-exported): numbers via
+`quantities.accuracy.said_values` (also "one and a half million", months, weeks, digit groups after
+plain / thin / no-break spaces). A `Fact` (value or range, SI) has a kind mapped to a rule by
+`KIND_RULES` and the bodies it is about. `orbit_claims`: the **clause** around a number names the
+bodies, its words pick the kinds (`topic_groups`; periods need a period word); agreement as
+`calc_numbers` (a range accepts any value inside); otherwise reported against the nearest fact only
+when bodies and kind are clear; a factor 1000 is "a prefix mixed up?". `ratio_claims`,
+`scale_claims` (against `picture_kind`: `sizes`, `schematic`, `log`, `enlarged` when 7 × R / reach
+is below the minimum drawn radius, else `true`), `event_claims` (dates vs `events_between`, Earth
+observer, 1800–2050). `ATMOSPHERES`: Earth 100 km (Kármán), Mars 125 km (entry interface).
 
-**Knowledge** (`vidgen/orbits/accuracy.py`, no manim, not re-exported — reached as
-`vidgen.orbits.accuracy`): numbers are read by `quantities.accuracy.said_values` (the `calc_*`
-reader; it gains "one and a half million kilometres": a scale word after "and a half", resolved to
-a quarter of the scale), plus months (a twelfth of a Julian year) and weeks; a number right after
-a digit group ("384 400 km") is skipped (Step 236: groups of three digits after spaces — plain,
-thin, no-break — are read as one number, §98.10). A `Fact` is a value or a range (SI; radians for angles)
-of a kind (`KIND_RULES`: period → `orbit_period`; speed, peri_speed, apo_speed, circular, escape,
-v_inf, planet_speed, shot, sun_speed → `orbit_speed`; dv (with its order), dv_total, gain, turn →
-`orbit_dv`; transfer_time, synodic, wait, phase → `orbit_transfer`; distance, peri, apo, altitude,
-radius, diameter, lagrange, between → `orbit_distance`) with the names of the bodies it is about.
-`orbit_claims(sentence, facts)`: for each time, speed, length or angle said (checkable: not a
-bound or a range end), the **clause** around it (between commas, semicolons, colons, dashes,
-"and", "but", "while" — not inside a number: "two hundred and fifty-nine days") names the bodies
-(else the sentence; none named: every fact of the scene; another scene's facts only when named)
-and its words give the kinds (`topic_groups`): time — "transfer / trip / later…" transfer times,
-"every / window / synodic…" synodic periods and waits, period words ("takes", "around", "orbit",
-"period") periods, else nothing ("Neptune barely moves in ten years" is a span); speed — Δv words,
-"escape", a named apsis (perihelion, apogee… one of the two), else speeds along the orbit, then
-v∞, Sun-frame and circular speeds; length — "L1"…"L5", radius words, altitude words, a named apsis,
-else distances (from the parent; two siblings' range; the event's distance); angle — phase
-(departure words choose the lead at departure over the lead at the start), else the turning angle.
-A value agreeing (as `calc_numbers` agrees: resolution, "about" with 1–2 figures or the tolerance;
-a range anywhere inside) with any fact of those kinds — of the first kinds only when the words are
-precise (a named apsis, "escape", a Lagrange point) — is fine; else it is reported against the
-nearest fact of the first kinds (Δv narrowed by "first / second / Δv₂ / arrival / total"), when the
-bodies it can be about are clear; a factor of 1000 off is "a prefix mixed up?". `ratio_claims`:
-"N times as wide as / wider than / the diameter of B" against the radii. `scale_claims`: "to
-scale", "true scale", "real sizes" against `PICTURES` — `enlarged` (flagged only with size words:
-"at true scale the inner planets crowd the Sun" speaks of distances), `log` and `schematic`
-(always), `sizes` (with distance words). `said_dates` (ISO, "13 October 2020", "October 13,
-2020", "the first of June 2020", "October 2020", "in 2021", "in mid October") and `event_claims`:
-an opposition / (inferior, superior) conjunction of a named planet seen from the Earth, compared
-with `events_between` over the said day (± `days`), month or year (1800–2050 only); a month alone
-against the scene's own `event`. `ATMOSPHERES`: the Earth 100 km (the Kármán line, FAI
-convention), Mars about 125 km (the entry interface used for Mars landings — **for the owner to
-check**).
-
-**What each orbit scene computes** (`orbit_rule.facts`, cached per project): every body's radius,
-diameter, surface escape and circular speeds; for every orbit (each arc of a trajectory) the
-periapsis speed and distance, the altitude range, and when closed the period, the speed range
-apoapsis–periapsis, the apoapsis speed and distance, the distance range from the parent, the
-escape speed from the parent along it; when open the speed range from v∞ and v∞; two closed
-siblings' distance range and synodic period; a transfer's Δv (by order), total, time of flight,
-phase angle needed (order 1) and at the start, the synodic period and wait (phasing: each burn,
-its time, the lead); plain burns' Δv and total; a flyby's planet speed, Sun-frame speeds, gain and
-turning angle; the cannon's shots, circular and escape speeds there; a restricted pair's L1–L5
-distances from both primaries; the figure-eight's period; the event's distance. Stand-in orbits
-(`near:` bodies, the figure-eight's) give no orbit facts. The sizes picture gives radii only.
-
-**Scale** (`picture_kind`): `sizes`, `schematic` (tides), `log`, else `enlarged` when some body is
-surely drawn enlarged — 7 × R / reach below the scene's minimum drawn radius (0.12 / 0.075 units),
-reach being `extent` or the farthest point of the paths in view (no layout is run: 7 units per
-reach is more than any layout gives) — else `true` (no finding).
-
-**Drift and crashes**: `orbit_conserved` reads `Orbit.diagnostics(params)` (Step 233) — the largest
-|ΔE/E|, |ΔL/L|, each near body's |ΔC/C|, the figure-eight's return — above `tolerance`, with the
-fix for the method (leapfrog: halve the step; else leapfrog or a smaller step; the Jacobi drift:
-RK45 or a smaller step). `orbit_crash`: a periapsis (or one after a burn) above the surface but
-below `ATMOSPHERES` (the body found by name with its preset's radius), a flyby without
-`flyby.atmosphere` passing below it, and in an n-body run two bodies closer than their radii' sum
-at an output sample (validation checks only the Kepler start).
-
-**Other scenes**: a scene that is not an orbit, a calculation or a plot with fits is checked
-against every orbit scene's facts that the sentence names (a card "Jupiter takes 20 years to orbit
-the Sun"); `orbit_date` reads every scene. Texts: beats, the `calc_rule.screen_texts` params,
-callout labels, burn labels.
-
-**Narration–picture rules**: `SHOWING_ACTIONS` gains `sweep`, `launch`, `burn`, `flyby`;
-`Orbit.target_text` adds `orbit:<name>` (the body's label), `periapsis:` / `apoapsis:` (perihelion,
-apogee…), `burn:<n>` (its label or "Δv₁ 2.43 km/s prograde": `orbit_manoeuvres.burn_text`, shared
-with the drawing), `lagrange:<L>`, `event` (its kind), `barycentre`, `face` ("near side"),
-`motion` (the planet's motion).
-
-**Checked**: every example, the gallery and the 229–233 scratch projects give 0 findings (one
-false positive met on the way and removed: "Neptune barely moves in ten years" — periods now need a
-period word); a demo project finds each planted mistake (16) with its right statements quiet.
-
-**Choices**: narrow, as the other accuracy rules — negations, questions, hypotheticals, bounds,
-ranges and comparisons are not read; a number is reported only when the bodies and kind it is
-about are clear. A range fact (a speed along an ellipse, the Moon's distance) accepts any value in
-it: "the Moon is 384,000 km away" and "405,000 km" are both true. `orbit_date` uses the Earth as
-the observer and JPL's Table 1 (the elements the scenes use), so its dates are the model's; the
-tolerance of 3 days is above the table's accuracy for oppositions (hours) and below the motion of
-a planet across the sky in a few days.
-
-Public (additive): lint rules and their config models (`OrbitPeriodRule` … `OrbitCrashRule`); the
-module `vidgen.orbits.accuracy`; `Orbit.target_text` answers more targets; `quantities.accuracy`
-reads "and a half million". No dependency; shared rendering code unchanged (only the lint, the
-number reader and the orbit scene's text helpers), so the Phase Q baseline was not re-run.
-
-**Not done**: claims about bodies a scene does not show (no textbook table of the Solar System);
-numbers written with spaces between digit groups are skipped (read since Step 236); eccentricities, inclinations and
-mass ratios said as pure numbers are not read; a claim of scale about one body among several
-(only the picture as a whole); an observer other than the Earth for event dates.
+**Facts** (`orbit_rule.facts`, cached per project): radii, surface speeds, per-orbit / per-arc
+speeds, distances, periods, transfer and burn values, flyby values, L1–L5 distances, figure-eight
+period, event distance; stand-in orbits give none. `orbit_conserved` reads `Orbit.diagnostics`;
+`orbit_crash` flags a periapsis below `ATMOSPHERES`, a flyby without `atmosphere` below it, n-body
+bodies closer than their radii at a sample. Non-orbit scenes are checked against facts they name.
+`SHOWING_ACTIONS` includes `sweep`, `launch`, `burn`, `flyby`; `burn:<n>` text comes from
+`orbit_manoeuvres.burn_text` (shared with the drawing). Narrow by design, as §97.11.
 
 ### 98.9 Example, docs and gallery (Step 235)
 
-**Example** `examples/mars-transfer` ("How to get to Mars", about 3:43 with Kokoro `af_heart` 0.85,
-the `discovery` bed at −9 dB, a 9:16 `short` variant; terms in concept colours: Hohmann transfer,
-launch window, semi-major axis with TeX `a`). Seven scenes: `intro` (title); `straight` (the
-Earth's 29.8 km/s as a live arrow, a rocket alongside the Earth with a 3 km/s radial burn on
-"Fire": it goes round the Sun on an ellipse out to 1.11 AU, far short of Mars); `hohmann` (the
-transfer on circular, coplanar orbits, Mars starting 95° ahead so the live phase angle shrinks to
-44.3° before the first burn; burns on "burn" and "second"); `timing` (a `calculation`: a = (r_E +
-r_M)/2 = 1.262 AU, T = π√(a³/GM☉) = 259 d, θ = π(1 − 2T/T_M) = 44.3°); `leaving` (a `calculation`
-taking v∞ `from_scene: hohmann.dv1`: v_circ 7.726, v_esc 10.93, Δv = √(v∞² + v_esc²) − v_circ =
-3.59 km/s from 300 km — the Oberth effect; computed, never typed in); `sky` (`date: 2026-10-28`,
-the Earth and Mars from Table 1 with `event: {kind: opposition, of: Mars}` → 2027-02-19; the
-narration's next window "around early December 2026" and "early 2029" are where the heliocentric
-lead equals the Hohmann 44.3° in this model, 2026-12-05 and 2029-01-07, stated as approximate);
-`recap` (bullets). Every narrated number passes the `orbit_*` and `calc_*` rules (0 findings with
-the Kokoro audio in 16:9 and 9:16); `tests/test_mars_transfer.py` pins the numbers against
-`vidgen.orbits` directly. Approximations are stated on screen (captions on the orbit scenes) and in
-the recap ("real missions fly computed, tilted, elliptical paths").
-
-**Docs.** A guide topic `orbits` (aliases orbit, orbital, orbital-mechanics, kepler, hohmann,
-planets, space, spaceflight: choosing a view, scale honesty, panels, presets and units,
-manoeuvres, three bodies, dates, pacing, lint, a snippet); the `scenes` topic points to it.
-`docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units and Δv — heliocentric Δv versus the burn
-from low orbit —, a table of approximations to state, pacing, mistakes → rules, a pattern that a
-test validates and lints), linked from the README, `docs/COOKBOOK.md` (intro and §12), the guide
-and the gallery's section note. The CONFIG completeness test (`test_docs`, parametrized `orbits`)
-already covers every param of the scene, nested ones included.
-
-**Gallery.** The section "Orbital mechanics" has its note (`gallery.SECTION_NOTES`: the example and
-the cookbook) and footer; the `orbit` entry is regenerated (the current layout and page: 0.34 MB);
-two showcases (`gallery.SHOWCASES`, section `orbital mechanics`): `mars_hohmann` (the transfer with
-the phase angle and burns on words, 0.33 MB) and `jupiter_trojans` (`sun_jupiter` in the rotating
-view with L1–L5, a Trojan's tadpole and its zero-velocity curve, 0.33 MB; a first version turning
-the frame on a word made GIFs above 150 KB even at the fallback frame rates, so the showcase starts
-in the rotating frame).
-
-**Budget decision: 13 → 15 MB.** The gallery was at 12.9 MB of 13 before this step and 13.6 MB
-after it. Making room first was tried: the GIFs are 10.3 of the 12.9 MB; a lossless re-save of the
-GIFs with Pillow's optimiser saved about 10 % on some files and grew others, needs checking frame
-by frame, and is not what `vidgen gallery` writes — the next regeneration of an entry would undo it
-(gifsicle, which does this well, is not installed here and is not a dependency the owner's Windows
-setup has). Lowering the clip frame rate or width would visibly hurt every entry. So the budget
-grows by what Phase X needs plus room for about three more entries (each ≤ 0.36 MB): 15 MB, with
-`ENTRY_MAX` (0.36 MB per entry) and `gallery.CLIP_MAX_BYTES` (150 KB per GIF) unchanged
-(`tests/test_gallery.py`).
-
-**Fix found on the way**: the transfer's phase-angle label (`orbit_manoeuvres._draw_phase`) kept
-off the panel and the central body only; in 9:16 it could stand on the Earth's label (which keeps
-its side while it stays about as good). It now keeps off the bodies and their labels too. Orbit
-scenes with a transfer may place θ's label differently; no other picture changes (the scene is not
-in the Phase Q baseline). And `ephemeris.events_between` listed an event twice when the bisection
-stopped just before its root (the Mars opposition of 2029-03-25): it now searches on from a day
-after each event (events of a pair are a synodic period apart).
-
-**Render note**: the 16:9 check render was made at 1280×720, 30 fps: a 47 s orbit scene at
-1920×1080 takes longer than one 10-minute command on the development machine (rendering is
-per scene; the owner's machine renders 1080p as usual).
-
-**Render note (Step 236)**: the cause was memory, not only time — see §98.10; the example now renders
-at 1920×1080 in about 6½ minutes here.
+`examples/mars-transfer` ("How to get to Mars", 16:9 and 9:16 `short`; Δv computed via
+`from_scene: hohmann.dv1`, never typed in; numbers pinned by `tests/test_mars_transfer.py`). Guide
+topic `orbits` (aliases orbit, orbital, orbital-mechanics, kepler, hohmann, planets, space,
+spaceflight); the CONFIG completeness test covers every orbit param. Gallery section "Orbital
+mechanics" with entry `orbit` and showcases `mars_hohmann`, `jupiter_trojans` (starts rotating, to
+stay under `gallery.CLIP_MAX_BYTES` 150 KB); budgets in `tests/test_gallery.py` (`ENTRY_MAX` 0.36
+MB). GIFs are not re-optimised: the next `vidgen gallery` would undo it.
 
 ### 98.10 Review of Phase X (Step 236)
 
-A critical review of Steps 229–235 with fixes: a physics-accuracy pass against independent
-calculations, the reviewer's four points (picture size, units in substitutions, render speed,
-known gaps), compatibility.
-
-**Physics against independent calculations** (scratchpad `s236/physics_check.py`, 133 checks; the
-lasting ones are `tests/test_orbit_review.py`). Written from the textbook formulas, with scipy's
-`brentq` and `solve_ivp` (DOP853, rtol 10⁻¹²): Kepler's equation by bisection for e from 0 to
-0.999999 and 1.000001 to 10, Barker's equation (ν to ≤ 1.1 × 10⁻¹⁵ rad); Vallado's COE2RV and the
-round trip through `Elements.from_state` (300 random ellipses and hyperbolas: 3 × 10⁻¹⁶ relative,
-elements to 8 × 10⁻¹⁵); Kepler propagation of an ellipse, a parabola and a hyperbola against direct
-integration (≤ 2 × 10⁻¹⁰); vis-viva, circular / escape speeds, the Moon's 27.28 d; Hohmann LEO 300 km →
-GEO (2.426 + 1.467 = 3.893 km/s, 5.275 h), Earth → Mars (2.945 / 2.649 km/s, 258.87 d, 44.35°,
-synodic 779.93 d; Table 1's 779.94 d), the bi-elliptic thresholds 11.93877 / 15.58171, a bi-elliptic
-Δv, the plane change and the combined plane change; the flyby turning angle against the integrated
-hyperbola (v∞ out = in, periapsis), the Sun-frame gain |v_p + v∞out| − |v_p + v∞in| and the energy
-change ½(v_after² − v_before²); L1–L3 by root finding for four mass ratios (≤ 5 × 10⁻¹⁴), L4/L5, the
-Jacobi constant at L1 and L4 (3 − μ + μ²), Routh's μ = (1 − √(23/27))/2, the Sun–Earth L1/L2 at
-1.4976 / 1.5077 million km; the figure-eight (Simó's values) integrated back to its start after
-T = 6.32591398 (3.9 × 10⁻⁸); the Galilean period ratios and the Laplace relation n_I − 3n_E + 2n_G;
-heliocentric positions of all nine Table 1 bodies against Standish's method written here
-(6 × 10⁻¹⁶, 1800–2050), Julian dates, 14 published oppositions / conjunctions 2018–2027 (Mars,
-Jupiter, Saturn, Venus: all within 0.48 d), the Earth's longitude at the 2024 March equinox. Every
-constant and preset was compared with the published value it cites: CODATA 2022 G (and scipy), the
-IAU 2012 AU, IAU 2015 B3 GM☉, GM⊕, R☉, R⊕, DE440's planetary GM, JPL SSD's Galilean GM (the sum
-matches DE440's Jupiter system minus the planet), IAU WGCCRE radii, Pluto (975.5 km³ s⁻², 1188.3 km),
-Table 1 (all 108 numbers, also pinned since Step 234), GEO 42 164.17 km, the Galilean distances from
-Kepler III within 3 × 10⁻⁵ of the published means. **No physics error was found.** Two notes: a
-period from Table 1's a by Kepler III (365.2578 d for the Earth–Moon barycentre) differs from the
-table's own mean motion (365.2564 d) by 4 × 10⁻⁶ — the table's a and L-rate are independent fits
-(the scenes use Kepler III, consistently); the lint's facts (`ATMOSPHERES`: the Kármán line; Mars
-125 km entry interface, still for the owner to check) are unchanged.
-
-**Picture size (16:9).** The orbit picture is height-limited (it is round): the caption now stands
-in the side column under the panel, left-aligned and wrapped to at least `COLUMN_CAPTION_WIDTH`
-4.4 units (`CAPTION_GAP` 0.25 under the panel or the flyby / inset box), so the picture takes the
-whole height under the title — 61 % → 69 % of the frame height in the example (≈ +28 % area); the
-caption goes under the picture when the column has no room. Labels keep off the column caption
-(`_static_boxes`). **9:16**: a transfer's Δv₁ / Δv₂ rows are rank 1 in a vertical frame (each burn's
-label carries its Δv; the total stays), so the compact panel has two rows fewer and the picture is
-≈ 25 % taller. Checked on the example's stills, the gallery's orbit entries and the 229–233 scratch
-projects (lint 0 in each).
-
-**Substitutions keep units** (`quantities.calc`, Step 236). A third way of writing a substitution:
-when every value with a unit has the same dimension as the result (or the result is a pure number),
-each value is written in the result's unit and the unit once at the end — `(√(2.945² + 10.93²) −
-7.726) km/s` (a sum or product in brackets; an angle or percentage keeps its own unit). Right
-whatever the formula: numbers in one unit give the result in that unit. `Step.common` /
-`common_stacked` come after the full-unit ways and before the SI numbers; they count as keeping the
-units unless the unit cancels (`common_bare`: a pure-number result, written without a unit — it then
-ranks with the SI numbers, so a readable full-unit line is not replaced: the radioactive-decay
-example's z line is unchanged). The Oberth line of the example now shows its units in 16:9 and
-9:16. Different dimensions (GM, R and h) keep the SI fallback. No author option was needed; the
-calculation's `units` choice still applies (`always` includes the common unit, `never` the SI numbers).
-
-**Render speed and memory.** Profiled on the example's 47 s `hohmann` scene at 1920×1080. The
-cost was the side panel: each new readout string (`t = 82.2 d` changes every frame, the θ label
-too) built a manim `Text` (Pango → SVG → svgelements; ~20 ms) and the panel's caches kept it and a
-deep copy (~0.3 MB each with its SVG path objects) — memory grew past 3 GB (the worker was killed:
-"exit code -9", which is why Step 235 rendered at 720p). Fixes, output unchanged to 10⁻⁷ units:
-`scenes/orbit_text.LiveText` lays a string out once per shape (digits as 0) and draws the real
-digits from glyphs rendered once, shifting the following glyphs by the digits' advances and pair
-kerning (measured once, ten pairs per render); glyphs are plain `VMobject`s (no SVG path); the
-panel's text cache keeps the latest 256 (`TEMPLATE_CACHE`); the panel's plate is built once per box;
-the panel is sized with the same glyphs. And the parts that never change while the clock runs —
-title, caption, axes (`STILL_Z` −2) — lie below the clock's mobject (`CLOCK_Z` −1), so manim draws
-them once per play into its static image instead of every frame. Timings (in-process, Python
-3.13, 1397 frames): **179.9 s, 129 ms/frame, ≥ 1.5 GB → 99.3 s, 71 ms/frame, 0.81 GB**; through
-`vidgen render` (Python 3.12 worker): `straight` 90.5 → 58.9 s, `hohmann` killed at 3 GB → 108 s,
-the whole example 1080p in ~6½ min. Remaining per frame: drawing ~26 ms (Cairo at 1080p), the
-panel ~16 ms, label placement ~10 ms, encoding in its thread.
-
-**Gaps fixed**: the lint reads digit groups written with spaces (plain, thin, no-break, narrow
-no-break: "384 400 km", "1 496 000 000 km"; a year before a number, "2026 300 km", stays out). The
-phase angle's label keeps off its own two lines and the central body's label; the lines start at the
-central body's edge and are drawn in the angle's colour (fainter), apart from the grey gridlines. A
-body's label also keeps off its own dot (a diagonal place could clip it).
-
-**Gaps kept** (documented): n-body runs with burns (refused: burns are Kepler arcs); the flyby in
-the planet's frame with the Sun-frame vector diagram, not a heliocentric trajectory; a LEO at true
-scale shows as a thin ring hugging the planet (the honest picture; a close-up with `center` +
-`extent` shows the gap — an exaggerated-altitude view would need the radial transform in every
-offset, not done); a scene of only open orbits frames 3 × the periapsis (`extent` for more);
-9:16 pictures with an inset or a long panel stay small (height-limited); the Moon on a date; light
-time and aberration.
-
-**Compatibility**: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check236`). Visible
-changes, all orbit scenes: the 16:9 caption beside the picture, the 9:16 transfer panel, the phase
-angle's lines and label; calculation scenes only where a substitution did not fit with its units
-(the example's Oberth line). The gallery's `orbit`, `mars_hohmann` and `jupiter_trojans` were
-regenerated (13.6 MB of 15). Lint sweep (`s236/lint_all.py`: 337 scenes of the examples, gallery and
-s205–s236 projects): 0 findings; the s234 demo still finds its 16 planted mistakes; `vidgen lint` of
-the example (Kokoro audio) 0 in 16:9 and 9:16, and of s230–s233: 0.
-
-
+Fixes folded into §98.4–§98.8 and §97.10; physics checks in `tests/test_orbit_review.py`.
+**Render memory**: a manim `Text` per changing readout string exhausted memory, so
+`scenes/orbit_text.LiveText` lays out a string once per shape (digits as 0) and draws digits from
+glyphs rendered once (plain `VMobject`s, advances and pair kerning); the text cache keeps
+`TEMPLATE_CACHE` = 256; still parts (title, caption, axes at `STILL_Z` −2) lie below the clock
+mobject (`CLOCK_Z` −1) so manim draws them once per play. Kept by decision: no n-body with burns;
+flybys in the planet's frame; a LEO at true scale is a thin ring (close-up via `center` +
+`extent`); no Moon positions on a date, no light time or aberration.
 ## 99. Particle physics (Phase Y, Steps 237–244)
 
 Particle-physics videos: the Standard Model, Feynman diagrams checked at every vertex,
@@ -20606,1467 +16503,490 @@ the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_p
 
 ## 115. Hosted inputs through a Cloudflare Quick Tunnel (Phase AJ, Steps 305–306)
 
-OpenRouter's video API takes pictures inline but audio and video references only as `https://`
-URLs (HTTP 400 "Only HTTPS URLs are allowed", §113.7), so talking shots (`audio:`) and shots with
-`guide:` could not be paid for. The owner chose a host that needs no account: a **Cloudflare
-Quick Tunnel** (`cloudflared tunnel --url http://127.0.0.1:<port>` prints a random
-`https://<words>.trycloudflare.com` address that forwards to a local port). The owner's priority
-is to share only what is needed, for as short a time as possible. Step 305 builds the host and a
-free self-test; Step 306 wires it into `generate run --pay`, the plan, MCP and the cookbook.
-The cloud workspace cannot reach Cloudflare (proxy 403, port 7844 blocked): everything is tested
-with a fake `cloudflared` and a real local server; the owner tests the real tunnel on Windows
-with `vidgen generate host-test`.
+OpenRouter's video API takes audio / video references only as `https://` URLs (§113.7). Local
+audio / video inputs (a voice, a `guide:` render) reach the provider through a **Cloudflare Quick
+Tunnel** (`cloudflared tunnel --url http://127.0.0.1:<port>` prints a random
+`https://<words>.trycloudflare.com`; no account). Rule: share only what is needed, as briefly as
+possible. Tests use a fake `cloudflared` and a real local server.
 
 ### 115.1 The host (Step 305)
 
 `vidgen.videogen.host` (not in `vidgen.api`):
 
 - **What is shared.** `QuickTunnelHost(sources, root=, settings=, ledger=, executable=, fetch=,
-  out=)` takes the exact files to share (a shot's audio / video inputs)
-  and `copy_into_share` copies each into a fresh `tempfile.mkdtemp(prefix="vidgen-share-")`
-  folder (refused when it would lie inside the project) under a new random name
-  (`secrets.token_hex(8)` + the lower-case extension), with its size and SHA-256. A symlink, a
-  folder, a missing file or a file given twice is a `VidgenError`; the source is opened with
-  `O_NOFOLLOW` where the system has it. The project, `build/` or any user path is never served:
-  only the copies exist in the served folder.
-- **The server** (`ShareServer`, stdlib `ThreadingHTTPServer`): bound to `127.0.0.1`, port 0 (a
-  random free port, `allow_reuse_address` off, no host name lookup), answers only `GET` / `HEAD`
-  of the exact paths `/<secret>/<name>` (`secret = secrets.token_urlsafe(24)`, a new one per
-  host; the query string must be empty) with the file's `Content-Type` (`openrouter.MEDIA_TYPES`,
-  `.txt` as UTF-8 text), `Content-Length`, `Cache-Control: no-store`, `X-Content-Type-Options:
-  nosniff`. Everything else (other paths, `/`, `/<secret>/`, any other method) is a 404 with a
-  10-byte body; no directory listing, no `Server` header. Requests are kept in memory
-  (`RequestRecord`: time, method, path with the secret replaced by `<secret>`, status, bytes,
-  file) and never written with client addresses; `log_message` writes nothing. Per-connection
-  socket timeout 30 s; `Connection: close`. (CPython itself folds a leading `//` of a request
-  path into `/`, so `//<secret>/<name>` is the same file.)
-- **The tunnel** (`TunnelProcess`): `tunnel_command(executable, port, protocol)` =
-  `cloudflared tunnel --url http://127.0.0.1:<port> --no-autoupdate [--protocol http2|quic]`
-  (`auto`: no `--protocol`); started with list arguments in its own process group (POSIX
-  `start_new_session`, Windows `CREATE_NEW_PROCESS_GROUP`, so Ctrl+C reaches vidgen, which then
-  stops it); its output (stdout + stderr) read by a thread, the last 200 lines kept for error
-  messages; the address is the first `https://<name>.trycloudflare.com` in it (not
-  `api.trycloudflare.com`), waited for `url_timeout` (60 s). An exit without an address quotes
-  cloudflared's last lines and names the usual causes (outgoing connections to Cloudflare,
-  `~/.cloudflared/config.yml`). `find_cloudflared(setting)`: `videogen.cloudflared` (a path or a
-  command name), else `cloudflared` on PATH, else where winget installs it on Windows
-  (`%ProgramFiles(x86)%`, `%ProgramFiles%`, `%LOCALAPPDATA%` `\cloudflared\cloudflared.exe`); else
-  a `VidgenError` with the install hints (Windows `winget install Cloudflare.cloudflared` and a new
-  terminal, macOS `brew install cloudflared`, Linux Cloudflare's downloads page, the setting).
-- **Checked before use.** After the address appears the host waits (at most 15 s) for
-  cloudflared's "Registered tunnel connection" line (an early DNS query of a new name can be
-  cached as "not found"), then `verify_public` asks the public URL of every file with `HEAD`
-  until it answers 200 with the file's length, every `verify_interval` (2 s) for
-  `verify_timeout` (60 s). If it never does, everything is closed and a `VidgenError` says
-  nothing was sent to a provider and points to `host-test`.
-- **Closed as soon as possible** (`close(reason)`, idempotent, each step even when an earlier
-  one fails): cloudflared first (`stop_process_tree`: Windows `taskkill /PID <pid> /T /F`,
-  elsewhere SIGTERM to its process group, SIGKILL after 5 s), then the server, then the temporary
-  folder (`shutil.rmtree`, retried 5 × 0.2 s for Windows file locks; a failure is a warning naming
-  the folder, and `folder_deleted: false` in the ledger). Reasons: `done` (the `with` block ended),
-  `error: <type>` (an exception in it), `interrupted` (Ctrl+C in it), `failed to open` /
-  `interrupted while opening` (anything going wrong in `open`, which closes before re-raising),
-  `max lifetime` (`host_max_minutes` after `open` began, as long as vidgen runs; a killed vidgen:
-  §115.5), `terminated (SIGTERM)` / `(SIGHUP)` (§115.5), `vidgen exited` (an `atexit` hook). A watchdog thread checks the lifetime every 0.1 s. (Step 309 removed the
-  `all files fetched` close: §115.4.)
-- **Ledger** (the project's `videogen-ledger.jsonl` when one is given; host events are not jobs,
-  `Ledger.jobs()` ignores them): `host_open {host, files: [{name, size, sha256}], max_seconds}`
-  once the address is known (the host name only, never a URL with the secret; `name` is the
-  source relative to the project), `host_fetch {file, method, status, bytes}` for every request
-  of a shared file (the host's own `HEAD` checks included; status 499 when the client went away
-  mid-file), `host_close {host, reason, seconds_open, requests, not_found, folder_deleted}`.
-- **Settings** (`HostSettings.from_config(videogen)`): `videogen.cloudflared` (null),
-  `tunnel_protocol: http2 | quic | auto` (http2: TCP 443, which more networks allow than QUIC's
-  UDP 7844), `host_max_minutes` (20, 5-120; §115.4).
-  `videogen.host: none | quick_tunnel` (off by default) switches it on for paid runs (§115.2).
-- **Self-test** `host_self_test(settings, keep_seconds=, out=)` and **`vidgen generate host-test
-  [PROJECT] [--keep SECONDS] [--json]`**: free, needs no key and sends nothing to OpenRouter. It
-  writes one tiny text file (`vidgen host test <random>`) in its own temporary folder, shares it
-  and checks: the public `HEAD` (by opening), a `GET` returns the
-  same bytes, the address without the secret and a wrong secret answer 404. `--keep` keeps the
-  tunnel open that long afterwards (capped by the maximum lifetime) and prints the full URL to
-  try in a browser; without `--keep` the URL with its secret is never printed. A failed check is
-  a `VidgenError` naming it (exit code 1), after closing. In a folder without a project the
-  default settings apply; the test writes nothing to a ledger.
-- **Tests** `tests/test_videogen_host.py` (12): random names, hashes, labels; links / folders /
-  missing / duplicate files refused; the real server's exact paths, HEAD, 404s (wrong secret,
-  listing, traversal, query, other methods), no `Server` header, no secret or address in its
-  records; the command line and the install hints; open → verify → fetch → close with a fake
-  cloudflared (a Python script that prints a trycloudflare address and starts a child process):
-  arguments, the process tree gone, the folder deleted, the ledger without the secret; closing
-  after every file was fetched; the maximum lifetime; Ctrl+C and errors in the block; cloudflared
-  exiting, printing nothing, not starting; a public address that never works (only HEADs sent, the
-  ledger's open / close); a wrong length; the self-test (and a tampered answer failing it); the
-  CLI outside a project (text and JSON); the config keys.
+  out=)`; `copy_into_share` copies each file into a fresh `tempfile.mkdtemp(prefix="vidgen-share-")`
+  (refused inside the project) as `secrets.token_hex(8)` + lower-case extension, with size and
+  SHA-256. A symlink, folder, missing or duplicate file, or a linked folder (junctions via
+  `is_junction`) between the project and the file is a `VidgenError`; `O_NOFOLLOW` where
+  available. Only the copies are served, never a project or user path.
+- **Server** (`ShareServer`, `ThreadingHTTPServer`): `127.0.0.1`, port 0, no address reuse, no
+  name lookup; answers only `GET` / `HEAD` of exact `/<secret>/<name>`
+  (`secrets.token_urlsafe(24)` per host, empty query) with `Content-Type`
+  (`openrouter.MEDIA_TYPES`), `Content-Length`, `Cache-Control: no-store` (else Cloudflare caches
+  `.mp3`/`.mp4`), `X-Content-Type-Options: nosniff`; anything else is a 404 with a 10-byte body;
+  no listing, no `Server` header. Requests kept in memory only (`RequestRecord`, secret replaced
+  by `<secret>`, no client address); nothing logged. Socket timeout 30 s, `Connection: close`.
+- **Tunnel** (`TunnelProcess`): `tunnel_command(executable, port, protocol)` = `cloudflared tunnel
+  --url http://127.0.0.1:<port> --no-autoupdate [--protocol http2|quic]` (`auto`: no flag), in
+  its own process group (Ctrl+C reaches vidgen, which stops it); last 200 output lines kept for
+  errors; address = first `https://<name>.trycloudflare.com` (not `api.`) within `url_timeout`
+  (60 s). `find_cloudflared(setting)`: `videogen.cloudflared` (path or command), PATH, then the
+  winget locations on Windows; else a `VidgenError` with install hints.
+- **Checked before use**: wait (≤ 15 s) for "Registered tunnel connection", then `verify_public`
+  sends `HEAD` to every public URL every `verify_interval` (2 s) for `verify_timeout` (60 s) until
+  200 with the right length (a missing length is accepted, a wrong one is not). Failure closes
+  everything; the error says nothing was sent and points to `host-test`.
+- **Close** (`close(reason)`, idempotent, resumable §115.5): cloudflared (`stop_process_tree`:
+  Windows `taskkill /PID <pid> /T /F`, or a direct kill without `taskkill`; POSIX SIGTERM to the
+  group, SIGKILL after 5 s), the server, the folder (`rmtree`, 5 × 0.2 s retries; failure = a
+  warning and `folder_deleted: false`). Reasons: `done`, `error: <type>`, `interrupted`, `failed
+  to open`, `interrupted while opening`, `max lifetime` (`host_max_minutes` after `open` began;
+  watchdog every 0.1 s), `terminated (SIGTERM)` / `(SIGHUP)`, `vidgen exited` (`atexit`).
+- **Ledger** (project `videogen-ledger.jsonl`; not jobs, `Ledger.jobs()` ignores them):
+  `host_open {host, files: [{name, size, sha256}], max_seconds}` before the checks, so every open
+  has a close (host name only, never the secret; `name` relative to the project); `host_fetch
+  {file, method, status, bytes}` per request of a shared file (499 = client left mid-file);
+  `host_close {host, reason, seconds_open, requests, not_found, folder_deleted}`.
+- **Settings** (`HostSettings.from_config(videogen)`): `videogen.host: none | quick_tunnel`
+  (`none`), `cloudflared` (null), `tunnel_protocol: http2 | quic | auto` (`http2`: TCP 443 passes
+  more networks than QUIC's UDP 7844), `host_max_minutes` (20, 5–120).
+- **`vidgen generate host-test [PROJECT] [--keep SECONDS] [--json]`** (`host_self_test`): free, no
+  key, no ledger, default settings outside a project; shares one tiny text file and checks the
+  public `HEAD`, the `GET` bytes, and 404 without the secret and with a wrong one. Only `--keep`
+  (capped by the lifetime) prints the full URL. A failed check is a `VidgenError` (exit 1) after
+  closing. Tests: `tests/test_videogen_host.py`.
 
 ### 115.2 Wiring: paid runs, the plan, MCP (Step 306)
 
-- **The switch.** `videogen.host: none | quick_tunnel`, default `none`: without it everything is
-  as before (a shot with audio / video inputs is blocked with `shots.NO_HOST_BLOCKED`, which
-  names the setting and `host-test`; with `inline_media: all` it is a problem). With
-  `quick_tunnel` such a shot is not blocked or a problem for that reason; `Shot.share_minutes`
-  is `host_max_minutes` and `Shot.shared` its audio / video inputs. When `find_cloudflared`
-  fails the shot is blocked with the install hints (the plan is free, so the check is cheap:
-  `which` and a few `is_file`).
-- **One tunnel per shot** (the owner's decision, Step 306). A tunnel for the whole run would
-  keep every shot's voice reachable while other shots' jobs run (minutes each) and would need a
-  lifetime longer than the 15 min limit for a long run; one per shot shares only that shot's
-  files, with its own secret, for that one job. The cost is a few seconds of start-up and check
-  per shot. Split parts (`<beat>_p<n>`) are shots of their own, so each gets its own tunnel.
-- **In `generate_clip`** (`run.py`): after the cache, an earlier job, the model checks, the key
-  and the budget (so a tunnel is never opened for a run that would be refused),
-  `hosted_inputs(sendable)` lists the local audio / video files. If there are any and a
-  `ShareOptions` is given (or `videogen.host: quick_tunnel` makes the default one), a
-  `QuickTunnelHost` is opened (copies, server, cloudflared, every file checked through the
-  public address: a failure here closes everything and raises before anything is sent or
-  paid); the provider's `uploader` is set to `host.url_of` for the submit only (restored in
-  `finally`); then `submit`, the `submit` ledger line and `provider.wait(job)` run inside the
-  `with` block, so the tunnel closes (`done`) as soon as the job reaches a final state
-  (completed, failed, cancelled, expired), before the download and before the job's final
-  ledger line. It closes at `host_max_minutes` at the latest while vidgen runs (§115.4; a killed vidgen: §115.5). A `VidgenError` inside the
-  block (a refused submit, a poll timeout) closes it (`error: VidgenError`) and is raised again
-  with `host.redact(...)` (the secret path replaced by `<secret>`: OpenRouter's 400 quotes the
-  reference URL; all provider text is covered by §115.6); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
-  earlier) is only polled: no tunnel is opened again (providers fetch inputs when the job
-  starts). Without a host the provider's `media_url` still stops the submit with a clear error.
-- **`run_shots`** builds `ShareOptions.from_config(settings, out=...)` once when the host is on
-  (its progress lines indented under the run's) and passes it to every shot; `share=` replaces
-  it (tests: fake cloudflared and network). The dry run never opens a host.
-- **The plan** prints, for a shot that would be shared (not cached, no earlier job), the line
-  "would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most
-  N min; copies under random names behind a secret path; pictures are not shared, they go
-  inline):" and each file with its size (`not made yet` while missing). JSON per shot:
-  `shared: [{path, bytes}]` (empty when nothing would be shared) and `share_max_minutes`.
-  `--pay` is still required to share anything.
-- **MCP**: `generate_host_test` (`keep` 0-300 s; read-only, open-world; JSON mode, so the URL
-  with its secret is never in the answer); `generate_plan` / `generate_run` run the CLI and so
-  follow the setting.
-- **Docs**: `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` §5 "Sharing voice and video inputs safely" (what is
-  shared, for how long, what the ledger records, "Test on Windows": winget, `host-test`, a dry
-  `plan`, one paid talking shot); CONFIG (setting, quick tunnel bullet, plan JSON, MCP); the
-  guide / AGENTS.md (the key and to ask the user before turning it on).
-- **Tests** (`tests/test_videogen_shots.py`): a talking shot with the host on — the plan (not
-  blocked, exactly the voice listed with its size, JSON), host off (blocked with the setting),
-  cloudflared missing (blocked with the install hints); a paid run on the mock API with the fake
-  cloudflared: a provider error quoting the URL is redacted, the ledger has open / the check's
-  fetch / close and no job; then the provider fetches the voice through the tunnel during the
-  submit, the bytes match, the ledger order is `host_open` < `submit` < `host_close` (`done`) <
-  `completed`, the share folder is gone, the secret is in no ledger line or printed line, the
-  provider's `uploader` is restored.
+- With `host: none` a shot with audio / video inputs is blocked with `shots.NO_HOST_BLOCKED`
+  (names the setting and `host-test`; a problem with `inline_media: all`). With `quick_tunnel`,
+  `Shot.share_minutes` = `host_max_minutes` and `Shot.shared` = those inputs; a failing
+  `find_cloudflared` blocks the shot with the install hints.
+- **One tunnel per shot** (split parts `<beat>_p<n>` too): only that shot's files, its own secret,
+  for its one job.
+- **`generate_clip`** (`run.py`): only after the cache, an earlier job, the model checks, the key
+  and the budget pass (never a tunnel for a refused run), `hosted_inputs(sendable)`; if any and a
+  `ShareOptions` is given (or the setting makes one), the host opens and verifies (failure raises
+  before anything is sent or paid); the provider's `uploader` = `host.url_of` for the submit only
+  (restored in `finally`); `submit`, its ledger line and `provider.wait(job)` run inside the
+  `with`, so the tunnel closes (`done`) at the job's final state, before the download and the
+  final ledger line. A `VidgenError` inside closes it and is re-raised redacted (§115.6). A job
+  resumed from the ledger is only polled, never re-shared. Without a host, `media_url` stops the
+  submit with a clear error.
+- `run_shots` builds `ShareOptions.from_config(settings, out=...)` once; `share=` overrides it;
+  the dry run never opens a host.
+- **Plan**: per shot that would be shared, "would share through a public Cloudflare quick tunnel,
+  only while this shot's job runs (at most N min; …):" and each file with its size (`not made
+  yet` while missing); JSON `shared: [{path, bytes}]`, `share_max_minutes`. Sharing needs `--pay`.
+- **MCP** `generate_host_test` (`keep` 0–300 s; JSON mode, so the URL with its secret never
+  appears). User docs: `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` §5, docs/CONFIG.md.
 
 ### 115.3 Review of Steps 305–306
 
-Checked against the security requirements of the brief; fixed in Step 306:
-
-- **Links in folders.** `O_NOFOLLOW` checks only the last part of a path, so a linked folder
-  inside the project (e.g. `build/videogen/<shot>` pointing elsewhere) would have been followed.
-  `copy_into_share` now refuses a source when any folder between the project and the file is a
-  link (folders above the project are not checked: a project under a linked home folder still
-  works). Windows junctions count as links where Python can tell them (3.12+ `is_junction`).
-- **HEAD without `Content-Length`.** A proxy may drop the length from a `HEAD` answer; the check
-  now accepts 200 without a length and still refuses a wrong one (host-test's `GET` compares the
-  bytes).
-- **Windows without `taskkill`.** `stop_process_tree` did nothing there until the 5 s wait ran
-  out; it now kills cloudflared itself at once (cloudflared starts no children on Windows).
-- **The secret in errors.** A provider error quoting the reference URL would have printed the
-  secret (harmless once the tunnel is closed, but against "never shown"); redacted now.
-
-Checked and kept: only exact `GET` / `HEAD` paths answer (query strings, traversal, other
-methods: 404); no `Server` header; `Cache-Control: no-store` (Cloudflare caches `.mp3` / `.mp4`
-by extension unless the origin says no-store); the server binds 127.0.0.1 only; requests are
-kept in memory without client addresses; the ledger has the host name, never the path's secret;
-`host_open` is written before the checks so every open has a close; `close` is idempotent and
-runs every step; an `atexit` hook closes a host left open. Open (needs the owner on Windows):
-the real tunnel, `taskkill`, and whether OpenRouter's providers fetch with `GET` (the ledger's
-`host_fetch` lines will show it on the first paid talking shot).
+Its fixes are folded into §115.1 and §115.6.
 
 ### 115.4 Keeping the tunnel for the job, and refusing a submit without one (Step 309)
 
-- **No close on fetched.** The owner's decision: during a generate run the tunnel stays open until
-  the job reaches a final state, bounded by `host_max_minutes`. `close_when_fetched`, the grace
-  period, `HostSettings.grace_seconds`, `all_fetched` and `videogen.host_grace_seconds` are gone:
-  a complete `GET` did not mean the provider was done, and in-flight requests, `HEAD`s and partial
-  `GET`s never extended the grace. host-test already passed `close_when_fetched=False`. The trade
-  is a longer exposure for a slow job, against never cutting off a job already paid for. The
-  removed key follows the strict config: `host_grace_seconds` is an unknown-key error like any
-  other (the setting existed only in Unreleased).
-- **`host_max_minutes`** default 20 (was 15), range 5-120. **`HostSettings.lifetime_problem(poll_timeout)`**:
-  `max_seconds` must be at least `poll_timeout + submit_margin (180 s: the longest POST, 120 s, and the
-  last poll's sleep, 60 s) + url_timeout`. Otherwise `_resolve_inputs` blocks the shot (with the
-  numbers) and `generate_clip` refuses before opening a tunnel. The deliberate way to run with a
-  short tunnel is a smaller `poll_timeout`: vidgen stops waiting sooner and closes the tunnel, the
-  job keeps running and a later run polls it (`generate resolve` is not involved; no tunnel is
-  opened again, as §115.2).
-- **`QuickTunnelHost.ensure_time_for_job(poll_timeout)`**, just before the submit: a `VidgenError`
-  (nothing sent or paid) unless the host is open and has `poll_timeout + submit_margin` left.
-  `opened_at` is set before cloudflared starts and the watchdog runs only after verification,
-  so a slow start eats the lifetime; this check is what catches it (`is_open` is false while
-  closing). `url_of` / `urls` raise on a closed host.
-- **The `max lifetime` line** still fires during a job that runs past the limit; `poll_timeout`
-  ends before it with the defaults. A provider that has not fetched yet when the wait ends
-  has no input: accepted and documented, it is a job the owner chose to stop waiting for.
+- No close-on-fetched: a complete `GET` does not mean the provider is done, and cutting off a
+  paid job is worse than a longer exposure. `host_grace_seconds` is not a key.
+- `HostSettings.lifetime_problem(poll_timeout)`: `max_seconds ≥ poll_timeout + submit_margin
+  (180 s: longest POST 120 s + last poll sleep 60 s) + url_timeout`; otherwise `_resolve_inputs`
+  blocks the shot (with the numbers) and `generate_clip` refuses before opening. For a short
+  tunnel lower `poll_timeout`; a later run polls the job without a tunnel.
+- `QuickTunnelHost.ensure_time_for_job(poll_timeout)` just before the submit: `VidgenError`
+  (nothing sent) unless open with `poll_timeout + submit_margin` left (`opened_at` is set before
+  cloudflared starts, so a slow start counts). `url_of` / `urls` raise on a closed host.
 
 ### 115.5 Cleanup when vidgen is signalled, killed or interrupted during close (Step 310)
 
-A review showed a killed vidgen left cloudflared running and the temporary copies (which can
-include a voice file) on disk, and a second Ctrl+C during close abandoned the cleanup for good.
-`host_guard.py` (and the stand-alone `host_watcher.py`) are the fix. Layers, from the inside out:
+`videogen/host_guard.py` and the stand-alone `host_watcher.py`:
 
-- **Resumable close** (`QuickTunnelHost.close`). Steps in order: `cloudflared`, `server`, `folder`,
-  `watcher`, `report` (ledger `host_close`, the progress line). A step that finishes (even by
-  failing with an `Exception`, a warning) is not run again. `KeyboardInterrupt` / `SystemExit`
-  during a step leaves that step unfinished, the remaining steps still run, and the exception is
-  raised once at the end; `_closed` is set only when every step finished. `report` waits for all
-  others. A later `close` (the `atexit` hook, the watchdog, a retry) runs the unfinished steps; the
-  first reason given stays. The watchdog resumes an abandoned close at once. A `close` from a
-  second thread waits for the first (bounded, 30 s, then a warning); a `close` re-entered from
-  the thread already closing (a signal handler) returns at once, so no deadlock. The `watcher` step
-  disarms the watcher only when cloudflared stopped and the folder is gone; otherwise it hands the
-  remainder to the watcher, which does it immediately.
-- **Termination signals** (`track_host` / `_on_termination`). While a host is open, SIGTERM, SIGHUP
-  (and Windows SIGBREAK) close every open host (reason `terminated (SIGTERM)` ...) and raise
-  `SystemExit(128 + signum)`, so the `with` block, `finally` and `atexit` run. `track_host`
-  installs a handler only from the main thread and only over the default disposition: a handler
-  someone set, or a `nohup`'s ignored SIGHUP, stays. The handlers go back to the default with the
-  last open host; a close in another thread cannot call `signal.signal`, so the handler stays
-  installed (inert, it re-raises the default) until the next main-thread close.
-- **The watcher** (`HostGuard`, `host_watcher.py`): a small `python -I -S` process per host, in its
-  own session (so `_kill`'s process-group SIGKILL in `mcp_server.py` does not reach it), started
-  right after the folder is made, holding stdin as a pipe from vidgen. It ignores
-  SIGINT/SIGTERM/SIGHUP. vidgen sends `tunnel <pid>` once cloudflared started (POSIX),
-  `tunnel-stopped` and `disarm`. End of stdin without `disarm` means vidgen is gone, however it
-  ended: the watcher stops cloudflared's process group (SIGTERM, SIGKILL after 5 s) and deletes
-  the folder. Never by process number alone: cloudflared inherits the write end of a second
-  pipe (`tunnel_fds`) whose read end the watcher holds; end-of-file on it means cloudflared is
-  gone, so a recycled number cannot be signalled. Chosen over `PR_SET_PDEATHSIG`: that is
-  Linux-only, needs `preexec_fn` (unsafe with threads), and fires on the death of the *thread*
-  that started the process. Its stdout/stderr are `DEVNULL`, so whoever reads vidgen's pipes
-  (MCP) does not wait for it. A watcher that cannot be started is a warning; the host still works.
-- **Windows** (`HostGuard.adopt`, `_job_for_process`): cloudflared is assigned to a Job Object with
-  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; the handle is held only by vidgen (not inheritable), so when
-  vidgen ends by any means the handle closes and Windows kills cloudflared (and any child). The watcher
-  there has no process number or pipe to check (`CREATE_NO_WINDOW`, stdin still): it deletes the
-  folder when its stdin ends. The job is closed when cloudflared has stopped. **Not run on Windows**:
-  a mocked kernel32 tests the calls and the structure layout (`ExtendedLimits`: 144 bytes on 64-bit).
-- **The stale sweep** (`sweep_stale_shares`, called by `open`). Each share folder holds a marker
-  file `.vidgen-host.lock`, locked (`flock` / `msvcrt.locking`) by the host that made it before any
-  copy is written; the operating system releases the lock when its holder ends. `open` deletes a
-  folder only when its marker lock can be taken. A folder of a running host (locked), one without
-  a marker (an older vidgen, or a stranger's folder) and anything not owned by the user are left
-  alone. A process number is never trusted here.
+- **Resumable close**: steps `cloudflared`, `server`, `folder`, `watcher`, `report` (ledger
+  `host_close`); a finished step (even one failing with an `Exception`, a warning) is not rerun;
+  `KeyboardInterrupt` / `SystemExit` leaves its step unfinished, the rest still run, and it is
+  re-raised at the end; `_closed` only when all finished; `report` waits for the others. A later
+  `close` (atexit, watchdog, retry) runs what is left, keeping the first reason. A second thread
+  waits (30 s, then a warning); a re-entrant close (signal handler) returns at once. The `watcher`
+  step disarms only when cloudflared stopped and the folder is gone.
+- **Signals** (`track_host` / `_on_termination`): while a host is open SIGTERM, SIGHUP (Windows
+  SIGBREAK) close every host and raise `SystemExit(128 + signum)`; handlers are installed only
+  from the main thread and only over the default disposition.
+- **Watcher** (`HostGuard`): a `python -I -S` process per host, own session (out of reach of
+  `mcp_server.py`'s group kill), stdin piped from vidgen, ignoring SIGINT/SIGTERM/SIGHUP,
+  output `DEVNULL`. Messages `tunnel <pid>`, `tunnel-stopped`, `disarm`. EOF without `disarm`:
+  stop cloudflared's group (SIGTERM, SIGKILL after 5 s) and delete the folder. Never by pid
+  alone: cloudflared holds the write end of a pipe (`tunnel_fds`) whose EOF means it is gone. Not
+  `PR_SET_PDEATHSIG` (Linux-only, needs `preexec_fn`, per thread). A watcher that fails to start
+  is a warning.
+- **Windows** (`HostGuard.adopt`): cloudflared goes into a Job Object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` whose non-inheritable handle only vidgen holds; the
+  watcher there only deletes the folder.
+- **Stale sweep** (`sweep_stale_shares`, in `open`): each share folder holds `.vidgen-host.lock`,
+  locked (`flock` / `msvcrt.locking`) by its host before any copy; `open` deletes only folders
+  owned by the user whose lock it can take. No pid is trusted.
 
-**What still is not covered:** vidgen and the watcher both killed at once, or a power failure:
-copies stay until the next tunnel opens (the sweep), and a `cloudflared` left running stays
-until stopped by hand; it serves nothing, because the local server ended with vidgen. A SIGKILL
-in the few milliseconds between starting cloudflared and telling the watcher its process number
-(the folder is still deleted). A vidgen frozen but alive (SIGSTOP): the watchdog is frozen too
-and nothing closes the tunnel until it runs again. Windows: `taskkill /F /T` of vidgen also kills the
-watcher (the sweep then deletes the copies at the next open). **macOS**: POSIX code paths (pipes, process groups,
-`flock`) are used but not run there. **Windows**: nothing here has been run on Windows.
+Not covered: vidgen and watcher killed together (the next sweep deletes the copies; a stray
+cloudflared serves nothing), a frozen (SIGSTOP) vidgen.
 
 ### 115.6 Provider text never carries the shared address; the mock never shares (Step 311)
 
-A review showed the failed job's error was raised in `_finish`, outside the `except` that
-redacted, so it reached `ShotRun.message`, `--json` and MCP with the secret; `exc.details` was not
-redacted either; and a job polled by a later run has no host at all. `vidgen.videogen.redaction`:
+`vidgen.videogen.redaction.redact_shared_addresses(text)` (needs no host) replaces the path of
+any `*.trycloudflare.com` address (plain, JSON-escaped, percent-encoded or truncated) and any bare
+host-shaped path (32-char secret + `/` + 16 hex digits) with `<secret>`; the host name stays.
+Applied wherever provider text enters: `parse_job`, `http_error`, `_send`'s transport error.
+`QuickTunnelHost.redact` adds the exact secret; `generate_clip` applies it to the message and
+details of every `VidgenError` from the host block and `_finish`. `Ledger.append` filters every
+string field; provider error text is never stored (terminal lines: status, cost, `is_byok`).
 
-- `redact_shared_addresses(text)` needs no host: it replaces the path of any
-  `*.trycloudflare.com` address, plain, JSON-escaped, percent-encoded or cut off by a length
-  limit, with `<secret>` (the host name stays, it is in the ledger on purpose), and a path
-  of the host's shape (32-character secret + `/` + 16 hex digits) quoted without its host.
-- Every place provider text enters: `parse_job` (a job's `error`, submit and poll), `http_error`
-  (submit, poll and download answers), the transport error in `_send`. This covers a job resumed
-  after its host is gone.
-- `QuickTunnelHost.redact` adds the host's exact secret (a provider quoting the bare token);
-  `generate_clip` applies it to the message and details of every `VidgenError` inside the host's
-  block and from `_finish` (the failed job's error), so `run_shots`' `ShotRun.message`, its
-  `details`, `--json` and MCP (which runs the CLI) see only clean text.
-- `Ledger.append` filters every string field, so no line can hold the path. Provider error text
-  is not stored at all: terminal lines record only status, cost and `is_byok`; sidecars and takes
-  hold no error text.
-- Not covered: a bare secret with no file name quoted after the host is gone (no pattern can tell
-  it from a request id; it opens nothing without its file name, and that tunnel is closed).
-
-`provider: mock` (`MOCK_PROVIDER`) never shares: `generate_clip` ignores `share` and
-`videogen.host` for it and sends the mock's `uploader` address (`https://mock.invalid/<name>`);
-`_resolve_inputs` marks the shot `fake_addresses` instead of `share_minutes`, so the plan has no
-"would share" lines, no cloudflared lookup and no block for a missing host (one note says the
-inputs stay on this machine). `inline_media: all` without a host stays a problem, since it describes
-the real API; `vidgen generate host-test` still opens a real tunnel on purpose. Tests of a real host
-use a stand-in provider whose name is not `mock` (`tests/test_videogen_host.HostedStandIn`).
+`provider: mock` (`MOCK_PROVIDER`) never shares: `share` and `videogen.host` are ignored, the
+mock `uploader` gives `https://mock.invalid/<name>`, `_resolve_inputs` marks the shot
+`fake_addresses` (no "would share", no cloudflared lookup, no host block). `host-test` still
+opens a real tunnel. Real-host tests use a non-`mock` stand-in
+(`tests/test_videogen_host.HostedStandIn`).
 
 ## 116. Every Python package is a base dependency (Step 322)
 
-Owner's rule: "If we ask the user to install any python dependency, we are doing something wrong.
-Dependencies should be listed in the source code." So a plain `pip install` of the distribution
-brings every Python package a user needs: `dependencies` in `pyproject.toml` holds fpdf2,
-faster-whisper, mcp, kokoro and misaki[zh], symusic (exact pin) and playwright. The extras
-`pdf`, `stt`, `mcp`, `kokoro`, `music` and `3d` stay defined, empty, so older install commands
-still work without a warning; `dev` is the only real extra (for developers of vidgen).
+A plain `pip install` of the distribution brings every Python package a user needs; never tell a
+user to pip install a package. `dependencies` in `pyproject.toml` holds fpdf2, faster-whisper,
+mcp, kokoro, misaki[zh], symusic (exact pin), playwright and fonttools (§119). Extras `pdf`,
+`stt`, `mcp`, `kokoro`, `music`, `3d` stay defined and empty; `dev` is the only real extra.
 
-- **Markers**: `kokoro` and `misaki[zh]` carry `python_version < '3.13'` (kokoro 0.9.4 and
-  misaki declare Python < 3.13). On 3.13 `install_message` says to use a Python 3.12 virtual
-  environment; the old forced install command (`--ignore-requires-python`) is gone.
-- **Left out**: `misaki[ja]`. Its pyopenjtalk has no wheels, so listing it would make every
-  install need a C++ compiler and no environment marker can express that. Japanese Kokoro
-  voices stop with `kokoro.JAPANESE_NOTE`, which says to use another voice provider.
-- **Hints**: a missing package is an incomplete install, so the message says to reinstall the
-  distribution and never to pip install the package: `errors.REINSTALL` and
-  `errors.incomplete_install(package)`. The imports stay lazy and guarded, so a broken
-  environment still gets a clear message.
-- **Chromium** is a browser download, not a Python package: `browser.BROWSER_HINT` keeps
-  `python -m playwright install chromium`, and that error message is what tells an AI what to run.
-- **Size**: on Linux x86_64 PyPI's PyTorch brings the CUDA libraries, about 3.3 GB of downloads
-  for a plain install on Python 3.12 (Step 322, summed from PyPI's file sizes). The CPU-only
-  PyTorch index cannot be expressed as a dependency that works on every platform.
+- `kokoro` and `misaki[zh]` carry `python_version < '3.13'`; on 3.13 `install_message` says to
+  use a Python 3.12 venv. `misaki[ja]` is left out (pyopenjtalk has no wheels): Japanese Kokoro
+  voices stop with `kokoro.JAPANESE_NOTE`.
+- A missing package is an incomplete install: `errors.REINSTALL`,
+  `errors.incomplete_install(package)` say to reinstall the distribution. Imports stay lazy and
+  guarded.
+- Chromium is a browser download: `browser.BROWSER_HINT` keeps `python -m playwright install
+  chromium`.
 
 ## 117. A clip that continues the one before: `match_previous` (Steps 325, 326)
 
-A film of generated takes is a list of `video_clip` scenes joined by plain cuts (§113). A take
-made with `first_frame: last_of:<shot>` starts from the last frame of the take before, but the
-video model draws that picture again a little darker: measured on "Get It All In", the mean RGB
-of the last frame of shot 2 is [141.6 126.7 130.0] and of the first frame of shot 3
-[131.7 116.4 120.5], a gain of about 1.08 on each channel. The eye sees a small flash at the cut.
+A take made with `first_frame: last_of:<shot>` is redrawn slightly darker than the frame it
+starts from, which flashes at the cut. `video_clip` param `match_previous: true | {seconds: 1.0,
+hold: false, dissolve: 0, level: true}` (default `false`; `clip_join.MatchPrevious`, `seconds`
+in (0, 30]) gives the clip's first frame the previous clip's level and colour and eases the
+correction away over `seconds`. No frame is added or removed; durations and sound are unchanged.
 
-**Param.** `video_clip` gains `match_previous: true | {seconds: 1.0, hold: false}` (default
-`false`). At the cut the clip's first frame is given the brightness and colour of the previous
-clip's last shown frame, and the correction eases away, so that `seconds` after the cut the
-clip shows its own pixels again. No frame is added, removed or blended; durations and sound do
-not change. A dissolve over a few frames is a separate setting, off by default (see "Dissolve"
-below).
-
-- **Where it applies** (`clip_join.match_previous_problem`; `vidgen validate` reports each case
-  at `scenes[i].params.match_previous`, and the scene's render raises the same text as a
-  `VidgenError`): the scene directly before is a `video_clip`, the transition between them is a
-  cut, and both scenes have `fade: false` and `region: bleed`. Not the first scene.
-- **Measure** (`clip_join.channel_gains`): both frames are decoded from their files at 64 x 64
-  pixels, each through its scene's crop (`fit: cover`), and the gain of a channel is the mean of
-  the previous clip's last shown frame divided by the mean of this clip's first frame, on the
-  coded 8-bit values. The previous clip's last shown frame is the one at `scene length − 1 /
-  fps` of the planned timeline (`VideoPlan.scene_duration`), through that scene's trim, speed,
-  `fit_duration` and loop (`clips.clip_timing`, shared with the scene). No rendered scene is
-  read, so scenes still render in any order and in parallel.
-- **Apply** (`clip_join.GainMatch`): each channel is multiplied by `1 + (gain − 1) · left`,
-  rounded and cut off at 255, where `left = 1 − smoothstep(played / seconds)`
-  (`correction_left`: 1 at the cut, 0.5 half way, 0 from `seconds` on; no jump in the level or
-  in its rate of change). From `seconds` on the frames are the decoded ones, untouched.
-- **`hold: true`** keeps the full gain for the whole clip. The next clip's reference is then
-  this clip's *corrected* last frame (`ClipJoin.reference`), so held corrections add up along a
-  chain instead of drifting: three takes each 8 % darker end at a gain of about 1.26. The same
-  happens without `hold` when a scene is shorter than its `seconds`.
-- **Limits.** `GAIN_RANGE = (0.8, 1.25)`: a channel gain outside it between the two frames *as
-  decoded* means the clip does not continue the one before. `MAX_DIFFERENCE = 0.04`: the same
-  when the two 64 x 64 pictures, after the gain, differ by more than 4 % of full scale (mean
-  absolute difference of their grey levels; on the four takes of "Get It All In" the three real
-  joins measure 0.011 to 0.016 and the nine other pairings 0.049 to 0.084). `MIN_LEVEL = 4`: a
-  channel whose mean is under 4 of 255 in either frame is too dark to measure. In each case the
-  scene logs a warning with the numbers and the clip plays uncorrected. `APPLIED_RANGE = (0.67,
-  1.5)` limits the gain applied; only a chain of held corrections reaches it, a step then stays
-  at that cut, and the scene's info line says so.
-- **Where the code is.** `vidgen/clip_join.py` is the one place that knows a join: `ShownClip`
-  (a clip as its scene shows it: file, timing, crop, seconds played at the scene's last frame),
-  `ClipJoin(previous, current, previous_treatment)` with `reference(size)` (the previous clip's
-  last shown frame, treated as its scene treats it) and `opening(size)`, and
-  `opening_treatment(project, plan, index, frame_aspect)`, which `VideoClip._match_previous`
-  calls. What it returns is a `clips.FrameTreatment` (`state(played)`, `apply(frame, state)`),
-  set as `ClipMobject.playback.treatment`: `ClipMobject.get_pixel_array` applies it to each
-  decoded frame before the mobject's opacity and tint, and the state is part of its one-frame
-  cache key. `ClipJoin.treatment(settings, fps)` chooses the treatment: a `GainMatch`, or with
-  a dissolve a `JoinTreatment` (gain, then blend). Neither name is in `vidgen.api`.
-- **Cache** (`render/fingerprint.py`): the param is in the scene's params, so changing it
-  renders that scene again and no other. A scene with `match_previous` also carries
-  `match_previous: [fingerprint of the scene before, size and time of its clip file]`, so a
-  change to the previous scene or its take renders this scene again; with `hold` that passes
-  down the chain, as the corrections do.
-- **Measured** (the four picked takes of "Get It All In", preview 480x854 at 24 fps, mean of R,
-  G and B of the frames of the joined MP4): the step at the three cuts is −7.6 %, −7.4 % and
-  −7.8 % without the param, and within ±0.1 % with it; with `seconds: 1` the frame 1.0 s after
-  each cut has the level of the uncorrected render (131.2 against 131.1, 125.3 against 125.2,
-  120.2 against 120.1); with `hold: true` all three cuts are within ±0.1 % and shot 4 plays
-  about 26 % brighter than its file.
-
-**Dissolve (Step 326).** After the gain, what is left of the flicker at such a cut is the picture
-itself: the model draws fine texture differently and shifts the picture by about 2 pixels (at
-496x864). `match_previous: {dissolve: N}` blends this clip's first N frames with the previous
-clip's last shown frame, held still. It is off by default (`dissolve: 0`), and `match_previous:
-true` does exactly what it did in Step 325: the owner wants a dissolve only on request.
-
-- **Settings** (`clip_join.MatchPrevious`): `dissolve` is a whole number of frames from 0 to 12
-  (`MAX_DISSOLVE`), usable with `seconds` and `hold`. `level: false` switches the gain off and
-  leaves the dissolve alone; it is an error without a dissolve, and with `seconds` or `hold`
-  (they set the gain).
-- **N counts frames of the render being made.** A preview at 24 fps and a final render at 30 fps
-  both blend N frames, so `dissolve: 3` lasts 0.125 s in the first and 0.1 s in the second.
-  `JoinTreatment` gets the rate from the planned timeline (`VideoPlan.fps`) and finds the frame
-  as `round(played · fps)`.
-- **Weights** (`clip_join.dissolve_weight`): frame *k* after the cut (0 = the first) shows
-  `(N − k) / (N + 1)` of the previous frame and the rest of its own. With N = 3: 0.75, 0.5,
-  0.25, then 0 from frame 3 on. Counting the frame before the cut as weight 1, the weight falls
-  in N + 1 equal steps, so the change at the cut is no larger than the change between any two
-  frames of the dissolve, and the first frame is not a repeat of the previous one.
-- **Order** (`clip_join.JoinTreatment.apply`): the frame gets its gain first (`apply_gains`),
-  then `blend` mixes its colour channels with the reference (rounded; the frame's alpha is
-  kept). The reference is `ClipJoin.reference(size)` at the size of the frame being treated: the
-  previous clip's last shown frame, treated as its own scene shows it, decoded once per size and
-  kept. So both pictures of the blend are at the same level. From frame N on the state is the
-  gain's alone, and `None` once that has eased to 1: `state` is `(gains | None, weight)`,
-  hashable, and part of the one-frame cache key.
-- **Skipped together.** `ClipJoin.treatment` runs the same `measure_match` for a dissolve, with
-  or without `level`, so a pair of frames that is not a continuation gets neither gain nor
-  dissolve, in the one warning. A dissolve also needs both scenes to show a picture of the same
-  shape (`ClipJoin.shape_problem`, within 1 %; true for two `fit: cover` scenes, or two clips
-  of the same shape with the same `fit`), because the blend lays one picture on the other pixel
-  for pixel; otherwise the whole treatment is skipped with a warning that names the two shapes.
-- **Chain.** A previous scene shorter than its own dissolve still shows it at its last frame;
-  `opening_treatment` then asks for that scene's treatment first (`_shows_at`), as for `hold`.
-- **Cache.** `dissolve` and `level` are in the scene's params, so changing either renders that
-  scene again and no other.
-- **Measured** (the same four takes, preview 480x854 at 24 fps; mean absolute difference of
-  RGB, 0 to 255, between consecutive frames). Inside the shots of the joined MP4 the median is
-  0.61 and the 90th percentile 1.71. At the three cuts, frame before to first frame after:
-  7.09, 6.74 and 5.80 with `match_previous: true`; 2.75, 2.71 and 2.44 with `{dissolve: 3}`,
-  followed by 1.4 to 2.0 for each of the next three frame pairs and 0.55 to 0.65 after them.
-  On the frames handed to Manim, before the video encoder, the same step is 7.11, 6.71 and 5.73
-  against 1.76, 1.65 and 1.41 (a quarter each, as the weights say); the rest of the MP4 figure
-  is the encoder, which codes each scene on its own (the frames of shots 2 to 4 that the
-  dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
-  frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
+- **Applies when** (`clip_join.match_previous_problem`; validate reports at
+  `scenes[i].params.match_previous`, the render raises the same text): the scene directly before
+  is a `video_clip`, joined by a cut, both with `fade: false` and `region: bleed`.
+- **Measure** (`channel_gains`): both frames decoded at 64 x 64 through their scenes' crops; gain
+  per channel = mean of the previous clip's last shown frame / mean of this clip's first frame
+  (8-bit). The previous frame is at `scene length − 1 / fps` of the planned timeline
+  (`VideoPlan.scene_duration`, `clips.clip_timing`): no rendered scene is read, so scenes still
+  render in any order and in parallel.
+- **Apply** (`GainMatch`): channel × `1 + (gain − 1) · left`, `left = 1 − smoothstep(played /
+  seconds)` (`correction_left`), rounded, clipped at 255; untouched from `seconds` on. `hold:
+  true` keeps the full gain; the next clip then references this clip's *corrected* last frame
+  (`ClipJoin.reference`), so held corrections accumulate along a chain (also when a scene is
+  shorter than its `seconds`).
+- **Limits**: `GAIN_RANGE = (0.8, 1.25)` (frames as decoded), `MAX_DIFFERENCE = 0.04` (mean grey
+  difference after the gain), `MIN_LEVEL = 4` (of 255): outside these, a warning with the numbers
+  and no treatment. `APPLIED_RANGE = (0.67, 1.5)` caps the applied gain of a held chain.
+- **Dissolve** `N` (0–12, `MAX_DISSOLVE`) blends the first N frames of the render being made
+  (`VideoPlan.fps`) with the previous clip's last shown frame held still: weight `(N − k) / (N +
+  1)` at frame *k* (`dissolve_weight`), applied after the gain (`JoinTreatment.apply`:
+  `apply_gains`, then `blend`, alpha kept). `level: false` = dissolve only; an error without a
+  dissolve or with `seconds` / `hold`. Gain and dissolve are skipped together (one warning) when
+  the frames are not a continuation (`measure_match`) or the pictures' shapes differ by over 1 %
+  (`ClipJoin.shape_problem`).
+- **Code**: `vidgen/clip_join.py` is the one place that knows a join (`ShownClip`, `ClipJoin`
+  with `reference`, `opening`, `treatment`; `opening_treatment`, called by
+  `VideoClip._match_previous`). It returns a `clips.FrameTreatment` set as
+  `ClipMobject.playback.treatment`, applied per decoded frame before opacity and tint; its
+  hashable `state` is in the one-frame cache key. Not in `vidgen.api`.
+- **Cache**: besides the params, the fingerprint carries `match_previous: [fingerprint of the
+  scene before, size and mtime of its clip file]`, so a change upstream re-renders it.
 
 ## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336–337, 339)
 
-The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
-project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
-first version; the page cannot reach the internet while rendering; screenshots of the whole page
-are accepted even when slow. Step 328 built the core described here, Step 329 the virtual clock
-(§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
-transparent background and the video's shape (§118.11), Step 332 lint of the page's text
-(§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
-(§118.13), Step 334 a chosen set of three.js add-ons (§118.14), Step 336 five animation and
-chart libraries (§118.15), Step 339 `design_width` for a page built in fixed pixels (§118.17), Step 340 drafts of `web` scenes measured (§118.18); §118.7 says where each part is
-and what is left for after the phase.
+A scene written as a web page. Decisions: project JavaScript is trusted like the Python in
+`extensions/` (no flag); the page cannot reach the internet while rendering; full screenshots are
+accepted even when slow. Author keys, `ctx` and what the clock does not control:
+docs/CONFIG.md#web and `vidgen guide web`.
 
 ### 118.1 How a `web` scene renders (Step 328)
 
-A `web` scene is a `NarratedScene` (`scenes/web.py`, `Web`) built like the `3d` scene (§114.1):
-`clip_plan(scene, SPARE_FRAMES)` (`browser/timing.py`, shared with `3d`, which used to have it
-as `Scene3D._plan`) gives the number of frames (the beats' windows or a silent scene's duration,
-the 0.5 s outro, 2 spare frames); `make_web_clip` returns a lossless clip of that many
-screenshots at `config.pixel_width × pixel_height` (since Step 331: the size of the page's box,
-§118.11) and `config.frame_rate`; the clip is a `ClipMobject` covering the frame or the box
-(target `view`: `dim`, `highlight`, `zoom` work as on `3d`), then `timeline()` holds each beat
-(beat 1 fades in the `title`, Step 331) and `finish()` fades out. Frame *n* of the clip is the page at
-*t = n / fps*, shown as output frame *n*.
+`Web` (`scenes/web.py`) is a `NarratedScene` built like `3d` (§114.1): `clip_plan(scene,
+SPARE_FRAMES)` (`browser/timing.py`) gives the frames (beat windows or silent duration, the 0.5 s
+outro, 2 spare); `make_web_clip` returns a lossless clip of screenshots at the page box's pixel
+size (§118.11) and `config.frame_rate`, shown as a `ClipMobject` (target `view`: `dim`,
+`highlight`, `zoom`). Clip frame *n* is the page at *t = n / fps*, output frame *n*.
 
 ### 118.2 Params and checks
 
-`page: <path>` (`.html`, `.htm`) or `script: <path>` (`.js`, `.mjs`), relative to the project
-folder; exactly one (a `model_validator` of `Web.Params`). `web/entry.py`: `entry_of(params)` ->
-`WebEntry(kind, path)`; `entry_problems(root, entry)` -> `"page: file not found: …"`, `"script:
-must be a path inside the project folder, got …"` (absolute or `..` out of the folder), `"script:
-expected a .js or .mjs file, got …"`; `vidgen validate` reports them at `scenes[i].params.page` /
-`.script` (the `validate_project` convention). The render checks again (`entry_path`) and stops
-with `scene '<id>': page: file not found: …`. Since Step 330 the author's own values go in `data:`
-(§118.9).
+Exactly one of `page:` (`.html`, `.htm`) or `script:` (`.js`, `.mjs`), a path inside the project
+folder. `web/entry.py`: `entry_of(params)` -> `WebEntry(kind, path)`; `entry_problems(root,
+entry)` (`page: file not found: …`, `script: must be a path inside the project folder, got …`,
+`script: expected a .js or .mjs file, got …`; validate reports at `scenes[i].params.page` /
+`.script`); the render checks again (`entry_path`).
 
 ### 118.3 The page, serving and errors
 
-`web/page.py`, `WebPage(root, entry, scene_id=, size=, fps=, frames=)` (a context manager, one per
-clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--hide-scrollbars
---force-color-profile=srgb` and, since Step 336, `--disable-partial-raster`, §118.15), a context with the frame's size as viewport and device scale 1 (with `design_width`: the design window and its scale, §118.17),
-the time zone `UTC` and locale `en-US`, the init script (`init_script(scene_id)`: `data/web/clock.js`,
-`media.js` and `runtime.js` joined in one function with the scene's random seed, §118.8) and a
-route for every request:
+`web/page.py` `WebPage(root, entry, scene_id=, size=, fps=, frames=, …)`, one per clip:
+`Chromium("a web scene", WEB_ARGS)` (`--hide-scrollbars --force-color-profile=srgb
+--disable-partial-raster`, the last for pixel-identical renders), viewport = box size, device
+scale 1 (or §118.17), time zone `UTC`, locale `en-US`, the init script (§118.8), and a route:
 
-- `http://vidgen-web.invalid/<path>` is answered from the project folder (`inside(root, path)`:
-  resolved, must stay in the folder), with a content type from `CONTENT_TYPES` (fixed table:
-  Windows' registry can map `.js` to `text/plain`, which Chromium refuses for a module), else
-  `mimetypes`. A file that is not there: 404 and a warning naming it (`favicon.ico` silent).
-  `Accept-Ranges: bytes`; a `Range: bytes=a-b` request is answered 206 with that part
-  (`byte_range`; Step 329: without it Chromium cannot seek a `<video>`, `seekable` is empty).
-- `__vidgen__/canvas.html` (only for a `script:` scene) is vidgen's bare page
-  (`data/web/canvas.html`: one `<canvas id="vidgen-canvas">` of the frame's size, black
-  background, an inline module `import * as hooks from "/<script>"` that copies the exports onto
-  `window.vidgen` and sets `window.__vidgen.ready`). A static import, so a syntax error in the
-  script is reported with its file and line (a dynamic `import()` rejects without them).
-- Any other URL is aborted and logged once as a warning: `scene '<id>': refused <url> (a web scene
-  cannot reach the internet; …)`. **Decision:** a warning, not an error — a page that links a web
-  font or a CDN script still renders (without it), and the warning says what was missing.
-  `data:` and `blob:` URLs never reach the route.
+- `http://vidgen-web.invalid/<path>` from the project folder (`inside(root, path)`), type from the
+  fixed `CONTENT_TYPES` (Windows may map `.js` to `text/plain`), else `mimetypes`; missing: 404
+  and a warning (`favicon.ico` silent); `Range` requests get 206 (`byte_range`; needed to seek a
+  `<video>`).
+- `__vidgen__/canvas.html` (script only, `data/web/canvas.html`): one `<canvas
+  id="vidgen-canvas">`, transparent background, a static `import * as hooks from "/<script>"`
+  (so a syntax error carries file and line) copied onto `window.vidgen`.
+- Anything else is aborted with one warning `scene '<id>': refused <url> (a web scene cannot reach
+  the internet; …)`: a warning, so a page with a CDN link still renders. `data:` / `blob:` never
+  reach the route.
 
-`runtime.js` (run before any script of the page, top frame only) records every uncaught error
-(`window` `error` events: `ErrorEvent` with its file, line, column and the error's stack; a
-`<script>` that did not load) and every unhandled promise rejection into `window.__vidgen.errors`,
-and defines `window.__vidgen.start(info)` (builds `ctx`, waits for the page, runs `load`) and
-`window.__vidgen.frame(n)` (moves the clock to frame *n* and runs `window.vidgen.frame(t, ctx)`,
-§118.8; catches what the page throws; returns and clears the errors so far).
-
-Opening: `goto(…, wait_until="load")`, then `wait_for_function`: an error was recorded, or
-`document.readyState === "complete"` and (for a script) the module has run. Both wait at most
-`READY_TIMEOUT_MS` = 30 s; a timeout is `scene '<id>': <file> did not become ready within 30 s
-(its load event never came or a module never finished loading; not answered: <404s and refused
-URLs>)`. Then `start(info)`; any error so far stops the render. Frame *n*: `frame(n / fps)`; an
-error stops the render; then `page.screenshot(type="png")` of the viewport, decoded and checked
-for size (`png_pixels`). (Since Step 349 the same picture through `Page.captureScreenshot` with
-`optimizeForSpeed`, §120.10.)
-
-Error messages (`error_message`): `scene '<id>': JavaScript error in <file> line <n> <when>:
-<Error name>: <message>` with *when* `at load` or `in frame(t=0.500)`. The file and line come
-from the error event, else from the first frame of the stack that is a project file (not
-`__vidgen__/`); without either, the entry's path and no line. A `VidgenError`, so the worker
-prints it without a traceback. A hook that never returns is bounded since Step 329 (§118.8, time
-limits).
+`runtime.js` collects uncaught errors and rejections into `window.__vidgen.errors` and defines
+`start(info)` and `frame(n)`. Opening waits for `load` and readiness at most `READY_TIMEOUT_MS` =
+30 s (the message lists the 404s and refused URLs); any error so far stops the render. Each frame
+is a viewport screenshot (`Page.captureScreenshot`, §120.10), size-checked by `png_pixels`.
+`error_message`: `scene '<id>': JavaScript error in <file> line <n> at load | in frame(t=0.500):
+<Name>: <message>`; location from the error event, else the first stack frame that is a project
+file; a `VidgenError`.
 
 ### 118.4 The page contract (Step 328) and the cache
 
-- A `page:` sets `window.vidgen = {load(ctx) {…}, frame(t, ctx) {…}}`; a `script:` module exports
-  `load` and `frame` (its exports are copied onto `window.vidgen`, so a script may also set
-  `window.vidgen`). Both are optional and may be async. Without `frame`, every frame is a
-  screenshot of the page as it stands at the frame's time (§118.8).
-- `t`: seconds from the scene's start. `ctx = {scene, width, height, fps, frames, duration,
-  canvas}` (`duration` = frames / fps, the length of the clip; `canvas` = the bare page's canvas,
-  `null` on a page without `#vidgen-canvas`); Step 330 added `theme`, `data`, `beats` (§118.9).
-- `window.vidgen` is the page's object (the hooks it gives vidgen: `frame`; `load`, Step 329;
-  `layout`, Step 332) and `ctx` is vidgen's (what it gives the page; Steps 330 and 331 added
-  fields). Each step only added names, so a page written for Step 328 still works.
-- **Cache** (`web/clip.py`, `make_web_clip(root, folder, scene_id, params, size=, fps=,
-  frames=)`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` = `{key, inputs}`, `inputs` =
-  `{version: 1, engine, scene, kind, path, sha256 (of the page or script file), width, height,
-  fps, frames}`, `engine` = digest of `clock.js`, `media.js`, `runtime.js` and `canvas.html`, the
-  Chromium flags, the time zone and locale, and the Playwright version (so a change to the clock
-  draws every web clip again; the random seed comes from `scene`, already in `inputs`); `key` = SHA-256 of the canonical JSON of `inputs`. Reused when the clip
-  exists and the keys match; else the record is removed, the clip drawn
-  (`write_ffv1_clip`, through a `.partial` file) and the record written last. Step 330 (version
-  2) adds `theme`, `data` and `beats` to `inputs` and the record's `loaded` map (§118.10).
-- **Render fingerprint** (§63): a `web` scene adds `web: {kind, path, sha256}` of its page or
-  script file (`entry_digest`), so an edit to that file renders the scene again; other scenes'
-  fingerprints are unchanged by this key. `data/web/*.html|js` are part of `vidgen_source_digest`.
-  Since Step 330 the key also holds every file the page loaded (§118.10).
+- A `page:` sets `window.vidgen = {load(ctx), frame(t, ctx), layout(t, ctx)}`; a `script:` module
+  exports them. All optional, may be async; without `frame` each frame shows the page at that
+  time. `ctx = {scene, width, height, fps, frames, duration, canvas, theme, data, beats, aspect,
+  orientation, frame, region}`. Names are only ever added.
+- **Clip cache** (`web/clip.py`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` `{key, inputs,
+  loaded}`; `inputs` = `{version: CLIP_VERSION (3), engine, scene, kind, path, sha256, width,
+  height, fps, frames, theme, data, beats, shape, alpha: true}` plus optional keys only when set
+  (`design_width`, …). `engine` = digest of the runtime files (`clock.js`, `media.js`,
+  `runtime.js`, `canvas.html`), Chromium flags, time zone, locale and Playwright version. `key` =
+  SHA-256 of canonical `inputs` (the random seed comes from `scene`). Drawn through a `.partial`
+  file; the record is written last.
+- **Render fingerprint** (§63): `web: {kind, path, sha256}` (`entry_digest`) plus loaded files
+  (§118.10); `data/web/*` is in `vidgen_source_digest`.
 
 ### 118.5 One Chromium for `3d` and `web` (Step 328)
 
-`browser/chromium.py` holds what both scene types use, moved out of `three_d/browser.py`:
-`CHROMIUM_ARGS`, `INSTALL_HINT` (now "3d and web scenes need Playwright and its Chromium: …"),
-`BROWSER_HINT` (unchanged), `sync_api()`, `playwright_version()`, `missing_dependency()`,
-`install_warnings(project)` (one warning per type in `BROWSER_SCENE_TYPES` the project uses:
-`3d scenes (a) cannot render here: …`, `web scenes (b, c) cannot render here: …`),
-`browser_error(exc, what)` ("cannot start Chromium for a web scene: …"), the context manager
-`Chromium(what, extra_args)` (Playwright + one headless Chromium, closed on exit),
-`write_ffv1_clip(path, fps, size, frames)` (the FFV1 writer `write_clip` had) and `png_pixels`.
-`three_d/browser.py` keeps the 3D page (`PAGE_FILES`, `page_digest`, `engine_id`, `_serve`,
-`PageRenderer`, `write_clip`) on top of them. **The `3d` cache keys did not change**: `engine_id()`
-is computed from the same files and Playwright version (checked: equal to the previous code's
-value), and the description is unchanged, so existing 3D clips are reused. One browser per clip,
-not per video, as for `3d` (§114.6).
-
-**Measured** (Step 328, this machine: 1 CPU, SwiftShader; drawing the clip only, Chromium start
-included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps: 88 ms per frame,
-2.1 s per second of video; a canvas script: 58 ms per frame, 1.4 s per second; the same page at
-1920x1080 at 30 fps: 432 ms per frame, 13 s per second of video.
+`browser/chromium.py`: `CHROMIUM_ARGS`, `INSTALL_HINT`, `BROWSER_HINT`, `sync_api`,
+`playwright_version`, `missing_dependency`, `install_warnings(project)` (one per type in
+`BROWSER_SCENE_TYPES` used), `browser_error`, `Chromium(what, extra_args)`, `write_ffv1_clip`,
+`png_pixels`. `three_d/browser.py` keeps the 3D page; `3d` keys do not depend on `web` code. One
+browser per clip, not per video.
 
 ### 118.6 Public interface and decisions (Step 328)
 
-- `vidgen.api` gains `make_web_clip`, `web_entry_problems(root, params)` and `clip_plan(scene,
-  spare_frames)` (built-ins import only `vidgen.api`). Step 330: `make_web_clip(..., theme=None,
-  beats=())` (keyword arguments with defaults: earlier calls work unchanged), and two new names,
-  `web_page_inputs(scene, spans)` -> `(ctx.theme, ctx.beats)` of a scene being rendered and
-  `web_json_problem(value, path="data")` (the first part that is not a JSON value, or `None`).
-- `three_d.browser` no longer exports `BROWSER_HINT`, `INSTALL_HINT`, `missing_dependency`,
-  `install_warnings`, `playwright_version` (they are in `browser.chromium`); not part of
-  `vidgen.api`.
-- Screenshots (`page.screenshot`) rather than a canvas read-back: a page may be any HTML.
-- The scene has no title of its own: whether the page fills the frame or sits under a vidgen
-  title is Step 331's `region` (§118.11). Step 331: `vidgen.api` adds `web_page_shape(frame,
-  region="bleed")` (§118.11); `make_web_clip(..., shape=None)` (default: a page filling a frame of
-  its `size`, so earlier calls work unchanged).
+`vidgen.api`: `make_web_clip`, `web_entry_problems(root, params)`, `clip_plan(scene,
+spare_frames)`, `web_page_inputs(scene, spans, css_scale=1)` -> `(ctx.theme, ctx.beats)`,
+`web_json_problem(value, path="data")`, `web_page_shape(frame, region="bleed")`, plus the names
+in §118.12 and §118.17; new `make_web_clip` arguments are keywords with defaults. Screenshots,
+not a canvas read-back: a page may be any HTML.
 
 ### 118.7 The phase step by step, and what is left
 
-328 (§118.1–118.6): the scene type, serving, errors, the shared Chromium. 329 (§118.8): the
-virtual clock. 330 (§118.9, §118.10): theme as CSS variables and `ctx.theme`, `ctx.data`, beats
-(`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js importable as `three`, every loaded
-file in the cache keys. 331 (§118.11): `region: bleed | body` and `title`, a transparent
-background, 9:16 from one page. 332 (§118.12): lint reads the page's text. 333 (§118.13): the
-guide topic `web`, `examples/web`, the gallery entry, the measured cost. 334 (§118.14): the
-three.js add-ons a page may import. 336 (§118.15): anime.js, Motion, D3, Chart.js and lottie-web
-shipped and measured under the clock; GSAP measured, not shipped.
-
-Left for after the phase (also in the tasklist's backlog): no hard cut (`fade: false`) on `web`;
-a storyboard or lint still renders the whole scene (no still-only path); text in pictures, WebGL
-or an undeclared canvas is not read, nor contrast over a gradient or picture; only a chosen
-set of three.js add-ons is served (§118.14); a page with its own import map (two maps) not
-tried; the shipped libraries' other features (§118.15 lists what was run); nothing tried on Windows.
+Limits: no hard cut (`fade: false`) on `web`; storyboard and lint render the whole scene; lint
+does not read text in pictures, WebGL or undeclared canvases, nor contrast over gradients; only
+the shipped three.js add-ons are served.
 
 ### 118.8 Time belongs to vidgen (Step 329)
 
-Any ordinary page renders frame by frame and the same on every render: vidgen owns the page's
-time. The code is three fragments in `data/web/` that `web/page.py` `init_script(scene_id)` joins,
-in this order, into one function run by Chromium before any script of the page (top frame only):
-`clock.js` (time, timers, animation frames, random numbers, fetch), `media.js` (animations, SVG,
-video), `runtime.js` (errors, hooks, the order of a frame).
+`init_script(scene_id)` joins `data/web/clock.js`, `media.js`, `runtime.js` (in that order) into
+one function run before any page script (top frame only). Hand-written replacements, not CDP
+virtual time or Playwright's `page.clock` (neither hits exact fractional frame times or covers
+CSS, SVG, video and random numbers).
 
-**Choice of mechanism.** Hand-written replacements in the page, chosen over two alternatives
-checked on this machine (Playwright 1.63, its Chromium headless shell):
+**Clock.** `nowMs` starts at 0, stands still during loading and `load`, moves only per frame.
+Replaced: `Date` (no-argument forms = `2026-01-01T00:00:00Z` + `nowMs`), `performance.now`,
+`document.timeline.currentTime`, `setTimeout` / `setInterval` / clears (one id space),
+`requestAnimationFrame` / `cancelAnimationFrame`, `requestIdleCallback` (a 0 ms timer,
+`timeRemaining()` = 50) / `cancelIdleCallback`.
 
-- CDP virtual time (`Emulation.setVirtualTimePolicy` with a budget): `performance.now` advanced
-  exactly, but `requestAnimationFrame` ran 3–9 times per 500 ms of virtual time (it follows
-  Chromium's real drawing), a 500 ms timer fired at 632.5 ms, and a 2 s CSS animation was at
-  26.7 px of 400 after 1.5 s (expected 300). Not usable.
-- Playwright's `page.clock` (its driver's `coreBundle.js`, a fake-timers library): integer
-  milliseconds (`Math.ceil`, so 1/24 s cannot be hit), `requestAnimationFrame` on its own 16 ms
-  grid (2 or 3 callbacks per frame at 24 fps, unevenly), and nothing for CSS, SVG, video or
-  `Math.random`; its code changes with the Playwright version, outside vidgen's control.
+**One frame** (`__vidgen.frame(n)`, target `n * 1000 / fps` ms):
+1. Due timers in due-time order (ties by set order), the clock at each due time, one task after
+   each (promises run) and animation discovery. Nested > 5 deep: ≥ 4 ms. The 10 001st callback
+   before one frame clears all timers and is an error. Then the clock is set to the target.
+2. Wait for every `fetch()` and body read, every incomplete `<img>`, `document.fonts.ready`.
+3. Media (`placeMedia`): every `document.getAnimations()` entry is paused in Chromium and placed
+   at vidgen's time (`t + (now − at) × playbackRate`; finished natively at its end); the page's
+   `play`, `pause`, `reverse`, `finish`, `cancel`, `updatePlaybackRate`, `currentTime`,
+   `startTime`, `playbackRate` act on vidgen's time. Outermost `<svg>`s are paused and set with
+   `setCurrentTime`. `<video>`s are paused and seeked to vidgen's time, waited to
+   `HAVE_CURRENT_DATA`. Then the beat (§118.9), followed by one task.
+4. One round of the animation-frame callbacks requested before it, each with `nowMs`.
+5. `frame(t, ctx)`, awaited. 6. Steps 2–3 again; errors returned; screenshot.
 
-The hand-written clock runs callbacks at exact frame times (fractional milliseconds), one round
-of animation frames per video frame, and covers CSS, SVG, video and random numbers; its source is
-in the clip key (§118.4). **`3d` is untouched**: `three_d/browser.py` and `browser/chromium.py` did
-not change, so 3D cache keys are the same.
+**Start** (clock at 0): the beat of frame 0 (no event), fonts (every declared face loaded),
+pictures, fetches, media, `load(ctx)`, then those again.
 
-**The clock.** `nowMs` starts at 0 and stands still while the page loads and during `load`; it
-moves only when vidgen runs a frame. Replaced: `Date` (`new Date()` and `Date()` give
-`2026-01-01T00:00:00Z` + `nowMs`; with arguments, the browser's `Date`; `Date.now()` is the integer
-millisecond), `performance.now()` (= `nowMs`), `document.timeline.currentTime`, `setTimeout`,
-`setInterval`, `clearTimeout`, `clearInterval` (one id space), `requestAnimationFrame`,
-`cancelAnimationFrame`, `requestIdleCallback` (a 0 ms timer; `timeRemaining()` = 50) and
-`cancelIdleCallback`. Chromium's context runs in time zone `UTC`, locale `en-US`.
+**Random**: `Math.random` is sfc32 seeded from SHA-256(`vidgen-web-random:<scene id>`)
+(`random_seed`); `crypto.getRandomValues` / `randomUUID` are seeded too (`crypto.subtle` not).
 
-**One frame** (`window.__vidgen.frame(n)`, the clock's target `n * 1000 / fps` ms):
-
-1. Timers: repeatedly the due timer (due time ≤ target) with the smallest due time, ties broken
-   by the order in which they were set (an interval counts as set again when it is rescheduled);
-   the clock is set to its due time, the callback runs, then one task passes (a `MessageChannel`
-   message, so the promises it resolved run, as after a task in a browser) and vidgen looks for new
-   animations (step 3's discovery, so a transition a timer started begins at that timer's time).
-   A timer set by a callback is due at the callback's time plus its delay and runs in this frame
-   if that is ≤ the target. Delays: not a number or negative = 0; a timer set from a callback
-   nested more than 5 deep gets at least 4 ms (the HTML rule, which also ends a zero-delay
-   loop: at most target/4 ms + 5 runs per frame). A 10 001st callback before one frame clears all
-   timers and is a JavaScript error ("more than 10000 timer callbacks before one frame"). An error
-   thrown by a callback is recorded and stops the render after the frame. Then the clock is set
-   to the target.
-2. Loading: waits until every `fetch()` the page started (and every `Response` body it reads) has
-   settled, and for every `<img>` of the document that is not complete (`decode()`, a broken one
-   skipped).
-3. Media (`placeMedia`): every animation in `document.getAnimations()` (CSS animations, CSS
-   transitions, `element.animate`) is followed: vidgen pauses it in Chromium and keeps its own
-   time (`t` at clock time `at`, playing or not, finished or not); a running animation starts at
-   0 when vidgen first sees it. Each frame it is set to `t + (now − at) × playbackRate`; a playing
-   one past its end (or below 0 when reversed) is finished with the native `finish()`, so its
-   `finished` promise and `finish` event come (the event when Chromium next draws). The page's
-   `play`, `pause`, `reverse`, `finish`, `cancel`, `updatePlaybackRate`, `currentTime`, `startTime`
-   (Step 336: read and set on vidgen's clock, `null` while paused; setting the browser's own
-   would let the animation run in real time, which Motion's start times did) and
-   `playbackRate` are wrapped to act on vidgen's time; `playState` reports the page's view. A CSS
-   animation that starts paused by `animation-play-state` and is set running by CSS is followed;
-   one paused by CSS after vidgen paused it is not (Chromium ignores CSS play state once the API
-   paused it). Every outermost `<svg>` is paused (`pauseAnimations`) and set to `now − (the
-   clock when vidgen first saw it)` with `setCurrentTime`. Every `<video>` (also one only drawn on
-   a canvas) is paused in Chromium; `autoplay` or the page's `play()` means "playing" (the
-   page's `play`, `pause`, `paused`, `currentTime` are wrapped); vidgen sets `currentTime` to its
-   time (looped or held at the end) and waits until it is not seeking and has the picture
-   (`readyState ≥ HAVE_CURRENT_DATA`), or has an error or no source.
-   Then (Step 330, §118.9) the narration beat: `data-beat` / `data-beat-index` on `<body>` follow
-   the frame's beat and a `vidgen-beat` event is dispatched when it changed, followed by one
-   task; the clock is at the target, and beats start on frame times (`clip_plan`), so a CSS
-   transition the attribute starts is first seen in step 3 and begins at the beat's start.
-4. Animation frames: one round: the callbacks requested before it, in request order, each with
-   `nowMs`, each followed by one task; one cancelled during the round is skipped; one requested
-   during the round runs next frame.
-5. `frame(t, ctx)` (`t = n / fps` seconds), awaited.
-6. Steps 2 and 3 again (what the round and `frame` started is set to this time), then the
-   errors since the last frame are returned and Python takes the screenshot.
-
-**Start** (`window.__vidgen.start(info)`, after the page's load event, clock at 0): `data-beat`
-of frame 0 (no event), fonts (since Step 330 every declared font face not loaded yet is loaded,
-then `document.fonts.ready`), pictures, fetches, media (videos ready), `load(ctx)` awaited, then
-fonts, pictures, fetches and media again. Step 2 of each frame also waits for
-`document.fonts.ready` (Step 330).
-
-**Random numbers**: `Math.random` is sfc32 seeded with four 32-bit words of
-SHA-256(`vidgen-web-random:<scene id>`) (`random_seed`), so the same id gives the same sequence and
-a different id another. **Decision:** `crypto.getRandomValues` (after the native call, which keeps
-its checks) and `crypto.randomUUID` are seeded too, from the other four words: libraries use them
-for ids and noise, and a page cannot reach anything that needs secret numbers. Not seeded:
-`crypto.subtle` keys.
-
-**Time limits** (`_TimeLimit` in `web/page.py`): `start` (fonts, pictures, videos, `load`) may take
-`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s (the first frame a page
-draws `FIRST_FRAME_TIMEOUT_S` = 30 s since Step 349, §120.10). Playwright's `evaluate`
-has no timeout, and a promise that never settles is not bounded by CDP's `Runtime.evaluate`
-`timeout` (checked), so a timer thread ends the page's renderer processes (their ids from
-`SystemInfo.getProcessInfo` after the page opened; `os.kill`, `SIGTERM`, `TerminateProcess` on
-Windows); the blocked call then fails and vidgen raises `scene '<id>': frame(t=0.500) in <file>
-did not return within 10 s: a loop that never ends or a promise that never settles, in the hook or
-in a timer, requestAnimationFrame callback, fetch, picture, font or video it waits for; vidgen
-stopped the page` (for `load(ctx)` with "(time stands still at 0 before frame 0, so a timer it
-waits for never fires)"). Without process ids (an older Chromium) there is no limit.
-
-**Not controlled** (documented in CONFIG): `<audio>`; animated GIF / WebP pictures; web workers
-and their timers; iframes; SVG animation in an `<img>` or `<object>`; `event.timeStamp`;
-`Intl.DateTimeFormat().format()` without a date (real now); `XMLHttpRequest` and dynamic
-`import()` (not waited for); `ResizeObserver` / `IntersectionObserver` callbacks (Chromium's
-drawing times); CSS pausing an animation after it ran; a page's own `svg.setCurrentTime`;
-events Chromium fires when it draws (`finish`, `animationend`, `transitionend`) come at its next
-drawing, which is before the screenshot but not at a defined point among the page's callbacks.
-
-**Measured** (1 CPU, 480x270, 24 fps, 72 frames, Chromium start included, one run each): a page
-with a CSS animation and transition 67 ms per frame (Step 328's code: 76), a
-`requestAnimationFrame` page 80 (79), a canvas script drawing in `requestAnimationFrame` 103 (209:
-real-time animation frames ran many times per screenshot). Frames of a page using CSS, timers,
-`requestAnimationFrame`, `Math.random`, SVG `<animate>` and `<video>`, rendered twice with the
-build folder deleted in between: decoded frames identical (Step 329, HANDOFF).
+**Time limits** (`_TimeLimit`): `start` `LOAD_TIMEOUT_S` = 90 s, a frame `FRAME_TIMEOUT_S` = 10 s,
+the first frame `FIRST_FRAME_TIMEOUT_S` = `LOAD_TIMEOUT_S` (§120.10). Past a limit a thread kills
+the page's renderer processes (ids from `SystemInfo.getProcessInfo`) and vidgen raises `scene
+'<id>': frame(t=…) in <file> did not return within 10 s: …; vidgen stopped the page`. Without
+process ids there is no limit.
 
 ### 118.9 What the page is given (Step 330)
 
-`web/inputs.py` builds it, `WebPage(..., theme=, data=, beats=)` passes it to `start(info)` (it
-becomes `ctx`), and `_serve` puts `page_head(theme)` right after the `<head>` tag of the entry page
-and of the bare page (`with_head`: else after `<html>`, else after the doctype, never before it, so
-the page stays in standards mode). The Python scene computes `theme` and `beats`
-(`web_page_inputs`, from `clip_plan`'s spans).
+`web/inputs.py`. `_serve` inserts `page_head(theme)` after `<head>` (else after `<html>`, else
+after the doctype, never before it) of the entry and bare pages: theme style, aspect script,
+import map.
 
-- **`ctx.theme`** (`page_theme(theme, px_per_point)`): `preset`, `background`, `colors` (every
-  colour token), `palette`, `fonts` (family name for every role, `BUILTIN_ROLES` plus the theme's
-  own, and for the tokens `sans`, `serif`, `mono`, which win over a role of that name), `sizes`
-  (every size token in CSS pixels: `px_per_point = pixel_height / (72 × frame_height)`, since a
-  Manim font size is in points with one scene unit = one inch; measured: Inter cap height at size
-  48 is 0.4852 units = 0.7275 em of 48/72 units).
-- **CSS** (`theme_css`, in `<style id="vidgen-theme">` first in `<head>`, so the page's own rules
-  win): `@font-face` for each bundled family the theme names (regular 400, bold 700, italic 400;
-  `url("/__vidgen__/fonts/<folder>/<file>")`), then on `:root`: `--vidgen-<colour>`,
-  `--vidgen-background`, `--vidgen-palette-<i>`, `--vidgen-font-<role|sans|serif|mono>` (`"Family",
-  generic`: `serif` for the theme's serif family, `monospace` for its mono one, else `sans-serif`),
-  `--vidgen-size-<name>` (`px`). **Naming rule:** `--vidgen-` + a kind prefix with `-` (none for
-  colours) + the theme's name as written; theme names are identifiers (letters, digits, `_`), so
-  keeping their `_` means no name of one kind can equal another kind's `font-…` / `size-…` /
-  `palette-…`. The one overlap, a colour token named `background`, loses to the background (it
-  is written after the colours).
-- **Background decision:** a `page:` gets nothing forced (it uses the variables); the bare page of
-  a `script:` set `background: var(--vidgen-background, #000)` until Step 331, which made it
-  transparent (§118.11).
-- **Fonts:** at start every declared, unloaded `FontFace` is loaded (`settleFonts`), so text first
-  shown on a later frame is never drawn in a fallback; the files then count as loaded (§118.10).
-  A theme family that is not bundled gets no `@font-face` and comes from the machine's fonts.
-- **`ctx.data`** = the scene's `data:` (`Web.Params.data`, a mapping, default `{}`), checked by
-  `json_problem` in a `mode="before"` validator: text, finite numbers, booleans, null, lists and
-  mappings with text keys; else `scenes[i].params.data: … data.when: 2026-01-01 is a date, not a
-  JSON value …`. **Decisions:** the YAML name is `data` and the JS name `ctx.data` (one name both
-  sides; the tasklist wrote `ctx.params`, which would read as the scene's whole `params:`); theme
-  colour names in it are not resolved (a string meant literally would change), the page looks
-  them up in `ctx.theme.colors`.
-- **`ctx.beats`** (`page_beats`): `{id, index, start, end, text, words: [{text, start, end}]}` with
-  `start` / `end` from `clip_plan` (`end` = start + heard voice), the words by
-  `beat_word_times` (the stored alignment of the MP3, else estimated within its speech; the
-  captions' timing). A scene without beats: `[]`, no `data-beat`, no event.
-- **The beat in the DOM** (`runtime.js` `showBeat`): the beat of frame *n* is the last whose
-  `round(start × fps) ≤ n`. `<body>` `data-beat` (id) and `data-beat-index` (from 0) are set in
-  `start` (before `load`, no event) and each frame after the timers; a `CustomEvent('vidgen-beat',
-  {bubbles: true, detail: {beat, index, previous, t}})` is dispatched from `<body>` when the
-  frame's beat is not the one announced last (so also at frame 0). Both: id and index, so CSS can
-  match either.
-- **three.js**: an import map `{"imports": {"three": "/__vidgen__/three/three.module.js"}}` in
-  `page_head` (in both pages, before any module script; a page with its own import map then has
-  two, which recent Chromium merges: not tried); `/__vidgen__/three/three.module.js` and `three.core.js` are served
-  from `data/three` (`loaded.vidgen_file`), so a page can also import the URL. Checked in
-  Chromium: `import * as THREE from "three"` from an inline module of a `page:` and from a
-  `script:` (`THREE.REVISION` = 186). Step 334 adds the add-ons (§118.14).
+- **`ctx.theme`** (`page_theme(theme, px_per_point, project_fonts)`): `preset`, `background`,
+  `colors`, `palette`, `fonts` (roles, and `sans` / `serif` / `mono`, which win), `sizes` (CSS px,
+  `px_per_point = pixel_height / (72 × frame_height)`), `font_files` (§119).
+- **CSS** (`theme_css`, `<style id="vidgen-theme">` first, so page rules win): `@font-face` per
+  bundled family named (`/__vidgen__/fonts/<folder>/<file>`), then on `:root`
+  `--vidgen-<colour>`, `--vidgen-background`, `--vidgen-palette-<i>`,
+  `--vidgen-font-<role|sans|serif|mono>`, `--vidgen-size-<name>`. Theme names are identifiers
+  kept with `_`, so kinds cannot collide; a colour token named `background` loses. A `page:` gets
+  no forced background.
+- **`ctx.data`** = the scene's `data:` (mapping, default `{}`), JSON values only (`json_problem`
+  in a before-validator; error at `scenes[i].params.data`); theme colour names in it are not
+  resolved.
+- **`ctx.beats`** (`page_beats`): `{id, index, start, end, text, words: [{text, start, end}]}`
+  from `clip_plan` and `beat_word_times`. `showBeat`: frame *n*'s beat is the last with
+  `round(start × fps) ≤ n`; `<body>` `data-beat` / `data-beat-index`; `CustomEvent('vidgen-beat',
+  {bubbles: true, detail: {beat, index, previous, t}})` when it changes (also at frame 0).
+- **three.js**: import map `"three"` → `/__vidgen__/three/three.module.js` (with `three.core.js`,
+  from `data/three`).
 
 ### 118.10 Every file the page loaded is in the cache keys (Step 330)
 
-- **Recording:** `WebPage._serve` notes each file it answers in `loaded` (`path -> SHA-256` of the
-  file, before vidgen's head is inserted): project files, vidgen's `__vidgen__/three/…` and
-  `__vidgen__/fonts/…`; a project file asked for but missing is `None` (creating it draws again;
-  `favicon.ico` is left out). It covers every frame, so a file first asked for on a later frame is
-  in. `make_web_clip` writes it to the record (`{key, inputs, loaded}`).
-- **Clip reuse:** the stored key equals the key of `inputs` *and* `loaded_changed(root,
-  loaded)` is empty (each recorded path hashed now, `served_file`); else the clip is drawn again
-  (logged: `<scene>: <files> changed since the web frames were drawn`).
-- **Render fingerprint:** `web` = `entry_digest` + `loaded` (the paths in the records of the
-  scene's final and preview clips of this project, hashed now) + `align` (stat of each beat's
-  `.align.json`, since `ctx.beats` holds word times). Theme, `data:`, beat texts and MP3s were
-  already in it. **First render** (no record yet): the worker takes `fingerprint_inputs` when it
-  starts and, after the scene rendered, `drawn_fingerprint` puts in the files as this render's
-  page loaded them (from the new record) for every path the records list then; so the next run's
-  fingerprint is equal when nothing changed (no second render), and differs as soon as one of
-  those files is edited, created or removed. A file edited during the render is caught too (its
-  recorded hash is the served one). A file the page stopped loading stays listed while the other
-  quality's record lists it.
-- **`--force`**: `render_project` removes the records (`forget_web_clips`) of the `web` scenes it
-  renders, so their frames are drawn again; without `--force` a re-render reuses an unchanged clip.
-- `3d` clips and keys are unchanged.
-- **Step 341:** all of this also holds for a scene of an extension type that subclasses `Web`
-  (`is_web_type`, §120.1); until then such a scene had no `web` part and its script was in no key.
+`WebPage._serve` records `loaded` (`path -> SHA-256` before the head insertion; a missing project
+file = `None`; `favicon.ico` skipped) over all frames. A clip is reused only if the key matches
+and `loaded_changed(root, loaded)` is empty. Render fingerprint `web` = `entry_digest` + `loaded`
+(paths in the final and preview records, hashed now) + `align` (stat of each beat's
+`.align.json`). On a first render `drawn_fingerprint` adds the new record's files, so the next run
+does not re-render. `--force` removes the records (`forget_web_clips`). All of this holds for
+subclasses of `Web` (`is_web_type`, §120.1).
 
 ### 118.11 A `web` scene fits with the rest of a video (Step 331)
 
-**Region and title** (`Web.Params`): `region: bleed | body` (default `bleed`) and `title` (the
-names `video_clip` uses for the same choice; `3d` has `title` too). `bleed`: the page fills the
-frame as before; a title is a `text_plate` in the header band over the page (as on `3d`).
-`body`: the title is `chart_title(title, area=safe_area)` (as on `video_clip`'s `region: body`) and
-the page's box is `safe_area.below(title, gap=0.45)`, or the whole safe area without a title (as
-`video_clip` does). The safe area already leaves out overlays with `reserve: true` (bottom
-captions) and, in a Short, the parts the app covers (§101), so the page box does too. The box's
-edges are moved to whole pixels (`scenes/web.py` `pixel_box`) and the page is drawn at the box's
-pixel size (the viewport, `ctx.width` / `ctx.height`, `100vw`), not the frame scaled down, so the
-`ClipMobject` (fit `cover` of that box) is copied pixel for pixel. Beat 1 fades the title in
-(`play_steps(d, [entrance("title")], fraction=0.6, cap=0.8)`, `3d`'s code); target `title`. The
-page itself is on screen from the first frame and the scene fades out over `outro` = 0.5 s, as
-on `3d` (`video_clip`, by contrast, fades its clip in on beat 1).
-
-**Transparency.** **Decision:** the frames keep their alpha. `WebPage` sets Chromium's default
-background to transparent once per page (CDP `Emulation.setDefaultBackgroundColorOverride`
-`{r: 0, g: 0, b: 0, a: 0}`, `TRANSPARENT`), so each `page.screenshot(type="png")` is RGBA with
-straight alpha; `png_pixels(..., alpha=True)` keeps it and `write_ffv1_clip(..., alpha=True)`
-stores FFV1 `bgra` (the `3d` clips stay `bgr0`: its keys are unchanged). `ClipMobject` already
-decodes `rgba`, and Manim's camera blends an `ImageMobject` with `Image.alpha_composite`
-(straight alpha), so what the page leaves transparent shows whatever vidgen draws behind it:
-today the theme background (the camera's background colour); transitions are joined from the
-finished scene videos, so they need nothing more. Alternatives measured (one CPU, a page with
-text, a semi-transparent box and a moving disc, 2 s, drawing + encoding the clip only):
-
-| | 480x270 @ 24 fps | 1920x1080 @ 30 fps |
-|---|---|---|
-| opaque: background override = theme colour, `bgr0` | 88 ms/frame, 0.35 MB | 427 ms/frame, 1.31 MB |
-| alpha: Playwright `omit_background=True` per screenshot | 90 ms/frame | 624 ms/frame, 1.79 MB |
-| alpha: override set once, `bgra` (chosen) | 72 ms/frame, 0.34 MB | 431 ms/frame, 1.79 MB |
-
-`omit_background` sends two extra CDP calls per screenshot (set and reset the override) and costs
-+46 % at 1080p; setting the override once costs nothing measurable. Through `make_web_clip`
-(Chromium start included), Step 330's code against this one at 1080p: 306–348 vs 338–362 ms per
-frame (noise of the same size), clips 1.15 vs 1.79 MB per 2 s (+56 %, about 0.9 MB per second of
-1080p video in `build/`; equal at 480x270). Compositing at capture over the theme colour would save
-that disk but shows nothing vidgen draws behind a page and gives coloured (LCD) text edges at small
-sizes: Chromium uses sub-pixel text on an opaque background and greyscale text on a transparent
-one (seen in a zoomed crop at 480x270; at 1080p the large text was greyscale in both and the
-alpha frame blended over the theme colour matched the opaque one within 1 level on 127 175
-semi-transparent pixels). In a real render the Manim still of the `script:` page matched the clip's
-RGBA frame blended over the theme background exactly (max difference 0 on 5 234 and 1 074
-semi-transparent pixels of discs and text); reading the same frames as premultiplied would be off
-by up to 241 levels, a dark fringe. The bare page of a `script:` is now `background: transparent`
-(**decision**: it looked the same over the theme background, and a script's `clearRect` now shows
-what is behind). A `page:` without a background now shows the theme background instead of
-Chromium's white (documented as a change in CONFIG and CHANGELOG).
-
-**The video's shape** (`web/inputs.py` `page_shape(frame, region)`, exported as
-`vidgen.api.web_page_shape`): `{aspect, orientation, frame: {width, height}, region}`, spread into
-`ctx` (`ctx.aspect`, `ctx.orientation`, `ctx.frame`, `ctx.region`). `aspect_name(w, h)`: the
-nearest of `NAMED_ASPECTS` (`16:9`, `9:16`, `1:1`, `4:5`, `5:4`, `4:3`, `3:4`, `3:2`, `2:3`, `21:9`,
-`9:21`; the names of `--format`, the gallery and image generation) within 1 % (`854x480` and the
-`426x240` draft are `16:9`), else the reduced `W:H`. `orientation`: `scales.frame_orientation`
-(the 1.2 rule of vidgen's layouts). Both describe the video's frame, not the page's box (in
-`body` a 9:16 page box is nearly square; CSS media queries see the box). **Decision:** the
-attributes go on `<html>` (`data-aspect`, `data-orientation`), set by a classic inline script that
-`page_head` puts after the theme style and before the import map: it runs while the page is parsed,
-before any style or script of the page, when `<body>` may not exist yet; `:root[data-aspect]` and
-descendant selectors both work. `data-orientation` is given beside `data-aspect` because a rule for
-every portrait shape reads better as `[data-orientation="portrait"]`.
-
-**Cache.** Clip inputs version 3: `shape` and `alpha: true` added (and the viewport size was
-already there), `canvas.html` changed: every web clip is drawn once more. The render fingerprint
-already holds the scene params (`region`, `title`) and the format (so the frame size and aspect).
-
-**Verified** (Step 331, HANDOFF): a 4-scene video at 480x270, 12 fps (title, `web` page with
-`region: body` and a title, `web` script full-bleed with a title, title) with Kokoro narration,
-karaoke captions, `progress_bar`, `watermark`, `lower_third`, a crossfade, a push and a wipe; the
-same project as a 9:16 variant (270x480) and a Short (`shorts: true`), `--draft`, `vidgen
-storyboard`, `vidgen animatic`, `vidgen lint`, `vidgen validate`. A storyboard renders the `web`
-scene as every scene type is rendered for it (all its frames at preview size, then the stills);
-the clip is shared with `vidgen render --preview`.
+- `region: bleed | body` (default `bleed`) and `title`: `bleed` fills the frame, a title is a
+  `text_plate` over it; `body` uses `chart_title(title, area=safe_area)` and the box
+  `safe_area.below(title, gap=0.45)` (or the safe area, which excludes reserved overlays and a
+  Short's covered parts, §101). `pixel_box` snaps to whole pixels and the page is drawn at the
+  box's pixel size. Beat 1 fades in the title; the scene fades out over 0.5 s.
+- **Transparency**: Chromium's default background is set transparent once per page
+  (`Emulation.setDefaultBackgroundColorOverride`, `TRANSPARENT`); frames are straight-alpha RGBA
+  stored as FFV1 `bgra` (`3d` stays `bgr0`) and composited over the theme background. Not per-shot
+  `omit_background` (slow) and not composited at capture (shows nothing vidgen draws behind, LCD
+  text fringes).
+- **Shape** (`page_shape(frame, region)`): `{aspect, orientation, frame, region}` in `ctx`;
+  `aspect_name` = nearest of `NAMED_ASPECTS` (`16:9`, `9:16`, `1:1`, `4:5`, `5:4`, `4:3`, `3:4`,
+  `3:2`, `2:3`, `21:9`, `9:21`) within 1 %, else the reduced `W:H`; `orientation` from
+  `scales.frame_orientation`. Both describe the video frame, not the box; `data-aspect` /
+  `data-orientation` on `<html>` are set by an inline script before any page code.
 
 ### 118.12 Lint reads the page (Step 332)
 
-`vidgen lint` checks the text a `web` page shows with the rules it uses for vidgen's own text. The
-page's text becomes layout objects (§15) of kind `text`, so no rule is written twice.
+Page text becomes layout objects (§15) of kind `text`, so every text rule applies.
 
-**Reading** (`data/web/layout.js`, an async function of `t` evaluated by `WebPage.layout(n)`). An
-*item* is an element that holds visible text: the nearest ancestor of a text node whose computed
-`display` is not `inline` / `contents` (so `<p>Hello <b>you</b></p>` is one item; a flex or grid
-child is blockified, hence its own item), or an SVG `<text>` with its `<tspan>`s. Per item:
-`text` (its runs joined, white space collapsed), `box` (the union of `Range.getClientRects()` of
-its text nodes: the line boxes as drawn, every CSS transform applied; an SVG text's
-`getBoundingClientRect`), `font_px` (computed `font-size` times the scale on screen: the product,
-up the ancestors, of `sqrt|det|` of each computed `transform` matrix, the `scale` property and
-`zoom`; for SVG `sqrt|det|` of `getScreenCTM()`, which includes the viewBox and the page's CSS
-transforms, checked: a 10-unit SVG text in a 2x viewBox is 20 px), `cap_px` (`font_px` times the
-font's cap height in em, from canvas `measureText("H").actualBoundingBoxAscent` of the computed
-font; 0.7 when the font gives none), `color` / `colors` (`-webkit-text-fill-color`, else `color`;
-SVG `fill`; a `background-clip: text` or paint-server fill is `null`), `opacity` (the product of
-the ancestors' `opacity`, times the colour's alpha), `background` (the elements under the centre of
-its visible part, `document.elementsFromPoint`, from the item down: each solid background (SVG
-shapes: `fill` × `fill-opacity`) times its opacity is a layer, blended until opaque, then over the
-theme's background, which is what a transparent page shows; an `<img>`, `<canvas>`, `<video>`,
-`<iframe>`, SVG `<image>`, a `background-image` or a gradient fill gives `null` and
-`background_unknown`; when the item is not hit at its centre (`pointer-events: none`), its
-ancestors are the stack), `clipped` (the first box that cuts it: its own or an ancestor's with
-`overflow` other than `visible`, as far up as they contain it: an absolutely placed box skips
-ancestors until a positioned or transformed one, a fixed box until a transformed one; `<body>`
-and `<html>` are the viewport's), `cut` (the viewport cuts it), `visible` (the box minus every
-clip and the viewport). An item none of whose runs is visible (`visibility`, opacity under 0.01,
-no client rects: `display: none`, zero size) or whose visible part is empty is counted in `hidden`
-and left out. `name`: `data-vidgen-id`, else up to three segments of `tag.firstclass:nth-child(k)`
-(`nth-child` only with siblings of the same tag; `tag#id` ends the path; a named ancestor is
-`[id]`), deduplicated with ` (2)`. `lint`: the nearest `data-vidgen-lint`. Then
-`window.vidgen.layout(t, ctx)` (a page's, or a script's export), if any: its items' colours are
-normalised by a canvas `fillStyle`, `size` gives `cap` from `font`. `ctx` is the page's own (the
-runtime exposes it as `window.__vidgen.ctx`, so `runtime.js` changed: every web clip is drawn
-again once).
-
-**Order and side effects.** The reader runs after a frame's screenshot, never before one, so a
-reading never changes a frame (a `layout` hook that changes the page would change later frames:
-documented as not allowed). It touches no timer or random number of the page's.
-
-**When it is read, and the cache.** The scene (`Web._draw_view`) passes `make_web_clip(...,
-layout_frames=planned_still_frames(self))`: the frames its capture will take stills of
-(`browser/timing.py`: `capture.plan_targets` per beat over `round(window × fps)` frames, plus each
-beat's last frame; a silent scene's targets; `per_beat` of the scene's capture, 1 without one,
-so a plain render reads the beat ends too). Drawing reads those frames after their screenshots
-and writes `<scene>.layout.json` = `{key, reader, frames: {n: reading}}` beside the clip, with the
-clip's own key and the digest of `layout.js` (`reader`; not part of the clip key: a change to the
-reader does not draw frames again). At each still, `LayoutRecorder` calls `scene.page_layout(frame)`
-(`(reading, view mobject)` or `None`); the scene answers from memory or `web_page_layouts(...,
-at=[frame, *later planned frames])`, which returns what the record holds for that key and reader
-and reads the rest in **one** Chromium that steps the page frame by frame with `WebPage.advance`
-(the frame's clock, timers, animation frames and `frame(t, ctx)`, no screenshot) to the last
-missing frame, then adds them to the record. **Decision:** stepping, not jumping to frame *n*: a
-page's state can depend on every frame before it (`requestAnimationFrame` loops that accumulate,
-a canvas drawn over itself), and only stepping gives what the clip shows (checked: a page read by
-stepping equals the reading taken while drawing). Mid-action stills (`stage` only) are not
-predicted; a frame missed is read by stepping.
-
-**Measured** (1 CPU; `cards` page of Step 331, 440x129, 93 frames at 12 fps, two stills; two runs
-each): drawing 9.2 / 10.2 s without readings, 10.4 / 8.4 s with them (the two readings cost less
-than the noise; one reading is 10–40 ms on the fault pages); readings from the record 0.00 s;
-stepping without a record: 3.5 / 4.7 s for two stills up to frame 84, 2.6 / 3.4 s for one at
-frame 10 (Chromium start about 1.2–2.5 s, then 15–25 ms per frame stepped, against 90–100 ms per
-frame drawn). `vidgen lint --force` of the Step 331 demo's two web scenes (clips reused, stills
-rendered again): 40–44 s before Step 332, 38–45 s after (no difference beyond the noise).
-**Not done:** a storyboard or lint still renders the whole scene in Manim (every scene type does);
-a still-only path would need Manim to skip frames.
-
-**Into the layout dump** (`introspect.LayoutRecorder._page_texts`): the reading's items, mapped
-from the page's pixels to the frame through the box the view mobject occupies on screen (its image
-object's `bbox`: so a `zoom` or `dim` of target `view` is followed; opacity times the view's), are
-inserted right after that image object with `order` between it and the next object (so a `title`
-plate drawn over page text is `covered_text`'s), as `{id: "web:<name>", kind: "text", class:
-"WebText", source: "web", path: "web/<name>", name, tag, bbox, visible, opacity, order, text,
-font_px = cap_px, font_size_px, color, colors, backdrop, [backdrop_unknown], [clipped], [cut],
-[lint_off], [declared]}` (`web/layout.py` `page_text_objects`). `cut` keeps only the sides where
-the page's box is inside the frame (`region: body`); at the frame's edge `off_frame` sees the
-unclipped box. Declared items: `box {x, y, width, height}` (checked: `declared_problem`, a bad
-item is a warning and skipped), `cap` from `size` and `font` or 0.7 of the box's height, no
-`background` → `backdrop_unknown: "not declared"`. The frame gets `web: {box, size, frame, texts,
-declared, hidden, canvases}`. The dump's header gains `reserved: [{overlay, type, box}]` (the
-overlays with `reserve`, the part of the frame they keep; every scene type) and each frame's
-`overlays` entries `reserve: true`.
-
-**Rules.** Unchanged rules see the page's texts: `off_frame`, `safe_area`, `text_overlap`,
-`covered_text`, `min_font` (`cap_height` returns `cap_px` when an object has it), `contrast`
-(the DOM backdrop), `max_words`, `overlay_overlap`, `shorts_safe_area`, `said_before_shown` /
-`unsaid_reveal`. `describe` names a page text `text '…' (page: <name>)`. New rule `web_clipped`
-(`lint/web_rule.py`, error, `tolerance` 0.004 of the shorter side like `off_frame`): `clipped`
-sides over the tolerance → `is cut by its box <by> (overflow: hidden) at the right (129 px of the
-text hidden)`, else `cut` → `runs past the page's box at the bottom`. To report a fault once:
-`off_frame` and `safe_area` skip objects with `clipped` or `cut` (web_clipped's); `safe_area`
-names the overlay when the text lies in a `reserved` box (`is in the part of the frame overlay
-'captions' (captions) keeps for itself, outside the safe area …`; a page's text gets the hint
-`region: body`), and `overlay_overlap` skips scene text inside the part of the frame the overlay
-reserves (safe_area's finding) unless the camera moved (safe_area is then off). This changes
-findings for every scene type with text under bottom captions: one `safe_area` finding instead of
-`safe_area` plus `overlay_overlap`.
-
-**Opting out.** `data-vidgen-lint="off"` → `lint_off: ["all"]`; `"off:text_overlap,contrast"`
-(commas or spaces) → those names (`lint_opt_out`; an unknown name is logged once as a warning).
-`lint.run.rule_objects` drops an object from every rule its `lint_off` names (as an overlay
-type's `lint_skip`); `narration_rule._label_texts` drops `all`. The texts stay in the dump.
-`lint_ignore` also matches them by `name`, `path` or `text`.
-
-**Public interface.** `vidgen.api` adds `web_page_layouts(root, folder, scene_id, params, *, size,
-fps, frames, theme=None, beats=(), shape=None, at=())` and `planned_still_frames(scene)`;
-`make_web_clip(..., layout_frames=())` (default: no reading, earlier calls unchanged). The page
-contract gains the optional hook `layout(t, ctx)`. `WebPage` adds `advance(n)` and `layout(n)`;
-`web.page` `LAYOUT_FILE`, `layout_reader`, `layout_digest`; `web.clip` `layout_record_path`.
-
-**Verified** (Step 332, HANDOFF): a project of 12 one-fault `web` scenes at 480x270 and its 270x480
-variant, the Step 330 and 331 demos.
+- **Reader** (`data/web/layout.js`, `WebPage.layout(n)`): an item is the nearest non-inline
+  ancestor of a text node, or an SVG `<text>`. Fields: `text`, `box` (client rects), `font_px`
+  (with transform / `scale` / `zoom`), `cap_px` (`measureText("H")`, 0.7 fallback), `color`,
+  `opacity`, `background` (solid layers from `elementsFromPoint` over the theme background;
+  pictures, canvases, gradients → `null` and `background_unknown`), `clipped`, `cut`, `visible`,
+  `name` (`data-vidgen-id`, else a short selector, deduplicated ` (2)`), `lint`
+  (`data-vidgen-lint`). Invisible items count in `hidden`. The optional `layout(t, ctx)` hook adds
+  declared items (`declared_problem` skips a bad one with a warning).
+- The reader runs after the frame's screenshot and touches no timer or random number; a `layout`
+  hook must not change the page.
+- **When**: `make_web_clip(..., layout_frames=planned_still_frames(self))` reads the planned still
+  frames while drawing into `<scene>.layout.json` `{key, reader, frames}` (`reader` = digest of
+  `layout.js`, not in the clip key). Other frames: `web_page_layouts(..., at=…)` reads them in one
+  Chromium by stepping with `WebPage.advance` (no screenshots), since page state can depend on
+  every earlier frame.
+- **Dump** (`LayoutRecorder._page_texts`, `web/layout.py` `page_text_objects`): items mapped
+  through the view's on-screen box, inserted right after its image object, as `{id: "web:<name>",
+  kind: "text", class: "WebText", source: "web", path: "web/<name>", …}`; the frame gets `web:
+  {box, size, frame, texts, declared, hidden, canvases}`; the header `reserved: [{overlay, type,
+  box}]`.
+- **Rules**: `web_clipped` (`lint/web_rule.py`, error, tolerance 0.004 of the shorter side; `is
+  cut by its box <by> …` / `runs past the page's box …`). `off_frame` / `safe_area` skip `clipped`
+  / `cut` objects; `safe_area` names a reserving overlay, and `overlay_overlap` skips text inside
+  a reserved part unless the camera moved (every scene type).
+- **Opt-out**: `data-vidgen-lint="off"` or `"off:rule,rule"` (`lint_opt_out`) → `lint_off`;
+  `lint_ignore` matches `name`, `path` or `text`.
+- **API**: `vidgen.api.web_page_layouts(root, folder, scene_id, params, *, size, fps, frames,
+  theme=None, beats=(), shape=None, at=())`, `planned_still_frames(scene)`; `make_web_clip(...,
+  layout_frames=())`; `web.clip.layout_record_path`.
 
 ### 118.13 Teaching it and proving it (Step 333)
 
-- **Guide topic** `web` (aliases `html`, `css`, `javascript`, `js`, `canvas`, `web-scenes`,
-  `web-scene`, `web-page`, `page`, `script`) in `data/guide/AGENTS.md`: when to use `web` rather
-  than a built-in, `3d`, `video_clip` or a Python extension; the two forms with a minimal page and a
-  minimal script; what follows the clock and what does not; the `ctx` table; theme variables;
-  revealing on `data-beat` and on word times; `data:`; three.js; `region` and transparency; one page
-  for both shapes; no internet; the lint loop (`data-vidgen-id`, `data-vidgen-lint`, `layout()`); the
-  usual mistakes with vidgen's messages; the render cost. Its pages and scripts are written so they
-  run as they stand: `tests/test_guide.py::test_the_web_topics_code_runs_in_chromium` writes each
-  (a fragment inside a `frame` hook) and draws it in Chromium with the YAML snippet's data and
-  beats; they were also rendered, validated and linted as a project at 16:9 and 9:16 (HANDOFF).
-- **Fix found by the example:** a declared item's `font` (`layout(t, ctx)`) was put after
-  `normal 400 100px`, so a canvas font (`"700 28px Inter"`, what a script draws with) made an
-  invalid font, the canvas kept its previous one, and the cap height came out about a tenth of the
-  size (`min_font` errors on correct text). `capRatio(font)` in `layout.js` now takes a canvas font
-  as it is (cap = ascent of "H" / its px size) and a family list at 100px; one the canvas refuses
-  gives 0.7. The reader's digest changed, so layout records are read again (clips are kept).
-- **`examples/web`** ("Where rain comes from", three scenes): `cycle` (`page:`, HTML + CSS only,
-  cards on `data-beat-index`, CSS `@keyframes` SVG, `region: body`), `rain` (`script:` canvas, rain
-  from the word "shower", `data:`, declared text measured with `measureText`), `globe` (`script:`
-  three.js by hand, low-poly planet, camera on beats, `region: bleed` with a title). Kokoro
-  narration (not committed).
-- **Gallery:** the guide's `scenes` snippet names `extensions/gears.html`; `gallery.sample_asset`
-  maps a `web` snippet's page or script (`WEB_SUFFIXES`) to `data/gallery/web/<name>` and
-  `_copy_files` copies it into the work project (`_is_web_entry`), so `vidgen gallery --types web`
-  renders the entry (`docs/gallery/web.md`; since Step 379 `docs/gallery/web/web.md`, §123.1).
-- **Measured** (1 CPU, drawing the frames only through `make_web_clip`, Chromium start included,
-  1920x1080 at 30 fps; HANDOFF Step 333): `cycle` (HTML + CSS page, 1760x668, 582 frames) 453 ms per
-  frame = 13.6 s per second of video; `rain` (canvas, 1760x660, 460 frames) 325 ms = 9.7 s; `globe`
-  (three.js on SwiftShader, 1920x1080, 518 frames) 550 ms = 16.5 s. Clips 46.5, 22.5 and 53.3 MB
-  (deleted after measuring).
-- **Animation library** (no download): the only one on the machine was Plotly.js 3.3.1 inside
-  gradio's front-end bundle (extracted with acorn into a scratch module). A linear 2 s
-  `Plotly.animate` transition started by a 500 ms timer: the bar's height read from the DOM equals
-  the expected value at every frame from 0 to 2.9 s at 10 fps (0.2 → 1.0, exact; pixels within one
-  row). GSAP, anime.js, Motion, Lottie and d3 are not on the machine; not tried (Step 336 tried
-  them: §118.15).
+Guide topic `web` (aliases `html`, `css`, `javascript`, `js`, `canvas`, `web-scenes`,
+`web-scene`, `web-page`, `page`, `script`); its code must run as written (`tests/test_guide.py`
+draws it in Chromium). `examples/web` has one `page:` and two `script:` scenes.
+`gallery.sample_asset` maps a web snippet's file (`WEB_SUFFIXES`) to `data/gallery/web/<name>`
+(§123.1).
 
 ### 118.14 three.js add-ons (Step 334)
 
-- **What ships** (the owner's choice): from the npm package `three` 0.186.1 (the registry's
-  tarball, its `dist.integrity` sha512 and `shasum` checked; its `build/three.module.js` and
-  `three.core.js` byte-identical to §114.4's), 23 files of `examples/jsm/`, unmodified and in their
-  folders, under `data/three/addons/` with a copy of the MIT `LICENSE` (390 676 bytes in all):
-  `loaders/GLTFLoader.js`, `utils/BufferGeometryUtils.js`, `environments/RoomEnvironment.js`,
-  `postprocessing/{EffectComposer,RenderPass,ShaderPass,UnrealBloomPass,OutputPass}.js`,
-  `renderers/CSS2DRenderer.js`, `lines/{Line2,LineGeometry,LineMaterial,LineSegments2,LineSegmentsGeometry}.js`,
-  `geometries/RoundedBoxGeometry.js`, `loaders/SVGLoader.js`, `controls/OrbitControls.js`, and what
-  they import: `postprocessing/{Pass,MaskPass}.js`, `shaders/{CopyShader,LuminosityHighPassShader,OutputShader}.js`
-  and `utils/SkeletonUtils.js` (`GLTFLoader` imports `clone` from it). None imports a left-out file
-  or does a dynamic `import()`. `SVGLoader.js` carries a number parser credited in a comment to
-  svg-numbers (MIT); THIRD_PARTY_NOTICES says so. Left out: 3D text (`FontLoader`,
-  `TextGeometry`), `DRACOLoader`, `KTX2Loader`, Meshopt (WebAssembly in workers, outside the
-  clock, megabytes), other loaders, HDR loaders, other controls, VR / AR, physics, exporters, the
-  GUI helper, the WebGPU renderer and node materials.
-- **Manifest and serving**: `web/loaded.py` `THREE_ADDONS` (paths under `addons/`), `ADDONS_FOLDER`,
-  `THREE_VERSION`; `vidgen_file("three/addons/<path>")` answers only a manifest path. Package data
-  glob `data/three/**/*` (a built wheel lists all 29 files of `data/three/`).
-- **Import map** (`web/inputs.py` `IMPORT_MAP`): `"three"` as before, plus the prefixes
-  `"three/addons/"` and `"three/examples/jsm/"` → `/__vidgen__/three/addons/`. An add-on's own
-  `import … from "three"` resolves through the same map to the same URL, so one core module is
-  loaded (checked: `THREE.REVISION` 186, `instanceof THREE.BufferGeometry` across both spellings,
-  only `three.module.js` + `three.core.js` among the non-add-on files served).
-- **An unshipped add-on**: a request under `__vidgen__/three/addons/` that is not in the manifest
-  is a 404, a warning, and — when the page then fails to load — the error
-  `web/page.py unshipped_addon_message`: `scene '<id>': the page imports the three.js add-on
-  '<path>' (three/addons/<path>), which is not shipped with vidgen (the shipped ones are listed in
-  'vidgen guide web'). To use it, copy <Name>.js from three.js 0.186.1 (the npm package 'three',
-  examples/jsm/<path>) into the project, e.g. extensions/lib/<Name>.js, and import it by relative
-  path ('./lib/<Name>.js'); …` (before: Chromium's `Failed to resolve module specifier`).
-- **Cache**: the add-ons a page loads are in its loaded-files record (§118.10) like the core. The
-  `3d` scene is unchanged: its `PAGE_FILES` and `page_digest()` do not include `addons/` (digest
-  the same before and after). `vidgen_source_digest()` hashes every `.js` under `data/three/`, so
-  it changed once, as it does for any source change.
-- **Behaviour under vidgen's clock** (HANDOFF Step 334 has the measurements): a loader in a
-  `script:` resolved relative paths against vidgen's bare page (`/__vidgen__/canvas.html`) until
-  Step 337 (§118.16: now against the script's folder), so a
-  file was named with `new URL("./x.glb", import.meta.url)`, which still works; `.gltf` (embedded or `.bin`) and `.glb`
-  load in `load(ctx)`. `EffectComposer`'s output is opaque: `RenderPass` without its own clear
-  colour leaves alpha 1 everywhere; with `clearColor` / `clearAlpha` 0 the alpha survives but a
-  bloom halo over transparency comes out wrong (colour above its alpha), so the rule is a scene
-  background. Composer colours equal `renderer.render`'s exactly (no bloom). `LineMaterial`
-  needs `resolution` = the page size. `OrbitControls.update()` turns 1/60 s per call (speed
-  follows fps); `update(t - last)` gives `autoRotateSpeed × 2π/60 × t` at any fps.
+23 unmodified `examples/jsm/` files of npm `three` 0.186.1 under `data/three/addons/` with its MIT
+`LICENSE`; the list is `web/loaded.py` `THREE_ADDONS` (`THREE_VERSION`). Import map prefixes
+`"three/addons/"` and `"three/examples/jsm/"` → `/__vidgen__/three/addons/`, so add-ons share one
+core module. `vidgen_file` serves only manifest paths; any other add-on gives
+`unshipped_addon_message` (copy it into the project, import it by relative path). Loaded add-ons
+are in `loaded`; `3d`'s `page_digest()` excludes `addons/`. `EffectComposer` output is opaque.
 
 ### 118.15 Animation and chart libraries (Step 336)
 
-- **What ships**: five libraries, each one build file of its npm package, unmodified, under
-  `data/web/libs/<package>/` with the package's licence file as `LICENSE` (1 426 979 bytes in all;
-  the owner's limit was 1.5 MB). Each tarball came from `registry.npmjs.org` and its sha512
-  equals the registry's `dist.integrity`; the manifest (`web/libs.py` `WEB_LIBS`) holds each
-  file's SHA-256 and size, which `tests/test_web_libs.py` compares.
-
-  | package | version | licence | file (path in the package) | bytes | import |
-  |---|---|---|---|---|---|
-  | `animejs` | 4.5.0 | MIT | `anime.esm.min.js` (`dist/bundles/`, ESM) | 118 678 | `animejs` |
-  | `motion` | 14.12.0 | MIT | `motion.js` (`dist/`, UMD, global `Motion`) | 188 678 | `motion` |
-  | `d3` | 7.9.2 | ISC | `d3.min.js` (`dist/`, UMD, global `d3`) | 280 622 | `d3` |
-  | `chart.js` | 4.6.1 | MIT | `chart.umd.min.js` (`dist/`, UMD, global `Chart`) | 210 082 | `chart.js/auto`, `chart.js` |
-  | `lottie-web` | 5.13.0 | MIT | `lottie.min.js` (`build/player/esm/`, ESM) | 589 019 | `lottie-web` |
-
-- **UMD builds as modules**: `d3`, `chart.js` and `motion` have no one-file ES build (d3's
-  `d3.mjs` re-exports 30 packages, Chart.js's `chart.js` imports a chunk and `@kurkle/color`,
-  Motion's `dist/es` imports `framer-motion`). vidgen ships the UMD file unmodified and, beside
-  it, `index.js` (written by vidgen): `import './<file>'` runs the UMD file as a module (its
-  `this` is undefined, so it sets `globalThis.<Name>`), then `export default` that object and
-  `export const {…}` each of its names (578, 50 and 352 names, read from the global in Chromium;
-  a `slow` test compares them). So the globals `d3`, `Chart` and `Motion` exist too. Chart.js's
-  UMD build has everything registered and no `registerables` export. lottie-web's ES build is
-  not minified and its `lottie.version` reads `[[BM_VERSION]]` (the package's own state); its
-  UMD `lottie.min.js` is 305 704 bytes and could replace it behind a wrapper to save 283 kB.
-- **Licences of what a bundle contains**: `LICENSES-bundled.txt` beside the d3, Chart.js and
-  Motion files joins the licence files of the packages inside them (d3: 30 `d3-*`, `delaunator`,
-  `robust-predicates`, `internmap`; Chart.js: `@kurkle/color`; Motion: `framer-motion`,
-  `motion-dom`, `motion-utils`, `tslib`), read from each package's latest version on the registry
-  (ISC, MIT, BSD-3-Clause, 0BSD, Unlicense, and ColorBrewer's Apache-style licence in
-  `d3-scale-chromatic`). THIRD_PARTY_NOTICES lists them.
-- **GSAP is not shipped**: the npm package `gsap` 3.15.1 has no licence file; its `package.json`
-  says `"license": "Standard 'no charge' license: https://gsap.com/standard-license."` and every
-  file's header says "Copyright 2026, GreenSock. All rights reserved. Subject to the terms at
-  https://gsap.com/standard-license." That is not a licence an MIT project can redistribute
-  under (the terms themselves were not fetched: only the npm registry was allowed). The import
-  map names `gsap` as `/__vidgen__/libs/gsap/index.js`, a file vidgen does not have
-  (`web/libs.py` `NOT_SHIPPED`), so the render stops with `unshipped_lib_message` instead of
-  Chromium's `Failed to resolve module specifier`.
-- **Serving and the import map**: `web/libs.py` (`WebLib`, `WEB_LIBS`, `NOT_SHIPPED`, `lib_file`,
-  `unshipped_lib_message`); `web/loaded.py` `vidgen_file("libs/<package>/<file>")` answers only a
-  manifest file (not the licences), `unshipped_lib`; `web/inputs.py` `IMPORT_MAP` gains one
-  entry per specifier. Package data glob `data/web/libs/**/*`. The files a page loads are in its
-  loaded-files record (§118.10).
-- **Measured under the clock** (`WebPage`, 160x90 at 5 fps, one 2 s linear move of 100 px or its
-  like; "twice" = two fresh pages give identical pixels for frames 0–10; "alone" = frames 3 and
-  7 each drawn alone in a fresh page equal the same frames of the full run):
-
-  | case | value per frame | twice | alone |
-  |---|---|---|---|
-  | anime.js `animate` / `createTimeline`, own loop | 12 ms ahead (20.6 px for 20; also at 10, 24, 30 fps) | yes | yes |
-  | anime.js `autoplay: false` + `seek(t * 1000)` in `frame` (also a timeline) | exact | yes | yes |
-  | anime.js `waapi.animate` | exact | yes | yes |
-  | Motion `animate(el, {x})`, `{opacity}`, a spring, `animate(0, 100, {onUpdate})` | exact | yes | no: starts at its first animation frame |
-  | Motion sequence `animate([[…], […]])` | exact | yes | yes |
-  | Motion `controls.time = t` in `frame` (after `pause()` or with `autoplay: false`) | one frame late | yes | no |
-  | D3 `transition()` (also with `delay`), `d3.timer` | exact | yes | yes |
-  | D3 scales in `frame(t)` | exact | yes | yes |
-  | D3 `forceSimulation`, own timer | one tick per video frame | yes | no |
-  | D3 `forceSimulation` `stop()` + `tick(n)` in `frame` | set by `n` | yes | yes |
-  | Chart.js animation on creation (`responsive` on or off; a `script:` on `ctx.canvas`) | exact | yes | yes |
-  | Chart.js `chart.update()` from a timer at 1 s | exact from where the bars were | yes | no: starts from the undrawn first animation |
-  | Chart.js `animation: false` + `update("none")` in `frame` | exact | yes | yes |
-  | lottie-web `autoplay: true` (`svg`, `canvas`, `path:`) | exact (`currentFrame` 2 per frame at 10 fr/s) | yes | no: starts at its first animation frame |
-  | lottie-web `goToAndStop(t * 1000, false)` in `frame` (`svg`, `canvas`) | exact | yes | yes |
-  | GSAP 3.15.1 `gsap.to`, own ticker (ES files) | exact | yes | no: a step over 0.5 s counts as 33 ms (1.65 px for 30) |
-  | GSAP with `gsap.ticker.lagSmoothing(0)` (ES files; `gsap.min.js` from `<script src>`) | exact | yes | yes |
-  | GSAP paused timeline + `tl.time(t)` in `frame` | exact | yes | yes |
-
-  vidgen draws a `web` scene's frames in order from frame 0 (`web/clip.py`), so "alone: no" does
-  not change a render; it says the picture depends on the frames before it. `gsap.min.js` cannot
-  be imported as a module (`TypeError: Cannot set property window of #<Window>`); GSAP's
-  `index.js` + `gsap-core.js` + `CSSPlugin.js` in one folder import as a module. lottie-web's
-  `path:` loaded a 1 kB file in time, but it uses `XMLHttpRequest`, which vidgen does not wait
-  for (§118.8), so the guide says `animationData`.
-- **The clock fix** (`data/web/media.js`): `Animation.prototype.startTime` is wrapped like
-  `currentTime`. Motion sets `animation.startTime` to line an animation up with its own clock;
-  the browser's setter un-paused the animation on Chromium's real timeline until vidgen's next
-  placement, so Motion's frame 0 differed between renders (the box 10 to 17 px off in five
-  runs; identical after the fix). `tests/test_scene_web.py::test_an_animations_start_time_is_on_vidgens_clock`
-  fails on the old file (frame 0 at 10 px) and passes on the new.
-- **Whole tiles** (`web/page.py` `WEB_ARGS` + `--disable-partial-raster`): with Chromium's partial
-  raster, content at a fractional position that a script changed in an animation-frame callback
-  (some real time before the screenshot) could come out with one edge pixel different from one
-  render to the next, the DOM being identical. Seen with lottie-web's `svg` renderer in a
-  160x45 box (a 160x90 animation at half size): frame 2 had 2 variants in 10 fresh pages (one
-  pixel, 10 levels of 255), 3 variants with the SVG's own `translate3d` removed; and without any
-  library (a `<g>` moved by `setAttribute` in `requestAnimationFrame`): 1 run of 12 differed.
-  With the flag: 16 of 16 identical for each of the three pages, and equal to the picture of the
-  same DOM drawn once (a static page). Not slower (lottie page at 1280x720: 221 and 209 ms per
-  frame without, 153 and 116 ms with). The flag is in `engine_id()`, so every `web` clip is
-  drawn again once; `3d` scenes do not use `WEB_ARGS`. lottie-web's `canvas` renderer and a
-  change made in `frame(t)` did not vary without the flag (10 and 12 runs).
-- **Not verified**: each library beyond the calls in the table (anime.js scroll, draggable, text
-  and SVG helpers; Motion's `scroll`, `inView`, layout and view transitions; D3 zoom, brush,
-  drag, `d3.json` and other fetch helpers; Chart.js chart types other than bar and line, its
-  time scale, plugins; Lottie files with images, fonts,
-  expressions or audio, the `html` renderer); the UMD `lottie.min.js`; Windows.
+Under `data/web/libs/<package>/`, unmodified with `LICENSE`, manifest `web/libs.py` `WEB_LIBS`
+(SHA-256, size): `animejs` 4.5.0, `motion` 14.12.0, `d3` 7.9.2, `chart.js` 4.6.1 (also
+`chart.js/auto`), `lottie-web` 5.13.0. The UMD builds (d3, Chart.js, Motion) get a vidgen
+`index.js` that imports them and re-exports the global's names. `LICENSES-bundled.txt` covers
+bundled packages. GSAP is not shipped (its licence is not redistributable): `NOT_SHIPPED`,
+`unshipped_lib_message`. `media.js` keeps `Animation.startTime` on vidgen's clock (Motion sets
+it). Frames are drawn in order from 0, so a library's own loop is deterministic.
 
 ### 118.16 Relative URLs in a `script:` scene; what `render --scene` renders (Step 337)
 
-- **The base of a `script:` scene's page.** `web/page.py` `canvas_page` writes `<base href="/<the
-  script's folder>/">` into vidgen's bare page (`data/web/canvas.html`, `@BASE@`; `script_base`:
-  `/extensions/` for `extensions/x.js`, `/` for a script in the project folder, each part
-  percent-encoded). Before, the page's base was its own URL, `/__vidgen__/canvas.html`, so
-  `fetch("data.json")` in `extensions/x.js` asked for `__vidgen__/data.json` (a 404 and a
-  warning). Now every URL the browser resolves against the document base names a file beside
-  the script: `fetch`, an image's or video's `src`, `url()` in a style set from JavaScript or in
-  a `<style>` the script adds, `new URL(x, document.baseURI)`, a three.js loader's path.
-  Unchanged: `location` is still `/__vidgen__/canvas.html` (so `new URL(x, location.href)` is
-  not relative to the script); imports resolve against the importing module (`./dep.js`,
-  `import.meta.url`); bare imports go through the import map; vidgen's own URLs in the page are
-  absolute paths (`/__vidgen__/...`: the import map's addresses, the font faces, the import of
-  the script), so the base does not move them; an SVG paint named by fragment (`fill="url(#g)"`)
-  is still found in the page. The served file is recorded with the page's loaded files
-  (§118.10) under its project path (`extensions/data.json`), so an edit to it draws the clip
-  again. A `page:` scene is served as before (its base is the page's own URL).
-- **Why `<base>`** and not serving the bare page from the script's folder: a page URL there could
-  collide with a project file, and error messages and the loaded-file record tell vidgen's
-  files from the project's by the `__vidgen__/` prefix.
-- **Cache keys.** `canvas.html` is part of `runtime_digest()`, so `engine_id()` changed and every
-  `web` clip is drawn again once. The frames of `examples/web`'s two `script:` scenes (`rain`,
-  `globe`; 6 frames each at 160x90) are identical with and without the `<base>`, and so are the
-  files they load.
-- **`vidgen render --scene ID`** (§14, §63; no change of behaviour): `pipeline.scenes_to_render`
-  (taken out of `render_project`, so tests can ask which scenes are planned without rendering)
-  returns the named scenes and every other scene without a usable render (`_usable_render`),
-  because the video is joined from every scene. `render_dir` is one folder per quality and
-  variant (`build/final`, `build/final_<variant>`, `build/preview...`, `build/draft...`), so the
-  first `--scene` run for a variant or quality renders every scene; that is what the owner saw
-  (`--scene lines --variant small`, 13 scenes). Measured on a 4-scene project: first run in
-  `final`, `final_small`, `preview` and `draft` 4 rendered each; second run 1 rendered, 3
-  reused; `--scene lines --force` 1 (with `--scene`, `--force` adds no scene; it draws a `web`
-  scene's frames again); two `--scene`s 2; `--no-audio` after a render with sound 1.
-  `vidgen storyboard --scene` and `vidgen lint --scene` on an empty folder render only that
-  scene (they join nothing). New: `pipeline.also_rendered_note` gives the line
-  `--scene lines: also rendering 3 other scene(s) (one, three, four): the video is joined from
-  every scene, and <render_dir> has no render of them to reuse (...)`, printed by
-  `render_project` before the scenes (stderr with `--json`, as the other progress lines);
-  `--scene` and `--force` say so in `vidgen render --help`.
+- `canvas_page` writes `<base href="/<script's folder>/">` (`script_base`, percent-encoded) into
+  the bare page, so `fetch`, `src` and `url()` resolve beside the script; `location` stays
+  `/__vidgen__/canvas.html` and vidgen's own URLs are absolute. A `<base>`, not serving from the
+  script's folder: vidgen's files are told apart by `__vidgen__/`.
+- **`render --scene`** (`pipeline.scenes_to_render`): the named scenes plus every scene without a
+  usable render in this `render_dir` (per quality and variant), since the video joins them all;
+  `pipeline.also_rendered_note` says so. With `--scene`, `--force` adds no scene. `storyboard` /
+  `lint --scene` render only that scene.
 
 ### 118.17 `design_width`: a page built in fixed pixels (Step 339)
 
-**Why.** A fresh agent ported a dashboard built in CSS pixels for a window about 1280 px wide.
-The largest edit was rewriting about 100 `px` values into `calc(N * var(--u))` and scaling canvas
-line widths, so that the page fits the 854x480 preview and the 1920x1080 render. The owner
-approved a param that makes the rewrite unnecessary.
-
-**The param.** `design_width: <int>` on `web` (`Web.Params`, default none): the width, in CSS
-pixels, of the window the page was designed for. 200 to 8192 (`DESIGN_WIDTH_MIN` / `_MAX`); a
-value outside, a fraction, `true` or text is a validation error at `scenes[i].params.design_width`
-(`web/inputs.py` `design_width_problem`: `3 is not a window width a page is designed for (give the
-width in CSS pixels, 200 to 8192, e.g. 1280 for a desktop page or 390 for a phone page)`).
-
-**No `design_height`.** The page fills a box whose shape vidgen decides (the frame, or the body
-region). A design height that disagrees with that shape would have to squeeze the page, crop it or
-leave bars; a height that agrees adds nothing. So the height always follows the box: a 1280 design
-is 720 high in a 16:9 `bleed` page, and a phone page in a 9:16 video is `design_width: 390`.
-
-**Mechanism: the browser's device scale factor.** `web/inputs.py` `page_viewport(size,
-design_width)` -> `((design_width, ceil(size[1] / scale)), scale)` with `scale = size[0] /
-design_width` (`(size, 1.0)` without the param). `WebPage` opens its context with that viewport
-and `device_scale_factor=scale`. Chromium then lays the page out in the design window and
-rasterises it at `scale` device pixels per CSS pixel, so text, SVG and CSS shapes are drawn at the
-output's resolution; nothing is resampled by vidgen. It is the same at every quality (preview,
-draft, final) and for `bleed` and `body`, because only `size` differs. No file of
-`data/web/` changed.
-
-**Rounding.** The viewport is a whole number of CSS pixels, and the exact height (`size[1] /
-scale`) often is not (1280 at 854x480: 719.44). Measured in Chromium (Playwright's build here,
-13 size / width pairs): the screenshot is `round(viewport x scale)` pixels each way; the width
-came out exact in all 13 (the scale is a 32-bit float in Chromium: 1.92 reads back as
-1.9199999570846558). vidgen rounds the height **up**, so the screenshot is never shorter than
-`size`, and `web/page.py` `fit_pixels` cuts the rows over (at most `ceil(scale) + 1`; seen: 0, 1
-or 2) off the bottom. So the frames are exactly `size`, pixels are never stretched, and the strip
-of the window under the frame's bottom edge, less than one CSS pixel, is not shown (a `bottom: 0`
-element may lose that much). Rounding to the nearest pixel instead gave screenshots one row
-short in three of the 13 pairs, which would need padding or a resample. A screenshot of any
-other size is still the error `the page drew WxH px, expected WxH`.
-
-**What the page is told.**
-
-| | without the param | with `design_width` |
-|---|---|---|
-| `innerWidth` / `innerHeight`, `100vw` / `100vh`, media queries, `getBoundingClientRect` | the box's output pixels | the design window |
-| `devicePixelRatio` | 1 | `scale` (1.5 for 1280 at 1920; 0.667 at 854) |
-| `ctx.width`, `ctx.height` | the box's output pixels | the design window (CSS pixels; the height rounded up) |
-| the canvas of a `script:` (`canvas.html`) | the box's output pixels | the design window's pixels |
-| `ctx.frame`, `ctx.aspect`, `ctx.region` | the video frame (output px), its shape | the same |
-| `ctx.theme.sizes`, `--vidgen-size-…` | CSS px = output px | divided by `scale` (`scene_page_inputs(scene, spans, css_scale)`), so text is still as tall as vidgen's |
-
-Decision: `ctx.width` / `ctx.height` are always CSS pixels, the numbers `innerWidth` /
-`innerHeight` give, so a page never has two coordinate systems for layout. The price is that a
-canvas is not sharp by itself: the canvas of a `script:` has the design window's pixels, and any
-canvas drawn without `devicePixelRatio` is drawn at the design size and enlarged by Chromium
-(soft when `scale > 1`). A page that sizes its canvas by `devicePixelRatio` (the usual code for
-high-density screens; three.js `renderer.setPixelRatio(window.devicePixelRatio)`) has the
-output's pixels. Giving the `script:` canvas the output's pixels was rejected: a 2D script
-drawing in `ctx.width` coordinates would then fill only a corner.
-
-**Cache.** `clip_inputs(..., design_width=)` puts `design_width` among the inputs only when it
-is set, and `CLIP_VERSION` stays 3, so the key of every clip without the param is what it was
-(checked: `engine_id()` and the keys of the three `examples/web` entries are equal before and
-after this step). Stored clips are reused. The scene fingerprint changes once, as with any
-change of the source, so the scene's video is composed again from the stored clip. With the
-param, setting, changing or removing it changes the key; the theme's sizes in the key change
-with it. `make_web_clip` and `web_page_layouts` read the param from `params`
-(`design_width_of`).
-
-**Lint.** `data/web/layout.js` reports boxes and font sizes in CSS pixels with the window's
-`innerWidth` / `innerHeight`, and `web/layout.py` already maps a reading to the frame by `box
-width / reading width`, so with the param the same code gives output pixels: 12 px text of a
-1280 design is 18 px in a 1920 frame. `WebPage.layout` sets the reading's `height` to the part
-of the window the frame shows (`css_height`: 719.44, not 720), so both axes have the same
-scale. Fixed on the way: the `cut` of a text declared with `layout(t, ctx)` was left in page
-pixels (the other texts' was scaled); it is scaled now. No difference at scale 1.
-
-**Public interface.** `vidgen.api`: `web_page_viewport` (`page_viewport`),
-`web_design_width_problem` (`design_width_problem`); `web_page_inputs` takes an optional third
-argument `css_scale` (default 1). `WebPage(..., design_width=None)` with `.viewport`, `.scale`;
-`clip_inputs(..., design_width=None)`; `fit_pixels`; `css_height`; `design_width_of`.
-`browser.chromium.png_pixels(png, None, ...)` skips the size check.
-
-**Tested** (`tests/test_web_design_width.py`): 15 default (the param's checks and the validate
-message; the window and scale for six size / width pairs; `fit_pixels`; the inputs' keys
-without the param; a redraw when the param changes; lint objects and `min_font`, `off_frame`,
-`safe_area` on a 1280 reading at 1920x1080 and 854x480; a declared text's cut) and 6 `slow` in
-Chromium: a fixed-pixel page at 640x360 and 160x90 with `design_width: 320` (`innerWidth`,
-`clientWidth`, `devicePixelRatio`, a media query, `getBoundingClientRect`, `50vw`, `ctx`; a 160
-x 90 px box covers half the frame each way at both sizes; `bottom: 0` reaches the last row;
-lint's font size in output pixels); a 2D canvas with and without `devicePixelRatio` (hard edge
-against a blurred one); sizes whose window height is not whole (213x121 at 320, 500x281 at 260:
-exact frames); the page without the param; a `script:` and a three.js renderer
-(`setPixelRatio(devicePixelRatio)` gives a 150x75 buffer for a 100x50 canvas at scale 1.5); a
-render through the pipeline with `region: body`, a title and `design_width: 400` (the page
-under the title on the theme background, the theme's sizes divided by the scale).
-
-**Not done / not verified.** `web_clipped` and `text_overlap` were not run on a real
-`design_width` page (they use the same scaled boxes as the rules that were). A scale above 2.77
-or below 0.125 was not rendered. `ctx` has no field for the scale (`devicePixelRatio` is it).
-The strip under one CSS pixel at the bottom is lost when the height is not whole. Windows and
-macOS not tried. Found, not fixed: `examples/web/extensions/cycle.html` at 160x90 gives one of
-two different pictures for frames 0 and 3 from run to run, with the code before this step as
-well (four runs: two of each).
+- `design_width: <int>` (200–8192, `DESIGN_WIDTH_MIN` / `_MAX`; `design_width_problem`): the CSS
+  width the page was designed for. No `design_height`: the height follows the box.
+- `page_viewport(size, design_width)` -> `((design_width, ceil(size[1] / scale)), scale)`, `scale
+  = size[0] / design_width`; the context uses `device_scale_factor=scale` (no resampling). The
+  height rounds up and `fit_pixels` cuts the surplus bottom rows, so frames are exactly `size`.
+- The page sees the design window (`innerWidth`, `ctx.width` / `height`, the script canvas) and
+  `devicePixelRatio` = `scale`; `ctx.frame` / `aspect` / `region` stay the video's; theme sizes are
+  divided by `scale` (`css_scale`). A canvas is sharp only when sized by `devicePixelRatio`.
+- `design_width` is in `clip_inputs` only when set. Lint maps readings by box / reading width;
+  `css_height` keeps both axes on one scale.
+- API: `web_page_viewport`, `web_design_width_problem`; `WebPage(..., design_width=None)`.
 
 ### 118.18 A draft of a video with `web` scenes (Step 340)
 
-The owner approved "a fast draft size for web scenes, around 480x270 at 12 fps". It exists: §74's
-`vidgen render --draft`. **No option was added.**
-
-**What there was.** Three qualities, each with its own build folder and output name:
-
-| quality | default size and rate | set by | folder |
-|---|---|---|---|
-| final | `format` (1920x1080, 30 fps) | `format:`, a variant's `format` | `build/final[_<variant>]` |
-| `--preview` | 854x480, 15 fps | `preview: {width, height, fps}` (not reshaped for a vertical variant: the variant sets its own) | `build/preview[_<variant>]` |
-| `--draft` | 240 px on the shorter side at the format's shape (426x240, 240x426, 240x240), 8 fps | `draft: {width, height, fps}` | `build/draft[_<variant>]` |
-
-No `--quality` option and no size option on the command line. A `web` scene draws its clip into
-`render_dir / "web"` at `config.pixel_width` x `pixel_height` and `frame_rate`, so a draft's page
-is drawn at the draft's size into `build/draft/web/` with a key of its own (size and rate are
-among `clip_inputs`); `--draft` with `web` was first run in Step 331. A draft is smaller and
-slower-framed than the approved "about 480x270 at 12 fps" (0.8 against 1.6 million pixels a
-second), and faster for it, so it was kept as it is; `draft: {width: 480, height: 270, fps: 12}` gives that size.
-
-**Where the guide's wrong figure came from.** Step 333 verified `examples/web` in a copy whose
-`preview:` was set to 480x270 at 12 fps (to save time) and wrote its speed as "a whole preview
-render". The default preview draws 4 times the pixels a second.
-
-**`design_width`** (§118.17) needs nothing: the window stays `design_width` wide and the device
-scale becomes draft width / design width (0.333 for 1280 at 426). Without it the window is the
-draft's pixels, so the page must be fluid; said in the guide.
-
-**Lint.** `vidgen lint` and `vidgen storyboard` have no `--draft` (§74: they never use drafts)
-and it stays so: lint has two sizes to judge, the preview and the final, and a third would only
-repeat them. Its size rules are relative to the frame (`min_font`: cap height over the shorter
-side), so text of a page that scales is judged the same at every size, and a fixed-pixel page
-without `design_width`, which would be judged differently at 240p, is never read there. A draft
-therefore produces no finding at all, and no `min_font` noise. Tested
-(`test_lint_and_the_storyboard_never_use_a_draft`).
-
-**Measured** (1 CPU, one render at a time, `vidgen render --jobs 1`, the build folder deleted
-before each, the scene's own "done in" time: Chromium's start and the composing included) on
-copies of two trial projects: a narrated HTML + SVG page (bicycle gears, 20.3 s) and a silent
-three.js dashboard (20 s, with 120 s of simulation at load). Draft and preview in turn, twice:
-
-| | draft 426x240 @ 8 | preview 854x480 @ 15 | preview / draft |
-|---|---|---|---|
-| HTML + SVG, 20 s | 37.8 s, 33.8 s | 102.4 s, 95.2 s | 2.7, 2.8 |
-| three.js, 20 s | 54.2 s, 53.6 s | 126.1 s, 127.1 s | 2.3, 2.4 |
-
-A 3 s cut of each (the first beat; `duration: 3`), preview, final, draft in turn:
-
-| | draft | preview | final 1920x1080 @ 30 | final / preview |
-|---|---|---|---|---|
-| HTML + SVG, 3.7 s | 14.1 s | 29.6 s | 101.9 s (27.8 s per second) | 3.4 |
-| three.js, 3.0 s | 32.3 s | 41.3 s | 175.5 s (58.5 s per second) | 4.2 |
-
-From the cut and the whole render, per frame and per start: HTML + SVG 0.16 s a draft frame
-(start 9 s), 0.28 s a preview frame (14 s); three.js 0.16 s and 0.34 s (26–28 s: its simulation
-at load). A draft's frame costs about half a preview's with a quarter of its pixels, and a draft
-has about half the frames: hence 2.3 to 2.8 times, not 7.
-
-**The machine's speed was not steady.** An hour earlier the same commands took 105.8 s (draft)
-and 303.8 s (preview) for the first page and 187.7 s and 392.1 s for the second, and the final
-cuts 269.0 s and 120.8 s; 20 minutes later the second page's draft took 47.7 s. Nothing else was
-running (`top`); `/proc/stat` showed about 30% of the CPU's time in software interrupts and
-`/proc/pressure/cpu` 33–47% waiting, so the virtual machine itself was short of CPU. The
-two trial authors' whole final renders that morning took 1119 s and 1285 s (56 and 64 s per
-second) and their previews 90–99 s and 285–380 s. The tables above are the runs taken in turn
-within 20 minutes, with equal repeats; ratios are the result, seconds only an indication.
-
-**Where a frame's time goes** (first page, 24 frames, in a slow phase, so read the proportions):
-moving the clock and the page 31–38 ms at every size; the screenshot 409 ms at 426x240, 743 ms
-at 854x480, 1369 ms at 1920x1080; decoding the PNG 14 / 53 / 183 ms. A second screenshot of the
-same frame took a fifth of the first, by Playwright or by a bare `Page.captureScreenshot` alike,
-with equal pixels: the cost is Chromium drawing the changed page in software, not Playwright's
-call. Of a 3 s draft cut's worker (28 s under the profiler), 14 s were Python imports and 14 s
-the page's frames.
-
-**Tests** (`tests/test_web_draft.py`): the draft's window with `design_width` at 16:9, 9:16 and
-1:1; a draft's `web` folder and clip key differ from the preview's and the final's; `lint` and
-`storyboard` refuse `--draft`; `render --help` names the draft's size, rate and folder; one
-`slow` render of a `design_width` page as a draft (96x54 at 4 fps, the page saw its 400 px
-window, nothing in `build/preview`).
-
-**Not done.** A draft is 2.3 to 2.8 times faster than a preview, not more (above); fewer frames
-(`draft: {fps: 4}`) is the only quicker setting. A render prints no progress while a `web`
-scene's frames are drawn (a trial author could not tell a hang from slow work for 18 minutes).
-The final figures are from 3 s cuts, not whole renders.
+`vidgen render --draft` (§74) is the fast draft: 240 px on the shorter side at the format's
+shape, 8 fps, `build/draft[_<variant>]` (`draft: {width, height, fps}`); preview is 854x480 at 15
+fps. A `web` clip has its own key per size and rate. Lint and storyboard have no `--draft`.
 
 ## 119. The project's own fonts: the `fonts/` folder (Step 338)
 
-Before this step a project's `fonts/` folder was read by nothing: a theme family that was not
-bundled had to be installed on the machine, and a `web` page could only use a font file through
-its own `@font-face`. Now the `.ttf`, `.otf` and `.woff` files under `<project>/fonts/` are used
-by the whole video.
+`.ttf`, `.otf` and `.woff` under `<project>/fonts/` are used by the whole video.
 
-- **Reading** (`vidgen/fonts.py`): `project_font_files(root)` lists the files; `project_fonts(root)`
-  returns a `ProjectFont(path, rel, family, weight, italic)` per file, read with fontTools
-  (`_read_names`, cached by path, size and mtime): family = name 16 (typographic family), else
-  name 1; weight = `OS/2.usWeightClass`, or the `wght` range of `fvar`; italic = `fsSelection`
-  bit 0 or 9. A file fontTools cannot read is a `VidgenError` naming it. fontTools is named in
-  `pyproject.toml` (`fonttools>=4.34`); every install already had it through fpdf2.
-- **`.woff2` is not read.** fontTools needs the `brotli` package for it, which a plain install
-  does not bring, and no dependency was added. `font_warnings(root)` (in `validate_warnings`)
-  names each `.woff2` in `fonts/` that has no `.ttf` / `.otf` / `.woff` of the same file name
-  beside it. A page's own `@font-face` can still name a `.woff2` (Chromium reads it). The
-  `.woff2` files of `@fontsource/space-grotesk` 5.3.0 also carry a wrong family name
-  ("Space Grotesk Light" at weight 400); its `.woff` files are right.
-- **Pango** (ordinary scenes, captions, overlays): `register_project_fonts(root, build_dir)`
-  registers each file with `manimpango.register_font`, as `register_bundled_fonts` does (so the
-  same platform calls on Windows, macOS and Linux). A `.woff` is first written as a plain
-  `.ttf` / `.otf` to `build/fonts/<stem>-<sha12>.<suffix>` (`_sfnt_copy`: zlib only, written once,
-  renamed into place). `extensions.activate(project)` calls it, so the worker and every command
-  that activates a project have the fonts before any text is laid out.
-- **Manim's text cache.** Manim names a cached text SVG by the family name, not by the font file,
-  so a text first drawn in a fallback font was reused after the font file was added. With font
-  files in the project `render/worker.py` `_text_cache_dir` names the scene's cache folder
-  `media/texts/<scene>.<digest of the font files' paths, sizes and mtimes>` and removes the
-  scene's folders for other sets of files; without font files the folder is `media/texts/<scene>`
-  as before. (A font installed on the machine after a fallback render is still not noticed:
-  remove `build/`.)
-- **Fingerprint.** `fingerprint_inputs` adds `fonts` (path -> size and mtime, as for `assets`) when
-  the project has font files, so every scene is rendered again when one changes; absent without
-  font files, so other projects' renders stay current.
-- **`web` pages** (§118.9): `page_theme(theme, px_per_point, project_fonts)` adds
-  `font_files: [{family, weight, style, url}]` to `ctx.theme` (always present, `[]` without
-  files; `weight` is `"400"` or a variable font's `"300 700"`; `url` is `/fonts/...`, quoted), and
-  `theme_css` adds one `@font-face` per entry after the bundled ones (`project_font_faces`). The
-  files are served as project files, so they are in the clip's `loaded` record; `font_files` is
-  in the clip key with the rest of the theme.
-- **Pillow** (the designed thumbnail): `fonts.font_file(family, bold=, italic=)` returns the
-  registered project file nearest in style and weight (a `.woff`'s copy), else the bundled file;
-  `thumbnail._font` uses it and sets a variable font's weight axis (`_at_weight`).
-- **Google Fonts warning** (`web/page.py`): a refused request to `fonts.googleapis.com`
-  (`family=` of `css` / `css2`, split at `|`, the part before `:`) or `fonts.gstatic.com`
-  (`/s/<family folder>/`) gives `google_font_message`, once per family per scene (families
-  compared without spaces and case, so the style sheet's and a font file's request are one):
-  that the internet is off during a render, to put the file in `fonts/` and remove the link, and
-  `FONT_RECIPE` (the guide section). When `declared_families(theme)` has the family, it says only
-  to remove the link. The URL is still in `WebPage.refused`.
-- **Not done:** `.woff2` (above); `.ttc` collections; the placeholder pictures of `imagegen`, the
-  PDF slides and the contact sheets keep their bundled fonts; no check that a theme family exists
-  anywhere; a project font is not removed from Pango when another project is activated in the
-  same process (it stays known by its family name).
-- **Verified** (Linux, 640x360 at 10 fps, Space Grotesk from the font's release zip and from the
-  `@fontsource` tarball): a `title` scene, the captions, a page's `font-family` and
-  `var(--vidgen-font-body)` and the designed thumbnail are drawn in Space Grotesk with static
-  `.ttf`, with `.woff` and with the variable `.ttf`, and in a fallback font without the folder;
-  both scenes are rendered again after each change of `fonts/` and reused after none. Not tried
-  on Windows or macOS.
-
+- `vidgen/fonts.py`: `project_fonts(root)` → `ProjectFont(path, rel, family, weight, italic)` via
+  fontTools (family = name 16, else 1; `OS/2.usWeightClass` or the `fvar` `wght` range; italic =
+  `fsSelection` bit 0 or 9); an unreadable file is a `VidgenError`. `.woff2` is not read (needs
+  `brotli`): `font_warnings` names one without a same-stem sibling.
+- `register_project_fonts(root, build_dir)` (called by `extensions.activate`) registers each with
+  `manimpango.register_font`; a `.woff` is first converted to `build/fonts/<stem>-<sha12>.<ext>`.
+- With font files the text cache is `media/texts/<scene>.<digest of the files>` (Manim caches by
+  family name) and the fingerprint gets `fonts` (path → size, mtime); without, neither changes.
+- Pages: `ctx.theme.font_files: [{family, weight, style, url}]` (always present) and one
+  `@font-face` each (`project_font_faces`); the files are in `loaded` and the clip key.
+- `fonts.font_file(family, bold=, italic=)` gives the thumbnail (Pillow) the nearest project file.
+- A refused Google Fonts request gives `google_font_message` once per family per scene (put the
+  file in `fonts/`, remove the link).
 ## 120. What three music films asked of the generator (Phase AL, Steps 341–351)
 
 Features built for music films made with `web` scenes and score files: `Web` subclasses in the
