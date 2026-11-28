@@ -252,7 +252,8 @@ scenes:
 - **An open model instead of Seedance**: LTX-2.3 in ComfyUI on a Colab L4,
   docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md in the repository (scripts in `tools/colab/`;
   `python tools/colab/setup_session.py <name>` creates or reuses the session and sets it up). Its rule,
-  measured once on one 4 s shot (stills only): give LTX a starting picture and a stylesheet and **no
+  measured on one scene (a 4 s comparison and a 12 s chain of three no-guide clips, each started from
+  the last frame of the one before; stills only): give LTX a starting picture and a stylesheet and **no
   guide**; a depth guide sets the place and overrides both (the picture is dropped after frame 0). That
   job is built by hand with `tools/colab/build_noguide_workflow.py` (vidgen's `ltx-2.3-union-control`
   requires a guide); make 2-3 takes with different seeds and pick from stills. A blockout `type: 3d`

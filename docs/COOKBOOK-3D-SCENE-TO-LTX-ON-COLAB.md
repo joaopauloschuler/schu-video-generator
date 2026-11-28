@@ -8,15 +8,18 @@ Settings: [CONFIG.md, Generated video](CONFIG.md#generated-video-videogen-vidgen
 [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.md) lists them).
 **local** = your machine, **VM** = the Colab machine.
 
-**How much is known.** Every result here was measured once, with one seed (42), on 768x448 clips of
-4 s at 24 fps, and judged from stills (contact sheets, crops, frame differences). Nobody has watched
-the motion. The test subject was "a woman walking in a futuristic city" (projects `city-walk/` and
-`starfall/` in the owner's `video-projects/`).
+**How much is known.** Every result here comes from 768x448 clips of 4 s at 24 fps, mostly one
+take each (seed 42); the no-guide 12 s chain had two takes per clip (section 11.4). All were judged
+from stills (contact sheets, crops, frame differences); nobody has watched the motion. The test
+subject was "a woman walking in a futuristic city" (projects `city-walk/` and `starfall/` in the
+owner's `video-projects/`).
 
 ## The rule: first frame + stylesheet, no guide
 
 **With LTX, give a shot a starting picture and a stylesheet, and no guide video.** That is what held
-the picture, the place and the person in the one direct comparison (section 11.1). The parts:
+the picture, the place and the person in the one direct comparison (section 11.1), and it held over a
+12 s chain of three clips, each started from LTX's own last frame of the one before (section 11.4).
+The parts:
 
 - **The stylesheet** (section 6): up to 4 panels drawn by an image model **from text alone**, on the
   session's own GPU. Never give the image model a render, a frame or a control image. A ready-made
@@ -24,7 +27,9 @@ the picture, the place and the person in the one direct comparison (section 11.1
 - **The starting picture** (section 7): the first frame of the clip. It sets the place and the look,
   and LTX holds it. An image model may paint it from a render of your 3D scene.
 - **The prompt** carries the camera and the motion, because nothing else does: "The camera tracks
-  steadily backwards in front of her at her pace". Short, positive words (section 6.3).
+  steadily backwards in front of her at her pace". Short, positive words (section 6.3), one clear,
+  ordinary camera move per clip (section 8.5).
+- **Takes**: 2 or 3 seeds per shot, picked from stills. Seeds differ a lot (section 8.4).
 
 Why no guide: with a depth guide **the place comes from the guide**. It overrides the starting
 picture (LTX drops it after frame 0: a cut inside the clip) and the sheet's street panel.
@@ -53,8 +58,8 @@ range reads as open sky, and any bump on a stand-in is painted as something.
 3. Make the starting picture (section 7) and look at it.
 4. `/free` the GPU, then build and submit the no-guide job (section 8): **2 or 3 takes per shot**, each
    with another seed. Fetch them, look at stills, pick the best.
-5. For a longer shot, start the next clip from the last frame of this one, and join the clips with
-   `match_previous: true` (section 10).
+5. For a longer shot, start the next clip from the last frame of the picked take (check it is usable:
+   the subject in frame and sharp), and join the clips with `match_previous: true` (section 10).
 6. Stop the session when the owner says you are done (section 15).
 
 ## 1. Which method
@@ -65,7 +70,7 @@ range reads as open sky, and any bump on a stand-in is painted as something.
 | the person | the sheet | the sheet | the sheet or the first frame | the reference sheets |
 | camera and motion | the prompt only | the guide, frame by frame | the guide | the guide, loosely |
 | inside vidgen | no: built by hand (`build_noguide_workflow.py`) | yes (`provider: comfyui`) | yes | yes |
-| cost | Colab units (about 0.26 for a 4 s clip) | about 0.30 | about 0.30 | dollars per clip |
+| cost | Colab units (0.15-0.26 for a 4 s clip) | about 0.30 | about 0.30 | dollars per clip |
 
 ## 2. Prerequisites
 
@@ -95,12 +100,11 @@ models side by side, starts ComfyUI with `--disable-comfy-compiler --disable-dyn
 session: after an error, run it again (it goes on where it stopped). Options:
 [tools/colab/README.md](../tools/colab/README.md).
 
-Why the flags, on an L4 (22.5 GB usable): a clip with a sheet ran out of memory in the first sampling
-step with ComfyUI's dynamic VRAM, and in the second with `--reserve-vram 8`; with `--reserve-vram 10` it
-completed at a peak of 19.2 GB. The routing node that a sheet + guide clip uses (`LTX Multi IC-LoRA`)
-stalls at step 0 with ComfyUI's model compiler on, so vidgen refuses such a shot unless ComfyUI runs
-with `--disable-comfy-compiler`. A re-run with other flags restarts a running ComfyUI (a job running
-on it is lost). A G4 needs none of the VRAM flags.
+Why the flags, on an L4 (22.5 GB usable): a clip with a sheet ran out of memory with ComfyUI's dynamic
+VRAM and with `--reserve-vram 8`; with `--reserve-vram 10` it peaked at 19.2 GB. The routing node of a
+sheet + guide clip (`LTX Multi IC-LoRA`) stalls at step 0 with ComfyUI's model compiler on, so vidgen
+refuses such a shot without `--disable-comfy-compiler`. A re-run with other flags restarts a running
+ComfyUI (its job is lost). A G4 needs none of the VRAM flags.
 
 ### 3.2 When vidgen's code changed
 
@@ -113,8 +117,8 @@ python tools/colab/setup_session.py ltx --vidgen-only     # 36-45 s; ComfyUI and
 
 ### 3.3 Keep it alive, and check it is the right machine
 
-Two L4 sessions were ended by Colab while in use, with all work going over SSH. When an L4 is kept
-between experiments, run the keepalive beside it for as long as the session is up:
+Colab ended two L4 sessions while in use over SSH. When an L4 is kept between experiments, run the
+keepalive beside it for as long as the session is up:
 
 ```bash
 python tools/colab/keepalive.py ltx --hours 8      # one tiny `colab exec` every 7 min, skipped when another call was recent
@@ -210,16 +214,16 @@ vm python3 - < tools/colab/free_vram.py        # POST /free to ComfyUI on 8188
 vm nvidia-smi --query-gpu=memory.used --format=csv,noheader
 ```
 
-Measured on `ltx`: 0.7 GB in use before each job; after a clip ComfyUI still held 3.3-10.4 GB, and
-after a batch of panels it kept Z-Image (7.5 GB) loaded. `/free` brought it back to 0.4-0.7 GB each
-time. `vidgen generate run --pay` posts `/free` once before its first job; a hand job does not.
+Measured on `ltx`: after a clip ComfyUI still held 3.3-10.4 GB, after a batch of panels Z-Image
+(7.5 GB); `/free` brought it back to 0.4-0.7 GB each time. `vidgen generate run --pay` posts `/free` once before its first job; a hand job does not.
 
 **Two ComfyUIs on one card.** vidgen talks to the ComfyUI on port 8188, which runs with the L4 flags of
-section 3.1. Those flags are for LTX; image models run on that same ComfyUI at 27 s a Z-Image-Turbo
-picture (1440x768, 8 steps). The `ltx` session also has a second ComfyUI on port 8189 with default
-flags, a separate checkout at the same commit (`/content/ComfyUI-img`, its own `models/` of
-symlinks); `setup_session.py` does not make it. Both share the card's memory, so `/free` **both**
-before an LTX job:
+section 3.1. Those flags are for LTX and slow image models down: Z-Image-Turbo (bf16, 8 steps, cfg 1,
+1440x768) took 27 s a picture there (10 s sampling, 17 s moving models) and 11 s on a ComfyUI with
+default flags (peak 18.3 GB). So batch image work on a ComfyUI without the reserve flag, and `/free`
+it before video work. The `ltx` session has one on port 8189, a separate checkout at the same commit
+(`/content/ComfyUI-img`, its own `models/` of symlinks); `setup_session.py` does not make it. Both
+share the card's memory, so `/free` **both** before an LTX job:
 
 ```bash
 for p in 8188 8189; do vm "curl -s -X POST -H 'Content-Type: application/json' \
@@ -283,17 +287,15 @@ one batch, and approve the best. Look at every candidate at full size, corners t
   "pilot" bring a cockpit.
 - **Share wording.** Write the person once (`WOMAN` = "a slim young East Asian woman with ... carrying
   a black handbag") and use the same words in every panel, the sheet prompt and the shot prompt.
-- The same rules hold for the LTX shot prompt: the no-guide clip's prompt was 71 words, all positive.
+- The same rules hold for the LTX shot prompt: the no-guide shot prompts were 70-74 words, all positive.
 
 ### 6.4 Other image models (measured once, text only, on the L4)
 
-`setup_session.py` installs only Z-Image-Turbo and Qwen-Image-Edit. On twelve short ship prompts with
-the same seeds (`starfall/candidates_models/MODELS.md`): Z-Image-Turbo (ComfyUI, 8 steps, cfg 1) took
-27 s a picture and was the most photographic; ERNIE-Image (bf16, a second ComfyUI, 50 steps, cfg 4)
-followed the written shape best, with true black, a bit CG, at 165 s; HiDream-O1-Image (GGUF through
-stable-diffusion.cpp, 50 steps, cfg 5) took 44-49 s and drew toy-like product shots on a green studio
-backdrop. Licences: Apache-2.0 and MIT. Z-Image-Turbo stays the default for exploring; ERNIE-Image
-when a shape must come out as written.
+`setup_session.py` installs only Z-Image-Turbo and Qwen-Image-Edit. On twelve short ship prompts
+(`starfall/candidates_models/MODELS.md`): Z-Image-Turbo (8 steps, cfg 1) was the most photographic;
+ERNIE-Image (bf16, 50 steps, cfg 4, 165 s a picture) followed the written shape best, a bit CG;
+HiDream-O1-Image (GGUF, 50 steps, 44-49 s) drew toy-like product shots. Z-Image-Turbo stays the
+default; ERNIE-Image when a shape must come out as written.
 
 ### 6.5 Compose the sheet
 
@@ -331,9 +333,9 @@ keeps an indoor, lamp-lit scene lit; `black` suits daylight outdoor shots and da
 ### 6.6 What the sheet does in the clip
 
 In all four variants of section 11.1 the woman kept the sheet's face, white top, black shorts, heels
-and handbag for the whole clip, and over 12 s of chained clips she did not drift. The hair drifted
-when a depth guide was used (longer, wavy, wind-blown instead of the sheet's straight, neat hair); in
-the no-guide clip it stayed as in the sheet.
+and handbag for the whole clip, and over both 12 s chains (guided and no-guide) she did not drift. The
+hair drifted when a depth guide was used (longer, wavy, wind-blown instead of the sheet's straight,
+neat hair); with no guide it stayed as in the sheet for 12 s, close-ups included.
 
 ## 7. The starting picture
 
@@ -369,19 +371,11 @@ ffmpeg -v error -y -i start.png -vf "scale=768:448:force_original_aspect_ratio=i
 ### 8.1 The graph
 
 `tools/colab/build_noguide_workflow.py` writes the ComfyUI API graph of vidgen's
-`ltx-2.3-union-control` workflow with a sheet, with the control video taken out. Compared with the graph
-vidgen sends for a sheet shot:
-
-| id | node | in vidgen's sheet + guide graph | in the no-guide graph |
-|---|---|---|---|
-| 2 | IC-LoRA loader | `LTXMultiICLoRA`: Ingredients (guide 0) + Union-Control (guide 1) | `LTXICLoRALoaderModelOnly`: the Ingredients IC-LoRA alone, strength 1.0 |
-| 10 / 11 | `LoadVideo` + `GetVideoComponents` | the control video | removed |
-| 14 | `LTXAddVideoICLoRAGuide` | the control, chained after 42 | removed |
-| 9 -> 13 | `LoadImage` -> `LTXVImgToVideoConditionOnly` | the first frame, strength 1.0 | the same |
-| 40 -> 41 -> 42 | `LoadImage` -> `RepeatImageBatch` -> `LTXAddVideoICLoRAGuide` | the sheet, repeated to the frame count, frame 0, strength 1.0 | the same; its downscale factor from node 2 output 1 |
-| 16, 20, 23 | latent concat, `CFGGuider`, `LTXVCropGuides` | read node 14 | read node 42 |
-
-Everything else is unchanged: the distilled-1.1 Q5_K_M GGUF (node 1), Gemma fp8 + connectors on the CPU
+`ltx-2.3-union-control` workflow with a sheet, with the control video taken out: node 2 loads the
+Ingredients IC-LoRA alone (`LTXICLoRALoaderModelOnly`, strength 1.0) instead of `LTXMultiICLoRA`; the
+control nodes 10, 11 and 14 are removed, and nodes 16, 20 and 23 read the sheet's guide node 42. The
+first frame (9 -> 13, strength 1.0) and the sheet (40 -> 41 -> 42, repeated to the frame count, at
+frame 0, strength 1.0) are as in vidgen's graph. Everything else is unchanged: the distilled-1.1 Q5_K_M GGUF (node 1), Gemma fp8 + connectors on the CPU
 (node 3), 8 steps (`ManualSigmas`), cfg 1, sampler `euler_ancestral_cfg_pp`, seed 42, the negative "pc game,
 console game, video game, cartoon, childish, ugly", tiled decode, `VHS_VideoCombine` h264 at crf 16, no
 audio. The prompt is `Reference sheet: <sheet prompt>. Generated video: <prompt>`.
@@ -403,7 +397,7 @@ vm 'cat > /content/workflow_walk1.json' < workflow_walk1.json
 vm 'cat > /content/run_job.py' < tools/colab/run_job.py
 vm python3 - < tools/colab/free_vram.py                       # and 8189 too, if it runs (section 5)
 vm 'cd /content || exit 3; setsid nohup python3 run_job.py workflow_walk1.json walk1 > job_walk1.log 2>&1 < /dev/null & echo started $!'
-vm cat /content/job_walk1.json                                 # missing until the job ends (about 7 min on an L4)
+vm cat /content/job_walk1.json                                 # missing until the job ends (L4: about 7 min for a session's first job, 4 min after)
 vm cat /content/ComfyUI/output/ltx_walk1_00001.mp4 > walk1.mp4
 vm python3 - < tools/colab/free_vram.py                        # after the last job
 ```
@@ -420,16 +414,17 @@ The prompt of the measured clip (71 words; the sheet prompt goes before it):
 > centred and full body in frame. Glass skyscrapers with warm light strips, wet stone paving, soft hazy
 > dusk light, cinematic 35 mm film.
 
-Name the camera move in plain words; it is the only thing that sets it. Lengths: 8k+1 frames (97 = 4 s
+Name the camera move in plain words (section 8.5). Lengths: 8k+1 frames (97 = 4 s
 at 24 fps, 121 = 5 s at most); width and height multiples of 64.
 
 ### 8.3 What it gives, and what vidgen does not do for it
 
-Measured (section 11.1, variant A): 396 s of GPU, 0.257 units, peak 13.3 GB. Frame 0 is the picture
+Measured (section 11.1, variant A): 396 s of GPU (as a session's first job takes, with the model load;
+later jobs 224-252 s), 0.257 units, peak 13.3 GB. Frame 0 is the picture
 (mean absolute difference 4.0), no cut, no morph; the place and the woman are the picture's and the
 sheet's for the whole 4 s. The camera tracked backwards at her pace with a small sideways sway.
 
-A hand job has no take, no QA, no ledger line and no cache. Check it yourself: stills every 0.5 s, and
+A hand job has no take, QA, ledger line or cache. Check it yourself: stills every 0.5 s, and
 `ffmpeg -i walk1.mp4 -vf "select='gt(scene,0.08)',showinfo" -f null -` for cuts inside the clip
 (variant A had no scene change above 0.08). To use it in a film, play it as a `video_clip` (section 10.2).
 
@@ -448,9 +443,37 @@ for s in 42 43 44; do
 done
 ```
 
-Submit the three graphs one after the other (they queue in ComfyUI; about 7 min each on an L4). On a
-shot inside vidgen, `seed:` on the `generated_shot` does the same: another seed is another request, a
-new take in `takes/<shot>/`, and `vidgen generate pick` chooses the one shown.
+Submit the graphs one after the other (they queue in ComfyUI; on an L4 about 4 min each after the
+session's first job). On a shot inside vidgen, `seed:` on the `generated_shot` does the same: another
+seed is another request, a new take in `takes/<shot>/`, and `vidgen generate pick` chooses the one shown.
+
+**Measured** (section 11.4): with the **painted** starting picture, one seed of two cut away after
+frame 0 to another street and grew a second copy of the woman (the sheet's back-view panel as a
+person): check the change from frame 0 to 1 of every take. From LTX's own last frame every take
+continued cleanly, and the seed decided how much of the camera instruction happened. The 12 s film
+took 6 takes (5 new jobs and 1 earlier clip); no clip needed a third.
+
+### 8.5 The camera, through the prompt
+
+Measured on the chain of section 11.4 (the shot prompts in full: city-walk
+`continuous/noguide/prompts/`):
+
+| instruction in the shot prompt | result | seed |
+|---|---|---|
+| "The camera tracks steadily backwards in front of her at her pace" | obeyed | 42 |
+| "The camera keeps gliding backwards ahead of her and slowly drifts round to her left side, until she is seen in a three-quarter view" | ignored: it kept tracking straight back, she stayed centred and frontal | 42 |
+| "Arc shot ... The camera slowly arcs to the right around her" | overdone: the camera turned past her onto the façade and she walked out of the frame on the right | 7 |
+| "Static shot ... The camera stays still as she comes closer ... and walks past it, leaving the frame on the right" | ignored: still a track-back, she stayed centred and the same size | 42 |
+| "The camera stops and she walks up close, then the camera pans to the right to follow her as she passes" | obeyed: full body to a close three-quarter view in 2 s, then a pan with her, ending on her shoulder | 7 |
+
+So:
+
+- Name **one clear, ordinary camera move** (track back, pan, arc). A gentle "drifts" is ignored, and
+  so is a still camera with the motion given to her.
+- A named move may be overdone: the arc lost her. Make 2-3 takes and pick.
+- Once a clip tracks back, the next clip keeps doing so unless the prompt names a clear move.
+- Before continuing from a take, check its **last** frame is a usable first frame: the subject in
+  frame and sharp. The arc take ended with her leaving the frame and was not continued.
 
 ## 9. Blockout + depth guide (inside vidgen)
 
@@ -511,11 +534,10 @@ guide (section 11.1).
 - **The place follows the blockout's boxes.** The sheet's tall-tower street became the guide's
   concrete plaza with a footbridge. Build the silhouettes you want: with depth only, outlines come
   from the primitives (a fighter kept its straight bar wings), surfaces and colour from the sheet.
-- **Everything beyond `depth_range` reads as open sky.** Depth is linear in distance and clamped at
-  the far end: with `[2, 40]` the right half of a street became sky over a plaza; with `[2, 120]` it
-  had buildings on both sides. Keep the far end past the farthest building that must stay a building,
-  or close the street within it. A very wide range costs contrast near the figure: with `[3, 260]` the
-  stand-in nearly vanished into the floor.
+- **Everything beyond `depth_range` reads as open sky** (depth is linear and clamped at the far end):
+  with `[2, 40]` half a street became sky; with `[2, 120]` it had buildings on both sides. Keep the far
+  end past the farthest building, or close the street within it. A very wide range costs contrast near
+  the figure: with `[3, 260]` the stand-in nearly vanished into the floor.
 - **Every bump is painted.** `standin` has a facing marker (its nose) that cannot be hidden; once the
   camera circled, the depth guide carried it and LTX painted a pale arm-like shape beside her shoulder
   for 5 s. For a guide, build a plain capsule from primitives (city-walk `continuous/testB`):
@@ -527,10 +549,9 @@ guide (section 11.1).
   - {id: her_foot, shape: sphere, parent: her, size: [0.45, 0.4, 0.4], position: [0, -0.65, 0], color: "#e8e4de"}
   ```
 
-- **A built figure over-controls the person.** A figure of spheres and cylinders with swinging limbs
-  (timed `object_rotate` on hip and shoulder pivots) gave the stride in the guide, but froze the legs
-  in one wide split from 1 s to 4 s (a glide, seen only in dense crops). The plain capsule gave a real
-  stepping cycle; the owner preferred it.
+- **A built figure over-controls the person.** A figure with swinging limbs (timed `object_rotate` on
+  hip and shoulder pivots) froze the legs in one wide split from 1 s to 4 s (a glide). The plain
+  capsule gave a real stepping cycle; the owner preferred it.
 - **A starting picture fights the guide** unless it agrees with it exactly (section 11.1).
 - `camera_orbit: her` with `run_time:` moves the camera round a moving figure in one action. A beat
   action's `at` counts only the beat's spoken words, not its `pause:`, so timed keyframes cannot be
@@ -556,11 +577,14 @@ vidgen remote ltx generate run . --pay --shot walk_p2
 **The frame holds when it agrees with what the model is otherwise told.** With a depth guide and the
 sheet, parts 2 and 3 of the 12 s walk opened with a match of 0.992 each and no cut warning: a frame
 from LTX's own previous clip agrees with the guide. A repainted picture that did not agree was dropped
-(section 11.1). For no-guide clips, cut the last frame of the picked take by hand and give it to the tool as
-`--first-frame`:
+(section 11.1). With no guide, LTX's own last frame held too: every take of clips 2 and 3 opened on it
+(frame 0 differs from it by 2.4-2.8 on a 0-255 scale), with no cut (section 11.4). Cut the last frame
+of the picked take by hand as a full-quality PNG (count the frames, decode exactly the last one, as
+city-walk's `noguide/last_frame.py` does) and give it to the tool as `--first-frame`:
 
 ```bash
-ffmpeg -v error -y -sseof -0.1 -i walk1.mp4 -update 1 -frames:v 1 walk1_last.png
+n=$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 walk1.mp4)
+ffmpeg -v error -y -i walk1.mp4 -vf "select=eq(n\,$((n-1)))" -vsync 0 -frames:v 1 -pix_fmt rgb24 walk1_last.png
 ```
 
 Each later clip's frame 0 is a copy of that picture: drop it when joining (below), so 3 clips of 97
@@ -589,37 +613,41 @@ vidgen render film_match.yaml --preview                               # 62 s loc
 ffmpeg -i output/continuous_match_preview.mp4 -an -c:v copy continuous_12s.mp4   # the render adds a silent track
 ```
 
-A hand-made clip (section 8) joins the same way: give its path. `match_previous` gives the clip's first
+A hand-made clip (section 8) joins the same way: give its path (city-walk's `noguide/make_join.py`
+writes such a film for a list of clips). `match_previous` gives the clip's first
 frame the brightness and colour of the previous clip's last frame and eases the correction out over
 1 s. `match_previous: {dissolve: 3}` also mixes the first 3 frames with the previous last frame; use it
 only if a jump still shows. Rendering the beat in the main project instead would draw its placeholder
 caption and voice, hence the separate film.
 
-Measured on the 12 s walk (no dissolve):
+Measured on both 12 s walks (no dissolve):
 
-| cut | mean level before | after | frame-to-frame change at the cut | the same next to it |
+| chain, cut | mean level before | after | frame-to-frame change at the cut | the same next to it (before / after) |
 |---|---|---|---|---|
-| clip 1 to 2 | 99.8 | 99.9 (+0.1 %) | 6.96 | 5.8-6.8 |
-| clip 2 to 3 | 75.0 | 75.1 (+0.1 %) | 7.80 | 6.5-7.1 |
+| guided, clip 1 to 2 | 99.8 | 99.9 (+0.1 %) | 6.96 | 5.8-6.8 |
+| guided, clip 2 to 3 | 75.0 | 75.1 (+0.1 %) | 7.80 | 6.5-7.1 |
+| no guide, clip 1 to 2 | 79.9 | 80.1 (+0.2 %) | 7.96 | 3.5 / 5.0-5.4 |
+| no guide, clip 2 to 3 | 73.6 | 73.7 (+0.1 %) | 9.59 | 3.4 / 9.1-10.5 |
 
-Neither join shows in the stills: her position, pose, size, the bag, the lamp posts and the paving
-continue with no jump; render warnings: none. The change across each cut is only a little above the
-change around it, which is high because the camera moves all the time.
+No render warning, and no join shows in the stills: her position, pose, size, the bag and the street
+continue with no jump. No dissolve was needed. At a cut the frame-to-frame change steps to the next
+clip's level (no guide, cut 2: from 3.4 to about 10, where clip 3 starts moving faster); a dissolve
+would not change that.
 
 ## 11. What was measured
 
 All: LTX-2.3 distilled Q5_K_M on the L4 `ltx`, 97 frames, 768x448, 24 fps, seed 42, the city-walk sheet
-and sheet prompt, `depth_range [2, 120]` where a guide was used. **Once each, one seed, judged from
-stills only.**
+and sheet prompt, `depth_range [2, 120]` where a guide was used. **One take each (seed 42), except the
+two seeds per clip of section 11.4; judged from stills and frame differences only.**
 
 ### 11.1 Which inputs LTX follows (the first 4 s of the walk)
 
 | variant | inputs | the place | the woman | opening | camera | faults |
 |---|---|---|---|---|---|---|
-| **A** | starting picture as first frame + sheet (Ingredients only), **no control video**, a 71-word prompt carrying the motion | **the picture's** glass-tower boulevard (curved balconies, warm light strips, wet tiles), close to the sheet's street panel | as the sheet, hair straight and neat too | **holds**: frame 0 = the picture (diff 4.0), no cut, no morph | tracks backwards at her pace, small sway; **no orbit** (nothing of the blockout's path) | none of the blockout's layout (bridge, kerbs, lamp posts) |
+| **A** | starting picture as first frame + sheet (Ingredients only), **no control video**, a 71-word prompt carrying the motion | **the picture's** glass-tower boulevard, close to the sheet's street panel | as the sheet, hair straight and neat too | **holds**: frame 0 = the picture (diff 4.0), no cut, no morph | tracks backwards at her pace, small sway; **no orbit** (nothing of the blockout's path) | none of the blockout's layout (bridge, kerbs, lamp posts) |
 | **B** | sheet + depth guide (plain capsule), `first_frame: none` | partly the panel's look, but the guide's walls make it a plaza with a footbridge | as the sheet; hair a bit longer, wind-blown | clean, no cut | follows the guide, starts to swing round her | none seen |
 | C | starting picture as first frame + sheet + depth guide | after frame 0, the guide's concrete plaza | as the sheet; hair longer, wavy | **fails**: the picture for 1 frame, then a cut (QA: abrupt change at 0.04 s) | follows the guide | the cut |
-| D | starting picture blended into the guide (`first_frame_in: guide`) + sheet + depth guide | after 0.4 s, the concrete plaza | as C | **fails**: a version of the picture (diff 34.3) that morphs into the plaza over 0.4 s | follows the guide | the morph; yellow lines painted on the paving |
+| D | starting picture blended into the guide (`first_frame_in: guide`) + sheet + depth guide | after 0.4 s, the concrete plaza | as C | **fails**: a version of the picture (diff 34.3) morphing into the plaza over 0.4 s | follows the guide | the morph; yellow lines on the paving |
 
 So: **with a depth guide the place comes from the guide** (B, C and D give the same kind of plaza;
 B gives it without any picture). **Without a guide the first frame is held**, and the camera does only
@@ -630,20 +658,42 @@ openings: there is no picture to fight the guide.
 
 Three clips with a depth guide and the sheet, clip 1 as D above, clips 2 and 3 from `last_of` (opening
 0.992 each). The same face, hair and clothes for 12 s; the place, a grey concrete plaza with LED lamp
-posts and glass shopfronts, does not drift between clips. Clip 3 is darker (level 75 against 100) as the
-camera turns to a darker facade. Faults: the 0.4 s opening morph; the place is less "futuristic city"
-than the sheet; the stand-in's nose painted as a pale limb from 6.5 s (section 9); the handbag merges
-with her leg near the end.
+posts, does not drift between clips. Faults: the 0.4 s opening morph; the place is less "futuristic
+city" than the sheet; the stand-in's nose painted as a pale limb from 6.5 s (section 9); the handbag
+merges with her leg near the end.
 
 ### 11.3 Blockout shots (single 4 s clips, depth guide, sheet, no first frame)
 
-- City, wide, plain stand-in from behind, `[3, 80]` (514 s GPU): the woman right, no capsule look, the
-  towers as the sheet; past 80 m open sky, the street ending at a horizon like a rooftop edge.
+- City, wide, plain stand-in from behind, `[3, 80]` (514 s GPU): the towers as the sheet; past 80 m
+  open sky, the street ending at a horizon like a rooftop edge.
 - City, medium (432-438 s each): the built figure gave a woman close to the sheet but legs that glide;
   the plain capsule a real stepping cycle, hair less like the sheet, and a skin-coloured flap on her
   shorts (cause unknown).
 - Space, ships and fighters of primitives (428 / 442 s): the ships took the sheet's look (ivory
   spindles, teal lines) and the blockout's proportions; the fighters kept the blockout's straight bar wings.
+
+### 11.4 The 12 s walk with no guide (chained, two takes per clip)
+
+Three clips of first frame + sheet, no guide, the motion from the prompt alone (section 8.5). Clip 1
+started from the painted starting picture (variant A), clips 2 and 3 from the last frame of the picked
+take before. Two seeds per clip: 6 takes, 5 of them new jobs. Picked: clip 1 seed 42, clip 2 seed
+42, clip 3 seed 7, joined with `match_previous: true` (city-walk `continuous/noguide_12s.mp4`, stills
+in `noguide_contact.jpg` and `noguide_seams.jpg`).
+
+| clip, seed | GPU s | frame 0 vs its first frame | what happened | picked |
+|---|---|---|---|---|
+| 1, 42 (variant A) | 396 | 4.0 | held the picture; tracked back | yes |
+| 1, 2024 | 390 (first job) | 0, then a cut | another street from frame 1; a second woman, from behind | no |
+| 2, 42 | 252 | 2.7 | clean; drift ignored | yes |
+| 2, 7 | 224 | 2.8 | clean; arc overdone | no |
+| 3, 42 | 224 | 2.4 | clean; "stays still" ignored | no |
+| 3, 7 | 224 | 2.5 | clean; stop, close-up, pan | yes |
+
+The same woman (face, straight hair, clothes, bag) and the same glass-tower street for 12 s; clean
+joins (section 10.2). Colour holds; sharpness drops a little from clip to clip (each starts from the
+previous clip's re-encoded frame), and the close-up of clip 3 has strong motion blur. Faults: 0-8 s is
+nearly one held composition, and the change in the last 4 s is quick (full body to a shoulder
+close-up in about 2.5 s). No extra people, limbs or text in the picked takes.
 
 ## 12. 8 s in one clip: `fps: 12` + RIFE
 
@@ -651,8 +701,8 @@ A clip is at most 121 frames (5 s at 24 fps). With `fps: 12` on a guided shot vi
 (2, 4, 6, 8 or 10 s), fits the guide at 12 fps and doubles the clip to 24 fps with RIFE 4.26 in the same
 ComfyUI job (`FrameInterpolationModelLoader` + `FrameInterpolate`, nodes 50 / 51; n frames become
 2n - 1). An 8 s clip is 97 frames, the GPU time of a 4 s clip at 24 fps; on an L4 the interpolation took
-3-4 s and about 550 MiB. Each tick or sudden step is spread over 2 frames, so keep `fps: 24` for fast
-motion with fine detail. `tools/colab/setup.sh` downloads the RIFE weights. The no-guide tool has no RIFE step: it writes the clip at
+3-4 s and about 550 MiB. A sudden step is spread over 2 frames: keep `fps: 24` for fast motion with
+fine detail. The no-guide tool has no RIFE step: it writes the clip at
 `--fps`; use `fps: 12` on guided shots.
 
 ## 13. Reference: restyling a render with a canny or final guide
@@ -660,28 +710,23 @@ motion with fine detail. `tools/colab/setup.sh` downloads the RIFE weights. The 
 These exist in vidgen and the tools, for keeping a render's layout and lighting when the render
 already looks right.
 
-- **Which control video** (`guide: canny | final | depth`, each with or without a sheet, at 12 or 24
-  fps). Measured once on an 8 s clockwork shot with a sheet: `final` (the scene's colour render) kept
-  the parts and the lighting best and followed the camera from frame 0, but kept some of the render's
-  look; `depth` invented surfaces where the render had texture; `canny` invented the most and lagged
-  the camera by up to 2 s. On a space film the owner, watching, preferred `depth` to `final` (rings, a
-  nebula or "no sun" went into the prompt). A web scene's depth needs its page to draw through
-  `vidgen/three-finish` (CONFIG.md, "A web scene's depth").
+- **Which control video** (`guide: canny | final | depth`, with or without a sheet, at 12 or 24 fps).
+  Once, on an 8 s clockwork shot with a sheet: `final` (the colour render) kept the parts and the
+  lighting best and followed the camera from frame 0, but kept some of the render's look; `depth`
+  invented surfaces where the render had texture; `canny` invented the most and lagged the camera by up
+  to 2 s. On a space film the owner, watching, preferred `depth` to `final`. A web scene's depth needs
+  its page to draw through `vidgen/three-finish` (CONFIG.md, "A web scene's depth").
 - **Canny with a glint mask**: `canny: {low: 92, high: 200, glint: 150}` drops the edges in bright areas
-  (a sun glint LTX paints as surf); by hand `make_canny_soft.py` on the VM (`GLINT=150`, `FEATHER=31`),
-  `make_canny.py` the plain canny. On a glider over the sea, canny held the horizon level where 1 / z
-  depth rolled it 15-30°; a CG first frame kept the CG look; no first frame looked real but invented a beach.
+  (a sun glint LTX paints as surf); by hand `make_canny_soft.py` on the VM. On a glider over the sea,
+  canny held the horizon level where 1 / z depth rolled it 15-30°.
 - **A repainted first frame by hand**: `prep_image_inputs.py` (VM), `build_image_workflow.py qwen`
-  (local), `run_job.py`; Qwen-Image-Edit-2511 takes the frame as its own reference, so the layout is
-  kept (about 110 s with the load, 25 s after, peak 19.5 GB). Name the CG pattern in the prompt
-  ("replace the regular, repeating computer-generated ripple pattern of the water with real, irregular
-  open-ocean waves") and say what must not move; `align_check.py` overlays the edges of frame 0 and the
-  candidate: check it by eye. Inside vidgen: `first_frame: restyled` (section 7).
-- **Graphs by hand**: `build_workflow.py` writes vidgen's graph for given inputs (`--control`,
-  `--second-control`, `--first-frame` or `--no-first-frame`, size, frames, fps, seed);
-  `prepare_inputs.sh` trims to 8k+1 frames and crops to multiples of 64; `make_compare.sh` lays clips
-  side by side. The graph's source, node by node: `src/vidgen/videogen/ltx_graph.py`. Do not add the
-  distilled LoRA on top of the distilled GGUF.
+  (local), `run_job.py`; Qwen-Image-Edit-2511 keeps the layout (about 110 s with the load, 25 s after,
+  peak 19.5 GB). Name the CG pattern to replace and say what must not move; `align_check.py` overlays
+  the edges of frame 0 and the candidate. Inside vidgen: `first_frame: restyled` (section 7).
+- **Graphs by hand**: `build_workflow.py` writes vidgen's graph for given inputs; `prepare_inputs.sh`
+  trims to 8k+1 frames and crops to multiples of 64; `make_compare.sh` lays clips side by side. The
+  graph's source: `src/vidgen/videogen/ltx_graph.py`. Do not add the distilled LoRA on top of the
+  distilled GGUF.
 
 ## 14. Costs and timings (L4)
 
@@ -691,12 +736,15 @@ already looks right.
 | `setup_session.py`, new session / ready session | about 6 min / 10-20 s |
 | `setup_session.py ltx --vidgen-only` | 36-45 s |
 | `vidgen remote ... generate inputs --guide` (one 4 s 3D shot, software WebGL, no GPU job) | about 50 s |
-| Z-Image-Turbo panel, 1440x768, 8 steps (ComfyUI 8188 with the L4 flags) | about 106 s for the first (load), 27 s each after |
+| Z-Image-Turbo panel, 1440x768, 8 steps, on 8188 with the L4 flags | about 106 s for the first (load), 27 s each after |
+| the same on a ComfyUI with default flags | 11 s each, peak 18.3 GB |
 | Qwen-Image-Edit starting picture, with the model load | 112 s, 0.073 units |
-| no-guide clip, 97 frames 768x448 (first frame + sheet) | 396 s GPU, 0.257 units, about 7 min 20 s; peak 13.3 GB |
+| no-guide clip, 97 frames 768x448 (first frame + sheet), a session's first job (loads the models) | about 390 s GPU, 0.25 units, about 7 min 20 s; peak 13.3 GB |
+| the same, later jobs | 224-252 s GPU, 0.15-0.16 units, about 4 min; peak 13.6 GB |
+| the 12 s no-guide walk: 5 new jobs (section 11.4) | 1 313 s GPU (22 min), 0.85 units |
 | depth guide + sheet clip, 97 frames 768x448 | 428-514 s GPU, 0.28-0.33 units, 7.5-9 min door to door |
 | sheet clip, 97 frames, peak VRAM | 19.2 GB (about 26 s a sampling step, text step on the CPU about 150 s) |
-| the 12 s walk: 1 picture + 4 clips | 1 935 s GPU (32 min), 1.25 units |
+| the guided 12 s walk: 1 picture + 4 clips | 1 935 s GPU (32 min), 1.25 units |
 
 Units at 2.33 an hour (what the projects set). An idle L4 still bills: stop it when you are done.
 
@@ -737,6 +785,6 @@ the L4 recipe of section 3.1.
 
 [`tools/colab/`](../tools/colab/) (the [README](../tools/colab/README.md) says where each script runs).
 The projects these results come from stay outside the repo, in the owner's `video-projects/`:
-`city-walk/` (the walk, its sheet, the four-variant test in `continuous/testA` and `testB`, the join),
+`city-walk/` (the walk, its sheet, the four-variant test in `continuous/testA` and `testB`, the joins, the no-guide chain in `continuous/noguide`),
 `starfall/` (text-only panels, the blockout test, the image-model comparison), `escapement-remake/`
 (guide choice, 12 fps, the L4 memory fit), `footage-test/ltx-test/` (the canny and first-frame tests).
