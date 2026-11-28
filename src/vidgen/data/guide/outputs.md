@@ -249,14 +249,15 @@ scenes:
   lighting best and moved with the camera from frame 0, but kept some of the render's look (its flash,
   its regular patterns); `depth` invented surfaces where the render had texture; `canny` invented the
   most and held the camera still for up to 2 s at the start.
-- **An open model instead of Seedance** (by hand, outside `vidgen generate`): the shot's
-  `guide.final.mp4` and `guide.depth.mp4` restyled by LTX-2.3 with its union-control IC-LoRA in
-  ComfyUI on a Colab L4: docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md in the repository (scripts in
-  `tools/colab/`; `python tools/colab/setup_session.py <name>` creates or reuses the session and sets it up). Tested twice: with the render's first frame the clip stays CG, without it
-  it looks real but invents content; with a **photoreal first frame** (frame 0 restyled on the same GPU
-  by Qwen-Image-Edit-2511) and a canny with the sun glint masked it looks real and keeps the layout
-  (about 1.7 Colab units for 6 stills and 4 clips). Ask the user before starting a Colab GPU; reuse a
-  running session between experiments (`setup_session.py` with its name); stop it when the user says so.
+- **An open model instead of Seedance**: LTX-2.3 in ComfyUI on a Colab L4,
+  docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md in the repository (scripts in `tools/colab/`;
+  `python tools/colab/setup_session.py <name>` creates or reuses the session and sets it up). Its rule,
+  measured once on one 4 s shot (stills only): give LTX a starting picture and a stylesheet and **no
+  guide**; a depth guide sets the place and overrides both (the picture is dropped after frame 0). That
+  job is built by hand with `tools/colab/build_noguide_workflow.py` (vidgen's `ltx-2.3-union-control`
+  requires a guide); make 2-3 takes with different seeds and pick from stills. A blockout `type: 3d`
+  scene as `guide: depth` stays the way to fix the layout and camera exactly. Ask the user before
+  starting a Colab GPU; reuse a running session between experiments; stop it when the user says so.
 
 ### Real footage from a web scene
 

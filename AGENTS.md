@@ -166,7 +166,7 @@ The `vidgen guide <topic>` names work everywhere (a pip install ships them). The
 | an audiobook or podcast, a dramatized audiobook | `audio`, `outputs` | `docs/COOKBOOK-AUDIO.md`, `docs/COOKBOOK-AUDIODRAMA.md` |
 | slides, chapters, thumbnail, GIFs, translations, rights | `outputs` | |
 | generated video shots (Seedance) | `outputs` | `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` |
-| restyling a render into real footage on Colab | `outputs` | `docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md` |
+| real footage from a 3D scene with LTX on Colab | `outputs` | `docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md` |
 | a film a person directs in short prompts | `workflow` | `docs/COOKBOOK-DIRECTING-YOUR-AI.md` |
 | a validate or lint message you do not understand | `troubleshooting` | |
 

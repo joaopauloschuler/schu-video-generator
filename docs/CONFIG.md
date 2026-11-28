@@ -2822,7 +2822,7 @@ videogen:
   $0: `--pay` runs it without a budget, its own ledger is `videogen-ledger.comfyui.jsonl`, and the take
   records `usage: {gpu_seconds, compute_units, units_per_hour, server}` (ComfyUI's execution time x
   `units_per_hour` / 3600). Same request, same cached clip, as with OpenRouter. The recommended shot
-  is `guide: canny` (with its glint mask) and `first_frame: restyled` (why: the HOWTO's "Recommended setup and why").
+  is `guide: canny` (with its glint mask) and `first_frame: restyled` (for a guided shot; the LTX cookbook, [COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md](COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md), recommends first frame + sheet with no guide, built by hand, section 8).
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
   never stored, logged or shown. Or `key_via_proxy: true` (or `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`)
   when the network's proxy adds `Authorization: Bearer ...` for openrouter.ai itself.
@@ -3123,11 +3123,10 @@ scenes:
   so earlier sheets stay current); changing it composes the sheet again, the panels and approvals stay. The prompt starts `Reference sheet: top left, <look>, <text>;
   top right, the same glider, <text>; ...`, then the shot's own prompt. `subjects:` and `sheet:` (or
   `sheet_prompt:`) on one shot is a config error, so is an unknown subject or a sheet of more than 4 panels.
-- **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
-  go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
-  `vidgen generate`: [COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md](COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md) (the
-  steps, scripts in `tools/colab/` with a one-command session setup, costs, errors and the results of the 2026-11-24 tests,
-  among them a photoreal first frame made with an image-editing model).
+- **LTX on Colab, the cookbook**: [COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md](COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md)
+  (the session setup with `tools/colab/`, stylesheets from text, a first frame + sheet clip with no guide
+  built by hand with `tools/colab/build_noguide_workflow.py`, blockout + depth guide shots, chained clips
+  and their join, costs, errors and what was measured).
 - **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was
   cut from. A shot whose inputs no longer match (scene, beat text or timing, narration MP3, draft
   size, or no record yet) is blocked in `vidgen generate plan` with the free command to cut them

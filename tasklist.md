@@ -9,7 +9,7 @@ one commit `Step N: <summary>`). When a step is finished, its items are removed 
 if only part is done, the item stays as `[~]` with a note on what is left. Work that downloads
 or calls a paid or remote service stays optional and is mocked in tests.
 
-**Next step number: 446** (the last completed step is 445). Each step raises this number in its commit.
+**Next step number: 447** (the last completed step is 446). Each step raises this number in its commit.
 
 ## Phase E — Outputs, extras, guidance
 
@@ -328,6 +328,7 @@ Never verified (drawn or run nowhere so far):
 - [~] **Step 413 — fewer and steadier colab calls** (`vidgen remote`: one tar up, one `begin` exec, a cached VM file list, retries, a per-session lock for every `colab` call). Left: a real run (session `ltx` had ended before the step began)
 - [ ] LTX-2.3 on a Colab G4 (RTX PRO 6000, 96 GB): `setup_session.py NAME --gpu G4` with the unquantized model (`Lightricks/LTX-2.3` `ltx-2.3-22b-distilled-1.1.safetensors`, 46.15 GB, or the dev checkpoint + `ltx-2.3-22b-distilled-lora-384-1.1.safetensors` at 0.5 as the official graph), the full Gemma (`Comfy-Org/ltx-2` `gemma_3_12B_it.safetensors`, 24.38 GB), `LTXAVTextEncoderLoader` / `CheckpointLoaderSimple`, and a second stage with `ltx-2.3-spatial-upscaler-x2-1.1.safetensors`; ~75 GB of downloads (from the Step 404 HOWTO).
 - [ ] The Colab LTX VM as a service for vidgen: a small HTTP wrapper (not ComfyUI itself) behind a Cloudflare quick tunnel, `POST /jobs` returning a job id at once and `GET /jobs/<id>` for state and result URL (a quick tunnel cuts requests at ~100 s and does not carry SSE reliably), a per-session bearer token, control videos uploaded as files, the tunnel stopped with the session; retry the new address's DNS before use (from the Step 404 HOWTO).
+- [ ] `guide: none` on `ltx-2.3-union-control` (first frame + sheet, no control video) in vidgen itself; validate/plan accept it (from Step 446: today `tools/colab/build_noguide_workflow.py` builds the job by hand, see docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md section 8).
 - [ ] LTX restyle ideas (Step 405): keep the subject's details in the photoreal first frame (edit only the background with a mask, or paste the CG subject back and blend); a photoreal last frame for long shots; a sparse canny of only the subject and horizon with the depth; a depth convention that keeps the horizon visible (a floor or gamma in `vidgen.web.depth`).
 - Later, not planned yet: flare ghosts and veiling glare with the sun near the frame; lens dirt and window reflections / double panes; rolling shutter; focus breathing and hunting; compression character (blocks in flat sky, crawl in detail); frame rate and shutter angle per look.
 

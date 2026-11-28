@@ -1,8 +1,8 @@
-# tools/colab: Colab sessions for vidgen and the LTX-2.3 HOWTO
+# tools/colab: Colab sessions for vidgen and the LTX cookbook
 
 `setup_session.py` sets up a Colab GPU session in one command: vidgen (for `vidgen remote`) and the
-models of [`docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md`](../../docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md);
-the other scripts are the HOWTO's per-run steps.
+models of [`docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md`](../../docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md);
+the other scripts are the cookbook's hand steps.
 
 ## Set up a session
 
@@ -70,7 +70,7 @@ fails, the file is not written and WebGL stays on SwiftShader. `VIDGEN_WEBGL=gpu
 rendered with one backend is drawn again with the other. `vidgen remote` passes this computer's `VIDGEN_WEBGL`
 (e.g. `swiftshader`) to the run, over the file's.
 
-The HOWTO's §4 and §6 list the repos, files and commits.
+The cookbook's section 4 lists the repos, files and commits.
 
 **Done markers.** On success `setup.sh` writes `/content/.vidgen_setup_ltx_done`,
 `setup_vidgen.sh` writes the code hash into `/content/.vidgen_setup_vidgen_done` (the hash of
@@ -167,13 +167,28 @@ the session (`gone`), or on Ctrl-C. It never creates or stops a session.
 
 ## The other scripts
 
-Local: `check_hf.sh`, `prepare_inputs.sh`, `build_workflow.py` and `build_image_workflow.py` (vidgen's
+Local: `check_hf.sh`, `prepare_inputs.sh`, `build_workflow.py`, `build_noguide_workflow.py` and `build_image_workflow.py` (vidgen's
 graphs, `src/vidgen/videogen/ltx_graph.py` and `qwen_graph.py`),
 `poll.sh`, `fetch_outputs.sh`, `make_compare.sh`. VM, started with `colab exec -f`: `start_bg.py`,
 `start_job.py` + `run_job.py`, `make_canny.py`, `make_canny_soft.py`, `prep_image_inputs.py`,
-`align_check.py`, `free_vram.py`, `object_info.py`, `object_info_image.py`. The HOWTO says when to
+`align_check.py`, `free_vram.py`, `object_info.py`, `object_info_image.py`. The cookbook says when to
 use each.
 
 `build_workflow.py` writes the graph of vidgen's `ltx-2.3-union-control` workflow
 (`src/vidgen/videogen/ltx_graph.py`, one copy). To run it on a shot from a project, use vidgen's
 `comfyui` provider instead (`videogen: {provider: comfyui, comfyui: {colab: <session>}}`, docs/CONFIG.md).
+
+## `build_noguide_workflow.py`: first frame + stylesheet, no control video
+
+```
+python tools/colab/build_noguide_workflow.py --run NAME --first-frame START.png --sheet SHEET.png \
+  --sheet-prompt TEXT (--prompt TEXT | --prompt-file FILE) [--width 768 --height 448 --frames 97 --fps 24 --seed 42]
+```
+
+Local, standard library only. Writes `workflow_NAME.json` (output prefix `ltx_NAME`): vidgen's
+`ltx-2.3-union-control` graph with a sheet (`src/vidgen/videogen/ltx_graph.py`) without its control
+video (nodes 10, 11, 14 removed) and with the Ingredients IC-LoRA alone in `LTXICLoRALoaderModelOnly`;
+the first frame (strength 1) and the sheet guide stay, no audio. vidgen itself cannot make this shot
+(the workflow requires a guide). The two file names are names in `ComfyUI/input/`, both pictures at the
+clip's size. Upload them and the graph, submit with `run_job.py` (or `start_job.py` on the exec route)
+and fetch `ComfyUI/output/ltx_NAME_00001.mp4`: the cookbook's section 8 has the commands.

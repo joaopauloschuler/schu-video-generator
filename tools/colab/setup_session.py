@@ -1,4 +1,4 @@
-"""Find or create a Google Colab GPU session and set it up for docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md.
+"""Find or create a Google Colab GPU session and set it up for docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md.
 
     python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler]
                                        [--reserve-vram GB] [--no-vidgen | --vidgen-only]
@@ -63,7 +63,7 @@ PART_LOGS = {"ltx": ("setup.log", "download.log"), "image": ("setup_image.log",)
 PART_TITLES = {"ltx": "ComfyUI + LTX-2.3 weights", "image": "image models (Qwen-Image-Edit, Z-Image)"}
 VIDGEN_TITLE = "vidgen (this computer's code)"
 VIDGEN_SCRIPT = "setup_vidgen.sh"
-HOWTO = "docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md"
+HOWTO = "docs/COOKBOOK-3D-SCENE-TO-LTX-ON-COLAB.md"
 #: What the SSH check runs on the VM, and what it must print.
 SSH_CHECK = "echo vidgen-ssh-ok"
 #: ComfyUI and its VRAM sampler, as start_comfy.py starts them on the exec route.
@@ -383,7 +383,7 @@ class SessionSetup:
             reason = "setup.sh ran while it was running (new nodes load at start)"
         if reason and self.colab.via != "ssh":
             self.colab.say(f"   note: ComfyUI is not restarted on the exec route, but {reason}; "
-                           "restart it by hand (HOWTO) or use the SSH route")
+                           "restart it by hand (the LTX cookbook) or use the SSH route")
             return ""
         return reason
 
@@ -574,7 +574,7 @@ def summary_lines(session: str, gpu: str, report: Report, parts: list[str], elap
     if parts and via == "ssh":
         lines.append(f"   LTX shots (provider: comfyui, colab: {name}): vidgen remote {name} generate run --pay")
     elif parts:
-        lines += [f"   or go on with {HOWTO} section 6.3, e.g.",
+        lines += [f"   or go on with {HOWTO} section 13, e.g.",
                   f"   colab upload -s {name} ltx-inputs/render_121_960x512.mp4 /content/render_121_960x512.mp4"]
     lines.append(rate_line(report.hardware or gpu, comfy=bool(parts)))
     lines.append(f"stop it when you are done: colab stop -s {name}")
@@ -599,7 +599,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="setup_session.py",
         description="Find or create a Colab GPU session and set it up: ComfyUI, LTX-2.3 and image models "
-                    "(the LTX-2.3 HOWTO), and this checkout's vidgen (vidgen remote). Never stops the session.")
+                    "(the LTX cookbook), and this checkout's vidgen (vidgen remote). Never stops the session.")
     parser.add_argument("session", help="Colab session name (reused when `colab sessions` lists it)")
     parser.add_argument("--gpu", default="L4", choices=HARDWARE,
                         help="GPU for a new session (default L4); CPU: no GPU, only with --vidgen-only")
