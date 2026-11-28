@@ -1,4 +1,4 @@
-// vidgen's control of the page's own animations (DESIGN.md §118.8): CSS animations and
+// vidgen's control of the page's own animations: CSS animations and
 // transitions and the Web Animations API, SVG (SMIL) animation and <video> elements are held
 // still by vidgen and set to the clock's time before each screenshot. A fragment joined after
 // clock.js (it uses clock).

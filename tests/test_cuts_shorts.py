@@ -1,4 +1,4 @@
-"""Cuts and Shorts (DESIGN.md §101): ``cut:`` (scenes and beats of a longer video, with changes, a
+"""Cuts and Shorts: ``cut:`` (scenes and beats of a longer video, with changes, a
 hook and an end card), ``shorts:`` (the app's zones kept clear by overlays, lint
 ``shorts_safe_area`` / ``shorts_length``) and ``zoom`` with ``hold``."""
 

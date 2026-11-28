@@ -1,4 +1,4 @@
-"""The names the space modules know, read from their own source (DESIGN.md §122.12).
+"""The names the space modules know, read from their own source.
 
 A declarative ``space`` scene is checked by ``vidgen validate`` in Python, with no browser and no
 Node: its ready-made worlds, craft kinds, camera moves, phases, lenses, sky looks, star kinds and
@@ -16,6 +16,7 @@ naming the file (a broken install or a module that renamed it; a test reads ever
 
 from __future__ import annotations
 
+import json
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -305,10 +306,10 @@ def _kebab(name: str) -> str:
 
 @lru_cache(maxsize=1)
 def air_names() -> dict[str, Any]:
-    """The names and options of the Phase AO modules a ``space`` scene reaches (DESIGN.md §123.14), read
+    """The names and options of the Phase AO modules a ``space`` scene reaches, read
     from their shipped source as :func:`space_names` reads Phase AN's:
 
-    ``air_presets``, ``air_options`` (vidgen/space-air); ``sea_states``, ``waters``, ``sea_options``,
+    ``air_presets``, ``air_options``, ``air_shadows`` (vidgen/space-air); ``sea_states``, ``waters``, ``sea_options``,
     ``state_options`` (vidgen/space-sea); ``skies`` (name -> its decks' types), ``deck_types``,
     ``deck_options``, ``cloud_options``, ``tower_options``, ``lightning_options`` (vidgen/space-clouds);
     ``land_presets``, ``land_options``, ``land_parts`` (vidgen/space-land); ``world_options``,
@@ -317,7 +318,7 @@ def air_names() -> dict[str, Any]:
     ``effect_update`` (vidgen/space-effects); ``hulls`` (family -> its numbers), ``hull_lengths``,
     ``palettes``, ``hull_options``, ``dress_options``, ``dress_groups``, ``plume_modes``
     (vidgen/space-hull, -hull-detail); ``air_moves`` / ``ship_moves`` (the module's names -> their
-    options), ``sides``, ``wing_views`` (vidgen/space-camera-air); ``kit_parts`` (the craft kit's
+    options), ``sides``, ``wing_views``, ``operator`` (group -> its keys), ``operator_keys`` (vidgen/space-camera-air); ``kit_parts`` (the craft kit's
     parts, vidgen/space-craft)."""
     air, air_src = "vidgen/space-air", module_source("vidgen/space-air")
     sea, clouds, land = "vidgen/space-sea", "vidgen/space-clouds", "vidgen/space-land"
@@ -364,7 +365,7 @@ def air_names() -> dict[str, Any]:
     descent_mod = "vidgen/space-descent"
     return {
         "air_presets": constant_keys(air, "PRESETS"), "air_options": [*constant_strings(air, "AIR_OPTIONS")], "air_qualities": constant_strings(air, "QUALITIES"),
-        "exposures": constant_strings(air, "EXPOSURES"),
+        "exposures": constant_strings(air, "EXPOSURES"), "air_shadows": constant_keys(air, "SHADOWS"),
         "sea_states": constant_keys(sea, "STATES"), "waters": constant_keys(sea, "WATERS"), "sea_options": constant_keys(sea, "OPTIONS"),
         "state_options": [k for k in constant_strings(sea, "STATE_OPTIONS") if k != "name"],
         "skies": skies, "sky_towers": sky_towers, "deck_types": constant_keys(clouds, "DECKS"), "deck_options": constant_strings(clouds, "DECK_OPTIONS"),
@@ -384,6 +385,8 @@ def air_names() -> dict[str, Any]:
         "dress_groups": {"windows": constant_strings(detail, "WINDOW_KEYS"), "hangars": constant_strings(detail, "HANGAR_KEYS"), "engines": constant_strings(detail, "ENGINE_KEYS")},
         "air_moves": {m: move_options[m] for m in air_moves}, "ship_moves": {m: move_options[m] for m in ship_moves},
         "sides": constant_keys(cam, "SIDES"), "wing_views": constant_keys(cam, "WING_VIEWS"),
+        "operator": {k: list(object_entries(v, cam_src, cam)) for k, v in object_entries(constant_text(cam_src, "OPERATOR", cam), cam_src, cam).items()},
+        "operator_keys": constant_strings(cam, "OPERATOR_KEYS"),
         "kit_parts": _class_methods(craft_src, "CraftKit", craft), "kit_options": constant_keys(craft, "KIT_DEFAULTS"),
     }
 
@@ -403,7 +406,7 @@ PART_PREFIXES = {"planes": "plane-", "hulls": "hull-", "sea_states": "sea-", "la
 
 def yaml_names() -> dict[str, list[str]]:
     """Every name a ``space`` scene's YAML accepts for the new pictures, spelled as the YAML writes it (the
-    one registry the validation, the guide and the parts sheet agree on; DESIGN.md §123.14): air presets,
+    one registry the validation, the guide and the parts sheet agree on): air presets,
     sea states, waters, cloud skies, deck types, land presets, planes, hull families, palettes, camera
     moves (kebab-case, as the parts sheet names them: ``climb-through``), sides, wing views, the effects'
     groups and the craft kit's parts."""
@@ -415,5 +418,18 @@ def yaml_names() -> dict[str, list[str]]:
             "handovers": a["handovers"]}
 
 
-__all__ = ["MODULES", "PART_PREFIXES", "air_names", "array_strings", "constant_entries", "constant_keys", "constant_strings", "constant_text",
+@lru_cache(maxsize=1)
+def camera_looks() -> dict[str, Any]:
+    """The camera looks of ``vidgen/camera-looks``, read from its JSON-written constants:
+    ``looks`` (name -> {finish, operator}: the options each sets) and ``main`` (section -> group -> the key a
+    number sets: ``noise: 0.006`` is the look's noise at amount 0.006)."""
+    where, source = "vidgen/camera-looks", module_source("vidgen/camera-looks")
+    try:
+        return {"looks": json.loads(_strip_comments(constant_text(source, "CAMERA_LOOKS", where))),
+                "main": json.loads(_strip_comments(constant_text(source, "LOOK_MAIN", where)))}
+    except json.JSONDecodeError as error:
+        raise VidgenError(f"{where}: CAMERA_LOOKS and LOOK_MAIN must be written as JSON ({error})") from None
+
+
+__all__ = ["MODULES", "PART_PREFIXES", "air_names", "array_strings", "camera_looks", "constant_entries", "constant_keys", "constant_strings", "constant_text",
            "module_source", "object_entries", "space_names", "yaml_names"]

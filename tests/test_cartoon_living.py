@@ -1,4 +1,4 @@
-"""Step 120: props that move by themselves, indoors (DESIGN.md §69.54): a running clock's hands, a
+"""Step 120: props that move by themselves, indoors: a running clock's hands, a
 television's flickering picture, a lamp's glow, the switch_on / switch_off actions, and what Manim
 redraws on every frame for them. Two tiny renders: a prop switched on later is drawn as before
 until then, and a running clock changes nothing outside its own box."""

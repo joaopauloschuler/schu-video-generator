@@ -1,4 +1,4 @@
-"""``cell``: a cell in physical scale (DESIGN.md §95): its compartments, membranes and contents
+"""``cell``: a cell in physical scale: its compartments, membranes and contents
 drawn from the cell world (``vidgen.cellworld``: the model and its location rules, no manim)
 by ``vidgen.cell_vector``, with a camera that zooms from a tissue to the lipids of one membrane
 (``zoom_to``, ``scenes/cell_actions.py``), level-of-detail switching as it goes, screen-sized

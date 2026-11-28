@@ -1,4 +1,4 @@
-"""Orchestral percussion for score files (DESIGN.md §120.6): timpani and concert toms played by
+"""Orchestral percussion for score files: timpani and concert toms played by
 note name, a taiko, a concert bass drum, a frame drum and a snare drum played as drum steps, a
 suspended cymbal and a tam-tam. No samples: every drum is a sum of the modes its head or its
 metal really has.

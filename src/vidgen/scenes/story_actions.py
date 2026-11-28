@@ -1,4 +1,4 @@
-"""Story actions of a ``stage`` (DESIGN.md §100.7, §100.9, §100.10, §102.15): ``alarm`` and
+"""Story actions of a ``stage``: ``alarm`` and
 ``shutters`` on the set, ``materialise`` / ``dematerialise``, ``hold_hands`` / ``let_go_hands`` and
 ``kiss`` on characters.
 Written against ``vidgen.api`` only, like project actions; the stage does the work
@@ -201,7 +201,7 @@ class KissAction(_Acting):
         anims: list[Animation] = []
         for character in _characters(scene, targets, "kiss")[:1]:
             # hands held by either let go first (their arms back at their sides): a hold keeps
-            # stepping them to its own places, which a kiss's step in would fight (§102.19)
+            # stepping them to its own places, which a kiss's step in would fight
             for figure, hand in scene.let_go_hands([character.name, self.options.with_]):
                 rest = {part: PartPose() for part in figure.reached_parts(hand, figure.hand_point(hand))}
                 state = figure.state()

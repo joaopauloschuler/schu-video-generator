@@ -1,4 +1,4 @@
-"""How the Sun, the planets, the Moon and the Galilean moons turn (Step 367, DESIGN.md §122.2):
+"""How the Sun, the planets, the Moon and the Galilean moons turn (Step 367):
 the direction of each body's north pole, the angle of its prime meridian on a date, its
 sidereal rotation period, its axial tilt (obliquity) and its radii. No manim.
 

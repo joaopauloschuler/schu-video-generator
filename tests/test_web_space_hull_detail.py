@@ -1,4 +1,4 @@
-"""The fine detail of giant hulls, ``vidgen/space-hull-detail`` (Step 389, DESIGN.md §123.11): the module
+"""The fine detail of giant hulls, ``vidgen/space-hull-detail`` (Step 389): the module
 is served by its import name and builds on ``vidgen/space-hull`` and ``vidgen/baked``; its parts are
 registered; in Node (when it is installed): window rows follow the decks (a floor's height apart) and a
 region's use (dense on crew decks, none on tanks, radiators and engines), the lit share comes from the

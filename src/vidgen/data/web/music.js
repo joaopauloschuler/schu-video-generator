@@ -1,4 +1,4 @@
-// vidgen's music helper for a `web` scene with `music_data:` (DESIGN.md §120.8). Run by Chromium
+// vidgen's music helper for a `web` scene with `music_data:`. Run by Chromium
 // after vidgen's own page script, only on pages of such scenes: it turns the data vidgen sends
 // (`info.music`) into `ctx.music`, with functions reading the video's music at a song time.
 //

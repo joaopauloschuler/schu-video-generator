@@ -1,5 +1,5 @@
 """How many frames a scene drawn in Chromium needs, and its beats on the scene's clock
-(``3d`` §114.1, ``web`` §118.1)."""
+(``3d``, ``web``)."""
 
 from __future__ import annotations
 

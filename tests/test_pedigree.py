@@ -1,4 +1,4 @@
-"""Step 215: the ``pedigree`` scene type (DESIGN.md §96.8): the chart parsed and checked (compact
+"""Step 215: the ``pedigree`` scene type: the chart parsed and checked (compact
 lines, two fathers, cycles, twins, NSGC ids), the deterministic layout by generation (sibships in
 birth order, partners beside, consanguineous lines meeting in the middle, NSGC numbering), the
 exact analysis of the six modes of inheritance on textbook pedigrees with the reason a mode is

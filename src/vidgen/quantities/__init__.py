@@ -1,4 +1,4 @@
-"""Quantities with units for worked calculations (Phase W, DESIGN §97.9), without manim and
+"""Quantities with units for worked calculations (Phase W), without manim and
 without a new dependency: units and dimensions (:mod:`.units`), constants with their sources
 (:mod:`.constants`), quantities carrying exactness and significant figures (:mod:`.quantity`),
 expressions evaluated on them and written in TeX (:mod:`.expr`) and worked calculations

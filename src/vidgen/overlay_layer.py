@@ -1,4 +1,4 @@
-"""Drawing overlays into a scene's frames (DESIGN.md §41).
+"""Drawing overlays into a scene's frames.
 
 :class:`OverlayLayer` sits between Manim's renderer and the frames it writes: it wraps
 ``renderer.add_frame`` (outside :class:`vidgen.capture.FrameCapture`, so stills, the layout dump
@@ -14,7 +14,7 @@ exact colours and alpha for both Cairo's vector drawing and Manim's image drawin
 cropped to its pixel box (a thin progress bar costs a thin strip, not a whole frame), and cached
 as a premultiplied RGBA patch; compositing a frame blends the shown overlays' patches in order.
 
-A push or wipe into the scene (DESIGN.md §50) moves the pictures, so overlays must not be in
+A push or wipe into the scene moves the pictures, so overlays must not be in
 them: :meth:`OverlayLayer.split_head` leaves the scene's first frames bare and writes the
 overlays of those frames into a separate RGBA clip, which the join draws over the moving
 pictures.
@@ -92,10 +92,10 @@ class OverlayLayer:
     """The overlays of one scene render, composited into every frame its renderer writes.
 
     ``following`` (with ``start`` and ``cut``, video seconds): when a crossfade overlaps the
-    scene's end with the next scene's start (DESIGN.md §49), the next scene's overlays, drawn
+    scene's end with the next scene's start, the next scene's overlays, drawn
     instead of the scene's own from ``cut`` (the next scene's start) on. Both scenes then show the
     same overlays in every frame they share, so blending them leaves the overlays unchanged.
-    Without ``following`` (a push or wipe out of the scene, DESIGN.md §50) nothing is drawn from
+    Without ``following`` (a push or wipe out of the scene) nothing is drawn from
     ``cut`` on: the next scene's render provides those frames' overlays (:meth:`split_head`).
     ``overlays`` / ``mobjects`` are the scene's own (what it reserves room for and avoids).
     """
@@ -177,7 +177,7 @@ class OverlayLayer:
 
     def face_boxes(self) -> list[tuple[float, float, float, float]]:
         """The boxes ``(left, bottom, right, top)`` of the heads of the scene's characters on
-        screen now, in the overlays' whole-frame units (DESIGN.md §102.8): those drawn, not
+        screen now, in the overlays' whole-frame units: those drawn, not
         hidden by a shot and not faded out (a hologram not yet materialised)."""
         from manim import config
 
@@ -281,7 +281,7 @@ class OverlayLayer:
         return patch
 
     def _patches(self, k: int, state: Hashable) -> list[_Patch]:
-        """Overlay ``k`` drawn in ``state``: one patch, or one per shown piece (DESIGN.md §102.8)."""
+        """Overlay ``k`` drawn in ``state``: one patch, or one per shown piece."""
         if not self._all[k].pieces:
             return [self._patch(k, state)]
         return [self._patch(k, s, piece) for piece, s in enumerate(state) if s is not None]   # type: ignore[arg-type]
@@ -333,7 +333,7 @@ class OverlayLayer:
         out[:, :, 3] = np.clip(np.rint(alpha[:, :, 0]), 0, 255).astype(np.uint8)
         return out
 
-    # ----- a push / wipe into the scene (DESIGN.md §50) ----------------------------------------
+    # ----- a push / wipe into the scene ----------------------------------------
 
     def split_head(self, frames: int, path: Path) -> None:
         """Write the scene's first ``frames`` frames without overlays and those frames' overlays

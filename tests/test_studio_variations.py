@@ -1,4 +1,4 @@
-"""``vidgen studio`` Step 199 (DESIGN.md §94.17): variations — the operators (pure, deterministic
+"""``vidgen studio`` Step 199: variations — the operators (pure, deterministic
 edits of the score text), four of different kinds for every built-in template, the batches the
 studio renders and checks in the background, keeping one, "more like this", the HTTP routes and
 the MCP side (``agent_variations``)."""

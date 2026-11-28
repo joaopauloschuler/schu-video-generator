@@ -1,4 +1,4 @@
-"""Nucleic-acid sequences (DESIGN.md §95.9): alphabets of DNA and RNA, complements (the
+"""Nucleic-acid sequences: alphabets of DNA and RNA, complements (the
 partner strand runs antiparallel: written 5′→3′ it is the reverse complement), the standard
 genetic code and how a tRNA's anticodon reads codons (Crick's wobble at the anticodon's first,
 5′ base). No manim."""

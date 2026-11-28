@@ -1,4 +1,4 @@
-"""Translations: a video's texts in another language from a translation file (DESIGN.md §54).
+"""Translations: a video's texts in another language from a translation file.
 
 A variant (or the config itself) names a YAML **translation file** with ``translations:``.
 Every translatable text of the config is listed there under a stable **key** — its path in the
@@ -1001,7 +1001,7 @@ def _few(keys: Sequence[str]) -> str:
 
 
 def translation_warnings(project: Project) -> list[str]:
-    """``vidgen validate`` warnings about the project's translation file (DESIGN.md §54): texts
+    """``vidgen validate`` warnings about the project's translation file: texts
     not translated (shown in the source language), stale translations (not used), entries that
     name nothing, places that name a translated text but are not updated, a file language other
     than the config's. Empty without ``translations:``."""
@@ -1052,7 +1052,7 @@ def translation_warnings(project: Project) -> list[str]:
 
 def language_warnings(project: Project) -> list[str]:
     """A variant in another language than the base config that keeps the base's pronunciation
-    entries unchanged (they were written for the base language; DESIGN.md §54)."""
+    entries unchanged (they were written for the base language)."""
     from vidgen.languages import primary_language
     from vidgen.pronunciation import applies_to
 

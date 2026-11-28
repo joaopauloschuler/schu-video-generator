@@ -1,4 +1,4 @@
-# A small original demo of the score format (DESIGN.md §93): a steady, hopeful loop in E minor.
+# A small original demo of the score format: a steady, hopeful loop in E minor.
 # Render it: vidgen music render tests/data/studio/tidewater.yaml --out tidewater.wav
 version: 1
 title: Tidewater

@@ -1,4 +1,4 @@
-"""``vidgen lint``: automatic checks of a rendered video's layout and timing (DESIGN.md §16, §17).
+"""``vidgen lint``: automatic checks of a rendered video's layout and timing.
 
 Layout rules read the layout dumps of the beat-end stills (:mod:`vidgen.introspect`), timing
 rules each scene's activity file (:mod:`vidgen.activity`); both report

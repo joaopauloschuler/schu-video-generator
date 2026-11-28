@@ -1,4 +1,4 @@
-"""Track effects and movement of score files (DESIGN.md §93.7): values that move along a section
+"""Track effects and movement of score files: values that move along a section
 (curves), filter sweeps, side-chain ducking, gates, echo, reverb and stereo width.
 
 A curve is a number (constant), ``{from: a, to: b}`` (a straight ramp over the section) or a list
@@ -40,7 +40,7 @@ SWEEP_MEMORY = 400 << 20
 #: numpy's FFT of a length with a prime factor above this is slower than the same filter on a
 #: quick length twice as long (measured on 2.5 M samples: a factor 601 1.4 s against 0.8 s,
 #: 1607 2.7 s, 307 0.73 s against 0.77 s); many tempos give one (112 BPM over 24 bars is
-#: 2⁹·3·1607 samples), and its memory grows too (DESIGN.md §94.19).
+#: 2⁹·3·1607 samples), and its memory grows too.
 SLOW_FFT_PRIME = 500
 #: Buffers shorter than this are filtered at their own length whatever it is (quick anyway).
 FAST_FFT_MIN = 1 << 16
@@ -79,7 +79,7 @@ class CircularFFT:
     transformed, and the result folded back around ``n`` (what spilled past the end added at the
     start, what spilled before the start at the end). The two agree to about 1e-13 of the
     loudest sample (the filters' responses die out long before ``m - n``); ``fast`` is the
-    studio's choice (DESIGN.md §94.19), never a video's: videos and beds keep the exact
+    studio's choice, never a video's: videos and beds keep the exact
     samples. ``spans``: how many ``n`` the linear result reaches (2 for a convolution of two
     buffers of ``n``)."""
 

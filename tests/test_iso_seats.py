@@ -1,4 +1,4 @@
-"""Sitting on, lying on and using the objects of an iso place (DESIGN.md §105.2): the seats and
+"""Sitting on, lying on and using the objects of an iso place: the seats and
 their facings, the parts drawn over a sitter, the checks of ``sit_on`` / ``lie_on`` / ``use`` /
 ``stand_up`` and one small render."""
 

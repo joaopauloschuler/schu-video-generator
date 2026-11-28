@@ -1,4 +1,4 @@
-"""Platform worlds (DESIGN.md §86): the world model (levels, bodies, story props) and its rules
+"""Platform worlds: the world model (levels, bodies, story props) and its rules
 (:mod:`vidgen.world.moves`: walking, climbing and jumping, picking up coins and stars, closed doors
 and blockers in the way; :mod:`vidgen.world.story_props`: doors, keys, blockers). Plain data and
 pure functions: nothing here imports manim, so a game could reuse them."""

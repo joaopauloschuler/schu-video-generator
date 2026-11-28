@@ -1,4 +1,4 @@
-"""The cartoon host beside any scene (``host:``, DESIGN.md §71): config and merging, the column /
+"""The cartoon host beside any scene (``host:``): config and merging, the column /
 band it takes from the scene's region per format, who speaks, lint, and one tiny render."""
 
 from __future__ import annotations

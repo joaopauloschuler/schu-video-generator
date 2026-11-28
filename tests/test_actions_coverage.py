@@ -1,4 +1,4 @@
-"""Per-beat actions, Step 24 (DESIGN.md §27): targets of every built-in scene type (kept in sync
+"""Per-beat actions, Step 24: targets of every built-in scene type (kept in sync
 with the table in docs/CONFIG.md), ``zoom`` (camera in and back), ``transform``, dimming that
 never compounds, highlights that undim, images, the bar outline, and the lint of zoomed stills."""
 

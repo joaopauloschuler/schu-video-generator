@@ -1,4 +1,4 @@
-// The studio's JSON API (DESIGN.md §94.2): every call returns `result` or throws an Error whose
+// The studio's JSON API: every call returns `result` or throws an Error whose
 // message is the server's (a score's problems, a bad request...). When the server does not answer
 // at all (stopped, or the computer slept), the error says so and the page hears about it through
 // `onConnection` (Step 200: the "not answering" banner and its retry).

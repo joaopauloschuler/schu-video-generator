@@ -1,4 +1,4 @@
-"""Gene expression in a ``molecule`` scene (DESIGN.md §95.11): with a ``gene``, the scene is a
+"""Gene expression in a ``molecule`` scene: with a ``gene``, the scene is a
 close-up of one gene's expression — the DNA with its promoter, exons and introns; RNA polymerase
 II and the general transcription factors; the pre-mRNA, its cap, splicing, its 3′ end; the
 nuclear pore; the ribosome with its tRNAs; the ER membrane with SRP, Sec61 and the

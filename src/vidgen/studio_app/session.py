@@ -1,10 +1,10 @@
-"""Studio sessions on disk (DESIGN.md §94.3): one folder per piece being worked on, holding every
+"""Studio sessions on disk: one folder per piece being worked on, holding every
 version of its score file as written (comments kept), the session's facts in ``session.json``
 and the render cache. Versions are never changed once written; a new edit is a new version.
 
 Layout (``<studio>`` is the project's ``build/studio``, or ``studio`` in vidgen's cache folder)::
 
-    <studio>/open.json                      the running studio: url, session, pid (for MCP, §94.8)
+    <studio>/open.json                      the running studio: url, session, pid (for MCP)
     <studio>/sessions/<id>/session.json     facts and the version list
     <studio>/sessions/<id>/versions/v0001.yaml
     <studio>/sessions/<id>/renders/<key>.wav, <key>.json, <key>-<section>.wav
@@ -68,7 +68,7 @@ def _now() -> str:
 @dataclass(frozen=True)
 class Version:
     """One version of the session's score. ``origin``: ``preset`` (a built-in bed's template),
-    ``text`` (a score given as text), later ``edit``, ``agent``, ``variation`` (§94.4)."""
+    ``text`` (a score given as text), later ``edit``, ``agent``, ``variation``."""
 
     number: int
     parent: int | None
@@ -252,7 +252,7 @@ def list_sessions(studio: Path, limit: int = 50) -> list[dict[str, Any]]:
 
 
 def write_open_marker(studio: Path, url: str, session_id: str | None) -> None:
-    """Record the running studio in ``<studio>/open.json`` (read by MCP tools, §94.8)."""
+    """Record the running studio in ``<studio>/open.json`` (read by MCP tools)."""
     doc = {"url": url, "session": session_id, "pid": os.getpid(), "started": _now()}
     write_text_atomic(studio / OPEN_FILE, json.dumps(doc, indent=2) + "\n")
 

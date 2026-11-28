@@ -1,4 +1,4 @@
-"""The ``particles`` beat action (DESIGN.md §69.9): rain, snow, sparkles, dust, confetti, smoke,
+"""The ``particles`` beat action: rain, snow, sparkles, dust, confetti, smoke,
 bubbles, leaves or wind streaks over any scene type from ``at`` of a beat, written against ``vidgen.api`` only, like
 project actions. The ``stage`` scene's ``particles`` param shows the same fields for the whole
 scene."""
@@ -66,10 +66,10 @@ class Particles(Action):
         return found
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
-        """Rain, snow, leaves and streaks stay out of a stage's room (DESIGN.md §69.42)."""
+        """Rain, snow, leaves and streaks stay out of a stage's room."""
         if getattr(params, "room", None) is not None and self.kind() in OUTDOOR_PARTICLES:
             return [("target", f"{self.kind()} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")]
-        if getattr(params, "iso", None) is not None:   # an iso place (DESIGN.md §89.11)
+        if getattr(params, "iso", None) is not None:   # an iso place
             problem = iso_particle_problem(params.iso, self.kind(), self.options)
             return [] if problem is None else [("target", problem)]
         return []

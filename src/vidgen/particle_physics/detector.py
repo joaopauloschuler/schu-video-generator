@@ -1,5 +1,4 @@
-"""A schematic cylindrical detector and simulated events for event displays (Phase Y, Step 240;
-DESIGN §99.9). No manim.
+"""A schematic cylindrical detector and simulated events for event displays (Phase Y, Step 240). No manim.
 
 **The detector is schematic**: a generic general-purpose layout (sizes of our own choosing, not
 any experiment's): a pixel and a strip tracker inside a solenoid, an electromagnetic (ECAL) and a

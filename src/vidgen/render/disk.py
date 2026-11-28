@@ -1,4 +1,4 @@
-"""Disk use of a render (DESIGN.md §120.9): the frames clips ``web`` and ``3d`` scenes keep until
+"""Disk use of a render: the frames clips ``web`` and ``3d`` scenes keep until
 they play them are by far the largest files of a build folder (about 1 byte per pixel and
 frame lossless for a detailed WebGL page, 26 MB per second at 720p30), so ``vidgen render``
 estimates them before it starts and warns when the disk has less room, reports the build
@@ -24,7 +24,7 @@ from vidgen.project import Project
 
 log = logging.getLogger("vidgen.render")
 
-#: Bytes per pixel and frame of a frames clip, measured on Escapement's WebGL frames (§120.9):
+#: Bytes per pixel and frame of a frames clip, measured on Escapement's WebGL frames:
 #: FFV1 0.92-1.01 (26-28 MB/s at 1280x720x30, 57.6 MB/s at 1920x1080x30), compact 0.20-0.22.
 #: A flat page (text, slides) compresses far better; these are the upper end.
 BYTES_PER_PIXEL = {"lossless": 1.0, "compact": 0.22}

@@ -1,4 +1,4 @@
-"""Drawing the notation of Feynman diagrams (Phase Y, Step 238; DESIGN §99.6): lines along a
+"""Drawing the notation of Feynman diagrams (Phase Y, Step 238): lines along a
 path (straight or a gentle arc) — fermions solid with an arrow on the fermion-number flow,
 photons and W / Z wavy, gluons as coils, the Higgs boson dashed — vertex dots, particle labels
 (antiparticle bars drawn as lines), hadron brackets. Used by ``scenes/feynman.py``."""

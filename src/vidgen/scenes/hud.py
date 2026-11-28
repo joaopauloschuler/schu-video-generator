@@ -1,10 +1,10 @@
-"""The ``hud`` overlay (DESIGN.md §102.5): a heads-up display over the frame — what an implant, a
+"""The ``hud`` overlay: a heads-up display over the frame — what an implant, a
 visor or a robot's eye shows. Corner brackets and faint scan lines over the frame, a blinking
 alert, readout lines appearing one by one, a heart monitor (a scrolling trace, its rate rising,
 beats skipped) and a scanner's meter (a live wave that can spike off its scale). It belongs to a
 scene like a lower third (``scene``, ``at``, ``duration``) and boots in with a flicker.
 
-Its texts keep off the characters' faces (DESIGN.md §102.8): the overlay layer tells it where the
+Its texts keep off the characters' faces: the overlay layer tells it where the
 heads are on screen at each frame (:attr:`Overlay.faces`), and the alert and the lines go to the
 free corner covering the least of a face (:func:`vidgen.hud.pick_place`). It is drawn in pieces
 (:attr:`Overlay.pieces`), so its still frame is drawn once and only the small meters each frame.
@@ -88,7 +88,7 @@ class Hud(Overlay):
     layer = 9   # under the captions and the hook
     lint_skip = ("contrast",)   # glowing lines over a scene; its text stands on dark plates
     avoids_faces = True
-    #: drawn in four pieces (DESIGN.md §102.8): the frame and the panels' plates (still), the
+    #: drawn in four pieces: the frame and the panels' plates (still), the
     #: alert and the lines (changing when they blink, flicker in or move), the heart monitor and
     #: the scan meter (moving on every frame, each a small patch)
     pieces = 4
@@ -277,7 +277,7 @@ class Hud(Overlay):
     # ----- time -------------------------------------------------------------------------------
 
     def state(self, t: float) -> Hashable | None:
-        """One state per piece (DESIGN.md §102.8), each ending with the boot level (1: fully on,
+        """One state per piece, each ending with the boot level (1: fully on,
         less while it boots in with a flicker or fades): the still frame; the texts (where the
         alert and the lines stand, whether the alert is lit, how far each line has come in); the
         heart monitor's and the scan meter's frame since it came on (they move on every frame)."""

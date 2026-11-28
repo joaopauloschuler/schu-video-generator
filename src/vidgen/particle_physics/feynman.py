@@ -1,5 +1,4 @@
-"""Feynman diagrams as data, with the Standard Model's vertex rules (Phase Y, Step 238; DESIGN
-§99.5). No manim; the ``feynman`` scene draws them and :mod:`.feynman_layout` places them.
+"""Feynman diagrams as data, with the Standard Model's vertex rules (Phase Y, Step 238). No manim; the ``feynman`` scene draws them and :mod:`.feynman_layout` places them.
 
 A :class:`Diagram` is a list of lines (:class:`DiagramLine`), each a particle from
 :mod:`.data` running **forward in time** from ``start`` to ``end``: a vertex id, ``in`` (an

@@ -1,5 +1,5 @@
 # Half-life: a short narrated physics explainer (about 2.5 min) that uses Phase W's science scene
-# types together (docs/CONFIG.md `plot` and `calculation`; DESIGN §97; the craft:
+# types together (docs/CONFIG.md `plot` and `calculation`; the craft:
 # docs/COOKBOOK-SCIENCE-CHARTS.md):
 #   - a live `plot` of a Monte Carlo decay: 1000 and 20 nuclei, each with a random decay time,
 #     growing beside the exponential law (two panels sharing the time axis)

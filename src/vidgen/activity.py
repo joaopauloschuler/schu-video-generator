@@ -1,7 +1,6 @@
 """What happens over time in a rendered scene: the input of ``vidgen lint``'s timing rules.
 
-Written by the worker next to the stills and the layout dump (``<render_dir>/activity/<scene>.json``,
-DESIGN.md §17) whenever stills are captured:
+Written by the worker next to the stills and the layout dump (``<render_dir>/activity/<scene>.json``) whenever stills are captured:
 
 - **beats**: each narrated beat's start, narration end (``start + d``), whether ``d`` came from
   its MP3 or the word-count estimate, and ``busy``: how long the beat's own code (its
@@ -77,7 +76,7 @@ class MotionTrack:
 
 
 def _joined_keys(scene: NarratedScene, beat_id: str) -> dict[str, Any]:
-    """For beats that overlap (DESIGN.md §69.34): ``window`` (seconds until the next beat, which
+    """For beats that overlap: ``window`` (seconds until the next beat, which
     starts before this one ends), ``overlap`` (seconds this one starts before the line before it
     ends) and ``interrupt``; nothing for other beats."""
     beat = scene.beat(beat_id)
@@ -94,7 +93,7 @@ def _joined_keys(scene: NarratedScene, beat_id: str) -> dict[str, Any]:
 
 
 def activity_document(scene: NarratedScene, motion: MotionTrack, fps: int) -> dict[str, Any]:
-    """The scene's activity file content (see the module docstring and DESIGN.md §17)."""
+    """The scene's activity file content (see the module docstring)."""
     sources = {}
     for beat in scene.beats:
         sources[beat.id] = "audio" if scene.beat_audio(beat) is not None else "estimate"
@@ -135,6 +134,6 @@ def activity_document(scene: NarratedScene, motion: MotionTrack, fps: int) -> di
         "beats": beats,
         "plays": plays,
         "motion": motion.to_json(),
-        # the last frames a crossfade into the next scene covers (DESIGN.md §49): they blend away
+        # the last frames a crossfade into the next scene covers: they blend away
         "overlap_out": scene.transition_out.overlap if scene.transition_out is not None else 0,
     }

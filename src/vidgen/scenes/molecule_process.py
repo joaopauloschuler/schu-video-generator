@@ -1,4 +1,4 @@
-"""Playing transport plans in a ``molecule`` scene (DESIGN.md §95.10): the renderer of the plans
+"""Playing transport plans in a ``molecule`` scene: the renderer of the plans
 of :mod:`vidgen.cellworld.transport`. One :class:`PlanPlayer` animation runs a whole plan: the
 proteins morph between their states (each piece of a glyph to its counterpart in the next state,
 pieces without one fading out or in), particles follow their planned paths (fading in where they

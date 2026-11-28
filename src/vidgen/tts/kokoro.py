@@ -1,5 +1,4 @@
-"""Kokoro-82M text to speech on this computer: free, offline after the first download
-(DESIGN.md §68).
+"""Kokoro-82M text to speech on this computer: free, offline after the first download.
 
 ``voice: {provider: kokoro, voice: af_heart, speed: 1.0, lang: a, device: cpu}`` voices every
 beat with hexgrad's Kokoro-82M (https://huggingface.co/hexgrad/Kokoro-82M, Apache-2.0) through
@@ -45,7 +44,7 @@ SAMPLE_RATE = 24000
 NEWEST_PYTHON = (3, 12)
 #: Languages read through espeak-ng (English uses it only for words missing from its dictionary).
 ESPEAK_LANGS = frozenset({"e", "f", "h", "i", "p"})
-#: Why Japanese is not brought by a plain install (DESIGN.md §68).
+#: Why Japanese is not brought by a plain install.
 JAPANESE_NOTE = (
     "pyopenjtalk has no pre-built release, so it would make every install need a C++ compiler and "
     f"{DIST_NAME} does not bring it: use another voice provider for Japanese"
@@ -308,7 +307,7 @@ def alignment_from_tokens(text: str, timed: Sequence[tuple[str, float, float]]) 
 
 class KokoroProvider:
     """Synthesise speech with one Kokoro voice (voice name or blend, language, speed) and an
-    ``emotion`` (DESIGN.md §72: speed, pitch, gain, pauses; ``None`` or neutral: none) on this
+    ``emotion`` (speed, pitch, gain, pauses; ``None`` or neutral: none) on this
     computer. Constructing it loads nothing; the first beat loads the shared engine of
     ``voice.device`` (``engine`` replaces it, ``ffmpeg`` the ffmpeg used for MP3: tests).
     Neighbouring beats are not used (each beat is voiced on its own)."""
@@ -318,7 +317,7 @@ class KokoroProvider:
     timings_included = True
     #: The phonemes of the last :meth:`synthesize_timed` call, ``(phonemes, start, end)`` in
     #: seconds: per token for English, per chunk otherwise (``vidgen tts`` builds the beat's
-    #: viseme track from them, DESIGN.md §69.4).
+    #: viseme track from them).
     last_phonemes: list[tuple[str, float, float]]
 
     def __init__(
@@ -354,7 +353,7 @@ class KokoroProvider:
         return min(max(self.speed * factor, 0.25), 4.0)
 
     def cache_key(self, text: str) -> str:
-        """sha1 of ``json(spec, sorted keys) | text`` (DESIGN.md §68)."""
+        """sha1 of ``json(spec, sorted keys) | text``."""
         head = json.dumps(self.spec(), sort_keys=True, ensure_ascii=False)
         return hashlib.sha1(f"{head}|{text}".encode("utf-8")).hexdigest()
 

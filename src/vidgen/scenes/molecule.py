@@ -1,4 +1,4 @@
-"""``molecule``: a molecular close-up in physical scale (DESIGN.md §95.9, §95.10): molecules,
+"""``molecule``: a molecular close-up in physical scale: molecules,
 drawn from the shared catalog and glyphs of ``vidgen.cellworld`` (DNA, RNAs, nucleosomes, chromatin,
 proteins, receptors, channels, carriers, pumps, ATP synthase, G proteins, small molecules and
 ions) in a solution or a membrane (a lipid bilayer between its two compartments), with

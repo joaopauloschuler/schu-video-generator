@@ -1,4 +1,4 @@
-"""The ``standard_model`` scene type (Phase Y, Step 237; DESIGN §99.4): params, targets, the
+"""The ``standard_model`` scene type (Phase Y, Step 237): params, targets, the
 actions' checks, and tiny renders in 16:9 and 9:16 (cells laid out without overlaps, the
 antiparticles action, couplings)."""
 

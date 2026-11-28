@@ -1,4 +1,4 @@
-"""Drawing a cell world with Manim (DESIGN.md §95.6): the renderer of the three-layer design
+"""Drawing a cell world with Manim: the renderer of the three-layer design
 (the world and its rules are in :mod:`vidgen.cellworld`, without manim). Kept as the module
 ``vidgen.api`` imports from; the drawings live in :mod:`vidgen.cell_draw`."""
 

@@ -1,4 +1,4 @@
-"""Step 274: ambient life on an iso place (DESIGN.md §105.7) — where background walkers, birds, a
+"""Step 274: ambient life on an iso place — where background walkers, birds, a
 cat, ducks, butterflies and fireflies go (deterministic, away from the main characters), what
 they look like, the stage's ``ambient`` setting and its checks, and a tiny render."""
 

@@ -1,4 +1,4 @@
-"""vidgen's opening title and end card for films (Step 364, DESIGN.md §121.7): the module
+"""vidgen's opening title and end card for films (Step 364): the module
 ``vidgen/title-cards``, served by name through the import map and in a page's loaded-files record;
 its options checked with a "did you mean", its timing and layout (16:9 and 9:16) in Node when it is
 installed. In Chromium (``slow``): a page with both cards draws the same frames twice, the card
@@ -141,4 +141,6 @@ def test_the_cookbook_guide_and_reference_describe_the_cards() -> None:
     assert "github" not in section.lower()
     assert "COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films" in (ROOT / "docs" / "COOKBOOK.md").read_text(encoding="utf-8")
     assert "**Opening titles and end cards: `vidgen/title-cards`**" in (ROOT / "docs" / "CONFIG.md").read_text(encoding="utf-8")
-    assert "**Opening titles and end cards: `vidgen/title-cards`.**" in (ROOT / "src" / "vidgen" / "data" / "guide" / "AGENTS.md").read_text(encoding="utf-8")
+    from vidgen.guide import find_topic
+
+    assert "**Opening titles and end cards: `vidgen/title-cards`.**" in find_topic("web").text

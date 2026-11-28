@@ -1,4 +1,4 @@
-"""Drawing in the isometric view with Pillow (DESIGN.md §89.6), in schu-video-generator's flat cartoon look:
+"""Drawing in the isometric view with Pillow, in schu-video-generator's flat cartoon look:
 filled shapes with the characters' ink outline. No manim.
 
 Shapes are given in the world (tile units, :mod:`vidgen.world.iso_view`) and drawn onto an
@@ -43,8 +43,8 @@ def shade(color: str, amount: float) -> str:
 class Poly:
     """A flat polygon in the world; ``ink`` outlines every edge (``True``), none (``False``) or
     the edges marked (edge ``i`` runs from point ``i`` to the next); ``glow``: a light (a lit
-    window or lantern) that the stage's light does not dim (DESIGN.md §89.11). Settling snow
-    (DESIGN.md §90.3) lies on it when it faces up (:func:`upward`) and ``holds_snow`` (water does
+    window or lantern) that the stage's light does not dim. Settling snow
+    lies on it when it faces up (:func:`upward`) and ``holds_snow`` (water does
     not); ``snow_cap``: on an upright one (a pine's tier), snow covers that share of it from its
     top down."""
 
@@ -73,7 +73,7 @@ class Disc:
     ``radius`` in tile units; with ``opacity`` under 1 it tints what is under it (a shadow, a
     pool of light); ``glow`` and ``holds_snow`` as a :class:`Poly`'s; ``pool``: a lamp's pool
     of light, drawn only in the picture of the pools (:func:`draw_shapes`), which the stage shows
-    as strong as its light is dark (DESIGN.md §104)."""
+    as strong as its light is dark."""
 
     centre: Point3
     radius: float
@@ -227,7 +227,7 @@ def _ink_runs(points: list[tuple[float, float]], ink: bool | tuple[bool, ...]) -
 #: What a shape that is not a light paints in a picture of the lights (:func:`draw_shapes` with
 #: ``glow``): nothing, so a light behind it stays hidden.
 CLEAR = (0, 0, 0, 0)
-#: Settling snow on an iso place (DESIGN.md §90.3): its colour (as on a plain stage), the least
+#: Settling snow on an iso place: its colour (as on a plain stage), the least
 #: share of a polygon's normal that points up for snow to lie on it (a roof's slope, not a wall),
 #: how much darker it is on a slope facing away from the viewer, and the arc (degrees each side of
 #: the top) of the cap on a round thing's every puff.
@@ -282,12 +282,12 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
     """An RGBA picture of ``shapes`` (painted in order) on ``canvas``, transparent elsewhere;
     ``outline`` multiplies :data:`ISO_OUTLINE`. Drawn ``supersample`` times larger and reduced
     with a box filter. With ``image`` (the canvas's size) the shapes go over it. ``glow``: a
-    picture of the lights only (DESIGN.md §89.11): the shapes marked ``glow`` as drawn, every
+    picture of the lights only: the shapes marked ``glow`` as drawn, every
     other shape (but a tint) clearing what it covers, so a light is seen only where the whole
-    picture shows it. ``snow``: a picture of the snow lying on the shapes (DESIGN.md §90.3,
-    :func:`_snow`), each shape clearing the snow behind it. ``pool``: a picture of the pools of
+    picture shows it. ``snow``: a picture of the snow lying on the shapes
+    (:func:`_snow`), each shape clearing the snow behind it. ``pool``: a picture of the pools of
     light only (discs marked ``pool``), every other shape (but a tint) clearing what it covers;
-    the other pictures leave the pools out (DESIGN.md §104)."""
+    the other pictures leave the pools out."""
     ss = supersample
     big = Image.new("RGBA", (canvas.width * ss, canvas.height * ss), (0, 0, 0, 0))
     draw = ImageDraw.Draw(big)
@@ -302,7 +302,7 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
     pad = ISO_OUTLINE * outline * 3 + 2 / canvas.scale   # the outline and a line's width reach past the fill
     for shape in shapes:
         if not _on_canvas(shape, canvas, pad):
-            continue   # nothing of it on this canvas (a tile of a large picture, DESIGN.md §89.10)
+            continue   # nothing of it on this canvas (a tile of a large picture)
         if snow:
             _snow(draw, shape, canvas, ss, width, line, ink)
             continue

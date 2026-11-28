@@ -1,4 +1,4 @@
-"""``crispr``: the Cas9 editing scene (DESIGN.md §96.14). The target DNA is drawn flat (top strand
+"""``crispr``: the Cas9 editing scene. The target DNA is drawn flat (top strand
 5′→3′ over its partner, every base), with the PAM and protospacer the model found; the enzyme with
 its sgRNA binds, the spacer pairs with the target strand (R-loop), both strands break 3 bp 5′ of
 the PAM, and the break is resolved by NHEJ (an indel) or HDR (a donor's edit), written in HGVS when

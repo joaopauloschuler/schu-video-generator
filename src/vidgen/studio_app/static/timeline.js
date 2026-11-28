@@ -1,4 +1,4 @@
-// The timeline (DESIGN.md §94.12): the sections coloured and sized by their bars, the playhead,
+// The timeline: the sections coloured and sized by their bars, the playhead,
 // the energy curve (the render's loudness bar by bar), a section's right edge dragged to change
 // its bars, a section's name clicked to loop it, and the section bar below it (rename, bars,
 // its own chords, add, remove).

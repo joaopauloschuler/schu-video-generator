@@ -1,4 +1,4 @@
-"""``vidgen studio`` Step 197 (DESIGN.md §94.15): the check from kept stems (the same report as
+"""``vidgen studio`` Step 197: the check from kept stems (the same report as
 ``vidgen music check``) with advice that carries machine-applicable edits, the background checker
 that newer versions supersede, versions / undo / redo / rename / star, exports (YAML, WAV, MP3,
 lengths and levels) and saving into a project's ``assets/music/`` with the Step 188 name rule."""

@@ -1,11 +1,11 @@
-"""Cartoon rules: checks of the characters in one still's layout dump (DESIGN.md §69.12, §69.17).
+"""Cartoon rules: checks of the characters in one still's layout dump.
 
 They read the keys the layout dump gives a ``character`` object (``facing``, ``speaking``,
 ``face``, ``viseme``, ``looked_at``, ``passage``, ``walked_in``), the ``bubble`` key of a speech
-bubble's objects, the ``effect`` objects (symbols over heads, §69.40) and the frame's
+bubble's objects, the ``effect`` objects (symbols over heads) and the frame's
 ``narrating``. Like every still rule they see beat-end stills
 only (mid-action stills are skipped by the runner). ``look_alike`` is a scene rule: it reads the
-config's characters (``SceneContext.character_pairs``, §69.49), not a still.
+config's characters (``SceneContext.character_pairs``), not a still.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from vidgen.lint.rules import Bbox, Issue, SceneContext, StillContext, rule
 #: Points per side of the grid on which :func:`_covered_share` samples a face.
 _FACE_SAMPLES = 12
 #: Characters whose depths (the layout dump's ``depth``, 0 when absent) differ by this much or
-#: more stand one behind the other, not on each other (DESIGN.md §69.44).
+#: more stand one behind the other, not on each other.
 DEPTH_APART = 0.15
 
 
@@ -45,8 +45,7 @@ def _apart_in_depth(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 
 def _riding_together(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    """Whether two characters ride the same vehicle (one behind the other in a car or a bus,
-    DESIGN.md §69.52), or hold hands (side by side on purpose, §100.10), or kiss (§102.15)."""
+    """Whether two characters ride the same vehicle (one behind the other in a car or a bus), or hold hands (side by side on purpose), or kiss."""
     if a.get("hand_in_hand") == b.get("name") or b.get("hand_in_hand") == a.get("name"):
         return True
     if a.get("kissing") == b.get("name") or b.get("kissing") == a.get("name"):
@@ -55,7 +54,7 @@ def _riding_together(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 
 def _figures(ctx: StillContext) -> list[dict[str, Any]]:
-    """The characters of a still (not those a shot with ``clear`` hides, DESIGN.md §100.6)."""
+    """The characters of a still (not those a shot with ``clear`` hides)."""
     return [obj for obj in ctx.objects if obj["kind"] == "character" and not obj.get("hidden")]
 
 
@@ -121,7 +120,7 @@ def walk_overlap(ctx: StillContext, settings: WalkOverlapRule) -> Iterator[Issue
             )
 
 
-#: Shots (DESIGN.md §69.29) whose subjects need only their face in view (the frame cuts the rest).
+#: Shots whose subjects need only their face in view (the frame cuts the rest).
 FACE_SHOTS = frozenset({"medium", "over_shoulder", "closeup"})
 
 
@@ -347,13 +346,13 @@ def facing_away(ctx: StillContext, settings: FacingAwayRule) -> Iterator[Issue]:
 def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is hidden by something drawn in front of it (a character or
     prop nearer the camera, a foreground layer; not an effect symbol or a motion effect, nor the
-    vehicle it rides, whose windows show it, DESIGN.md §69.52, nor an overlay that keeps off
-    faces, a ``hud``, which ``overlay_face`` checks, §102.19): the viewer cannot see who talks."""
+    vehicle it rides, whose windows show it, nor an overlay that keeps off
+    faces, a ``hud``, which ``overlay_face`` checks): the viewer cannot see who talks."""
     own_check = {str(o["id"]) for o in ctx.frame.get("overlays", []) if o.get("faces")}
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
-        iso = speaker.get("features") is not None   # on an iso place: its eyes and mouth (DESIGN.md §89.11)
+        iso = speaker.get("features") is not None   # on an iso place: its eyes and mouth
         face = tuple(float(v) for v in speaker["features" if iso else "face"])
         fronts = [
             obj for obj in ctx.objects
@@ -387,7 +386,7 @@ def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[I
 @rule("small_speaker")
 def small_speaker(ctx: StillContext, settings: SmallSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is too small on screen to read it and its lip sync (as seen,
-    so a shot that frames it closer counts; DESIGN.md §86.10): a closer shot or larger characters
+    so a shot that frames it closer counts): a closer shot or larger characters
     (``character_size``) fix it."""
     limit = settings.min_face * ctx.short_side
     for speaker in _figures(ctx):
@@ -398,7 +397,7 @@ def small_speaker(ctx: StillContext, settings: SmallSpeakerRule) -> Iterator[Iss
         if height >= limit:
             continue
         if speaker.get("name_tag") and int(ctx.frame.get("line_words", settings.max_tagged_words + 1)) <= settings.max_tagged_words:
-            continue   # on an iso place its name tag shows who says this short line (DESIGN.md §89.11)
+            continue   # on an iso place its name tag shows who says this short line
         name = speaker.get("name")
         yield Issue(
             f"{describe(speaker)} speaks with its face {height / ctx.short_side:.2%} of the frame's shorter side tall "
@@ -413,7 +412,7 @@ def small_speaker(ctx: StillContext, settings: SmallSpeakerRule) -> Iterator[Iss
 
 @rule("offscreen_action")
 def offscreen_action(ctx: StillContext, settings: OffscreenActionRule) -> Iterator[Issue]:
-    """On an iso place (DESIGN.md §89.11): an action of the still's beat that the camera never
+    """On an iso place: an action of the still's beat that the camera never
     mostly did not show while it played (the layout dump's ``iso_actions``: what acted and the
     share of its frames with at least half of it in view): a walk, a small thing handed about, a
     change of the place."""
@@ -447,7 +446,7 @@ def _format_name(width: int, height: int) -> str:
 @rule("iso_ground")
 def iso_ground(ctx: StillContext, settings: IsoGroundRule) -> Iterator[Issue]:
     """An iso place's fixed wide view on a map too small to fill the frame (the background shows
-    round it; DESIGN.md §106), with the map size that fills it; for an outdoor place in the
+    round it), with the map size that fills it; for an outdoor place in the
     whole-place wide view an info-level hint (once a scene, the layout dump's ``iso_ground``)."""
     data = ctx.frame.get("iso_ground")
     if not data:

@@ -1,4 +1,4 @@
-"""Units and dimensions for worked calculations (Phase W, DESIGN §97.9). No manim.
+"""Units and dimensions for worked calculations (Phase W). No manim.
 
 A dimension is a tuple of seven rational exponents of the SI base quantities (length, mass,
 time, electric current, temperature, amount of substance, luminous intensity). A unit is an SI

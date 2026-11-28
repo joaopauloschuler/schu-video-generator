@@ -1,4 +1,4 @@
-"""Sitting on, lying on and using the objects of an isometric place (DESIGN.md §105.2): where
+"""Sitting on, lying on and using the objects of an isometric place: where
 each object's seats are, which way one sits on them, which of its parts stand in front of who sits
 there, how one uses an object, and the checks ``vidgen validate`` replays. Plain data and pure
 functions, no manim, like :mod:`vidgen.world.iso_moves` for walks.
@@ -36,7 +36,7 @@ class IsoSeat:
     """One place to sit on an object: where the hips rest (``a``, ``b`` shares of the footprint,
     ``z`` tile units over the object's base), the way the sitter faces and the parts of the
     object drawn over the sitter (``front`` regions); ``tucked``: the sitter's legs go under a
-    desk in front of it (not drawn: they showed over the desk's front, DESIGN.md §105.8)."""
+    desk in front of it (not drawn: they showed over the desk's front)."""
 
     a: float
     b: float
@@ -72,7 +72,7 @@ class IsoUse:
 
 _NEAR_ARM: Region = (0.68, 0.0, 1.0, 1.0)
 #: The seats of each object one can sit on (the kinds of :data:`~vidgen.world.iso.OBJECT_KINDS`),
-#: as drawn (DESIGN.md §104).
+#: as drawn.
 ISO_SEATS: dict[str, tuple[IsoSeat, ...]] = {
     "chair": (IsoSeat(0.5, 0.52, 0.63),),
     "bench": (IsoSeat(0.3, 0.58, 0.55), IsoSeat(0.7, 0.58, 0.55)),

@@ -1,7 +1,7 @@
 # Cookbook: particle-physics videos
 
 Craft notes for videos about elementary particles, collisions and discoveries with schu-video-generator's
-particle-physics scene types (DESIGN §99): the chart [`standard_model`](CONFIG.md#standard_model),
+particle-physics scene types: the chart [`standard_model`](CONFIG.md#standard_model),
 Feynman diagrams [`feynman`](CONFIG.md#feynman), momentum pictures
 [`kinematics`](CONFIG.md#kinematics), event displays [`detector`](CONFIG.md#detector), simulated
 spectra [`mass_spectrum`](CONFIG.md#mass_spectrum), [`decay_chain`](CONFIG.md#decay_chain) and

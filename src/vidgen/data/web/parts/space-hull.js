@@ -1,4 +1,4 @@
-// The giant hulls of vidgen/space-hull (DESIGN.md §123.10) for the registry vidgen/parts (§122.5): what
+// The giant hulls of vidgen/space-hull for the registry vidgen/parts: what
 // `vidgen parts` draws on its contact sheet: every family of hull, a fleet and a hull with a 50 m craft beside
 // it (kind "craft"), and the kit's shapes, surfaces and atlas (kind "craft-part"), under the light of the
 // craft of vidgen/space-craft: one hard sun with its shadows, a faint planet-shine from below; a small tile

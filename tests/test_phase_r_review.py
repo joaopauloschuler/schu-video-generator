@@ -1,4 +1,4 @@
-"""Step 176: the review of Phase R (DESIGN.md §90.13). The iso diagram fills the body (labels
+"""Step 176: the review of Phase R. The iso diagram fills the body (labels
 beside the blocks when those above and below take a wide body's height; in 9:16 the grid as
 written or slanted, whichever is drawn larger), a focus fades out the labels its view would cut and
 brings them back, connectors tilt up to raised blocks, the floor comes in with what stands on it

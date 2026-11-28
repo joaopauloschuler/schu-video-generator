@@ -1,4 +1,4 @@
-"""Step 253 (DESIGN.md §102.18-§102.19): neon strip lights along a room's walls
+"""Step 253: neon strip lights along a room's walls
 (``iso.wall_lights``) and a kiss between two characters holding hands."""
 
 from __future__ import annotations

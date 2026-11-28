@@ -1,4 +1,4 @@
-"""Additive synthesis for the orchestral score instruments (DESIGN.md §120.4): a note's harmonics
+"""Additive synthesis for the orchestral score instruments: a note's harmonics
 summed once into one-period wave tables, which are then read along the note's phase. A note
 with a hundred harmonics costs the same per sample as one with three, and a spectrum that changes
 over the note (brass getting brighter as it gets louder) is a cross-fade between a few tables."""
@@ -24,10 +24,9 @@ _SAMPLES_PER_CYCLE = 128
 #: Notes up to this many samples are remembered (the last 48: under 70 MB of stereo notes).
 _REMEMBERED_SAMPLES = 2 * RATE
 
-#: The further notes of a slurred phrase (DESIGN.md §120.7): per note its start in samples from
+#: The further notes of a slurred phrase: per note its start in samples from
 #: the phrase's start, its pitch in semitones above the first note and its glide in samples; a
-#: choir's note whose mark names a syllable or vowel has a fourth item, ``(syllable, vowel)``
-#: (DESIGN.md §121.4).
+#: choir's note whose mark names a syllable or vowel has a fourth item, ``(syllable, vowel)``.
 Phrase = tuple[tuple[Any, ...], ...]
 #: Seconds over which one note's wave tables give way to the next's in a slurred phrase.
 _JOIN = 0.03

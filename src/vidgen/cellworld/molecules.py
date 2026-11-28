@@ -1,4 +1,4 @@
-"""Molecules as data (DESIGN.md §95.9): nucleic acids, chromatin, proteins, membrane proteins
+"""Molecules as data: nucleic acids, chromatin, proteins, membrane proteins
 and small molecules with their textbook sizes (nm), names typeset (Pango markup), the
 compartments and membranes they belong in with the reason, how a membrane protein is oriented
 (which part faces which side) and the states it can be drawn in. The location and orientation

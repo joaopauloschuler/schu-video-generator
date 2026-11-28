@@ -1,4 +1,4 @@
-"""The ``cell`` beat actions (DESIGN.md §95.6): ``zoom_to`` moves the physical-scale camera
+"""The ``cell`` beat actions: ``zoom_to`` moves the physical-scale camera
 between levels (tissue, cell, organelle, molecular complex), timed like any action (``at: 0.5``,
 ``at: "@word"``). Written against ``vidgen.api`` only, like project actions; the scene does the
 drawing (``Cell.cell_zoom``)."""

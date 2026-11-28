@@ -1,4 +1,4 @@
-"""The scene gallery (``vidgen gallery``, DESIGN.md §60): every scene type has a sample (the
+"""The scene gallery (``vidgen gallery``): every scene type has a sample (the
 guide's snippet), the committed ``docs/gallery`` lists every type and shows the current
 samples, and the command renders a few types at a tiny size."""
 
@@ -20,21 +20,20 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs" / "gallery"
 #: What the committed gallery may weigh (stills + GIFs + pages), see HANDOFF.md Steps 57 and 182
 #: (8 MB until the showcases came: 16 GIFs and 16 stills, about 2.8 MB); Step 210 saved the stills
-#: as palette PNGs (3.0 -> 1.2 MB) to make room for the five cell-biology showcases. Step 216
-#: (DESIGN §96.12): the budget grows by what the entries still to come need — Phase V adds nine
+#: as palette PNGs (3.0 -> 1.2 MB) to make room for the five cell-biology showcases. Step 216:
+#: the budget grows by what the entries still to come need — Phase V adds nine
 #: genetics types and a showcase, each entry at most ENTRY_MAX — so 10 MB (full at Step 215) +
-#: 8 entries after Step 216 × 0.36 MB ≈ 13 MB; every entry is held to ENTRY_MAX. Step 235 (DESIGN
-#: §98.9): 13 → 15 MB for Phase X's "Orbital mechanics" section — the `orbit` entry (0.34 MB) and
+#: 8 entries after Step 216 × 0.36 MB ≈ 13 MB; every entry is held to ENTRY_MAX. Step 235: 13 → 15 MB for Phase X's "Orbital mechanics" section — the `orbit` entry (0.34 MB) and
 #: two showcases (0.33 MB each) took the gallery to 13.6 MB; the rest is room for about three more
 #: entries. Lossless GIF re-optimisation saved about 10 % on some files but is not what `vidgen
 #: gallery` writes (the next regeneration would undo it), so the budget grew instead; ENTRY_MAX and
-#: gallery.CLIP_MAX_BYTES are unchanged. Step 241 (DESIGN §99.12): 15 → 16.5 MB for Phase Y — its four
+#: gallery.CLIP_MAX_BYTES are unchanged. Step 241: 15 → 16.5 MB for Phase Y — its four
 #: data types (mass_spectrum, decay_chain, branching, branching_pie; 0.10–0.33 MB each) took the
 #: gallery to 15.4 MB; the rest is room for Step 243's showcase and one more entry; ENTRY_MAX and the
 #: GIF cap are unchanged. Step 243: the `higgs_diphoton` showcase (0.32 MB) took it to 15.7 MB, within
 #: the budget. Step 378: 16.5 → 17 MB for Phase AN's `space` entry (0.31 MB: a star field under a
 #: moving camera, its GIFs held to gallery.CLIP_NOISY_MAX_BYTES and its stills to gallery.STILL_MAX_BYTES);
-#: ENTRY_MAX and the GIF cap are unchanged. Step 379 (DESIGN §123.1): the entries of types drawn in
+#: ENTRY_MAX and the GIF cap are unchanged. Step 379: the entries of types drawn in
 #: headless Chromium (`3d`, `web`, `space`: 0.6 MB) moved to the web gallery, docs/gallery/web, with
 #: a budget of its own (WEB_BUDGET); the main gallery (16.1 MB without web/) is back to 16.5 MB.
 BUDGET = 16_500_000
@@ -366,7 +365,7 @@ _ROW = re.compile(r"^\| \[[^\]]+\]\(([^)]+)\.md\) \|", re.M)
 
 
 def test_web_entries_are_the_types_drawn_in_chromium() -> None:
-    """DESIGN §123.1: an entry is in the web gallery when its scene class is drawn by a web page in
+    """An entry is in the web gallery when its scene class is drawn by a web page in
     headless Chromium (``drawn_in_browser``: ``web``, ``3d`` and their subclasses such as ``space``)."""
     from vidgen.scenes.scene_3d import Scene3D
     from vidgen.scenes.space import Space

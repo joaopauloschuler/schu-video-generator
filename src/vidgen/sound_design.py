@@ -1,4 +1,4 @@
-"""Sound design without pictures (DESIGN.md §112): ambience beds per scene or section that
+"""Sound design without pictures: ambience beds per scene or section that
 cross-fade at scene changes and start or stop on a beat's word, and the sounds an audio-only
 render can work out from the config alone for the scenes that would make them while they render
 (``audio.scene_sounds``): a stage's set ambience and rain, the footsteps of its walks, its doors,
@@ -43,14 +43,14 @@ log = logging.getLogger("vidgen.audio")
 #: The shortest fade (s) at a change with ``ambience_crossfade: 0`` (a cut that does not click).
 MIN_FADE = 0.05
 #: A 16:9 frame's width in Manim units (the shorter side is 8): stage widths and walks are
-#: worked out in it (DESIGN.md §112: the audio has no frame).
+#: worked out in it (the audio has no frame).
 FRAME_WIDTH = 8.0 * 16.0 / 9.0
 #: A character's half width as a share of its height (where it stands off stage).
 HALF_WIDTH = 0.18
 #: A stage's set fades in over this share of its first beat, at most these seconds (its
 #: ``reveal(fraction=0.6, cap=1.0)``); the first beat's actions wait for it.
 STAGE_ENTRANCE = (0.6, 1.0)
-#: The stage actions whose sounds an audio-only render works out (DESIGN.md §112).
+#: The stage actions whose sounds an audio-only render works out.
 STAGE_SOUND_ACTIONS = frozenset({"walk_to", "run_to", "enter", "exit", "open", "close", "knock", "switch_on", "switch_off",
                                  "jump", "emote", "react", "effect"})
 
@@ -320,7 +320,7 @@ def _door_kinds(params: Any) -> dict[str, str | None]:
 
 
 def stage_sounds(project: Project, slot: SceneSlot) -> tuple[list[SfxEvent], list[dict[str, Any]]]:
-    """A stage scene's sounds without pictures (``audio.scene_sounds``, DESIGN.md §112): its set
+    """A stage scene's sounds without pictures (``audio.scene_sounds``): its set
     beds and rain (plain timings ``ambience`` entries) and the foley of its walks on a plain stage,
     its doors opening and closing, knocks, switches, jumps, surprised faces and effect symbols (each
     walk panned where it goes), in the scene's room with ``audio.sfx_room``; none with its foley

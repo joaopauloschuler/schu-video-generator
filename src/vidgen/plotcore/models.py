@@ -1,4 +1,4 @@
-"""Models that generate data for live plots (Phase W, DESIGN §97.7), without manim and
+"""Models that generate data for live plots (Phase W), without manim and
 deterministic: the same inputs (and seed) always give the same numbers, on every machine.
 
 - :func:`simulate_ode` — a system of ODEs written as safe expressions (``x' = v``, ``v' = -k*x -

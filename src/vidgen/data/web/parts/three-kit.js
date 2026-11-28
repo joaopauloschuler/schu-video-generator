@@ -1,5 +1,5 @@
-// The ready-made parts of vidgen/three-kit and vidgen/three-finish (DESIGN.md §121.1, §120.11) for
-// the registry vidgen/parts (§122.5): what `vidgen parts` draws on its contact sheet. Each make()
+// The ready-made parts of vidgen/three-kit and vidgen/three-finish for
+// the registry vidgen/parts: what `vidgen parts` draws on its contact sheet. Each make()
 // sets the kit's stage for the scene it is given (setStage) and builds the part as the films do.
 // Music the parts react to (hits, notes, bands) is made up here: a page gives its own (ctx.music).
 import * as THREE from "three";

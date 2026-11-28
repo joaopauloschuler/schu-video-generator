@@ -1,4 +1,4 @@
-"""Where a ``3d`` scene's objects are (DESIGN.md §114.7, §114.11): their world transforms at a
+"""Where a ``3d`` scene's objects are: their world transforms at a
 time (their object actions through an attached :class:`~vidgen.three_d.motion.Motion`; a
 group's spin and moves carry its children), and the centre and size of an object or group, for
 the camera moves (``camera_fly_to``), ``look_at`` an object, arrows pointing at one and lint.

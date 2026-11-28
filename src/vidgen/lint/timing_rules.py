@@ -1,4 +1,4 @@
-"""Timing rules: checks of one scene's activity file (DESIGN.md §17).
+"""Timing rules: checks of one scene's activity file.
 
 They read what the worker recorded while rendering (:mod:`vidgen.activity`): each beat's
 narration times and how long its code ran, every ``play``/``wait``, and a per-frame change
@@ -25,7 +25,7 @@ from vidgen.speech import SILENCE_DB, speech_bounds, spoken_characters, spoken_w
 def narration_speed(ctx: SceneContext, settings: NarrationSpeedRule) -> Iterator[Issue]:
     """A beat spoken faster or slower than the configured words per second (words of the
     spoken text: the pronunciation applied, so "SQL" said "sequel" counts 1, not 1.5). The range
-    and unit follow the video's language (DESIGN.md §54): words per second for languages with a
+    and unit follow the video's language: words per second for languages with a
     known word rate, else characters (letters and digits) per second."""
     unit, min_rate, max_rate = settings.limits(ctx.language)
     for beat in ctx.beats:
@@ -85,7 +85,7 @@ def narration_speed(ctx: SceneContext, settings: NarrationSpeedRule) -> Iterator
 def static_runs(activity: dict[str, Any], min_change: float) -> list[tuple[int, int]]:
     """``(first, end)`` frame ranges in which the picture does not change: frame ``first`` (the
     last change) stays on screen until frame ``end`` (the next change, or the scene's end — or
-    where a crossfade into the next scene starts blending it away, DESIGN.md §49)."""
+    where a crossfade into the next scene starts blending it away)."""
     frames = int(activity["frames"])
     end = frames - int(activity.get("overlap_out", 0))
     changes = sorted(frame for frame, fraction in activity["motion"]["changes"] if fraction >= min_change and frame < end)
@@ -175,8 +175,8 @@ def animation_overrun(ctx: SceneContext, settings: AnimationOverrunRule) -> Iter
 # ----- rushed_animation -------------------------------------------------------------------------
 
 
-#: The animations of a walk or a jump on a platform level (DESIGN.md §86.7) or a walk on an iso
-#: place (§89.9), as the play log names them.
+#: The animations of a walk or a jump on a platform level or a walk on an iso
+#: place, as the play log names them.
 LEVEL_MOVES = ("RouteWalk", "ArcJump", "IsoWalk")
 
 

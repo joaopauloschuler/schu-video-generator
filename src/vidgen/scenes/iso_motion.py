@@ -1,4 +1,4 @@
-"""The animations of the ``iso_diagram`` scene and its actions (DESIGN.md §90.9): a block or
+"""The animations of the ``iso_diagram`` scene and its actions: a block or
 label moved up the picture (points only), a shadow's fade, a block growing up from its ground, dots
 or packets running along a connector, and a label's new text taking the old one's place when its
 morph ends. Written against ``vidgen.api`` only."""

@@ -1,4 +1,4 @@
-"""More iso lab and sci-fi objects (Steps 258–260, DESIGN.md §103): footprints, states, a wall
+"""More iso lab and sci-fi objects (Steps 258–260): footprints, states, a wall
 clock's time and wall, the moving parts of working objects, validation; one small render of each
 batch."""
 

@@ -1,4 +1,4 @@
-"""The ``wind`` beat action (DESIGN.md §69.32): a ``stage``'s wind fades to a new strength,
+"""The ``wind`` beat action: a ``stage``'s wind fades to a new strength,
 starting at ``at`` of the beat; written against ``vidgen.api`` only, like project actions. It
 draws nothing itself (``animates = False``, like ``light``): the runner cues it when its beat
 starts, and the stage fades the wind over ``run_time`` seconds from then, whatever plays
@@ -53,7 +53,7 @@ class WindAction(Action):
         if getattr(params, "room", None) is not None:
             return [("action", "there is no wind in a room (the stage has room:)")]
         iso = getattr(params, "iso", None)
-        if iso is not None and iso.place == "indoor":   # DESIGN.md §105.4
+        if iso is not None and iso.place == "indoor":
             return [("action", "there is no wind inside an indoor place (iso place: indoor)")]
         return []
 

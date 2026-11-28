@@ -1,4 +1,4 @@
-"""Built-in music data for ``web`` scenes (DESIGN.md §120.8): ``music_data: true`` gives the page
+"""Built-in music data for ``web`` scenes: ``music_data: true`` gives the page
 ``ctx.music``, made from the video's own music without a script of the author's.
 
 - **Analysis**, one value per video frame of the whole video, of the music the video plays (every

@@ -1,4 +1,4 @@
-// vidgen/space-bodies: planets, moons and rings from a seed (DESIGN.md §122.7). Part of
+// vidgen/space-bodies: planets, moons and rings from a seed. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-bodies".
 //
 //   import {planet} from "vidgen/space-bodies";

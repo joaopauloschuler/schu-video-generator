@@ -1,9 +1,9 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
-line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
-layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
-(§69.9), its light and shadows (§69.31), its wind (§69.32) or a room instead of the sky (§69.42),
-props that move by themselves (§69.54), snow that settles and fog (§69.60), lightning, rainbows
-and the sun and moon moving across the sky (§69.61)."""
+line, named marks and the video's characters standing on them, parallax
+layers that move by their factor when the camera moves, props, particles,
+its light and shadows, its wind or a room instead of the sky,
+props that move by themselves, snow that settles and fog, lightning, rainbows
+and the sun and moon moving across the sky."""
 
 import difflib
 import math
@@ -45,7 +45,7 @@ PHONE_RING_GAIN = -6.0
 #: The level of a ``knock`` on a door (dB).
 KNOCK_GAIN = -3.0
 #: A portal tearing open (a rushing whoosh over a low rumble) and sealing (a falling swoosh and a
-#: soft thud): (sound, its params) each (DESIGN.md §100.4).
+#: soft thud): (sound, its params) each.
 PORTAL_OPEN_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
     ("whoosh", {"gain": -2.0, "duration": 1.4, "pitch": -5.0}),
     ("thunder", {"gain": -8.0, "duration": 2.5, "intensity": 0.2, "pitch": -4.0}),
@@ -55,13 +55,13 @@ PORTAL_SEAL_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
     ("thud", {"gain": -4.0, "duration": 0.5}),
 )
 #: A hologram display switching on (a soft hum and a chime as its panel opens) and off (a short
-#: hum down): (sound, its params, ``delay``: seconds after the switch) each (DESIGN.md §100.10).
+#: hum down): (sound, its params, ``delay``: seconds after the switch) each.
 DISPLAY_ON_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
     ("hum", {"gain": -10.0, "duration": 1.6}),
     ("chime", {"gain": -14.0, "pitch": 12.0, "duration": 1.2, "delay": 0.45}),
 )
 DISPLAY_OFF_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (("hum", {"gain": -13.0, "duration": 0.7, "pitch": -5.0}),)
-#: Lightning (DESIGN.md §69.61): a bolt's core width (Manim stroke width) and how far it zigzags
+#: Lightning: a bolt's core width (Manim stroke width) and how far it zigzags
 #: (frame heights); the band left free above the sky's path for the sun and moon (frame heights).
 BOLT_WIDTH = 4.0
 BOLT_SPREAD = 0.12
@@ -69,22 +69,21 @@ SKY_TOP_ROOM = 0.14
 #: A character's height on a stage when the scene gives no ``size`` (a fraction of the frame's
 #: shorter side); a level's default is smaller (:data:`LEVEL_SIZE`).
 STAGE_SIZE = 0.45
-#: A platform level (DESIGN.md §86): the parallax factor of the background picture behind it,
+#: A platform level: the parallax factor of the background picture behind it,
 #: how much finer than the frame its tiles are drawn (for shots that zoom in), and the most
 #: pixels its pictures hold together.
 LEVEL_PICTURE_FACTOR = 0.2
 LEVEL_OVERSAMPLE = 1.25
 LEVEL_MAX_PIXELS = 24_000_000
-#: On a level the camera rises over (DESIGN.md §86.11): the night's stars fill this top share of
+#: On a level the camera rises over: the night's stars fill this top share of
 #: the view and stay there as the camera moves (they are as far as the sky).
 LEVEL_STAR_SKY = 0.45
-#: The props an iso place takes: small things to hold, give and put down (DESIGN.md §89.10); its
-#: big things are its ready-made objects. A portal stands at a spot too (DESIGN.md §100.4).
+#: The props an iso place takes: small things to hold, give and put down; its
+#: big things are its ready-made objects. A portal stands at a spot too.
 ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom", *SCIFI_PROPS)
-#: The light of an iso place where it rains from the start and no ``light`` is given (DESIGN.md
-#: §89.12): the overcast tint the docs give for a rainy day, so the rain reads as rain.
+#: The light of an iso place where it rains from the start and no ``light`` is given: the overcast tint the docs give for a rainy day, so the rain reads as rain.
 ISO_RAIN_LIGHT: tuple[str, float] = ("#6B7890", 0.45)
-#: A blocker stepping back off a level's path (``step_aside`` without ``to``, DESIGN.md §86.8):
+#: A blocker stepping back off a level's path (``step_aside`` without ``to``):
 #: it walks to this depth (a little smaller), its feet this many tiles higher (behind the path).
 ASIDE_DEPTH = 0.3
 ASIDE_RISE_TILES = 0.3
@@ -125,7 +124,7 @@ class StageCharacter(SceneParams):
 
 
 class ScannerReading(SceneParams):
-    """A switched-on scanner's readout (DESIGN.md §102.13)."""
+    """A switched-on scanner's readout."""
 
     level: float = Field(0.35, ge=0.0, le=2.0)
     """Its reading at the start, a share of its scale."""
@@ -301,7 +300,7 @@ class StageParticles(ParticleSettings, SceneParams):
 
 
 class FlockSettings(SceneParams):
-    """A flock of birds crossing the sky (DESIGN.md §69.55): how many, which way, how high, how
+    """A flock of birds crossing the sky: how many, which way, how high, how
     fast and its seed."""
 
     count: int = Field(FLOCK_COUNT, ge=1, le=MAX_BIRDS)
@@ -341,7 +340,7 @@ class StageBirds(FlockSettings):
 
 
 class StageFogSetting(SceneParams):
-    """Fog over the stage (DESIGN.md §69.60): translucent bands lying between the things by depth,
+    """Fog over the stage: translucent bands lying between the things by depth,
     thicker further back, drifting. ``true`` is fog with the defaults, a number its density."""
 
     also_accepts: ClassVar[tuple[type, ...]] = (bool, float)
@@ -371,7 +370,7 @@ class StageFogSetting(SceneParams):
 
 
 class StageAmbient(SceneParams):
-    """Ambient life on an iso place (DESIGN.md §105.7): background walkers, birds, a cat, ducks,
+    """Ambient life on an iso place: background walkers, birds, a cat, ducks,
     butterflies, fireflies and flies going about their business, away from the main characters,
     hidden in close shots. ``true`` is every kind that suits the place (``auto``)."""
 
@@ -564,8 +563,7 @@ class StageRoom(SceneParams):
 
 
 class WaterStrip(SceneParams):
-    """A strip of water at the front of the stage, with waves: a boat floats on it (DESIGN.md
-    §69.53). ``true`` is water across the whole stage."""
+    """A strip of water at the front of the stage, with waves: a boat floats on it. ``true`` is water across the whole stage."""
 
     also_accepts: ClassVar[tuple[type, ...]] = (bool,)
 
@@ -593,7 +591,7 @@ def _parsed_level(text: str, spots: tuple[tuple[str, str], ...]) -> Level:
 
 
 class StageLevel(SceneParams):
-    """A platform level seen from the side (DESIGN.md §86), written as a small map."""
+    """A platform level seen from the side, written as a small map."""
 
     map: str
     """The level, one line per row, top row first: . air, # ground, = a floating platform, ~ a cloud to stand on, | a ladder, $ a coin, * a star (picked up when a walk or a jump touches it; named coin_1, star_1... in map order), a letter: a spot (whatever stands there stands on the first tile below it)."""
@@ -629,7 +627,7 @@ def _parsed_iso(text: str, spots: tuple[tuple[str, str], ...], heights: str | No
 
 
 class IsoCellRef(SceneParams):
-    """A cell of an iso place's map as the author reads it (DESIGN.md §89)."""
+    """A cell of an iso place's map as the author reads it."""
 
     column: int = Field(ge=1)
     """Its column, from 1 at the map's left."""
@@ -643,7 +641,7 @@ def _a(kind: str) -> str:
 
 
 class IsoObjectParam(SceneParams):
-    """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
+    """A ready-made object standing in an iso place."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
     """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2); a retro-future kit: googie_building (3 x 3, a boomerang roof and a starburst sign), retro_tower (2 x 2, round, a saucer deck), starburst_sign, ray_lamp, atomic_sculpture, monorail (4 x 1, a beam on pylons; traffic with shape: monorail glides along it), tube_computer (2 x 1, tape reels and bulbs), sunburst_clock (at a cell of a back wall), tv_console, retro_desk (2 x 1), hedge, planter; on a room's back wall (at a cell of it): poster (a framed picture of tomorrow), wall_shelf (books and a plant)."""
@@ -720,7 +718,7 @@ class IsoObjectParam(SceneParams):
         return self
 
     def state(self) -> ObjectState:
-        """How it is at the start (DESIGN.md §89.10)."""
+        """How it is at the start."""
         start = default_state(self.object)
         return ObjectState(self.shown, start.open if self.open is None else self.open, start.on if self.on is None else self.on)
 
@@ -732,7 +730,7 @@ class IsoObjectParam(SceneParams):
 
 
 class IsoTrafficLane(SceneParams):
-    """A traffic lane over an iso place (DESIGN.md §102.3): hover pods gliding from one spot to
+    """A traffic lane over an iso place: hover pods gliding from one spot to
     another, high over the ground."""
 
     start: Identifier | IsoCellRef = Field(alias="from")
@@ -758,7 +756,7 @@ class IsoTrafficLane(SceneParams):
 
 
 class IsoHazeParam(SceneParams):
-    """Shimmering air over a spot of an iso place (DESIGN.md §102.12)."""
+    """Shimmering air over a spot of an iso place."""
 
     at: Identifier | IsoCellRef
     """Where it shimmers: a spot of the map, or {column, row} (its cell's middle)."""
@@ -775,7 +773,7 @@ class IsoHazeParam(SceneParams):
 
 
 class IsoFixedWide(SceneParams):
-    """``iso.wide: {tiles: N}`` (DESIGN.md §106): the fixed wide view with ``N`` tile widths
+    """``iso.wide: {tiles: N}``: the fixed wide view with ``N`` tile widths
     across the frame."""
 
     tiles: float = Field(ge=2.0, le=80.0)
@@ -784,7 +782,7 @@ class IsoFixedWide(SceneParams):
 
 def _iso_wide_given(iso: Any) -> str | None:
     """``fixed`` when an ``iso`` param (a mapping or a :class:`StageIso`) asks for ``wide:
-    fixed``, ``tiles`` for ``wide: {tiles: N}``, else ``None`` (DESIGN.md §106)."""
+    fixed``, ``tiles`` for ``wide: {tiles: N}``, else ``None``."""
     wide = iso.get("wide") if isinstance(iso, dict) else getattr(iso, "wide", None)
     if wide == "fixed":
         return "fixed"
@@ -794,7 +792,7 @@ def _iso_wide_given(iso: Any) -> str | None:
 
 
 class StageIso(SceneParams):
-    """An isometric place (DESIGN.md §89): written as a small map, seen from above at an angle."""
+    """An isometric place: written as a small map, seen from above at an angle."""
 
     place: Literal["outdoor", "indoor"] = "outdoor"
     """outdoor (grass, paths, water, garden walls, on a slab of earth) or indoor (a wooden floor, the room's back walls standing and its front walls cut away, like a dollhouse)."""
@@ -831,13 +829,13 @@ class StageIso(SceneParams):
 
     @property
     def fixed(self) -> bool:
-        """Whether the wide view is the fixed one (``wide: fixed`` or ``{tiles: N}``, §106)."""
+        """Whether the wide view is the fixed one (``wide: fixed`` or ``{tiles: N}``)."""
         return self.wide == "fixed" or isinstance(self.wide, IsoFixedWide)
 
     def view_tiles(self, frame_width: float, frame_height: float, character_size: str | None = None) -> float | None:
         """The tile widths across the frame of the fixed wide view (its ``tiles``, else from
         ``character_size``: :func:`~vidgen.cartoon.iso_stage.fixed_tiles`); ``None`` for the
-        other wide views (DESIGN.md §106)."""
+        other wide views."""
         if isinstance(self.wide, IsoFixedWide):
             return self.wide.tiles
         if self.wide == "fixed":
@@ -851,11 +849,11 @@ class StageIso(SceneParams):
     def wall_room(self) -> float:
         """How far (cells) the fixed wide view may reach behind the floor's back edges: the
         standing back walls' :func:`~vidgen.cartoon.iso_stage.wall_reach` with ``show_walls``,
-        else 0 (DESIGN.md §108)."""
+        else 0."""
         return wall_reach(self.parsed()) if self.show_walls else 0.0
 
     def wall_light_colors(self) -> tuple[str, str] | None:
-        """The strip lights' colours (DESIGN.md §102.18): the left back wall's (a wall along a
+        """The strip lights' colours: the left back wall's (a wall along a
         column of the map) and the right one's (along a row); ``None`` without strips."""
         if self.wall_lights is None:
             return None
@@ -891,8 +889,8 @@ class StageIso(SceneParams):
         return self
 
     def haze_foot(self, haze: IsoHazeParam) -> tuple[float, float, float]:
-        """The world point (tile units) a haze rises from: its cell's middle on the floor
-        (DESIGN.md §102.12)."""
+        """The world point (tile units) a haze rises from: its cell's middle on the floor.
+        """
         place = self.parsed()
         if isinstance(haze.at, str):
             spot = place.spot(haze.at)
@@ -903,7 +901,7 @@ class StageIso(SceneParams):
 
     def lane_ends(self, lane: IsoTrafficLane) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
         """The world points (tile units) a traffic lane runs between: the middles of its cells,
-        ``height`` over the ground at its start (DESIGN.md §102.3)."""
+        ``height`` over the ground at its start."""
         place = self.parsed()
 
         def cell(end: Any) -> tuple[int, int]:
@@ -923,7 +921,7 @@ class StageIso(SceneParams):
 
     def object_kinds(self) -> dict[str, str]:
         """The objects of the place (the map's and the placed ones) and its doors that open
-        (``door``, DESIGN.md §89.10) by name: their kinds."""
+        (``door``) by name: their kinds."""
         place = self.parsed()
         return {**{item.name: item.kind for item in place.objects}, **{name: "door" for name, _, _ in place.doors()}}
 
@@ -933,7 +931,7 @@ class StageIso(SceneParams):
         return {item.name: param.state() for param, item in zip(self.objects, placed) if param.state() != default_state(param.object)}
 
     def auto_lit(self) -> dict[str, str]:
-        """The lights a ``time_of_day`` action switches by itself (DESIGN.md §105.3) by name:
+        """The lights a ``time_of_day`` action switches by itself by name:
         their kinds (:data:`AUTO_LIGHT_KINDS`, not those placed with ``auto_light: false``)."""
         place = self.parsed()
         placed = place.objects[-len(self.objects):] if self.objects else ()
@@ -1053,11 +1051,11 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     """
 
     outro = 0.5
-    takes_host = False   # its characters are on the set already (DESIGN.md §71)
+    takes_host = False   # its characters are on the set already
     target_patterns = ("<character>", "<prop>", "<character>.<part>")
     uses_cartoon_style = True
     uses_drawing_style = True
-    #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
+    #: Storyboard stills also show these actions half-way through.
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
         "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour", "drive_to", "sail_to", "lift_off",
@@ -1069,7 +1067,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """The names of the characters, then of the props, on the stage, then the characters'
         parts (``kit.arm_left``; only with an active project, which knows the parts)."""
         names = [c.name for c in params.characters]
-        objects = params.iso.changeable_names() if getattr(params, "iso", None) is not None else []   # an iso place's objects (§89.10)
+        objects = params.iso.changeable_names() if getattr(params, "iso", None) is not None else []   # an iso place's objects
         return names + params.prop_names() + objects + part_target_names(names)
 
     class Params(SceneParams):
@@ -1148,9 +1146,9 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         @model_validator(mode="before")
         @classmethod
         def _default_size(cls, data: Any) -> Any:
-            """The default ``size`` from ``character_size`` (DESIGN.md §86.10); on a level the
-            characters are smaller (:data:`LEVEL_SIZE` for medium); an iso place sets its own
-            (DESIGN.md §89.7)."""
+            """The default ``size`` from ``character_size``; on a level the
+            characters are smaller (:data:`LEVEL_SIZE` for medium); an iso place sets its own.
+            """
             if not isinstance(data, dict):
                 return data
             if data.get("iso") is not None:
@@ -1225,7 +1223,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
         def _check_iso(self) -> None:
             """An iso place is the whole set: no level, room, water, width, layers or flat props;
-            characters stand at its spots, with no depth (DESIGN.md §89.7)."""
+            characters stand at its spots, with no depth."""
             assert self.iso is not None
             given = [key for key in ("level", "room", "water") if getattr(self, key) is not None]
             given += [key for key in ("width", "layers") if key in self.model_fields_set and getattr(self, key) not in ([], 1.0)]
@@ -1234,7 +1232,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
                          "water": "water is ~ on the map",
                          "width": "the whole place fits the frame", "layers": "the background colour or picture shows around the place"}
                 raise ValueError(f"an iso place cannot have {given[0]} ({hints[given[0]]}); remove it, or the iso")
-            if self.iso.place == "indoor":   # weather stays outdoors (DESIGN.md §105.4)
+            if self.iso.place == "indoor":   # weather stays outdoors
                 if self.fog is not None:
                     raise ValueError("there is no fog inside an indoor place: remove fog (or use place: outdoor)")
                 if wind_level(self.wind) != 0.0:
@@ -1273,7 +1271,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
                 self.light = CustomLight(tint=ISO_RAIN_LIGHT[0], strength=ISO_RAIN_LIGHT[1])   # a rainy day, not a sunny one
 
         def _check_ambient(self) -> None:
-            """Ambient life suits its place (DESIGN.md §105.7): indoors only a cat and flies,
+            """Ambient life suits its place: indoors only a cat and flies,
             ducks on water."""
             assert self.ambient is not None and self.iso is not None
             given = {key: value for key, value in self.ambient.counts(indoor=False).items() if key in self.ambient.model_fields_set and value}
@@ -1339,7 +1337,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
         def level_props(self) -> LevelProps | None:
             """The story props of the stage's level (``None``: no level): its door props, locks and
-            blockers (DESIGN.md §86.8)."""
+            blockers."""
             if self.level is None:
                 return None
             doors = {name: prop.open for name, prop in zip(self.prop_names(), self.stage_props()) if prop.prop == "door"}
@@ -1354,7 +1352,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
         def _check_water_and_air(self, marks: dict[str, float]) -> None:
             """Water and air vehicles stay outdoors; a boat floats on the stage's water, at the
-            front (DESIGN.md §69.53)."""
+            front."""
             if self.water is not None:
                 if self.room is not None:
                     raise ValueError("a room has no water: remove water (or the room)")
@@ -1431,7 +1429,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             return None if self.room is None else wall_depth(self._floor_items(), self.room.depth)
 
         def stage_props(self) -> list[StageProp]:
-            """The props (in a room, those against its wall at its depth, DESIGN.md §69.43), then
+            """The props (in a room, those against its wall at its depth), then
             the room's doors as ``door`` props standing at its wall."""
             if self.room is None:
                 return list(self.props)
@@ -1449,7 +1447,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         def stage_marks(self) -> dict[str, float]:
             """The stage's own marks, plus a mark at each of its room's doors (named after it) and
             at each spot of its level."""
-            if self.iso is not None:   # a spot across the picture of the map (DESIGN.md §89.7)
+            if self.iso is not None:   # a spot across the picture of the map
                 place = self.iso.parsed()
                 return {**self.marks, **{spot.name: map_fraction(place, spot.column, spot.row) for spot in place.spots}}
             if self.level is not None:
@@ -1525,20 +1523,19 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """With ``auto_direct`` (beat, scene, video; nearest wins): listeners look at whoever
         speaks, the speaker at the one it talks to, listeners react after lines, speakers
         gesture on stressed words and short punchy lines get a close-up, each checked against
-        the stage's geometry (:func:`stage_directions`, DESIGN.md §69.23, §69.24). When the stage
-        reframes (:func:`stage_reframes`), pans keep the speaker in view (§69.30). Always: a
-        speaker's face for the voice sounds of its line (§69.33)."""
+        the stage's geometry (:func:`stage_directions`). When the stage
+        reframes (:func:`stage_reframes`), pans keep the speaker in view. Always: a
+        speaker's face for the voice sounds of its line."""
         names = [c.name for c in params.characters]
         frame = stage_frame(project, params)
         return stage_directions(project, spec, names, params.auto_direct, frame, reframe=stage_reframes(project, params))
 
     @classmethod
     def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
-        """The prop actions replayed in order with the stage's geometry (DESIGN.md §69.27,
-        §69.28, :func:`holding_problems`): a prop held by someone else, a full hand, nothing to put
+        """The prop actions replayed in order with the stage's geometry (:func:`holding_problems`): a prop held by someone else, a full hand, nothing to put
         down, a prop or spot too far without a walk, giving to someone not next to the giver, a
         seat taken, a walk of a character that sits, leans or rides, a full vehicle or one too far
-        to get in (§69.52). Needs the active project (the video's frame); none without one."""
+        to get in. Needs the active project (the video's frame); none without one."""
         fruit = cls._fruit_count_problems(params, uses) + cls._level_move_problems(spec, params, uses) + cls._iso_move_problems(spec, params, uses)
         try:
             project = current_project()
@@ -1549,14 +1546,14 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         frame = stage_frame(project, params)
         names = [c.name for c in params.characters] + params.prop_names()
         beats = [b.id for b in spec.beats]
-        iso = params.iso is not None   # an iso place's distances are cells: its own replay checks them (§89.10)
+        iso = params.iso is not None   # an iso place's distances are cells: its own replay checks them
 
         def matched(use: Any) -> tuple[str, ...]:
             return tuple(n for n in names if any(fnmatchcase(n, p) for p in use.config.targets()))
 
         ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
         steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered
-                 if not (iso and u.config.action in ISO_SEAT_ACTIONS)]   # on an iso place: its own replay (§105.2)
+                 if not (iso and u.config.action in ISO_SEAT_ACTIONS)]   # on an iso place: its own replay
         left = -frame.stage_width / 2
         problems = holding_problems(
             steps,
@@ -1576,7 +1573,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     @staticmethod
     def _level_move_problems(spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
         """On a level, the walks and jumps replayed in order with the rules and the level's story
-        props (DESIGN.md §86.7, §86.8, :func:`level_move_problems`): one that cannot get there on
+        props (:func:`level_move_problems`): one that cannot get there on
         foot, a jump that cannot be made, a closed door or a blocker in the way, a locked door
         opened without its key, naming the beat and why."""
         if params.level is None:
@@ -1604,10 +1601,10 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     @staticmethod
     def _iso_move_problems(spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
-        """On an iso place, the moves replayed in order with the rules (DESIGN.md §89.9,
-        :func:`iso_move_problems`): an unknown spot, a cell nobody can stand on, no way there, a
+        """On an iso place, the moves replayed in order with the rules
+        (:func:`iso_move_problems`): an unknown spot, a cell nobody can stand on, no way there, a
         move of a character not on the place, a small thing picked up, given or put down from too
-        far, naming the beat and why; objects that are not there are not walked over (§89.10)."""
+        far, naming the beat and why; objects that are not there are not walked over."""
         if params.iso is None:
             return []
         characters = [c.name for c in params.characters]
@@ -1620,7 +1617,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES | ISO_VEHICLE_ACTIONS | ISO_SEAT_ACTIONS:
                 continue
             names = objects if action in ISO_PLACE_CHANGES else characters
-            if action in ISO_VEHICLE_ACTIONS:   # the vehicles it moves (§105)
+            if action in ISO_VEHICLE_ACTIONS:   # the vehicles it moves
                 kinds = params.iso.object_kinds()
                 names = [n for n in objects if VEHICLE_ACTIONS.get(kinds.get(n, "")) == action]
             moved = tuple(n for n in names if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
@@ -1635,7 +1632,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     @staticmethod
     def _fruit_count_problems(params: Any, uses: list[Any]) -> list[tuple[str, str]]:
-        """A ``drop_fruit`` of a tree whose fruits have all fallen (DESIGN.md §69.55)."""
+        """A ``drop_fruit`` of a tree whose fruits have all fallen."""
         dropped: dict[str, int] = {}
         problems: list[tuple[str, str]] = []
         for use in uses:
@@ -1650,7 +1647,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     @staticmethod
     def _calm_blow_problems(params: Any, ordered: list[Any]) -> list[tuple[str, str]]:
         """A ``blow_away`` without ``to`` while the stage's wind is calm (its ``wind`` and the
-        ``wind`` actions before it, DESIGN.md §69.32): nothing would blow the prop off stage."""
+        ``wind`` actions before it): nothing would blow the prop off stage."""
         level = wind_level(params.wind)
         problems: list[tuple[str, str]] = []
         for use in ordered:
@@ -1664,12 +1661,11 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     @contextmanager
     def narrate(self, beat: Any) -> Iterator[float]:
         """Narrate a beat; the characters on the stage whose voice says it speak (lip sync from
-        the beat's start to its end; on under the next beat while it overlaps this one, DESIGN.md
-        §69.34), unless the beat has a ``say`` action, which picks who speaks (§69.11)."""
+        the beat's start to its end; on under the next beat while it overlaps this one), unless the beat has a ``say`` action, which picks who speaks."""
         b = self.beat(beat)
         voiced = [] if "say" in self.beat_action_names(b) else speaking_characters(self.project.config, beat_voice(self.spec, b), self.cast)
         said = [p for act in b.actions if act.action == "say" for p in act.targets()]
-        #: who says the beat being narrated (a shot's default framing reads it, DESIGN.md §69.29)
+        #: who says the beat being narrated (a shot's default framing reads it)
         self.beat_speakers = voiced or [n for n in self.cast if any(fnmatchcase(n, p) for p in said)]
         speakers: list[tuple[Character, Any]] = []
         with super().narrate(b) as d:
@@ -1680,11 +1676,11 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         for figure, track in speakers:
             self.end_lip_sync(figure, track)
         if self.on_iso:
-            self._iso_drop_tags()   # the name tags of the lines that ended (§89.11)
+            self._iso_drop_tags()   # the name tags of the lines that ended
 
     def speaker_pan(self, beat: Any) -> float | None:
         """Where the beat's speakers (:attr:`beat_speakers`) stand in the camera's view as the
-        line starts, as a pan (DESIGN.md §111.4); ``None`` when none is on the stage."""
+        line starts, as a pan; ``None`` when none is on the stage."""
         from vidgen.staging import stage_pan
 
         frame = self.camera.frame
@@ -1694,18 +1690,18 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         return stage_pan(0.5 + (sum(xs) / len(xs) - float(frame.get_center()[0])) / frame.width)
 
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
-        """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
+        """The sounds of a character's action as it plays: footsteps on
         walks, a whoosh on enter / exit, a boing on jump, a thud where a thrown prop lands, a pop
         on a surprised face, a sound for an effect symbol (unless its ``sound: false``), a door's
         creak, a splash of water (:func:`foley_cues`), splashing steps once puddles lie on the
         ground (:func:`wet_steps`); none with ``foley: false`` (the stage's, else the video's). A
         project file with a sound's name plays as it is (without the cue's params)."""
         if self.on_iso:
-            self.iso_watch_action(action, animations, start, seconds)   # what the camera shows of it (lint offscreen_action, §89.11)
+            self.iso_watch_action(action, animations, start, seconds)   # what the camera shows of it (lint offscreen_action)
         if not self._foley_on():
             return
         wet_from = min(getattr(self, "_puddles_from", []), default=None)
-        cues = handling_cues(action, start, seconds) if self.on_iso else []   # small things handed about (§89.11)
+        cues = handling_cues(action, start, seconds) if self.on_iso else []   # small things handed about
         for part, anim, part_start, part_seconds in _timed_parts(action, animations, start, seconds):
             cues += wet_steps(foley_cues(_played(part, options, anim, part_start, part_seconds)), wet_from)
         for cue in cues:
@@ -1716,7 +1712,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """Whether this stage plays its sounds: its ``foley``, else the video's."""
         return self.params.foley if self.params.foley is not None else self.project.config.foley
 
-    # ----- motion effects (DESIGN.md §69.41) ------------------------------------------------------
+    # ----- motion effects ------------------------------------------------------
 
     def action_motion_effects(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The motion effects of a character's action as it plays (:func:`motion_effect_cues`):
@@ -1725,7 +1721,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         (the stage's, else the video's) or for a character whose ``cartoon_motion`` is none.
         Each is a :class:`MotionEffect` of its own, drawn right in front of its mover (speed
         lines right behind it), not graded by the light, and taken off the scene when its cue is
-        over. None in a draft (§74)."""
+        over. None in a draft."""
         on = self.params.motion_effects if self.params.motion_effects is not None else self.project.config.motion_effects
         if not on or self.is_draft:
             return
@@ -1749,7 +1745,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     def _add_motion_effect(self, effect: MotionEffect, mover: Mobject, *, behind: bool) -> None:
         """Put ``effect`` right in front of ``mover`` and the props it holds (``behind``: right
         behind it) in the scene (on top when the mover is not in it; a held prop stays right after
-        its holder, §69.27), and start the sweep that takes it off when it is done."""
+        its holder), and start the sweep that takes it off when it is done."""
         effect.set_z_index(mover.z_index)
         k = next((i for i, m in enumerate(self.mobjects) if m is mover), None)
         if k is None:
@@ -1775,11 +1771,11 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if not self.motion_effects:
             self.remove_updater(self._motion_sweep)
 
-    # ----- walking in depth, the front view (DESIGN.md §69.44) -------------------------------------
+    # ----- walking in depth, the front view -------------------------------------
 
     def feet_y_at(self, depth: float) -> float:
         """The y (Manim units) of the ground line at ``depth``: where feet stand there. Not on a
-        level (its floors are tiles, §86.7; depth is refused there)."""
+        level (its floors are tiles; depth is refused there)."""
         if self.on_level:
             raise VidgenError(f"scene '{self.spec.id}': a level has no depth: things stand on its tiles")
         return feet_point(0.5, depth, self.params.ground, self.frame_width, self.frame_height)[1]
@@ -1794,7 +1790,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def ride_in_depth(self, vehicle: Prop, ride: Ride) -> None:
         """``vehicle`` rides in depth with ``ride``: its place in the draw order, with its riders,
-        follows its depth on every frame (:meth:`_keep_depth_order`, DESIGN.md §69.52), and the
+        follows its depth on every frame (:meth:`_keep_depth_order`), and the
         ground line under it is its new depth's once it stops."""
         self.grounds[vehicle.name] = self.feet_y_at(ride.to_depth)
         for seat in ride.seats:
@@ -1814,7 +1810,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
         if (fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None) or getattr(self, "iso_swayers", None)
                 or getattr(self, "iso_critters", None)):
-            # a working object's parts (§103), a vehicle (§105), a tree in the wind (§105.4), ambient life (§105.7)
+            # a working object's parts, a vehicle, a tree in the wind, ambient life
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:
@@ -1831,7 +1827,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if self.params.iso is not None:
             changed |= self._iso_keep_order()
         if self._depth_walks:
-            changed |= self._sort_fog()   # a walker may pass a fog band's depth (§69.60)
+            changed |= self._sort_fog()   # a walker may pass a fog band's depth
         self._depth_walks = [(c, w) for c, w in self._depth_walks if abs(c.stage_depth - w.to_depth) > SAME_DEPTH]
         for name, figure in self.cast.items():
             if self._part_orders.get(name) != figure.order_changes:
@@ -1845,7 +1841,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         what it drew so far plus what moves now. Manim drew everything else once, when the
         animation began, into its static image; a thing dropped from this list mid-play (a prop at
         the depth the walker has left behind, so no longer one it passes) would be drawn in neither
-        and vanish until the next animation (§69.44)."""
+        and vanish until the next animation."""
         now = self.get_moving_and_static_mobjects(self.animations)[0]
         kept = {id(m) for m in self.moving_mobjects} | {id(m) for m in now}
         ordered = self.get_mobject_family_members()
@@ -1898,18 +1894,18 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             riders = [seat.rider for seat in anim.seats] if isinstance(anim, Ride) else []
             for thing in [anim.mobject, *riders, *(t for t in things if low - SAME_DEPTH <= float(getattr(t, "stage_depth", 0.0)) <= high + SAME_DEPTH)]:
                 found |= {id(m) for m in thing.get_family()}
-            fog = getattr(self, "fog", None)   # the fog bands it passes (§69.60)
+            fog = getattr(self, "fog", None)   # the fog bands it passes
             for band in fog.bands if fog is not None else []:
                 if low - SAME_DEPTH <= band.stage_depth <= high + SAME_DEPTH:
                     found |= {id(m) for m in band.get_family()}
         return found
 
-    # ----- rain on the ground (DESIGN.md §69.39) --------------------------------------------------
+    # ----- rain on the ground --------------------------------------------------
 
     def rain_ground(self) -> RainGround:
         """Where rain ends now: the landing band from the ground line up to the top of the ground
         area, and the shelters (open umbrellas, held or standing, and trees) where they are; on an
-        iso place anywhere on its ground (DESIGN.md §89.11)."""
+        iso place anywhere on its ground."""
         if self.on_iso:
             return self.iso_rain_ground()
         shelters = [s for s in (self._shelter_of(prop) for prop in self.props.values()) if s is not None]
@@ -1932,14 +1928,14 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         shadows, characters and props). A snow field with ``settle: true``: its layer grows
         (:meth:`_settle_snow`)."""
         if field.seeds.kind == "snow" and settings.settle and not self.is_draft:
-            if self.on_iso:   # on the place's pictures (DESIGN.md §90.3)
+            if self.on_iso:   # on the place's pictures
                 self.iso_settle_snow(field, settings)
             else:
                 self._settle_snow(field, settings)
         if field.seeds.kind != "rain":
             return
         every = storm_every(settings)
-        if every is not None:   # lightning while it rains (§69.61); a draft hears its thunder only (§74)
+        if every is not None:   # lightning while it rains; a draft hears its thunder only
             storm = RainStorm(field.start, every, motion_seed(self.spec.id, "storm", settings.seed, len(self._storms)), lambda: field.ended)
             self._storms.append(storm)
             if not self.is_draft:
@@ -1949,10 +1945,10 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             self._rain_fields.append(field)
         if not settings.puddles:
             return
-        self._puddles_from.append(field.start)   # steps splash from then on, also in a draft without puddles (§74)
+        self._puddles_from.append(field.start)   # steps splash from then on, also in a draft without puddles
         if self.is_draft:
             return
-        if self.on_iso:   # on the place's ground cells (DESIGN.md §90.2)
+        if self.on_iso:   # on the place's ground cells
             self.iso_lay_puddles(field, settings)
             return
         left, right = self.camera_bounds()[:2]
@@ -1965,12 +1961,12 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         self.puddles.append(puddles)
         self._lay_on_ground(puddles)
 
-    # ----- snow that settles (DESIGN.md §69.60) -----------------------------------------------------
+    # ----- snow that settles -----------------------------------------------------
 
     def snow_ground(self) -> RainGround:
         """Where settling snow ends now: rain's landing band, open umbrellas (held or standing) and
         the top line of every prop that catches snow (:meth:`_snow_tops`); on an iso place where
-        its rain lands (DESIGN.md §90.3)."""
+        its rain lands."""
         if self.on_iso:
             return self.iso_rain_ground()
         tops = self._snow_tops()
@@ -2041,15 +2037,15 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         else:
             self.mobjects.insert(at + 1, mobject)
 
-    # ----- fog (DESIGN.md §69.60) -------------------------------------------------------------------
+    # ----- fog -------------------------------------------------------------------
 
     def _fog(self) -> StageFog | None:
         """The stage's ``fog`` (``None``: none): its bands lit by the light, drifting with the
-        stage's wind when it may blow, and the scene updater when its waves move. None in a draft (§74)."""
+        stage's wind when it may blow, and the scene updater when its waves move. None in a draft."""
         setting = self.params.fog
         if setting is None or self.is_draft:
             return None
-        if self.on_iso:   # in bands by depth over the place (§105.4)
+        if self.on_iso:   # in bands by depth over the place
             return self._iso_fog(setting)
         left, right = self.camera_bounds()[:2]
         color = resolve_color(setting.color, self.theme) if setting.color is not None else FOG_COLOR
@@ -2119,8 +2115,8 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def timings(self) -> dict[str, Any]:
         """The scene's timings, plus ``ambience``: the rain sound bed from each rain field's start
-        to its end (the scene's end while it lasts, DESIGN.md §69.39), the fire's crackle while
-        each fireplace burns (§69.55) and the set's beds (:meth:`set_beds`, §69.62), with foley;
+        to its end (the scene's end while it lasts), the fire's crackle while
+        each fireplace burns and the set's beds (:meth:`set_beds`), with foley;
         scene seconds."""
         data = super().timings()
         end = float(self.renderer.time)
@@ -2129,7 +2125,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         fires = [live for live in getattr(self, "living", {}).values() if live.kind == "fireplace"] if self._foley_on() else []
         beds += [{"bed": "fire", "start": round(a, 6), "end": round(b, 6)} for live in fires for a, b in on_spans(live.on, live.switches, end)]
         beds += [{"bed": bed, "start": round(a, 6), "end": round(b, 6)} for bed, a, b in self.set_beds([s for s in spans if s[1] > s[0]], end)]
-        beds += self.alarm_beds(end)   # the siren while an alarm runs (§100.7)
+        beds += self.alarm_beds(end)   # the siren while an alarm runs
         if beds:
             data["ambience"] = beds
         return data
@@ -2154,7 +2150,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def shot_framing(self, kind: str, names: list[str]) -> tuple[ShotView, Shot]:
         """The camera view of a ``kind`` shot of the characters ``names`` (filled in by
-        :func:`shot_figures`) where the characters on the stage stand now (DESIGN.md §69.29)."""
+        :func:`shot_figures`) where the characters on the stage stand now."""
         left, right = self.camera_bounds()[:2]
         present: dict[str, ShotFigure] = {}
         for name, figure in self.cast.items():
@@ -2166,16 +2162,16 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             present[name] = ShotFigure(name, x, float(figure.feet()[1]), figure.standing_height, figure.facing, float(top))
         looked = {name: figure.looked_at for name, figure in self.cast.items()}
         shot = shot_figures(kind, names, present, speakers=getattr(self, "beat_speakers", []), looked_at=looked)
-        if kind == "wide" and self.on_iso:   # the place's wide view, keeping who is there (§89.13)
+        if kind == "wide" and self.on_iso:   # the place's wide view, keeping who is there
             return self.iso_wide_shot(list(present)), shot
-        most = MAX_SHOT_SCALE * (self.zoom_base() if self.on_iso else 1.0)   # closer than an iso place's fixed wide view (§106)
+        most = MAX_SHOT_SCALE * (self.zoom_base() if self.on_iso else 1.0)   # closer than an iso place's fixed wide view
         view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds(), max_scale=most)
-        if self.on_iso and self.frame_height > self.frame_width:   # 9:16 on an iso place: nobody cut at the edge (§90.14)
+        if self.on_iso and self.frame_height > self.frame_width:   # 9:16 on an iso place: nobody cut at the edge
             view = portrait_shot(view, shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
         return view, shot
 
     def drawing_settings(self) -> list[Any]:
-        """The video's ``drawing:``, then the scene's ``drawing`` param (DESIGN.md §79)."""
+        """The video's ``drawing:``, then the scene's ``drawing`` param."""
         return [*super().drawing_settings(), self.params.drawing]
 
     @classmethod
@@ -2185,7 +2181,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def camera_bounds(self) -> tuple[float, float, float, float]:
         """The stage: ``width`` frames wide, the frame's height; a level's up to its top (a
-        character on its highest tile and room for a jump, DESIGN.md §86.10)."""
+        character on its highest tile and room for a jump)."""
         half = self.stage_width / 2
         frame = self.params.level_frame(self.frame_width, self.frame_height)
         top = self.frame_height / 2 if frame is None else frame.top
@@ -2193,7 +2189,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def _follow_hero(self, hero: Character) -> None:
         """``level.follow``: the camera starts on ``hero`` (as a follow that has settled there)
-        and follows it from the first frame (DESIGN.md §86.10)."""
+        and follows it from the first frame."""
         follower = self.camera_follower(hero)
         assert follower is not None
         frame = self.camera.frame
@@ -2204,7 +2200,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     def camera_follower(self, mob: Mobject) -> SmoothFollow | None:
         """How the camera follows ``mob`` (the ``follow`` action, ``level.follow``): on a level
         and on an iso place gently, with a dead zone, up and down too
-        (:class:`~vidgen.camera.SmoothFollow`, DESIGN.md §86.10, §89.10); ``None`` elsewhere (the
+        (:class:`~vidgen.camera.SmoothFollow`); ``None`` elsewhere (the
         camera keeps its centre on it)."""
         if not self.on_level and not self.on_iso:
             return None
@@ -2220,15 +2216,15 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         return SmoothFollow(lambda: float(mob.get_center()[0]), followed=mob, settle=self._follow_settle())
 
     def _follow_settle(self) -> Any:
-        """A follow's ``settle``: an iso place's fixed wide view keeps the view on the ground
-        (DESIGN.md §106); ``None`` elsewhere."""
+        """A follow's ``settle``: an iso place's fixed wide view keeps the view on the ground;
+        ``None`` elsewhere."""
         return self._iso_on_ground if self.on_iso and self.iso_tiles() is not None else None
 
     @property
     def stage_width(self) -> float:
         """The stage's width in Manim units: ``width`` frames, or, when reframing in a frame
-        narrower than a landscape one, ``width`` 16:9 frames (DESIGN.md §69.30); on a level, the
-        level's width (§86)."""
+        narrower than a landscape one, ``width`` 16:9 frames; on a level, the
+        level's width."""
         frame = self.params.level_frame(self.frame_width, self.frame_height)
         if frame is not None:
             return frame.stage_width
@@ -2238,7 +2234,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def construct(self) -> None:
         # on an iso place with the fixed wide view, thin strokes are one pixel of that view, not of
-        # the whole place the zoom magnifies (DESIGN.md §108); 1 otherwise (unchanged)
+        # the whole place the zoom magnifies; 1 otherwise (unchanged)
         zoom = 1.0
         if self.params.iso is not None:
             self.iso_view = iso_view(self.params.iso.parsed(), self.frame_width, self.frame_height)
@@ -2251,11 +2247,11 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         frame = self.camera.frame
         start_x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
         frame.move_to([*view_center_within(self.camera_bounds(), (start_x, 0.0), frame.width, frame.height), 0.0])
-        if p.iso is not None:   # the place's tiles drawn fast; before the light wraps the camera (§89.10)
+        if p.iso is not None:   # the place's tiles drawn fast; before the light wraps the camera
             install_tile_drawing(self.renderer.camera)
         self._start_light()
         layers = self._layers()
-        #: the layers by name, in the order given (DESIGN.md §69.7)
+        #: the layers by name, in the order given
         self.layers: dict[str, Mobject] = dict(zip(p.layer_names(), layers))
         behind = [m for layer, m in zip(p.layers, layers) if layer.place != "foreground"]
         in_front = [m for layer, m in zip(p.layers, layers) if layer.place == "foreground"]
@@ -2265,25 +2261,25 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
                 raise VidgenError(f"scene '{self.spec.id}': level: {problems[0]}")
         placements = p.layout(frame_width=self.frame_width, frame_height=self.frame_height, stage_width=self.stage_width)
         heads = [place.feet[1] + place.height for place in placements if place.kind == "character"]
-        #: an iso place's scenery drawn right after each character (DESIGN.md §89.7)
+        #: an iso place's scenery drawn right after each character
         self._iso_after: dict[str, list[Mobject]] = {}
         self._iso_behind = self._iso_scenery(placements) if p.iso is not None else []
         backdrop = self._backdrop(behind, max(heads, default=None))
         members = {m.name: m for m in p.characters}
         props = dict(zip(p.prop_names(), p.stage_props()))
-        # the characters and the props on the stage by name, back to front (DESIGN.md §69.6, §69.8)
+        # the characters and the props on the stage by name, back to front
         self.cast: dict[str, Character] = {}
         self.props: dict[str, Prop] = {}
-        #: who holds which prop (the prop actions, DESIGN.md §69.27)
+        #: who holds which prop (the prop actions)
         self.holdings = Holdings()
         #: each character's mark (its ``at``) as an x in Manim units, where ``enter`` walks it to
         self.homes: dict[str, float] = {}
-        #: the y of the ground line at each character's and prop's depth (``keyframes`` y 0, §69.14)
+        #: the y of the ground line at each character's and prop's depth (``keyframes`` y 0)
         self.grounds: dict[str, float] = {}
-        #: on a level, each character's own place in tile units, where ``enter`` walks it (§86.7)
+        #: on a level, each character's own place in tile units, where ``enter`` walks it
         self.level_homes: dict[str, tuple[float, float]] = {}
         #: on an iso place, the cell each character stands in once the moves planned so far are
-        #: over (``None``: off the place), and the routes planned last, with the scene time (§89.9)
+        #: over (``None``: off the place), and the routes planned last, with the scene time
         self.iso_cells: dict[str, tuple[int, int] | None] = {}
         self._iso_planned: dict[str, tuple[float, IsoRoute]] = {}
         level_at = p.level_frame(self.frame_width, self.frame_height)
@@ -2294,9 +2290,9 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         unit = p.size * min(self.frame_width, self.frame_height)
         lifts = {item.name: item.lift * self.frame_height + item.hang * unit for item in p.items()}
         for place_at in placements:
-            if p.level is not None:   # the tile it stands on (§86)
+            if p.level is not None:   # the tile it stands on
                 self.grounds[place_at.name] = place_at.feet[1] - lifts[place_at.name]
-            elif p.iso is not None:   # its cell's top (§89)
+            elif p.iso is not None:   # its cell's top
                 self.grounds[place_at.name] = place_at.feet[1]
             else:
                 self.grounds[place_at.name] = feet_point(
@@ -2306,9 +2302,9 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
                 item = self._prop(place_at.name, props[place_at.name], place_at.height, living=place_at.name in living)
                 item.height_factor = props[place_at.name].height_factor()
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
-                item.stage_depth = place_at.depth   # its place in the draw order (walks in depth, §69.44)
+                item.stage_depth = place_at.depth   # its place in the draw order (walks in depth)
                 item.raised = props[place_at.name].resolved_lift() + props[place_at.name].resolved_hang() > 0
-                if p.iso is not None:   # where it stands on the place (§89.10)
+                if p.iso is not None:   # where it stands on the place
                     item.iso_feet = iso_item_point(p.iso.parsed(), str(props[place_at.name].at))
                 self.props[place_at.name] = item
                 on_stage.append((place_at.name, item))
@@ -2317,22 +2313,22 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             facing = facing_towards_centre(place_at.x_fraction) if member.facing in ("auto", "front") else member.facing
             figure = character(member.name, height=place_at.height, facing=facing, motion=p.cartoon_motion)
             if member.facing == "front":
-                figure.face("front")   # an SVG character keeps its side, towards the middle (§69.44)
+                figure.face("front")   # an SVG character keeps its side, towards the middle
             figure.stage_depth, figure.ground_y = place_at.depth, self.grounds[place_at.name]
             if member.pose is not None:
                 figure.set_pose(member.pose)
             if member.expression is not None:
                 figure.set_expression(member.expression)
-            if not p.idle or self.is_draft:   # a draft: no breathing, swaying or blinking (§74)
+            if not p.idle or self.is_draft:   # a draft: no breathing, swaying or blinking
                 figure.stop_idle()
             figure.shift(np.array([*place_at.feet, 0.0]) - figure.feet())
             self.homes[member.name] = place_at.feet[0]
             if level_at is not None:
                 self.level_homes[member.name] = level_at.world_point(*place_at.feet)
-            if p.iso is not None:   # where its feet are on the place, and its cell (§89.9)
+            if p.iso is not None:   # where its feet are on the place, and its cell
                 figure.iso_feet = iso_stand(p.iso.parsed(), str(member.at))
                 self.iso_cells[member.name] = None if member.name in entering else cell_of(figure.iso_feet)
-            if member.name in entering:  # waits beyond the stage's edge until its enter (§69.12)
+            if member.name in entering:  # waits beyond the stage's edge until its enter
                 side = entering[member.name] or nearer_side(place_at.feet[0], left, right)
                 figure.shift([offstage_x(side, left, right, figure.width / 2) - place_at.feet[0], 0.0, 0.0])
             self.cast[member.name] = figure
@@ -2346,7 +2342,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if p.level is not None and p.level.follow is not None:
             self._follow_hero(self.cast[p.level.follow])
         #: the stage's water (``None``: none): its band over the ground, its front strip in front of
-        #: everything, the boats bobbing on it (DESIGN.md §69.53)
+        #: everything, the boats bobbing on it
         self.water = self._water()
         if self.water is not None:
             backdrop.append(self.water.back)
@@ -2354,32 +2350,32 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             for prop in self.props.values():
                 if prop.is_vehicle and VEHICLES[prop.kind].medium == "water":
                     self.water.float_boat(prop)
-        # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
+        # the light grades the set, not the stars, shadows, bubbles or text
         mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews)) and m is not self.day_sky], *in_front, *(mob for _, mob in on_stage))
-        if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
+        if p.iso is not None:   # a lamp's light falls on who stands near it
             self.iso_lamplight()
-        if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
+        if self.drawing.shading == "soft":   # the characters' and props' fills
             mark_shaded(*(mob for _, mob in on_stage if not (is_hologram(mob) or is_echo(mob))))
-        for figure in self.cast.values():   # a hologram or an echo glows the same in any light (DESIGN.md §100.3, §102.6)
+        for figure in self.cast.values():   # a hologram or an echo glows the same in any light
             if is_hologram(figure) or is_echo(figure):
                 unmark_lit(figure)
-        self._fill_lights()   # faces readable in the dark, visitors shining (§100.15)
+        self._fill_lights()   # faces readable in the dark, visitors shining
         self._start_living(living)
-        self._start_story()   # flickers, iridescence, afterimages, materialising, a lab's lights (§100.9)
+        self._start_story()   # flickers, iridescence, afterimages, materialising, a lab's lights
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
         self._start_sky_path(any(getattr(m, "name", None) == "ground" for m in backdrop))
-        vehicles =list(getattr(self, "iso_vehicles", {}).items())   # the vehicles the scene moves: bodies of the place (§105)
+        vehicles =list(getattr(self, "iso_vehicles", {}).items())   # the vehicles the scene moves: bodies of the place
         mark_lit(*(vehicle for _, vehicle in vehicles))
         on_stage = vehicles + on_stage
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
-        for whole in targets:  # parts come on screen with their character (§69.14)
+        for whole in targets:  # parts come on screen with their character
             if isinstance(whole.mobject, Character):
                 for part in whole.mobject.parts:
                     self.target(f"{whole.name}.{part}", whole.mobject.parts[part], entrance=lambda t=whole: self.entrance(t))
-        for name, holder in getattr(self, "iso_objects", {}).items():   # an iso place's objects the scene changes (§89.10)
+        for name, holder in getattr(self, "iso_objects", {}).items():   # an iso place's objects the scene changes
             self.target(name, holder, entrance=lambda name=name: self.iso_reveal(name))
         cast_by = {id(c.mobject) for c in (moving.casters if moving is not None else [])}
         first_moving = next((k for k, t in enumerate(targets) if id(t.mobject) in cast_by), None)
@@ -2387,36 +2383,36 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         def entrance() -> list:
             """The set comes in as one picture: everything is added at once, back to front, under
             a cover of the background colour that fades out (a fade-in per thing would show the
-            things behind through each one while they fade, §69.51)."""
-            shown: list[Mobject] = [*backdrop, *self.iso_ambient_shown()]   # an iso place's creatures (§105.7)
+            things behind through each one while they fade)."""
+            shown: list[Mobject] = [*backdrop, *self.iso_ambient_shown()]   # an iso place's creatures
             items: list = []
             for k, t in enumerate(targets):  # moving things' shadows: drawn just before the first of them
                 shown += [moving] if k == first_moving else []
                 if self.is_shown(t):
                     continue
-                carried = self._claim_carried(t) if self._carried else None   # a copy from the scene before moves in (§50)
+                carried = self._claim_carried(t) if self._carried else None   # a copy from the scene before moves in
                 if carried is not None:
                     items.append(carried)
                 else:
-                    live = self.living.get(t.name)   # a glow right behind it, steam right in front (§69.54, §69.55)
+                    live = self.living.get(t.name)   # a glow right behind it, steam right in front
                     shown += [m for m in (live.glow if live else None, t.mobject, live.steam if live else None) if m is not None]
-                    shown += self._after_props.pop(t.name, [])   # its snow cap (§69.60)
-                    shown += self._iso_after.get(t.name, [])   # the iso scenery in front of it (§89.7)
+                    shown += self._after_props.pop(t.name, [])   # its snow cap
+                    shown += self._iso_after.get(t.name, [])   # the iso scenery in front of it
             self.add(*shown, *in_front)
-            for body in self.sky_bodies:   # a moving sun or moon goes behind everything (§69.61)
+            for body in self.sky_bodies:   # a moving sun or moon goes behind everything
                 self.mobjects.remove(body.prop)
                 self._put_in_sky(body.prop)
             self._sort_fog()
-            if self.transition_in is not None and self.transition_in.overlap:   # a crossfade, push or wipe brings the set in (§110)
+            if self.transition_in is not None and self.transition_in.overlap:   # a crossfade, push or wipe brings the set in
                 return items
             return [FadeOut(self._cover()), *items]
 
         self._start_wind(placements)
         self._start_water()
         self._start_depth_order()
-        #: the set behind the characters (puddles go in it, DESIGN.md §69.39)
+        #: the set behind the characters (puddles go in it)
         self._backdrop = backdrop
-        #: the flocks of birds in the sky (DESIGN.md §69.55), drawn right after the sky
+        #: the flocks of birds in the sky, drawn right after the sky
         self.flocks: list[Flock] = []
         if p.birds is not None:
             self.add_flock(p.birds, p.birds.start)
@@ -2430,21 +2426,21 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         #: the scene times the rain fields with ``puddles: true`` started (wet steps follow them)
         self._puddles_from: list[float] = []
         #: the layers of the snow fields with ``settle: true``, what waits to be drawn right after
-        #: a prop when it comes in (its snow cap), and the stage's fog (DESIGN.md §69.60)
+        #: a prop when it comes in (its snow cap), and the stage's fog
         self.snow_layers: list[SettledSnow] = []
         self._after_props: dict[str, list[Mobject]] = {}
         self._in_front = in_front
         self.fog = self._fog()
-        #: the motion effects on the scene now (DESIGN.md §69.41), and the scene updater that
+        #: the motion effects on the scene now, and the scene updater that
         #: takes finished ones off, kept: Manim removes an updater by identity
         self.motion_effects: list[MotionEffect] = []
         self._motion_sweep = self._sweep_motion_effects
-        #: the particle fields over the stage, in the order given (DESIGN.md §69.9)
+        #: the particle fields over the stage, in the order given
         self.particles: list[ParticleField] = [particle_field(self, item.kind, item) for item in p.particles]
         self.add(*self.particles)
         if self.light is not None:
             self.light.on_change(self._show_light)
-        in_front += self._flashback_vignette()   # over the set and the characters (§100.12)
+        in_front += self._flashback_vignette()   # over the set and the characters
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
         self._ring_sounds()
@@ -2467,7 +2463,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         then everything leaves the scene (as after a fade out); fading each thing on its own
         showed what stands behind a house through it. As
         :meth:`NarratedScene.finish` when there is no outro, a transition takes the picture away or
-        the next scene carries something on (DESIGN.md §49, §50)."""
+        the next scene carries something on."""
         if self.outro <= 0 or (self.transition_out is not None and not self.transition_out.cut) or self._carried_parts():
             super().finish()
             return
@@ -2475,28 +2471,28 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         self.play(FadeIn(self._cover().set_z_index(top + 1)), run_time=self.outro)
         self.remove(*self.mobjects)   # gone, as a fade out leaves the scene
 
-    # ----- light and shadows (DESIGN.md §69.31) ---------------------------------------------------
+    # ----- light and shadows ---------------------------------------------------
 
     def _start_light(self) -> None:
         """The light at the start (``light``) and, when it grades anything or a ``light`` action
         changes it, the :class:`StageLight` that grades the set as the camera draws it."""
         #: the light from the start, and whether any light of the scene has stars
-        self.base_light = self.flashback_look(resolve_light(self.params.light, self.theme))   # a memory's look over it (§100.12)
+        self.base_light = self.flashback_look(resolve_light(self.params.light, self.theme))   # a memory's look over it
         #: (scene time, light preset or ``None`` for a tint) from the start: where the light
-        #: counts as changed for the ambience (half-way through each change, DESIGN.md §69.62)
+        #: counts as changed for the ambience (half-way through each change)
         self.light_marks: list[tuple[float, str | None]] = [(0.0, self.params.light if isinstance(self.params.light, str) else None)]
         changes = [resolve_light(use.setting(), self.theme) for use in self._light_uses()]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
         flashes = self._lightning_used() or bool(self.action_uses("alarm"))
         #: the stage's light (``None``: the set as drawn, nothing changes it)
-        #: (a draft's is flat: nothing graded, no flashes, the changes at their times, §74)
+        #: (a draft's is flat: nothing graded, no flashes, the changes at their times)
         self.light: StageLight | None = (
             StageLight(self.renderer.camera, self.base_light, flat=self.is_draft) if self.base_light.changes_colors or changes or flashes else None
         )
         if self.light is not None and self.params.room is not None:
-            self.light.flash_share *= ROOM_FLASH   # only what comes in through the windows (§69.61)
+            self.light.flash_share *= ROOM_FLASH   # only what comes in through the windows
         #: the lightning bolt in the sky, the rainbows, the suns and moons moving along the sky's
-        #: path and the rain fields' storms (DESIGN.md §69.61)
+        #: path and the rain fields' storms
         self.bolt: LightningBolt | None = None
         self.rainbows: list[StageRainbow] = []
         self.sky_bodies: list[SkyBody] = []
@@ -2504,7 +2500,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         self._bolt_paths: dict[int, list[np.ndarray]] = {}
         self.stars: StarField | None = None
         self.window_views: WindowViews | None = None
-        #: a day passing's sky (DESIGN.md §105.3; ``None``: the set's own background)
+        #: a day passing's sky (``None``: the set's own background)
         self.day_sky: Rectangle | None = None
         self.shadows: list[StageShadows] = []
         #: the scene updater while the light changes, kept: Manim removes an updater by identity,
@@ -2515,9 +2511,9 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """Fade the light to ``setting`` (a preset or a tint) from scene time ``start`` over
         ``seconds`` (the ``light`` action); everything is redrawn on every frame meanwhile.
         ``move_sun``: the suns and moons move along the sky's path to their places for the preset
-        meanwhile (DESIGN.md §69.61)."""
+        meanwhile."""
         self.light_marks.append((float(start) + max(float(seconds), 0.0) / 2, setting if isinstance(setting, str) else None))
-        if self.window_views is not None or self.day_sky is not None:   # the sky outside fades with it (§69.42, §105.3)
+        if self.window_views is not None or self.day_sky is not None:   # the sky outside fades with it
             self._sky_changes.append(SkyChange(float(start), max(float(seconds), 0.0), window_sky(self._light_key(setting))))
         if move_sun and isinstance(setting, str):
             for body in self.sky_bodies:
@@ -2538,7 +2534,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             self.add_updater(self._light_updater)
 
     def _light_step(self, dt: float) -> None:
-        """Scene updater while the light changes or lightning may flash: the sky (§69.61) and the
+        """Scene updater while the light changes or lightning may flash: the sky and the
         grade for the scene time now; it removes itself once every change and flash is over (a
         scene updater makes Manim redraw every frame)."""
         now = float(self.renderer.time)
@@ -2550,8 +2546,8 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def _show_light(self, grade: LightGrade) -> None:
         """The stars' brightness and the shadows' darkness for ``grade``, and the sky outside a
-        room's windows or of a day passing for the light now (lit by lightning, §69.61, §105.3)."""
-        if self.stars is not None:   # in a day passing's sky they come out late, once it is dark (§105.3)
+        room's windows or of a day passing for the light now (lit by lightning)."""
+        if self.stars is not None:   # in a day passing's sky they come out late, once it is dark
             self.stars.set_level(grade.stars ** 2 if self.day_sky is not None else grade.stars)
         if self.window_views is not None or self.day_sky is not None:
             sky = sky_at(self._sky_base, self._sky_changes, float(self.renderer.time))
@@ -2564,7 +2560,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         for group in self.shadows:
             group.set_strength(grade.shadow)
 
-    # ----- lightning, rainbows, the sun and moon moving (DESIGN.md §69.61) --------------------------
+    # ----- lightning, rainbows, the sun and moon moving --------------------------
 
     def _lightning_used(self) -> bool:
         """Whether lightning may flash in this scene: a ``lightning`` action, or rain with
@@ -2584,7 +2580,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         seed = seed if seed is not None else motion_seed(self.spec.id, "lightning", round(float(time), 3))
         x = mark_x(at, self.params.stage_marks()) if at is not None else 0.15 + 0.7 * (seed % 1000) / 999
         strike = Strike(float(time), x, float(distance), seed, bolt and self.params.room is None)
-        if not self.is_draft:   # a draft: no flash, no bolt, the thunder at its time (§74)
+        if not self.is_draft:   # a draft: no flash, no bolt, the thunder at its time
             self._lit().strikes.append(strike)
             self._watch_light()
         self._thunder(strike)
@@ -2653,7 +2649,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """With a ``light`` action that has ``move_sun`` (outdoors), every ``sun`` and ``moon``
         prop is a :class:`SkyBody`: placed on the sky's path where the light at the start puts it
         (a tint: as by day), moved by the light changes, and the shadows cast away from it.
-        ``ground``: a ground band hides the sky under the horizon (a body sinks behind it, §105.8)."""
+        ``ground``: a ground band hides the sky under the horizon (a body sinks behind it)."""
         if self.params.room is not None or not any(use.moves_sun(self.params) for use in self._light_uses()):
             return
         start = self.params.light if isinstance(self.params.light, str) else "day"
@@ -2689,11 +2685,11 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """Manim's moving mobjects, or every mobject while the light changes during this
         animation (the grade then changes on every frame, so nothing can stay in the static
         image), or, while the wind may move something, everything from the first swaying prop or
-        trailing character on (DESIGN.md §69.32; the set behind it stays in the static image),
+        trailing character on (the set behind it stays in the static image),
         while a character walks in depth, everything from the first thing whose depth it passes
-        on (its place in the draw order changes, §69.44), on a stage with water everything from
-        the first boat on (the waves and the bobbing move every frame, §69.53), and the parts of the
-        props that move by themselves with what is drawn over them (§69.54)."""
+        on (its place in the draw order changes), on a stage with water everything from
+        the first boat on (the waves and the bobbing move every frame), and the parts of the
+        props that move by themselves with what is drawn over them."""
         moving = super().get_moving_mobjects(*animations)
         now = float(self.renderer.time)
         duration = getattr(self, "duration", None)
@@ -2721,7 +2717,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             moving = list_update(family[first:], moving)
         return self._living_redrawn(moving, now, end)
 
-    # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------------
+    # ----- wind ----------------------------------------------------------------
 
     def _start_wind(self, placements: list[StagePlacement]) -> None:
         """The wind from the start (``wind``) and, when it or a ``wind`` action blows, the
@@ -2737,7 +2733,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             return
         wind = Wind(base, seed=wind_seed(self.spec.id))
         left = -self.stage_width / 2
-        if self.is_draft:   # nothing sways or trails; balloons and blown props still drift with it (§74)
+        if self.is_draft:   # nothing sways or trails; balloons and blown props still drift with it
             self.blowing = StageWind(wind, [], {}, lambda x: (x - left) / self.stage_width)
             self._wind_updater = self._wind_step
             return
@@ -2768,7 +2764,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         self.blowing.wind.change(level, start, seconds)
         if not self.is_draft and not any(f is self._wind_updater for f in self.updaters):
             self.add_updater(self._wind_updater)
-        if getattr(self, "iso_swayers", None):   # the place's trees sway with it (§105.4)
+        if getattr(self, "iso_swayers", None):   # the place's trees sway with it
             self._watch_living()
 
     def _wind_step(self, dt: float) -> None:
@@ -2781,7 +2777,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if self.blowing is None or not self.blowing.moving(now, math.inf):
             self.remove_updater(self._wind_updater)
 
-    # ----- water (DESIGN.md §69.53) ----------------------------------------------------------------
+    # ----- water ----------------------------------------------------------------
 
     def _water(self) -> StageWater | None:
         """The stage's ``water`` (``None``: none), its waves drifting with the wind's way."""
@@ -2823,12 +2819,12 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         riders = [seat.rider for boat in boats for seat in self._riders_of(boat)]
         return {id(m) for mob in [water.front, *boats, *riders] for m in mob.get_family()}
 
-    # ----- props that move by themselves (DESIGN.md §69.54) ----------------------------------------
+    # ----- props that move by themselves ----------------------------------------
 
     def _living_names(self) -> set[str]:
         """The props that move by themselves in this scene: running clocks, and the tvs and lamps
         that are on at the start or that a ``switch_on`` names (or, for lamps, a ``time_of_day`` may
-        switch, §105.3). Every other prop is drawn as before."""
+        switch). Every other prop is drawn as before."""
         p = self.params
         patterns = [pattern for use in self.action_uses("switch_on") for pattern in use.config.targets()]
         dusk = any(use.options.auto_lights for use in self.action_uses("time_of_day"))
@@ -2847,7 +2843,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         movable = self._movable_props() if names else set()
         blows = wind_level(self.params.wind) != 0.0 or any(use.level() for use in self.action_uses("wind"))
         wind = self._felt_wind if blows else None
-        #: the props that move by themselves, by name (DESIGN.md §69.54)
+        #: the props that move by themselves, by name
         self.living: dict[str, LivingProp] = {}
         for name in sorted(names):
             prop = given[name]
@@ -2868,7 +2864,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def _living_things(self) -> list[Any]:
         """The props that move by themselves, the flocks of birds, the layers of settling snow, the
-        fog and the rainbows (DESIGN.md §69.54, §69.55, §69.60, §69.61)."""
+        fog and the rainbows."""
         fog = getattr(self, "fog", None)
         return [
             *getattr(self, "living", {}).values(), *getattr(self, "flocks", []), *getattr(self, "snow_layers", []), *([fog] if fog is not None else []),
@@ -2892,7 +2888,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             fog.update(now)
         for rainbow in self.rainbows:
             rainbow.update(now)
-        things = getattr(self, "story_things", [])   # shutters, a lab's lights (§100.7, §100.11)
+        things = getattr(self, "story_things", [])   # shutters, a lab's lights
         for thing in things:
             thing.update_to(now)
         settled = all(layer.done(now) for layer in [*self.snow_layers, *self.rainbows, *things]) and (fog is None or not fog.moves)
@@ -2907,31 +2903,31 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         names = [name for name in getattr(self, "living", {}) if any(fnmatchcase(name, pat) for pat in patterns)]
         for name in names:
             self.living[name].switch(on, time)
-        if self.on_iso and self.iso_switch(patterns, on, time) and self._foley_on():   # a lamp, a house's windows (§89.10)
+        if self.on_iso and self.iso_switch(patterns, on, time) and self._foley_on():   # a lamp, a house's windows
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if not names or not self._foley_on():
             return
         if any(self.living[name].kind not in ("fireplace", "portal", "hologram_display", *(("phone",) if on else ())) for name in names):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
-        if any(self.living[name].kind == "hologram_display" for name in names):   # it hums up and chimes, or hums down (§100.10)
+        if any(self.living[name].kind == "hologram_display" for name in names):   # it hums up and chimes, or hums down
             for sound, params in (DISPLAY_ON_SOUNDS if on else DISPLAY_OFF_SOUNDS):
                 self.sfx(sound, max(float(time), 0.0) + params.get("delay", 0.0), **{k: v for k, v in params.items() if k != "delay"})
         if on and any(self.living[name].kind == "fireplace" for name in names):
             self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
-        if any(self.living[name].kind == "portal" for name in names):   # it tears open or seals (§100.4)
+        if any(self.living[name].kind == "portal" for name in names):   # it tears open or seals
             for sound, params in (PORTAL_OPEN_SOUNDS if on else PORTAL_SEAL_SOUNDS):
                 self.sfx(sound, max(float(time), 0.0), **params)
 
     def knock_on(self, patterns: list[str], time: float) -> None:
         """Someone knocks on the doors matching ``patterns`` at scene ``time`` (the ``knock``
-        action): a ``knock`` sound (foley, DESIGN.md §69.62), once however many doors match."""
+        action): a ``knock`` sound (foley), once however many doors match."""
         names = [name for name, prop in self.props.items() if prop.kind == "door" and any(fnmatchcase(name, pat) for pat in patterns)]
         if names and self._foley_on():
             self.sfx("knock", max(float(time), 0.0), gain=KNOCK_GAIN)
 
     def _ring_sounds(self) -> None:
         """A ``phone`` sound at each burst of rings of each phone while it rings in the scene
-        (foley; DESIGN.md §69.56), once the scene has played (its end ends a ring left on)."""
+        (foley), once the scene has played (its end ends a ring left on)."""
         if not self._foley_on():
             return
         end = float(self.renderer.time)
@@ -2961,7 +2957,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         known = {id(m) for m in family}
         return [m for m in family if id(m) in kept] + [m for m in moving if id(m) not in known]
 
-    # ----- birds and fruit (DESIGN.md §69.55) ------------------------------------------------------
+    # ----- birds and fruit ------------------------------------------------------
 
     def add_flock(self, settings: Any, start: float) -> Flock:
         """A flock of birds (``settings``: count, direction, height, seconds, seed) crossing the
@@ -2999,7 +2995,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     def _fruit_left(self, tree: str) -> list[int]:
         """The fruits still on the tree ``tree`` (indices of :data:`FRUIT_SPOTS`)."""
         if not hasattr(self, "_fallen"):
-            #: each tree's fallen fruits (DESIGN.md §69.55)
+            #: each tree's fallen fruits
             self._fallen: dict[str, set[int]] = {}
         return [k for k in range(len(FRUIT_SPOTS)) if k not in self._fallen.get(tree, set())]
 
@@ -3079,7 +3075,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn
         with the backdrop, so they stay in Manim's static image), and of the characters and the
-        props an action may move (placed under them on every frame). None in a draft (§74)."""
+        props an action may move (placed under them on every frame). None in a draft."""
         if not self.params.shadows or self.is_draft:
             return None, None
         lifts = {item.name: item.lift + item.hang for item in self.params.items()}
@@ -3104,14 +3100,14 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if groups[1] is not None:
             groups[1].add_updater(lambda m: m.follow())
         self.shadows = [g for g in groups if g is not None]
-        #: the shadows of the things that may move (kept drawn before them, §69.44)
+        #: the shadows of the things that may move (kept drawn before them)
         self._moving_shadows = groups[1]
         return groups[0], groups[1]
 
     def _movable_props(self) -> set[str]:
         """The props an action may move or reshape: picked up or held (then put down, given or
         thrown), moved by ``keyframes`` / ``move_along``, opened or closed, blown away; the
-        vehicles of a scene with a ``ride_to`` (DESIGN.md §69.52)."""
+        vehicles of a scene with a ``ride_to``."""
         moved = {use.options.to for kind in ("pick_up", "hold") for use in self.action_uses(kind)}
         if self.action_uses("ride_to"):
             moved |= {name for name, prop in self.props.items() if prop.is_vehicle}
@@ -3149,7 +3145,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def _prop(self, name: str, prop: StageProp, height: float, *, living: bool = False) -> Prop:
         """The prop ``name`` drawn ``height`` units tall, its feet at the origin; outlines as wide
-        as a character's at its depth; ``living``: with the parts it moves by itself (§69.54)."""
+        as a character's at its depth; ``living``: with the parts it moves by itself."""
         if prop.svg is not None:
             problems = check_image(self.project, prop.svg, "svg")
             if problems:
@@ -3172,20 +3168,20 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         ground band."""
         p = self.params
         fw, fh = self.stage_width, self.frame_height
-        if p.room is not None:  # the room's wall and floor instead of the sky and the ground (§69.42)
+        if p.room is not None:  # the room's wall and floor instead of the sky and the ground
             return [*self._room().mobjects(), *layers]
         parts: list[Mobject] = []
         #: how many of the backdrop's first members are its sky (a flock flies right after them)
         self._sky_end = 0
-        top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it (§69.6)
-        if p.has_picture() and p.level is not None:   # far behind the level, moving by parallax (§86)
+        top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it
+        if p.has_picture() and p.level is not None:   # far behind the level, moving by parallax
             parts.append(self._picture(LEVEL_PICTURE_FACTOR))
         elif p.has_picture():
             parts.append(self._picture())
         elif p.background is not None or self.light is not None:   # a lit stage grades the theme's background too
             colors = p.background if isinstance(p.background, list) else [p.background or self.theme.background]
             sky = Rectangle(width=fw, height=fh, stroke_width=0)
-            if p.background is None and self.action_uses("time_of_day"):   # a day passing: the sky of the time of day (§105.3)
+            if p.background is None and self.action_uses("time_of_day"):   # a day passing: the sky of the time of day
                 self._sky_base = window_sky(self._light_key(p.light))
                 self._sky_changes = []
                 self.day_sky = sky
@@ -3194,12 +3190,12 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
             sky.name = "background"
             parts.append(sky)
-            if self.camera_bounds()[3] > fh / 2 + 1e-9:   # a tall level: the camera rises, the sky stays with it (§86.10)
+            if self.camera_bounds()[3] > fh / 2 + 1e-9:   # a tall level: the camera rises, the sky stays with it
                 self._move_by_parallax(sky, 0.0)
-        if self._starry and not p.has_picture():  # in the sky, behind the layers (§69.31)
+        if self._starry and not p.has_picture():  # in the sky, behind the layers
             rises = p.level is not None and self.camera_bounds()[3] > fh / 2 + 1e-9
             width = self.frame_width if rises else fw
-            if rises:   # a tall level: the stars stay in the top of the view, with the sky (§86.11)
+            if rises:   # a tall level: the stars stay in the top of the view, with the sky
                 sky_share = LEVEL_STAR_SKY
             else:
                 sky_share = STAR_SKY * (1.0 - top)
@@ -3213,9 +3209,9 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             parts.append(self.stars)
         self._sky_end = len(parts)
         parts += layers
-        if p.level is not None:   # the tiles are the ground: no ground band (§86)
+        if p.level is not None:   # the tiles are the ground: no ground band
             return [*parts, self._level_tiles()]
-        if p.iso is not None:   # the place is the ground: no ground band (§89)
+        if p.iso is not None:   # the place is the ground: no ground band
             return [*parts, *self._iso_behind]
         ground_color = p.ground_color
         if ground_color is None and not p.has_picture():
@@ -3229,7 +3225,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             parts.append(band)
         return parts
 
-    # ----- rooms (DESIGN.md §69.42) -------------------------------------------------------------
+    # ----- rooms -------------------------------------------------------------
 
     def _room(self) -> RoomDrawing:
         """The room: its wall and floor, the sky outside its windows (for the light at the start;
@@ -3314,7 +3310,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             return load_vector(source, theme=self.theme, where=f"scene '{self.spec.id}' ({source.name})")
         return load_image(source)
 
-    # ----- parallax layers (DESIGN.md §69.7) -----------------------------------------------------
+    # ----- parallax layers -----------------------------------------------------
 
     def _layers(self) -> list[Mobject]:
         """Each layer's mobject (named after it), drawn for the camera's home view (the stage's
@@ -3327,14 +3323,14 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             half_w, half_h = self._layer_extent(factor)
             mob = self._layer_picture(layer, k, half_w) if layer.image is not None else self._layer_shapes(layer, half_w, half_h)
             mob.name = name
-            mob.shift(UP * self._level_lift)   # on a raised level's ground, as on the frame's bottom (§86.10)
+            mob.shift(UP * self._level_lift)   # on a raised level's ground, as on the frame's bottom
             made.append(mob)
             self._move_by_parallax(mob, factor)
         return made
 
     @property
     def _level_lift(self) -> float:
-        """How far a raised level (in a portrait frame, DESIGN.md §86.10) stands above the frame's
+        """How far a raised level (in a portrait frame) stands above the frame's
         bottom edge (Manim units; 0: not raised, or no level): the layers and the background
         picture are raised with it, so they stand behind its ground as behind a level's that is not."""
         frame = self.params.level_frame(self.frame_width, self.frame_height)
@@ -3361,18 +3357,18 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         self._parallax.append(_Parallax(mob, factor, [(m, m.points.copy()) for m in mob.get_family() if len(m.points)]))
         self._move_layers()
 
-    # ----- platform levels (DESIGN.md §86) ---------------------------------------------------------
+    # ----- platform levels ---------------------------------------------------------
 
     @property
     def on_level(self) -> bool:
-        """Whether the stage is a platform level: walks and jumps follow its tiles (§86.7)."""
+        """Whether the stage is a platform level: walks and jumps follow its tiles."""
         return self.params.level is not None
 
     @property
     def level_pace(self) -> float:
         """How much slower (in Manim units) the default walking speeds are on this stage: its
         characters' size over a plain stage's default :data:`STAGE_SIZE` (on an iso place the
-        place's characters' size, §89.9)."""
+        place's characters' size)."""
         if self.params.iso is not None:
             view = iso_view(self.params.iso.parsed(), self.frame_width, self.frame_height)
             return view.height(ISO_CHARACTER_HEIGHT) / (STAGE_SIZE * min(self.frame_width, self.frame_height))
@@ -3397,13 +3393,13 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         return frame.world_point(float(feet[0]), float(feet[1])), character.character_height / frame.tile
 
     def _level_story(self) -> list[Mobject]:
-        """Start the level's story props (DESIGN.md §86.8): :attr:`level_state`, the world with
+        """Start the level's story props: :attr:`level_state`, the world with
         its coins, stars, doors, keys and blockers as the rules see them, and the coins and stars
         drawn (:attr:`level_pickups`, by name), returned to go in front of the tiles."""
         p = self.params
         #: the level's world as the rules see it now (``None``: no level); the scene's actions change it
         self.level_state: World | None = None
-        #: the coins and stars on the level, by name (DESIGN.md §86.8)
+        #: the coins and stars on the level, by name
         self.level_pickups: dict[str, Collectible] = {}
         if p.level is None:
             return []
@@ -3539,9 +3535,9 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
 
     def level_open(self, door: str, by: str | None) -> bool:
         """The rules' check that ``by`` can open ``door`` now (a locked one with its key, next to
-        it, DESIGN.md §86.8), recorded in :attr:`level_state`; :class:`VidgenError` naming the scene
+        it), recorded in :attr:`level_state`; :class:`VidgenError` naming the scene
         and the beat otherwise. Whether it was a locked door that ``by``'s key opened (foley plays
-        the key's ``unlock``, §86.9)."""
+        the key's ``unlock``)."""
         state = self._level_now()
         item = state.item(door)
         unlocks = item is not None and item.key is not None and not item.open
@@ -3560,7 +3556,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         self.level_state = close_door(self._level_now(), door)
 
     def level_step_aside(self, character: Character, place: Any, *, speed: float) -> Animation:
-        """The blocker ``character`` moving out of the way (DESIGN.md §86.8): along the tiles to
+        """The blocker ``character`` moving out of the way: along the tiles to
         ``place`` (:meth:`level_walk`), or with none, back off the path (a walk in depth to
         :data:`ASIDE_DEPTH`, a little smaller, its feet :data:`ASIDE_RISE_TILES` higher, drawn
         behind the others). :attr:`level_state` has it out of the way from now on."""
@@ -3592,7 +3588,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         frame = p.level_frame(self.frame_width, self.frame_height)
         assert frame is not None
         colors = LevelColors(**{key: resolve_color(value, self.theme) for key, value in p.level.colors.items()})
-        below = frame.below   # a raised level: ground under the map (§86.10)
+        below = frame.below   # a raised level: ground under the map
         shapes = level_shapes(level, colors, self.drawing.outline_factor, below)
         rows = drawn_rows(level)
         density = 1.0 if self.is_draft else LEVEL_OVERSAMPLE
@@ -3609,7 +3605,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             left, bottom = frame.point(first, -below)
             picture.move_to([left + picture.width / 2, bottom + picture.height / 2, 0.0])
             picture.name = f"level_{len(chunks) + 1}"
-            picture.scenery = True   # the camera crops it on purpose (lint off_frame, §86.10)
+            picture.scenery = True   # the camera crops it on purpose (lint off_frame)
             chunks.append(picture)
         tiles = LevelTiles(chunks)
         tiles.name = "level"
@@ -3667,7 +3663,7 @@ def _box(mob: Mobject) -> tuple[float, float, float, float] | None:
 def _timed_parts(action: str, animations: Any, start: float, seconds: float) -> list[tuple[str, Animation, float, float]]:
     """Each of an action's animations as ``(action, animation, scene start, seconds)`` as they
     play from ``start`` for ``seconds``; a :class:`Succession` (a jump's run-up, then its arc on a
-    level, DESIGN.md §86.7) as its parts in turn, the run-up as a ``walk_to`` (its footsteps)."""
+    level) as its parts in turn, the run-up as a ``walk_to`` (its footsteps)."""
     parts: list[tuple[str, Animation, float, float]] = []
     for anim in animations:
         if not isinstance(anim, Succession) or anim.max_end_time <= 0:
@@ -3684,7 +3680,7 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     """One animation of a built-in ``action`` (its ``options``) as it plays from scene time
     ``start`` for ``seconds``, for foley and motion effects."""
     if isinstance(anim, Walk):
-        through_door = anim.fade_in > 0 or anim.fade_out > 0   # a fade in a doorway (§69.42)
+        through_door = anim.fade_in > 0 or anim.fade_out > 0   # a fade in a doorway
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length, rolls=anim.gait.rolls,
                             through_door=through_door, opens_door=anim.opens_door, pickups=_picked_kinds(anim),
                             surfaces=getattr(anim, "surfaces", ()))
@@ -3693,11 +3689,11 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     if isinstance(anim, WaterFlow):
         return PlayedAction(action, start, seconds, pours=True)
     if isinstance(anim, Ride):
-        lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
+        lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)
-    if isinstance(anim, IsoDrive):   # a vehicle on an iso place (§105)
+    if isinstance(anim, IsoDrive):   # a vehicle on an iso place
         return PlayedAction(action, start, seconds, vehicle=anim.kind)
-    if isinstance(anim, ArcJump):   # on a level: it lands as its settle starts (DESIGN.md §86.9)
+    if isinstance(anim, ArcJump):   # on a level: it lands as its settle starts
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift, lands=1.0 - anim.phases.after, pickups=_picked_kinds(anim))
     if isinstance(anim, Jump):
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift)

@@ -1,4 +1,4 @@
-"""Flight in the air of a world (Step 385, DESIGN.md §123.7), beside :mod:`vidgen.orbits`: a
+"""Flight in the air of a world (Step 385), beside :mod:`vidgen.orbits`: a
 flight described in words (:mod:`.spec`: a start, then legs — straight, turns, climbs, speed
 changes, terrain following, curves through waypoints, circling a place, a landing, a re-entry from
 orbit) becomes smooth position, velocity and attitude on the world's sphere (:mod:`.plan`), checked

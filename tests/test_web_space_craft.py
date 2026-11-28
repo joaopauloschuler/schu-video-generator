@@ -1,4 +1,4 @@
-"""The spacecraft kit, ``vidgen/space-craft`` (Step 374, DESIGN.md §122.10): the module is served by its
+"""The spacecraft kit, ``vidgen/space-craft`` (Step 374): the module is served by its
 import name and imports only ``three``, its geometry add-on and ``vidgen/music-time``; its parts are
 registered (every ready-made craft, the kit's parts, surfaces and plumes); in Node (when it is
 installed): every craft builds, the same seed gives the same craft and another seed another, the

@@ -1,4 +1,4 @@
-"""A heads-up display over the frame (DESIGN.md §102.5), the maths without manim: what an implant,
+"""A heads-up display over the frame, the maths without manim: what an implant,
 a helmet's visor or a robot's eye shows — readout lines appearing one by one, a blinking alert, a
 heart monitor (a scrolling trace, the rate rising, beats skipped) and a scanner's meter (a live
 wave that can spike off its scale). :mod:`vidgen.scenes.hud` draws it as the ``hud`` overlay.
@@ -147,7 +147,7 @@ def scan_level(t: float, scan: ScanMeter) -> float:
     return changing_value(t, scan.level, scan.to, scan.at, SCAN_RISE)
 
 
-#: Placing the HUD's texts clear of faces (DESIGN.md §102.8): a face's box is grown by this share
+#: Placing the HUD's texts clear of faces: a face's box is grown by this share
 #: of its size on each side; a place covering at most :data:`FACE_COVER` of the faces keeps its
 #: texts there, another must be better by :data:`FACE_SWITCH` for them to move.
 FACE_GROW = 0.12

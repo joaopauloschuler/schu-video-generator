@@ -1,4 +1,4 @@
-"""The ``callout`` beat action (DESIGN.md §44): a box, circle, arrow, label, spotlight or
+"""The ``callout`` beat action: a box, circle, arrow, label, spotlight or
 magnifier drawn on any scene for one beat, pointing at targets of the scene or at coordinates of
 the frame. Built from the Step 34 callout helpers (``callout_box`` ...), written against
 ``vidgen.api`` only, like project actions.

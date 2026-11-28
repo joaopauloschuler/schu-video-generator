@@ -1,5 +1,5 @@
-// The fine detail of giant hulls, vidgen/space-hull-detail (DESIGN.md §123.11), for the registry vidgen/parts
-// (§122.5): what `vidgen parts` draws on its contact sheet: a dressed hull by day and by night, a hangar bay
+// The fine detail of giant hulls, vidgen/space-hull-detail, for the registry vidgen/parts:
+// what `vidgen parts` draws on its contact sheet: a dressed hull by day and by night, a hangar bay
 // seen from outside, a bank of bells with its long plume, a dressed fleet (kind "craft") and the tiling maps
 // (kind "craft-part"), under one hard sun with a faint planet-shine. A hull is kilometres long: the tile scales
 // it to fit. Measured at 1280x720 in software GL on 2 cores: a dressed hull that fills the frame from two

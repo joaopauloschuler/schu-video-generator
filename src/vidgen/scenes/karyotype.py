@@ -1,4 +1,4 @@
-"""``karyotype``: a human karyotype from its ISCN notation (DESIGN.md §96.10). ``show:
+"""``karyotype``: a human karyotype from its ISCN notation. ``show:
 karyogram`` arranges the chromosomes in pairs 1–22, X, Y by the Denver groups A–G (centromeres on
 one line per row, numbers under the pairs) with schematic G-band ideograms; the changes the
 notation names are highlighted (an extra copy boxed, a missing one as a dashed ghost, a derivative

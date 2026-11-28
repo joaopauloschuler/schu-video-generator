@@ -1,4 +1,4 @@
-"""The ``orbit`` scene's many-body params and their resolution (Phase X, Step 232, DESIGN §98.6):
+"""The ``orbit`` scene's many-body params and their resolution (Phase X, Step 232):
 ``system`` (a circular restricted three-body pair — ``earth_moon``, ``sun_earth``,
 ``sun_jupiter`` or your own with a mass ratio — or the ``figure_eight`` of three equal masses),
 bodies placed at a Lagrange point (``near: L4`` with a ``shift``), ``resonance`` (period ratios,

@@ -1,9 +1,9 @@
-"""Vector pictures as Manim shapes: :func:`load_vector` and :class:`VectorPicture` (DESIGN.md §65).
+"""Vector pictures as Manim shapes: :func:`load_vector` and :class:`VectorPicture`.
 
 A generated SVG (``generate: {format: svg}``) or an ``.svg`` file of the ``image`` scene is
 sanitised (:func:`vidgen.svgclean.sanitize_svg`: no scripts, filters, rasters, text; gradients
 flattened; shapes and points capped), parsed with Manim's ``SVGMobject`` and normalised like an
-icon (§22): an invisible first part spans the ``viewBox`` (the picture's box), SVG stroke widths
+icon: an invisible first part spans the ``viewBox`` (the picture's box), SVG stroke widths
 become Manim's for the picture's height and scale with it, and ``recolor="theme"`` maps every
 colour to the nearest theme colour (:func:`vidgen.svgclean.theme_color`).
 

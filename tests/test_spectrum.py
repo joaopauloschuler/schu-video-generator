@@ -1,4 +1,4 @@
-"""Collisions, decays and data (Phase Y, Step 241; DESIGN §99.11–§99.12): simulated spectra
+"""Collisions, decays and data (Phase Y, Step 241): simulated spectra
 (deterministic, signal share, window), the Asimov and counting significances against hand values,
 p-values, peak fits recovering the mass across seeds, the likelihood-ratio significance, decay
 times and the lifetime fit, the Z line shape, branching ratios (sources, sums, the conservation

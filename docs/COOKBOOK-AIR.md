@@ -20,8 +20,10 @@ ev, quality}`. The air (`vidgen/space-air`) is the one the same planet shows fro
 from an orbital scene of the same world keeps its colours; the sea, ground and clouds belong to that
 world and that place (the ground's continents are the globe's). `sun` is `[elevation, azimuth]` in
 degrees or `{date, utc}` (the Earth's Sun at the place then). The stars behind the air are `sky:`.
-A surface scene is drawn straight to the canvas (every number in the cost table is); `finish:`
-draws it through `vidgen/three-finish`. `flights:` are planned in Python (the `flight_data` words: legs,
+A surface scene is drawn through `vidgen/three-finish` with the default camera look `camera` (Step
+401: the sensor and the lens of a camera, nobody holding it; the scenes look different from before);
+`camera_look: none` draws it straight to the canvas as before (the cost table's numbers were measured
+so), and `finish:` given with `none` draws it through the finish without a camera. `flights:` are planned in Python (the `flight_data` words: legs,
 turns, climbs, following the ground, a landing) and checked never to come under the ground or the
 sea; `craft:` with `plane:` flies them. Each recipe validates as it stands (`tests/test_docs.py`).
 
@@ -50,8 +52,8 @@ daylight sees.
 water at 90 m/s towards the sun, turning 14 degrees to the right through the move: the horizon rolls
 into the turn and back (`horizon: level` keeps it level). The glitter path is narrow on a calm sea
 and under a low sun; a `rough` sea shows whitecaps along its crests, a `storm` high waves with dark
-troughs and foam streaks; at dusk the near water keeps the sky's colours (looks, stated in DESIGN
-§123.4). `quality: fast` draws a smoother sea (other waves than `standard`) for a quarter less.
+troughs and foam streaks; at dusk the near water keeps the sky's colours (looks).
+`quality: fast` draws a smoother sea (other waves than `standard`) for a quarter less.
 
 ```yaml
 - id: skim
@@ -60,6 +62,23 @@ troughs and foam streaks; at dusk the near water keeps the sky's colours (looks,
   params:
     world: {sea: {state: breeze, seed: 3}, sun: [5, 300]}
     camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}
+```
+
+**The same skim as drone footage.** `camera_look: drone` turns on a small camera on a gimbal: its noise, a short dynamic range, sharpening, the wide lens's bend and soft fringed corners,
+vibration and an automatic exposure. Into a low sun its 2.4 stops blow the glitter path flat and
+yellow-white, as a small camera does; the scene's own `finish:` goes over the look, and `range: 3`
+keeps a little more of it. The other
+looks: `window_handheld`, `broadcast_long_lens`, `phone`, `chase_mount` (what each sets: CONFIG.md, `space`).
+
+```yaml
+- id: skim_drone
+  type: space
+  duration: 8
+  params:
+    world: {sea: {state: breeze, seed: 3}, sun: [5, 300]}
+    camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}
+    camera_look: drone
+    finish: {range: 3}
 ```
 
 **Round a volcano** (1.6 s a frame). The ground (`vidgen/space-land`) is the same world's as the
@@ -78,9 +97,11 @@ rises over ground that stands too near. Over ground give a skim a clearance the 
 ```
 
 **A climb through an overcast, lightning on the kick drum** (2.0 s a frame with a sea and two
-decks). Under a closed deck the day is grey with a bright line at the horizon; inside it is fog; over
+decks). Under a closed deck the day is grey and dim, the haze in the deck's shadow; inside it is fog; over
 it the deck is a white sea to its own horizon. `adapt: 1` pulls the exposure down a stop as the
-camera nears the top (a look) so the break-out is not a white flash. Decks: `fair`, `overcast`,
+camera nears the top (a look) so the break-out is not a white flash; `operator: {exposure: true}` instead
+(and no `adapt`) is a camera's automatic exposure: it opens up in the dark fog, the break-out flashes white
+and the picture settles a stop darker after a small overshoot. Decks: `fair`, `overcast`,
 `layers`, `towers`, `storm` ready-made, or your own; `deck:` names one by index or name.
 
 ```yaml
@@ -98,6 +119,26 @@ camera nears the top (a look) so the break-out is not a white flash. Decks: `fai
         towers: 4
         lightning: {track: kick}
     camera: {move: climb-through, deck: 0, heading: 40, adapt: 1}
+```
+
+**A low sun behind a broken deck in haze** (about 3.2 s a frame at 1280x720 with the shadows in the
+air, 2.8 s without). The decks' shadows lie in the air and on the sea (on by default since Step 403): the
+haze under the deck is dim, the sun's glow is held in the gaps, the glitter shows only where the sun
+reaches the water. They show most in a hazy air with a low sun; the Earth-like air's own haze is thin, so
+in clear air the change is mostly a darker horizon under the deck. `shadows: false` gives the picture of
+before. Mountains cast theirs into the haze the same way (a darker band across a valley before a far range).
+
+```yaml
+- id: gaps
+  type: space
+  duration: 6
+  params:
+    world:
+      sea: breeze
+      sun: [8, 250]
+      air: {air: {like: earth, haze: [0.25, 0.25, 0.25]}, forward: 0.8}
+      clouds: {decks: [{type: cumulus, cover: 0.45, base: 1000, top: 2000}], seed: 7}
+    camera: {move: skim, heading: 250, speed: 60, clearance: 40, turn: 0, lens: wide}
 ```
 
 ## 3. Planes and flights
@@ -180,7 +221,7 @@ down (from 45 % throttle).
 
 ## 4. The descent from orbit
 
-**From orbit to a skim over the sea, in one shot** (DESIGN §123.13). `descend` comes down by equal
+**From orbit to a skim over the sea, in one shot**. `descend` comes down by equal
 factors of height in equal times and ends moving, level; the `skim` with `continues: true` takes
 over there with no cut. Keep ten seconds or more for 400 km.
 
@@ -214,8 +255,7 @@ seen; a thin cirrus deck is a white line on the horizon while the camera passes 
 
 True by default: the air's colours (one scattering model with ozone; Mars-like dust as a stated
 season), the horizon's place and dip, the sea's wave speeds, the ground's relief and colours from the
-same world's globe, a flight's path and bank, the sun's place on a date. Stated looks, each said in
-DESIGN §123 where it is made:
+same world's globe, a flight's path and bank, the sun's place on a date. Stated looks:
 
 - the film exposure (`exposure: film`, the default): the dusk is lifted up to 16 stops, the twilight
   arch kept under white; high over the day side the stars and the Milky Way are dimmed to a third;
@@ -225,7 +265,17 @@ DESIGN §123 where it is made:
   their length (short-crested: no closed rings);
 - the clouds: densities a tenth of real cloud's; fine lumps in the shading, not in the shape; a deck's
   cover varying with a broad weather of its own, tens of km across; `adapt` pulling the exposure down
-  near a deck's top;
+  near a deck's top; under a deck the sky's light dimmed by a set share and the light a cloud passes on all
+  round one number (the shadows in the air: soft and broad, no sharp beams; towers cast none into the air);
+- the operator (`operator:`, off unless given): the hand's drift, corrections, reframes and vibration are
+  seeded noise shaped like a person's, not measured; the automatic exposure meters an estimate of the frame's
+  brightness from the camera's view, the sun, the decks and the ground (within about a stop of the drawn
+  picture's mean on the views it was fitted to), not the picture itself;
+- the camera looks (`camera_look:`, `camera` by default): matched sets of the finish's and the operator's
+  options chosen by eye on eight views (a rise to 60 km, a skim into the sun, a pass beside a hull, a sunrise
+  over a limb; for the default also a night side, a desert at noon, a ship's bay and a calm sea at noon), not
+  measured from real cameras; the default's 2.8 stops make bright saturated ground (a Mars-like desert at noon)
+  a little more saturated;
 - the ground: rock beds on steep faces (layered rock in a canyon); the lava's glow lighting the ground
   beside it; the globe's relief shading from very high up;
 - the descent: the camera falls far faster than any vehicle; the globe's clouds and the decks' are not
@@ -256,7 +306,7 @@ export function frame(t) {
 ```
 
 *A re-entry from orbit*: a `web` scene with `orbit_data` and `flight_data` whose flight starts
-`{orbit: Ship}` with a first leg `{reentry: {to: {height: 12000, speed: 250}}}` (DESIGN §123.7), the
+`{orbit: Ship}` with a first leg `{reentry: {to: {height: 12000, speed: 250}}}`, the
 plane flown by `ship.fly(ctx.flight)` and its glow from `vidgen/space-effects`:
 
 ```js
@@ -267,6 +317,6 @@ scene.add(fx.object);              // trails and the train stay where they were 
 fx.update(t);                      // or by hand: fx.update(t, {heating: 0.8, velocity: [6600, 0, 0], height: 75000})
 ```
 
-`reentry: {full: 0.65}` is the heating shown as the white-pink peak (the 400 km re-entry of DESIGN
-§123.7 reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5. A flight far
+`reentry: {full: 0.65}` is the heating shown as the white-pink peak (a 400 km
+re-entry reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5. A flight far
 from its anchor is lit by the anchor's sun (the scene's +y is not up there).

@@ -1,4 +1,4 @@
-// The joined world of vidgen/space-descent (DESIGN.md §123.13) for the registry vidgen/parts (§122.5): the
+// The joined world of vidgen/space-descent for the registry vidgen/parts: the
 // same world from orbit, in the handover and near the ground, and the camera's `descend` at a telling
 // moment. An ocean world with fair clouds and a Mars-like desert, each at its own place and sun. Drawn
 // straight to the canvas. Measured at 1280x720 in software GL on 2 cores: 0.75 s a frame from orbit (the

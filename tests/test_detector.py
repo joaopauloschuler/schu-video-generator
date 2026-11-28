@@ -1,4 +1,4 @@
-"""Detectors and event displays (Phase Y, Step 240; DESIGN §99.9–§99.10): the bending radius
+"""Detectors and event displays (Phase Y, Step 240): the bending radius
 p_T = 0.3 B R and the sign of the curvature, curlers, the muon's return-field bend, the signature of
 every kind of particle, the missing transverse momentum, seeded presets (deterministic, balanced,
 masses), the ``detector`` scene's params, targets and the ``switch_view`` action, tiny renders in

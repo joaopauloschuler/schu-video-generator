@@ -1,4 +1,4 @@
-// vidgen/title-cards: an opening title and a matching end card for films (DESIGN.md §121.7). Part
+// vidgen/title-cards: an opening title and a matching end card for films. Part
 // of schu-video-generator (MIT licence); imported by a page as "vidgen/title-cards".
 //
 //   const title = await titleCard(ctx, {title: "ESCAPEMENT", subtitle: "a clockwork film in D minor"});

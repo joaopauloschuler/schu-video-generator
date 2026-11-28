@@ -1,4 +1,4 @@
-"""Composed music played with real instruments (DESIGN.md §81, §82): symusic renders a :class:`~vidgen.score.Score` with a SoundFont (:mod:`vidgen.soundfont`).
+"""Composed music played with real instruments: symusic renders a :class:`~vidgen.score.Score` with a SoundFont (:mod:`vidgen.soundfont`).
 Nothing here imports symusic until it is needed.
 
 symusic 0.5.9 ignores MIDI volume, pan and reverb, stops at the last note's release and returns

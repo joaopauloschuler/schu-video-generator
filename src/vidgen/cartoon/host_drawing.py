@@ -1,4 +1,4 @@
-"""The drawing of a cartoon host (``host:``, DESIGN.md §71): its character and the floor line.
+"""The drawing of a cartoon host (``host:``): its character and the floor line.
 
 :func:`build_host` needs no stage: it builds the ``characters:`` entry with
 :func:`~vidgen.cartoon.character.build_character`, measures it in its pose, asks
@@ -95,7 +95,7 @@ def build_host(
 ) -> HostFigure:
     """The host ``host`` (its character ``entry``, coloured with ``theme``) standing in ``area``
     (the scene's safe area without the overlays' reserved room) of the frame; ``arms``: the
-    video's ``cartoon_arms`` (DESIGN.md §110)."""
+    video's ``cartoon_arms``."""
     facing = facing_for(host.side, host.facing)
     probe = _posed(entry, host, theme, root, motion, REFERENCE_HEIGHT, facing, arms)
     layout = host_layout(area, frame_width, frame_height, host, probe.width / REFERENCE_HEIGHT)

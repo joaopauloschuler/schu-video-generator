@@ -1,4 +1,4 @@
-"""The beat actions of the molecular genetics scenes (DESIGN.md §96.13–96.15): ``mutate`` (a
+"""The beat actions of the molecular genetics scenes: ``mutate`` (a
 ``mutation`` scene's variant made from the reference), ``scan``, ``cleave``, ``repair`` (a
 ``crispr`` scene's Cas9: PAM search and R-loop, the double-strand break, NHEJ or HDR) and ``run``
 (a ``dna_lab`` scene's step: PCR cycles, the gel running, Sanger synthesis / capillary / trace, NGS

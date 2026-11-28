@@ -1,4 +1,4 @@
-"""Energy metabolism as data and rules (DESIGN.md §95.13; no manim): glycolysis (ten steps,
+"""Energy metabolism as data and rules (no manim): glycolysis (ten steps,
 investment and payoff phases, in the cytosol), the link reaction (pyruvate into the matrix,
 pyruvate dehydrogenase), the citric acid cycle (eight steps per acetyl-CoA), the mitochondrial
 electron transport chain with ATP synthase, and the light reactions of photosynthesis in the

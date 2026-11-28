@@ -1,4 +1,4 @@
-// The ready-made skies of vidgen/space-sky (DESIGN.md §122.6) for the registry vidgen/parts (§122.5):
+// The ready-made skies of vidgen/space-sky for the registry vidgen/parts:
 // what `vidgen parts` draws on its contact sheet. The skies are drawn straight to the canvas
 // ({finish: false}: the sky applies the tone curve itself, and three-finish's FXAA would smear the
 // stars of a small tile); the particle galaxy, whose sprites add up in linear light, goes through

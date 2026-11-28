@@ -1,4 +1,4 @@
-"""From orbit down to flight (Step 385, DESIGN.md §123.7): a shaped descent, not a simulation of
+"""From orbit down to flight (Step 385): a shaped descent, not a simulation of
 aerodynamics.
 
 **What is physical.** (1) The start: the orbit's own two-body motion (Kepler, the world's GM),

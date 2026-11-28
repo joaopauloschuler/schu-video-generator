@@ -1,4 +1,4 @@
-"""Reference sheets for generated video shots (DESIGN.md §113.3): pictures of each character
+"""Reference sheets for generated video shots: pictures of each character
 (``characters[].reference_sheet``) and style frames (``style_sheet``), made by the project's
 image provider (``imagegen:``) and stored in ``assets/sheets/``.
 
@@ -308,7 +308,7 @@ def run_sheets(
     plan = result.plan
     chosen = provider if provider is not None else get_image_provider(project)
     if project.config.videogen.key_via_proxy and hasattr(chosen, "key_via_proxy"):
-        chosen.key_via_proxy = True   # the proxy adds the OpenRouter key for the sheets too (§113.4)
+        chosen.key_via_proxy = True   # the proxy adds the OpenRouter key for the sheets too
     result.paid = pay_for_pictures(plan, result.budget, chosen, ledger, out, what="sheet picture", then="look at them, then set approved: true")
     return result
 

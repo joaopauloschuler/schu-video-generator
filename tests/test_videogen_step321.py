@@ -1,4 +1,4 @@
-"""Step 321 (DESIGN.md §113.17): readable overlays, the film's disclosure, the fast music list,
+"""Step 321: readable overlays, the film's disclosure, the fast music list,
 the plan's voice note, orphaned audio of a config without beats. Cheap: nothing is rendered."""
 
 from __future__ import annotations

@@ -1,17 +1,17 @@
-"""Moving beat actions (DESIGN.md §69.12): ``walk_to``, ``run_to`` (§69.41), ``enter``, ``exit``,
+"""Moving beat actions: ``walk_to``, ``run_to``, ``enter``, ``exit``,
 ``gesture``, ``jump`` and ``step_aside`` on the characters of a scene, and on an iso place
 ``wander`` and ``meet``. Written against ``vidgen.api`` only, like project actions; on a stage's
 platform level the stage plans the walks and jumps with its rules (``level_walk``,
-``level_enter``, ``level_exit``, ``level_jump``, DESIGN.md §86.7), with its story props in the way
+``level_enter``, ``level_exit``, ``level_jump``), with its story props in the way
 and coins and stars picked up on the way, a reaction (``react``) during or after the move and a
-blocker stepping aside (§86.8); on an iso place it plans the walks from cell to cell
-(``iso_walks``, §89.9).
+blocker stepping aside; on an iso place it plans the walks from cell to cell
+(``iso_walks``).
 
 The motion is worked out without manim in :mod:`vidgen.cartoon.acting` (walk times, the walk
 cycle, where an entrance starts and an exit ends, gestures, jumps) and played with the
 :class:`Walk`, :class:`Gesture` and :class:`Jump` animations. A walk lasts its distance over its
 speed (:meth:`Action.run_time_for`) plus the wind-up and settle of the character's
-``cartoon_motion`` (§69.13), shortened like any action when its beat has less time.
+``cartoon_motion``, shortened like any action when its beat has less time.
 """
 
 import logging
@@ -32,7 +32,7 @@ STEP_ASIDE_SECONDS = 1.0
 
 
 class MapTile(ActionOptions):
-    """A tile of a level's map to walk or jump onto, as the author reads the map (DESIGN.md §86.7)."""
+    """A tile of a level's map to walk or jump onto, as the author reads the map."""
 
     column: int = Field(ge=1)
     """Its column, from 1 at the map's left."""
@@ -41,7 +41,7 @@ class MapTile(ActionOptions):
 
 
 class MoveReaction(ActionOptions):
-    """A reaction during or after a move on a platform level (DESIGN.md §86.8)."""
+    """A reaction during or after a move on a platform level."""
 
     when: Literal["pickup", "land", "arrive"] | None = None
     """When it reacts: pickup (as it picks up the first coin or star on the way), land (as a jump lands) or arrive (as it stops); default: land for a jump, else arrive."""
@@ -57,7 +57,7 @@ def _tile_place(to: Any) -> Any:
 
 
 class WalkPlace(ActionOptions):
-    """Where a walk goes on the stage: a mark or an x, and a depth (DESIGN.md §69.44)."""
+    """Where a walk goes on the stage: a mark or an x, and a depth."""
 
     mark: Place | None = None
     """A mark (left, centre, right, ... or the stage's own) or an x from 0 (left edge) to 1 (right edge); default: where it is."""
@@ -90,20 +90,20 @@ def _walk_time(character: Character, distance: float, speed: float) -> float:
 
 def _speed(options: ActionOptions, character: Character) -> float:
     """The action's ``speed``, or when it gives none its default times the character's species
-    factor (a turtle plods, a penguin waddles; DESIGN.md §69.57)."""
+    factor (a turtle plods, a penguin waddles)."""
     if "speed" in options.model_fields_set:
         return options.speed
     return options.speed * character.species_motion.speed
 
 
 def _on_level(scene: NarratedScene) -> bool:
-    """Whether the scene is a stage with a platform level (DESIGN.md §86.7): walks and jumps
+    """Whether the scene is a stage with a platform level: walks and jumps
     follow its tiles (the stage's ``level_walk``, ``level_jump``...)."""
     return bool(getattr(scene, "on_level", False))
 
 
 def _on_iso(scene: NarratedScene) -> bool:
-    """Whether the scene is a stage with an iso place (DESIGN.md §89.9): walks go from cell to
+    """Whether the scene is a stage with an iso place: walks go from cell to
     cell on its map (the stage's ``iso_walks``)."""
     return bool(getattr(scene, "on_iso", False))
 
@@ -216,7 +216,7 @@ class _Moving(_Acting):
 
 def _walk_problems(params: Any, to: Any, depth: float | None) -> list[tuple[str, str]]:
     """A walk names where it goes (``to`` or ``depth``), its depth once, and, in a room, not
-    behind the wall (DESIGN.md §69.44)."""
+    behind the wall."""
     inner = to.depth if isinstance(to, WalkPlace) else None
     if to is None and depth is None:
         return [("to", "say where it walks: to (a mark or an x, or {mark, depth}) and / or depth")]
@@ -246,7 +246,7 @@ class WalkTo(_Moving):
     instead); a beat shorter than that speeds it up. It stays there. On a platform level it walks
     along the tiles (``to`` may be a tile ``{column, row}`` of the map), picks up the coins and
     stars it touches and cannot pass a closed door or a blocker; ``react`` changes its expression
-    and / or pops an effect when it picks one up or arrives (DESIGN.md §86.8)."""
+    and / or pops an effect when it picks one up or arrives."""
 
     class Options(ActionOptions):
         to: MapTile | WalkPlace | Place | None = None
@@ -295,7 +295,7 @@ class WalkTo(_Moving):
         return problems + self._react_problems(scene_cls, params, jumps=False)
 
     def _iso_plan(self) -> dict[str, Any]:
-        """The move as the iso rules take it (DESIGN.md §89.9)."""
+        """The move as the iso rules take it."""
         if self.options.after is not None:
             return {"after": self.options.after, "gap": self.options.gap}
         return {"to": self._destination()[0]}
@@ -388,7 +388,7 @@ class RunTo(WalkTo):
 
 def _door_problems(params: Any, door: str | None, other: str, given: Any) -> list[tuple[str, str]]:
     """``door`` names a door of the stage's room (on an iso place a spot of its map), and the edge
-    option ``other`` is not ``given`` too (DESIGN.md §69.42)."""
+    option ``other`` is not ``given`` too."""
     if door is None:
         return []
     if getattr(params, "iso", None) is not None:
@@ -476,7 +476,7 @@ class Enter(_Moving):
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Put each character just beyond the view's edge, or in the open door, and walk it in
         (fading in at the door); on a level along the tiles; on an iso place from beyond its edge
-        or out of a spot (DESIGN.md §89.9)."""
+        or out of a spot."""
         if _on_iso(scene):
             return _iso_apply(scene, "enter", self.options, self._iso_plan(), targets, "enter")
         anims: list[Animation] = []
@@ -608,12 +608,12 @@ class GestureAction(_Moving):
 @action("jump")
 class JumpAction(_Moving):
     """The target character jumps up (``height`` in character heights) and lands where it stood.
-    Without a ``height`` a frog jumps higher (its species' factor, DESIGN.md §69.57). On a
+    Without a ``height`` a frog jumps higher (its species' factor). On a
     platform level, ``to`` (a spot, a mark, an x or a tile ``{column, row}``) jumps it there: it
     walks to the best take-off point, crouches, flies an arc clear of the tiles and lands with a
-    squash and a wobble (DESIGN.md §86.7), picking up the coins and stars it touches on the way
+    squash and a wobble, picking up the coins and stars it touches on the way
     (mid-jump too), never through a closed door or a blocker; ``react`` changes its expression
-    and / or pops an effect as it picks one up, lands or stops (§86.8). ``vidgen validate`` says
+    and / or pops an effect as it picks one up, lands or stops. ``vidgen validate`` says
     why a jump cannot be made."""
 
     class Options(ActionOptions):
@@ -676,7 +676,7 @@ class StepAside(_Moving):
     """On a platform level, the target character, one of the level's ``blockers`` (a grumpy
     turtle on the path), moves out of the way, as when it is asked nicely in the beat's line: it
     steps back off the path (a little smaller, drawn behind the others), or with ``to`` walks
-    there along the tiles. From then on walks and jumps pass where it stood (DESIGN.md §86.8)."""
+    there along the tiles. From then on walks and jumps pass where it stood."""
 
     class Options(ActionOptions):
         to: MapTile | Place | None = None
@@ -718,7 +718,7 @@ class StepAside(_Moving):
 
 
 def _iso_only(params: Any, action: str) -> list[tuple[str, str]]:
-    """``action`` moves characters about an iso place (DESIGN.md §89.9)."""
+    """``action`` moves characters about an iso place."""
     if getattr(params, "iso", None) is None:
         return [("action", f"{action} is for an iso place (params.iso); on a plain stage use walk_to")]
     return []

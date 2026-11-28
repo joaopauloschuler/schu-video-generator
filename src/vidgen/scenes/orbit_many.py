@@ -1,4 +1,4 @@
-"""Many bodies on the ``orbit`` scene (Phase X, Step 232, DESIGN §98.6): a restricted three-body
+"""Many bodies on the ``orbit`` scene (Phase X, Step 232): a restricted three-body
 pair seen in the inertial or the rotating frame (switched on a word by ``corotate`` /
 ``inertial``), its Lagrange points, zero-velocity curves, the Jacobi constant and co-orbital
 motion in the panel; the figure-eight and binary stars about their barycentre; resonances with

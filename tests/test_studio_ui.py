@@ -1,4 +1,4 @@
-"""``vidgen studio`` in a browser (Step 193, DESIGN.md §94): headless Chromium through Playwright
+"""``vidgen studio`` in a browser (Step 193): headless Chromium through Playwright
 drives the page served by a studio server on a background thread. Skipped when Playwright or
 its Chromium is missing. Kept few and fast: scores of a few seconds, one preset render."""
 

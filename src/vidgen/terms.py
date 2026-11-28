@@ -1,4 +1,4 @@
-"""One colour per concept (DESIGN.md §87.3): the video's ``terms:`` map.
+"""One colour per concept: the video's ``terms:`` map.
 
 ``terms: {loss: accent, gradient: "#E07A5F", "learning rate": {color: primary, tex: '\\eta'}}``
 gives each concept a colour (a theme colour token or hex). Wherever one of the words is drawn as

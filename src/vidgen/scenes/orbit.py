@@ -1,4 +1,4 @@
-"""``orbit``: bodies on their orbits, moving in correct timing (Phase X, DESIGN §98). A central
+"""``orbit``: bodies on their orbits, moving in correct timing (Phase X). A central
 body, bodies from presets, orbital elements or a position and velocity, their orbits drawn as
 conics, the bodies moving along them by Kepler's equation (or by n-body integration with
 leapfrog / RK45), fading trails, an equal-aspect frame on the plot core (AU or km ticks, or a

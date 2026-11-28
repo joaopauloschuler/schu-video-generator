@@ -1,4 +1,4 @@
-"""The animation and chart libraries shipped for ``web`` scenes (Step 336, DESIGN.md §118.15):
+"""The animation and chart libraries shipped for ``web`` scenes (Step 336):
 the shipped files are the manifest's and the npm packages' own (SHA-256), each has its licence,
 the import map names them, only manifest files are served, GSAP gets a clear message; in Chromium
 (``slow``): each library moves with vidgen's clock and draws the same frames twice."""

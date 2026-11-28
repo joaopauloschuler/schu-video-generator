@@ -1,4 +1,4 @@
-"""Phenomena, ``vidgen/space-phenomena`` (Step 373, DESIGN.md §122.9): the module is served by its
+"""Phenomena, ``vidgen/space-phenomena`` (Step 373): the module is served by its
 import name and imports only ``three``, ``vidgen/music-time`` and ``vidgen/space-sky``; its parts are
 registered with their measured costs; in Node (when it is installed): the bending of light past a
 black hole (the weak-field value far out, without end at the shadow), the tables the lensed stars

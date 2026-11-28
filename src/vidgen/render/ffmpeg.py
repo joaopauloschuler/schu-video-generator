@@ -24,7 +24,7 @@ from vidgen.fileio import replace_file
 #: Audio of every padded scene (and so of the final video): AAC, 48 kHz, stereo.
 AUDIO_RATE = 48000
 AUDIO_BITRATE = "192k"
-#: Quality of the video when the join has to encode it (crossfades, DESIGN.md §49): visually
+#: Quality of the video when the join has to encode it (crossfades): visually
 #: lossless next to the scenes' own encoding (Manim: CRF 23).
 VIDEO_CRF = "18"
 #: Oldest ffmpeg schu-video-generator supports: 4.3 has no ``amix=normalize``, 4.2 no ``xfade`` (tested with
@@ -209,8 +209,7 @@ def write_concat_list(files: list[Path], list_file: Path, durations: list[float]
 
 def constant_rate(frames: int, fps: int) -> str:
     """Filters making a video input exactly ``frames`` frames at ``fps``, starting at 0, in the
-    ``AVTB`` time base, with its frame rate set on the link, the same on every FFmpeg (DESIGN.md
-    §49, Step 64). ``xfade`` refuses an input without a frame rate, and FFmpeg 7.0 / 7.1's
+    ``AVTB`` time base, with its frame rate set on the link, the same on every FFmpeg (Step 64). ``xfade`` refuses an input without a frame rate, and FFmpeg 7.0 / 7.1's
     ``setpts`` clears it ("1/0 is invalid"), so ``fps`` sets it after the ``setpts``. FFmpeg 4.4 /
     5.1's ``fps`` drops the last frame (their end of stream is at its timestamp), so ``tpad``
     first adds a copy of it and ``trim`` cuts the count back."""
@@ -221,7 +220,7 @@ def crossfade_graph(runs: list[int], crossfades: list[int], fps: int, kinds: lis
     """The filter graph blending video inputs ``0 .. len(runs) - 1`` (``runs[k]`` frames each)
     with a transition of ``crossfades[k - 1]`` frames between input ``k - 1`` and ``k``: its
     filters and the output label. ``kinds[k - 1]`` is the ``xfade`` transition (default ``fade``;
-    ``slideleft``, ``wipeup``... for a push or wipe, DESIGN.md §50). Each transition starts half
+    ``slideleft``, ``wipeup``... for a push or wipe). Each transition starts half
     a frame before its first shared frame, so the progress at shared frame ``j`` is ``(j + 0.5) /
     n`` (symmetric; the middle frame of an odd crossfade is 50/50) and the output has exactly
     ``sum(runs) - sum(crossfades)`` frames.
@@ -270,23 +269,23 @@ def join(
 ) -> None:
     """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC
     at ``audio_bitrate``) into ``dst`` with the concat demuxer. ``language``: an ISO 639-2 code (``por``) written as
-    the audio stream's ``language`` tag (DESIGN.md §54).
+    the audio stream's ``language`` tag.
 
-    ``sfx``: a WAV as long as the whole video (the sound effects track, DESIGN.md §47), added
+    ``sfx``: a WAV as long as the whole video (the sound effects track), added
     sample for sample to the concatenated audio (``amix`` without normalising: both keep their
-    levels) before encoding. ``mix``: the finished mix of the whole video (DESIGN.md §48), used
+    levels) before encoding. ``mix``: the finished mix of the whole video, used
     as the audio instead of ``audios`` and ``sfx``.
 
-    ``crossfades`` (DESIGN.md §49): per boundary between ``videos[i]`` and ``videos[i + 1]``,
+    ``crossfades``: per boundary between ``videos[i]`` and ``videos[i + 1]``,
     the frames they overlap (0: a cut), with ``frames`` (each video's frame count) and ``fps``.
     With any crossfade, the scenes joined by cuts are concatenated into runs and the runs blended
     with ffmpeg's ``xfade``, so the video is encoded once (H.264, CRF :data:`VIDEO_CRF`) instead
     of stream-copied. ``kinds``: the ``xfade`` transition per boundary (default ``fade``; a push
-    / wipe slides or wipes, DESIGN.md §50). ``overlays``: RGBA clips ``(path, first output
+    / wipe slides or wipes). ``overlays``: RGBA clips ``(path, first output
     frame)`` drawn over the joined pictures (the overlays of frames a push / wipe moves).
 
     ``metadata``: an FFMETADATA file whose global tags and chapters become the output's
-    (DESIGN.md §52; the MP4 muxer stores the chapters as a chapter track plus a Nero ``chpl``
+    (the MP4 muxer stores the chapters as a chapter track plus a Nero ``chpl``
     list); without it the output keeps FFmpeg's defaults.
 
     ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
@@ -314,7 +313,7 @@ def join(
         runs = [sum(frames[i] for i in group) for group in groups]
         blends_at = [crossfades[g[0] - 1] for g in groups[1:]]
         kinds_at = [kinds[g[0] - 1] for g in groups[1:]] if kinds else None
-        if len(groups) > BLEND_BATCH:   # many runs: blended a batch at a time (memory, §110)
+        if len(groups) > BLEND_BATCH:   # many runs: blended a batch at a time (memory)
             inputs, runs, blends_at, kinds_at = _blend_batches(ffmpeg, inputs, runs, blends_at, kinds_at, fps, work_dir)
         blends, label = crossfade_graph(runs, blends_at, fps, kinds_at)
         video_inputs = inputs.count("-i")
@@ -361,7 +360,7 @@ def join(
 
 
 #: Most runs (scenes joined by cuts) one ``xfade`` graph blends: every input is open at once and
-#: the graph holds frames of each, so 48 crossfaded 1080p scenes took over 3 GB (DESIGN.md §110).
+#: the graph holds frames of each, so 48 crossfaded 1080p scenes took over 3 GB.
 #: More are blended a batch at a time into lossless intermediate videos, then those.
 BLEND_BATCH = 8
 #: The intermediate videos' encoding: lossless H.264 (the same pictures as one graph gives).
@@ -428,7 +427,7 @@ def _write_video(ffmpeg: str, args: list[str], dst: Path, what: str) -> None:
         raise VidgenError(f"{exc}\nthe new video was saved as {tmp}") from None
 
 
-#: Encoding of an animatic's held stills (DESIGN.md §75): x264 tuned for still pictures.
+#: Encoding of an animatic's held stills: x264 tuned for still pictures.
 STILLS_CODEC: tuple[str, ...] = ("-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-crf", "20", "-pix_fmt", "yuv420p")
 
 

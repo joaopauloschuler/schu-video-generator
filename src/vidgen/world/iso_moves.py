@@ -1,4 +1,4 @@
-"""Walking on an isometric place (DESIGN.md §89.9): routes on the grid of cells, around what is
+"""Walking on an isometric place: routes on the grid of cells, around what is
 in the way and up and down steps. Plain data and pure functions, no manim, like
 :mod:`vidgen.world.moves` for platform levels.
 
@@ -322,7 +322,7 @@ def follow_route(place: IsoPlace, start: Cell, leader: Cell, leader_route: IsoRo
     """A walk after a leader: to where it stands (``leader``) and on along its route when it walks
     now (``leader_route``), stopping ``gap`` cells behind where the leader stops; one cell right
     behind it on the picture (where the leader would hide it) takes a step aside, to a cell next
-    to the leader half a tile to the side (DESIGN.md §89.10)."""
+    to the leader half a tile to the side."""
     cells = [cell for cell in (leader_route.cells if leader_route is not None else (leader,)) if cell is not None]
     approach = find_route(place, start, cells[0], crowd=set(crowd) - {cells[0]}, who=who, to=whom)
     path = list(approach.cells) + cells[1:]
@@ -431,7 +431,7 @@ def exit_route(place: IsoPlace, start: Cell, *, side: str | None = None, door: C
 
 #: The moves :func:`iso_move_problems` replays.
 ISO_MOVES = frozenset({"walk_to", "run_to", "enter", "exit", "wander", "meet"})
-#: What else :func:`iso_move_problems` replays (DESIGN.md §89.10): small things handed about
+#: What else :func:`iso_move_problems` replays: small things handed about
 #: (who stands next to what), and objects coming and going (a bridge to walk over).
 ISO_ITEM_ACTIONS = frozenset({"pick_up", "give", "put_down"})
 ISO_PLACE_CHANGES = frozenset({"reveal", "hide"})
@@ -529,19 +529,19 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
     message naming the beat)``. A character with a problem is no longer followed, nor one whose
     move names a spot the place does not have (the action's own check says so).
 
-    Also (DESIGN.md §89.10): ``items`` (small thing -> its spot) picked up, given and put down
+    Also: ``items`` (small thing -> its spot) picked up, given and put down
     by characters standing next to them (:data:`ISO_REACH`), and the objects ``hidden`` at the
     start or by a ``hide`` (not there until a ``reveal``): routes go round where they would stand
     and do not cross a bridge that is not there. Vehicles moved by ``drive_to``, ``sail_to`` and
-    ``lift_off`` (DESIGN.md §105, :func:`~vidgen.world.iso_vehicles.vehicle_problems`) stand where
+    ``lift_off`` (:func:`~vidgen.world.iso_vehicles.vehicle_problems`) stand where
     they stopped for the moves after them."""
     from vidgen.cartoon.seating import PostureError, Postures
     from vidgen.world.iso_seats import ISO_SEAT_ACTIONS, seat_step_problem
     from vidgen.world.iso_vehicles import ISO_VEHICLE_ACTIONS, moved_place, vehicle_problems
 
-    postures = Postures()   # who sits or lies on which object (DESIGN.md §105.2)
+    postures = Postures()   # who sits or lies on which object
     cells: dict[str, Cell | None] = {name: None if name in entering else place.stand_cell(spot) for name, spot in starts.items()}
-    vehicles: dict[str, tuple[object, Cell]] = {}   # the vehicles moved so far: where they stand, the way they head (§105)
+    vehicles: dict[str, tuple[object, Cell]] = {}   # the vehicles moved so far: where they stand, the way they head
     tracks: dict[str, list[Cell]] = {}
     lifted: set[str] = set()
     spots = set(place.spot_names())
@@ -564,14 +564,14 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
         if step.action in ISO_PLACE_CHANGES:
             gone = (gone | set(step.names)) if step.action == "hide" else (gone - set(step.names))
             continue
-        if step.action in ISO_VEHICLE_ACTIONS:   # a car, a boat, a train car, a rocket (DESIGN.md §105)
+        if step.action in ISO_VEHICLE_ACTIONS:   # a car, a boat, a train car, a rocket
             crowd = {cell: who for who, cell in cells.items() if cell is not None}
             for message in vehicle_problems(place.without(gone), step.action, step.names, step.options, vehicles=vehicles,  # type: ignore[arg-type]
                                             crowd=crowd, tracks=tracks, gone=lifted):
                 problems.append((f"{step.location}.to", f"beat '{step.beat}': {message}"))
             continue
         now = moved_place(place.without(gone), {name: item for name, (item, _) in vehicles.items()})   # type: ignore[misc]
-        if step.action in ISO_SEAT_ACTIONS:   # sitting, lying and using (DESIGN.md §105.2)
+        if step.action in ISO_SEAT_ACTIONS:   # sitting, lying and using
             for who in step.names:
                 if cells.get(who) is not None and who not in lost:
                     problem = seat_step_problem(now, postures, who, cells[who], step)   # type: ignore[arg-type]
@@ -645,7 +645,7 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
     return problems
 
 
-#: What a cell is underfoot, for the footsteps (DESIGN.md §89.11): outdoors ``grass`` (floor) and
+#: What a cell is underfoot, for the footsteps: outdoors ``grass`` (floor) and
 #: ``path``, indoors ``boards`` (floor) and ``tiles`` (a path); ``stone`` a raised block (steps,
 #: a terrace) or a doorway in a garden wall; a ``bridge`` and a ``rug`` (walkable objects).
 SURFACES: tuple[str, ...] = ("grass", "path", "boards", "tiles", "stone", "bridge", "rug")

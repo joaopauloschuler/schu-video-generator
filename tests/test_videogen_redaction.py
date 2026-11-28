@@ -1,4 +1,4 @@
-"""A quick tunnel's secret path never reaches the user or disk (DESIGN.md §115.6), and the mock
+"""A quick tunnel's secret path never reaches the user or disk, and the mock
 provider never opens a tunnel. A real local server and a fake cloudflared; no rendering, no
 network, no real tunnel, no key."""
 

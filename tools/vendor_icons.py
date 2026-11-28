@@ -15,8 +15,7 @@ package)::
 
 It copies ``icons/<name>.svg`` verbatim to ``lucide/<name>.svg``, the package's ``LICENSE`` to
 ``lucide/LICENSE``, removes vendored SVGs no longer listed and writes ``manifest.json`` (name,
-category, tags from the package's ``tags.json`` plus ``extra_tags``, aliases, source; DESIGN.md
-§22-§23). It also regenerates the icon catalogue ``docs/ICONS.md``.
+category, tags from the package's ``tags.json`` plus ``extra_tags``, aliases, source). It also regenerates the icon catalogue ``docs/ICONS.md``.
 
 Aliases: Lucide keeps the old names of renamed icons as copies of the new file (``home.svg`` =
 ``house.svg``); an icon file that has no entry in ``tags.json`` and draws exactly like a vendored

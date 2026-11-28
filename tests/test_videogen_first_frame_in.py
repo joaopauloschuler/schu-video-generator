@@ -1,4 +1,4 @@
-"""``first_frame_in`` (DESIGN.md §113.13): the starting picture spliced into the guide video, the
+"""``first_frame_in``: the starting picture spliced into the guide video, the
 role sentence, the block on a first frame plus references for a model known to separate the modes,
 and the warning about hosted files the provider never downloaded. Nothing is sent or paid."""
 

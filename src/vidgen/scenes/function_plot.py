@@ -4,7 +4,7 @@ value label (and a tangent following them), and shaded areas under a curve betwe
 The expressions are parsed by :func:`~vidgen.mathexpr.parse_expression` (a whitelisted parser,
 never ``eval``). The axes (:func:`math_axes`, :class:`MathAxes`) are maths style: they cross at the origin when it is in
 view, with arrow tips, ticks and plain ``Text`` labels (no LaTeX). The ``trace`` beat action
-moves a dot (or an area's right end) to a new x (DESIGN §87.6).
+moves a dot (or an area's right end) to a new x.
 """
 
 from collections.abc import Callable

@@ -1,4 +1,4 @@
-"""Lip sync: a beat's viseme track (DESIGN.md §69.4). No manim here.
+"""Lip sync: a beat's viseme track. No manim here.
 
 A *viseme* is the mouth shape of a group of speech sounds (:data:`VISEMES`). A beat's track is
 a list of :class:`VisemeCue` (start, end, viseme) over its audio, from 0 (the audio's start) to
@@ -131,7 +131,7 @@ class VisemeTrack:
         return self.cues[max(k, 0)].viseme
 
     def until(self, seconds: float) -> VisemeTrack:
-        """The track cut at ``seconds`` (an interrupted line, DESIGN.md §69.34): ``rest`` from then on."""
+        """The track cut at ``seconds`` (an interrupted line): ``rest`` from then on."""
         cues = tuple(c._replace(end=min(c.end, seconds)) for c in self.cues if c.start < seconds)
         return VisemeTrack(cues, self.source, self.timing)
 
@@ -454,7 +454,7 @@ def write_beat_visemes(
 
 def with_cues(track: VisemeTrack, spans: Sequence[tuple[float, float, str]]) -> VisemeTrack:
     """``track`` with ``(start, end, viseme)`` spans laid over it (the generated voice sounds of
-    a beat, DESIGN.md §69.33): cut to 0 and on, past its end with ``rest`` before them."""
+    a beat): cut to 0 and on, past its end with ``rest`` before them."""
     cues = list(track.cues)
     for start, end, viseme in spans:
         start = max(start, 0.0)

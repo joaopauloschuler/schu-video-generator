@@ -1,4 +1,4 @@
-"""A city at night on an isometric place (DESIGN.md §102.2, §102.3), the maths without manim: a
+"""A city at night on an isometric place, the maths without manim: a
 tower's parts in its own frame (its info screen, its algae-farm bands, its antenna), how a
 screen's lines of text crawl, and where the hover pods of a traffic lane are at a time.
 

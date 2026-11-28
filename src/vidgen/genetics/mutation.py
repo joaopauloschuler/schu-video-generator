@@ -1,4 +1,4 @@
-"""The plan of a ``mutation`` scene (DESIGN.md §96.13): the coding sequence (a reference gene's
+"""The plan of a ``mutation`` scene: the coding sequence (a reference gene's
 window, an author's sequence, or a gene built by ``cellworld.expression`` from the ``gene:`` param
 of the molecule scene) and each variant worked out by :mod:`vidgen.genetics.hgvs` — its HGVS ``c.``
 form checked, the protein consequence computed, an author's ``p.`` checked against it, a legacy

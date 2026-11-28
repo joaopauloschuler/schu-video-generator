@@ -249,7 +249,7 @@ def test_the_symbol_follows_the_head_and_leaves_the_character_alone() -> None:
     pip.shift([2.0, 0.5, 0.0])   # a walk, a jump
     idea.update(1 / 30)
     assert idea.get_center()[:2] == pytest.approx(before[:2] + [2.0, 0.5], abs=0.05)
-    assert list(pip.get_family()) == family   # nothing added to the character (DESIGN.md §69.22)
+    assert list(pip.get_family()) == family   # nothing added to the character
     sweat = EffectSymbol("sweat", color="#58C4DD", character_height=pip.character_height).follow(pip)
     sweat.update(0.5)
     pip.face("left")

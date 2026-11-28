@@ -1,4 +1,4 @@
-"""Keyframe and motion path beat actions (DESIGN.md §69.14): ``keyframes`` and ``move_along`` on
+"""Keyframe and motion path beat actions: ``keyframes`` and ``move_along`` on
 the characters, props and character parts (``kit.arm_left``) of a ``stage``. Written against
 ``vidgen.api`` only, like project actions.
 

@@ -1,5 +1,5 @@
 """Reframing: on a stage wider than the frame, the camera keeps the speaker in view
-(``reframe:``; DESIGN.md §69.30). No manim.
+(``reframe:``). No manim.
 
 A frame narrower than a landscape one (9:16, 1:1) shows a stage laid out as wide as the 16:9
 frame of the same short side (:func:`stage_base_width`), so a vertical variant keeps the
@@ -169,14 +169,14 @@ def _upcoming_speaker(beats: Sequence[ReframeBeat], first: ReframeBeat) -> Refra
 def reframe_path(
     beats: Sequence[ReframeBeat], *, frame_width: float, bounds: tuple[float, float], start_x: float, following: bool = False,
 ) -> list[CameraMove]:
-    """The camera's moves that keep each speaker in view (DESIGN.md §69.30), from the view
+    """The camera's moves that keep each speaker in view, from the view
     centred on ``start_x`` on a stage from ``bounds`` (left, right), the view ``frame_width`` wide.
     In a ``free`` beat whose speaker (:func:`_first_speaker`) is not wholly in view the camera
     eases to it at the beat's start (a cut in the first beat and in a beat with a speech
     bubble); before the first line, the first beat cuts to the scene's first speaker when the start
     view does not show it. Beats with a written camera move get nothing, and a ``follow`` leaves
     the camera alone until a ``pan`` whose view is known; ``following``: the camera follows a
-    character from the start (a level's hero, DESIGN.md §86.10), as after a ``follow``."""
+    character from the start (a level's hero), as after a ``follow``."""
     low, high = bounds[0] + frame_width / 2, bounds[1] - frame_width / 2
     if low > high:
         return []

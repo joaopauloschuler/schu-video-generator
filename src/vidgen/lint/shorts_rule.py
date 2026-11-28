@@ -1,4 +1,4 @@
-"""Shorts rules (DESIGN.md §101): a vertical Short (the config's ``shorts:``) checked for what the
+"""Shorts rules: a vertical Short (the config's ``shorts:``) checked for what the
 phone app covers and for its length.
 
 ``shorts_safe_area`` reads a still's layout dump: the header's ``shorts`` box (px, the part of the
@@ -7,7 +7,7 @@ overlays') and the characters' ``face`` boxes. An overlay object's ``reach`` (ca
 every caption of the line being spoken) stands for the overlay when faces are checked, so a face
 that a longer caption of the same line covers is found from any still of it. ``shorts_length`` is a scene rule: it reads the
 video's planned length (``SceneContext.video_seconds``), set on the video's last scene only.
-``overlay_face`` (DESIGN.md §102.8) checks the overlays that keep off faces (a ``hud``) outside
+``overlay_face`` checks the overlays that keep off faces (a ``hud``) outside
 Shorts, from the same layout dump: only their texts and panels' plates count (their frame's thin
 lines run over the whole picture); in a Short ``shorts_safe_area`` checks them that way too.
 """
@@ -149,7 +149,7 @@ def _face_cover(face: Bbox, covering: dict[str, list[Bbox]]) -> Iterator[tuple[s
 @rule("overlay_face", mid_beat=True)
 def overlay_face(ctx: StillContext, settings: OverlayFaceRule) -> Iterator[Issue]:
     """An overlay that keeps off faces (the layout dump's still ``overlays`` entry has ``faces``:
-    a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8). In a
+    a ``hud``) whose text or plate covers a character's face anyway. In a
     Short, ``shorts_safe_area`` checks them (the same way) with the other overlays."""
     if "shorts" in ctx.layout:
         return

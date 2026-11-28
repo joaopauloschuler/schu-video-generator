@@ -1,4 +1,4 @@
-"""Relativistic kinematics (Phase Y, Step 239; DESIGN §99.7). No manim.
+"""Relativistic kinematics (Phase Y, Step 239). No manim.
 
 Four-vectors (E, p) in natural units — energies, momenta and masses all in MeV with c = 1 —
 with the conversions to SI shown through ``vidgen.quantities`` (MeV → J, MeV/c → kg·m/s, MeV/c²

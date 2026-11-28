@@ -1,4 +1,4 @@
-"""Characters drawn from an SVG file, ``look: {svg: FILE}`` (DESIGN.md §69.2).
+"""Characters drawn from an SVG file, ``look: {svg: FILE}``.
 
 The SVG is sanitised with :func:`vidgen.svgclean.sanitize_svg`, then split into character parts
 by element ids:
@@ -15,14 +15,14 @@ by element ids:
 - ``data-pivot="x y"`` on a part's element sets its pivot, in the SVG's ``viewBox`` coordinates;
   without it the pivot is guessed from the part's box (:func:`default_pivot`).
 - Parts are drawn in the file's order; the figure is drawn facing right.
-- Arms and legs may come in two segments (DESIGN.md §69.26): ``arm_left`` is then the upper arm
+- Arms and legs may come in two segments: ``arm_left`` is then the upper arm
   and ``arm_left_lower`` the forearm and hand (pivot: the elbow); legs either as one ``legs`` or
   as ``leg_left`` / ``leg_right``, each with an optional ``leg_left_lower`` (pivot: the knee).
   A limb in one piece keeps working: its bend is shown folded.
-- ``id="tail"`` (optional, DESIGN.md §69.48) hangs from ``body`` and is drawn where the file
+- ``id="tail"`` (optional) hangs from ``body`` and is drawn where the file
   puts it; it swings on a spring as the figure sets off and stops, swishes while idle and turns
   as a whole about its pivot (``data-pivot``: where it leaves the body) and trails in the wind
-  (§69.32) like a generated character's tail.
+  like a generated character's tail.
 
 Splitting (:func:`split_character_svg`) needs no manim, so ``vidgen validate`` can report
 problems and the actions a character cannot do (:mod:`vidgen.cartoon.cast`).
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from vidgen.cartoon.character import CharacterPart
 
 #: Every part name (:data:`vidgen.cartoon.character.PART_NAMES`, kept here without manim) but the
-#: generator's ``cheeks`` and ``bristles`` (DESIGN.md §69.59), whose rest shape draws nothing.
+#: generator's ``cheeks`` and ``bristles``, whose rest shape draws nothing.
 SVG_PART_NAMES: tuple[str, ...] = (
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",

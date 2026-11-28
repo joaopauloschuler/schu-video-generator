@@ -1,4 +1,4 @@
-"""Overlapping speech and interruptions (DESIGN.md §69.34): the timeline maths and the mix plan
+"""Overlapping speech and interruptions: the timeline maths and the mix plan
 of beats that start before the beat before them ends. No manim.
 
 A beat's ``overlap: S`` starts it ``S`` seconds before the speech of the beat before it ends
@@ -53,7 +53,7 @@ class SpokenLine:
     speech ends (``speech_end``, seconds from its start, at most ``d``), its own ``overlap``
     and ``interrupt`` keys (how it joins the beat before it), its ``last_word`` (start, end;
     seconds from its start) when stored word times give it, and ``pause``: the silence after it
-    instead of the pad (its ``pause:``, DESIGN.md §111; ``None``: the pad)."""
+    instead of the pad (its ``pause:``; ``None``: the pad)."""
 
     seconds: float
     speech_end: float

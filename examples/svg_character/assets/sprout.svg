@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- "Sprout": an original example character for vidgen's SVG naming convention (DESIGN.md §69.2).
+<!-- "Sprout": an original example character for vidgen's SVG naming convention.
      Drawn facing right. Part ids: body, legs, arm_left, arm_right, head, eyes, brows, mouth;
      other shapes of a part: <part>_<shape>, hidden with display="none" (eyes_closed, mouth_A, ...).
      data-pivot="x y" (viewBox coordinates) is the point a part turns about. -->

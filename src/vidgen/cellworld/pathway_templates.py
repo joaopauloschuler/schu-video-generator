@@ -1,4 +1,4 @@
-"""Built-in signalling pathways (DESIGN.md §95.12), usable as they are (``template:
+"""Built-in signalling pathways, usable as they are (``template:
 gpcr_camp_pka``) or as a start that ``nodes``, ``edges`` and ``remove`` change. Each follows
 the textbook account (Alberts, *Molecular Biology of the Cell*, ch. 15; Lodish, *Molecular Cell
 Biology*, ch. 15–16), human nomenclature, and draws only what the textbooks agree on. No manim.

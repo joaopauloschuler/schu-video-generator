@@ -1,4 +1,4 @@
-"""Gene expression as actions, Step 206 (DESIGN.md §95.11): the genetic code, genes written,
+"""Gene expression as actions, Step 206: the genetic code, genes written,
 generated and checked (introns, reading frames, signal peptides, sequons), the order of the steps,
 the close-up stage's geometry (bubble, hybrid, codon–anticodon pairing, the chain N→C), the route
 through a cell, validation in projects, and tiny renders."""

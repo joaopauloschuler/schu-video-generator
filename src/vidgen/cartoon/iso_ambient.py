@@ -1,10 +1,10 @@
-"""Ambient life on an isometric place, drawn (DESIGN.md §105.7): background walkers, birds, a cat,
+"""Ambient life on an isometric place, drawn: background walkers, birds, a cat,
 ducks, butterflies, fireflies and a fly, each moving as its plan says
 (:class:`~vidgen.world.iso_ambient.AmbientPlan`).
 
 A creature is an :class:`IsoCritter`: a body of the place like a character (a box for the draw
 order, a front picture of what stands in front of it) drawn as a small picture (a *sprite*, as a
-driven vehicle is, §105.1) of simple shapes in the place's style, made once per pose, frame of its
+driven vehicle is) of simple shapes in the place's style, made once per pose, frame of its
 step or wing beat, facing and level of detail, and moved across the place. The stage says how
 much of it shows (``seen(now)``: none in a close shot, butterflies by day, fireflies at night).
 """
@@ -137,7 +137,7 @@ def walker_shapes(look: CritterLook, *, facing: int, swing: float) -> list[Shape
     out.append(_round(0.01, 0.93, 0.115, skin, f, s))
     cap = [(0.01 + 0.122 * math.cos(a), 0.935 + 0.122 * math.sin(a)) for a in np.linspace(0.15, math.pi + 0.35, 9)]
     out.append(Poly(tuple(_b(u, v, f, s) for u, v in [*cap, (-0.08, 0.9)]), hair, holds_snow=False))
-    # a face of dots (side-on: an eye, a smile's end), DESIGN.md §105.8
+    # a face of dots (side-on: an eye, a smile's end)
     out.append(_round(0.068, 0.905, 0.024, INK, f, s, ink=False))   # under the hair's edge
     out.append(_round(0.068, 0.86, 0.014, mix(INK, skin, 0.35), f, s, ink=False))
     return out
@@ -287,7 +287,7 @@ def _faded(pixels: np.ndarray | None, share: float) -> np.ndarray | None:
 
 
 class IsoCritter(Group):
-    """A creature of a place's ambient life (DESIGN.md §105.7), named after its plan: its sprite
+    """A creature of a place's ambient life, named after its plan: its sprite
     where its ``plan`` (:class:`~vidgen.world.iso_ambient.AmbientPlan`) puts it at the scene time
     of :meth:`update_to`, shown ``seen(now)`` (0..1, the stage's say: hidden in close shots,
     butterflies by day, fireflies at night) times its own fading in and out; at the level of

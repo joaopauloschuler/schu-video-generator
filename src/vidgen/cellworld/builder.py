@@ -1,4 +1,4 @@
-"""Placing a cell world's structures (DESIGN.md §95.3, §95.9): the cell and its envelope (a
+"""Placing a cell world's structures: the cell and its envelope (a
 plant's wall with plasmodesmata, a bacterium's periplasm or wall and capsule), each structure
 with its fine structure (the nuclear envelope opened by pores, ER sheets joined to it and a
 smooth-ER network joined to them, Golgi cisternae with rims and buds, cristae, thylakoids,

@@ -1,4 +1,4 @@
-"""Original animal characters of the generator (DESIGN.md §69.48, §69.57): ``look.species``
+"""Original animal characters of the generator: ``look.species``
 ``cat``, ``dog``, ``bird``, ``bear``, ``rabbit``, ``mouse`` and (Step 123) ``fox``, ``owl``,
 ``frog``, ``turtle``, ``penguin`` and (Step 155) ``snail``.
 
@@ -89,7 +89,7 @@ FRONT_MOUTH_PLACES: dict[str, tuple[float, float]] = {
     "snail": (-0.24, 0.55),
 }
 #: How far a bird's beak opens for each mouth shape (degrees, side view): ``open`` for a
-#: surprised face, the visemes of DESIGN.md §69.4; ``M`` is closed.
+#: surprised face, the visemes; ``M`` is closed.
 BEAK_OPENINGS: dict[str, float] = {"open": 40.0, "A": 34.0, "E": 16.0, "O": 26.0, "U": 14.0, "F": 6.0, "L": 22.0, "W": 12.0}
 #: Tails from the side: the centre line (from the root, character units) and its width at the
 #: root and at the tip; ``None``: a round tail (bear, rabbit) or a bird's fan.
@@ -460,7 +460,7 @@ def beak_mouth(species: str, f: Frame, c: Mapping[str, str], w: float) -> tuple[
     return {name: shapes[name] for name in order}, hinge
 
 
-#: How far a beak opens laughing and with its tongue out (degrees, side view; DESIGN.md §69.59).
+#: How far a beak opens laughing and with its tongue out (degrees, side view).
 BEAK_LAUGH_OPENING = 46.0
 BEAK_TONGUE_OPENING = 18.0
 

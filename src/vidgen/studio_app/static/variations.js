@@ -1,4 +1,4 @@
-// Variations (DESIGN.md §94.17): one click makes four siblings of the current version, each a
+// Variations: one click makes four siblings of the current version, each a
 // different kind of change (harmony, pattern, mix, energy), rendered and checked by the server in
 // the background and shown side by side. ▶ plays one at the same moment as what was playing
 // (again: back to the current version); Keep makes it the next version; More like this makes

@@ -1,4 +1,4 @@
-"""The studio's inspector and the editable score file (Step 195, DESIGN.md §94.13): ``unset`` with
+"""The studio's inspector and the editable score file (Step 195): ``unset`` with
 its pruning, the patch catalogue with units and scales, an instrument change that keeps what it
 can and says what changes, the play mode, playing or resting in a section, typed text as a
 version, and the tracks as written in the outline."""

@@ -1,6 +1,6 @@
 # How the Higgs boson was found: a narrated particle-physics explainer (about 3:50) built on Phase
 # Y's scene types (docs/CONFIG.md `standard_model`, `feynman`, `branching`, `detector`,
-# `mass_spectrum`) with a `calculation` and a `plot` (DESIGN §99; the craft:
+# `mass_spectrum`) with a `calculation` and a `plot` (the craft:
 # docs/COOKBOOK-PARTICLES.md):
 #   - the Standard Model chart with the Higgs boson highlighted and what its field does (the W and
 #     Z masses, the fermions' through Yukawa couplings; not most of the proton's mass)

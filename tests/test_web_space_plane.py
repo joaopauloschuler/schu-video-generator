@@ -1,4 +1,4 @@
-"""The space plane parts, ``vidgen/space-plane`` (Step 386, DESIGN.md §123.8): the module is served by
+"""The space plane parts, ``vidgen/space-plane`` (Step 386): the module is served by
 its import name and builds on ``vidgen/space-craft``; its parts are registered (every ready-made
 plane as kind ``craft``, the kit's parts and surfaces as ``craft-part``); in Node (when it is
 installed): a wing's outline from its numbers (area, aspect, sweep), every preset, a body's

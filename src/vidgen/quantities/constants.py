@@ -1,4 +1,4 @@
-"""Physical and astronomical constants for worked calculations (DESIGN §97.9). No manim.
+"""Physical and astronomical constants for worked calculations. No manim.
 
 Sources:
 

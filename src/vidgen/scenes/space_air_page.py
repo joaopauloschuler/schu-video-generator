@@ -1,4 +1,4 @@
-"""The page a surface ``space`` scene draws (DESIGN.md §123.14): JavaScript written from the scene's
+"""The page a surface ``space`` scene draws: JavaScript written from the scene's
 params, one world from orbit to the ground in the place's own frame (``vidgen/space-descent``: the
 air, the sea, the ground, the decks and the globe of one planet), the stars behind it
 (``vidgen/space-sky``), planes and craft on the scene's flights (``vidgen/space-plane``,
@@ -72,10 +72,16 @@ class _AirPage(_Page):
         if w.match != 1:
             o["match"] = w.match
         o.update({"exposure": w.exposure, "ev": w.ev, "quality": w.quality})
+        if w.shadows is not None:
+            o["shadows"] = w.shadows
         adapt = [m for m in p.camera if m.move in ("climb-through", "descend-through") and m.options().get("adapt")]
-        if adapt:
+        metered = p.operator is not None and p.operator.metered
+        if adapt or metered:
             o["ev"] = Ref(f"() => (S.shot && Number.isFinite(S.shot.ev) ? S.shot.ev : 0) + {js(w.ev)}")
-            self.out("// eye adaptation of the move through the deck: the air's exposure follows the shot's ev (a look)")
+            if adapt:
+                self.out("// eye adaptation of the move through the deck: the air's exposure follows the shot's ev (a look)")
+            if metered:
+                self.out("// the operator's automatic exposure: the air's exposure follows the shot's ev (vidgen/space-camera-air's meter)")
         self.out("// one world from orbit to the ground, in the place's own frame: x east, y up, z south, metres (vidgen/space-descent)")
         self.out(f"S.world = world(renderer, {{{pairs(o)}{'stars: S.sky, ' if p.sky is not False else ''}scene}}); scene.add(S.world.object);")
 
@@ -175,6 +181,7 @@ class _AirPage(_Page):
             self.out(f"{{name: {js(name)}, start: {js(start)}, cut: {js(m.cut)}, shot: (t) => {call}}},", 2)
         self.out("];")
         self.out("S.view = moveTrack(S.moves);")
+        self.operator(metered=True)
 
     def reactions(self) -> None:
         live = [(i, r) for i, r in enumerate(self.p.music) if r.target.lower() != "lightning"]
@@ -256,7 +263,7 @@ class _AirPage(_Page):
         self.out(f"checkMoves(S.cam, S.moves, S.seconds, {{fps: {CHECK_FPS}}});")
         self.out("for (const p of S.world.problems(camera)) pageNote(`world: ${p}`);")
         head = [
-            f"// The page of the space scene \"{self.id}\" (DESIGN.md §123.14), a surface scene written by vidgen from video.yaml (generator {PAGE_VERSION}).",
+            f"// The page of the space scene \"{self.id}\", a surface scene written by vidgen from video.yaml (generator {PAGE_VERSION}).",
             "// Change the scene in video.yaml; to go on in code, `vidgen space-page` writes this page out as a web scene's script.",
             'import * as THREE from "three";',
         ]

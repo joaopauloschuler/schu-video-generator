@@ -1,4 +1,4 @@
-"""The particle-physics accuracy lint rules (Phase Y, Step 242, DESIGN §99.13): narration and
+"""The particle-physics accuracy lint rules (Phase Y, Step 242): narration and
 on-screen text against the particle model, the conservation checker, the vertex rules, the
 detector signatures and what the particle scenes compute.
 

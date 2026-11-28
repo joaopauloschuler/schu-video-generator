@@ -1,5 +1,4 @@
-// vidgen/space-scene: what the page of a declarative `space` scene needs besides the parts (DESIGN.md
-// §122.12). Part of schu-video-generator (MIT licence); imported as "vidgen/space-scene" by the page
+// vidgen/space-scene: what the page of a declarative `space` scene needs besides the parts. Part of schu-video-generator (MIT licence); imported as "vidgen/space-scene" by the page
 // vidgen writes for a `space` scene of video.yaml (and by the same page written out with `vidgen
 // space-page`, to go on in code).
 //

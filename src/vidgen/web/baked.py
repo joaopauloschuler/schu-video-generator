@@ -1,5 +1,5 @@
 """The cache of baked maps: pictures a page bakes once (a planet's surface, a sky's cube map),
-kept between pages in vidgen's cache folder (DESIGN.md §123.2).
+kept between pages in vidgen's cache folder.
 
 The page side is the module ``vidgen/baked`` (``data/web/modules/baked.js``): it asks
 :class:`~vidgen.web.page.WebPage` under ``__vidgen__/baked/`` whether an entry exists

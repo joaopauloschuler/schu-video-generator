@@ -1,4 +1,4 @@
-"""Drawing a ``web`` scene's frames faster (Step 349, DESIGN.md §120.10): the progress lines and
+"""Drawing a ``web`` scene's frames faster (Step 349): the progress lines and
 how ``vidgen render`` shows them, the frames clip written in a thread beside the drawing, the
 first frame's time limit; one ``slow`` page in Chromium whose screenshots equal Playwright's."""
 

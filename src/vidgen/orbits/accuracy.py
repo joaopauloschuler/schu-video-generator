@@ -1,4 +1,4 @@
-"""The orbital lint's knowledge (Phase X, Step 234, DESIGN §98.8): which value of an ``orbit``
+"""The orbital lint's knowledge (Phase X, Step 234): which value of an ``orbit``
 scene's model a number in the narration or on screen is about, whether it agrees, dates of
 oppositions and conjunctions, claims about scale, and the atmospheres a periapsis should stay
 above. No manim.
@@ -26,7 +26,7 @@ from vidgen.quantities.units import DIMENSIONLESS, dim, parse_unit
 
 from .values import AU, DAY, YEAR, time_unit
 
-#: The rules the facts belong to (DESIGN §98.8), in :data:`vidgen.config.LINT_RULES` order.
+#: The rules the facts belong to, in :data:`vidgen.config.LINT_RULES` order.
 ORBIT_RULES: tuple[str, ...] = ("orbit_period", "orbit_speed", "orbit_dv", "orbit_transfer", "orbit_distance", "orbit_date", "orbit_scale",
                                 "orbit_conserved", "orbit_crash")
 #: Fact kinds and the rule a mismatch is reported under.

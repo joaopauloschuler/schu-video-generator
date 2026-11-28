@@ -1,4 +1,4 @@
-"""The ``shot`` beat action (DESIGN.md §69.29): the camera framing of a ``stage``'s beat, which the
+"""The ``shot`` beat action: the camera framing of a ``stage``'s beat, which the
 ``shot:`` beat key writes. Written against ``vidgen.api`` only, like project actions.
 
 A shot cuts the camera to a framing of characters (``wide``, ``two_shot``, ``medium``,

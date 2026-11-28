@@ -1,4 +1,4 @@
-"""``gwas``: a genome-wide association study (DESIGN.md §96.17), computed by
+"""``gwas``: a genome-wide association study, computed by
 ``vidgen.genetics.gwas``: a Manhattan plot (−log₁₀ p along the genome, the 22 autosomes (and X) in
 alternating colours, the genome-wide significance line at 5 × 10⁻⁸ and the suggestive line at
 1 × 10⁻⁵, peaks labelled with their gene or lead variant), a QQ plot with λ_GC, and a regional

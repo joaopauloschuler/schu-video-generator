@@ -1,16 +1,16 @@
-"""Props that move by themselves (DESIGN.md §69.54, §69.55): the maths, without manim.
+"""Props that move by themselves: the maths, without manim.
 
 A wall ``clock`` that runs turns its hands from the scene clock (:func:`clock_seconds`,
 :func:`hand_angles`); a ``tv`` that is on shows a picture that changes every second or two and
 flickers (:func:`tv_picture`); a ``lamp`` that is on glows (:data:`GLOWS`, :func:`glow_rings`); a
 ``fireplace`` that is on burns, its flames flickering and leaning with the wind
 (:func:`flame_shapes`, :func:`fire_flicker`); a ``kettle`` that is on steams (:func:`steam_puffs`);
-a ``phone`` that is on rings in bursts, shaking (:func:`ring_shake`, DESIGN.md §69.56); a
-``portal`` that is on is open, crackling and glowing (:mod:`vidgen.cartoon.portal`, §100.4).
+a ``phone`` that is on rings in bursts, shaking (:func:`ring_shake`); a
+``portal`` that is on is open, crackling and glowing (:mod:`vidgen.cartoon.portal`).
 These are on or off from the start and the ``switch_on`` / ``switch_off`` actions change them
 (:func:`switched_on`, :func:`on_spans`). Only what changes is redrawn on each frame: the moving
 parts and what is drawn over them (:func:`redrawn_members`); the rest of the set stays in Manim's
-static image (§69.20).
+static image.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 #: The props a ``switch_on`` / ``switch_off`` action and the stage key ``on`` act on (a phone
-#: that is on rings, DESIGN.md §69.56).
+#: that is on rings).
 SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv", "portal", "hologram_display", "scanner", "crystal")
 #: The props that can move by themselves: a running clock and the switched ones.
 LIVING_KINDS: tuple[str, ...] = ("clock", *SWITCHED_PROPS)
@@ -77,13 +77,13 @@ GLOWS: dict[str, GlowSpec] = {
     "lamp": GlowSpec(0.0, 0.86, 0.42, "#FFD67A", 0.55),
     "tv": GlowSpec(0.0, 0.7, 0.8, "#A8D8FF", 0.3),
     "fireplace": GlowSpec(0.0, 0.32, 1.05, "#FFA94D", 0.5),
-    "portal": GlowSpec(0.0, 0.5, 0.75, "#C9A8FF", 0.5),   # in the portal's own rim colour (§100.4)
-    "hologram_display": GlowSpec(0.0, 0.69, 0.7, "#5FD8FF", 0.32),   # in the panel's own colour (§100.10)
-    "scanner": GlowSpec(0.0, 0.7, 0.45, "#5FFFE0", 0.3),   # its lit screen (§102.13)
-    "crystal": GlowSpec(0.0, 0.55, 0.85, "#7FE8FF", 0.45),   # in the shard's own colour (§102.13)
+    "portal": GlowSpec(0.0, 0.5, 0.75, "#C9A8FF", 0.5),   # in the portal's own rim colour
+    "hologram_display": GlowSpec(0.0, 0.69, 0.7, "#5FD8FF", 0.32),   # in the panel's own colour
+    "scanner": GlowSpec(0.0, 0.7, 0.45, "#5FFFE0", 0.3),   # its lit screen
+    "crystal": GlowSpec(0.0, 0.55, 0.85, "#7FE8FF", 0.45),   # in the shard's own colour
 }
 #: A glowing data crystal's light pulses between ``1 - CRYSTAL_PULSE`` and 1 every
-#: ``CRYSTAL_PULSE_SECONDS``; a scanner's readout (DESIGN.md §102.13).
+#: ``CRYSTAL_PULSE_SECONDS``; a scanner's readout.
 CRYSTAL_PULSE = 0.3
 CRYSTAL_PULSE_SECONDS = 2.2
 
@@ -122,7 +122,7 @@ STEAM_RADIUS = (0.08, 0.3)
 STEAM_OPACITY = 0.85
 STEAM_LEAN = 0.9
 STEAM_LEAN_MAX = 1.2
-#: A ringing phone (DESIGN.md §69.56): from when it starts ringing, a burst of ``RING_BURST`` s
+#: A ringing phone: from when it starts ringing, a burst of ``RING_BURST`` s
 #: every ``RING_PERIOD`` s, in which it shakes ``RING_SHAKE_HZ`` times a second up to
 #: ``RING_TILT`` degrees either way about its middle (easing in and out over ``RING_EASE`` s).
 RING_PERIOD = 2.0

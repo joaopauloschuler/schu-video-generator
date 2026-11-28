@@ -1,4 +1,4 @@
-"""Safe maths expressions of ``x`` for the maths scenes (``function_plot``, DESIGN §87.6; exported
+"""Safe maths expressions of ``x`` for the maths scenes (``function_plot``; exported
 by ``vidgen.api``).
 
 A small whitelisted parser, not ``eval``: numbers, ``x``, the constants ``pi`` / ``e`` / ``tau``,

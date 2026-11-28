@@ -1,4 +1,4 @@
-"""Naming conventions as data (DESIGN.md §95.9), so validation and the accuracy lint (Step 209)
+"""Naming conventions as data, so validation and the accuracy lint (Step 209)
 use one table: gene symbols in italics, protein names in roman type, the case each species'
 nomenclature committee prescribes (human HGNC: *TP53* / TP53 or p53; mouse MGI: *Trp53* /
 TRP53; budding yeast SGD: *CDC28* / Cdc28 or Cdc28p; *E. coli*: *lacZ* / LacZ…); markers of

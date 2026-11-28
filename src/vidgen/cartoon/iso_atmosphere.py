@@ -1,4 +1,4 @@
-"""Weather on an iso place, drawn (DESIGN.md §105.4): the lights mirrored in its puddles at night
+"""Weather on an iso place, drawn: the lights mirrored in its puddles at night
 (:class:`IsoReflections`), fog lying over it in bands by depth (:class:`IsoFog`) and its plants
 and balloons swaying in the wind (:class:`IsoSwayer`). The rules are in
 :mod:`vidgen.cartoon.iso_weather` and :mod:`vidgen.cartoon.fog`.
@@ -134,7 +134,7 @@ class IsoReflections(VGroup):
 
 
 class IsoFog:
-    """Fog over an iso place (DESIGN.md §105.4): a :class:`~vidgen.cartoon.weather_drawing.FogBand`
+    """Fog over an iso place: a :class:`~vidgen.cartoon.weather_drawing.FogBand`
     per share of :data:`~vidgen.cartoon.fog.FOG_DEPTHS` (``bands``, back to front), each lying
     along the ground line of its depth (``depths``: ``x + y``; ``bases``: those lines' y on
     screen) from ``left`` to ``right``, its haze up to ``top`` (Manim units; ``unit``: a tile's
@@ -180,7 +180,7 @@ class IsoFog:
 
 
 class IsoSwayer(Group):
-    """An object of an iso place swaying in the wind (DESIGN.md §105.4), named after it: a picture
+    """An object of an iso place swaying in the wind, named after it: a picture
     of its ``shapes`` (a *sprite*, at the level of detail the camera's zoom needs, as a driven
     vehicle's) bent each frame (:func:`~vidgen.cartoon.iso_weather.sway_rows`) about its foot,
     the middle of the bottom of its ``box``, by
@@ -237,7 +237,7 @@ class IsoSwayer(Group):
         self.degrees = degrees
         pixels, foot, height, (left, bottom, right, top), middle = self._sprite()
         slot = self.slot
-        if self.kind in ISO_SWINGS:   # swung as a whole about its foot (DESIGN.md §105.8)
+        if self.kind in ISO_SWINGS:   # swung as a whole about its foot
             slot.pixel_array = swing_pixels(pixels, foot, middle, degrees)
         else:
             slot.pixel_array = sway_rows(pixels, foot, height, degrees, ISO_SWAYS[self.kind].bend_from)

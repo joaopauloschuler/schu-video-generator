@@ -1,4 +1,4 @@
-"""What a flight must stay over (Step 385, DESIGN.md §123.7): ground heights in the scene's local
+"""What a flight must stay over (Step 385): ground heights in the scene's local
 frame (:mod:`vidgen.flight.frames`), metres over the world's sphere at a place (x east, z south).
 
 :class:`LandGround` is ``vidgen/space-land``'s ground: a numpy port of its pure height recipe

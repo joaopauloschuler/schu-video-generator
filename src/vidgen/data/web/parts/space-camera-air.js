@@ -1,4 +1,4 @@
-// The moves of vidgen/space-camera-air (DESIGN.md §123.12) for the registry vidgen/parts (§122.5): each tile
+// The moves of vidgen/space-camera-air for the registry vidgen/parts: each tile
 // is one move at a telling moment, so `vidgen parts 'camera-*'` shows what its frame looks like before a
 // page is written. Air moves: an Earth-like air over a breeze sea (a plane on a flight made by hand: a
 // steady banked turn); ship moves: a dressed carrier of seed 1 scaled to the tile, under one hard sun.

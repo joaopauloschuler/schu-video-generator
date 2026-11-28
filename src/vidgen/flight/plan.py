@@ -1,4 +1,4 @@
-"""A flight's path from its words (Step 385, DESIGN.md §123.7): legs → smooth position, velocity
+"""A flight's path from its words (Step 385): legs → smooth position, velocity
 and attitude on the world's sphere (or a flat world), checked against the ground.
 
 **Kinematics.** A flight is three channels of time (:mod:`vidgen.flight.profiles`): the air speed

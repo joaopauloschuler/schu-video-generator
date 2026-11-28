@@ -1,4 +1,4 @@
-"""The file a ``web`` scene names (``page:`` or ``script:``) and its checks (DESIGN.md §118.2).
+"""The file a ``web`` scene names (``page:`` or ``script:``) and its checks.
 
 No browser here: ``vidgen validate`` and the render fingerprint use these.
 """
@@ -65,7 +65,7 @@ def web_entry_problems(root: Path, params: Any) -> list[str]:
 
 
 def served_root(project: Any) -> Path:
-    """The folder a ``web`` scene's page is served from (DESIGN.md §123.16): the project folder,
+    """The folder a ``web`` scene's page is served from: the project folder,
     or the folder ``web_root:`` names (relative to the project), which must hold the project folder.
     A wrong ``web_root`` is a :class:`VidgenError`."""
     rel = project.config.web_root
@@ -139,7 +139,7 @@ def entry_digest(root: Path, params: Any) -> dict[str, Any]:
 def is_web_type(name: str) -> bool:
     """True when the scene type ``name`` is ``web`` or a registered type whose class subclasses
     the built-in ``Web`` scene (an extension's ``class WebCut(Web)``): such a scene shows a page
-    too, so its script and the files its page loaded are render inputs (DESIGN.md §120.1).
+    too, so its script and the files its page loaded are render inputs.
 
     Told by the class's bases, so nothing is imported here. A type the registry does not know
     (no project is active) counts only when it is ``web`` itself."""

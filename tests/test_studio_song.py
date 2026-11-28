@@ -1,4 +1,4 @@
-"""The studio's song strip, timeline and track list (Step 194, DESIGN.md §94.12): value edits that
+"""The studio's song strip, timeline and track list (Step 194): value edits that
 keep the score's comments, Roman numerals of the templates' chords, the song edits (tracks and
 sections), versions from edits, the energy curve and listening mixes with tracks muted."""
 

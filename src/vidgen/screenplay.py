@@ -1,4 +1,4 @@
-"""``vidgen screenplay``: a stage project from a screenplay, with no AI involved (DESIGN.md §69.25).
+"""``vidgen screenplay``: a stage project from a screenplay, with no AI involved.
 
 The format (Markdown-like, one element per line or paragraph):
 
@@ -116,7 +116,7 @@ MANNERS: dict[str, tuple[str, str]] = {
     **{w: ("expression", "worried") for w in ("nervous", "anxious", "uneasy")},
     **{w: ("expression", "thinking") for w in ("doubtful", "puzzled", "curious", "pondering", "unsure", "sceptical", "skeptical")},
     **{w: ("expression", "neutral") for w in ("calm", "flat", "deadpan")},
-    # Step 125 (DESIGN.md §69.59)
+    # Step 125
     **{w: ("expression", "laughing") for w in ("laughs", "chuckling", "giggling", "amused", "in stitches")},
     **{w: ("expression", "blushing") for w in ("embarrassed", "shy", "bashful", "flustered", "blushes")},
     **{w: ("expression", "tongue_out") for w in ("cheeky", "teasing", "playful", "mocking", "sticking out tongue")},
@@ -150,7 +150,7 @@ LOOKS: tuple[dict[str, Any], ...] = (
      "colors": {"skin": "#FFE0BD", "clothes": "secondary", "hair": "#B5532E", "accessory": "tertiary"}, "voice_kind": "feminine"},
     {"look": {"body": "tall", "head_size": 1.1, "eyes": "round", "nose": "dot", "hair": "none", "ears": "round", "accessories": ["hat", "bag"]},
      "colors": {"skin": "#D9A3E0", "clothes": "#5B6C8F", "accessory": "highlight"}, "voice_kind": "masculine"},
-    # since Step 113: outfits, patterns, shoes, more hair and accessories (DESIGN.md §69.47)
+    # since Step 113: outfits, patterns, shoes, more hair and accessories
     {"look": {"body": "pear", "head_size": 1.05, "eyes": "oval", "hair": "ponytail", "outfit": "dress", "pattern": "dots", "shoes": "shoes",
               "accessories": ["necklace"]},
      "colors": {"skin": "#E8B48A", "clothes": "accent", "hair": "#3B2A1E", "accessory": "highlight"}, "voice_kind": "feminine"},
@@ -197,7 +197,7 @@ _VERBS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p, re.IGNORE
 #: Gestures a direction may name (``wave`` / ``nod`` turn to their object first).
 _GESTURE_KINDS = ("wave", "nod", "shrug", "shake_head")
 _MOOD = r"^(?:is|looks|seems|gets|feels|becomes)\s+(?:very\s+|so\s+|a bit\s+|quite\s+|all\s+)?"
-#: Predicates that put an effect symbol over the subject's head (DESIGN.md §69.40): pattern ->
+#: Predicates that put an effect symbol over the subject's head: pattern ->
 #: the symbol. Tried before :data:`_VERBS`.
 _EFFECT_VERBS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p, re.IGNORECASE), kind) for p, kind in (
     (r"^(?:has|gets|had|got)\s+(?:an?\s+)?(?:bright\s+|great\s+|sudden\s+|new\s+|good\s+)?idea$|^lights?\s+up$", "idea"),
@@ -403,7 +403,7 @@ class SetDesign:
     """A scene's ``set:`` line read: stage ``params`` (background, ground_color, marks, props),
     the characters placed by it (name -> place), the props' names (name -> kind), what it did
     not understand (``todos``) and the named set it starts from (``set_name``: a set of
-    ``--cast``, whose params are ``set_params``; DESIGN.md §69.35)."""
+    ``--cast``, whose params are ``set_params``)."""
 
     params: dict[str, Any]
     placed: dict[str, str | float] = field(default_factory=dict)
@@ -421,7 +421,7 @@ class SetDesign:
 
 def stage_marks(params: Mapping[str, Any]) -> dict[str, float]:
     """A stage's marks (x 0..1) as a screenplay places and walks by them: its ``marks`` and, on a
-    platform ``level``, its spots (DESIGN.md §86.3; a map that does not parse adds none: validate
+    platform ``level``, its spots (a map that does not parse adds none: validate
     reports it)."""
     from vidgen.world import parse_level
 
@@ -460,7 +460,7 @@ _AGAINST_WALL = re.compile(r"\s*\b(?:against|on)\s+(?:the\s+)?(?:back\s+)?wall\b
 def _room(text: str, design: SetDesign) -> None:
     """A ``room`` part of a ``set:`` line into ``design.params["room"]``: nothing (a room with the
     defaults), or comma separated :data:`ROOM_WORDS`, ``window [at place]`` and ``[open] door
-    [(name)] [at place]`` (DESIGN.md §69.43)."""
+    [(name)] [at place]``."""
     room: dict[str, Any] = {}
     for entry in (e.strip() for e in text.split(",") if e.strip()):
         what, name, at = _item(entry)
@@ -786,7 +786,7 @@ def _predicate(text: str, who: list[str], state: StageState) -> list[dict[str, A
             return [{kind: target, **side, **speed, "_seconds": seconds}]
         if kind == "jump":
             return [{"jump": target, "_seconds": jump_motion_seconds(JUMP_SECONDS, 1.0) + MARGIN}]
-        if kind == "jump_to":   # on a platform level only: to a spot or a mark (DESIGN.md §86.7)
+        if kind == "jump_to":   # on a platform level only: to a spot or a mark
             obj = _object(obj_text or "", state, camera=False)
             if not state.level or obj is None or obj[0] != "mark":
                 return None

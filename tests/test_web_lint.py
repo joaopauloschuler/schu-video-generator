@@ -1,4 +1,4 @@
-"""Lint reads a ``web`` page (DESIGN.md §118.12): the page's text as layout objects, the layout
+"""Lint reads a ``web`` page: the page's text as layout objects, the layout
 rules on them, ``web_clipped``, naming and opting out. The rules are checked on hand-made
 readings (no browser); one ``slow`` + ``render`` test reads real pages in Chromium."""
 

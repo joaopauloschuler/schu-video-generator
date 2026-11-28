@@ -1,4 +1,4 @@
-"""Project: locate and load a project's config (with its ``include:`` files), apply a variant, resolve paths (DESIGN.md §3)."""
+"""Project: locate and load a project's config (with its ``include:`` files), apply a variant, resolve paths."""
 
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def read_config_file(path: Path) -> Any:
 
 
 #: Environment variable naming a folder that every file a config refers to must lie in (set by
-#: ``vidgen mcp`` for the commands it runs: its ``--root``; DESIGN.md §63).
+#: ``vidgen mcp`` for the commands it runs: its ``--root``).
 CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
 #: Config keys (anywhere in the config, variants and sets included) whose string values are
 #: files or folders of the project: scene ``path`` / ``logo``, watermark, thumbnail, stage and
@@ -100,7 +100,7 @@ PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", 
                        "svg"})
 #: Config key whose value may name a file among other words: a Kokoro ``voice`` (a blend
 #: ``af_bella,own.pt``) whose parts ending in ``.pt`` are voice files Kokoro reads from the
-#: current folder (DESIGN.md §68).
+#: current folder.
 VOICE_FILE_KEY = "voice"
 
 
@@ -171,7 +171,7 @@ def _dump(config: VideoConfig) -> dict[str, Any]:
 
 
 def _parsed(data: Any, where: str, origins: Mapping[str, Origin]) -> VideoConfig:
-    """:func:`parse_config` with its problems placed where their values are written (DESIGN.md §69.35)."""
+    """:func:`parse_config` with its problems placed where their values are written."""
     try:
         return parse_config(data, where)
     except VidgenError as exc:
@@ -181,8 +181,8 @@ def _parsed(data: Any, where: str, origins: Mapping[str, Origin]) -> VideoConfig
 def _translated(
     data: dict[str, Any], root: Path, where: str, origins: Mapping[str, Origin]
 ) -> tuple[VideoConfig, tuple[dict[str, Any], VideoConfig], TranslationReport | None]:
-    """The config validated from the raw ``data`` with its ``translations:`` file applied
-    (DESIGN.md §54): the translated config, the source ``(data, config)`` and the report."""
+    """The config validated from the raw ``data`` with its ``translations:`` file applied:
+    the translated config, the source ``(data, config)`` and the report."""
     config = _parsed(data, where, origins)
     source = (data, config)
     if config.translations is None:
@@ -218,18 +218,18 @@ class Project:
         #: The config without the variant applied (equals ``config`` when there is no variant).
         self.base_config = base_config if base_config is not None else config
         #: The raw config mapping (variant merged) before its ``translations:`` were applied, and
-        #: its validated form (DESIGN.md §54); for a project built from a config alone, its dump.
+        #: its validated form; for a project built from a config alone, its dump.
         self.source_data, self.source_config = source if source is not None else (_dump(config), config)
         #: What applying the ``translations:`` file did (``None`` without one).
         self.translation = translation
         #: The ``include:`` files merged into the config (absolute, in merge order) and the files
-        #: they name (SVGs, pictures), DESIGN.md §69.35.
+        #: they name (SVGs, pictures).
         self.included_files: tuple[Path, ...] = included.files if included is not None else ()
         self.files_named_by_includes: tuple[Path, ...] = included.named_files if included is not None else ()
         #: Where values of the merged config are written (included files, sets), for :meth:`attributed`.
         self.origins: dict[str, Origin] = dict(origins or {})
         #: The project's own pronunciation entries (``pronunciation_file`` + ``pronunciation:``,
-        #: DESIGN.md §45; ``null`` values kept): reading the files here makes a missing or
+        #: ``null`` values kept): reading the files here makes a missing or
         #: invalid one a :class:`VidgenError` at load.
         self.pronunciation_entries: dict[str, PronunciationValue] = project_entries(config, root)
         self._pronunciations: dict[str | None, Pronunciation] = {}
@@ -237,18 +237,21 @@ class Project:
         self._voices: dict[str | None, VoiceConfig] = {}
         #: True for :meth:`without_overlays` copies: their renders go to ``build/..._bare``.
         self.bare = False
-        #: True for a draft (``vidgen render --draft``, DESIGN.md §74): every render of it goes to
+        #: False for :meth:`without_takes` copies: no generated take is laid over a beat (a
+        #: shot's ``guide: final``); their renders go to ``build/..._source``.
+        self.takes_shown = True
+        #: True for a draft (``vidgen render --draft``): every render of it goes to
         #: ``build/draft...`` in the draft format, every output name ends in ``_draft``, whatever
         #: ``preview`` the path methods are given.
         self.draft = False
         #: The ``--output-dir`` folder (absolute); it wins over ``output_dir:`` (see :attr:`output_dir`).
         self.output_dir_override: Path | None = None
-        #: True for a project written with ``sections:`` (§111): its problems name the sections.
+        #: True for a project written with ``sections:``: its problems name the sections.
         self.from_sections = False
         #: Each scene's section index or the key that added it (``cold_open``, ``credits``),
-        #: when a cold open or spoken credits moved or added scenes (§112.3); else ``None``.
+        #: when a cold open or spoken credits moved or added scenes; else ``None``.
         self.section_sources: list[int | str] | None = None
-        retime_project_anchors(self)   # actions at a spoken word, timed by the beats' audio (§87.2)
+        retime_project_anchors(self)   # actions at a spoken word, timed by the beats' audio
 
     @classmethod
     def load(
@@ -256,8 +259,7 @@ class Project:
     ) -> Project:
         """Load the project at ``path`` (directory or config file), optionally applying a variant.
 
-        The ``include:`` files are merged first and each stage's ``set:`` applied (DESIGN.md
-        §69.35); the variant's overrides are deep-merged onto the raw config before validation.
+        The ``include:`` files are merged first and each stage's ``set:`` applied; the variant's overrides are deep-merged onto the raw config before validation.
         ``output_dir`` (the CLI's ``--output-dir``; relative to the current directory) overrides
         where the deliverables go (:attr:`output_dir`). ``draft``: load it as a draft (:attr:`draft`).
         """
@@ -274,7 +276,7 @@ class Project:
         if not (isinstance(included.data, dict) and "sections" in included.data):
             return cls._load_config(config_file, included, variant)
         sources = _section_sources(included.data, variant)
-        try:   # an audio-only project's sections (§111): problems located in its sections
+        try:   # an audio-only project's sections: problems located in its sections
             project = cls._load_config(config_file, included, variant)
         except VidgenError as exc:
             raise section_error(exc, sources) from None
@@ -287,7 +289,7 @@ class Project:
         """:meth:`_load` of the config ``included`` read from ``config_file``."""
         root = config_file.parent
         source = config_file.name
-        data = expand_sections(included.data, source)   # an audio-only project's sections (§111)
+        data = expand_sections(included.data, source)   # an audio-only project's sections
         _confine(data, root, source)
         base_data, base_origins = expand_character_size(*expand_sets(*apply_delivery(*apply_cut(data, included.origins))))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
@@ -309,17 +311,32 @@ class Project:
     def without_overlays(self) -> Project:
         """This project without any overlay (no video ``overlays``, every scene ``overlays:
         false``), rendering into its own folders ``build/<final|preview>[_<variant>]_bare`` (a
-        frame thumbnail without overlays, DESIGN.md §53); the render worker's ``--bare``."""
+        frame thumbnail without overlays); the render worker's ``--bare``."""
         scenes = [scene.model_copy(update={"overlays": False}) for scene in self.config.scenes]
         config = self.config.model_copy(update={"overlays": [], "scenes": scenes})
-        bare = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
-        bare.included_files, bare.files_named_by_includes, bare.origins = self.included_files, self.files_named_by_includes, self.origins
+        bare = self._copy(config)
         bare.bare = True
-        bare.draft = self.draft
-        bare.output_dir_override = self.output_dir_override
-        bare.from_sections = self.from_sections
-        bare.section_sources = self.section_sources
         return bare
+
+    def without_takes(self) -> Project:
+        """This project as vidgen draws it, without overlays and without the generated takes
+        picked for its beats, rendering into ``build/<final|preview>[_<variant>]_source``: the
+        finished render a shot's ``guide: final`` sends; the worker's
+        ``--source``."""
+        source = self.without_overlays()
+        source.bare = False
+        source.takes_shown = False
+        return source
+
+    def _copy(self, config: VideoConfig) -> Project:
+        """A copy of this project (its flags and folders) with ``config``."""
+        copy = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
+        copy.included_files, copy.files_named_by_includes, copy.origins = self.included_files, self.files_named_by_includes, self.origins
+        copy.bare, copy.takes_shown, copy.draft = self.bare, self.takes_shown, self.draft
+        copy.output_dir_override = self.output_dir_override
+        copy.from_sections = self.from_sections
+        copy.section_sources = self.section_sources
+        return copy
 
     @property
     def included_labels(self) -> list[str]:
@@ -373,7 +390,7 @@ class Project:
                 return True
         return False
 
-    # ----- voices (DESIGN.md §46) -------------------------------------------------------------
+    # ----- voices -------------------------------------------------------------
 
     def voice_names(self) -> dict[str, str | None]:
         """Beat id -> name of the voice that says it (``None``: the base ``voice:``), video order."""
@@ -394,7 +411,7 @@ class Project:
         return self.voice(names[beat_id])
 
     def beat_emotion(self, beat_id: str) -> Prosody | None:
-        """How a beat's line feels (DESIGN.md §72): its ``emotion``, else its voice's; ``None``
+        """How a beat's line feels: its ``emotion``, else its voice's; ``None``
         when neither is set or the emotion changes nothing (``neutral``)."""
         beat = self.beat(beat_id)
         return prosody(beat.emotion if beat.emotion is not None else self.beat_voice(beat_id).emotion)
@@ -405,7 +422,7 @@ class Project:
         mode = self.config.subtitles.speakers if mode is None else mode
         return {} if mode in ("off", "color") else speaker_tags(self.config)
 
-    # ----- pronunciation (DESIGN.md §45, §88) -------------------------------------------------
+    # ----- pronunciation -------------------------------------------------
 
     def builtin_list(self, voice: VoiceConfig) -> str | None:
         """The built-in pronunciation list ``voice``'s text goes through
@@ -447,7 +464,7 @@ class Project:
     def spoken(self, beat: BeatConfig) -> Spoken:
         """What the TTS gets for ``beat``: its text with its pronunciation applied, what its
         voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`) and, for an
-        ElevenLabs v3 voice, its emotion's audio tag before it (DESIGN.md §73)."""
+        ElevenLabs v3 voice, its emotion's audio tag before it."""
         spoken = self.pronounced(beat)
         voice = self.beat_voice(beat.id)
         if beat.voice_sounds:
@@ -471,12 +488,15 @@ class Project:
 
     def render_dir(self, preview: bool) -> Path:
         """Per-quality build folder: ``build/<final|preview|draft>[_<variant>]`` (``draft`` for a
-        :attr:`draft`; ``..._bare`` for a project :meth:`without_overlays`)."""
+        :attr:`draft`; ``..._bare`` for a project :meth:`without_overlays`, ``..._source`` for one
+        :meth:`without_takes`)."""
         name = "draft" if self.draft else "preview" if preview else "final"
         if self.variant:
             name += f"_{self.variant}"
         if self.bare:
             name += "_bare"
+        if not self.takes_shown:
+            name += "_source"
         return self.build_dir / name
 
     def render_format(self, preview: bool) -> FormatConfig:
@@ -497,7 +517,7 @@ class Project:
 
     @property
     def output_dir(self) -> Path:
-        """The folder of the deliverables (MP4, SRT, chapter list, thumbnail; DESIGN.md §3):
+        """The folder of the deliverables (MP4, SRT, chapter list, thumbnail):
         ``--output-dir`` (:attr:`output_dir_override`), else ``output_dir:`` (relative to the
         project root, or absolute), else ``<root>/output``. Not created here: writers create it."""
         if self.output_dir_override is not None:
@@ -513,7 +533,7 @@ class Project:
         return self.output_dir / f"{self._output_stem(preview)}.srt"
 
     def audio_path(self, preview: bool = False, suffix: str | None = None) -> Path:
-        """The sound of an audio-only render (DESIGN.md §111) matching :meth:`output_path`:
+        """The sound of an audio-only render matching :meth:`output_path`:
         ``<output>[_<variant>][_preview|_draft].<format>`` (``suffix``, default that of
         ``audio_output.format``)."""
         if suffix is None:
@@ -532,7 +552,7 @@ class Project:
         return self.output_dir / f"{self._output_stem(preview)}_thumbnail{suffix}"
 
     def animatic_path(self) -> Path:
-        """The animatic (``vidgen animatic``, DESIGN.md §75): ``<output>[_<variant>]_animatic.mp4``
+        """The animatic (``vidgen animatic``): ``<output>[_<variant>]_animatic.mp4``
         in :attr:`output_dir`."""
         stem = self.output_name + (f"_{self.variant}" if self.variant else "")
         return self.output_dir / f"{stem}_animatic.mp4"
@@ -543,7 +563,7 @@ class Project:
 
     @property
     def exports_dir(self) -> Path:
-        """``<root>/exports``: GIFs and clips written by ``vidgen export`` (DESIGN.md §53)."""
+        """``<root>/exports``: GIFs and clips written by ``vidgen export``."""
         return self.root / "exports"
 
     def asset(self, rel: str | Path) -> Path:

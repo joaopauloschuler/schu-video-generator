@@ -1,4 +1,4 @@
-"""Kepler's laws and orbital speed in the model (Phase X, Step 230; DESIGN §98.4): the ellipse's
+"""Kepler's laws and orbital speed in the model (Phase X, Step 230): the ellipse's
 geometry for the Earth's and Halley's orbits, equal areas in equal times to rounding, vis-viva
 speeds, Newton's cannonball classified by energy, and Kepler's third law for the planets. No
 manim, no rendering."""

@@ -1,5 +1,4 @@
-"""One generated clip end to end: cache, checks, estimate, budget, then a dry run or a paid job
-(DESIGN.md §113).
+"""One generated clip end to end: cache, checks, estimate, budget, then a dry run or a paid job.
 
 :func:`generate_clip` never pays unless ``pay=True`` and a budget is set (``videogen.budget_usd``
 or ``budget_usd=``; with both, the lower). In order:
@@ -26,7 +25,7 @@ reaches a final state (completed, failed, ...), before the download, or at the m
 (a provider may fetch again after queueing, so a finished fetch does not close it); also on an
 error or Ctrl+C. A job resumed from the ledger is only polled: no tunnel is opened again.
 After a job, a hosted file the provider never fetched with a ``GET`` becomes a warning
-(:attr:`ClipResult.warnings`; vidgen's own ``HEAD`` checks do not count, DESIGN.md §113.13).
+(:attr:`ClipResult.warnings`; vidgen's own ``HEAD`` checks do not count).
 Without a host such inputs stop the submit with a clear error. Whatever the provider says with
 the shared address in it is redacted before it leaves this module (:mod:`vidgen.videogen.redaction`).
 
@@ -46,7 +45,7 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
-from vidgen.videogen import CLIPS_DIR, LEDGER_NAME, MOCK_PROVIDER, JobState, VideoRequest, canonical_request, request_hash
+from vidgen.videogen import CLIPS_DIR, COMFYUI_PROVIDER, LEDGER_NAME, MOCK_PROVIDER, JobState, VideoRequest, canonical_request, request_hash
 from vidgen.videogen.ledger import BudgetState, Ledger, LedgerJob, SubmitIntent, intent_refusal, refusal, utc_now
 from vidgen.videogen.models import Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, load_catalog, money
 from vidgen.videogen.openrouter import OpenRouterVideoProvider, SubmitRefused, job_failure
@@ -61,8 +60,9 @@ log = logging.getLogger("vidgen.videogen")
 
 
 def ledger_path(root: Path, provider: str) -> Path:
-    """The project's ledger (the mock provider's own for ``mock``)."""
-    return root / (LEDGER_NAME.replace(".jsonl", ".mock.jsonl") if provider == MOCK_PROVIDER else LEDGER_NAME)
+    """The project's ledger (the mock and comfyui providers keep their own: ``.mock.jsonl``, ``.comfyui.jsonl``)."""
+    own = provider in (MOCK_PROVIDER, COMFYUI_PROVIDER)
+    return root / (LEDGER_NAME.replace(".jsonl", f".{provider}.jsonl") if own else LEDGER_NAME)
 
 
 def clip_path(root: Path, key: str) -> Path:
@@ -71,7 +71,14 @@ def clip_path(root: Path, key: str) -> Path:
 
 
 def get_provider(settings: VideogenConfig) -> OpenRouterVideoProvider:
-    """The provider ``settings`` name (``openrouter`` or ``mock``)."""
+    """The provider ``settings`` name (``openrouter``, ``mock`` or ``comfyui``)."""
+    if settings.provider == COMFYUI_PROVIDER:
+        from vidgen.videogen.comfyui import ComfyUIVideoProvider, make_transport
+
+        assert settings.comfyui is not None
+        transport = make_transport(settings.comfyui, poll_timeout=settings.poll_timeout)
+        return ComfyUIVideoProvider(transport, units_per_hour=settings.comfyui.units_per_hour, poll_timeout=settings.poll_timeout,
+                                    text_encoder=settings.comfyui.text_encoder)  # type: ignore[return-value]
     if settings.provider == MOCK_PROVIDER:
         from vidgen.videogen.mock import MockVideoProvider
 
@@ -101,7 +108,7 @@ class ClipPlan:
         r = self.request
         shown = self.path.relative_to(root).as_posix() if root is not None and self.path.is_relative_to(root) else str(self.path)
         if self.cached:
-            return [f"cached: {shown} ({r.model}; nothing to pay)"]
+            return [f"cached: {shown} ({r.model}; nothing to pay; for another take, set or change the shot's seed:)"]
         what = [r.model, f"{r.duration} s" if r.duration else None, r.resolution or r.size, r.aspect_ratio]
         if r.frame_images:
             what.append(f"{len(r.frame_images)} frame image(s)")
@@ -162,6 +169,13 @@ def unfetched_warnings(events: Sequence[dict[str, Any]], labels: Sequence[str], 
     return [f"the provider never downloaded {names} (vidgen hosted them for this job; the clip may not use them)"]
 
 
+def provider_mismatch(model: str, runs_on: str, provider: str) -> str:
+    """The problem of a shot whose model runs on another provider than ``videogen.provider``."""
+    if runs_on == COMFYUI_PROVIDER:
+        return f"{model} is a ComfyUI workflow: set videogen: {{provider: comfyui, comfyui: {{colab: <session>}}}} (or url: http://host:port)"
+    return f"videogen.provider is {provider}, which runs vidgen's ComfyUI workflows only; {model} is an OpenRouter model"
+
+
 def _cap(settings: VideogenConfig, budget_usd: float | None) -> float | None:
     caps = [c for c in (settings.budget_usd, budget_usd) if c is not None]
     return min(caps) if caps else None
@@ -188,6 +202,10 @@ def plan_clip(
     plan.budget = BudgetState(_cap(settings, budget_usd), ledger.spent())
     model = (catalog or load_catalog()).find(request.model)
     plan.model = model
+    if (model.provider == COMFYUI_PROVIDER) != (name == COMFYUI_PROVIDER):
+        plan.check.problems.append(provider_mismatch(model.id, model.provider, name))
+        plan.refusal = "the model does not take these settings (see the problems)"
+        return plan
     plan.check = check_request(request, model)
     plan.estimate = estimate(request, model, duration=duration)
     if plan.check.problems:
@@ -229,6 +247,9 @@ def generate_clip(
     if plan.refusal:
         raise VidgenError(f"not paying for {request.model}: {plan.refusal}")
     assert plan.estimate is not None
+    if chosen.name == COMFYUI_PROVIDER:   # the files go to ComfyUI itself, as they are
+        job = _submit(ledger, chosen, plan, request)
+        return _finish(root, ledger, chosen, plan, job, recorded=False)
     sendable = sendable_request(request, root)
     local = hosted_inputs(sendable)
     if share is None and local and settings.host == "quick_tunnel":
@@ -318,6 +339,8 @@ def _finish(root: Path, ledger: Ledger, provider: OpenRouterVideoProvider, plan:
         "estimate_usd": plan.estimate.cost if plan.estimate is not None else None, "cost_usd": job.cost,
         "bytes": size, "time": utc_now(),
     }
+    if job.usage:
+        sidecar["usage"] = dict(job.usage)
     write_text_atomic(plan.path.with_suffix(".json"), json.dumps(sidecar, indent=1, ensure_ascii=True) + "\n")
     cost = money(job.cost) if job.cost is not None else "cost not reported"
     log.info("video job %s completed (%s): %s", job.id, cost, plan.path)

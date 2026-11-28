@@ -1,5 +1,5 @@
 """``branching`` and ``branching_pie``: a particle's branching ratios from the model (Phase Y,
-Step 241; DESIGN §99.12) as bars or a pie — the ``bar_chart`` and ``pie`` scene types with their
+Step 241) as bars or a pie — the ``bar_chart`` and ``pie`` scene types with their
 labels, values and caption made from ``particle_physics.branching`` (PDG 2024 measurements; the
 Higgs boson: Standard Model predictions of the LHC Higgs Cross Section Working Group, said so on
 screen). Everything else — sizes, reveal, highlight, actions — is the chart's own."""

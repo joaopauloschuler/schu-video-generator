@@ -18,7 +18,7 @@ not depend on the resolution, and the eight counts add up to exactly 6932, the f
 to log, per beat, the remaining time `rest = d + pad - elapsed` and the frames its
 `self.wait(rest)` wrote. The original waits only if `rest > 0.02` and Manim writes
 `int(rest × fps)` frames for a still wait, i.e. it truncates. vidgen's `narrate()` waits
-`round(rest × fps)` frames (DESIGN §5.2: a beat lasts `d + pad` to within half a frame). The
+`round(rest × fps)` frames (a beat lasts `d + pad` to within half a frame). The
 predicted difference per scene is the sum over its beats of `round(rest×30) - frames written`.
 
 **Frames.** For each of the 27 beats, three frames were compared (early: `min(1 s, d/4)` after
@@ -75,7 +75,7 @@ mono) around where the frame timeline says the beat starts:
 
 The original's narration starts 42–61 ms after the frame time. 21 ms of that is the video
 stream's start offset; the rest is the per-segment AAC priming of its concat, which
-schu-video-generator's PCM concat avoids (DESIGN §5.2, Step 4). schu-video-generator's narration is in sync to within 1 ms.
+schu-video-generator's PCM concat avoids (Step 4). schu-video-generator's narration is in sync to within 1 ms.
 
 ## Remaining differences
 

@@ -1,4 +1,4 @@
-"""Actions timed to a spoken word (DESIGN.md §87.2): ``at: "@gradient"``.
+"""Actions timed to a spoken word: ``at: "@gradient"``.
 
 A *word anchor* is the text ``@WORDS[#N][+S s | -S s]``: the ``N``-th time (default the first)
 the beat says ``WORDS`` (one word or a few in a row, matched without case, accents or the

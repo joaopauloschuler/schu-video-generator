@@ -1,4 +1,4 @@
-"""Step 201 (DESIGN.md §94.19): the review of Phase T (vidgen studio) — one test per attack checked
+"""Step 201: the review of Phase T (vidgen studio) — one test per attack checked
 (Host / Origin, request bodies, path names of every kind, Windows device names, links out, hostile
 YAML, the paid provider's confirmation), Windows-minded behaviour (line ends, a running studio's
 session left alone by cleaning), the studio's quick FFT lengths (the same samples within 1e-9 at worst;
@@ -305,7 +305,7 @@ def test_clean_leaves_the_session_a_running_studio_has_open(tmp_path: Path) -> N
     assert len(list(other.renders.iterdir())) == 2  # v3 is neither current, first nor starred
 
 
-# ----- the studio's quick FFT lengths (§94.19) -----------------------------------------------------------
+# ----- the studio's quick FFT lengths -----------------------------------------------------------
 
 
 def test_fft_lengths() -> None:
@@ -340,7 +340,7 @@ def _slow_length(at_least: int) -> int:
 
 #: How close the quick lengths' filters are to the exact ones here, against the loudest sample:
 #: white noise at the shortest folded length is the worst case (what the filters do near 24 kHz
-#: reaches furthest); a real piece of 50 s differed by 5e-15 (DESIGN.md §94.19).
+#: reaches furthest); a real piece of 50 s differed by 5e-15.
 QUICK_TOLERANCE = 1e-9
 
 

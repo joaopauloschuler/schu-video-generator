@@ -1,4 +1,4 @@
-"""Molecular detail drawn round the close-up views (DESIGN.md §95.9): a membrane's lipids in
+"""Molecular detail drawn round the close-up views: a membrane's lipids in
 side view — phospholipids (two tails, some kinked by a cis double bond), cholesterol (a rigid
 ring plate, its OH at the head groups), glycolipids with their sugars on the exoplasmic leaflet
 only, cardiolipin's four tails, galactolipids, LPS — the plasma membrane's glycocalyx and lipid

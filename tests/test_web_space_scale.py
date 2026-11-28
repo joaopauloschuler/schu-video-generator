@@ -1,4 +1,4 @@
-"""Astronomical scales in three.js, ``vidgen/space-scale`` (Step 368, DESIGN.md §122.4): served by its
+"""Astronomical scales in three.js, ``vidgen/space-scale`` (Step 368): served by its
 import name, in the loaded-files record of a page that imports it and of no other; in Node (when it is
 installed) on orbit data made by Python: the log view's mapping and r0 equal the flat ``orbit``
 scene's, positions are subtracted in float64 before three.js sees them (a ship 1 AU out keeps
@@ -200,11 +200,12 @@ out.push(w.problems());
 def test_the_reference_guide_and_cookbooks_describe_it() -> None:
     config = (ROOT / "docs" / "CONFIG.md").read_text(encoding="utf-8")
     assert "**Astronomical scales: `vidgen/space-scale`**" in config and "| `dofFocus` |" in config
-    guide = (ROOT / "src" / "vidgen" / "data" / "guide" / "AGENTS.md").read_text(encoding="utf-8")
+    from vidgen.guide import find_topic
+
+    guide = find_topic("web").text
     assert "**Astronomical scales: `vidgen/space-scale`.**" in guide and 'from "vidgen/space-scale"' in guide
     assert "vidgen/space-scale" in (ROOT / "docs" / "COOKBOOK-ORBITS.md").read_text(encoding="utf-8")
     assert "**Space at real scale.**" in (ROOT / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")
-    assert "### 122.4 Scale: `vidgen/space-scale` (Step 368)" in (ROOT / "DESIGN.md").read_text(encoding="utf-8")
 
 
 PAGE = """import * as THREE from "three";

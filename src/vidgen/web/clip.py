@@ -1,4 +1,4 @@
-"""A ``web`` scene's frames as a clip, reused while nothing that draws them changed (DESIGN.md §118.4, §118.10)."""
+"""A ``web`` scene's frames as a clip, reused while nothing that draws them changed."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from vidgen.browser.frames_clip import (
     duration_text,
     seconds_text,
 )
+from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
 from vidgen.web.entry import WebEntry, entry_of, entry_path
 from vidgen.web.inputs import design_width_of, page_shape
@@ -46,14 +47,14 @@ def clip_inputs(root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, 
                 orbits: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """What the clip is drawn from (stored in its record): the entry and its file's SHA-256,
     the size (the frames' pixels; the page's window too unless ``design_width`` gives its width
-    in CSS pixels, §118.17: then ``design_width`` is among the inputs, and left out otherwise so
+    in CSS pixels: then ``design_width`` is among the inputs, and left out otherwise so
     that the keys of clips without it stay as they were), frame rate and frame count, what the page is given (theme,
     data, beats, the video's shape: aspect, orientation, frame size, region), that the frames
     keep their alpha, and vidgen's page files and Playwright version. The other files the page loads are checked
-    from the record (:func:`loaded_changed`). ``music`` (§120.8, ``ctx.music``): with it the
+    from the record (:func:`loaded_changed`). ``music`` (``ctx.music``): with it the
     inputs name its SHA-256 and the music helper's; without it they leave ``music`` out, so the
-    keys of clips without music data stay as they were. ``orbits`` (§122.3, ``ctx.orbits``) the same way; when it
-    carries flights (``orbits.flights``, §123.7, ``ctx.flight``) the flight helper's SHA-256 too."""
+    keys of clips without music data stay as they were. ``orbits`` (``ctx.orbits``) the same way; when it
+    carries flights (``orbits.flights``, ``ctx.flight``) the flight helper's SHA-256 too."""
     path = entry_path(root, entry, scene_id)
     return {
         **({} if design_width is None else {"design_width": design_width}),
@@ -77,13 +78,15 @@ def loaded_changed(root: Path, loaded: Mapping[str, str | None]) -> list[str]:
 def _clip_key(root: Path, scene_id: str, params: Any, *, size: tuple[int, int], fps: int, frames: int,
               theme: Mapping[str, Any] | None, beats: Sequence[Mapping[str, Any]],
               shape: Mapping[str, Any] | None, music: Mapping[str, Any] | None = None,
-              orbits: Mapping[str, Any] | None = None) -> tuple[WebEntry, dict[str, Any], dict[str, Any], str]:
-    """The entry, ``data``, inputs (:func:`clip_inputs`) and key of a scene's clip."""
+              orbits: Mapping[str, Any] | None = None, draw_mode: str | None = None) -> tuple[WebEntry, dict[str, Any], dict[str, Any], str]:
+    """The entry, ``data``, inputs (:func:`clip_inputs`, with ``draw_mode`` when one is given) and key of a scene's clip."""
     entry = entry_of(params)
     data = scene_data(params)
     shape = dict(shape) if shape is not None else page_shape(size)
     inputs = clip_inputs(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames, theme=theme, data=data, beats=beats,
                          shape=shape, design_width=design_width_of(params), music=music, orbits=orbits)
+    if draw_mode is not None:
+        inputs["draw_mode"] = draw_mode
     key = hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return entry, data, inputs, key
 
@@ -111,27 +114,35 @@ def _store_layouts(folder: Path, scene_id: str, key: str, layouts: Mapping[int, 
 def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size: tuple[int, int], fps: int, frames: int,
                   theme: Mapping[str, Any] | None = None, beats: Sequence[Mapping[str, Any]] = (),
                   shape: Mapping[str, Any] | None = None, layout_frames: Iterable[int] = (),
-                  music: Mapping[str, Any] | None = None, intermediate: str = "lossless", orbits: Mapping[str, Any] | None = None) -> Path:
+                  music: Mapping[str, Any] | None = None, intermediate: str = "lossless", orbits: Mapping[str, Any] | None = None,
+                  draw_mode: str | None = None) -> Path:
     """``folder/<scene_id>.mkv``: ``frames`` screenshots with alpha (RGBA, FFV1 ``bgra``) of the
     scene's page (``params``: its ``page`` or ``script``, a path in the project folder ``root``,
     its ``data`` and its ``design_width``) at ``fps`` and ``size`` (the frames' pixels: the page's
-    window, or with ``design_width`` a window that wide in CSS pixels drawn at ``size``, §118.17),
+    window, or with ``design_width`` a window that wide in CSS pixels drawn at ``size``),
     drawn now (one Chromium) unless the clip there was drawn from the same inputs
     (:func:`clip_inputs`) and every file the page loaded then is unchanged. ``theme`` and
-    ``beats`` are ``ctx.theme`` and ``ctx.beats`` (§118.9), ``shape`` the video's shape
-    (:func:`~vidgen.web.inputs.page_shape`; default: a page filling a frame of ``size``, §118.11). Writes ``folder/<scene_id>.json`` =
+    ``beats`` are ``ctx.theme`` and ``ctx.beats``, ``shape`` the video's shape
+    (:func:`~vidgen.web.inputs.page_shape`; default: a page filling a frame of ``size``). Writes ``folder/<scene_id>.json`` =
     ``{"key", "inputs", "loaded"}`` beside it (``loaded``: served path -> SHA-256). When it draws,
     it also reads the page's text at ``layout_frames`` (after their screenshots) into
-    ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back, §118.12). ``music``:
-    the scene's music data, ``ctx.music`` (§120.8); ``orbits`` its orbit data, ``ctx.orbits`` (§122.3). ``intermediate``: how the frames are kept
-    (§120.9; ``compact``: H.264 4:4:4 with a lossless alpha stream, the record then says
+    ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back). ``music``:
+    the scene's music data, ``ctx.music``; ``orbits`` its orbit data, ``ctx.orbits``. ``intermediate``: how the frames are kept
+    (``compact``: H.264 4:4:4 with a lossless alpha stream, the record then says
     ``"intermediate": "compact"``); it is not in the key: a lossless clip is reused for either,
     a compact one only while ``compact`` is asked for. While it draws, :class:`FrameProgress`
-    logs progress lines on ``vidgen.progress`` (§120.10)."""
+    logs progress lines on ``vidgen.progress``.
+
+    ``draw_mode`` ``"depth"``: the scene's depth pass instead, ``folder/<scene_id>.depth.mkv``
+    (+ ``.json``), drawn with ``ctx.draw_mode`` (vidgen/three-finish packs the depth into the pixels:
+    always lossless, no layout readings); a page that draws no depth frame is an error."""
     entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
-                                         music=music, orbits=orbits)
+                                         music=music, orbits=orbits, draw_mode=draw_mode)
     shape = inputs["shape"]
-    clip, record = folder / f"{scene_id}.mkv", record_path(folder, scene_id)
+    name = scene_id if draw_mode is None else f"{scene_id}.{draw_mode}"
+    if draw_mode is not None:
+        intermediate, layout_frames = "lossless", ()
+    clip, record = folder / f"{name}.mkv", record_path(folder, name)
     stored = read_record(record) or {}
     loaded = stored.get("loaded") if isinstance(stored.get("loaded"), dict) else {}
     if clip.is_file() and stored.get("key") == key and clip_serves(stored.get("intermediate"), intermediate):
@@ -140,9 +151,10 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
             log.info("%s: reusing the web frames (%s)", scene_id, clip.name)
             return clip
         log.info("%s: %s changed since the web frames were drawn", scene_id, ", ".join(changed))
-    log.info("%s: drawing %d web frames of %s", scene_id, frames, entry.posix)
+    log.info("%s: drawing %d web frames of %s%s", scene_id, frames, entry.posix, "" if draw_mode is None else f" ({draw_mode} pass)")
     record.unlink(missing_ok=True)
-    layout_record_path(folder, scene_id).unlink(missing_ok=True)
+    if draw_mode is None:
+        layout_record_path(folder, scene_id).unlink(missing_ok=True)
     wanted = {n for n in layout_frames if 0 <= n < frames}
     layouts: dict[int, dict[str, Any]] = {}
 
@@ -150,16 +162,19 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     with WebPage(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames,
                  theme=dict(theme) if theme is not None else None, data=data, beats=[dict(b) for b in beats], shape=shape,
                  design_width=inputs.get("design_width"), music=dict(music) if music is not None else None,
-                 orbits=dict(orbits) if orbits is not None else None) as page:
+                 orbits=dict(orbits) if orbits is not None else None, draw_mode=draw_mode) as page:
         progress = FrameProgress(frames, ready_seconds=time.monotonic() - opened)
         with FramesClipWriter(clip, fps, size, page.pixels, alpha=True, intermediate=intermediate) as writer:
             for n in range(frames):
                 started = time.monotonic()
                 page.advance(n)
+                if n == 0 and draw_mode == "depth" and page.depth_frames() == 0:
+                    raise VidgenError(f"scene '{scene_id}': guide: depth needs the page to draw through vidgen/three-finish "
+                                      f"(Finish.render(t) in frame(t)); {entry.posix} drew no depth frame")
                 hooked = time.monotonic()
                 png = page.screenshot(n)
                 shot = time.monotonic()
-                writer.put(png)   # decoded and encoded while the next frame is drawn (DESIGN.md §120.10)
+                writer.put(png)   # decoded and encoded while the next frame is drawn
                 if n in wanted:
                     layouts[n] = page.layout(n)
                 progress.drawn(hooked - started, shot - hooked)
@@ -167,7 +182,8 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     progress.finish()
     kept = {} if intermediate == "lossless" else {"intermediate": intermediate}
     write_text_atomic(record, json.dumps({"key": key, "inputs": inputs, "loaded": served, **kept}, indent=1) + "\n")
-    _store_layouts(folder, scene_id, key, layouts)
+    if draw_mode is None:
+        _store_layouts(folder, scene_id, key, layouts)
     return clip
 
 
@@ -178,7 +194,7 @@ def web_page_layouts(root: Path, folder: Path, scene_id: str, params: Any, *, si
     """The page's text at frames ``at`` (frame -> the reading of ``data/web/layout.js``, page
     pixels), for the clip :func:`make_web_clip` makes from the same arguments: the readings kept
     beside the clip, else read now in one Chromium that steps the page frame by frame (no
-    screenshots) to the last frame missing, and kept for next time (§118.12)."""
+    screenshots) to the last frame missing, and kept for next time."""
     entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
                                          music=music, orbits=orbits)
     wanted = sorted({min(max(int(n), 0), frames - 1) for n in at})

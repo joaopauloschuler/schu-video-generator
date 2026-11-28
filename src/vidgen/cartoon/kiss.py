@@ -1,4 +1,4 @@
-"""A cartoon kiss (DESIGN.md §102.15): the maths, no manim; :class:`~vidgen.cartoon.figure_fx.KissMotion`
+"""A cartoon kiss: the maths, no manim; :class:`~vidgen.cartoon.figure_fx.KissMotion`
 and :class:`~vidgen.cartoon.figure_fx.KissBurst` draw it.
 
 Two characters turn to each other, lean in (their bodies tilt forward, the taller one more when

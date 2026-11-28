@@ -1,4 +1,4 @@
-"""OpenRouter image provider (``POST /api/v1/images``), standard library only (DESIGN.md §64).
+"""OpenRouter image provider (``POST /api/v1/images``), standard library only.
 
 One key, many image models (``imagegen: {provider: openrouter, model: author/name}``). The API key
 is read from the environment variable ``OPENROUTER_API_KEY`` when a request is made; it is never
@@ -43,7 +43,7 @@ APP_HEADERS: dict[str, str] = {"HTTP-Referer": APP_URL, "X-OpenRouter-Title": DI
 LOOKUP_TIMEOUT = 5.0
 #: HTTP statuses retried: rate limit, server errors, edge timeout (524), provider overloaded (529).
 TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504, 524, 529})
-#: Media types of vector pictures (stored as SVG when ``format: svg`` asked for one; §65).
+#: Media types of vector pictures (stored as SVG when ``format: svg`` asked for one).
 VECTOR_TYPES = frozenset({"image/svg+xml"})
 #: Where an account's privacy settings (Zero Data Retention, data policy) are changed.
 PRIVACY_URL = "https://openrouter.ai/settings/privacy"
@@ -419,7 +419,7 @@ def zdr_image_models(*, timeout: float = LOOKUP_TIMEOUT, svg: bool = False) -> l
 
 def policy_intro(model: str) -> str:
     """The first line of the data-policy error: why ``model`` cannot be used and where the
-    account's privacy settings are changed (shared with text to speech, DESIGN.md §66)."""
+    account's privacy settings are changed (shared with text to speech)."""
     return (
         f"OpenRouter has no provider for {model} that your account's privacy settings allow (e.g. Zero Data "
         f"Retention required, or providers that may train on or keep prompts excluded). Change them at {PRIVACY_URL}, "

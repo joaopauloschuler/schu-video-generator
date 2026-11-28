@@ -1,4 +1,4 @@
-"""Step 110: furniture for rooms (DESIGN.md §69.43): the furniture props, seats at the seat line
+"""Step 110: furniture for rooms: the furniture props, seats at the seat line
 (more than one place on a sofa or a bed), props against a room's wall and hanging on it, the
 screenplay's ``set:`` room and furniture, the gallery still, and one tiny render of a furnished
 room."""

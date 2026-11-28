@@ -1,4 +1,4 @@
-"""Actions timed to a spoken word (DESIGN.md §87.2): ``at: "@gradient"`` on beat actions (scene,
+"""Actions timed to a spoken word: ``at: "@gradient"`` on beat actions (scene,
 callout, stage and sound actions), ``lower_third``'s ``at``, the estimate before any audio, the
 beat's audio once it exists, errors naming the beat, translations, and one tiny render."""
 

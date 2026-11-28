@@ -1,8 +1,8 @@
-"""The ``light`` beat action (DESIGN.md §69.31): a ``stage``'s light fades to a preset or a tint,
+"""The ``light`` beat action: a ``stage``'s light fades to a preset or a tint,
 starting at ``at`` of the beat; written against ``vidgen.api`` only, like project actions. It draws
 nothing itself (``animates = False``): the runner cues it when its beat starts, and the stage
 fades its colour grade, stars and shadows over ``run_time`` seconds from then, whatever plays
-meanwhile. The ``time_of_day`` action (DESIGN.md §105.3) is the same fade to a preset, longer by
+meanwhile. The ``time_of_day`` action is the same fade to a preset, longer by
 default, that also switches the lights on by themselves at dusk and off at dawn."""
 
 import difflib
@@ -86,7 +86,7 @@ def _outdoor_sky(params: Any) -> bool:
 
 @action("time_of_day")
 class TimeOfDay(Action):
-    """A day passing in one scene (DESIGN.md §105.3): `- {time_of_day: sunset, run_time: 6}`
+    """A day passing in one scene: `- {time_of_day: sunset, run_time: 6}`
     (morning, day, sunset, night, indoor) fades the light from `at` of the beat over `run_time`
     seconds (default 6): the sky, the ground, the shadows, the stars fading in or out, the pools
     of light growing; as it passes dusk the lamps, a house's windows, lit objects and cars'

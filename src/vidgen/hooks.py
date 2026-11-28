@@ -1,4 +1,4 @@
-"""Pipeline hooks (DESIGN.md §6.2).
+"""Pipeline hooks.
 
 ``@hook(event)`` registers a function ``fn(ctx: HookContext)``. :func:`dispatch` calls the hooks
 of an event in registration order (built-in hooks first, then the project's). An exception in a

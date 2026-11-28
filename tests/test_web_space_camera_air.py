@@ -1,5 +1,4 @@
-"""Camera moves in the air and beside giant ships, ``vidgen/space-camera-air`` (Step 390, DESIGN.md
-§123.12): the module is served by its import name and imports no three.js; its moves are registered
+"""Camera moves in the air and beside giant ships, ``vidgen/space-camera-air`` (Step 390): the module is served by its import name and imports no three.js; its moves are registered
 as parts; in Node (when it is installed): every move is a function of its time (the same time, the
 same shot, in any order); bar-locked times; eased ends that start or end moving; the camera never
 under its margin over a ground given as a function, with a note when it had to be lifted; "up" is
@@ -12,6 +11,7 @@ moves drawn at three times each in two orders give the same pictures, the camera
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -273,6 +273,82 @@ out.push(err(() => cam.skim(0, {over: [0, 1], clearence: 3})), err(() => cam.win
     assert "flights: Plane, Tanker" in said[3] and "skim needs progress (0..1) or over" in said[4] and "needs deck: {base, top}" in said[5] and 'did you mean "bank"' in said[6]
     assert "no tower 2" in said[7] and "`unit` must be 1" in said[8] and 'unknown option "camra" (did you mean "camera"?)' in said[9] and "needs ship: a hull" in said[10]
     assert said[11] == pytest.approx(0.5 * 0.2 * 180 / 3.141592653589793) and 'flyPast side must be one of left, right, got "up"' in said[12]      # ctx.flight's bank is in radians
+
+
+def test_the_operators_curves_in_node(tmp_path: Path) -> None:
+    """Step 399's pure functions: endless noise, a second-order follower settled at `since`, a handheld error that
+    holds the frame on average and grows on the screen with a longer lens, a mount that only vibrates, a horizon
+    held then levelled with a small overshoot, reframes that return, the meter's view of the scene."""
+    noise, follow, hand, level, meter = _run_in_node(tmp_path, """
+const xs = Array.from({length: 4000}, (_, i) => i * 0.137), rms = (a) => Math.sqrt(a.reduce((s, x) => s + x * x, 0) / a.length);
+out.push({rms: rms(xs.map((x) => A.smoothNoise(x, 3))), most: Math.max(...xs.map((x) => Math.abs(A.smoothNoise(x, 3)))), mean: xs.reduce((s, x) => s + A.smoothNoise(x, 3), 0) / xs.length,
+  same: A.smoothNoise(12.34, 5) === A.smoothNoise(12.34, 5), other: A.smoothNoise(12.34, 5) !== A.smoothNoise(12.34, 6), knot: A.smoothNoise(7, 2)});
+const ts = Array.from({length: 1200}, (_, i) => i / 100), step = (x) => (x >= 1 ? 1 : 0);
+const under = ts.map((t) => A.stepResponse(t, 0.5, 0.5)), critical = ts.map((t) => A.stepResponse(t, 0.5, 1));
+const follower = ts.map((t) => A.responded(step, t, {delay: 0.2, rate: 0.5, damping: 0.5, n: 48}));
+out.push({over: Math.max(...under), critical: Math.max(...critical), end: under[1199], before: A.stepResponse(-1, 0.5, 0.5), lateAt: follower[115], mid: follower[300], top: Math.max(...follower), settled: follower[1199],
+  since: A.responded(step, 5, {rate: 0.5, damping: 0.5, since: 5}), flat: A.responded(() => 3, 4, {rate: 1})});
+const seconds = Array.from({length: 3600}, (_, i) => i / 30), yaw = (mm) => rms(seconds.map((t) => A.handheld(t, {mm}).yaw));
+const fovOf = (mm) => 2 * Math.atan(12 / mm) / RAD, h = seconds.map((t) => A.handheld(t, {mm: 50})), m = seconds.map((t) => A.mounted(t));
+out.push({wide: yaw(16), normal: yaw(50), long: yaw(300), screenWide: yaw(16) / fovOf(16), screenLong: yaw(300) / fovOf(300), mean: h.reduce((s, x) => s + x.yaw, 0) / h.length,
+  roll: rms(h.map((x) => x.roll)), mounted: rms(m.map((x) => x.yaw)), mountedLong: A.mounted(3.3, {mm: 300}).yaw === A.mounted(3.3).yaw,
+  again: JSON.stringify(A.handheld(7.77, {seed: 4})) === JSON.stringify(A.handheld(7.77, {seed: 4})), seeded: A.handheld(7.77, {seed: 4}).yaw !== A.handheld(7.77, {seed: 5}).yaw,
+  none: A.handheld(3, {amount: 0}).yaw, reframes: seconds.filter((t) => Math.abs(A.reframeAt(t).yaw) > 0.3).length, back: Math.max(...[60, 90, 120].map((t) => Math.abs(A.reframeAt(t, {reframe: 1e9}).yaw)))});
+out.push({start: A.horizonRoll(0), held: A.horizonRoll(2.4), level: A.horizonRoll(8), over: Math.max(...ts.map((t) => -Math.sign(A.horizonRoll(0)) * A.horizonRoll(t))),
+  sides: [1, 2, 3, 4, 5, 6].map((s) => Math.sign(A.horizonRoll(0, {seed: s}))), three: A.horizonRoll(0, {degrees: 3})});
+const shot = (pitch, fov = 50, forward = null) => ({forward: forward ?? [0, Math.sin(pitch * RAD), -Math.cos(pitch * RAD)], fov, aspect: 16 / 9});
+const sun = [0, Math.sin(20 * RAD), -Math.cos(20 * RAD)], deck = {base: 1000, top: 2000, cover: 1, density: 0.008};
+const at = (height, s = shot(0), o = {}) => A.meterStops(s, {up: [0, 1, 0], height, sun, water: true, decks: [deck], ...o});
+out.push({under: at(500), base: at(1100), deep: at(1500), nearTop: at(1950), over: at(2600), clear: at(500, shot(0), {decks: []}),
+  sunIn: at(3000, shot(20)), sunOut: at(3000, shot(20, 50, [0, Math.sin(20 * RAD), Math.cos(20 * RAD)])), down: at(3000, shot(-60)), high: at(40000, shot(10), {decks: []}), low: at(100, shot(10), {decks: []})});
+""")
+    assert 0.2 < noise["rms"] < 0.4 and noise["most"] <= 1 and abs(noise["mean"]) < 0.03 and noise["same"] and noise["other"] and noise["knot"] == 0
+    assert follow["over"] == pytest.approx(1 + 2.718281828 ** (-0.5 * 3.14159265 / 0.75 ** 0.5), abs=1e-3) and follow["critical"] <= 1 and follow["end"] == pytest.approx(1, abs=1e-3)
+    assert follow["before"] == 0 and follow["lateAt"] < 0.05 and 0.3 < follow["mid"] < 1.1 and 1.08 < follow["top"] < 1.25 and follow["settled"] == pytest.approx(1, abs=0.01)
+    assert follow["since"] == 1 and follow["flat"] == pytest.approx(3)                     # settled at `since`: nothing earlier is read
+    assert 0.1 < hand["normal"] < 0.4 and hand["wide"] > hand["normal"] > hand["long"]     # a long lens is held steadier ...
+    assert hand["screenLong"] > 3 * hand["screenWide"]                                      # ... but shakes more on the screen
+    assert abs(hand["mean"]) < 0.08 and hand["roll"] < hand["normal"] and 0.01 < hand["mounted"] < 0.1 and hand["mountedLong"]
+    assert hand["again"] and hand["seeded"] and hand["none"] == 0 and hand["reframes"] > 30 and hand["back"] < 0.05
+    assert abs(level["start"]) == pytest.approx(1) and level["held"] == level["start"] and abs(level["level"]) < 0.01
+    assert 0.03 < level["over"] < 0.2 and set(level["sides"]) == {-1, 1} and abs(level["three"]) == pytest.approx(3)
+    assert meter["base"] < meter["deep"] < meter["nearTop"] < meter["over"] and meter["deep"] < meter["under"] - 1 and meter["under"] < meter["clear"]      # fog darkens with the deck above
+    assert meter["sunIn"] > meter["sunOut"] and meter["down"] > meter["sunOut"] and meter["high"] < meter["low"]      # sunlit tops below are bright
+
+
+def test_the_operator_frames_a_view_in_node(tmp_path: Path) -> None:
+    """`operate` / `cam.operator`: off returns the view itself; a function of t alone (any order, the same shot);
+    the frame stays square and is turned by the hand and the horizon; the horizon restarts at every cut; the
+    exposure is settled at the start and at every cut, answers a jump in brightness late, overshoots with `hunt` and
+    not without, never past `most`, adds to the move's own `ev` (a deck's `adapt`); mistakes named."""
+    pure, cuts, exposure, said = _run_in_node(tmp_path, """
+const cam = A.airCamera({radius: R, sun: [0, Math.sin(15 * RAD), -Math.cos(15 * RAD)], water: {heightAt: () => 0, list: {waves: []}},
+  clouds: {decks: [{name: "stratus", base: 1500, top: 2300, cover: 1, density: 0.008}]}});
+const climb = (t) => cam.climbThrough(t, {over: [0, 14], heading: 0, adapt: 1, lens: "wide"}), op = {hand: "handheld", exposure: true, horizon: true};
+const seen = cam.operator(climb, op), order = [9, 2, 11, 2, 9, 5], text = {};
+let stable = true, square = 0, turned = 0;
+for (const t of order) { const s = seen(t), k = JSON.stringify(s); if (text[t] !== undefined && text[t] !== k) stable = false; text[t] = k; square = Math.max(square, ortho(s)); turned = Math.max(turned, deg(s.forward, climb(t).forward)); }
+out.push({off: A.operate(climb, {}) === climb && cam.operator(climb, {hand: false, exposure: 0}) === climb, stable, square, turned, keeps: seen(3).from.join() === climb(3).from.join() && seen(3).fov === climb(3).fov,
+  adds: seen(9).ev - seen(9).operator.ev - climb(9).ev, mounted: Math.abs(cam.operator(climb, {hand: "mounted"})(4).operator.yaw) < 0.3});
+// a cut at 5 s: a new horizon error (its own side), the exposure settled there
+const cutSeen = A.operate((t) => climb(t), {horizon: true, cuts: [5]}), first = cutSeen(0.5).operator.horizon, second = cutSeen(5.5).operator.horizon, late = cutSeen(4.9).operator.horizon;
+const metered = cam.operator(climb, {exposure: true, cuts: [9.5]});
+out.push({first, late, second, atCut: metered(9.5).operator.ev, after: metered(12).operator.ev, start: seen(0).operator.ev, seeded: A.operate(climb, {horizon: true, seed: 7})(0).operator.horizon});
+// brightness that jumps up by 3 stops at 2 s: late, overshooting, limited
+const jump = (x) => (x >= 2 ? 3 : 0), ts = Array.from({length: 1000}, (_, i) => i / 100), curve = (o) => ts.map((t) => A.autoExposure(t, jump, o, 0));
+const hunting = curve({hunt: 1, most: 8}), calm = curve({hunt: 0, most: 8}), limited = curve({most: 1});
+out.push({before: hunting[150], lateAt: hunting[215], end: hunting[999], low: Math.min(...hunting), calmLow: Math.min(...calm), calmEnd: calm[999], limited: Math.min(...limited)});
+out.push([err(() => A.operate(climb, {hnd: "handheld"})), err(() => A.operate(climb, {hand: "handhled"})), err(() => A.operate(climb, {hand: {style: "mounted", drift: 1}})),
+  err(() => A.operate(climb, {exposure: true})), err(() => A.operate(climb, {exposure: {hunts: 1}})), err(() => A.operate(climb, {horizon: {degrees: 40}})), err(() => A.operate(climb, {hand: {reframe: 1}}))]);
+""")
+    assert pure["off"] and pure["stable"] and pure["square"] < 1e-9 and 0.05 < pure["turned"] < 3 and pure["keeps"] and pure["adds"] == pytest.approx(0, abs=1e-12) and pure["mounted"]
+    assert abs(cuts["first"]) == pytest.approx(1) and abs(cuts["late"]) < 0.2 and abs(cuts["second"]) == pytest.approx(1) and cuts["seeded"] != 0
+    assert cuts["atCut"] == pytest.approx(0, abs=1e-9) and cuts["after"] != 0 and cuts["start"] == pytest.approx(0, abs=1e-9)
+    settled = -8 * math.tanh(0.7 * 3 / 8)                                                # a share 0.7 of the jump taken back, under the soft limit
+    assert exposure["before"] == 0 and abs(exposure["lateAt"]) < 0.4 and exposure["end"] == pytest.approx(settled, abs=0.06)
+    assert exposure["low"] < 1.2 * settled and exposure["calmLow"] > settled - 0.02 and exposure["calmEnd"] == pytest.approx(settled, abs=0.02) and exposure["limited"] >= -1
+    assert 'unknown option "hnd" (did you mean "hand"?)' in said[0] and 'did you mean "handheld"' in said[1] and 'unknown option "drift"' in said[2]
+    assert "needs a meter" in said[3] and 'did you mean "hunt"' in said[4] and "degrees must be a number from -20 to 20" in said[5] and "at least 2 seconds" in said[6]
 
 
 PAGE = """

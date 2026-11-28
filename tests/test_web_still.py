@@ -1,4 +1,4 @@
-"""Step 342 (DESIGN.md §120.3): ``vidgen still`` writes single frames of a ``web`` scene's page
+"""Step 342: ``vidgen still`` writes single frames of a ``web`` scene's page
 that equal the frames of the render's lossless page clip, without rendering the scene."""
 
 from __future__ import annotations

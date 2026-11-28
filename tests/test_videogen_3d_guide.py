@@ -1,4 +1,4 @@
-"""3D guide passes as the guide of a generated shot (DESIGN.md §113.8): ``guide: depth | outline |
+"""3D guide passes as the guide of a generated shot: ``guide: depth | outline |
 mask`` on a ``3d`` scene, validation, the plan, the request hash, the prompt and the converted
 ``guide.<pass>.mp4``. Nothing is sent or paid; one test renders a tiny scene in Chromium."""
 
@@ -63,7 +63,7 @@ def test_guide_values(make_project, value: Any, source: str | None) -> None:
 
 
 def test_unknown_guide_is_refused_with_did_you_mean(make_project) -> None:
-    with pytest.raises(VidgenError, match=r"'dpeth' is not true, false, render, depth, outline, mask \(did you mean depth\?\)"):
+    with pytest.raises(VidgenError, match=r"'dpeth' is not true, false, render, final, canny, depth, outline, mask \(did you mean depth\?\)"):
         Project.load(make_project(guide_config("dpeth")))
 
 
@@ -82,7 +82,7 @@ def test_the_shot_sends_the_pass_and_says_what_it_is(make_project) -> None:
     (shot,) = project_shots(project, CATALOG)
     (guide,) = [i for i in shot.inputs if i.role == "guide"]
     assert guide.path == project.root / "build" / "videogen" / "act" / "guide.depth.mp4" and guide.kind == "video"
-    assert guide.what.startswith("depth pass of the beat's 3D scene")
+    assert guide.what.startswith("depth pass of the beat's scene")
     assert GUIDE_PROMPTS["depth"] + "." in shot.prompt and "Mask colours" not in shot.prompt
     render = project_shots(Project.load(make_project(guide_config(True), folder="r")), CATALOG)[0]
     assert render.inputs[-1].path.name == "guide.mp4" and "The guide video is" not in render.prompt
@@ -122,7 +122,7 @@ def test_plan_names_the_pass_and_shares_it(make_project, fake_cloudflared: list[
     root = make_project(unhosted)
     (item,) = plan_shots(Project.load(root), catalog=CATALOG).shots
     text = "\n".join(item.lines(root))
-    assert "  guide: build/videogen/act/guide.depth.mp4 (depth pass of the beat's 3D scene" in text and "not made yet" in text
+    assert "  guide: build/videogen/act/guide.depth.mp4 (depth pass of the beat's scene" in text and "not made yet" in text
     assert NO_HOST_BLOCKED in item.shot.blocked and "inputs not made yet: `vidgen generate inputs --guide`" in item.shot.blocked
     hosted = guide_config("depth")
     hosted["videogen"] = {"provider": "openrouter", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}
@@ -147,7 +147,7 @@ def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
     depth = lossless_clip(root / "fake" / "plaza.depth.mkv", 6.0, "54x96", 5)
     asked: list[tuple[str, tuple[str, ...]]] = []
 
-    def render(_project: Project, scene_id: str, passes: tuple[str, ...]) -> SceneRender:
+    def render(_project: Project, scene_id: str, passes: tuple[str, ...], _kind: str = "render") -> SceneRender:
         asked.append((scene_id, passes))
         return SceneRender(video, {"act": 1.0}, {"depth": depth})
 
@@ -169,7 +169,7 @@ def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
     frame = np.asarray(Image.open(folder / "first_frame.png").convert("RGB"))
     assert abs(int(frame[..., 1].mean()) - int(frame[..., 0].mean())) < 3   # the grey render, not the green pass
     with pytest.raises(VidgenError, match="drew no depth pass"):
-        make_inputs(project, [shot], guide=True, out=lambda line: None, render=lambda p, s, m: SceneRender(video, {"act": 1.0}))
+        make_inputs(project, [shot], guide=True, out=lambda line: None, render=lambda p, s, m, k="render": SceneRender(video, {"act": 1.0}))
 
 
 # ----- a real render (Chromium) ----------------------------------------------------------------------
@@ -216,7 +216,7 @@ def test_cookbook_example_validates_and_matches_the_example(tmp_path: Path) -> N
     from vidgen.cli import validate_all
 
     root = Path(__file__).resolve().parents[1]
-    text = (root / "docs" / "COOKBOOK-GENERATED-VIDEO.md").read_text(encoding="utf-8")
+    text = (root / "docs" / "COOKBOOK-3D-SCENE-TO-SEEDANCE.md").read_text(encoding="utf-8")
     section = text.split("## 6. From a 3D scene to a generated clip", 1)[1].split("\n## 7.", 1)[0]
     block = re.findall(r"```yaml\n(.*?)```", section, flags=re.S)[0]
     assert block in (root / "examples" / "3d-to-video" / "video.yaml").read_text(encoding="utf-8")
@@ -226,4 +226,4 @@ def test_cookbook_example_validates_and_matches_the_example(tmp_path: Path) -> N
     assert not problems, problems
     (shot,) = project_shots(project, CATALOG)
     assert shot.spec.guide_source == "depth" and shot.first_frame_in == "guide" and shot.inputs[-1].path.name == "guide.depth.opening.mp4"
-    assert "COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip" in (root / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")
+    assert "COOKBOOK-3D-SCENE-TO-SEEDANCE.md#6-from-a-3d-scene-to-a-generated-clip" in (root / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")

@@ -1,4 +1,4 @@
-"""Everyday small props in motion, drawn with manim (DESIGN.md §69.56); the maths is in
+"""Everyday small props in motion, drawn with manim; the maths is in
 :mod:`vidgen.cartoon.small_props`.
 
 The ``pour`` action plays :class:`Pouring` on a held watering can (it tilts about its grip, at the

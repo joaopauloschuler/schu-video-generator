@@ -1,4 +1,4 @@
-"""Home iso objects (DESIGN.md §104, Phase AC): a fireplace, a kitchen counter, a stove, a sink, a
+"""Home iso objects (Phase AC): a fireplace, a kitchen counter, a stove, a sink, a
 tall bookshelf, an armchair, a floor lamp, a TV and a piano. No manim.
 
 Drawn like :mod:`vidgen.cartoon.iso_objects`' objects (its frame, shading and helpers), which

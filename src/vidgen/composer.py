@@ -1,4 +1,4 @@
-"""Original music composed from a mood (DESIGN.md §83): ``music: {compose: {mood, key, tempo,
+"""Original music composed from a mood: ``music: {compose: {mood, key, tempo,
 instruments, seed, bars}}`` becomes a :class:`~vidgen.score.Score` that :mod:`vidgen.synth` plays.
 Pure and seeded: the same settings give the same notes.
 

@@ -1,6 +1,6 @@
 """Values written by authors with their units (``"1 AU"``, ``"7.8 km/s"``, ``"92.7 min"``,
 ``"45 deg"``), read through the units engine of :mod:`vidgen.quantities` into SI numbers, and
-the units orbits are shown in (Phase X, DESIGN §98). No manim."""
+the units orbits are shown in (Phase X). No manim."""
 
 from __future__ import annotations
 

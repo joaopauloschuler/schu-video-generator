@@ -1,4 +1,4 @@
-"""Shorts suggestions (DESIGN.md §105.6): windows timed from the plan, scores, hooks, the teaser,
+"""Shorts suggestions: windows timed from the plan, scores, hooks, the teaser,
 the variants written to shorts.yaml (included by the config) and the CLI. No rendering."""
 
 from __future__ import annotations

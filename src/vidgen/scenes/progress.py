@@ -1,4 +1,4 @@
-"""Built-in overlays (DESIGN.md §42): ``progress_bar`` and ``chapter_indicator``.
+"""Built-in overlays: ``progress_bar`` and ``chapter_indicator``.
 
 Both read the whole video's planned timeline (``context.duration``, ``context.chapters``), so
 they look the same on both sides of every cut; chapters come from ``chapter`` scenes and scenes

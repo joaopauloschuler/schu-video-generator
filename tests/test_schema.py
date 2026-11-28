@@ -276,7 +276,7 @@ def test_default_is_the_whole_config(capsys: pytest.CaptureFixture[str], monkeyp
     monkeypatch.chdir(tmp_path)
     doc = cli_schema([], capsys)
     assert doc["title"] == "schu-video-generator video.yaml" and doc["required"] == ["title"]
-    assert doc["oneOf"] == [{"required": ["scenes"]}, {"required": ["sections"]}]   # an audio-only project's sections (§111)
+    assert doc["oneOf"] == [{"required": ["scenes"]}, {"required": ["sections"]}]   # an audio-only project's sections
     assert doc["$schema"] == schema.DIALECT
 
 

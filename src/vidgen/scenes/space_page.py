@@ -1,4 +1,4 @@
-"""The page a ``space`` scene draws (DESIGN.md §122.12): JavaScript written from the scene's params,
+"""The page a ``space`` scene draws: JavaScript written from the scene's params,
 built from the shipped modules (``vidgen/space-sky``, ``-bodies``, ``-light``, ``-craft``,
 ``-phenomena``, ``-camera``, ``-scale``, ``-scene``, ``three-finish``, ``title-cards``).
 
@@ -400,6 +400,25 @@ class _Page:
             self.out(f"{{name: {js(name)}, start: {js(start)}, cut: {js(m.cut)}, shot: (t) => S.cam.{MOVE_CALLS[m.move]}(t, {js(opts)})}},", 2)
         self.out("];")
         self.out("S.view = moveTrack(S.moves);")
+        self.operator(metered=False)
+
+    def operator(self, metered: bool) -> None:
+        """The person holding the camera (``operator:``) over the moves' view: written only when
+        given, so a page without it is the same. Every cut starts a shot with its own horizon and a settled exposure;
+        ``metered``: the rig's own meter (a surface scene's airCamera) for the exposure."""
+        o = self.p.operator
+        if o is None:
+            return
+        opts = o.options()
+        cuts = [when(m.over[0]) for m in self.p.camera if m.cut and m.over]
+        if cuts:
+            opts["cuts"] = cuts
+        self.out("// the camera operator (vidgen/space-camera-air): a hand on the camera, its automatic exposure, a horizon set level late")
+        if metered:
+            self.out(f"S.view = S.cam.operator(S.view, {js(opts)});")
+        else:
+            self.use("vidgen/space-camera-air", "operate")
+            self.out(f"S.view = operate(S.view, {js(opts)});")
 
     def _craft_update(self, c: Any, sets: dict[str, str], burns: set[str] | frozenset[str] = frozenset()) -> dict[str, Any]:
         """The options of a plane's, a hull's or a kit-built craft's update(t, ...) at scene time t."""
@@ -556,6 +575,8 @@ class _Page:
             self.use("vidgen/space-scene-air", "flashes")
             cuts = [{"at": when(f.at), "amount": f.amount, "rise": f.rise, "fall": f.fall} for f in self.p.flash]
             extra += f", flash: (t) => flashes(t, {js(cuts)})"
+        if self.p.camera_look is not None:
+            self.out(f"// camera look {self.p.camera_look} (vidgen/camera-looks): its finish and operator, this scene's own options over them")
         self.out("// finishing (vidgen/three-finish): no FXAA by default (it breaks stars and thin rings)")
         self.out(f"S.finish = new Finish(renderer, scene, camera, ctx, {{{pairs(opts)}update: (t) => S.step(t){extra}}});")
 
@@ -583,7 +604,7 @@ class _Page:
             from .space_air_params import HULL_NEAR
 
             view["near"] = HULL_NEAR
-            self.out(f"// near: {HULL_NEAR:g} m, set by vidgen because a giant hull is in the scene (the default near plane slices a hull and draws the world behind it over it: DESIGN.md §123.12)")
+            self.out(f"// near: {HULL_NEAR:g} m, set by vidgen because a giant hull is in the scene (the default near plane slices a hull and draws the world behind it over it)")
         self.out(f"const space = new SpaceView(ctx, {{{pairs(view)}renderer, scene, camera{', dofFocus: () => S.focus()' if dof else ''}}});")
         stores = [k for k, used in (("detail", any(c.maker == "hull" and c.dress is not False for c in p.craft)), ("refs", any(c.scale_ref for c in p.craft)),
                                     ("fx", any(c.effects for c in p.craft)), ("matched", any(m.match for m in p.camera))) if used]
@@ -626,7 +647,7 @@ class _Page:
         self.out("for (const b of Object.values(S.bodies)) for (const p of [].concat(b.problems ? b.problems(0) ?? [] : [])) pageNote(`bodies: ${p}`);")
         self.out("for (const p of [].concat(space.problems() ?? [])) pageNote(`scale: ${p}`);")
         head = [
-            f"// The page of the space scene \"{self.id}\" (DESIGN.md §122.12), written by vidgen from video.yaml (generator {PAGE_VERSION}).",
+            f"// The page of the space scene \"{self.id}\", written by vidgen from video.yaml (generator {PAGE_VERSION}).",
             "// Change the scene in video.yaml; to go on in code, `vidgen space-page` writes this page out as a web scene's script.",
             'import * as THREE from "three";',
         ]

@@ -1,4 +1,4 @@
-"""Playing a score file (DESIGN.md §93.6-93.7): every track's notes synthesised with its
+"""Playing a score file: every track's notes synthesised with its
 instrument, the track's effects applied to its own sound, all summed, through the master filter
 and set to :data:`vidgen.music.MUSIC_LEVEL`.
 
@@ -35,7 +35,7 @@ BEFORE_SECONDS = 1.6
 PAD_TABLE = 2**18
 #: The notes played: others are left out with a warning.
 LOWEST_HZ, HIGHEST_HZ = 20.0, 12000.0
-#: Expression (DESIGN.md §120.7). A note shorter than this takes the dynamic at its start; a
+#: Expression. A note shorter than this takes the dynamic at its start; a
 #: longer one follows a level that moves by at least :data:`SHAPED_DB` inside it.
 SHAPED_SECONDS, SHAPED_DB = 0.25, 1.0
 #: ``fp`` / ``sfz``: seconds the loud start is held and seconds it takes to fall to the level.
@@ -64,7 +64,7 @@ class _Event:
 
     @property
     def plain(self) -> bool:
-        """Whether nothing of §120.7 touches it (it is played exactly as before Step 346)."""
+        """Whether no expressive mark touches it (it is played exactly as before Step 346)."""
         return not (self.slurred or self.step.changes or self.step.burst or any(a or b for _, a, b in self.levels))
 
 
@@ -127,7 +127,7 @@ def _events_and_last(
 ) -> tuple[list[_Event], _Event | None]:
     """:func:`_events` and the note still sounding at the section's end (``None`` after a rest).
     ``carry``: the note sounding when the section starts (the section before's last); holds
-    (``-``) before the section's first note or rest extend it (DESIGN.md §93.13)."""
+    (``-``) before the section's first note or rest extend it."""
     events: list[_Event] = []
     current: _Event | None = carry
     for b in range(section.bars):
@@ -227,7 +227,7 @@ class _Skipped:
 
 def range_warnings(score: MusicScore) -> list[str]:
     """One line per track and instrument whose notes leave the instrument's written range
-    (:attr:`~vidgen.studio.instruments.Instrument.range`; DESIGN.md §120.7): how many, the
+    (:attr:`~vidgen.studio.instruments.Instrument.range`): how many, the
     lowest or highest and where. The notes are played all the same; nothing is synthesised here."""
     out = []
     for track in score.tracks:
@@ -311,7 +311,7 @@ def _toned(instrument: Instrument, settings: Mapping[str, float], db: float) -> 
 
 
 def _expressive(instrument: Instrument, settings: Mapping[str, float], event: _Event, n: int, make: Callable[[Mapping[str, float]], np.ndarray]) -> np.ndarray:
-    """An event's sound with its dynamics (DESIGN.md §120.7): ``make(settings)`` is the note or
+    """An event's sound with its dynamics: ``make(settings)`` is the note or
     hit with these settings; ``n``: the samples its level curve is laid over. The level is a
     gain; an instrument with a response to dynamics also plays brighter or harder, and a level
     that moves inside the note cross-fades between the note at its softest and at its loudest
@@ -394,7 +394,7 @@ def _phrase(section: Section, part: TrackPart, event: _Event, voicer: _Voicer, f
     """The slurred notes of ``event`` for its instrument (:data:`vidgen.studio.additive.Phrase`):
     each note's start, its pitch in semitones above the event's ``first`` pitch (a MIDI number)
     and its glide (the ``glide`` setting in force at the note) in samples; for a choir, a
-    note's own syllable and vowel when its mark names one (DESIGN.md §121.4)."""
+    note's own syllable and vowel when its mark names one."""
     out = []
     for start, step in event.slurred:
         slot = _slot_at(section, event.start + start) if section.chords else None
@@ -573,7 +573,7 @@ def _start_gain(event: _Event) -> float:
 def _hit_times(score: MusicScore, tracks: Mapping[str, Track], name: str) -> list[tuple[int, float]]:
     """When track ``name`` sounds (its hits and notes; its chords for ``play: chords``), or
     every beat for ``beat``, with each hit's level (1 a plain hit, 1.5 an accent, 0.5 soft;
-    times its dynamic mark's gain, DESIGN.md §120.7)."""
+    times its dynamic mark's gain)."""
     if name == "beat":
         return [(t, 1.0) for t in range(0, score.samples, score.beat)]
     track = tracks[name]
@@ -701,7 +701,7 @@ def _one_shot_end(x: np.ndarray, bar_end: int) -> np.ndarray:
 
 @dataclass(frozen=True)
 class TrackStem:
-    """One track played alone (DESIGN.md §94.6, Step 196): ``data`` float64 ``(n, 2)``, read-only,
+    """One track played alone (Step 196): ``data`` float64 ``(n, 2)``, read-only,
     on the piece's canvas — ``score.samples`` for a loop; for a one-shot :data:`BEFORE_SECONDS`
     of room before the start (``before`` samples), the piece, and :data:`TAIL_SECONDS` of tail —
     before the master filter and the level. ``skipped``: the notes left out (outside 20 Hz-12
@@ -724,7 +724,7 @@ def render_track_stem(score: MusicScore, name: str, fast_fft: bool = False) -> T
     tempo, time, seed, loop, sections, chords), its own spec and, when it ducks, the hits of the
     track it ducks under — nothing else. ``fast_fft`` (the studio's): its filters and reverb on
     quick FFT lengths when the piece's length is a slow one (:class:`~vidgen.studio.effects.CircularFFT`:
-    the same within about 1e-13, many times faster; DESIGN.md §94.19)."""
+    the same within about 1e-13, many times faster)."""
     tracks = {t.name: t for t in score.tracks}
     track = tracks[name]
     skipped = _Skipped()
@@ -815,7 +815,7 @@ def render_music_score(score: MusicScore, warnings: list[str] | None = None) -> 
 
     A plain track's notes are added straight into the piece (a track with effects as one sum),
     so :func:`mix_track_stems` of the same tracks differs from this only in the order floats
-    were added: at most 1 float32 step in a few samples of a piece (DESIGN.md §94.14). These
+    were added: at most 1 float32 step in a few samples of a piece. These
     samples are kept as they were (the beds' and projects' music must not change)."""
     canvas = _Canvas(score)
     tracks = {t.name: t for t in score.tracks}
@@ -838,7 +838,7 @@ def render_music_score(score: MusicScore, warnings: list[str] | None = None) -> 
 
 
 def render_music_stems(score: MusicScore, on_stem: Callable[[str, np.ndarray], None], warnings: list[str] | None = None) -> tuple[np.ndarray, float]:
-    """The score played track by track (for ``vidgen music check``, §93.9): every track is
+    """The score played track by track (for ``vidgen music check``): every track is
     rendered alone and handed to ``on_stem(name, sound)`` (float64 ``(n, 2)``, its one pass of
     ``score.samples``, *before* the master filter and the final level), then summed. Returns
     the mix (:func:`mix_track_stems`: :func:`render_music_score`'s within rounding) and the

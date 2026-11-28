@@ -402,7 +402,7 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
         "thumbnail": None,
     }
     assert doc["guide_passes"] == {}
-    intro, second = doc["chapters"]  # the intro chapter before the first chapter (DESIGN.md §52)
+    intro, second = doc["chapters"]  # the intro chapter before the first chapter
     assert (intro["title"], intro["intro"], intro["start"], second["title"], second["scene"]) == ("Intro", True, 0.0, "Second", "b")
     assert second["start"] == pytest.approx(doc["scenes"][1]["start"]) and second["end"] == pytest.approx(doc["duration"])
     assert any("at least 3" in w["message"] for w in doc["warnings"])  # YouTube's rules

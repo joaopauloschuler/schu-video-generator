@@ -1,4 +1,4 @@
-"""Takes of generated shots (DESIGN.md §113.4): every clip a shot got is kept as
+"""Takes of generated shots: every clip a shot got is kept as
 ``takes/<shot>/<n>.mp4`` (n = 1, 2, ...) with ``<n>.json`` (where it came from, its cost, its QA
 report) and ``<n>.contact.png`` (its contact sheet); ``takes/picks.json`` records the take picked
 per shot.
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -146,11 +146,14 @@ def pick_take(root: Path, shot_id: str, take: str, known: list[str]) -> Take | N
 def add_take(
     root: Path, shot_id: str, clip: Path, *, key: str, model: str, provider: str, job_id: str | None, cost: float | None,
     length: float, width: int, height: int, sound: str = "mix", warnings: Sequence[str] = (), opening_picture: Path | None = None,
+    usage: Mapping[str, Any] | None = None, sheet: Path | None = None,
 ) -> tuple[Take, bool]:
     """Keep ``clip`` (the cached clip of request ``key``) as the shot's next take, with its QA
     report (for a ``length`` s shot in a ``width`` x ``height`` video, ``sound`` its setting),
     the job's ``warnings`` (kept in its record) and contact sheet; ``opening_picture`` is the shot's
-    starting picture, for the opening-frame score. The take that already holds ``key`` when there is
+    starting picture, for the opening-frame score; ``usage`` what a free job used (comfyui: GPU
+    seconds, compute units), kept in its record, and ``sheet`` the stylesheet picture it was made
+    with (``sheet:``, named in its record). The take that already holds ``key`` when there is
     one. Returns it and whether it is new."""
     from vidgen.videogen.qa import check_clip, contact_sheet
 
@@ -170,6 +173,10 @@ def add_take(
     }
     if warnings:
         info["warnings"] = list(warnings)
+    if usage:
+        info["usage"] = dict(usage)
+    if sheet is not None:
+        info["sheet"] = sheet.relative_to(root).as_posix() if sheet.is_relative_to(root) else str(sheet)
     if opening_picture is not None:
         info["opening_picture"] = opening_picture.relative_to(root).as_posix() if opening_picture.is_relative_to(root) else str(opening_picture)
     write_text_atomic(path.with_suffix(".json"), json.dumps(info, indent=1, ensure_ascii=True) + "\n")

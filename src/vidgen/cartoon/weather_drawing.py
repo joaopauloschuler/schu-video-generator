@@ -1,12 +1,12 @@
-"""Drawing snow that settles and fog on a stage (DESIGN.md §69.60; the maths in
+"""Drawing snow that settles and fog on a stage (the maths in
 :mod:`vidgen.cartoon.snow` and :mod:`vidgen.cartoon.fog`), and lightning bolts, rainbows and the
-sun and moon moving across the sky (§69.61; :mod:`vidgen.cartoon.storm`,
+sun and moon moving across the sky (:mod:`vidgen.cartoon.storm`,
 :mod:`vidgen.cartoon.sun_path`).
 
 :class:`SettledSnow` grows a :class:`SnowBlanket` on the ground and a :class:`SnowCap` on each
 prop that holds snow while a settling snow field falls; :class:`StageFog` drifts the
 :class:`FogBand` s a stage draws between its things by depth. Both are what the stage calls a thing
-that moves by itself (DESIGN.md §69.54): ``update(now)``, ``changing(start, end)``, ``movers()``
+that moves by itself: ``update(now)``, ``changing(start, end)``, ``movers()``
 and ``region(start, end)``, so only what changes leaves Manim's static image.
 """
 
@@ -125,7 +125,7 @@ class SnowCap(VMobject):
 
 
 class SettledSnow:
-    """The layer a settling snow field leaves (DESIGN.md §69.60): its blanket over the ground area
+    """The layer a settling snow field leaves: its blanket over the ground area
     (``left`` .. ``right``, from ``bottom`` up to ``back``, Manim units; thin snow in the ``bare``
     patches) and its caps, for snow from scene time ``start`` until ``ended()`` (``None`` while it
     snows) at ``density``, with ``settled`` seconds of snowfall already lying."""
@@ -188,8 +188,7 @@ class SettledSnow:
 class FogBand(VGroup):
     """One band of fog: :data:`~vidgen.cartoon.fog.FOG_LAYERS` shapes in ``color``, ``opacity``
     where all overlap; ``stage_depth`` is where it lies (the stage draws it in front of everything
-    deeper); ``shares``: the share of its fog each layer holds (an iso place's banks hold more,
-    §105.4)."""
+    deeper); ``shares``: the share of its fog each layer holds (an iso place's banks hold more)."""
 
     def __init__(self, depth: float, color: str, opacity: float, shares: Sequence[float] = FOG_LAYER_SHARES) -> None:
         super().__init__(*[_filled(VMobject(), color, layer_opacity(opacity, share)) for share in shares])
@@ -203,7 +202,7 @@ class FogBand(VGroup):
 
 
 class StageFog:
-    """A stage's fog (DESIGN.md §69.60): a :class:`FogBand` per depth of
+    """A stage's fog: a :class:`FogBand` per depth of
     :data:`~vidgen.cartoon.fog.FOG_DEPTHS` (``bands``, back to front) at ``density`` across
     ``left`` .. ``right`` on the ground line ``ground`` (a fraction of the frame height), drifting
     at ``drift`` and pushed by ``blown(now)`` (the stage's wind force added up; ``None``: calm)."""
@@ -250,7 +249,7 @@ class StageFog:
 
 
 class LightningBolt(VGroup):
-    """A lightning bolt (DESIGN.md §69.61): up to :data:`BOLT_PATHS` jagged paths (a main channel
+    """A lightning bolt: up to :data:`BOLT_PATHS` jagged paths (a main channel
     and its branches), each a wide pale glow under a white core; :meth:`show` draws one strike's
     paths, :meth:`hide` none. Never graded by the light (it is the light)."""
 
@@ -287,7 +286,7 @@ class LightningBolt(VGroup):
 
 
 class Rainbow(VGroup):
-    """A rainbow (DESIGN.md §69.61): a half ring of :data:`~vidgen.cartoon.storm.RAINBOW_COLORS`
+    """A rainbow: a half ring of :data:`~vidgen.cartoon.storm.RAINBOW_COLORS`
     bands about (``cx``, ``base``) with an outer ``radius``, its ``opacity`` when fully in;
     :meth:`show` sets how much of it shows."""
 
@@ -309,8 +308,7 @@ class Rainbow(VGroup):
 
 class StageRainbow:
     """A :class:`Rainbow` on a stage fading in and out (``rainbow`` actions:
-    :class:`~vidgen.cartoon.storm.RainbowChange` s), a thing that moves by itself (DESIGN.md
-    §69.54): only it and what is drawn over it are redrawn while it fades."""
+    :class:`~vidgen.cartoon.storm.RainbowChange` s), a thing that moves by itself: only it and what is drawn over it are redrawn while it fades."""
 
     def __init__(self, rainbow: Rainbow) -> None:
         self.rainbow = rainbow
@@ -346,10 +344,10 @@ class StageRainbow:
 
 
 class SkyBody:
-    """A ``sun`` or ``moon`` prop moving along the sky's path (DESIGN.md §69.61): from path share
+    """A ``sun`` or ``moon`` prop moving along the sky's path: from path share
     ``base`` at the start, then each :class:`~vidgen.cartoon.sun_path.PathMove`; ``place(x share,
     height)`` gives where its middle is (Manim units). It fades out under the horizon; with a
-    ``sink`` (path heights: its own height, DESIGN.md §105.8) the ground in front of the sky hides
+    ``sink`` (path heights: its own height) the ground in front of the sky hides
     it, so it shows whole down to the horizon and sinks behind the ground, gone ``sink`` under it."""
 
     def __init__(self, prop: Mobject, kind: str, base: float, place: Callable[[float, float], tuple[float, float]], sink: float = 0.0) -> None:

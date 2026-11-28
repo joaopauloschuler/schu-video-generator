@@ -1,4 +1,4 @@
-"""The lint rules on speech to text (DESIGN.md §57, §78).
+"""The lint rules on speech to text.
 
 - ``readback``: beats whose audio was heard differently from their text by ``vidgen readback``.
   It only reads the transcripts that command cached (it never runs speech to text), so it finds

@@ -1,4 +1,4 @@
-"""The shapes molecules are drawn with, as plain geometry in nanometres (DESIGN.md §95.9): the
+"""The shapes molecules are drawn with, as plain geometry in nanometres: the
 DNA double helix (two antiparallel backbones round base pairs, major and minor grooves, 5′/3′
 ends), RNAs, the nucleosome, chromatin, proteins and membrane proteins, small molecules and
 ions, modification markers. A :class:`Glyph` is a list of primitives (filled or stroked Bézier

@@ -1,4 +1,4 @@
-"""Drawings of an animal cell's structures and complexes (DESIGN.md §95.9): the nucleus with
+"""Drawings of an animal cell's structures and complexes: the nucleus with
 its envelope (one lumen with the ER), pores, heterochromatin and nucleolus; the rough ER joined
 to the envelope, with exit sites; the smooth-ER network; Golgi cisternae cis to trans with rims,
 buds and coats; mitochondria with cristae and their junctions; lysosomes, peroxisomes,

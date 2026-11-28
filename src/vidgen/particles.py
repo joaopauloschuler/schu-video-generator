@@ -1,5 +1,4 @@
-"""Particles: rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves and wind streaks
-(DESIGN.md §69.9, §69.32).
+"""Particles: rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves and wind streaks.
 
 The motion is a pure function of a seed and the time, without manim, so it is tested without
 rendering: :func:`particle_seeds` draws each particle's start (position, size, speed, phase,
@@ -90,7 +89,7 @@ KINDS: dict[str, ParticleKind] = {
     ),
 }
 
-#: How fast each kind drifts with a stage's wind (DESIGN.md §69.32): shorter sides per second at
+#: How fast each kind drifts with a stage's wind: shorter sides per second at
 #: force 1, times each particle's speed factor (light snow and confetti blow far, rain a little).
 WIND_DRIFT: dict[str, float] = {
     "rain": 0.3, "snow": 0.35, "sparkles": 0.08, "dust": 0.4, "confetti": 0.3, "smoke": 0.25, "bubbles": 0.2,
@@ -181,7 +180,7 @@ def particle_states(
 ) -> ParticleStates:
     """Where the particles are ``t`` seconds after they started, in an area ``width`` x
     ``height`` shorter sides large. A particle leaving one edge comes back at the other. A
-    stage's wind (§69.32): ``blown`` is its force added up since they started (force × seconds;
+    stage's wind: ``blown`` is its force added up since they started (force × seconds;
     each particle drifts :data:`WIND_DRIFT` × its speed factor × that to the right), ``wind`` its
     force now (rain slants with it; streaks show only while it is above their ``wind_shown``)."""
     spec = particle_kind(seeds.kind)

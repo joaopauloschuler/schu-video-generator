@@ -1,4 +1,4 @@
-"""``feynman``: Feynman diagrams in standard notation (Phase Y, Step 238; DESIGN §99.6) — fermion
+"""``feynman``: Feynman diagrams in standard notation (Phase Y, Step 238) — fermion
 lines with arrows on the fermion-number flow (an antifermion's against time), photons and W / Z
 wavy, gluons curly, the Higgs boson dashed, vertices as dots, every external line labelled, the
 time direction stated. The diagram comes from a preset or from lines written by id; its layout

@@ -1,4 +1,4 @@
-"""CRISPR–Cas9 genome editing as data and rules (DESIGN.md §96.14). No manim.
+"""CRISPR–Cas9 genome editing as data and rules. No manim.
 
 - **The nucleases** (:data:`CAS`): SpCas9 (*Streptococcus pyogenes*; PAM 5′-NGG-3′, a 20-nt
   spacer) and SaCas9 (*Staphylococcus aureus*; PAM 5′-NNGRRT-3′, 21–23 nt). The PAM lies on the

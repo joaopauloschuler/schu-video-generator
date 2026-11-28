@@ -1,4 +1,4 @@
-"""Wind on a stage (DESIGN.md §69.32): its strength over time (the ``wind`` param and the fades
+"""Wind on a stage: its strength over time (the ``wind`` param and the fades
 of the ``wind`` beat action), seeded gusts, how far props lean and how far a character's scarf,
 hair, ears and hat trail behind. No manim: :mod:`vidgen.cartoon.windblown` draws them.
 

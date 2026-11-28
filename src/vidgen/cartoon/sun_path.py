@@ -1,5 +1,4 @@
-"""The sun's and the moon's path across a stage's sky and the shadows they cast (DESIGN.md
-§69.61). No manim: the stage moves its ``sun`` and ``moon`` props and turns the shadows.
+"""The sun's and the moon's path across a stage's sky and the shadows they cast. No manim: the stage moves its ``sun`` and ``moon`` props and turns the shadows.
 
 A body's place is a *path share*: 0 on the horizon at the left (east), 0.5 at the top of its arc,
 1 on the horizon at the right (west); below the horizon the path goes on hidden for

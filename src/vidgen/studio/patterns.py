@@ -1,4 +1,4 @@
-"""Step patterns of score files (DESIGN.md §93): one bar per ``|``, each bar split into equal
+"""Step patterns of score files: one bar per ``|``, each bar split into equal
 steps, one symbol per step.
 
 ``x`` a hit (on a pitched instrument: the chord's bass note; ``x'`` an octave up, ``x,`` down),
@@ -11,7 +11,7 @@ octave up; ``'`` / ``,`` as for degrees), a note name with its octave (``A4``, `
 ``C4+E4+G4``). ``!`` after a hit accents it, ``?`` makes it soft. Spaces only help reading:
 ``x... x...`` is ``x...x...``.
 
-A track's steps may carry marks (DESIGN.md §120.7). ``[...]`` before a step holds items separated
+A track's steps may carry marks. ``[...]`` before a step holds items separated
 by spaces, each in force until changed: a dynamic (``pp`` to ``fff``, or dB with a sign), a
 hairpin ``<`` / ``>`` running to the next dynamic, ``fp`` / ``sfz``, a setting of the instrument
 (``stroke=pizzicato``, or its named value alone: ``pizzicato``) and ``default``. ``( ... )`` is
@@ -65,7 +65,7 @@ class Step:
     :data:`SOFT_GAIN`; ``marked``: written with ``X``, ``o``, ``!`` or ``?`` (an ``accent:``
     pattern leaves it alone).
 
-    From the marks (DESIGN.md §120.7): ``level`` / ``level_end``: the dynamic in dB at the
+    From the marks: ``level`` / ``level_end``: the dynamic in dB at the
     step's start and end (0: unmarked; they differ under a hairpin); ``burst``: dB above
     ``level`` at the note's start (``fp``, ``sfz``); ``slur``: the note is slurred from the one
     before (not attacked again); ``marks``: the setting items written before the step, as

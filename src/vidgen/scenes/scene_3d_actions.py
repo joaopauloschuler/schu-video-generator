@@ -1,6 +1,6 @@
-"""The actions of the ``3d`` scene type: the camera actions (Phase AI, Step 299, DESIGN §114.8)
+"""The actions of the ``3d`` scene type: the camera actions (Phase AI, Step 299)
 ``camera_orbit``, ``camera_dolly``, ``camera_fly_to``, ``camera_look_at`` and ``camera_move``, and
-the object actions (Step 300, §114.11) ``object_move``, ``object_path``, ``object_rotate``,
+the object actions (Step 300) ``object_move``, ``object_path``, ``object_rotate``,
 ``object_spin``, ``object_scale``, ``object_show``, ``object_hide``, ``object_highlight``,
 ``object_walk`` and ``object_face`` (the ``camera_`` / ``object_`` prefixes keep them apart from
 the stage's ``look_at``, ``turn``, ``walk_to``... and the 2D ``highlight``).

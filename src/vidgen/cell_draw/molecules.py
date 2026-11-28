@@ -1,4 +1,4 @@
-"""Drawing molecule glyphs with Manim (DESIGN.md §95.9): the renderer of
+"""Drawing molecule glyphs with Manim: the renderer of
 :mod:`vidgen.cellworld.glyphs` (whose geometry is in nm, without manim). Filled and stroked
 Bézier outlines become ``VMobject``s, texts Pango ``MarkupText`` scaled to their height in nm;
 colours come from the theme through :class:`~.base.CellColors`. The ``molecule`` scene draws

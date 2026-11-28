@@ -1,4 +1,4 @@
-"""Human karyotypes (DESIGN.md §96.10): the 24 chromosomes with their lengths and centromere
+"""Human karyotypes: the 24 chromosomes with their lengths and centromere
 positions, schematic G-band ideograms, ISCN karyotype notation parsed and checked
 (``46,XX``, ``47,XY,+21``, ``45,X``, ``47,XXY``, ``46,XY,del(5)(p15.2)``,
 ``46,XX,t(9;22)(q34;q11.2)``, ``45,XX,rob(14;21)(q10;q10)``…) and the chromosomes it describes,

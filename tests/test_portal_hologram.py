@@ -1,5 +1,4 @@
-"""Portals (a rift that opens, crackles and seals) and hologram characters (DESIGN.md §100.3,
-§100.4)."""
+"""Portals (a rift that opens, crackles and seals) and hologram characters."""
 
 from __future__ import annotations
 

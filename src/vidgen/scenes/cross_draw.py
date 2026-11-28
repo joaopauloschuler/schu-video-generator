@@ -1,4 +1,4 @@
-"""Flat pictures for the ``cross`` scene (DESIGN.md §96.7): phenotype glyphs (a pea round or
+"""Flat pictures for the ``cross`` scene: phenotype glyphs (a pea round or
 wrinkled, yellow or green; a flower; a fruit fly's eye or the whole fly with its body colour and
 wings; an animal's coat; a feather; a squash fruit; a blood drop with its ABO group; a seed
 capsule; an affected / unaffected mark; a colour swatch), the ♀ / ♂ symbols, a parent's

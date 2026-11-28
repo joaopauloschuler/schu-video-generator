@@ -1,4 +1,4 @@
-"""Drawing a stage's light (DESIGN.md §69.31): :class:`StageLight` grades what the stage marks lit
+"""Drawing a stage's light: :class:`StageLight` grades what the stage marks lit
 (:func:`mark_lit`) as the camera draws it, :class:`StarField` shows the night's stars and
 :class:`StageShadows` the soft shadows on the ground. The maths is in
 :mod:`vidgen.cartoon.lighting`.
@@ -50,8 +50,8 @@ from vidgen.theme import Theme
 
 #: The attribute :func:`mark_lit` sets on what the light grades.
 LIT = "light_graded"
-#: The camera's attribute saying how strongly an iso place's pools of light show (DESIGN.md §104;
-#: :data:`~vidgen.cartoon.iso_pictures.POOL_STRENGTH`, the same name).
+#: The camera's attribute saying how strongly an iso place's pools of light show
+#: (:data:`~vidgen.cartoon.iso_pictures.POOL_STRENGTH`, the same name).
 POOL_STRENGTH = "pool_strength"
 #: Colour of the stars (no theme token is light in every preset).
 STAR_COLOR = "#FFF6DA"
@@ -82,7 +82,7 @@ def resolve_light(setting: str | CustomLight, theme: Theme | None = None) -> Lig
     return light_grade(setting)
 
 
-#: The attribute holding a :class:`LampLit` on what a lamp can light (DESIGN.md §89.13).
+#: The attribute holding a :class:`LampLit` on what a lamp can light.
 LAMP_LIT = "lamp_lit"
 
 
@@ -111,17 +111,17 @@ def mark_lamp_lit(mobject: Mobject, lamp: LampLit) -> None:
         setattr(member, LAMP_LIT, lamp)
 
 
-#: The attribute holding how much a fill light lifts what the light grades (0..1, DESIGN.md §100.15).
+#: The attribute holding how much a fill light lifts what the light grades (0..1).
 LIGHT_LIFT = "light_lift"
 
 
-#: The attribute holding the multiply a coloured fill light lifts to (DESIGN.md §108).
+#: The attribute holding the multiply a coloured fill light lifts to.
 LIGHT_LIFT_TOWARD = "light_lift_toward"
 #: The most bytes of pictures (their pixels as drawn and graded) a :class:`StageLight` keeps to
-#: draw an unchanged picture again without grading it again (DESIGN.md §109).
+#: draw an unchanged picture again without grading it again.
 GRADED_CACHE_BYTES = 192 * 1024 * 1024
 #: The attribute an iso tile carries while the stage's light draws it: (its
-#: :class:`GradedPictures`, the grade), so the tile grades only what it draws anew (§109).
+#: :class:`GradedPictures`, the grade), so the tile grades only what it draws anew.
 TILE_GRADING = "iso_tile_grading"
 
 
@@ -156,7 +156,7 @@ def _in_frame(camera: Any, image: Any, pixel_array: np.ndarray) -> bool:
 def pixels_digest(pixels: np.ndarray) -> tuple[Any, ...]:
     """A picture's fingerprint: its shape, type and the CRC-32 and Adler-32 of its bytes (both
     together: a changed picture keeps the same one about once in 10^19 changes; ~0.03 ms a
-    megabyte, a twentieth of comparing it with a copy, and no copy kept; DESIGN.md §109)."""
+    megabyte, a twentieth of comparing it with a copy, and no copy kept)."""
     data = np.ascontiguousarray(pixels)
     return pixels.shape, pixels.dtype.str, zlib.crc32(data), zlib.adler32(data)
 
@@ -164,7 +164,7 @@ def pixels_digest(pixels: np.ndarray) -> tuple[Any, ...]:
 class OwnedCache:
     """Values kept for live objects (their *owners*), at most ``budget`` bytes in all: a value
     goes when its owner is gone (a picture made again at another level of detail), so what is
-    kept is only ever for what can still be drawn (DESIGN.md §109)."""
+    kept is only ever for what can still be drawn."""
 
     def __init__(self, budget: int) -> None:
         self.budget = budget
@@ -201,7 +201,7 @@ class OwnedCache:
 
 class GradedPictures:
     """The graded pixels of pictures drawn before, so a picture whose pixels and grade are what
-    they were at its last drawing is not graded again (DESIGN.md §109): most of an iso place's
+    they were at its last drawing is not graded again: most of an iso place's
     pictures stay the same from frame to frame, and grading them was most of a lit frame's cost.
     A picture counts as the same when its fingerprint (:func:`pixels_digest`) is (pictures change
     in place: pools, sprites). Keeps at most ``budget`` bytes of graded pixels of live pictures
@@ -232,11 +232,10 @@ class GradedPictures:
 class StageLight:
     """A stage's light: ``base`` from the start, then the :class:`LightChange`\\s the ``light``
     action schedules, lit up by lightning (``strikes`` of the ``lightning`` action and the
-    ``storms`` of rain fields with ``lightning``, DESIGN.md §69.61; ``flash_share`` of a flash:
+    ``storms`` of rain fields with ``lightning``; ``flash_share`` of a flash:
     less in a room). Wraps ``camera`` (a Manim Cairo camera) so the fill and stroke colours and
     the pictures of lit mobjects are drawn graded by :attr:`grade`; :meth:`update` sets the grade
-    for a scene time and tells the listeners (stars, shadows) when it changed. ``flat`` (a draft,
-    DESIGN.md §74): nothing is graded and lightning never flashes; the changes keep their times."""
+    for a scene time and tells the listeners (stars, shadows) when it changed. ``flat`` (a draft): nothing is graded and lightning never flashes; the changes keep their times."""
 
     def __init__(self, camera: Any, base: LightGrade, *, flat: bool = False) -> None:
         self.base = base
@@ -245,15 +244,15 @@ class StageLight:
         self.changes: list[LightChange] = []
         self.strikes: list[Strike] = []
         self.storms: list[RainStorm] = []
-        #: the alarms that pulse the light (DESIGN.md §100.7)
+        #: the alarms that pulse the light
         self.alarms: list[AlarmSpan] = []
         self.flash_share = FLASH_SHARE
         #: how bright the lightning lights the set now (0..1)
         self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
-        #: grades lifted by a fill light, by (grade, share): made once (§100.15)
+        #: grades lifted by a fill light, by (grade, share): made once
         self._lifted: dict[tuple[LightGrade, float, tuple[float, ...]], LightGrade] = {}
-        #: pictures graded before, drawn again without grading while unchanged (§109)
+        #: pictures graded before, drawn again without grading while unchanged
         self.pictures = GradedPictures()
         self.camera = camera
         if flat:
@@ -265,8 +264,8 @@ class StageLight:
         camera.display_image_mobject = lambda image_mobject, pixel_array: self._draw_image(image, image_mobject, pixel_array)
 
     def _grade_of(self, mob: Any) -> LightGrade:
-        """The grade of a lit ``mob``: the light's, with a lamp's light on it (§89.13), lifted
-        by a fill light (§100.15)."""
+        """The grade of a lit ``mob``: the light's, with a lamp's light on it, lifted
+        by a fill light."""
         lamp = getattr(mob, LAMP_LIT, None)
         grade = self.grade if lamp is None else lamp.grade(self.grade)
         lift = getattr(mob, LIGHT_LIFT, 0.0)
@@ -288,10 +287,10 @@ class StageLight:
 
     def _draw_image(self, draw: Callable[[Any, Any], Any], image: Any, pixel_array: Any) -> Any:
         """Draw a picture, graded while it is drawn when it is lit (not one wholly outside the
-        frame: nothing of it is drawn, §109)."""
+        frame: nothing of it is drawn)."""
         if not self.grade.changes_colors or not getattr(image, LIT, False) or not _in_frame(self.camera, image, pixel_array):
             return draw(image, pixel_array)
-        if getattr(image, "iso_tile", False):   # an iso tile grades as it draws, only when its part on screen changed (§109)
+        if getattr(image, "iso_tile", False):   # an iso tile grades as it draws, only when its part on screen changed
             setattr(image, TILE_GRADING, (self.pictures, self._grade_of(image)))
             try:
                 return draw(image, pixel_array)
@@ -327,7 +326,7 @@ class StageLight:
             grade = alarm_grade(grade, self.alarms, now)
         if grade != self.grade:
             self.grade = grade
-            if not self.flat:   # an iso place's pools of light (§104)
+            if not self.flat:   # an iso place's pools of light
                 setattr(self.camera, POOL_STRENGTH, pool_strength(grade))
             for listener in self._listeners:
                 listener(grade)
@@ -378,12 +377,12 @@ class StarField(VGroup):
 @dataclass
 class ShadowCaster:
     """What casts a shadow: ``mobject`` (with ``feet()``; a prop with ``held_by`` set casts none,
-    nor does a character ``riding`` a vehicle, DESIGN.md §69.52),
+    nor does a character ``riding`` a vehicle),
     the y of its ``ground`` line (a character's own ``ground_y`` wins: it walks in depth), its
     shadow's ``width`` and its ``size`` (height, the unit of how high it is off the ground).
     ``widths``: the shadow's width per shape a prop with shapes shows (an umbrella closed or open;
     a shape not listed: ``width``). ``grows``: width and size follow the caster's
-    ``standing_height`` (a character growing or shrinking as it walks in depth, DESIGN.md §69.44)."""
+    ``standing_height`` (a character growing or shrinking as it walks in depth)."""
 
     mobject: Any
     ground: float
@@ -430,7 +429,7 @@ class Shadow(VGroup):
 class StageShadows(VGroup):
     """The shadows of ``casters``, at ``strength`` (the light's ``shadow``); :meth:`follow` puts
     each under its caster as it is now (an updater calls it for things that move), cast by a low
-    sun or moon (:meth:`set_cast`, DESIGN.md §69.61)."""
+    sun or moon (:meth:`set_cast`)."""
 
     def __init__(self, casters: Sequence[ShadowCaster], strength: float = 1.0) -> None:
         super().__init__()

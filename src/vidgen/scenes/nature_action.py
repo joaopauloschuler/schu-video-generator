@@ -1,4 +1,4 @@
-"""The ``drop_fruit`` and ``birds`` beat actions (DESIGN.md §69.55) on a ``stage``: a fruit falls
+"""The ``drop_fruit`` and ``birds`` beat actions on a ``stage``: a fruit falls
 from a tree with ``fruit: true`` (on a character's head too), and a flock of birds crosses the sky.
 Written against ``vidgen.api`` only, like project actions (the flock's settings are the stage's
 ``birds`` param's)."""

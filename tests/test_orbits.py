@@ -1,4 +1,4 @@
-"""The orbital-mechanics model (Phase X, Step 229; DESIGN §98): Kepler's equation for every
+"""The orbital-mechanics model (Phase X, Step 229): Kepler's equation for every
 conic, elements ↔ state vectors, derived quantities against known values, preset bodies and
 orbits, values with units, the playback clock and n-body runs against Kepler. No manim."""
 

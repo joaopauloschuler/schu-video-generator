@@ -1,4 +1,4 @@
-"""A day passing in one scene, Step 270 (DESIGN.md §105.3): the ``time_of_day`` action, dusk and
+"""A day passing in one scene, Step 270: the ``time_of_day`` action, dusk and
 dawn, the lights switching on and off by themselves, the sky of the time of day."""
 
 from __future__ import annotations

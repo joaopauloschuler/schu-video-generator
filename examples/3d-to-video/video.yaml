@@ -1,4 +1,4 @@
-# From a 3D scene to a generated clip (docs/COOKBOOK-GENERATED-VIDEO.md, section 6): a 9:16 `3d`
+# From a 3D scene to a generated clip (docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md, section 6): a 9:16 `3d`
 # scene (a floor, a crate, two stand-ins) whose one beat is also a generated action shot. The shot
 # sends the beat's depth pass as its guide video (`guide: depth`), so the clip keeps the 3D
 # layout and camera move while the model draws Ana and Ben from their reference sheets.

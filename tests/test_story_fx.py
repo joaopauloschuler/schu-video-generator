@@ -1,4 +1,4 @@
-"""Story-cartoon features of Step 246 (DESIGN.md §100.6-§100.13): framing, alarms and shutters,
+"""Story-cartoon features of Step 246: framing, alarms and shutters,
 holograms that materialise and flicker, iridescence and afterimages, holding hands, a hologram
 display, a view through a portal, lab and memory objects, a flashback's look, the new sounds."""
 

@@ -1,9 +1,9 @@
-// Playback of rendered audio (DESIGN.md §94.6, §94.14): <audio> elements streaming the server's
+// Playback of rendered audio: <audio> elements streaming the server's
 // WAV with range requests, so seeking works. The browser never synthesises sound itself.
 //
 // Times given to and reported by the player are the piece's (from its start). A source may be
 // a section cut from the piece: `offset` is where that section starts, so its local time
-// `t` is the piece's `offset + t` (DESIGN.md §94.12, loops of one section).
+// `t` is the piece's `offset + t` (loops of one section).
 //
 // A new source while playing (a re-render, a mute, "under narration", A/B) is loaded in a second
 // element, seeked a little ahead of the moment playing, started when the playing one gets there

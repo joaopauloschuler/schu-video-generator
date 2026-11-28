@@ -1,5 +1,5 @@
-// The ready-made worlds of vidgen/space-bodies (DESIGN.md §122.7) for the registry vidgen/parts
-// (§122.5): what `vidgen parts` draws on its contact sheet. Every tile is one body of radius 1.5 at
+// The ready-made worlds of vidgen/space-bodies for the registry vidgen/parts:
+// what `vidgen parts` draws on its contact sheet. Every tile is one body of radius 1.5 at
 // the origin under one hard sun, drawn straight to the canvas; a small tile bakes small maps.
 import {definePart} from "vidgen/parts";
 import {planet} from "vidgen/space-bodies";

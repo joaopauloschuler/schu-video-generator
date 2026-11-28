@@ -1,4 +1,4 @@
-"""The eukaryotic cell cycle as data and rules (DESIGN.md §95.13; no manim): the phases G1, S,
+"""The eukaryotic cell cycle as data and rules (no manim): the phases G1, S,
 G2 and M (with the stages of mitosis inside M) and their typical lengths, the exit to G0 before
 the restriction point, the three checkpoints with the regulators that pass or arrest them, the
 stylised levels of the four cyclin–CDK complexes over the cycle, and the replay of ``advance``

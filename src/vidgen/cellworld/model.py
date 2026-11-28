@@ -1,4 +1,4 @@
-"""The cell world (DESIGN.md §95): a cross-section of a cell as plain data — the cell (animal,
+"""The cell world: a cross-section of a cell as plain data — the cell (animal,
 plant or bacterium) with its envelope, the structures, filaments and complexes placed in it with
 real sizes in µm, the compartments and membranes they make. Built from a :class:`CellSpec` by
 :func:`~.build.build_cell_world`, which applies the location rules and refuses what is

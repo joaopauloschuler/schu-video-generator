@@ -1,8 +1,8 @@
-"""Generated video shots (DESIGN.md §113): requests, their canonical form and cache key, jobs.
+"""Generated video shots: requests, their canonical form and cache key, jobs.
 
 A :class:`VideoRequest` is one clip asked of a video model (OpenRouter's asynchronous video API:
 submit, poll, download). A request asks for the model's own sound only when its
-``generate_audio`` is true (a shot's resolved ``sound: model``, DESIGN.md §113.11); by default it
+``generate_audio`` is true (a shot's resolved ``sound: model``); by default it
 is sent with ``generate_audio: false`` and vidgen's mix is the film's sound. Requests are cached
 by :func:`request_hash`, the SHA-256 of :func:`canonical_request` (input files by their contents'
 hashes, ``generate_audio`` as sent), so the same request is never paid for twice and a request
@@ -30,7 +30,7 @@ from vidgen.errors import VidgenError
 CACHE_VERSION = 1
 #: Where generated clips are stored in a project, ``<hash>.mp4`` with a ``<hash>.json`` sidecar.
 CLIPS_DIR = Path("assets") / "generated_video"
-#: The project's spending ledger (append-only JSON lines, DESIGN.md §113).
+#: The project's spending ledger (append-only JSON lines).
 LEDGER_NAME = "videogen-ledger.jsonl"
 #: Job statuses OpenRouter reports while a job runs, and the terminal ones.
 RUNNING_STATUSES = frozenset({"pending", "in_progress"})
@@ -84,7 +84,9 @@ class MediaInput:
 @dataclass(frozen=True)
 class VideoRequest:
     """One clip asked of a video model. ``provider_options`` maps an upstream provider's slug
-    to its passthrough parameters (``provider.options.<slug>.parameters``)."""
+    to its passthrough parameters (``provider.options.<slug>.parameters``); ``sheet`` is a
+    stylesheet picture a ComfyUI workflow follows together with the control video; ``fps`` the frame
+    rate a ComfyUI workflow generates at (``None``: its own, 24; 12: doubled to 24 in the same job)."""
 
     model: str
     prompt: str = ""
@@ -98,10 +100,14 @@ class VideoRequest:
     previous_job_id: str | None = None
     provider_options: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     generate_audio: bool = False
+    sheet: MediaInput | None = None
+    fps: int | None = None
 
     def __post_init__(self) -> None:
-        if "/" not in self.model.strip("/"):
+        if "/" not in self.model.strip("/") and not is_workflow_model(self.model):
             raise VidgenError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}")
+        if self.fps is not None and self.fps <= 0:
+            raise VidgenError(f"fps must be a whole number of frames a second above 0, not {self.fps}")
         if self.duration is not None and self.duration <= 0:
             raise VidgenError(f"duration must be a whole number of seconds above 0, not {self.duration}")
         if self.size is not None and self.resolution is not None:
@@ -110,6 +116,8 @@ class VideoRequest:
             raise VidgenError("each frame image needs frame_type first_frame or last_frame")
         if any(r.frame_type is not None for r in self.references):
             raise VidgenError("references take no frame_type (put frame images in frame_images)")
+        if self.sheet is not None and (self.sheet.kind != "image" or self.sheet.frame_type is not None):
+            raise VidgenError("a sheet is one picture (no frame_type)")
 
     @property
     def images(self) -> int:
@@ -119,10 +127,11 @@ class VideoRequest:
 
 def canonical_request(request: VideoRequest) -> dict[str, Any]:
     """Everything that decides the clip, as plain JSON (input files by content hash; local
-    pictures by their source, with the size limit of the copies sent, :mod:`.pictures`)."""
+    pictures by their source, with the size limit of the copies sent, :mod:`.pictures`; a
+    ``sheet`` by its content hash and ``fps``, each only when there is one, so requests without keep their keys)."""
     from vidgen.videogen.pictures import JPEG_QUALITY, PICTURE_MAX_SIDE
 
-    return {
+    out: dict[str, Any] = {
         "cache_version": CACHE_VERSION,
         "model": request.model,
         "prompt": request.prompt,
@@ -138,6 +147,11 @@ def canonical_request(request: VideoRequest) -> dict[str, Any]:
         "previous_job_id": request.previous_job_id,
         "provider_options": {k: dict(v) for k, v in sorted(request.provider_options.items())},
     }
+    if request.sheet is not None:
+        out["sheet"] = request.sheet.canonical()
+    if request.fps is not None:
+        out["fps"] = request.fps
+    return out
 
 
 def request_hash(request: VideoRequest) -> str:
@@ -148,6 +162,15 @@ def request_hash(request: VideoRequest) -> str:
 
 #: The ``videogen.provider`` that sends nothing and shares nothing (a fake API).
 MOCK_PROVIDER = "mock"
+#: The ``videogen.provider`` that runs vidgen's own workflows on a ComfyUI server (no money paid).
+COMFYUI_PROVIDER = "comfyui"
+
+
+def is_workflow_model(model: str) -> bool:
+    """Whether ``model`` names a ComfyUI workflow kept with vidgen (:mod:`.comfyui`)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    return find_workflow(model) is not None
 
 
 @dataclass(frozen=True)
@@ -162,6 +185,8 @@ class JobState:
     cost: float | None = None
     is_byok: bool | None = None
     error: str | None = None
+    #: What a free job used, kept in the take (comfyui: GPU seconds and compute units).
+    usage: Mapping[str, Any] | None = None
 
     @property
     def done(self) -> bool:
@@ -170,6 +195,6 @@ class JobState:
 
 
 __all__ = [
-    "CACHE_VERSION", "CLIPS_DIR", "LEDGER_NAME", "RUNNING_STATUSES", "TERMINAL_STATUSES",
-    "JobState", "MediaInput", "VideoRequest", "canonical_request", "did_you_mean", "request_hash",
+    "CACHE_VERSION", "CLIPS_DIR", "COMFYUI_PROVIDER", "LEDGER_NAME", "MOCK_PROVIDER", "RUNNING_STATUSES", "TERMINAL_STATUSES",
+    "JobState", "MediaInput", "VideoRequest", "canonical_request", "did_you_mean", "is_workflow_model", "request_hash",
 ]

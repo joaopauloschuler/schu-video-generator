@@ -13,7 +13,7 @@ generated from code, free to use.** [Listen](docs/music/README.md) ·
 - **[2D cartoon](docs/gallery/README.md#2d-cartoons):** characters that walk, talk and act on a stage.
 - **[Isometric cartoon](docs/gallery/README.md#isometric-cartoons):** the same characters in a village or a room seen from above at an angle, with rain, snow and time of day.
 - **[Web scenes](docs/gallery/web/README.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
-- **[Video-model scenes](docs/COOKBOOK-GENERATED-VIDEO.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
+- **[Video-model scenes](docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
 
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
 an MCP client) uses to produce narrated, animated videos (explainers, cartoon stories, Shorts) and slide decks. Its main users are AI agents, not people
@@ -143,8 +143,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
 ## For AI agents
 
 schu-video-generator is meant to be driven by AI agents. An agent making a video should read
-**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same guide, shipped with schu-video-generator;
-`vidgen guide --list` for its topics, `vidgen guide scenes` for one, `--json` for programs). It
+**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same short page, shipped with schu-video-generator)
+— and then only the topics its video needs: `vidgen guide --list` lists them, `vidgen guide scenes`
+prints one (`--json` for programs; the topics are files in `src/vidgen/data/guide/`). The guide
 covers the working loop (write → `validate --json` → `storyboard`, and look at the PNGs → `lint
 --json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
 chooser with a snippet per type, visual design, beat actions and audio with restraint, good vs bad
@@ -343,7 +344,7 @@ narration.
 | `vidgen init DIR [--example minimal] [--json]` | create a new project (DIR must not exist or be empty) |
 | `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (also `vidgen-mcp`) |
 | `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
-| `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
+| `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents: the short entry page ([AGENTS.md](AGENTS.md)), one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant, including variants that do not load), estimated length, audio status, generated pictures |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
@@ -670,14 +671,13 @@ my_video/
   loudness presets and targets, formats, pacing, voices, checking a file;
   [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
   casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
-  [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
+  [docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md](docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md) — shots made by video models
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
   [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
   in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`), from a score to a music video (`vidgen music plan`), checking a music video's motion (`vidgen motion check`), opening titles and end cards for films (`vidgen/title-cards`).
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
-- [DESIGN.md](DESIGN.md) — architecture and internal contracts.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release (0.3.0: cartoons, Kokoro and
   OpenRouter narration, `output/`, `--jobs auto`), behaviour changes first.
 - [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md) — a short checklist to try a release on Windows

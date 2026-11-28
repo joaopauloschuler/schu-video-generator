@@ -1,4 +1,4 @@
-"""Make the star file of ``vidgen/space-sky`` (DESIGN.md §122.6):
+"""Make the star file of ``vidgen/space-sky``:
 ``src/vidgen/data/web/modules/space-sky-stars.js``, the bright stars the real sky draws.
 
 Two sources, one output format:
@@ -339,7 +339,7 @@ def star_file_text(catalog: str, approximate: bool, complete_to: float, rows: li
     head = {"catalog": catalog, "approximate": approximate, "epoch": "J2000.0", "complete_to": complete_to, "columns": COLUMNS}
     lines = ",\n".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) for r in rows)
     body = json.dumps(head, ensure_ascii=False)[:-1] + ', "stars": [\n' + lines + "\n]}"
-    return ("// The bright stars of vidgen/space-sky's real sky (DESIGN.md §122.6). Written by\n"
+    return ("// The bright stars of vidgen/space-sky's real sky. Written by\n"
             "// tools/make_star_catalogue.py; do not edit by hand. Right ascension and declination in\n"
             "// degrees (J2000), V magnitude, B-V colour index, a name where the star has one.\n"
             f"export default {body};\n")

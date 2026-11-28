@@ -1,4 +1,4 @@
-"""Chi-square goodness of fit for a cross (DESIGN.md §96.7): observed counts of the phenotype
+"""Chi-square goodness of fit for a cross: observed counts of the phenotype
 classes against the counts the cross predicts, the statistic (exact, as a fraction), its degrees
 of freedom (classes − 1), the p-value from the upper regularized gamma function and the critical
 value at the chosen significance level. Own implementation (series and Lentz's continued

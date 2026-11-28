@@ -1,4 +1,4 @@
-"""The ``knock`` beat action (DESIGN.md §69.62): someone knocks on a ``stage``'s door at ``at`` of the
+"""The ``knock`` beat action: someone knocks on a ``stage``'s door at ``at`` of the
 beat; written against ``vidgen.api`` only, like project actions. It draws nothing (``animates =
 False``, like ``switch_on``): nobody needs to stand at the door (a knock from outside); the stage
 plays the ``knock`` sound with foley."""

@@ -1,4 +1,4 @@
-"""Nature iso objects (DESIGN.md §104, Phase AC Step 264): a campfire, a tent, a log, a stump, a
+"""Nature iso objects (Phase AC Step 264): a campfire, a tent, a log, a stump, a
 ring of mushrooms, a pond, a scarecrow and a beehive. No manim.
 
 Drawn like :mod:`vidgen.cartoon.iso_objects`' objects (its frame, shading and helpers), which

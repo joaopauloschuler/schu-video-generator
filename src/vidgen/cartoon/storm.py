@@ -1,4 +1,4 @@
-"""Lightning, thunder and rainbows on a stage (DESIGN.md §69.61). No manim:
+"""Lightning, thunder and rainbows on a stage. No manim:
 :mod:`vidgen.cartoon.weather_drawing` draws the bolt and the rainbow, and the stage's light
 (:class:`~vidgen.cartoon.shading.StageLight`) flashes.
 

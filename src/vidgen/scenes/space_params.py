@@ -1,4 +1,4 @@
-"""The words of a ``space`` scene (DESIGN.md §122.12): sky, sun, bodies, orbits and scale, light,
+"""The words of a ``space`` scene: sky, sun, bodies, orbits and scale, light,
 craft, phenomena, camera moves, finishing, music, title and end card, and the hook to code.
 
 Every key is checked here, at ``vidgen validate``, in Python: the vocabulary's own keys by these
@@ -827,6 +827,18 @@ class FinishSpec(SceneParams):
     """true, or {f_stop, max_blur, quality}: focused on the camera move's subject (shot.focus), every frame."""
     antialias: Literal["none", "fxaa"] = "none"
     """none (space-safe default: FXAA makes small crosses of stars and dots of thin rings) or fxaa."""
+    noise: bool | float | dict[str, Any] | None = None
+    """A camera sensor's noise in place of the grain (off unless given): an amount (0.012 at mid grey), true, or {amount, color, size, floor}."""
+    range_: bool | float | dict[str, Any] | None = Field(default=None, alias="range")
+    """A camera's limited dynamic range (off unless given): stops above mid grey where it clips (2.5), true, or {stops, shoulder, black}."""
+    sharpen: bool | float | dict[str, Any] | None = None
+    """In-camera sharpening with faint halos (off unless given): an amount (0.5), true, or {amount, radius, limit}."""
+    distort: bool | float | dict[str, Any] | None = None
+    """The lens's barrel distortion (off unless given), from the camera's lens at each moment (strong at ultra-wide, none from 50 mm): true, a share of it (1), or {amount, mm}."""
+    edges: bool | float | dict[str, Any] | None = None
+    """Softness and a colour fringe growing towards the frame's edges (off unless given): true (1.2 and 0.8 pixels at the corner), the softness, or {soft, fringe, power}."""
+    halation: bool | float | dict[str, Any] | None = None
+    """A warm glow bleeding round the brightest edges (off unless given): an amount (0.15), true, or {amount, radius, threshold, color}."""
 
     @model_validator(mode="after")
     def _check(self) -> "FinishSpec":
@@ -837,7 +849,9 @@ class FinishSpec(SceneParams):
         """Three-finish's options (camelCase), every key checked against its own lists."""
         known = names()["finish_options"]
         out: dict[str, Any] = {"antialias": self.antialias, "grain": self.grain}
-        for key, value in (("bloom", self.bloom), ("vignette", self.vignette), ("grade", self.grade), ("motionBlur", self.motion_blur)):
+        sensor = [(k, v) for k, v in (("noise", self.noise), ("range", self.range_), ("sharpen", self.sharpen),
+                                      ("distort", self.distort), ("edges", self.edges), ("halation", self.halation)) if v is not None]
+        for key, value in (("bloom", self.bloom), ("vignette", self.vignette), ("grade", self.grade), ("motionBlur", self.motion_blur), *sensor):
             if isinstance(value, dict):
                 value = module_options(value, known[key], f"finish.{snake(key)}")
             if isinstance(value, int) and not isinstance(value, bool) and key == "motionBlur":
@@ -846,8 +860,121 @@ class FinishSpec(SceneParams):
                 out[key] = value
         if self.depth_of_field:
             out["dof"] = module_options(self.depth_of_field, known["dof"], "finish.depth_of_field", leave=("focus",)) if isinstance(self.depth_of_field, dict) else {}
-        out.update(module_options(dict(self.model_extra or {}), list(known), "finish", leave=("update", "bloom", "vignette", "grade", "motionBlur", "dof", "antialias", "grain")))
+        out.update(module_options(dict(self.model_extra or {}), list(known), "finish", leave=("update", "bloom", "vignette", "grade", "motionBlur", "dof", "antialias", "grain", "noise", "range", "sharpen",
+                                                                                         "distort", "edges", "halation")))
         return out
+
+
+class OperatorSpec(SceneParams):
+    """``operator:``: the person holding the camera (vidgen/space-camera-air's ``operate``), off
+    unless given: a hand, the camera's automatic exposure and a horizon set level late, over all the camera's moves."""
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
+    header_synonyms = False
+    hand: bool | str | dict[str, Any] | None = None
+    """handheld (slow drift, late corrections with a little overshoot, a reframe now and then), mounted (vibration only), true (handheld), or {style, amount, seed, ...}."""
+    exposure: bool | float | dict[str, Any] | None = None
+    """An automatic exposure that lags and hunts after big changes of brightness (surface scenes): true, a strength (0.7), or {strength, delay, speed, hunt, most, samples}."""
+    horizon: bool | float | dict[str, Any] | None = None
+    """The horizon a degree off at the start of every shot, levelled late: true, degrees (1), or {degrees, seed, hold, settle, damping}."""
+    seed: int | None = Field(default=None, ge=0)
+    """The seed of the hand and the horizon (default 1)."""
+
+    @model_validator(mode="after")
+    def _check(self) -> "OperatorSpec":
+        self.options()
+        return self
+
+    def options(self) -> dict[str, Any]:
+        """``operate``'s options (camelCase), every key checked against the module's own lists (did-you-mean)."""
+        groups = air_names()["operator"]
+        module_options(dict(self.model_extra or {}), ["hand", "exposure", "horizon", "seed"], "operator")
+        out: dict[str, Any] = {}
+        hand = self.hand
+        if isinstance(hand, str):
+            hand = one_of(hand, ["handheld", "mounted"], "operator hand")
+        elif isinstance(hand, dict):
+            style = one_of(str(hand.get("style", "handheld")), ["handheld", "mounted"], "operator hand style")
+            hand = {**module_options(hand, ["style", *groups[style]], f"operator.hand ({style})"), "style": style}
+        for key, value in (("hand", hand), ("exposure", self.exposure), ("horizon", self.horizon)):
+            if isinstance(value, dict) and key != "hand":
+                value = module_options(value, groups[key], f"operator.{key}")
+            if value is not None:
+                out[key] = value
+        if self.seed is not None:
+            out["seed"] = self.seed
+        return out
+
+    @property
+    def metered(self) -> bool:
+        """The automatic exposure is on."""
+        return self.exposure not in (None, False, 0)
+
+
+def _snake_keys(value: Any) -> Any:
+    """``value`` with the keys of its mappings, at every depth, snake_case (as the YAML writes them)."""
+    if isinstance(value, dict):
+        return {snake(str(k)): _snake_keys(v) for k, v in value.items()}
+    return value
+
+
+def look_merge(base: dict[str, Any], own: dict[str, Any] | None, main: dict[str, str] | None = None) -> dict[str, Any]:
+    """``own`` over ``base`` (a section of a camera look: its finish or its operator), as vidgen/camera-looks'
+    ``lookMerge``: a mapping merges into the look's mapping key by key, at every depth; ``true``
+    keeps the look's group; a number (not 0) sets the group's main value (``main``); the hand's style named again
+    keeps the look's hand, another style replaces it; anything else (false, 0, null, text, a list) replaces it."""
+    main = main or {}
+    out = dict(base)
+    for key, value in (own or {}).items():
+        b = out.get(key)
+        if not isinstance(b, dict):
+            out[key] = value
+        elif value is True:
+            out[key] = b
+        elif isinstance(value, (int, float)) and not isinstance(value, bool) and value != 0 and key in main:
+            out[key] = {**b, main[key]: value}
+        elif key == "hand" and isinstance(value, str):
+            out[key] = b if value == b.get("style") else value
+        elif isinstance(value, dict):
+            out[key] = value if key == "hand" and "style" in value and value["style"] != b.get("style") else look_merge(b, value)
+        else:
+            out[key] = value
+    return out
+
+
+#: The camera look a ``space`` scene gets when it gives no ``camera_look:`` (Step 401): the sensor
+#: and the lens, nobody holding the camera.
+DEFAULT_CAMERA_LOOK = "camera"
+#: ``camera_look: none``: no look, the clean render (as every ``space`` scene was drawn before Step 401).
+NO_CAMERA_LOOK = "none"
+
+
+def camera_look(name: str, finish: Any, operator: Any, surface: bool) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """The ``finish:`` and ``operator:`` a scene with ``camera_look: name`` gets: the look's
+    options (vidgen/camera-looks' ``CAMERA_LOOKS``) with the scene's own ``finish`` and ``operator`` over them
+    (:func:`look_merge`: the scene's win, key by key; the space finish's defaults fill in what neither gives).
+    ``surface``: a surface scene (``world:``); an orbital scene has no meter, so the look's automatic exposure is
+    left out there. Keys come back snake_case; the operator is None when neither the look nor the scene gives one
+    (``camera``, the default look). A ValueError for an unknown look (did-you-mean) or ``finish: false``."""
+    table = camera_looks()
+    looks = list(table["looks"])
+    name = name.strip().lower().replace("-", "_") if isinstance(name, str) else name
+    if not isinstance(name, str) or name not in looks:
+        known = [*looks, NO_CAMERA_LOOK]
+        raise ValueError(f"unknown camera_look {name!r}{did_you_mean(str(name).lower().replace('-', '_'), known)} (looks: {', '.join(known)})")
+    if finish is False:
+        raise ValueError(f"camera_look: {name} sets the finish (vidgen/three-finish's sensor, lens, bloom and grade); leave out finish: false")
+    for what, value in (("finish", finish), ("operator", operator)):
+        if value is not None and value is not True and not isinstance(value, dict):
+            raise ValueError(f"camera_look: {name}: {what}: must be a mapping of {what} options over the look's, got {value!r}")
+    look = _snake_keys(table["looks"][name])
+    mains = {k: {snake(g): m for g, m in v.items()} for k, v in table["main"].items()}
+    lens_and_sensor = look_merge(look["finish"], _snake_keys(finish) if isinstance(finish, dict) else None, mains["finish"])
+    hand = dict(look["operator"])
+    if not surface:
+        hand.pop("exposure", None)
+    held = look_merge(hand, _snake_keys(operator) if isinstance(operator, dict) else None, mains["operator"])
+    return lens_and_sensor, held or None
 
 
 class ReactionSpec(SceneParams):
@@ -912,5 +1039,5 @@ class CardSpec(Open):
 
 
 __all__ = ["BAR", "DEFAULT_RADIUS", "LENGTH_KEYS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
-           "FinishSpec", "LightSpec", "MoveSpec", "Open", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
-           "camel", "direction", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]
+           "FinishSpec", "LightSpec", "MoveSpec", "Open", "OperatorSpec", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
+           "DEFAULT_CAMERA_LOOK", "NO_CAMERA_LOOK", "camel", "camera_look", "direction", "look_merge", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]

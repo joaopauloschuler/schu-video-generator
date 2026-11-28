@@ -1,4 +1,4 @@
-// vidgen/space-hull: hulls of giant ships, 0.5 to 10 km long (DESIGN.md §123.10). Part of schu-video-generator
+// vidgen/space-hull: hulls of giant ships, 0.5 to 10 km long. Part of schu-video-generator
 // (MIT licence); imported by a page as "vidgen/space-hull". It builds on the kit of vidgen/space-craft.
 //
 //   import {hull, hullFleet} from "vidgen/space-hull";
@@ -11,8 +11,8 @@
 //   ship.problems()                                          // what looks wrong (buried bells, absurd proportions, ...)
 //
 // These are the large forms only: masses that read in silhouette and under one hard sun, with big plates of
-// their own tone, real recesses and hangar mouths as dark voids. For the fine detail a hull carries a contract
-// (DESIGN.md §123.10): `regions` (named, with a box, an outward direction and what the surface is), `anchors`
+// their own tone, real recesses and hangar mouths as dark voids. For the fine detail a hull carries a contract:
+// `regions` (named, with a box, an outward direction and what the surface is), `anchors`
 // (bells, hangar mouths, docks, lights, the command place), `charts` (every large face's place in one atlas,
 // with its metres per texel; the meshes' `uv1`) and `uv` in metres.
 //

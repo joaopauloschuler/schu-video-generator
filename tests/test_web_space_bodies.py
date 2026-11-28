@@ -1,4 +1,4 @@
-"""Planets, moons and rings, ``vidgen/space-bodies`` (Step 371, DESIGN.md §122.7): the module is
+"""Planets, moons and rings, ``vidgen/space-bodies`` (Step 371): the module is
 served by its import name and imports only ``three``, ``vidgen/music-time`` and ``vidgen/baked``; its parts are
 registered; in Node (when it is installed): every ready-made world's options resolve, a wrong
 name gets a did-you-mean, palettes, air and rings are checked, a seed gives the same bands, rings

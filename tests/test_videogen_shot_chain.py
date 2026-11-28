@@ -1,4 +1,4 @@
-"""One shot after another (DESIGN.md §113.14): ``first_frame: last_of:``, the opening match in QA
+"""One shot after another: ``first_frame: last_of:``, the opening match in QA
 and the overlay of ``vidgen generate inputs``. Nothing is sent or paid."""
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+import yaml
 from conftest import write_clip
 from PIL import Image
 from test_videogen_first_frame_in import picture_file, the_shot
@@ -16,7 +17,7 @@ from test_videogen_shots import CATALOG
 
 from vidgen.project import Project
 from vidgen.render.ffmpeg import find_ffmpeg
-from vidgen.videogen.inputs import last_frame, make_inputs, make_overlay
+from vidgen.videogen.inputs import frame_at, last_frame, make_inputs, make_overlay
 from vidgen.videogen.qa import OPENING_WARNING, check_clip, picture_similarity
 from vidgen.videogen.shots import project_shots
 from vidgen.videogen.takes import add_take, pick_take
@@ -94,6 +95,16 @@ def test_last_frame_is_the_clips_last_decoded_frame(tmp_path: Path) -> None:
     assert np.asarray(Image.open(dest).convert("L")).mean() == pytest.approx(26 + 10 * 9, abs=6)   # frame n: 26 + 10 n, n = 9
 
 
+@pytest.mark.slow
+def test_frame_at_is_the_frame_showing_then(tmp_path: Path) -> None:
+    clip = write_clip(tmp_path / "c.mp4", seconds=2.0, size="32x18", fps=5, audio=False)
+    dest = tmp_path / "at.png"
+    frame_at(find_ffmpeg(), clip, dest, 1.06)
+    assert np.asarray(Image.open(dest).convert("L")).mean() == pytest.approx(11.64 * 6, abs=3)   # frame 5 shows from 1.0 s
+    frame_at(find_ffmpeg(), clip, dest, 9.0)
+    assert np.asarray(Image.open(dest).convert("L")).mean() == pytest.approx(11.64 * 10, abs=3)   # past the end: the last
+
+
 def test_a_short_clip_still_gives_a_frame(tmp_path: Path) -> None:
     clip = write_clip(tmp_path / "s.mp4", seconds=0.4, size="32x18", fps=5, audio=False)
     dest = tmp_path / "last.png"
@@ -133,6 +144,70 @@ def test_a_source_with_no_take_does_not_stop_the_other_cuts(make_project) -> Non
     lines: list[str] = []
     assert make_inputs(project, project_shots(project, CATALOG), out=lines.append) == []
     assert any("no starting picture yet" in line for line in lines)
+
+
+def split_project(make_project, first_frame: str) -> Path:
+    """One beat of about 11.9 s for veo-3.1-lite (6 s at most): two parts."""
+    beat = {"id": "w", "text": " ".join(["word"] * 30), "generated_shot": {"kind": "action", "model": "google/veo-3.1-lite", "first_frame": first_frame}}
+    return make_project(config(beat), folder=f"split_{first_frame}")
+
+
+def test_a_later_part_starts_from_the_part_before_it(make_project) -> None:
+    root = split_project(make_project, "render")
+    first, second = shots_of(root).values()
+    assert first.last_of is None and second.last_of == "w_p1"
+    assert any("w_p1 has no take yet" in b for b in second.blocked) and any("part 2 of 2" in n for n in second.notes)
+    assert (first.lead, second.lead) == (0, 1)   # part 2's take starts a frame early: still covered
+    assert second.duration is not None and second.duration >= second.length + 1 / second.fps
+
+
+@pytest.mark.slow
+def test_a_later_part_gets_the_last_frame_of_the_part_before_it(make_project) -> None:
+    root = split_project(make_project, "render")
+    keep_take(root, "w_p1", "k1", seconds=2.0)
+    project = Project.load(root)
+    written = make_inputs(project, project_shots(project, CATALOG), out=lambda line: None)
+    assert [p.name for p in written] == ["last_of.w_p1.1.png"]
+    second = shots_of(root)["w_p2"]
+    assert [i.path.name for i in second.inputs if i.kind == "image"] == ["last_of.w_p1.1.png"]
+
+
+def test_parts_without_a_starting_picture_are_not_chained(make_project) -> None:
+    root = split_project(make_project, "none")
+    assert all(s.last_of is None for s in shots_of(root).values())
+
+
+@pytest.mark.slow
+def test_the_later_part_is_placed_with_a_colour_match_at_the_join(make_project) -> None:
+    from vidgen.videogen.compose import scene_placements
+
+    root = split_project(make_project, "render")
+    for part in ("w_p1", "w_p2"):
+        keep_take(root, part, f"k_{part}", seconds=2.0)
+    data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))
+    data["scenes"][0]["beats"][0]["generated_shot"]["place"] = True
+    (root / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    first, second = scene_placements(Project.load(root))
+    assert (first.match_join, second.match_join) == (False, True) and second.fingerprint(root)[-1] == "match_join"
+
+
+def test_a_join_gain_matches_the_previous_parts_last_frame_and_eases_out(tmp_path: Path) -> None:
+    from vidgen.generated_layer import _Take
+    from vidgen.videogen.compose import Placement
+
+    path = write_clip(tmp_path / "t.mp4", seconds=3.0, size="32x18", fps=5, audio=False)
+    placement = Placement("s", "w_p2", path, 1, MODEL, 0.0, 2.0, "cover", 0.0, 0.0, 0.0, True)
+    take = _Take(placement, 5)
+    opening = take._sample(0.0)
+    take.previous = _Take(placement, 5)
+    take.previous.last_shown = lambda: opening * np.array([1.1, 1.0, 0.9], dtype=np.float32)   # type: ignore[method-assign]
+    take.open(32, 18)
+    assert take.join is not None and np.allclose(take.join.gains, (1.1, 1.0, 0.9), atol=0.01)
+    base = np.zeros((18, 32, 4), dtype=np.uint8)
+    plain = take.picture(base, 5, 5)[..., :3].astype(float).mean(axis=(0, 1))   # 1 s after the cut: no gain left
+    assert plain[0] == pytest.approx(plain[1], abs=1.5)
+    cut = take.picture(base, 0, 5)[..., :3].astype(float).mean(axis=(0, 1))
+    assert cut[0] > cut[1] > cut[2]
 
 
 # ----- the opening match -----------------------------------------------------------------------

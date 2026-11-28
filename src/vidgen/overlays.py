@@ -1,4 +1,4 @@
-"""Overlays (DESIGN.md §41): things drawn on top of every scene, fixed to the screen — lower
+"""Overlays: things drawn on top of every scene, fixed to the screen — lower
 thirds, a watermark, later a progress bar or captions.
 
 The video-level ``overlays:`` list (``vidgen.config.OverlayConfig``) names registered overlay
@@ -56,7 +56,7 @@ class OverlayContext:
     Times are planned (:mod:`vidgen.videoplan`): ``scene`` is the scene being rendered (its
     ``start`` in the video, ``duration``, ``beats`` with times from the scene's start,
     ``chapter``), ``scenes`` all of them, ``duration`` the whole video, ``chapters`` the video's
-    chapters (DESIGN.md §42) and ``chapter`` the scene's. ``fps`` is the render's frame rate.
+    chapters and ``chapter`` the scene's. ``fps`` is the render's frame rate.
     """
 
     project: Project
@@ -129,7 +129,7 @@ class Overlay:
     #: :attr:`clear_of` holding the boxes of those that reserve room (bottom captions), which
     #: :meth:`clear_area` keeps it clear of (a lower third moves above the captions).
     yields: ClassVar[bool] = False
-    #: Whether it keeps its texts off the characters' faces (DESIGN.md §102.8): the layer then
+    #: Whether it keeps its texts off the characters' faces: the layer then
     #: gives it :attr:`faces`, and the layout dump marks it for lint ``overlay_face``.
     avoids_faces: ClassVar[bool] = False
     #: How many pieces it is drawn in (0: one). With pieces, :meth:`state` returns a tuple of one
@@ -515,7 +515,7 @@ def check_overlays(project: Project, theme: Theme | None) -> None:
 
 def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: VideoPlan) -> list[Overlay]:
     """The overlays drawn on scene ``spec``, built for rendering it (ordered by ``layer``, then
-    config order), and its citations when it has references (DESIGN.md §95.14). Raises
+    config order), and its citations when it has references. Raises
     :class:`VidgenError` for invalid overlays."""
     entries, problems = overlay_entries(project)
     if problems:
@@ -523,7 +523,7 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
     out: list[Overlay] = []
     context = OverlayContext(project, theme, plan, spec.id)
     specs = list(project.config.scenes)
-    index = [s.id for s in specs].index(spec.id)   # by id: ``spec`` may carry automatic actions (§69.23)
+    index = [s.id for s in specs].index(spec.id)   # by id: ``spec`` may carry automatic actions
     for entry in entries:
         if entry.kind is None or not entry.selects(spec):
             continue
@@ -544,13 +544,13 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
         if overlay.timed:
             start, end = overlay.interval()
             slot = context.scene
-            # drawn until the cut: the next scene's overlays take over in a crossfade (§49)
+            # drawn until the cut: the next scene's overlays take over in a crossfade
             if end <= slot.start or start >= slot.cut or not overlay.shown_in(max(start, slot.start), min(end, slot.cut)):
                 continue  # its time range does not reach this scene, or it is hidden all along
         out.append(overlay)
     from vidgen.citations import citation_overlay
 
-    cited = citation_overlay(project, spec, context)   # the scene's references (DESIGN.md §95.14)
+    cited = citation_overlay(project, spec, context)   # the scene's references
     if cited is not None:
         out.append(cited)
     return sorted(out, key=lambda o: o.layer)
@@ -594,7 +594,7 @@ def avoid(area: Region, box: Region, gap: float = RESERVE_GAP) -> Region:
 
 def shorts_area(project: Project | None, area: Region | None = None) -> Region:
     """``area`` (default the safe area) without the parts of the frame a Shorts app covers
-    (the config's ``shorts:`` zones, DESIGN.md §101: the bottom and right edges by default);
+    (the config's ``shorts:`` zones: the bottom and right edges by default);
     ``area`` itself when the video is no Short."""
     from vidgen.regions import frame_region, safe_area
 

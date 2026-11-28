@@ -1,4 +1,4 @@
-"""Simulated collision data and what is read from it (Phase Y, Step 241; DESIGN §99.11) — no
+"""Simulated collision data and what is read from it (Phase Y, Step 241) — no
 manim. Everything here is **simulated** from a seed (:class:`~vidgen.plotcore.SplitMix64`: the
 same seed gives the same events with any numpy version) and is labelled so on screen.
 

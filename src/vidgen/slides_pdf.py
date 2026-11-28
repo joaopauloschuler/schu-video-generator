@@ -1,4 +1,4 @@
-"""``vidgen slides --format pdf``: the video's key frames as a PDF deck (DESIGN.md §56).
+"""``vidgen slides --format pdf``: the video's key frames as a PDF deck.
 
 The slides come from :func:`vidgen.deck.deck_frames`, like the HTML deck of ``vidgen slides``.
 Without notes every slide is one page at the video's aspect ratio (the long side 960 pt, the

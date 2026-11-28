@@ -1,5 +1,5 @@
 """Worked calculations: a symbol table and a chain of formulas, evaluated with units and
-written step by step (DESIGN §97.9). No manim; the ``calculation`` scene draws what
+written step by step. No manim; the ``calculation`` scene draws what
 :func:`work` returns, and lint compares narrated numbers with it.
 
 Each calculation is shown as: the formula (``v = \\sqrt{G M_\\odot / r}``), the values

@@ -1,4 +1,4 @@
-"""The fixed wide view of an iso place (``iso: {wide: fixed}``, DESIGN.md §106): its scale, how it
+"""The fixed wide view of an iso place (``iso: {wide: fixed}``): its scale, how it
 centres on the ground and the characters, the camera moves over it and lint ``iso_ground``."""
 
 from __future__ import annotations

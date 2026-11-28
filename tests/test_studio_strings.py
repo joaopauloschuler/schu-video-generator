@@ -1,4 +1,4 @@
-"""The bowed strings of score files (Step 344, DESIGN.md §120.5): what makes them strings is
+"""The bowed strings of score files (Step 344): what makes them strings is
 measured on single notes (cheap: a score is rendered in one slow test only)."""
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ def test_attack_brightness_mute_and_release() -> None:
 def test_a_slow_soft_swell_has_no_breath_above_its_tone() -> None:
     """Step 366: Parallel Space's `swell` (violas, F#3, attack 0.6, brightness 0.25, ring 1.2) made
     a "fo": the rosin hiss stood 1 to 27 dB over the dark tone above 4 kHz while it swelled in
-    and died away. The hiss is now held within the tone's highs (DESIGN.md §121.8)."""
+    and died away. The hiss is now held within the tone's highs."""
     swell = {"attack": 0.6, "brightness": 0.25, "vibrato": 10.0, "ring": 1.2, "accent": 0.0}
     tone, played = (_mono(_note("violas", 185.0, 0.87, bow=bow, **swell)) for bow in (0.0, 1.0))
     noise = played - tone

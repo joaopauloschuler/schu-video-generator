@@ -1,4 +1,4 @@
-"""The isometric view (DESIGN.md §89.3): world points to the picture and the draw order of boxes.
+"""The isometric view: world points to the picture and the draw order of boxes.
 Plain math, no manim and no drawing, so a stage and a later presentation diagram can share it.
 
 The world is in tile units (``x`` to the viewer's lower right, ``y`` to the lower left, ``z``
@@ -54,7 +54,7 @@ class Box3:
 
     def picture_bounds(self) -> tuple[float, float, float, float]:
         """``(left, top, right, bottom)`` of the box on the picture (tile widths, ``v`` down);
-        worked out once per box (the draw order asks for it millions of times, DESIGN.md §109)."""
+        worked out once per box (the draw order asks for it millions of times)."""
         found = self.__dict__.get("_picture_bounds")
         if found is None:
             points = [iso_point(*corner) for corner in self.corners()]

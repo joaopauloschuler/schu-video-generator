@@ -1,4 +1,4 @@
-"""The planets on a date (Phase X, Step 233, DESIGN §98.7). No manim.
+"""The planets on a date (Phase X, Step 233). No manim.
 
 Source: E. M. Standish (JPL Solar System Dynamics), "Keplerian Elements for Approximate
 Positions of the Major Planets", **Table 1**: mean elements at J2000 and their rates per Julian

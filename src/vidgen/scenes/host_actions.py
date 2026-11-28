@@ -1,5 +1,5 @@
-"""Host beat actions (DESIGN.md §71.1): ``host_point``, ``host_look``, ``host_react``,
-``host_move``, ``host_enter`` and ``host_exit`` act on the scene's cartoon host (``host:``, §71),
+"""Host beat actions: ``host_point``, ``host_look``, ``host_react``,
+``host_move``, ``host_enter`` and ``host_exit`` act on the scene's cartoon host (``host:``),
 in any scene type that draws one. Written against ``vidgen.api`` only, like project actions.
 
 The host is not a target: ``host_point`` / ``host_look`` name a target of the scene (``item2``,
@@ -81,7 +81,7 @@ class _HostAction(_Acting):
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         if not scene_cls.takes_host:
-            return [("action", f"{self.config.action}: this scene type draws no host (DESIGN.md §71)")]
+            return [("action", f"{self.config.action}: this scene type draws no host")]
         return []
 
     def _place(self) -> str | None:

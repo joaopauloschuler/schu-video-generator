@@ -1,4 +1,4 @@
-"""The public surface for project extensions and built-in scenes (DESIGN.md §6.4).
+"""The public surface for project extensions and built-in scenes.
 
 Use ``from vidgen.api import *``: it gives every name of ``from manim import *`` plus the vidgen
 names below. Where a manim name and a vidgen name collide, vidgen wins; the only collision is
@@ -684,11 +684,11 @@ from vidgen.web.music import MusicDataSettings as WebMusicData, has_music as vid
 from vidgen.web.orbits import scene_orbit_data as web_scene_orbits  # noqa: E402
 from vidgen.web.flights import scene_flight_data as web_scene_flights, with_flights as web_with_flights  # noqa: E402
 from vidgen.web.land import land_definition as web_land_definition, land_settings as web_land_settings  # noqa: E402
-from vidgen.web.space_names import air_names, constant_entries as web_space_entries, space_names, yaml_names as space_yaml_names  # noqa: E402
+from vidgen.web.space_names import air_names, camera_looks, constant_entries as web_space_entries, space_names, yaml_names as space_yaml_names  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
-# Phase AD review (Step 275, DESIGN.md §105.8)
+# Phase AD review (Step 275)
 from vidgen.cartoon.iso_driving import turning_shapes  # noqa: E402
 from vidgen.cartoon.iso_weather import ISO_SWINGS, swing_pixels  # noqa: E402
 from vidgen.story_text import PERSON_NOUNS, quote_pattern  # noqa: E402
@@ -769,7 +769,7 @@ def register_theme_preset(
     font_serif: str | None = None,
     font_mono: str | None = None,
 ) -> None:
-    """Add a project theme preset, selectable with ``theme: {preset: NAME}`` (DESIGN.md §19-20).
+    """Add a project theme preset, selectable with ``theme: {preset: NAME}``.
 
     Values left out come from ``base`` (a built-in or earlier registered preset), else from the
     defaults; ``video.yaml`` values still win. ``scale`` is a type scale (``compact``,
@@ -1023,6 +1023,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "web_space_entries",
     "space_names",
     "air_names",
+    "camera_looks",
     "space_yaml_names",
     "clip_plan",
     "make_guide_passes",

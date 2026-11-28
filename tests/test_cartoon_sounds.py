@@ -1,4 +1,4 @@
-"""Step 128: more sounds (DESIGN.md §69.62): the generated ``creak``, ``knock`` and ``splash``, the
+"""Step 128: more sounds: the generated ``creak``, ``knock`` and ``splash``, the
 set beds ``birdsong``, ``city`` and ``room_tone``, the rules that choose them (pure), the door,
 water and wet-step foley, and the ``knock`` action. Two tiny renders: a room with doors (knock,
 creaks, a shut, its room tone) and a day turning to night outdoors (birdsong until then)."""

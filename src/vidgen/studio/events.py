@@ -1,4 +1,4 @@
-"""The notes and hits of a score file as a list, without playing it (DESIGN.md §120.8): when each
+"""The notes and hits of a score file as a list, without playing it: when each
 track's drum hits and notes start, how long they last, their pitches, instrument, dynamic,
 stroke and slur, read the way :mod:`vidgen.studio.render` plays them (the same events, holds,
 slurs, voicings and notes left out). Times are seconds from the piece's start (one pass).

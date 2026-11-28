@@ -1,5 +1,5 @@
 """Step 126: snow that settles (a layer growing in steps on the ground and on props' top lines,
-flakes landing there) and fog in bands between the things by depth (DESIGN.md §69.60)."""
+flakes landing there) and fog in bands between the things by depth."""
 
 from __future__ import annotations
 

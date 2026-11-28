@@ -1,5 +1,4 @@
-"""OpenRouter text-to-speech provider (``POST /api/v1/audio/speech``), standard library only
-(DESIGN.md §66).
+"""OpenRouter text-to-speech provider (``POST /api/v1/audio/speech``), standard library only.
 
 ``voice: {provider: openrouter, model, voice, instructions, speed}`` voices every beat with one
 of OpenRouter's TTS models through one key (``OPENROUTER_API_KEY``, read from the environment
@@ -12,7 +11,7 @@ ffmpeg so the ``audio/`` cache always holds MP3s. No neighbouring-beat context, 
 timings and no ``language_code`` exist on this API: the language follows the text, and
 ``instructions`` can name a language or accent. A beat's ``emotion`` becomes a sentence added to
 the ``instructions`` of models that take them, else a change of the audio's speed, pitch and
-loudness afterwards (DESIGN.md §73).
+loudness afterwards.
 
 Free lookups (no key): ``GET /api/v1/models?output_modalities=speech`` (every TTS model with its
 voices and list price) and ``GET /api/v1/models/{author}/{slug}/endpoints`` (each provider's
@@ -107,7 +106,7 @@ def known_voices(model: str) -> list[str] | None:
 
 def takes_instructions(model: str) -> bool:
     """Whether OpenRouter documents ``instructions`` for ``model`` (OpenAI and Gemini TTS:
-    :data:`INSTRUCTION_PREFIXES`); an emotion becomes a sentence of them there (DESIGN.md §73)."""
+    :data:`INSTRUCTION_PREFIXES`); an emotion becomes a sentence of them there."""
     return model.startswith(INSTRUCTION_PREFIXES)
 
 
@@ -375,7 +374,7 @@ def as_mp3(data: bytes, content_type: str | None, requested: str, ffmpeg: str | 
 
 
 def with_prosody(mp3: bytes, emotion: Prosody, ffmpeg: str | None = None) -> bytes:
-    """``mp3`` spoken with ``emotion`` afterwards (DESIGN.md §73), for models without
+    """``mp3`` spoken with ``emotion`` afterwards, for models without
     instructions: re-encoded at 24 kHz mono with its gain (:func:`prosody.apply_gain`, a boost
     soft-limited), speed (``atempo``, the pitch kept) and pitch (:func:`prosody.pitch_filter`,
     the length kept). Its pauses are not changed: that needs word timings, which OpenRouter does
@@ -434,7 +433,7 @@ class OpenRouterTTSProvider:
         if voice.provider != "openrouter" or voice.model is None:
             raise VidgenError("the OpenRouter TTS provider needs voice.provider: openrouter and a model")
         self.voice = voice
-        #: The emotion as spoken (DESIGN.md §73): an instruction for models that take them (by its
+        #: The emotion as spoken: an instruction for models that take them (by its
         #: name), else applied to the audio afterwards (by its numbers); ``None``: none.
         self.emotion = emotion if emotion is not None and self._speaks(emotion) else None
         self.timeout = timeout
@@ -498,7 +497,7 @@ class OpenRouterTTSProvider:
         return spec
 
     def cache_key(self, text: str) -> str:
-        """sha1 of ``json(spec, sorted keys) | text`` (DESIGN.md §66)."""
+        """sha1 of ``json(spec, sorted keys) | text``."""
         head = json.dumps(self.spec(), sort_keys=True, ensure_ascii=False)
         return hashlib.sha1(f"{head}|{text}".encode("utf-8")).hexdigest()
 

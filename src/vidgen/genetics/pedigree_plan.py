@@ -1,4 +1,4 @@
-"""What a ``pedigree`` scene shows, worked out from its params (DESIGN.md §96.8): the checked chart
+"""What a ``pedigree`` scene shows, worked out from its params: the checked chart
 (``pedigree``), its layout and NSGC numbering (``pedigree_layout``), the analysis of the modes
 (``pedigree_analysis``), the mode used for genotypes and risk (declared, from a locus, or the only
 one that fits), the allele symbols and the warnings for the lint. Cached by the params' JSON. No

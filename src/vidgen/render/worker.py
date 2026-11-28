@@ -1,7 +1,7 @@
-"""Render one scene in its own process (DESIGN.md §5.2)::
+"""Render one scene in its own process::
 
     python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview|draft
-        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare] [--guide-passes LIST]
+        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare] [--source] [--guide-passes LIST]
         [--intermediate lossless|compact]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
@@ -63,13 +63,13 @@ def scene_audio_path(project: Project, preview: bool, scene_id: str) -> Path:
 
 def scene_overlay_path(project: Project, preview: bool, scene_id: str) -> Path:
     """``<render_dir>/scenes/<scene_id>.overlay.mov``: the overlays of the scene's first frames
-    as an RGBA clip, when a push or wipe moves those frames (DESIGN.md §50)."""
+    as an RGBA clip, when a push or wipe moves those frames."""
     return project.render_dir(preview) / "scenes" / f"{scene_id}.overlay.mov"
 
 
 def scene_carry_path(project: Project, preview: bool, scene_id: str) -> Path:
     """``<render_dir>/carry/<scene_id>.json``: the objects the next scene carries out of this
-    one, as they ended (DESIGN.md §50)."""
+    one, as they ended."""
     from vidgen.carry import carry_path
 
     return carry_path(project.render_dir(preview), scene_id)
@@ -192,7 +192,7 @@ def write_json(path: Path, data: Any) -> None:
 
 
 def _carried_in(project: Project, preview: bool, scene_id: str) -> tuple[dict[str, Any] | None, str | None]:
-    """The objects ``scene_id`` carries from the scene before (its ``carry:``, DESIGN.md §50)
+    """The objects ``scene_id`` carries from the scene before (its ``carry:``)
     as that scene's render recorded them, and the fingerprint of that render; ``(None, None)``
     when it carries nothing. A missing record is a :class:`VidgenError` (``vidgen render``
     renders the scene before first; a worker run alone cannot)."""
@@ -223,18 +223,21 @@ def render_scene(
     draft: bool = False,
     guide_passes: tuple[str, ...] = (),
     intermediate: str | None = None,
+    source: bool = False,
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
     ``frames``: also save that many stills per beat (0: none) in :func:`scene_frames_dir`,
     their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
     ``bare``: render the project :meth:`~vidgen.project.Project.without_overlays` (into its
-    ``_bare`` folders; a frame thumbnail without overlays, DESIGN.md §53).
-    ``draft``: render a draft (DESIGN.md §74): the project loaded as a draft (its folders and
+    ``_bare`` folders; a frame thumbnail without overlays).
+    ``source``: render the project :meth:`~vidgen.project.Project.without_takes` (into its
+    ``_source`` folders; the finished render of a shot's ``guide: final``).
+    ``draft``: render a draft: the project loaded as a draft (its folders and
     format), the scene with :attr:`~vidgen.scene.NarratedScene.is_draft` (and ``is_preview``).
-    ``guide_passes``: the guide passes a ``3d`` scene draws besides its own (DESIGN.md §114.14).
+    ``guide_passes``: the guide passes a ``3d`` scene draws besides its own.
     ``intermediate``: how a ``web`` or ``3d`` scene keeps its drawn frames, instead of the
-    config's ``render.intermediate`` (``vidgen render --intermediate``, DESIGN.md §120.9).
+    config's ``render.intermediate`` (``vidgen render --intermediate``).
     Call it only in a fresh process: this is the body of the worker.
     """
     from vidgen import carry, extensions, registry
@@ -254,6 +257,8 @@ def render_scene(
     preview = preview or draft
     if bare:
         project = project.without_overlays()
+    if source:
+        project = project.without_takes()
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
@@ -283,7 +288,7 @@ def render_scene(
         scene.is_preview = preview
         scene.guide_passes = tuple(guide_passes)
         layer = scene.overlay_layer
-        if layer is not None and scene.overlay_head:  # a push / wipe moves the first frames (§50)
+        if layer is not None and scene.overlay_head:  # a push / wipe moves the first frames
             layer.split_head(scene.overlay_head, scene_overlay_path(project, preview, scene_id))
         try:
             scene.render()
@@ -358,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
     parser.add_argument("--frames", type=int, default=0, metavar="N", help="save N PNG stills per beat (default: 0)")
     parser.add_argument("--bare", action="store_true", help="render without overlays into build/..._bare")
+    parser.add_argument("--source", action="store_true", help="render without overlays or generated takes into build/..._source")
     parser.add_argument("--guide-passes", default="", metavar="LIST", help="a 3d scene also draws these guide passes (depth,outline,mask)")
     parser.add_argument("--intermediate", choices=("lossless", "compact"), help="how a web or 3d scene keeps its drawn frames (default: the config's)")
     return parser
@@ -377,14 +383,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.propagate = False
     progress = logging.StreamHandler(sys.stderr)
     progress.setFormatter(logging.Formatter(f"{PROGRESS_PREFIX}%(message)s"))
-    progress_logger = logging.getLogger("vidgen.progress")   # frames drawn (DESIGN.md §120.10)
+    progress_logger = logging.getLogger("vidgen.progress")   # frames drawn
     progress_logger.addHandler(progress)
     progress_logger.setLevel(logging.INFO)
     progress_logger.propagate = False
     try:
         render_scene(
             args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,
-            args.bare, args.quality == "draft", parse_passes(args.guide_passes), args.intermediate,
+            args.bare, args.quality == "draft", parse_passes(args.guide_passes), args.intermediate, args.source,
         )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)

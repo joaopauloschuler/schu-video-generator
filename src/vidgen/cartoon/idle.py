@@ -1,6 +1,6 @@
 """Automatic life of characters: blinking, breathing, head sway, an animal's tail swishing and a
-robot's antenna wobbling with its light blinking (DESIGN.md §69.5, §69.48, §69.58), and the
-motion some expressions add (*moods*, §69.59). No manim.
+robot's antenna wobbling with its light blinking, and the
+motion some expressions add (*moods*). No manim.
 
 A character's *idle clock* runs while its updaters run. Manim suspends a mobject's updaters
 while an animation plays on it, so the clock stops during a :class:`~vidgen.cartoon.transition.PoseChange`
@@ -41,7 +41,7 @@ TAIL_SWAY_SECONDS = 2.6
 TAIL_SWAY_DEGREES = 5.0
 #: A robot's antenna on its spring: one wobble (seconds) and its largest angle (degrees); its light
 #: goes dim once per :data:`ANTENNA_BLINK_SECONDS` for :data:`ANTENNA_DIM_SHARE` of it (the
-#: ``antenna`` part's shape :data:`ANTENNA_DIM_SHAPE`, DESIGN.md §69.58).
+#: ``antenna`` part's shape :data:`ANTENNA_DIM_SHAPE`).
 ANTENNA_SWAY_SECONDS = 1.7
 ANTENNA_SWAY_DEGREES = 3.0
 ANTENNA_BLINK_SECONDS = 1.3
@@ -53,7 +53,7 @@ MOOD_SHAPES: tuple[tuple[str, str, str], ...] = (
     ("eyes", "swirl", "sway"), ("eyes", "wide", "shiver"), ("mouth", "laugh", "bounce"), ("cheeks", "tears", "bounce"),
 )
 MOODS: tuple[str, ...] = ("sway", "shiver", "bounce")
-#: How a mood's strength (0..1) grows in and dies away (DESIGN.md §69.15's spring).
+#: How a mood's strength (0..1) grows in and dies away (a spring).
 MOOD_SPRING = Spring.tuned(1.4, 0.45)
 #: After this long a mood that ended has died away (within 0.5 % of rest).
 MOOD_SETTLE_SECONDS = MOOD_SPRING.settle_seconds(0.005)

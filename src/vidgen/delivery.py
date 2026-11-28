@@ -1,4 +1,4 @@
-"""Delivering an audio drama (DESIGN.md §112.3): a cold open, spoken credits from the cast, one
+"""Delivering an audio drama: a cold open, spoken credits from the cast, one
 file per chapter (episode) with a playlist and per-file transcripts, and what the drama
 loudness preset's dialogue checks measure.
 

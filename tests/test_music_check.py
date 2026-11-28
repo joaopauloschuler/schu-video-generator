@@ -1,4 +1,4 @@
-"""``vidgen music check`` (Step 187, DESIGN.md §93.9): the measures and limits on small synthetic
+"""``vidgen music check`` (Step 187): the measures and limits on small synthetic
 sounds and small scores (each fault flagged, with advice naming the score's keys), the track-by-
 track render, schu-video-generator's ducking for the narration demo, the pictures, the command, and two
 templates of the built-in beds that must pass as fine."""

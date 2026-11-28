@@ -1,4 +1,4 @@
-"""The beat action of the ``detector`` scene type (Phase Y, Step 240; DESIGN §99.10):
+"""The beat action of the ``detector`` scene type (Phase Y, Step 240):
 ``switch_view`` turns the transverse (x–y) view into the longitudinal (r–z) one or back — the
 rings flatten into the barrel and endcaps, every track, tower and hit morphs into its
 counterpart; the missing transverse momentum shows only in x–y. ``highlight``, ``dim`` and

@@ -1,4 +1,4 @@
-"""``vidgen motion check``: watch a rendered video for motion faults (DESIGN.md §121.3).
+"""``vidgen motion check``: watch a rendered video for motion faults.
 
 The video (a file, a project's rendered video, or its rendered scene clips) is decoded once by
 ffmpeg at low resolution (:attr:`Thresholds.width`, 160 px wide) and piped as raw RGB frames; each
@@ -20,7 +20,7 @@ memory is about 1 KB a frame and the time is the decode's. The checks then read 
 - ``frozen``: frames without visible change for long inside a scene (info).
 - ``cut_jump``: a large change of brightness or of the luma histogram across a cut (info).
 
-Dark frames (DESIGN.md §122.5) are also decoded at :attr:`Thresholds.detail_width` (640 px) in
+Dark frames are also decoded at :attr:`Thresholds.detail_width` (640 px) in
 the same ffmpeg run, where star points, a subject, clipped white, flat steps and the stars'
 frame-to-frame brightness can be seen; a frame with many small bright points on black is a star
 field, not a blank frame. The checks of dark pictures:

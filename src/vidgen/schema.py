@@ -13,11 +13,11 @@ AI agent can check a config before running ``vidgen validate``:
   (built-in and the project's ``assets/icons``);
 - the silent-scene rule (``duration`` iff no beats), even ``width``/``height``, optional beat
   ids and the bodies of ``variants`` (partial configs) are expressed too;
-- beat ``actions`` (DESIGN.md §26): the canonical ``{action: NAME, ...}`` form with ``action``
+- beat ``actions``: the canonical ``{action: NAME, ...}`` form with ``action``
   an ``enum`` of the registered actions and each action's options (``if``/``then``), and the
   shorthand ``{NAME: TARGET, ...options}`` (one ``anyOf`` branch per action). Targets depend on
   the scene's params, so only their shape is checked here;
-- ``overlays`` (DESIGN.md §41): ``type`` an ``enum`` of the registered overlay types and each
+- ``overlays``: ``type`` an ``enum`` of the registered overlay types and each
   type's options (``if``/``then``); a scene's ``overlays`` overrides are only checked for shape.
 
 What JSON Schema cannot say is left to ``vidgen validate``: unique scene/beat ids, asset files,
@@ -443,7 +443,7 @@ def scene_schema(entries: list[SceneType], themes: Iterable[Theme], actions: lis
 
 
 def _add_sections(schema: dict[str, Any], scene: dict[str, Any]) -> None:
-    """``sections:`` (an audio-only project's scenes, DESIGN.md §111; :mod:`vidgen.sections`) in
+    """``sections:`` (an audio-only project's scenes; :mod:`vidgen.sections`) in
     the config schema: a project gives ``scenes`` or ``sections``. A section's ``voice``, ``room``,
     ``music`` and ``sfx`` are a scene's; its beats are beats or plain strings."""
     scene_props = scene["properties"]

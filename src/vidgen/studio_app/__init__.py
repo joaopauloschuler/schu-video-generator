@@ -1,4 +1,4 @@
-"""``vidgen studio``: a local music workstation in the browser (Phase T, DESIGN.md §94).
+"""``vidgen studio``: a local music workstation in the browser (Phase T).
 
 A small web app on 127.0.0.1 where people load the built-in beds as editable score files,
 change them, listen and export. The sound is always schu-video-generator's own renderer
@@ -43,7 +43,7 @@ def _running_session(studio: Path) -> str | None:
 def clean_studio_folder(project_root: Path | None, say: Callable[[str], None] = _say) -> dict[str, int]:
     """``vidgen studio --clean``: remove old renders of every session of the studio folder
     (those of each session's current, first and starred versions are kept) and exports older
-    than an hour; versions, notes and checks are never removed (DESIGN.md §94.18)."""
+    than an hour; versions, notes and checks are never removed."""
     from vidgen.studio_app.cleanup import ASKED_EXPORT_AGE, disk_use
     from vidgen.studio_app.session import studio_dir
 

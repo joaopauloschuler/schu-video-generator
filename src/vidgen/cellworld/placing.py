@@ -1,4 +1,4 @@
-"""Placing molecules in a cell world (DESIGN.md §95.9): a membrane protein ``on:`` the cell (its
+"""Placing molecules in a cell world: a membrane protein ``on:`` the cell (its
 plasma membrane) or a structure sits in one of that structure's membranes — ATP synthase on a
 mitochondrion's cristae (the inner membrane) or a chloroplast's thylakoids, a channel in the ER
 — oriented by the catalog's rule: each place's two sides are found in the world (which

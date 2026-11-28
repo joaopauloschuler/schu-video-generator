@@ -1,4 +1,4 @@
-"""Step 226 (DESIGN.md §97.11): the calculation and plot lint rules.
+"""Step 226: the calculation and plot lint rules.
 
 Numbers and units as narration writes them (words and digits), how they compare with computed
 values, the text checks on wrong statements (each must be found) and right ones (none may be),

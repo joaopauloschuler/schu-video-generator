@@ -303,6 +303,9 @@ def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
         assert {"vidgen://guide", "vidgen://guide/start", "vidgen://guide/workflow", "vidgen://schema"} <= resources
         start = (await client.read_resource("vidgen://guide/start")).contents[0]
         assert start.text == doc["text"]
+        from vidgen.guide import entry_page_text
+
+        assert (await client.read_resource("vidgen://guide")).contents[0].text == entry_page_text()   # the short page only
         schema_doc = json.loads((await client.read_resource("vidgen://schema")).contents[0].text)
         assert schema_doc["$schema"].startswith("https://json-schema.org/") and "scenes" in schema_doc["properties"]
 

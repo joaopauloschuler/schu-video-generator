@@ -1,4 +1,4 @@
-"""Transport and membrane processes as plans (DESIGN.md §95.10): the rules and the planned moves
+"""Transport and membrane processes as plans: the rules and the planned moves
 of the ``molecule`` scene's actions — a channel passing ions down their electrochemical
 gradient, a carrier's alternating access (uniport, symport, antiport), the Post–Albers cycle of
 the Na⁺/K⁺ pump, H⁺ pumps, ABC transporters, aquaporins, simple diffusion and osmosis across a

@@ -1,4 +1,4 @@
-"""NSGC pedigree symbols for the ``pedigree`` scene (DESIGN.md §96.8; Bennett et al. 2008): male
+"""NSGC pedigree symbols for the ``pedigree`` scene (Bennett et al. 2008): male
 square, female circle, sex unknown a diamond; affected filled; a carrier a dot in the centre (or,
 with ``carrier_style: half``, the textbook heterozygote's half-shaded symbol); deceased a diagonal
 line through the symbol; adoption square brackets; a miscarriage a small triangle; a proposed

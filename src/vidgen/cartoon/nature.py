@@ -1,4 +1,4 @@
-"""Nature that moves by itself on a stage (DESIGN.md §69.55): the maths, without manim.
+"""Nature that moves by itself on a stage: the maths, without manim.
 
 A ``tree`` with ``fruit: true`` carries a few fruits (:data:`FRUIT_SPOTS`); the ``drop_fruit``
 action lets one fall (:func:`drop_timing`, :func:`drop_point`): it falls faster and faster, hits

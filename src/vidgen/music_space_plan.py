@@ -1,4 +1,4 @@
-"""A draft space film from a score (DESIGN.md §122.12): ``vidgen music plan SCORE --style space``.
+"""A draft space film from a score: ``vidgen music plan SCORE --style space``.
 
 The music video plan (:mod:`vidgen.music_video_plan`: sections, roles, cuts on bar lines, a colour
 per scene, the tracks each scene follows) is kept as it is; each of its scenes becomes a ``space``
@@ -22,7 +22,7 @@ the score and ``--seed`` (the same score and seed, the same draft):
 
 It is a starting point: look at each scene (``vidgen still``), then change worlds, moves and timing.
 
-``--style space-air`` (Step 392, DESIGN.md §123.14) makes the same plan into scenes in the air and beside
+``--style space-air`` (Step 392) makes the same plan into scenes in the air and beside
 giant ships, by role and from the same score and seed: quiet, a skim over the sea at sunset; build, a
 descent from orbit to the sea; verse, a plane chased over the alpine range (its afterburner on the glow
 track); drop and climax, a pass along a dressed giant hull or a craft into its bay, by turns (the hull's
@@ -176,7 +176,7 @@ def _say(shot: dict[str, Any], world: str) -> str:
     return words[move]
 
 
-#: The templates of ``--style space-air`` by role (DESIGN.md §123.14).
+#: The templates of ``--style space-air`` by role.
 AIR_BY_ROLE = {"intro": "skim", "outro": "skim", "breakdown": "skim", "build": "descent", "verse": "chase", "drop": "ship", "climax": "ship"}
 #: Hull families a pass shows (the seed picks); a craft into a bay is always the carrier's (hangar slots along a side).
 PASS_HULLS = ("carrier", "ark", "spine", "cluster", "lance")

@@ -1,4 +1,4 @@
-"""Chapters as the render publishes them (DESIGN.md §52): MP4 chapter entries and tags, the
+"""Chapters as the render publishes them: MP4 chapter entries and tags, the
 YouTube chapter list ``<output>_chapters.txt`` and its rules.
 
 Published lists start at 0:00 (YouTube requires it, and a player's chapter menu should cover the
@@ -183,7 +183,7 @@ def write_youtube_list(path: Path, chapters: Sequence[Chapter], references: str 
 
 def chapter_warnings(project: Project) -> list[str]:
     """``vidgen validate``'s warnings about the YouTube chapter list of ``project`` (planned
-    times), when it writes one; none for an audio-only project (``audio_only: true``, §111:
+    times), when it writes one; none for an audio-only project (``audio_only: true``:
     no video for YouTube)."""
     if project.config.audio_only or not project.config.chapters.youtube or not chapter_marks(project.config.scenes):
         return []

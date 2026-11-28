@@ -1,4 +1,4 @@
-"""Shared parts of the maths scenes (``function_plot``, ``number_line``; DESIGN §87.6, §87.7):
+"""Shared parts of the maths scenes (``function_plot``, ``number_line``):
 maths axes (:func:`math_axes`) and their tick labels, labels with live values, label placement
 clear of curves and other labels, and the animations the ``trace`` action plays."""
 

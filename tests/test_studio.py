@@ -1,4 +1,4 @@
-"""Score files and their rendering (Steps 184-185, DESIGN.md §93): theory, step patterns, checks
+"""Score files and their rendering (Steps 184-185): theory, step patterns, checks
 with clear messages, deterministic seamless loops and one-shots, ``vidgen music render``, the
 instrument library, effects and ``vidgen music patches``."""
 
@@ -430,7 +430,7 @@ def test_echo_ping_pongs_and_reverb_leaves_a_tail() -> None:
 
 @pytest.mark.slow
 def test_the_beds_sounds_can_be_written() -> None:
-    """Everything momentum, ascent, horizon, beacon and neon do (DESIGN.md §93.7), in one score."""
+    """Everything momentum, ascent, horizon, beacon and neon do, in one score."""
     tracks = {
         "saws": {"instrument": "supersaw", "play": "chords", "lowpass": {"from": 900, "to": 3200}, "duck": {"to": "beat", "depth": 0.55, "release": 0.13},
                  "sections": {"b": {"gate": "XooXooXoXooXooXo", "octave": 4, "lowpass": 3400}}},

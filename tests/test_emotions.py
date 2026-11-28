@@ -1,4 +1,4 @@
-"""Step 135: voices with feeling, part 1 (``emotion:`` for Kokoro, DESIGN.md §72).
+"""Step 135: voices with feeling, part 1 (``emotion:`` for Kokoro).
 
 The emotion table and its parsing are pure; the prosody edits run on numpy arrays (and one tiny
 ffmpeg call for the pitch); synthesis uses the fake Kokoro pipeline of ``test_tts_kokoro``."""

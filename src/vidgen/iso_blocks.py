@@ -1,4 +1,4 @@
-"""The geometry of an iso block diagram (DESIGN.md §90.6), the ``iso_diagram`` scene's model:
+"""The geometry of an iso block diagram, the ``iso_diagram`` scene's model:
 blocks, stacks of layers, group plates and connectors placed on a grid in the world of
 :mod:`vidgen.world.iso_view`, and the shapes of :mod:`vidgen.cartoon.iso_drawing` they are
 drawn with. Plain math, no manim: ``vidgen validate`` lays a diagram out to check it.

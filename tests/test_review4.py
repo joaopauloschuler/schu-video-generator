@@ -1,4 +1,4 @@
-"""Final review (Step 60): fixes found while reviewing Steps 8–59 (DESIGN.md §63)."""
+"""Final review (Step 60): fixes found while reviewing Steps 8–59."""
 
 from __future__ import annotations
 

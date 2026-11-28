@@ -1,4 +1,4 @@
-"""Prose into narration beats and on-screen labels, for ``vidgen plan`` (DESIGN.md §61).
+"""Prose into narration beats and on-screen labels, for ``vidgen plan``.
 
 - :func:`split_sentences`: sentence ends at ``. ! ? …`` (and ``。！？``) followed by a capital, a
   digit or an opening mark; abbreviations of the language (:attr:`LanguageRules.abbreviations`:

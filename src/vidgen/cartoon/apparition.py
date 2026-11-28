@@ -1,4 +1,4 @@
-"""How characters appear, flicker and shimmer (DESIGN.md §100.9): the maths, no manim.
+"""How characters appear, flicker and shimmer: the maths, no manim.
 
 - A hologram *materialises* (the ``materialise`` action) in :data:`MATERIALISE_SECONDS`: its
   outlines first, a flickering wireframe (:data:`WIREFRAME_SHARE` of the time), then its fills

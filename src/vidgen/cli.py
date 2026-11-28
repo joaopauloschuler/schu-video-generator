@@ -1,4 +1,4 @@
-"""Command-line interface (DESIGN.md §8)."""
+"""Command-line interface."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from typing import Any, NoReturn
 from pydantic import ValidationError
 
 from vidgen import __version__, jsonout
+from vidgen.colab import via_arg
 from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
@@ -87,7 +88,7 @@ def scaffold_project(target: Path, example: str = "minimal") -> None:
 
 
 def cmd_plan(args: argparse.Namespace) -> CommandResult:
-    """Write a draft project from a Markdown outline or a plain-text script (DESIGN.md §61)."""
+    """Write a draft project from a Markdown outline or a plain-text script."""
     from vidgen.languages import normalize_language
     from vidgen.outline import parse_outline
     from vidgen.plan import PlanOptions, make_plan
@@ -146,7 +147,7 @@ def cmd_plan(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
-    """Write a stage project from a screenplay (DESIGN.md §69.25)."""
+    """Write a stage project from a screenplay."""
     from vidgen.plan_yaml import commented_yaml, write_project
     from vidgen.random_cast import parse_species
     from vidgen.screenplay import parse_screenplay, screenplay_project
@@ -206,7 +207,7 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_story(args: argparse.Namespace) -> CommandResult:
-    """Draft a story cartoon project from a story in prose (DESIGN.md §105.5)."""
+    """Draft a story cartoon project from a story in prose."""
     from vidgen import kokoro_voices
     from vidgen.fileio import write_text_atomic
     from vidgen.plan_yaml import write_project
@@ -259,7 +260,7 @@ def cmd_story(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_shorts(args: argparse.Namespace) -> CommandResult:
-    """Suggest Shorts cut from the video, and write them as variants (DESIGN.md §105.6)."""
+    """Suggest Shorts cut from the video, and write them as variants."""
     from vidgen.shorts_suggest import report_text, suggest_shorts, write_suggestions
 
     project = Project.load(args.project)
@@ -295,7 +296,7 @@ def cmd_shorts(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_cast(args: argparse.Namespace) -> CommandResult:
-    """Write a random, well-contrasted cast as an include file (DESIGN.md §69.49)."""
+    """Write a random, well-contrasted cast as an include file."""
     from vidgen.cartoon.contrast import MIN_CONTRAST
     from vidgen.config import CharacterEntry
     from vidgen.languages import normalize_language
@@ -342,13 +343,13 @@ def project_problems(project: Project) -> list[Problem]:
     ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
-    options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
-    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), the
-    ``soundfont:`` file (§81), a designed
-    ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
-    SVG files (§69) and the shapes of their own poses (§69.3), and the host's floor colour and a
-    scene's own ``host:`` on a type that draws none (§71). Each problem points where its
-    value is written: an ``include:`` file, a set (§69.35).
+    options, scene references); also checks the project's ``assets/icons``,
+    the sounds of the scenes' ``sfx:`` lists, the ``music:`` sources, the
+    ``soundfont:`` file, a designed
+    ``thumbnail:``'s icon, image, preset and background and the ``characters:`` colours,
+    SVG files and the shapes of their own poses, and the host's floor colour and a
+    scene's own ``host:`` on a type that draws none. Each problem points where its
+    value is written: an ``include:`` file, a set.
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
@@ -496,8 +497,8 @@ def theme_warnings(project: Project) -> list[str]:
 
 
 def pronunciation_warnings(project: Project) -> list[str]:
-    """``pronunciation:`` entries that match no beat, never apply or collide (DESIGN.md §45);
-    built-in entries are not reported (§88)."""
+    """``pronunciation:`` entries that match no beat, never apply or collide;
+    built-in entries are not reported."""
     from vidgen.pronunciation import pronunciation_warnings as check
 
     return check(project.pronunciation, ((beat.id, beat.text) for _, beat in project.beats()), project.beat_pronunciation)
@@ -506,19 +507,19 @@ def pronunciation_warnings(project: Project) -> list[str]:
 def validate_warnings(project: Project) -> list[str]:
     """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings`,
     :func:`pronunciation_warnings`, named voices no beat uses and transitions that hold the
-    scene before them longer (DESIGN.md §49), carries through a transition that moves them
-    (§50), a YouTube chapter list YouTube would ignore (§52), texts a translation file leaves in
-    the source language and base pronunciations kept in another language (§54), generated
-    pictures not made yet and prompts asking for words in a picture (§58), OpenRouter TTS models
-    and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
-    characters' unavailable actions and part warnings (§69.2), parts the characters' own
-    poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
-    character that lacks the parts they need (§69.11), front views asked of SVG characters
-    (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
-    line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
-    composed music without the ``music`` extra or the SoundFont (§85), and a Short that is not
-    vertical or longer than its ``max_seconds`` (§101), ``3d`` scenes without Playwright or
-    its Chromium (§114.4), and ``.woff2`` files in the project's ``fonts/`` folder, which vidgen does not read (§119)."""
+    scene before them longer, carries through a transition that moves them,
+    a YouTube chapter list YouTube would ignore, texts a translation file leaves in
+    the source language and base pronunciations kept in another language, generated
+    pictures not made yet and prompts asking for words in a picture, OpenRouter TTS models
+    and voices not in the bundled list and ``timestamps`` it cannot honour, and SVG
+    characters' unavailable actions and part warnings, parts the characters' own
+    poses name that they do not have, characters sharing a voice and beat actions on a
+    character that lacks the parts they need, front views asked of SVG characters,
+    a host speaking only in its own voice without one, lines that overlap a
+    line of their own voice, dubbed voices that lose their kind or merge and
+    composed music without the ``music`` extra or the SoundFont, and a Short that is not
+    vertical or longer than its ``max_seconds``, ``3d`` scenes without Playwright or
+    its Chromium, and ``.woff2`` files in the project's ``fonts/`` folder, which vidgen does not read."""
     from vidgen.carry import carry_warnings
     from vidgen.cuts import shorts_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
@@ -642,7 +643,7 @@ def _validate_json(path: str) -> dict[str, Any]:
 
 def pronunciation_summary_lines(project: Project) -> list[str]:
     """``pronounce: built-in kokoro-en-us changes 3 beat(s): epoch (2), README (1)`` when
-    built-in pronunciation entries change beats' spoken text (DESIGN.md §88); else nothing."""
+    built-in pronunciation entries change beats' spoken text; else nothing."""
     changes = project.builtin_changes()
     if not changes:
         return []
@@ -654,8 +655,8 @@ def pronunciation_summary_lines(project: Project) -> list[str]:
 
 def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
     """``language: pt-BR (translations/pt.yaml: 40 translated, 2 stale)`` for the base config
-    and each variant with a language or a translation file (DESIGN.md §54), each followed by
-    ``dub [pt]: default bf_emma -> pf_dora (auto), ...`` when its voices are dubbed (§80)."""
+    and each variant with a language or a translation file, each followed by
+    ``dub [pt]: default bf_emma -> pf_dora (auto), ...`` when its voices are dubbed."""
     from vidgen.dubbing import dub_summary
 
     lines = []
@@ -731,7 +732,7 @@ def images_summary_lines(project: Project, variants: dict[str, Project | None]) 
 
 
 def cmd_imagegen(args: argparse.Namespace) -> CommandResult:
-    """Generate the pictures of ``generate:`` params that are missing (DESIGN.md §58)."""
+    """Generate the pictures of ``generate:`` params that are missing."""
     from vidgen.imagegen.run import run_imagegen
 
     started = time.monotonic()
@@ -744,8 +745,7 @@ def cmd_imagegen(args: argparse.Namespace) -> CommandResult:
 
 def each_language(args: argparse.Namespace, command: str, run: Callable[[str | None], CommandResult]) -> CommandResult:
     """``run(variant)`` for ``--variant`` alone, or with ``--all-languages`` for the base config
-    and every variant in another language (:func:`vidgen.dubbing.language_variants`, DESIGN.md
-    §80) in turn: a heading line before each, the worst exit code, or with ``--json`` one document
+    and every variant in another language (:func:`vidgen.dubbing.language_variants`) in turn: a heading line before each, the worst exit code, or with ``--json`` one document
     whose ``languages`` lists each one's."""
     if not getattr(args, "all_languages", False):
         return run(args.variant)
@@ -786,8 +786,7 @@ def _tts(args: argparse.Namespace, variant: str | None) -> CommandResult:
 
 def cmd_readback(args: argparse.Namespace) -> CommandResult:
     """Transcribe the beats' MP3s (speech to text, cached) and compare them with their texts:
-    word error rate, differing words, unclear words and suggested fixes per beat (DESIGN.md
-    §57, §78)."""
+    word error rate, differing words, unclear words and suggested fixes per beat."""
     from vidgen.readback import report_lines, run_readback
 
     started = time.monotonic()
@@ -802,7 +801,7 @@ def cmd_readback(args: argparse.Namespace) -> CommandResult:
 
 def cmd_translate_template(args: argparse.Namespace) -> CommandResult:
     """Write (or update) a variant's translation file: every translatable text with its source,
-    keeping the translations it already holds (DESIGN.md §54)."""
+    keeping the translations it already holds."""
     from vidgen.translation import write_template
 
     project = Project.load(args.project, variant=args.variant)
@@ -844,7 +843,7 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     project = Project.load(args.project, variant=variant, output_dir=args.output_dir, draft=args.draft)
     if args.audio_only or project.config.audio_only:
         return _render_audio(args, project, started)
-    if args.intermediate is not None:   # the command line wins over render: in the config (DESIGN.md §120.9)
+    if args.intermediate is not None:   # the command line wins over render: in the config
         project.config.render.intermediate = args.intermediate
     if args.clean_intermediates:
         project.config.render.keep_intermediates = False
@@ -884,7 +883,7 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
 
 
 def _build_line(project: Project, preview: bool, result: Any) -> str:
-    """The build folder's size, its frames clips, the free disk and what this run deleted (§120.9)."""
+    """The build folder's size, its frames clips, the free disk and what this run deleted."""
     from vidgen.render.disk import size_text
 
     disk = result.disk
@@ -895,7 +894,7 @@ def _build_line(project: Project, preview: bool, result: Any) -> str:
 
 
 def _guide_passes(args: argparse.Namespace) -> tuple[str, ...]:
-    """The guide passes ``--guide-passes`` asks for (DESIGN.md §114.14)."""
+    """The guide passes ``--guide-passes`` asks for."""
     from vidgen.three_d.passes import parse_passes
 
     try:
@@ -905,7 +904,7 @@ def _guide_passes(args: argparse.Namespace) -> tuple[str, ...]:
 
 
 def _render_audio(args: argparse.Namespace, project: Project, started: float) -> CommandResult:
-    """``vidgen render --audio-only`` (or ``audio_only: true``): the sound alone (DESIGN.md §111)."""
+    """``vidgen render --audio-only`` (or ``audio_only: true``): the sound alone."""
     from vidgen.audio_only import render_audio
 
     video_only = [name for name, given in (
@@ -943,9 +942,9 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
 
 def cmd_audio(args: argparse.Namespace) -> CommandResult:
     """``vidgen audio check FILE|PROJECT``: measure an audio file and check it against the
-    loudness presets (DESIGN.md §111.2); exit code 1 when the preset asked for (``--preset``, or
+    loudness presets; exit code 1 when the preset asked for (``--preset``, or
     the project's ``audio_output.loudness``) fails, or with ``--mono`` when a stereo file does not
-    fold to mono well (§111.4)."""
+    fold to mono well."""
     from vidgen import audio_check, delivery
     from vidgen.config import AudioConfig
 
@@ -1036,7 +1035,7 @@ def _loudness_line(mix: dict[str, Any], limiter: bool = False) -> str:
 def cmd_motion(args: argparse.Namespace) -> CommandResult:
     """``vidgen motion check FILE|PROJECT``: watch a rendered video at low resolution for blank
     frames, flashes, flicker, pops, strobing, frozen stretches and jumps at cuts, with a contact
-    strip per finding (DESIGN.md §121.3); nothing is rendered."""
+    strip per finding; nothing is rendered."""
     from vidgen import motion_check
 
     target = Path(args.target)
@@ -1190,7 +1189,7 @@ def cmd_still(args: argparse.Namespace) -> CommandResult:
 
 def cmd_space_page(args: argparse.Namespace) -> CommandResult:
     """``vidgen space-page``: write the page a ``space`` scene draws as a ``web`` scene's script, to go on
-    in code, and print the ``web`` scene to put in its place (DESIGN.md §122.12)."""
+    in code, and print the ``web`` scene to put in its place."""
     import yaml
 
     from vidgen import extensions
@@ -1232,7 +1231,7 @@ def cmd_space_page(args: argparse.Namespace) -> CommandResult:
 
 def cmd_parts(args: argparse.Namespace) -> CommandResult:
     """``vidgen parts``: a labelled contact sheet of the ready-made three.js parts, or with
-    ``--list`` their names and the line that uses each (DESIGN.md §122.5)."""
+    ``--list`` their names and the line that uses each."""
     from vidgen.web import parts
 
     chosen = parts.select_parts(parts.read_parts(), args.names, args.kind)
@@ -1314,7 +1313,7 @@ def cmd_character_sheet(args: argparse.Namespace) -> CommandResult:
 
 def cmd_direct(args: argparse.Namespace) -> CommandResult:
     """Show the actions automatic directing (``auto_direct``) adds to the beats of the stage
-    scenes; with ``--print``, as YAML to paste into ``video.yaml`` (DESIGN.md §69.23)."""
+    scenes; with ``--print``, as YAML to paste into ``video.yaml``."""
     from vidgen import extensions
     from vidgen.cartoon.directing import auto_label, directions_yaml, project_directions
 
@@ -1662,7 +1661,7 @@ def cmd_list_sfx(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_list_pronunciation(args: argparse.Namespace) -> CommandResult:
-    """Print schu-video-generator's built-in pronunciation lists (DESIGN.md §88): every list, or in a project
+    """Print schu-video-generator's built-in pronunciation lists: every list, or in a project
     the lists its beats' voices use, with what the project replaces or removes and the beats
     each entry changes."""
     from vidgen.pronunciation import builtin_list_names, builtin_listing
@@ -1762,8 +1761,8 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
 
 def cmd_music(args: argparse.Namespace) -> CommandResult:
     """``preview``: compose a piece (the project's first ``compose:`` cue, changed by the options)
-    and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid`` (§83);
-    ``page``: write the Listen page (§92)."""
+    and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid``;
+    ``page``: write the Listen page."""
     import math
 
     from vidgen import composer, loudness, soundfont, synth
@@ -1824,7 +1823,7 @@ def _section_instruments(track: dict[str, Any]) -> str:
 
 
 def _music_render(args: argparse.Namespace) -> CommandResult:
-    """``vidgen music render SCORE.yaml [--out FILE.wav|FILE.mp3]``: play a score file (DESIGN.md §93)."""
+    """``vidgen music render SCORE.yaml [--out FILE.wav|FILE.mp3]``: play a score file."""
     from vidgen import loudness
     from vidgen.sfx import RATE, write_wav
     from vidgen.studio import load_music_score, render_music_score, score_outline
@@ -1899,7 +1898,7 @@ def _write_bed(bed: Any, audio: Any, out: Path, as_json: bool) -> CommandResult:
 
 
 def _music_patches(args: argparse.Namespace) -> CommandResult:
-    """``vidgen music patches``: every score-file instrument, setting and effect in words (§93.4, §93.7)."""
+    """``vidgen music patches``: every score-file instrument, setting and effect in words."""
     from vidgen.studio import patch_catalog, patch_text
 
     if args.json:
@@ -1910,7 +1909,7 @@ def _music_patches(args: argparse.Namespace) -> CommandResult:
 
 def _music_template(args: argparse.Namespace) -> CommandResult:
     """``vidgen music template [BED] [--out FILE.yaml]``: list the built-in beds' templates, or
-    write one out as an editable score file (DESIGN.md §93.8)."""
+    write one out as an editable score file."""
     from vidgen.studio import music_template_catalog, music_template_text, template_path
 
     catalog = music_template_catalog()
@@ -1947,7 +1946,7 @@ def _music_template(args: argparse.Namespace) -> CommandResult:
 def _music_check(args: argparse.Namespace) -> CommandResult:
     """``vidgen music check SCORE.yaml|AUDIO [--narration FILE] [--compare OTHER] [--out DIR]``:
     how a piece will sit under narration, in words and numbers, a spectrogram and a demo under a
-    voice (DESIGN.md §93.9)."""
+    voice."""
     import time
 
     from vidgen.listen import write_mp3
@@ -2020,7 +2019,7 @@ def _music_check(args: argparse.Namespace) -> CommandResult:
 def _music_plan(args: argparse.Namespace) -> CommandResult:
     """``vidgen music plan SCORE [--out DIR] [--force]``: a music video's scenes proposed from a
     score file (cuts on bar lines, a colour per section, the tracks each scene follows); with
-    ``--out`` a draft project of ``web_cut`` scenes with a starter page each (DESIGN.md §121.2)."""
+    ``--out`` a draft project of ``web_cut`` scenes with a starter page each."""
     from vidgen.music_pieces import music_source
     from vidgen.music_video_plan import plan_dict, plan_music_video, plan_text, write_music_video
 
@@ -2066,7 +2065,7 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
 
 
 def _music_page(args: argparse.Namespace) -> CommandResult:
-    """``vidgen music page``: write the Listen page (DESIGN.md §92)."""
+    """``vidgen music page``: write the Listen page."""
     from vidgen.listen import make_listen_page
 
     result = make_listen_page(Path(args.out or Path("docs") / "music"), composed=args.composed)
@@ -2080,7 +2079,7 @@ def _music_page(args: argparse.Namespace) -> CommandResult:
 
 def cmd_studio(args: argparse.Namespace) -> int:
     """``vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]``: serve the music studio
-    on 127.0.0.1 until Ctrl+C (DESIGN.md §94); ``--clean`` removes old renders and exits."""
+    on 127.0.0.1 until Ctrl+C; ``--clean`` removes old renders and exits."""
     from vidgen.studio_app import run_studio
     from vidgen.studio_app.session import find_project_root
 
@@ -2097,7 +2096,7 @@ def cmd_studio(args: argparse.Namespace) -> int:
 
 def cmd_soundfont(args: argparse.Namespace) -> int:
     """``fetch``: download the default SoundFont into vidgen's cache (checked) unless it is there;
-    ``info``: show the SoundFont a project (or any project) uses (DESIGN.md §81)."""
+    ``info``: show the SoundFont a project (or any project) uses."""
     from vidgen import soundfont, synth
 
     setting, root = None, None
@@ -2132,9 +2131,8 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
 
 
 def cmd_cache(args: argparse.Namespace) -> int:
-    """``info``: what vidgen's cache folder holds, the baked maps of web pages first (DESIGN.md
-    §123.2); ``clear``: remove the baked maps (pages bake them again when they need them) and the
-    ground heights flights read (§123.7; fetched again from a page when needed)."""
+    """``info``: what vidgen's cache folder holds, the baked maps of web pages first; ``clear``: remove the baked maps (pages bake them again when they need them) and the
+    ground heights flights read (fetched again from a page when needed)."""
     from vidgen.render.disk import size_text
     from vidgen.soundfont import cache_dir
     from vidgen.web.baked import FOLDER, LIMIT_ENV, BakedStore, baked_dir, limit_bytes
@@ -2167,7 +2165,7 @@ CACHE_OWNERS: dict[str, str] = {"soundfonts": "`vidgen soundfont`", "studio": "`
 
 
 def cmd_generate(args: argparse.Namespace) -> CommandResult:
-    """Generated video (DESIGN.md §113): ``models`` lists OpenRouter's video models (public list,
+    """Generated video: ``models`` lists OpenRouter's video models (public list,
     cached; works offline from the cache); ``ledger`` shows a project's spending and budget."""
     from vidgen.videogen.ledger import BudgetState, Ledger, intent_text
     from vidgen.videogen.models import load_catalog, model_line, money
@@ -2181,18 +2179,22 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         if args.json:
             return jsonout.envelope(
                 "generate", True, action="models", source=catalog.source, fetched_at=stamp,
-                models=[m.to_json() for m in catalog.models],
+                models=[m.to_json() for m in catalog.with_workflows()],
             )
         print(f"{len(catalog.models)} video models on OpenRouter (list of {stamp}, {catalog.source}; --refresh fetches it again)")
         print("model | durations | resolutions | aspect ratios | frame images | estimated price without audio")
         for model in catalog.models:
+            print(f"  {model_line(model)}")
+        workflows = catalog.with_workflows()[len(catalog.models):]
+        print(f"{len(workflows)} ComfyUI workflow(s) kept with vidgen (videogen.provider: comfyui):")
+        for model in workflows:
             print(f"  {model_line(model)}")
         print("prices: vidgen's conservative estimates from the listed SKUs (~: per video token, estimated); the model's audio is never generated")
         print("references: pictures on every model; audio / video references only where the provider supports them (e.g. Seedance 2.x)")
         return 0
     if args.action == "host-test":
         return _generate_host_test(args)
-    if args.action in ("plan", "sheets", "inputs", "frames"):
+    if args.action in ("plan", "sheets", "inputs", "frames", "subjects"):
         return _generate_shots(args)
     if args.action in ("run", "status", "takes", "pick"):
         return _generate_workflow(args)
@@ -2225,8 +2227,8 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
 
 
 def _generate_resolve(args: argparse.Namespace) -> CommandResult:
-    """``vidgen generate resolve --intent ID --not-charged | --charged [--cost USD] | --job JOB_ID``
-    (DESIGN.md §113.10): the owner records what happened to a submit whose outcome is unknown."""
+    """``vidgen generate resolve --intent ID --not-charged | --charged [--cost USD] | --job JOB_ID``:
+    the owner records what happened to a submit whose outcome is unknown."""
     from vidgen.videogen.ledger import CHARGED, NOT_CHARGED, Ledger
     from vidgen.videogen.run import ledger_path
 
@@ -2251,16 +2253,68 @@ def _generate_resolve(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def _use_route(project: Project, via: str) -> None:
+    """Send this command's Colab calls of ``videogen.comfyui.colab`` by ``via`` (``--via``)."""
+    if project.config.videogen.comfyui is not None:
+        project.config.videogen.comfyui.use_route(via)
+
+
+def _generate_subjects(project: Project, args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate subjects [--subject NAME] [--force]``: the subjects' sheet panels, in one
+    batch with the image model on the ComfyUI server."""
+    from vidgen.videogen.subjects import make_panels
+
+    if args.pay:
+        raise VidgenError("`generate subjects` costs no money (it runs on your ComfyUI server); drop --pay")
+    root = project.root
+    if args.approve or args.approve_all or args.reject:
+        return _approve_subjects(project, args)
+    if args.view is not None:
+        raise VidgenError("--view goes with --approve NAME or --reject NAME")
+    result = make_panels(project, args.subject or (), force=args.force, out=print)   # with --json, print goes to stderr (`vidgen remote` shows it)
+    if args.json:
+        return jsonout.envelope(
+            "generate", True, action="subjects", batch_seconds=result.batch_seconds, contacts=[c.relative_to(root).as_posix() for c in result.contacts],
+            panels=[{"subject": o.panel.subject, "view": o.panel.view, "action": o.action, "path": o.panel.path.relative_to(root).as_posix(),
+                     "record": o.panel.record_path.relative_to(root).as_posix(), "usage": o.usage, "seconds": o.seconds} for o in result.outcomes],
+        )
+    print("next: look at each subject's contact.png, approve its panels (`vidgen generate subjects --approve NAME` or --approve-all), "
+          "then `vidgen generate inputs` composes each shot's sheet from them")
+    return 0
+
+
+def _approve_subjects(project: Project, args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate subjects --approve NAME | --approve-all | --reject NAME [--view VIEW]``."""
+    from vidgen.videogen.subjects import set_approval
+
+    if sum([bool(args.approve), args.approve_all, bool(args.reject)]) != 1 or args.subject or args.force:
+        raise VidgenError("give one of --approve NAME, --approve-all or --reject NAME (not with --subject or --force; "
+                          "`vidgen generate subjects --force --subject NAME` makes a subject's panels again)")
+    if args.approve_all and args.view is not None:
+        raise VidgenError("--view goes with --approve NAME or --reject NAME")
+    approve = not args.reject
+    panels = set_approval(project, args.approve or args.reject or (), args.view, approve=approve)
+    word = "approved" if approve else "not approved"
+    if args.json:
+        return jsonout.envelope("generate", True, action="subjects", approved=approve, panels=[p.label for p in panels])
+    for panel in panels:
+        print(f"{panel.label}: {word}")
+    then = "`vidgen generate plan` shows the shots they unblock" if approve else "the shots that name them are blocked until they are approved again"
+    print(f"next: {then}")
+    return 0
+
+
 def _generate_shots(args: argparse.Namespace) -> CommandResult:
-    """``vidgen generate plan | sheets | inputs | frames`` (DESIGN.md §113.3, §113.15)."""
+    """``vidgen generate plan | sheets | inputs | frames``."""
     from vidgen.videogen.inputs import make_inputs
     from vidgen.videogen.models import load_catalog
     from vidgen.videogen.sheets import run_sheets
     from vidgen.videogen.shots import plan_shots, project_shots
 
     project = Project.load(args.project, variant=args.variant)
+    _use_route(project, args.via)
     if args.action == "sheets":
-        result = run_sheets(project, args.sheet or (), pay=args.pay, out=(lambda line: None) if args.json else print)
+        result = run_sheets(project, args.sheet or (), pay=args.pay, out=print)
         if args.json:
             total, unknown = result.cost
             return jsonout.envelope(
@@ -2272,18 +2326,24 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         return 0
     if args.action == "frames":
         return _generate_frames(project, args)
+    if args.action == "subjects":
+        return _generate_subjects(project, args)
     if args.pay:
         raise VidgenError(f"--pay is for `vidgen generate run`, `generate sheets` and `generate frames`; `generate {args.action}` never pays")
     if args.action == "inputs":
         catalog = load_catalog()
         shots = [s for s in project_shots(project, catalog) if not args.shot or s.id in args.shot or s.beat.id in args.shot]
-        written = make_inputs(project, shots, guide=args.guide, out=(lambda line: None) if args.json else print)
+        written = make_inputs(project, shots, guide=args.guide, out=print)
         if args.json:
             return jsonout.envelope("generate", True, action="inputs", written=[p.relative_to(project.root).as_posix() for p in written])
         print(f"{len(written)} input file(s) written in build/videogen/")
+        only = "".join(f" --shot {s}" for s in args.shot or ())
+        print(f"next: look at the first frames and guides there, then `vidgen generate run --pay{only}`")
         return 0
     plan = plan_shots(project, budget_usd=args.budget, shot_ids=args.shot or ())
     root = project.root
+    for line in plan.lines(root):   # with --json on stderr (`vidgen remote` shows it), the document on stdout
+        print(line)
     if args.json:
         return jsonout.envelope(
             "generate", True, action="plan", clips_usd=plan.clips_cost, sheets_usd=plan.sheets_cost, total_usd=plan.total,
@@ -2306,19 +2366,17 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
                 for s in plan.shots
             ],
         )
-    for line in plan.lines(root):
-        print(line)
     return 0
 
 
 def _generate_frames(project: Project, args: argparse.Namespace) -> CommandResult:
-    """``vidgen generate frames``: paint the shots' starting pictures (DESIGN.md §113.15)."""
+    """``vidgen generate frames``: paint the shots' starting pictures."""
     from vidgen.videogen.frames import run_frames, select_paint_shots
     from vidgen.videogen.models import load_catalog
     from vidgen.videogen.shots import project_shots
 
     shots = select_paint_shots(project_shots(project, load_catalog()), args.shot or ())
-    result = run_frames(project, shots, pay=args.pay, out=(lambda line: None) if args.json else print)
+    result = run_frames(project, shots, pay=args.pay, out=print)
     if args.json:
         total, unknown = result.cost
         return jsonout.envelope(
@@ -2331,7 +2389,7 @@ def _generate_frames(project: Project, args: argparse.Namespace) -> CommandResul
 
 
 def _generate_host_test(args: argparse.Namespace) -> CommandResult:
-    """``vidgen generate host-test [PROJECT] [--keep SECONDS]`` (DESIGN.md §115): a free check of
+    """``vidgen generate host-test [PROJECT] [--keep SECONDS]``: a free check of
     the quick tunnel; the project (when there is one) gives its ``videogen`` settings."""
     from vidgen.config import VideogenConfig
     from vidgen.project import find_config_file
@@ -2360,7 +2418,7 @@ def _generate_host_test(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_split_sheet(args: argparse.Namespace) -> CommandResult:
-    """``vidgen split-sheet``: cut a style sheet picture into named panels (DESIGN.md §113.16)."""
+    """``vidgen split-sheet``: cut a style sheet picture into named panels."""
     from vidgen.videogen.split_sheet import split_sheet
 
     panels = split_sheet(
@@ -2376,18 +2434,23 @@ def cmd_split_sheet(args: argparse.Namespace) -> CommandResult:
 
 
 def _generate_workflow(args: argparse.Namespace) -> CommandResult:
-    """``vidgen generate run | status | takes | pick`` (DESIGN.md §113.4)."""
+    """``vidgen generate run | status | takes | pick``."""
     from vidgen.videogen.takes import chosen_take, pick_take, takes_of
     from vidgen.videogen.workflow import catalog_or_none, known_shots, run_shots, status_lines
 
     project = Project.load(args.project, variant=args.variant)
+    _use_route(project, args.via)
     root = project.root
     if args.pay and args.action != "run":
         raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
     if args.action == "run":
-        report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=(lambda line: None) if args.json else print)
+        report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=print)
         if args.json:
             return jsonout.envelope("generate", True, action="run", paid=args.pay, cost_usd=report.cost_usd, shots=[s.to_json(root) for s in report.shots])
+        made = [s.shot for s in report.shots if s.take is not None]
+        if args.pay and made:
+            print(f"next: `vidgen generate takes` (look at the contact sheets), `vidgen generate pick --shot {made[0]} --take N`; "
+                  "a later part of a split beat then needs `vidgen generate inputs --guide` (its first frame is this take's last)")
         return 0
     catalog = catalog_or_none()
     if args.action == "status":
@@ -2456,15 +2519,33 @@ def cmd_schema(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_remote(args: argparse.Namespace) -> CommandResult:
+    """Run a vidgen command on a Colab session from the project folder."""
+    from vidgen.colab import Colab
+    from vidgen.remote import EXCLUDED_DIRS, RemoteRun
+
+    vidgen_args = list(args.vidgen_args)
+    if vidgen_args[:1] == ["--"]:
+        vidgen_args = vidgen_args[1:]
+    if not vidgen_args:
+        raise VidgenError("give the vidgen command to run, e.g. vidgen remote NAME render")
+    if vidgen_args[0] == "remote":
+        raise VidgenError("vidgen remote runs a vidgen command on the session; it cannot run remote there")
+    with Colab(args.session, cli=args.colab, via=args.via) as colab:
+        run = RemoteRun(colab, Path.cwd(), vidgen_args, json_commands=JSON_COMMANDS,
+                        exclude=(*EXCLUDED_DIRS, *args.exclude))
+        return run.run()
+
+
 def cmd_guide(args: argparse.Namespace) -> CommandResult:
-    """Print the author guide for AI agents, one topic of it, or the list of topics (DESIGN.md §59)."""
-    from vidgen.guide import find_topic, guide_text, guide_topics, topic_lines
+    """Print the author guide's short entry page, one topic of the guide, or the list of topics."""
+    from vidgen.guide import entry_page_text, find_topic, guide_topics, topic_lines
 
     if args.list and args.topic is not None:
         raise VidgenError("--list lists every topic; give either a TOPIC or --list")
     topics = guide_topics()
     topic = find_topic(args.topic) if args.topic is not None else None
-    text = None if args.list else (topic.text if topic is not None else guide_text())
+    text = None if args.list else (topic.text if topic is not None else entry_page_text())
     if args.json:
         return jsonout.guide_document(topic, topics, text)
     if text is None:
@@ -2476,7 +2557,7 @@ def cmd_guide(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
-    """Serve vidgen's commands as MCP tools on stdin / stdout until the client disconnects (DESIGN.md §62)."""
+    """Serve vidgen's commands as MCP tools on stdin / stdout until the client disconnects."""
     from vidgen.mcp_server import serve
 
     serve(Path(args.root))
@@ -2484,7 +2565,7 @@ def cmd_mcp(args: argparse.Namespace) -> int:
 
 
 def cmd_gallery(args: argparse.Namespace) -> CommandResult:
-    """Render every scene type's sample at 16:9 and 9:16 and write the Markdown gallery (DESIGN.md §60)."""
+    """Render every scene type's sample at 16:9 and 9:16 and write the Markdown gallery."""
     from vidgen.gallery import make_gallery
 
     started = time.monotonic()
@@ -2651,7 +2732,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_cast)
 
     p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
-    p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
+    p.add_argument("topic", nargs="?", metavar="TOPIC", help="print this topic (vidgen guide --list shows them); no topic: the short entry page")
     p.add_argument("--list", action="store_true", help="list the topics")
     p.set_defaults(func=cmd_guide)
 
@@ -2791,15 +2872,18 @@ def build_parser() -> argparse.ArgumentParser:
         "generate",
         help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
         "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; run makes the clips (a dry run unless --pay); status, "
-        "takes and pick show and choose the takes the film shows; ledger shows the spending and budget; host-test checks the Cloudflare "
+        "takes and pick show and choose the takes the film shows; subjects makes the subjects' sheet panels with the image model on the ComfyUI server; ledger shows the spending and budget; host-test checks the Cloudflare "
         "quick tunnel that shares audio / video inputs (free); frames paints shots' starting pictures from their 3D scene and reference "
         "pictures (a dry run unless --pay)",
     )
     p.add_argument(
-        "action", choices=["models", "plan", "sheets", "inputs", "frames", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
+        "action", choices=["models", "plan", "sheets", "subjects", "inputs", "frames", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
-        "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
+        "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); subjects: make the "
+        "subjects' sheet panels (sheets/<subject>/<view>.png) that are missing or out of date, all in one batch with the image model on "
+        "the ComfyUI server, which is unloaded once after the last (free), and write each subject's contact.png to look at; "
+        "--approve NAME / --approve-all / --reject NAME [--view VIEW] approve its panels or take that back (no GPU); inputs: cut each "
         "shot's voice (and with --guide its draft render) into build/videogen/; frames: paint each shot's starting picture from its paint_first_frame: (a dry run; --pay paints, within the budget, into assets/frames/; a shot uses it with first_frame: painted); run: generate the ready shots (a dry run; --pay pays, within "
         "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
         "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
@@ -2814,6 +2898,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs, frames, run, status, takes, pick: apply a named variant")
     p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs, frames, run, takes: only this shot or beat (repeatable); pick: the shot")
     p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
+    p.add_argument("--subject", action="append", metavar="NAME", help="subjects: only this subject's panels (repeatable)")
+    p.add_argument("--force", action="store_true", help="subjects: make the panels again even when they are current")
+    p.add_argument("--approve", action="append", metavar="NAME", help="subjects: approve this subject's panels after looking at its contact.png (repeatable; nothing is made)")
+    p.add_argument("--approve-all", action="store_true", help="subjects: approve every subject's panels (nothing is made)")
+    p.add_argument("--reject", action="append", metavar="NAME", help="subjects: take back the approval of this subject's panels (repeatable; --force makes them again)")
+    p.add_argument("--view", metavar="VIEW", help="subjects --approve NAME / --reject NAME: only this view of the subject")
     p.add_argument("--pay", action="store_true", help="run, sheets, frames: pay for the clips / pictures (needs a budget); without it a dry run")
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
@@ -2824,6 +2914,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--job", metavar="JOB_ID", help="resolve: the job this submit became; the next run polls and downloads it, free")
     p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
     p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with a guide: (true, or depth / outline / mask on a 3d scene) or first_frame: render (a draft render of their scenes)")
+    via_arg(p)
     p.set_defaults(func=cmd_generate)
 
     p = sub.add_parser("split-sheet", help="cut a style sheet picture into named panels (PNG), by columns and rows or by explicit boxes")
@@ -3129,6 +3220,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     all_languages_arg(p)
     p.set_defaults(func=cmd_lint)
+
+    p = sub.add_parser(
+        "remote",
+        help="run a vidgen command on a Colab session from the project folder: sync the changed files up, "
+        "run it there, bring back its outputs (build/ stays on Colab)",
+    )
+    p.add_argument("session", help="the Colab session name (set up with tools/colab/setup_session.py NAME --vidgen-only)")
+    p.add_argument("vidgen_args", nargs=argparse.REMAINDER, metavar="ARGS", help="the vidgen command and its arguments, e.g. render --preview")
+    p.add_argument("--exclude", action="append", default=[], metavar="DIR",
+                   help="a top folder of the project not to sync (repeatable; build, output, exports and media never are)")
+    p.add_argument("--colab", default="colab", help="the colab CLI command (default: colab)")
+    via_arg(p)
+    p.set_defaults(func=cmd_remote)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")
     project_arg(p)

@@ -1,4 +1,4 @@
-"""Built-in music data for ``web`` scenes (Step 347, DESIGN.md §120.8): the analysis, the score's
+"""Built-in music data for ``web`` scenes (Step 347): the analysis, the score's
 events, the song time of a scene, the cache and the keys, and ``ctx.music`` on a page.
 
 No music is synthesised here: a project's piece is given its render in the music cache (as the

@@ -1,4 +1,4 @@
-"""Mitosis and meiosis as data (DESIGN.md §95.13; no manim): a karyotype (2n chromosomes in
+"""Mitosis and meiosis as data (no manim): a karyotype (2n chromosomes in
 homologous pairs, maternal and paternal, of different lengths and centromere positions), the
 stages of each division with the counts per cell (chromosomes, chromatids, ploidy, DNA content
 C), crossing over (each bivalent's crossovers, exchanged segments on the non-sister chromatids),
@@ -187,7 +187,7 @@ class DivisionSpec:
     nondisjunction: tuple[str, int] | None = None
     """meiosis: (``I`` or ``II``, pair index from 0): the homologues of that pair fail to
     separate at anaphase I, or its sister chromatids at anaphase II (in the first daughter
-    cell); DESIGN.md §96.11."""
+    cell)."""
 
 
 def stages_of(mode: str) -> tuple[str, ...]:

@@ -1,5 +1,5 @@
-// vidgen/space-hull-detail: the fine detail of a giant hull and what makes it read as kilometres long
-// (DESIGN.md §123.11). Part of schu-video-generator (MIT licence); imported by a page as
+// vidgen/space-hull-detail: the fine detail of a giant hull and what makes it read as kilometres long.
+// Part of schu-video-generator (MIT licence); imported by a page as
 // "vidgen/space-hull-detail". It dresses a hull of vidgen/space-hull.
 //
 //   import {hull} from "vidgen/space-hull";

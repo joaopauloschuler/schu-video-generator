@@ -1,4 +1,4 @@
-"""Fast re-render (DESIGN.md §94.14, Step 196): every track's stem is kept in memory under a key
+"""Fast re-render (Step 196): every track's stem is kept in memory under a key
 of exactly what its sound depends on, so an edit re-renders only the tracks it changed and
 remixes; mute / solo remix the kept stems at the whole piece's gain; level meters are each
 stem's loudness per 50 ms.
@@ -38,8 +38,7 @@ STEM_CACHE_BYTES = 768 << 20
 #: Threads for the mix's master filter (one per channel) and loudness: the same samples as on
 #: one, in about half the time on two cores. Tracks render one at a time (memory).
 THREADS = 2
-#: Filters and reverb on quick FFT lengths when a piece's length is a slow one (Step 201,
-#: DESIGN.md §94.19): within about 1e-14 of the exact samples, the same 16-bit audio, 2–3 times
+#: Filters and reverb on quick FFT lengths when a piece's length is a slow one (Step 201): within about 1e-14 of the exact samples, the same 16-bit audio, 2–3 times
 #: faster and a third less memory on such pieces (exports render exactly, as videos do).
 FAST_FFT = True
 #: A meter frame (s): the level of each stem per frame.

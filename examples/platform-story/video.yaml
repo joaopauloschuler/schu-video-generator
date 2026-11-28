@@ -1,4 +1,4 @@
-# A platform story (Phase O, DESIGN §86): three levels written as ASCII maps; walking, ladders,
+# A platform story (Phase O): three levels written as ASCII maps; walking, ladders,
 # jumps over gaps and up onto clouds timed to the narration; a key and a locked gate, coins and
 # stars, a grumpy snail who moves when asked nicely; the camera follows the hero.
 # Original story and characters. No audio committed: run `vidgen tts` (Kokoro, free), or render

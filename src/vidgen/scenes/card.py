@@ -7,7 +7,7 @@ import numpy as np
 
 from vidgen.api import *
 
-#: Seconds the text's bounce takes to settle (the pop of the effect symbols, DESIGN.md §69.40).
+#: Seconds the text's bounce takes to settle (the pop of the effect symbols).
 POP_RUN = 0.8
 #: How much of the spring the pop uses (1: the symbols' 30 % overshoot; the text is wide, so less).
 POP_STRENGTH = 0.5
@@ -25,7 +25,7 @@ class Card(NarratedScene):
     """
 
     outro = 0.5
-    takes_host = False   # a full-frame title card (DESIGN.md §71)
+    takes_host = False   # a full-frame title card
     target_patterns = ("text", "subtitle", "burst", "frame")
 
     @classmethod
@@ -64,7 +64,7 @@ class Card(NarratedScene):
         width, height = float(config.frame_width), float(config.frame_height)
         layout = card_layout(width, height, style=p.style, subtitle=bool(p.subtitle))
         clear = self.safe_area if self.project.config.shorts_zones is not None else None
-        if clear is not None:   # a Short: the words keep out of the app's buttons (DESIGN.md §101)
+        if clear is not None:   # a Short: the words keep out of the app's buttons
             room = clear.width
             layout = dataclasses.replace(layout, text_width=min(layout.text_width, room), subtitle_width=min(layout.subtitle_width, room))
         color = self.theme.color(p.color)

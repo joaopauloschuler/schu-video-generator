@@ -1,4 +1,4 @@
-"""Cuts (DESIGN.md §101): a shorter video made of chosen scenes and beats of a longer one.
+"""Cuts: a shorter video made of chosen scenes and beats of a longer one.
 
 A config's ``cut:`` (usually in a variant: one variant per Short or teaser) lists the scenes to
 show, in order, each whole or with some of its beats, and what changes in this cut: a scene's

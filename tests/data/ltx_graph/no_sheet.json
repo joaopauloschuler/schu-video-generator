@@ -1,0 +1,972 @@
+{
+ "default": {
+  "1": {
+   "class_type": "UnetLoaderGGUF",
+   "inputs": {
+    "unet_name": "ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"
+   }
+  },
+  "2": {
+   "class_type": "LTXICLoRALoaderModelOnly",
+   "inputs": {
+    "model": [
+     "1",
+     0
+    ],
+    "lora_name": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+    "strength_model": 1.0
+   }
+  },
+  "3": {
+   "class_type": "DualCLIPLoader",
+   "inputs": {
+    "clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
+    "clip_name2": "ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
+    "type": "ltxv",
+    "device": "default"
+   }
+  },
+  "4": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "text": "a grey glider flies low over a rough open sea and banks gently, the chase camera following close behind. Real 35 mm aerial footage shot from a chase plane: natural daylight, real atmosphere and haze, real waves, spray and whitecaps, fine film grain; photographic, not computer graphics",
+    "clip": [
+     "3",
+     0
+    ]
+   }
+  },
+  "5": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "text": "pc game, console game, video game, cartoon, childish, ugly",
+    "clip": [
+     "3",
+     0
+    ]
+   }
+  },
+  "6": {
+   "class_type": "LTXVConditioning",
+   "inputs": {
+    "positive": [
+     "4",
+     0
+    ],
+    "negative": [
+     "5",
+     0
+    ],
+    "frame_rate": 24.0
+   }
+  },
+  "7": {
+   "class_type": "VAELoaderKJ",
+   "inputs": {
+    "vae_name": "ltx-2.3-22b-distilled_video_vae.safetensors",
+    "device": "main_device",
+    "weight_dtype": "bf16"
+   }
+  },
+  "8": {
+   "class_type": "VAELoaderKJ",
+   "inputs": {
+    "vae_name": "ltx-2.3-22b-distilled_audio_vae.safetensors",
+    "device": "main_device",
+    "weight_dtype": "bf16"
+   }
+  },
+  "9": {
+   "class_type": "LoadImage",
+   "inputs": {
+    "image": "first_frame_960x512.png"
+   }
+  },
+  "10": {
+   "class_type": "LoadVideo",
+   "inputs": {
+    "file": "c.mp4"
+   }
+  },
+  "11": {
+   "class_type": "GetVideoComponents",
+   "inputs": {
+    "video": [
+     "10",
+     0
+    ]
+   }
+  },
+  "12": {
+   "class_type": "EmptyLTXVLatentVideo",
+   "inputs": {
+    "width": 960,
+    "height": 512,
+    "length": 121,
+    "batch_size": 1
+   }
+  },
+  "13": {
+   "class_type": "LTXVImgToVideoConditionOnly",
+   "inputs": {
+    "vae": [
+     "7",
+     0
+    ],
+    "image": [
+     "9",
+     0
+    ],
+    "latent": [
+     "12",
+     0
+    ],
+    "strength": 1.0,
+    "bypass": false
+   }
+  },
+  "14": {
+   "class_type": "LTXAddVideoICLoRAGuide",
+   "inputs": {
+    "positive": [
+     "6",
+     0
+    ],
+    "negative": [
+     "6",
+     1
+    ],
+    "vae": [
+     "7",
+     0
+    ],
+    "latent": [
+     "13",
+     0
+    ],
+    "image": [
+     "11",
+     0
+    ],
+    "frame_idx": 0,
+    "strength": 1.0,
+    "latent_downscale_factor": [
+     "2",
+     1
+    ],
+    "crop": "disabled",
+    "use_tiled_encode": false,
+    "tile_size": 256,
+    "tile_overlap": 64
+   }
+  },
+  "15": {
+   "class_type": "LTXVEmptyLatentAudio",
+   "inputs": {
+    "frames_number": 121,
+    "frame_rate": 24,
+    "batch_size": 1,
+    "audio_vae": [
+     "8",
+     0
+    ]
+   }
+  },
+  "16": {
+   "class_type": "LTXVConcatAVLatent",
+   "inputs": {
+    "video_latent": [
+     "14",
+     2
+    ],
+    "audio_latent": [
+     "15",
+     0
+    ]
+   }
+  },
+  "17": {
+   "class_type": "RandomNoise",
+   "inputs": {
+    "noise_seed": 42
+   }
+  },
+  "18": {
+   "class_type": "KSamplerSelect",
+   "inputs": {
+    "sampler_name": "euler_ancestral_cfg_pp"
+   }
+  },
+  "19": {
+   "class_type": "ManualSigmas",
+   "inputs": {
+    "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+   }
+  },
+  "20": {
+   "class_type": "CFGGuider",
+   "inputs": {
+    "model": [
+     "2",
+     0
+    ],
+    "positive": [
+     "14",
+     0
+    ],
+    "negative": [
+     "14",
+     1
+    ],
+    "cfg": 1.0
+   }
+  },
+  "21": {
+   "class_type": "SamplerCustomAdvanced",
+   "inputs": {
+    "noise": [
+     "17",
+     0
+    ],
+    "guider": [
+     "20",
+     0
+    ],
+    "sampler": [
+     "18",
+     0
+    ],
+    "sigmas": [
+     "19",
+     0
+    ],
+    "latent_image": [
+     "16",
+     0
+    ]
+   }
+  },
+  "22": {
+   "class_type": "LTXVSeparateAVLatent",
+   "inputs": {
+    "av_latent": [
+     "21",
+     0
+    ]
+   }
+  },
+  "23": {
+   "class_type": "LTXVCropGuides",
+   "inputs": {
+    "positive": [
+     "14",
+     0
+    ],
+    "negative": [
+     "14",
+     1
+    ],
+    "latent": [
+     "22",
+     0
+    ]
+   }
+  },
+  "24": {
+   "class_type": "LTXVTiledVAEDecode",
+   "inputs": {
+    "vae": [
+     "7",
+     0
+    ],
+    "latents": [
+     "23",
+     2
+    ],
+    "horizontal_tiles": 2,
+    "vertical_tiles": 2,
+    "overlap": 6,
+    "last_frame_fix": false,
+    "working_device": "auto",
+    "working_dtype": "auto"
+   }
+  },
+  "25": {
+   "class_type": "LTXVAudioVAEDecode",
+   "inputs": {
+    "samples": [
+     "22",
+     1
+    ],
+    "audio_vae": [
+     "8",
+     0
+    ]
+   }
+  },
+  "26": {
+   "class_type": "VHS_VideoCombine",
+   "inputs": {
+    "images": [
+     "24",
+     0
+    ],
+    "audio": [
+     "25",
+     0
+    ],
+    "frame_rate": 24.0,
+    "loop_count": 0,
+    "filename_prefix": "p",
+    "format": "video/h264-mp4",
+    "pix_fmt": "yuv420p",
+    "crf": 16,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   }
+  }
+ },
+ "workflow_silent_no_first": {
+  "1": {
+   "class_type": "UnetLoaderGGUF",
+   "inputs": {
+    "unet_name": "ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"
+   }
+  },
+  "2": {
+   "class_type": "LTXICLoRALoaderModelOnly",
+   "inputs": {
+    "model": [
+     "1",
+     0
+    ],
+    "lora_name": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+    "strength_model": 1.0
+   }
+  },
+  "3": {
+   "class_type": "DualCLIPLoader",
+   "inputs": {
+    "clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
+    "clip_name2": "ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
+    "type": "ltxv",
+    "device": "default"
+   }
+  },
+  "4": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "text": "a glider",
+    "clip": [
+     "3",
+     0
+    ]
+   }
+  },
+  "5": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "text": "pc game, console game, video game, cartoon, childish, ugly",
+    "clip": [
+     "3",
+     0
+    ]
+   }
+  },
+  "6": {
+   "class_type": "LTXVConditioning",
+   "inputs": {
+    "positive": [
+     "4",
+     0
+    ],
+    "negative": [
+     "5",
+     0
+    ],
+    "frame_rate": 24.0
+   }
+  },
+  "7": {
+   "class_type": "VAELoaderKJ",
+   "inputs": {
+    "vae_name": "ltx-2.3-22b-distilled_video_vae.safetensors",
+    "device": "main_device",
+    "weight_dtype": "bf16"
+   }
+  },
+  "8": {
+   "class_type": "VAELoaderKJ",
+   "inputs": {
+    "vae_name": "ltx-2.3-22b-distilled_audio_vae.safetensors",
+    "device": "main_device",
+    "weight_dtype": "bf16"
+   }
+  },
+  "9": {
+   "class_type": "LoadImage",
+   "inputs": {
+    "image": "vidgen_k_first.png"
+   }
+  },
+  "10": {
+   "class_type": "LoadVideo",
+   "inputs": {
+    "file": "vidgen_k_control.mp4"
+   }
+  },
+  "11": {
+   "class_type": "GetVideoComponents",
+   "inputs": {
+    "video": [
+     "10",
+     0
+    ]
+   }
+  },
+  "12": {
+   "class_type": "EmptyLTXVLatentVideo",
+   "inputs": {
+    "width": 768,
+    "height": 448,
+    "length": 121,
+    "batch_size": 1
+   }
+  },
+  "13": {
+   "class_type": "LTXVImgToVideoConditionOnly",
+   "inputs": {
+    "vae": [
+     "7",
+     0
+    ],
+    "image": [
+     "9",
+     0
+    ],
+    "latent": [
+     "12",
+     0
+    ],
+    "strength": 1.0,
+    "bypass": true
+   }
+  },
+  "14": {
+   "class_type": "LTXAddVideoICLoRAGuide",
+   "inputs": {
+    "positive": [
+     "6",
+     0
+    ],
+    "negative": [
+     "6",
+     1
+    ],
+    "vae": [
+     "7",
+     0
+    ],
+    "latent": [
+     "13",
+     0
+    ],
+    "image": [
+     "11",
+     0
+    ],
+    "frame_idx": 0,
+    "strength": 1.0,
+    "latent_downscale_factor": [
+     "2",
+     1
+    ],
+    "crop": "disabled",
+    "use_tiled_encode": false,
+    "tile_size": 256,
+    "tile_overlap": 64
+   }
+  },
+  "15": {
+   "class_type": "LTXVEmptyLatentAudio",
+   "inputs": {
+    "frames_number": 121,
+    "frame_rate": 24,
+    "batch_size": 1,
+    "audio_vae": [
+     "8",
+     0
+    ]
+   }
+  },
+  "16": {
+   "class_type": "LTXVConcatAVLatent",
+   "inputs": {
+    "video_latent": [
+     "14",
+     2
+    ],
+    "audio_latent": [
+     "15",
+     0
+    ]
+   }
+  },
+  "17": {
+   "class_type": "RandomNoise",
+   "inputs": {
+    "noise_seed": 7
+   }
+  },
+  "18": {
+   "class_type": "KSamplerSelect",
+   "inputs": {
+    "sampler_name": "euler_ancestral_cfg_pp"
+   }
+  },
+  "19": {
+   "class_type": "ManualSigmas",
+   "inputs": {
+    "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+   }
+  },
+  "20": {
+   "class_type": "CFGGuider",
+   "inputs": {
+    "model": [
+     "2",
+     0
+    ],
+    "positive": [
+     "14",
+     0
+    ],
+    "negative": [
+     "14",
+     1
+    ],
+    "cfg": 1.0
+   }
+  },
+  "21": {
+   "class_type": "SamplerCustomAdvanced",
+   "inputs": {
+    "noise": [
+     "17",
+     0
+    ],
+    "guider": [
+     "20",
+     0
+    ],
+    "sampler": [
+     "18",
+     0
+    ],
+    "sigmas": [
+     "19",
+     0
+    ],
+    "latent_image": [
+     "16",
+     0
+    ]
+   }
+  },
+  "22": {
+   "class_type": "LTXVSeparateAVLatent",
+   "inputs": {
+    "av_latent": [
+     "21",
+     0
+    ]
+   }
+  },
+  "23": {
+   "class_type": "LTXVCropGuides",
+   "inputs": {
+    "positive": [
+     "14",
+     0
+    ],
+    "negative": [
+     "14",
+     1
+    ],
+    "latent": [
+     "22",
+     0
+    ]
+   }
+  },
+  "24": {
+   "class_type": "LTXVTiledVAEDecode",
+   "inputs": {
+    "vae": [
+     "7",
+     0
+    ],
+    "latents": [
+     "23",
+     2
+    ],
+    "horizontal_tiles": 2,
+    "vertical_tiles": 2,
+    "overlap": 6,
+    "last_frame_fix": false,
+    "working_device": "auto",
+    "working_dtype": "auto"
+   }
+  },
+  "26": {
+   "class_type": "VHS_VideoCombine",
+   "inputs": {
+    "images": [
+     "24",
+     0
+    ],
+    "frame_rate": 24.0,
+    "loop_count": 0,
+    "filename_prefix": "vidgen_k",
+    "format": "video/h264-mp4",
+    "pix_fmt": "yuv420p",
+    "crf": 16,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   }
+  }
+ },
+ "workflow_first_audio": {
+  "1": {
+   "class_type": "UnetLoaderGGUF",
+   "inputs": {
+    "unet_name": "ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"
+   }
+  },
+  "2": {
+   "class_type": "LTXICLoRALoaderModelOnly",
+   "inputs": {
+    "model": [
+     "1",
+     0
+    ],
+    "lora_name": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+    "strength_model": 1.0
+   }
+  },
+  "3": {
+   "class_type": "DualCLIPLoader",
+   "inputs": {
+    "clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
+    "clip_name2": "ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
+    "type": "ltxv",
+    "device": "default"
+   }
+  },
+  "4": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "text": "a grey glider flies low over a rough open sea and banks gently, the chase camera following close behind. Real 35 mm aerial footage shot from a chase plane: natural daylight, real atmosphere and haze, real waves, spray and whitecaps, fine film grain; photographic, not computer graphics",
+    "clip": [
+     "3",
+     0
+    ]
+   }
+  },
+  "5": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "text": "pc game, console game, video game, cartoon, childish, ugly",
+    "clip": [
+     "3",
+     0
+    ]
+   }
+  },
+  "6": {
+   "class_type": "LTXVConditioning",
+   "inputs": {
+    "positive": [
+     "4",
+     0
+    ],
+    "negative": [
+     "5",
+     0
+    ],
+    "frame_rate": 24.0
+   }
+  },
+  "7": {
+   "class_type": "VAELoaderKJ",
+   "inputs": {
+    "vae_name": "ltx-2.3-22b-distilled_video_vae.safetensors",
+    "device": "main_device",
+    "weight_dtype": "bf16"
+   }
+  },
+  "8": {
+   "class_type": "VAELoaderKJ",
+   "inputs": {
+    "vae_name": "ltx-2.3-22b-distilled_audio_vae.safetensors",
+    "device": "main_device",
+    "weight_dtype": "bf16"
+   }
+  },
+  "9": {
+   "class_type": "LoadImage",
+   "inputs": {
+    "image": "vidgen_k_first.png"
+   }
+  },
+  "10": {
+   "class_type": "LoadVideo",
+   "inputs": {
+    "file": "vidgen_k_control.mp4"
+   }
+  },
+  "11": {
+   "class_type": "GetVideoComponents",
+   "inputs": {
+    "video": [
+     "10",
+     0
+    ]
+   }
+  },
+  "12": {
+   "class_type": "EmptyLTXVLatentVideo",
+   "inputs": {
+    "width": 960,
+    "height": 512,
+    "length": 73,
+    "batch_size": 1
+   }
+  },
+  "13": {
+   "class_type": "LTXVImgToVideoConditionOnly",
+   "inputs": {
+    "vae": [
+     "7",
+     0
+    ],
+    "image": [
+     "9",
+     0
+    ],
+    "latent": [
+     "12",
+     0
+    ],
+    "strength": 1.0,
+    "bypass": false
+   }
+  },
+  "14": {
+   "class_type": "LTXAddVideoICLoRAGuide",
+   "inputs": {
+    "positive": [
+     "6",
+     0
+    ],
+    "negative": [
+     "6",
+     1
+    ],
+    "vae": [
+     "7",
+     0
+    ],
+    "latent": [
+     "13",
+     0
+    ],
+    "image": [
+     "11",
+     0
+    ],
+    "frame_idx": 0,
+    "strength": 1.0,
+    "latent_downscale_factor": [
+     "2",
+     1
+    ],
+    "crop": "disabled",
+    "use_tiled_encode": false,
+    "tile_size": 256,
+    "tile_overlap": 64
+   }
+  },
+  "15": {
+   "class_type": "LTXVEmptyLatentAudio",
+   "inputs": {
+    "frames_number": 73,
+    "frame_rate": 24,
+    "batch_size": 1,
+    "audio_vae": [
+     "8",
+     0
+    ]
+   }
+  },
+  "16": {
+   "class_type": "LTXVConcatAVLatent",
+   "inputs": {
+    "video_latent": [
+     "14",
+     2
+    ],
+    "audio_latent": [
+     "15",
+     0
+    ]
+   }
+  },
+  "17": {
+   "class_type": "RandomNoise",
+   "inputs": {
+    "noise_seed": 42
+   }
+  },
+  "18": {
+   "class_type": "KSamplerSelect",
+   "inputs": {
+    "sampler_name": "euler_ancestral_cfg_pp"
+   }
+  },
+  "19": {
+   "class_type": "ManualSigmas",
+   "inputs": {
+    "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+   }
+  },
+  "20": {
+   "class_type": "CFGGuider",
+   "inputs": {
+    "model": [
+     "2",
+     0
+    ],
+    "positive": [
+     "14",
+     0
+    ],
+    "negative": [
+     "14",
+     1
+    ],
+    "cfg": 1.0
+   }
+  },
+  "21": {
+   "class_type": "SamplerCustomAdvanced",
+   "inputs": {
+    "noise": [
+     "17",
+     0
+    ],
+    "guider": [
+     "20",
+     0
+    ],
+    "sampler": [
+     "18",
+     0
+    ],
+    "sigmas": [
+     "19",
+     0
+    ],
+    "latent_image": [
+     "16",
+     0
+    ]
+   }
+  },
+  "22": {
+   "class_type": "LTXVSeparateAVLatent",
+   "inputs": {
+    "av_latent": [
+     "21",
+     0
+    ]
+   }
+  },
+  "23": {
+   "class_type": "LTXVCropGuides",
+   "inputs": {
+    "positive": [
+     "14",
+     0
+    ],
+    "negative": [
+     "14",
+     1
+    ],
+    "latent": [
+     "22",
+     0
+    ]
+   }
+  },
+  "24": {
+   "class_type": "LTXVTiledVAEDecode",
+   "inputs": {
+    "vae": [
+     "7",
+     0
+    ],
+    "latents": [
+     "23",
+     2
+    ],
+    "horizontal_tiles": 2,
+    "vertical_tiles": 2,
+    "overlap": 6,
+    "last_frame_fix": false,
+    "working_device": "auto",
+    "working_dtype": "auto"
+   }
+  },
+  "25": {
+   "class_type": "LTXVAudioVAEDecode",
+   "inputs": {
+    "samples": [
+     "22",
+     1
+    ],
+    "audio_vae": [
+     "8",
+     0
+    ]
+   }
+  },
+  "26": {
+   "class_type": "VHS_VideoCombine",
+   "inputs": {
+    "images": [
+     "24",
+     0
+    ],
+    "audio": [
+     "25",
+     0
+    ],
+    "frame_rate": 24.0,
+    "loop_count": 0,
+    "filename_prefix": "vidgen_k",
+    "format": "video/h264-mp4",
+    "pix_fmt": "yuv420p",
+    "crf": 16,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   }
+  }
+ }
+}

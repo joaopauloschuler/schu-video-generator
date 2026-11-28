@@ -1,4 +1,4 @@
-"""The YAML side of a ``3d`` scene (DESIGN.md §114.2, §114.7, §114.11): the params models for its
+"""The YAML side of a ``3d`` scene: the params models for its
 camera, light, floor and objects (shapes, labels, arrows, groups, character stand-ins), checked
 with did-you-mean messages."""
 
@@ -18,7 +18,7 @@ from vidgen.translation import TranslatableStr
 SHAPES: tuple[str, ...] = ("box", "sphere", "cylinder", "cone", "torus", "plane", "arrow", "label", "group", "standin")
 #: Names a scene description keeps for itself (a track's target ``camera``).
 RESERVED_IDS: frozenset[str] = frozenset({"camera"})
-#: The guide passes (DESIGN.md §114.14), in the order they are drawn.
+#: The guide passes, in the order they are drawn.
 GUIDE_PASSES: tuple[str, ...] = ("depth", "outline", "mask")
 #: What ``guide_passes: true`` or ``--guide-passes`` alone mean.
 ALL_PASSES = "all"
@@ -325,7 +325,7 @@ class Scene3DParams(SceneParams):
         return out
 
     def passes(self) -> tuple[str, ...]:
-        """The guide passes ``guide_passes`` asks for (DESIGN.md §114.14), in drawing order."""
+        """The guide passes ``guide_passes`` asks for, in drawing order."""
         return parse_passes(self.guide_passes)
 
     def object(self, object_id: str) -> Object3D | None:

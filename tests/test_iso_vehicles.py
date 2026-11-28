@@ -1,4 +1,4 @@
-"""Vehicles moving on an iso place (DESIGN.md §105): the rules (routes for a car, a boat, a train
+"""Vehicles moving on an iso place: the rules (routes for a car, a boat, a train
 car, a rocket's lift-off), the drawings (a car driving away, turning wheels, a driven vehicle
 left out of the place's pictures), the checks of ``drive_to`` / ``sail_to`` / ``lift_off`` and
 one small render."""

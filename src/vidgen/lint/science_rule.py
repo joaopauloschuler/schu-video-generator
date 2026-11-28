@@ -1,4 +1,4 @@
-"""The scientific-accuracy lint rules (DESIGN.md §95.14): they read the config — each scene's
+"""The scientific-accuracy lint rules: they read the config — each scene's
 params (validated by its scene type, its cell world rebuilt where needed, no render) and its
 beats' narration — not the stills.
 
@@ -45,7 +45,7 @@ MOST_PER_CELL: dict[str, tuple[int, str]] = {
 #: Molecule kinds that show where a cell scene's energy comes from (ATP, a pump, a coupled carrier).
 ENERGY_KINDS = frozenset({"atp", "na_k_atpase", "h_atpase", "abc_transporter", "atp_synthase", "carrier"})
 MOTOR_KINDS = frozenset({"kinesin", "dynein", "myosin"})
-#: The genetics scene types that declare gene symbols (``science_naming``, DESIGN.md §96.18).
+#: The genetics scene types that declare gene symbols (``science_naming``).
 GENE_SCENES = ("mutation", "crispr", "gwas", "karyotype")
 
 

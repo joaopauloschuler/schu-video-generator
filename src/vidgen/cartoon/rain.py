@@ -1,4 +1,4 @@
-"""Rain on a stage's ground (DESIGN.md §69.39). No manim.
+"""Rain on a stage's ground. No manim.
 
 On a ``stage``, each rain drop ends on the ground instead of falling past it: it gets a *landing
 line* (seeded once per drop) in the stage's landing band, from :data:`LANDING_FRONT` frame
@@ -95,7 +95,7 @@ NO_FLOOR = -1e9
 
 @dataclass(frozen=True)
 class IsoRainGround(RainGround):
-    """Where rain ends on an iso place (DESIGN.md §89.11): seen from above, its whole ground is a
+    """Where rain ends on an iso place: seen from above, its whole ground is a
     landing band, so a drop at ``x`` lands between the front and the back edge of the place's
     picture there (``xs`` sorted, ``fronts`` and ``backs`` their y), within the camera's view
     (``ground`` its bottom, ``back`` its top); a drop beside the place, or landing on one of
@@ -103,7 +103,7 @@ class IsoRainGround(RainGround):
     face), falls through. No depth: a splash is the same size everywhere (no perspective).
     ``lift(x, y)``: how much higher (Manim units) a drop that would land on the ground at
     (``x``, ``y``) lands, on what keeps the rain off there (a roof, a crown, a bridge's deck;
-    DESIGN.md §90.2; ``None``: nothing does)."""
+    ``None``: nothing does)."""
 
     xs: tuple[float, ...] = ()
     fronts: tuple[float, ...] = ()

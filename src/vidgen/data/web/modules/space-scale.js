@@ -1,6 +1,6 @@
-// vidgen/space-scale: astronomical scales in three.js without jitter or z-fighting (DESIGN.md §122.4).
+// vidgen/space-scale: astronomical scales in three.js without jitter or z-fighting.
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/space-scale", beside
-// "vidgen/three-finish" (it works through Finish's own render calls) and `ctx.orbits` (§122.3).
+// "vidgen/three-finish" (it works through Finish's own render calls) and `ctx.orbits`.
 //
 //   const space = new SpaceView(ctx, {renderer, scene, camera, mode: "enlarged", enlarge: 50});
 //   space.add(earthMesh, {body: "Earth"});          // a mesh of radius 1: drawn at the Earth's radius x 50

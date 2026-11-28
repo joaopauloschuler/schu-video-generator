@@ -1,4 +1,4 @@
-"""``vidgen studio`` Step 198 (DESIGN.md §94.16): listening notes (pinned at a moment, placed in
+"""``vidgen studio`` Step 198: listening notes (pinned at a moment, placed in
 later versions when sections change length), "Ask an agent" (the hand-off, pasted replies, the
 inbox MCP agents write to, keep / discard) and the optional OpenRouter provider — mocked: no
 network, no key read but a fake one set here. The MCP tools themselves are in ``test_mcp.py``."""

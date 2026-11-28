@@ -1,4 +1,4 @@
-"""Pronunciation dictionary: how the narrator says terms (DESIGN.md §45).
+"""Pronunciation dictionary: how the narrator says terms.
 
 A project's ``pronunciation:`` map (plus the entries of its ``pronunciation_file``) replaces
 terms in the text **sent to the TTS only**: ``K-Phi-3`` is written in the subtitles and captions
@@ -13,7 +13,7 @@ re-voices only the beats it changes; a beat no entry matches keeps its hash.
   matched again). Where matches overlap, the one starting first wins, then the longest, then
   the entry written first (a project's entries before built-in ones);
   :func:`pronunciation_warnings` reports entries that never match and entries that collide.
-- Built-in lists (DESIGN.md §88): ``data/pronunciation/<engine>-<dialect>.yaml`` files shipped
+- Built-in lists: ``data/pronunciation/<engine>-<dialect>.yaml`` files shipped
   with schu-video-generator, one per TTS engine and language (:func:`builtin_list_name`: ``kokoro-en-us`` for
   Kokoro's American English voices); :func:`build_pronunciation` puts a project's entries over
   them (``null`` removes one).
@@ -184,7 +184,7 @@ class Spoken:
     def inserted(self, inserts: Sequence[tuple[int, str, str]]) -> Spoken:
         """This text with ``(position, said, term)`` inserts: ``said`` is spoken at ``position``
         of :attr:`text` (between words) but not written; it belongs to no written word
-        (:meth:`word_groups`). Voice sounds use it (DESIGN.md §69.33)."""
+        (:meth:`word_groups`). Voice sounds use it."""
         events = sorted(
             [(r.start, 1, r.end, r.term, self.spoken[r.spoken_start : r.spoken_end], r.builtin) for r in self.replacements]
             + [(position, 0, position, term, said, False) for position, said, term in inserts]
@@ -320,9 +320,9 @@ def build_pronunciation(
     builtin_list: str | None = None,
 ) -> Pronunciation:
     """The :class:`Pronunciation` of a project's ``entries`` over the built-in list
-    ``builtin_list`` (DESIGN.md §88): a project entry replaces the built-in entry of the same
+    ``builtin_list``: a project entry replaces the built-in entry of the same
     term, ``null`` removes it; entries with a ``language`` other than the video's are left out
-    (DESIGN.md §54) and do not replace a built-in entry. The project's rules come first, so
+    and do not replace a built-in entry. The project's rules come first, so
     they win a tie with a built-in rule matching the same text."""
     own = {t: v for t, v in entries.items() if v is None or applies_to(v, language)}
     used = [(t, v) for t, v in own.items() if v is not None]
@@ -350,7 +350,7 @@ def applies_to(value: str | PronunciationEntry, language: str | None) -> bool:
     return any(language_matches(tag, language) for tag in wanted)
 
 
-# ----- built-in lists (DESIGN.md §88) -----------------------------------------------------------
+# ----- built-in lists -----------------------------------------------------------
 
 #: Kokoro language letter -> the language part of its built-in list's name.
 KOKORO_DIALECTS: dict[str, str] = {

@@ -1,4 +1,4 @@
-"""The drawing toolkit of a cell world (DESIGN.md §95.6): Bézier paths in scene units from the
+"""The drawing toolkit of a cell world: Bézier paths in scene units from the
 world's µm shapes and regions, theme-aware colours, and drawn pieces with a level-of-detail
 feature each, whose opacity and stroke width the camera sets — keeping any dimming or
 highlighting an action applied meanwhile (an action's change is measured against what the level

@@ -1,4 +1,4 @@
-"""Make an SVG safe and cheap to draw before Manim parses it (DESIGN.md §65). No manim import.
+"""Make an SVG safe and cheap to draw before Manim parses it. No manim import.
 
 Generated vector pictures (``generate: {format: svg}``) and ``.svg`` files of the ``image``
 scene go through :func:`sanitize_svg`, which returns a cleaned copy and what it changed:
@@ -10,7 +10,7 @@ scene go through :func:`sanitize_svg`, which returns a cleaned copy and what it 
   declaring XML entities is refused.
 - **Flattened**: a gradient fill or stroke becomes the average colour of its stops (a pattern:
   the first colour drawn in it), so Manim (which cannot draw gradients) paints something close.
-- **Manim's quirks** (shared with the icon loader, §22): ``currentColor`` becomes a marker
+- **Manim's quirks** (shared with the icon loader): ``currentColor`` becomes a marker
   colour the caller replaces, ``stroke="none"`` a zero stroke width (Manim would draw it white),
   and an invisible rectangle spanning the ``viewBox`` is inserted first (the picture's box).
 - **Capped**: at most :data:`MAX_SHAPES` shapes (the smallest beyond it are dropped) and

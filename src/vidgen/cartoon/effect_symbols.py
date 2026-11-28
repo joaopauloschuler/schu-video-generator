@@ -1,8 +1,8 @@
-"""Effect symbols drawn and moved with manim (DESIGN.md §69.40); the geometry is in
+"""Effect symbols drawn and moved with manim; the geometry is in
 :mod:`vidgen.cartoon.effects`.
 
 An :class:`EffectSymbol` is a mobject of its own, never a part of the character it marks (a
-character's parts never change, §69.22): :meth:`EffectSymbol.follow` gives it an updater that, on
+character's parts never change): :meth:`EffectSymbol.follow` gives it an updater that, on
 every frame, reads the head's box on screen and the facing (so it goes along with walks, jumps,
 turns and shots), counts its own seconds and redraws every shape from its points in symbol units.
 """
@@ -60,7 +60,7 @@ def _head_members(character: Character) -> tuple[list[VMobject], list[VMobject]]
 
 def head_box(character: Character) -> Box:
     """The box ``(left, bottom, right, top)`` of ``character``'s head on screen now (without the
-    hair beyond the head, DESIGN.md §69.47); without a ``head`` part, the top 30 % of its box."""
+    hair beyond the head); without a ``head`` part, the top 30 % of its box."""
     if character.has_part("head"):
         head = character.parts["head"]
         own, outer = _head_members(character)
@@ -75,7 +75,7 @@ def head_box(character: Character) -> Box:
 
 def crown_top(character: Character) -> float | None:
     """The top of what ``character`` wears on its head on screen: its ``accessory`` (a hat, a
-    cap), a robot's ``antenna`` (DESIGN.md §69.58) or hair beyond the head (an afro), whichever
+    cap), a robot's ``antenna`` or hair beyond the head (an afro), whichever
     is higher; ``None`` without any drawn."""
     tops = []
     for name in ("accessory", "antenna"):

@@ -1,8 +1,7 @@
-"""What a ``web`` scene's page is given besides time (DESIGN.md §118.9): the theme (``ctx.theme``
+"""What a ``web`` scene's page is given besides time: the theme (``ctx.theme``
 and CSS custom properties on ``:root``, with ``@font-face`` rules for vidgen's bundled fonts),
 the author's ``data:`` values (``ctx.data``), the beats (``ctx.beats``), the video's shape
-(``ctx.aspect``, ``ctx.orientation`` and ``data-aspect`` / ``data-orientation`` on ``<html>``,
-§118.11) and the import map that makes ``import * as THREE from "three"`` load the bundled
+(``ctx.aspect``, ``ctx.orientation`` and ``data-aspect`` / ``data-orientation`` on ``<html>``) and the import map that makes ``import * as THREE from "three"`` load the bundled
 three.js. No browser here.
 """
 
@@ -68,7 +67,7 @@ def design_width_of(params: Any) -> int | None:
 
 def page_viewport(size: tuple[int, int], design_width: int | None = None) -> tuple[tuple[int, int], float]:
     """The page's window (CSS px) and its device scale factor for screenshots of ``size`` (output
-    px; §118.17). Without ``design_width``: ``size`` and 1. With it: a window ``design_width``
+    px). Without ``design_width``: ``size`` and 1. With it: a window ``design_width``
     wide at the scale ``size[0] / design_width`` (the page's ``devicePixelRatio``), as high as
     ``size``'s aspect gives, rounded up to a whole CSS pixel so that the screenshot is never
     shorter than ``size`` (:func:`vidgen.web.page.fit_pixels` cuts off what is over)."""
@@ -123,7 +122,7 @@ def aspect_name(width: int, height: int) -> str:
 
 
 def page_shape(frame: tuple[int, int], region: str = "bleed") -> dict[str, Any]:
-    """The video's shape as the page is given it (§118.11): ``aspect`` (:func:`aspect_name`),
+    """The video's shape as the page is given it: ``aspect`` (:func:`aspect_name`),
     ``orientation`` (``landscape`` / ``portrait`` / ``square``, the rule vidgen's own layouts
     use), ``frame`` (the video frame's ``{width, height}`` in px) and ``region`` (``bleed`` or
     ``body``: where the page is drawn)."""
@@ -273,7 +272,7 @@ def scene_page_inputs(scene: Any, spans: Sequence[Any], css_scale: float = 1.0) 
         beat_word_times(project.audio_dir, beat.id, beat.text, span.start, span.end, project.spoken(beat), project.config.language)
         for beat, span in zip(scene.beats, spans)
     ]
-    prefix = served_prefix(project)   # the project folder's place on the page (web_root:, §123.16)
+    prefix = served_prefix(project)   # the project folder's place on the page (web_root:)
     fonts = [replace(font, rel=prefix + font.rel) for font in project_fonts(project.root)]
     theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height) * css_scale), fonts)
     return theme, page_beats(spans, scene.beats, words)

@@ -1,4 +1,4 @@
-"""The camera of a cell world in physical scale (DESIGN.md §95.5): named zoom levels (tissue →
+"""The camera of a cell world in physical scale: named zoom levels (tissue →
 cell → organelle → molecular complex), the view each gives on a target, the level of detail at
 a view (what is drawn, from the size things take on screen) and the automatic scale bar. No
 manim: the scene turns a :class:`CellView` into a camera frame, lint reads the same numbers."""

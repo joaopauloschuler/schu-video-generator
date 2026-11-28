@@ -1,4 +1,4 @@
-"""``vidgen export gif|clip`` (DESIGN.md §53): a part of the rendered video as an animated GIF or
+"""``vidgen export gif|clip``: a part of the rendered video as an animated GIF or
 an MP4 clip, written to ``<project>/exports/``.
 
 The source is the joined video ``<output>[_<variant>][_preview].mp4`` and its

@@ -1,5 +1,5 @@
-"""Light on a stage (DESIGN.md §69.31): the colour grade of a ``light`` preset or tint, fades
-between grades over time (:func:`fade_at`, also the wind's, §69.32), the night's stars and the soft shadows under what stands on the
+"""Light on a stage: the colour grade of a ``light`` preset or tint, fades
+between grades over time (:func:`fade_at`, also the wind's), the night's stars and the soft shadows under what stands on the
 ground. No manim: :mod:`vidgen.cartoon.shading` draws them.
 
 A *grade* multiplies each colour channel of what the stage draws (its background, layers,
@@ -26,7 +26,7 @@ from vidgen.particles import particle_count, particle_seeds
 #: The light presets, in the order the docs list them.
 LIGHT_PRESETS = ("day", "morning", "sunset", "night", "indoor", "blue_hour")
 #: Each preset: tint, strength, glow, star brightness, shadow factor. ``day`` changes nothing.
-#: ``blue_hour`` (DESIGN.md §107, §108) is a crisp, clean night: a cool indigo multiply with no
+#: ``blue_hour`` is a crisp, clean night: a cool indigo multiply with no
 #: lift in the blacks, colours made more saturated before the tint (they keep their own hues, not a
 #: lavender haze), mid tones darkened and the tones stretched (contrast), dark enough for lamps,
 #: windows and neon to glow and pool.
@@ -40,7 +40,7 @@ PRESET_LIGHTS: dict[str, tuple[str, float, tuple[float, float, float], float, fl
 }
 #: The presets that keep more (or less) than all of each colour's saturation (before the tint).
 PRESET_SATURATION: dict[str, float] = {"blue_hour": 1.6}
-#: The presets that bend the tones: (gamma, contrast, vivid) (:class:`LightGrade`, DESIGN.md §108).
+#: The presets that bend the tones: (gamma, contrast, vivid) (:class:`LightGrade`).
 PRESET_TONES: dict[str, tuple[float, float, float]] = {"blue_hour": (1.2, 1.3, 1.15)}
 #: The tone a ``contrast`` stretches about (0..1): below it darker, above it brighter.
 CONTRAST_PIVOT = 0.35
@@ -82,13 +82,13 @@ class LightGrade:
     stars: float = 0.0
     shadow: float = 1.0
     #: How much of each colour's saturation is kept before the multiply (1: all; a flashback's
-    #: faded colours less, DESIGN.md §100.12).
+    #: faded colours less).
     saturation: float = 1.0
     #: The saturation scaled after the multiply and glow (1: unchanged; above 1 the tinted colours
-    #: get their hues back, DESIGN.md §108).
+    #: get their hues back).
     vivid: float = 1.0
     #: A power on each channel before the multiply (1: none; above 1 the mid tones darken while
-    #: whites stay, a crisper night, DESIGN.md §108).
+    #: whites stay, a crisper night).
     gamma: float = 1.0
     #: A contrast stretch about :data:`CONTRAST_PIVOT` after the multiply and glow (1: none).
     contrast: float = 1.0
@@ -152,7 +152,7 @@ def blend_grades(a: LightGrade, b: LightGrade, share: float) -> LightGrade:
                       keep(a.vivid, b.vivid), keep(a.gamma, b.gamma), keep(a.contrast, b.contrast))
 
 
-#: A lamp's light on what stands near it (an iso place's lamp at night, DESIGN.md §89.13): its
+#: A lamp's light on what stands near it (an iso place's lamp at night): its
 #: colour and strength as a light, the share of the way from the stage's light to it where it
 #: falls fully, and how dark the stage's light must be (one minus its mean ``multiply``) for the
 #: lamp to show fully (less in a lighter one; by day nothing).
@@ -172,7 +172,7 @@ def lamp_lit(base: LightGrade, share: float) -> LightGrade:
     return blend_grades(base, tint_grade(*LAMP_LIGHT), lift)
 
 
-#: A lamp's pool of light on the ground (an iso place's, DESIGN.md §104): how much of it shows by
+#: A lamp's pool of light on the ground (an iso place's): how much of it shows by
 #: day, and the curve from there to full as the light darkens (:data:`LAMP_DARK` dark: full),
 #: so it is strong at night, gentle at sunset or indoors and barely seen by day.
 POOL_DAY = 0.1
@@ -186,7 +186,7 @@ def pool_strength(grade: LightGrade) -> float:
     return POOL_DAY + (1.0 - POOL_DAY) * dark ** POOL_CURVE
 
 
-#: A day passing (the ``time_of_day`` action, DESIGN.md §105.3): its fade by default (seconds),
+#: A day passing (the ``time_of_day`` action): its fade by default (seconds),
 #: how dark (:func:`darkness`) the light is where lamps switch on as it darkens (dusk; the
 #: ``sunset`` preset is past it) and off as it brightens (dawn), how long each light takes to
 #: come on or go out, and the most a light is early or late (seconds; a share of the fade at
@@ -262,9 +262,8 @@ def auto_switch_time(name: str, crossing: float, start: float, seconds: float) -
 
 def lifted(grade: LightGrade, share: float, toward: RGB = (1.0, 1.0, 1.0)) -> LightGrade:
     """``grade`` lifted ``share`` 0..1 of the way back to the colours as drawn: a fill light on
-    what it grades (a stage's ``fill_light`` on its characters, a visitor's own ``glow``,
-    DESIGN.md §100.15). ``toward`` is the multiply it lifts to (a coloured fill light, e.g. a
-    warm key, ``fill_color``, DESIGN.md §108; white: the colours as drawn). Its stars, shadows and
+    what it grades (a stage's ``fill_light`` on its characters, a visitor's own ``glow``). ``toward`` is the multiply it lifts to (a coloured fill light, e.g. a
+    warm key, ``fill_color``; white: the colours as drawn). Its stars, shadows and
     saturation are kept, but a boost above 1 (``saturation``, ``vivid``) and the tone curve
     (``gamma``, ``contrast``) relax as far towards 1; 0 returns ``grade`` itself."""
     s = min(max(float(share), 0.0), 1.0)
@@ -307,7 +306,7 @@ def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
     """RGBA rows (components 0..1) with the grade applied; alpha unchanged; a new array."""
     graded = np.array(rgbas, dtype=float, copy=True)
     colors = graded[..., :3]
-    if not grade.curved and grade.vivid == 1.0:   # the plain path, as before §108
+    if not grade.curved and grade.vivid == 1.0:   # the plain path
         multiply, glow = grade.arrays
         if grade.saturation != 1.0:
             _desaturate(colors, grade.saturation)
@@ -325,7 +324,7 @@ def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
 def grade_pixels(pixels: np.ndarray, grade: LightGrade) -> np.ndarray:
     """An 8-bit RGB or RGBA picture with the grade applied; alpha unchanged; a new array."""
     graded = pixels.astype(np.float32)
-    if not grade.curved and grade.vivid == 1.0:   # the plain path, as before §108
+    if not grade.curved and grade.vivid == 1.0:   # the plain path
         if grade.saturation != 1.0:
             _desaturate(graded[..., :3], grade.saturation)
         graded[..., :3] = graded[..., :3] * np.asarray(grade.multiply, dtype=np.float32) + 255 * np.asarray(grade.glow, dtype=np.float32)

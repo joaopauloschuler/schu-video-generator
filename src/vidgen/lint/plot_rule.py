@@ -1,4 +1,4 @@
-"""The plot lint rules (DESIGN.md §97.11): a ``plot`` scene's figure and narration checked against
+"""The plot lint rules: a ``plot`` scene's figure and narration checked against
 its params and data (resolved as the render resolves them, no render).
 
 ``plot_units`` (an axis of a physical quantity without its unit), ``plot_log`` (error bars, fits,

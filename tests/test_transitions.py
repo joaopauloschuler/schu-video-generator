@@ -1,4 +1,4 @@
-"""Transitions between scenes (Step 46, DESIGN.md §49): config, the planned timeline with
+"""Transitions between scenes (Step 46): config, the planned timeline with
 overlaps and holds, the voice track, the join's crossfades, in-render colour fades, and a
 rendered video whose every time (SRT, captions, overlays, effects, narration) follows the plan."""
 

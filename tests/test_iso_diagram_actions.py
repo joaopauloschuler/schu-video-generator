@@ -1,4 +1,4 @@
-"""The ``iso_diagram`` actions and labels (DESIGN.md §90.8-90.10): the label geometry, placing
+"""The ``iso_diagram`` actions and labels: the label geometry, placing
 labels clear of blocks, labels and connectors, the slanted grid in 9:16, the action checks, the
 ``iso_labels`` lint rule, and tiny renders of every action."""
 

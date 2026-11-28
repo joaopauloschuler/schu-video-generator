@@ -1,4 +1,4 @@
-"""Costume pieces of the generator (DESIGN.md §69.58): the accessories ``crown``, ``wizard_hat``,
+"""Costume pieces of the generator: the accessories ``crown``, ``wizard_hat``,
 ``party_hat`` (worn on top of the head, in the ``accessory`` part, like a hat) and ``cape`` (its
 own ``cape`` part hanging from the shoulders behind the body, with a clasp on the body).
 

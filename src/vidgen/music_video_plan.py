@@ -1,4 +1,4 @@
-"""A storyboard from the music (DESIGN.md §121.2): ``vidgen music plan SCORE`` reads a score file
+"""A storyboard from the music: ``vidgen music plan SCORE`` reads a score file
 and proposes the scenes of a music video, cut on its bar lines, without playing it.
 
 The score's events (:func:`vidgen.studio.events.score_events`) are counted per bar: which tracks

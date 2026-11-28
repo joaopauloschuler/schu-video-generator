@@ -1,4 +1,4 @@
-"""Step 121: props that move by themselves, part 2 (DESIGN.md §69.55): a fireplace's flames, glow
+"""Step 121: props that move by themselves, part 2: a fireplace's flames, glow
 and crackle, a kettle's steam, fruit falling from a tree, birds crossing the sky. Pure, seeded
 maths without rendering; three tiny renders: a fire lit later and a flock that sets off later
 change no pixel before then, and a fruit falls on a head with a thud and stars."""

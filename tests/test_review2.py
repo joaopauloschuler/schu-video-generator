@@ -1,7 +1,7 @@
 """Step 37 (review 2): text on filled shapes under dim / highlight, decorations that follow their
 target, ``until`` keeping a scene's own dimming, header synonyms (``title`` / ``heading``),
 unknown-key messages, single-item lists, the copy-free fade, portrait growth and the 9:16 world
-map (DESIGN.md §40)."""
+map."""
 
 from __future__ import annotations
 

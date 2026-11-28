@@ -1,12 +1,12 @@
-"""Prop beat actions (DESIGN.md §69.27): ``pick_up``, ``hold``, ``put_down``, ``give`` and
+"""Prop beat actions: ``pick_up``, ``hold``, ``put_down``, ``give`` and
 ``throw`` on the characters and props of a ``stage``, ``open`` / ``close`` on its props
-(an umbrella, §69.37; a book, a letter, a gift, §69.56), ``blow_away`` (the wind takes a light
-prop, out of a hand too, §69.32), ``let_go`` (held balloons float away) and ``pour`` (a held
-watering can pours water, §69.56).
+(an umbrella; a book, a letter, a gift), ``blow_away`` (the wind takes a light
+prop, out of a hand too), ``let_go`` (held balloons float away) and ``pour`` (a held
+watering can pours water).
 Written against ``vidgen.api`` only, like project actions.
 
 Who holds what is a :class:`Holdings` on the scene. A held prop is not added to its character
-(a character's parts never change, §69.22): it stays a mobject of its own, drawn right after its
+(a character's parts never change): it stays a mobject of its own, drawn right after its
 holder (in front of it, behind what stands in front of it; right before it when held overhead),
 and an updater keeps its grip (its middle unless it has one) at the
 hand (:meth:`Character.hand_point`) on every frame, so it goes along with walks, jumps and turns.
@@ -118,7 +118,7 @@ def crouch(character: Character, hand: str, point: Any) -> CharacterState | None
 def _reach_low(character: Character, hand: str, point: Any, share: float, back: dict[str, PartPose]) -> Animation:
     """The arm reaching ``point`` at ``share`` of the action and going to ``back`` at its end,
     crouching for a low point (:func:`crouch`) and rising again (from its side: a character
-    facing the front turns to its side first, DESIGN.md §69.44)."""
+    facing the front turns to its side first)."""
     low = crouch(character, hand, point)
     if low is not None and character.facing == "front":
         character.face(character.side_facing)
@@ -206,7 +206,7 @@ class _Handling(_Acting):
             known = f"props: {', '.join(props)}" if props else "the scene has no props"
             problems.append((self.prop_option, f"'{name}' is not a prop of the scene ({known})"))
         kinds = dict(zip(props, (p.prop for p in params.stage_props())))
-        if name is not None and kinds.get(name) in SCIFI_PROPS:   # a rift in space, a beam of light (§100.4)
+        if name is not None and kinds.get(name) in SCIFI_PROPS:   # a rift in space, a beam of light
             problems.append((self.prop_option, f"'{name}' is a {kinds[name]}: it cannot be held or carried"))
         return problems
 
@@ -311,11 +311,11 @@ class PutDown(_Handling):
         for character in _characters(scene, targets, "put_down")[:1]:
             name, hand = holdings(scene).release(character.name, self.options.prop)
             prop = _prop(scene, name)
-            prop.stage_depth = character.stage_depth   # it lands at its holder's depth (DESIGN.md §69.44)
+            prop.stage_depth = character.stage_depth   # it lands at its holder's depth
             held = _held(scene).get(name)
             feet = character.feet()
             ground = float(feet[1])
-            if getattr(scene, "on_iso", False):   # on a spot of the place, or on the ground beside it (DESIGN.md §89.10)
+            if getattr(scene, "on_iso", False):   # on a spot of the place, or on the ground beside it
                 prop.iso_feet = scene.iso_put_point(character, self.options.to)
                 x, ground = scene.iso_view.point(*prop.iso_feet)
             elif self.options.to is not None:
@@ -430,7 +430,7 @@ class Throw(_Handling):
         for character in _characters(scene, targets, "throw")[:1]:
             name, hand = holdings(scene).release(character.name, self.options.prop)
             prop = _prop(scene, name)
-            prop.stage_depth = character.stage_depth   # it lands at its holder's depth (DESIGN.md §69.44)
+            prop.stage_depth = character.stage_depth   # it lands at its holder's depth
             held = _held(scene).get(name)
             feet = character.feet()
             x = _place_x(scene, self.options.to)
@@ -457,7 +457,7 @@ class Throw(_Handling):
 class _Reshape(Action):
     """``open`` / ``close``: the target props (by name) switch to the action's shape
     (:data:`PROP_SHAPES`); a held one is lifted overhead or brought back to the hold point by its
-    holder's arm, changing size in the hand (DESIGN.md §69.37)."""
+    holder's arm, changing size in the hand."""
 
     #: The shape the prop shows afterwards.
     shape: ClassVar[str]
@@ -469,7 +469,7 @@ class _Reshape(Action):
             return [("target", f"{action} is for the props of a stage")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         able = sorted(kind for kind, shapes in PROP_SHAPES.items() if self.shape in shapes)
-        objects = params.iso.object_kinds() if getattr(params, "iso", None) is not None else {}   # an iso place's (§89.10)
+        objects = params.iso.object_kinds() if getattr(params, "iso", None) is not None else {}   # an iso place's
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():
             for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:
@@ -484,8 +484,8 @@ class _Reshape(Action):
         return problems
 
     def _on_level(self, scene: NarratedScene, prop: Prop) -> bool:
-        """On a platform level, the rules' record (and check) of a door opening or closing
-        (DESIGN.md §86.8); nothing elsewhere. Whether a key unlocked it (foley, §86.9)."""
+        """On a platform level, the rules' record (and check) of a door opening or closing;
+        nothing elsewhere. Whether a key unlocked it (foley)."""
         return False
 
     def _opener(self, scene: NarratedScene, prop: Prop) -> list[Animation]:
@@ -497,7 +497,7 @@ class _Reshape(Action):
         it in its new shape (overhead or in front), the prop at the hand."""
         anims: list[Animation] = []
         seconds = float(self.config.run_time or self.run_time)
-        for target in [t for t in targets if isinstance(t.mobject, IsoObject)]:   # an iso place's house, door, flowers (§89.10)
+        for target in [t for t in targets if isinstance(t.mobject, IsoObject)]:   # an iso place's house, door, flowers
             scene.iso_change(target.name, float(scene.renderer.time) + seconds / 4, seconds / 2, open=self.shape == "open")
         for prop in [t.mobject for t in targets if isinstance(t.mobject, Prop)]:
             if self.shape not in prop.shapes or prop.shape == self.shape:
@@ -507,7 +507,7 @@ class _Reshape(Action):
             if held is None:
                 anims += self._opener(scene, prop)
                 reshape = PropReshape(prop, self.shape, at=RESHAPE_SHARE)
-                reshape.unlocks = unlocks   # a locked door opened with its key: foley clicks the lock (DESIGN.md §86.9)
+                reshape.unlocks = unlocks   # a locked door opened with its key: foley clicks the lock
                 anims.append(reshape)
                 continue
             character, hand, overhead = held.character, held.hand, is_overhead(prop, self.shape)
@@ -524,7 +524,7 @@ class Open(_Reshape):
     holder's arm raised; standing, it opens where it stands; ``by``: that character reaches for it
     as it opens. A prop can also start open (`open: true` in the stage's props). On a platform
     level a closed door is in the way of walks and jumps, and a locked one (``level.locks``) opens
-    only ``by`` a character holding its key and standing next to it (DESIGN.md §86.8)."""
+    only ``by`` a character holding its key and standing next to it."""
 
     class Options(ActionOptions):
         by: str | None = None

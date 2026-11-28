@@ -1,5 +1,5 @@
 """Step 283: audio-only renders, audio-only projects (``sections:``), timing without pictures,
-explicit pauses and ``vidgen story draft --audio`` (DESIGN.md §111). Narration is mocked: each
+explicit pauses and ``vidgen story draft --audio``. Narration is mocked: each
 beat's "MP3" is a WAV tone (PyAV reads it by its content)."""
 
 from __future__ import annotations

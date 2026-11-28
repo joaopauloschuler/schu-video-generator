@@ -1,4 +1,4 @@
-"""Step 252 (DESIGN.md §102.8-§102.15): a HUD that keeps off faces and is drawn in pieces, lint
+"""Step 252: a HUD that keeps off faces and is drawn in pieces, lint
 ``overlay_face``, plain splashes on an iso place, display patterns ``equations`` and
 ``timelines``, the ``scanner``, ``takeout`` and ``crystal`` props, the ``medal`` and ``pendant``
 accessories, a haze over a spot, sliding doors and the ``kiss`` action."""

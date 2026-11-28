@@ -1,4 +1,4 @@
-"""Everyday small props (DESIGN.md §69.56): the maths, without manim.
+"""Everyday small props: the maths, without manim.
 
 Balloons that a character lets go of (the ``let_go`` action) float up and out of the frame,
 drifting with the stage's wind and swaying (:func:`float_point`); a watering can tilts and pours

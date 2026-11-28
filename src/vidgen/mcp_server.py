@@ -1,4 +1,4 @@
-"""The MCP server: vidgen's commands as tools for AI agents (``vidgen mcp``, DESIGN.md §62).
+"""The MCP server: vidgen's commands as tools for AI agents (``vidgen mcp``).
 
 Every tool call runs ``python -m vidgen <command> ... --json`` in a **fresh subprocess** in the
 root folder and returns its JSON document (Step 8 envelope), plus pictures where the command makes
@@ -49,7 +49,7 @@ from vidgen.mcp_tools import (
 WORK_DIR = Path("build") / "mcp"
 #: STT providers that bill per use (``readback`` asks for ``confirm_cost``).
 PAID_STT = ("elevenlabs",)
-#: TTS providers that cost nothing (``tts`` runs without ``confirm_cost``; DESIGN.md §68).
+#: TTS providers that cost nothing (``tts`` runs without ``confirm_cost``).
 FREE_TTS = ("kokoro",)
 #: Seconds between progress notifications (at most).
 PROGRESS_INTERVAL = 0.5
@@ -62,7 +62,7 @@ MUSIC_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*(/[A-Za-z0-9_][A-Za-z0-9_-]
 INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
-Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
+Start with `guide` (no topic: the short entry page; then only the topics your video needs, e.g. "start" or "workflow"). Usual loop: `plan` (from \
 an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it), `story_draft` (a story \
 cartoon drafted from prose, with a report of what to refine) or `init` -> edit video.yaml (`shorts_suggest` proposes \
 Shorts cut from a finished video as variants) -> `validate` -> `storyboard` (look at the sheets it \
@@ -315,7 +315,8 @@ def build_server(root: Path) -> Any:
     # ----- guide, scaffolding --------------------------------------------------------------------
 
     @tool("The author guide (how to make a good video with schu-video-generator: workflow, pacing, scene types, design, "
-          "troubleshooting). No topic: the whole guide (long); list_topics=true: the topics.", read_only)
+          "troubleshooting). No topic: the short entry page (read it first); a topic: that part only; "
+          "list_topics=true: the topics. Read only the topics your video needs.", read_only)
     async def guide(
         ctx: Context,
         topic: Annotated[str | None, Field(description="a topic or alias, e.g. start, workflow, scenes, pacing, social")] = None,
@@ -1095,7 +1096,7 @@ def build_server(root: Path) -> Any:
         options = {"variant": variant, "language": language, "output": str(where(output, "output")) if output else None}
         return answer(await call(ctx, args_of(["translate-template"], [str(where(project))], options)))
 
-    # ----- the studio's hand-offs (Step 198, DESIGN.md §94.16) -------------------------------------
+    # ----- the studio's hand-offs (Step 198) -------------------------------------
     # Through files on disk, in this process (small reads and one atomic write; no Manim).
 
     async def studio(command: str, work: Callable[[], dict[str, Any]]) -> Any:
@@ -1196,17 +1197,18 @@ def build_server(root: Path) -> Any:
 
 
 def _add_resources(server: Any, policy: RootPolicy) -> None:
-    """The guide (whole and per topic), the JSON Schema of video.yaml and the gallery pages under
+    """The guide (its entry page and each topic), the JSON Schema of video.yaml and the gallery pages under
     the root (``docs/gallery``), if any, as MCP resources."""
-    from vidgen.guide import guide_text, guide_topics
+    from vidgen.guide import entry_page_text, guide_topics
 
     def text_resource(uri: str, name: str, description: str, mime: str, read: Callable[[], Any]) -> None:
         server.resource(uri, name=name, description=description, mime_type=mime)(read)
 
     def guide_resource() -> str:
-        return guide_text()
+        return entry_page_text()
 
-    text_resource("vidgen://guide", "guide", "The schu-video-generator author guide (AGENTS.md): how to make a good video.", "text/markdown", guide_resource)
+    text_resource("vidgen://guide", "guide", "The schu-video-generator author guide's short entry page (AGENTS.md): read it first, "
+                  "then only the vidgen://guide/<topic> your video needs.", "text/markdown", guide_resource)
     for topic in guide_topics():
         text_resource(
             f"vidgen://guide/{topic.name}", f"guide-{topic.name}", f"Author guide: {topic.title}", "text/markdown", _constant(topic.text)
@@ -1224,7 +1226,7 @@ def _add_resources(server: Any, policy: RootPolicy) -> None:
     )
     gallery = policy.root / "docs" / "gallery"
     if gallery.is_dir():
-        # the web gallery's pages (docs/gallery/web, DESIGN.md §123.1) under their own names, its index as web-index
+        # the web gallery's pages (docs/gallery/web) under their own names, its index as web-index
         pages = [(p, "index" if p.name == "README.md" else p.stem) for p in sorted(gallery.glob("*.md"))]
         pages += [(p, "web-index" if p.name == "README.md" else p.stem) for p in sorted((gallery / "web").glob("*.md"))]
         for page, name in pages:

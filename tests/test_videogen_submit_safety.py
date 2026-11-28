@@ -1,4 +1,4 @@
-"""Money safety of a paid submit (DESIGN.md §113.10, §115.4): the quick tunnel stays open for a
+"""Money safety of a paid submit: the quick tunnel stays open for a
 job's whole wait (a real local server and a fake cloudflared, with real sleeps), a submit is
 refused on a host that is closed or almost out of time, and a submit with no known outcome is
 never paid twice. No rendering, no network, no real tunnel."""

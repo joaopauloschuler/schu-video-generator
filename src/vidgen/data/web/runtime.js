@@ -1,4 +1,4 @@
-// vidgen's part of a `web` scene's page (DESIGN.md §118.3, §118.8). A fragment joined after
+// vidgen's part of a `web` scene's page. A fragment joined after
 // clock.js and media.js: it records the page's uncaught errors, runs the page's hooks
 // (window.vidgen.load and .frame; a `script:` module's exports are put there) and, for each frame,
 // moves the clock and the page's animations to the frame's time.

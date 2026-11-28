@@ -1,4 +1,4 @@
-"""Step 234 (DESIGN.md §98.8): the orbital accuracy lint.
+"""Step 234: the orbital accuracy lint.
 
 Numbers, dates and scale claims as narration writes them, the values an orbit scene computes,
 each rule finding its planted mistake and leaving the right statements alone, the drift and crash

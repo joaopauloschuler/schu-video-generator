@@ -1,4 +1,4 @@
-"""Where an iso diagram's labels go (DESIGN.md §90.8): plain geometry on the picture, no manim,
+"""Where an iso diagram's labels go: plain geometry on the picture, no manim,
 shared by the ``iso_diagram`` scene (placing) and lint's ``iso_labels`` rule (checking).
 
 Coordinates are ``x`` right, ``y`` up (scene units, or picture units turned up the right way);

@@ -1,4 +1,4 @@
-"""Dubbing (DESIGN.md §80): per-language voices of the same kind, timings and lint per language,
+"""Dubbing: per-language voices of the same kind, timings and lint per language,
 ``--all-languages``. No rendering."""
 
 from __future__ import annotations

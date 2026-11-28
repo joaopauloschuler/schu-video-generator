@@ -1,4 +1,4 @@
-"""The sky from inside an atmosphere, ``vidgen/space-air`` (Step 381, DESIGN.md §123.3): the module is
+"""The sky from inside an atmosphere, ``vidgen/space-air`` (Step 381): the module is
 served by its import name and imports only ``three``, ``vidgen/baked`` and ``vidgen/space-bodies``; its
 parts are registered under the kind ``air``; in Node (when it is installed): the airs as numbers (the
 same as ``vidgen/space-bodies`` draws from outside), errors with a did-you-mean, the air along a ray
@@ -223,6 +223,52 @@ out.push([30, 10, 0, -2, -4, -6, -8, -12, -20].map((el) => { const mus = Math.si
     drawn = [row[1] for row in evening]
     assert drawn[7] > 0.003 and all(a >= b for a, b in zip(drawn, drawn[1:])) and all(a < 3.5 * b for a, b in zip(drawn[:7], drawn[1:8]))   # still a glow at -12; down to there it fades by small steps
 
+
+
+def test_the_earths_shadow_rises_opposite_the_sun_at_dusk(tmp_path: Path) -> None:
+    # Step 403: the scattering model's own sums give the dark band and the pink band above it (no table changed for it)
+    out = _run_in_node(tmp_path, """
+const m = A.airOf("earth"), psi = A.psiTable(m);
+for (const el of [0, -2, -4]) out.push([0.5, 2, 4, 6, 9, 12, 16, 20, 30, 45].map((e) => { const mus = Math.sin(el * R), mu = Math.sin(e * R), cosv = -Math.cos(e * R) * Math.cos(el * R) + mu * mus;
+  const once = A.skyLight(m, 2, mu, cosv, mus, {scattered: false, steps: 64}).light, all = A.skyLight(m, 2, mu, cosv, mus, {psi, steps: 64}).light; return [once[1], all[1], all[0] / all[2]]; }));
+""")
+    for el, row in zip((0, -2, -4), out):
+        once = [r[0] for r in row]
+        top = int(np.argmax(once))
+        assert once[0] < 0.1 * once[top] and 0 < top < len(row) - 1                     # the sun's light gone from the air low opposite the sun; brightest a band higher up
+        assert row[0][1] > 0                                                             # light scattered more often fills the shadow: dark, not black
+        if el < 0:
+            shade = [r[2] for r, o in zip(row, once) if o < 0.1 * once[top]]
+            band = max(r[2] for r, o in zip(row, once) if o >= 0.1 * once[top])
+            assert band > 1.3 * min(shade) and band > row[-1][2]                         # over the shadow a band redder than the shadow and than the sky above
+    assert [int(np.argmax([r[0] for r in row])) for row in out] == sorted(int(np.argmax([r[0] for r in row])) for row in out)   # the shadow rises as the sun sinks
+
+
+def test_the_shadows_in_the_air_in_node(tmp_path: Path) -> None:
+    out = _run_in_node(tmp_path, """
+const m = A.airOf("earth"), R6 = m.radius;
+// the stretch where casters reach: under their top from the camera, from where the ray comes under it, nothing over it looking up
+out.push([A.shadeSpan(R6, 10, 0, 3000, 2e5), A.shadeSpan(R6, 10, 1, 3000, 2e5), A.shadeSpan(R6, 8000, 1, 3000, 2e5), A.shadeSpan(R6, 8000, -0.5, 3000, 2e5), A.shadeSpan(R6, 10, 0.1, 3000, 1000), A.shadeSpan(R6, 10, -0.2, 3000, 2e5, 50)]);
+out.push([A.shadeShareAt([0.2, 0.6], 0), A.shadeShareAt([0.2, 0.6], 0.0625), A.shadeShareAt([0.2, 0.6], 0.25), A.shadeShareAt([0.2, 0.6], 1), A.shadeShareAt([0.2, 0.6], 2)]);
+// one ray towards a low sun, under a deck's top at 2 km: nothing casting, all in shadow, shadow beyond 5 km only, a cloud's diffuse light
+const ray = {height: 30, mu: Math.sin(3 * R), cosv: Math.cos(5 * R), mus: Math.sin(8 * R)}, top = {top: 2000};
+const none = A.shadowShares(m, ray, top), all = A.shadowShares(m, ray, {...top, sun: () => 0, sky: () => 0}), sunOnly = A.shadowShares(m, ray, {...top, sun: () => 0});
+const far = A.shadowShares(m, ray, {...top, sun: (w) => (Math.hypot(...w) > 5000 ? 0 : 1)}), soft = A.shadowShares(m, ray, {...top, sun: () => 0, diffuse: 0.25});
+const whole = A.skyLight(m, 30, ray.mu, ray.cosv, ray.mus).light[1];
+out.push([none, all, sunOnly, far, soft, A.shadowShares(m, ray, {...top, sun: () => 0}), whole]);
+out.push([A.shadowShares(m, {...ray, height: 8000, mu: 0.5}, top), A.SHADOWS]);
+out.push([err(() => A.air({isWebGLRenderer: true}, "earth", {shadows: {reech: 1}}))]);
+""")
+    spans, shares, (none, all_, sun_only, far, soft, again, whole), (over, defaults), errors = out
+    level, up, over_top, down, short, ground = spans
+    assert level[0] == 0 and 150000 < level[1] < 200000 and up[0] == 0 and up[1] == pytest.approx(2990, rel=1e-3)   # from the sea along the level the top is far; straight up 2,990 m
+    assert over_top[1] <= over_top[0] and down[0] == pytest.approx(10000, rel=0.01) and down[1] > down[0]            # from over the top: looking up nothing, looking down from where the ray comes under it
+    assert short == [0, 1000] and ground == [0, 50]                                                                 # the reach and the ray's end bound it
+    assert shares == [0, pytest.approx(0.1), pytest.approx(0.2), pytest.approx(0.6), pytest.approx(0.6)]           # none at the start, half way, all the way
+    assert none == [0, 0] and 0 < all_[0] < all_[1] < 1 and sun_only[1] < all_[1] and sun_only == again           # nothing casting: no shadow; more of the stretch, more shadow; deterministic
+    assert far[0] < far[1] and far[1] < sun_only[1] and soft[1] < sun_only[1]                                      # a shadow beyond 5 km darkens only the far half; a cloud's diffuse light softens it
+    assert whole > 0 and over == [0, 0] and defaults == {"reach": 200000, "share": 0.25, "steps": 24}             # a ray over every caster: nothing
+    assert errors[0] is not None and 'did you mean "reach"' in errors[0]
 
 PAGE = """
 import * as THREE from "three";

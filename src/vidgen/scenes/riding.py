@@ -1,4 +1,4 @@
-"""Riding beat actions (DESIGN.md §69.52, §69.53): ``get_in`` (or on), ``ride_to`` and
+"""Riding beat actions: ``get_in`` (or on), ``ride_to`` and
 ``get_out`` on the characters and vehicles (a ``bicycle``, a ``car``, a ``bus``; a ``boat`` on the
 stage's water; a ``hot_air_balloon`` and a ``toy_rocket`` in the air) of a ``stage``. Written
 against ``vidgen.api`` only, like project actions.

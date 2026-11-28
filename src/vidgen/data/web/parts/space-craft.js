@@ -1,4 +1,4 @@
-// The spacecraft of vidgen/space-craft (DESIGN.md §122.10) for the registry vidgen/parts (§122.5): what
+// The spacecraft of vidgen/space-craft for the registry vidgen/parts: what
 // `vidgen parts` draws on its contact sheet: every ready-made craft (kind "craft"), the kit's parts, its
 // surfaces on test shapes and its plumes (kind "craft-part"). Each tile: one hard sun with its shadows, a
 // faint planet-shine from below, a painted environment (a blue-white world under the craft) for the metal;

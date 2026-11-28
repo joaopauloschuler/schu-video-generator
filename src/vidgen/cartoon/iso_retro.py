@@ -1,4 +1,4 @@
-"""A retro-future kit of iso objects (DESIGN.md §107): the 1950s-60s "world of tomorrow" — a
+"""A retro-future kit of iso objects: the 1950s-60s "world of tomorrow" — a
 googie building with a boomerang roof and a starburst sign, a round tower with a saucer deck, a
 starburst sign, a ray-gun street lamp, an atomic sculpture, a monorail's beam on pylons, a
 mainframe of tape reels and blinking bulbs, a sunburst wall clock, a TV console, a kidney desk
@@ -694,7 +694,7 @@ def rocket_car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, revers
     return shapes
 
 
-#: Objects dressing a room's walls (DESIGN.md §108): (lowest, highest, reach into the room), tile
+#: Objects dressing a room's walls: (lowest, highest, reach into the room), tile
 #: units over the wall's base, of a poster and a wall shelf.
 WALL_SPANS: dict[str, tuple[float, float, float]] = {"poster": (1.2, 2.45, 0.05), "wall_shelf": (1.35, 2.45, 0.34)}
 #: A poster's picture's sky colour by kind, and a shelf's book colours.

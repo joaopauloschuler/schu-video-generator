@@ -1,4 +1,4 @@
-"""Step 209 (DESIGN.md §95.14): the scientific-accuracy lint rules and references.
+"""Step 209: the scientific-accuracy lint rules and references.
 
 The text checks are run on wrong statements (each must be found) and on correct ones (none may
 be); the scene checks on small projects. References are checked offline: every identifier

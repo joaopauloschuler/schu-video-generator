@@ -1,4 +1,4 @@
-"""Brass for score files (DESIGN.md §120.4): a solo trumpet, a horn and a low brass section,
+"""Brass for score files: a solo trumpet, a horn and a low brass section,
 synthesised from the things that make brass sound like brass.
 
 - **The spectrum follows the level.** A brass tube radiates little below its bell's cutoff and,

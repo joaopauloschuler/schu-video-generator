@@ -1,4 +1,4 @@
-"""Bodies (gravitational parameter GM and radius) and preset orbits (Phase X, DESIGN §98). No
+"""Bodies (gravitational parameter GM and radius) and preset orbits (Phase X). No
 manim.
 
 Sources (SI; marked in each entry):
@@ -84,7 +84,7 @@ class OrbitPreset:
     equinox of J2000: the planets, the Moon, Halley) or ``equator`` (the equator of the body it
     goes around: the ISS-like and geostationary orbits, the Galilean moons). The ``orbit`` scene
     draws every orbit seen from above its own reference plane and does not turn one into the
-    other; the ``web`` scenes' orbit data does (DESIGN.md §122.1)."""
+    other; the ``web`` scenes' orbit data does."""
 
     key: str
     body: Body

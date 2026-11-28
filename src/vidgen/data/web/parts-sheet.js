@@ -1,4 +1,4 @@
-// The page `vidgen parts` draws its contact sheet with (DESIGN.md §122.5): frame n builds part n of
+// The page `vidgen parts` draws its contact sheet with: frame n builds part n of
 // ctx.data.names in a scene of its own (vidgen/parts' default camera and light), sets it to its time
 // `at` and draws it, through vidgen/three-finish (bloom, ACES; no grain) unless the part says
 // {finish: false}. The previous part is taken down first: one browser, one renderer, every part.

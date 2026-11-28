@@ -1,6 +1,6 @@
 """What the MCP server (:mod:`vidgen.mcp_server`) needs that does not need the MCP SDK: the
-folder policy, command lines of the tools, progress parsing and pictures sized for a model
-(DESIGN.md §62). Kept apart so it is tested without the optional ``mcp`` package."""
+folder policy, command lines of the tools, progress parsing and pictures sized for a model.
+Kept apart so it is tested without the optional ``mcp`` package."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""``vidgen slides``: the video's key frames as one self-contained HTML slide deck (DESIGN.md §55).
+"""``vidgen slides``: the video's key frames as one self-contained HTML slide deck.
 
 The slides come from :func:`vidgen.deck.deck_frames` (shared with the PDF deck of Step 53). The
 page embeds every slide picture as a ``data:`` URI (WebP by default, or JPEG / PNG), the beats'

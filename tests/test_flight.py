@@ -1,4 +1,4 @@
-"""Flight paths (Step 385, DESIGN.md §123.7): the frames and their conversions both ways, the worlds'
+"""Flight paths (Step 385): the frames and their conversions both ways, the worlds'
 air against the page's, each manoeuvre against its closed form, smoothness where legs meet, the
 ground check and the lift, the landing, the re-entry's ends, determinism, the cache and the keys,
 the validation; the numpy port of ``vidgen/space-land``'s heights against the JavaScript (Node, a

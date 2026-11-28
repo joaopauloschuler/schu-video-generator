@@ -1,4 +1,4 @@
-"""Drawing a stage's room (DESIGN.md §69.42): :func:`draw_room` turns the shapes of
+"""Drawing a stage's room: :func:`draw_room` turns the shapes of
 :mod:`vidgen.cartoon.room` into mobjects in three layers, back to front: the room (wall,
 wallpaper, floor, skirting, ceiling), the views out of its windows (:class:`WindowViews`: the sky
 and its stars, never graded by the stage's light) and the window frames, sills and curtains.

@@ -1,4 +1,4 @@
-"""Built-in pronunciation lists, Step 165 (DESIGN.md §88): the shipped files, which list a beat's
+"""Built-in pronunciation lists, Step 165: the shipped files, which list a beat's
 voice uses, the order (built-in, files, `pronunciation:`), overrides, `null`, the opt-out,
 validate, the audio hash and `vidgen tts`, readback hints and `vidgen list-pronunciation`."""
 

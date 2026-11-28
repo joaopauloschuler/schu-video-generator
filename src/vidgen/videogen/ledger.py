@@ -1,8 +1,8 @@
-"""The spending ledger and the budget cap of generated video (DESIGN.md §113).
+"""The spending ledger and the budget cap of generated video.
 
 ``videogen-ledger.jsonl`` in the project: append-only JSON lines, one per event —
 ``submit_intent`` (``intent_id, provider, model, request_hash, estimate_usd``) just before a
-paid job is sent (written to disk first: DESIGN.md §113.10), ``submit`` (``job_id, provider,
+paid job is sent (written to disk first), ``submit`` (``job_id, provider,
 model, request_hash, estimate_usd``, and ``intent_id`` when one was recorded) when it is
 accepted, then one terminal event (``completed | failed | cancelled | expired``, with the
 reported ``cost_usd`` from ``usage.cost`` or ``null``, ``is_byok``). ``intent_resolved``
@@ -263,7 +263,9 @@ class BudgetState:
 
 
 def refusal(budget: BudgetState, estimate_usd: float | None, model: str) -> str | None:
-    """Why a paid job of ``estimate_usd`` may not be submitted now, else ``None``."""
+    """Why a paid job of ``estimate_usd`` may not be submitted now, else ``None`` (a job of $0 needs no budget)."""
+    if estimate_usd == 0:
+        return None
     if budget.cap_usd is None:
         return "paying needs a budget: set videogen: {budget_usd: 2.0} in video.yaml (a hard cap on what vidgen may spend)"
     if estimate_usd is None:

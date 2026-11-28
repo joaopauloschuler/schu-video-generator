@@ -1,4 +1,4 @@
-"""Words to check in a beat's narration (DESIGN.md §78): the word flags of ``vidgen readback``
+"""Words to check in a beat's narration: the word flags of ``vidgen readback``
 and the ``unclear_speech`` lint rule.
 
 :func:`flag_words` reads a beat's transcript (word times and, from faster-whisper, each word's

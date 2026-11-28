@@ -1,4 +1,4 @@
-"""Town iso objects (DESIGN.md §104, Phase AC Step 263): a street lamp, a traffic light, a bus
+"""Town iso objects (Phase AC Step 263): a street lamp, a traffic light, a bus
 stop, a mailbox, a fountain, a phone booth, a parked car, a bicycle and a newsstand. No manim.
 
 Drawn like :mod:`vidgen.cartoon.iso_objects`' objects (its frame, shading and helpers), which
@@ -390,7 +390,7 @@ def _car(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = Fal
     """A small parked car (``color``) side-on, its nose to the viewer's right: a body with
     wheels, doors and a handle, a cabin with windows (``detail``), bumpers, a grille and
     headlights; on, the headlights shine (light on the ground ahead) and the tail lights glow.
-    ``reverse``: its tail to the viewer's right (driving away up the picture, DESIGN.md §105): the
+    ``reverse``: its tail to the viewer's right (driving away up the picture): the
     rear window and the tail lights show there; ``spin``: its wheels' spokes turned so far
     (radians; ``None``: plain hubcaps). Driven, the stage draws it (:func:`car_shapes`)."""
     if look.driven:
@@ -400,7 +400,7 @@ def _car(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = Fal
 
 def car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = False, spin: float | None = None) -> list[Shape]:
     """The shapes of :func:`_car` (also for a car the stage drives); a ``rocket`` car's are
-    :func:`~vidgen.cartoon.iso_retro.rocket_car_shapes` (DESIGN.md §107)."""
+    :func:`~vidgen.cartoon.iso_retro.rocket_car_shapes`."""
     if "rocket" in f.item.features:
         from vidgen.cartoon.iso_retro import rocket_car_shapes   # it builds on this module
         return rocket_car_shapes(f, look, state, reverse=reverse, spin=spin)
@@ -413,7 +413,7 @@ def car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool
 
     a0, a1, b0, b1 = 0.1, w - 0.1, 0.2, 0.84
     # its headlights' pool on the road ahead; driving away up the picture the car hides the ground
-    # just ahead of it, so the pool lies further on and wider (DESIGN.md §105.8)
+    # just ahead of it, so the pool lies further on and wider
     reach, size = (1.0, 0.75) if reverse else (0.45, 0.55)
     shapes = light_pool(f.p(X(a1 + reach), (b0 + b1) / 2, 0.01), size, 0.9) if on else []
     shapes += f.box(a0, b0, 0.2, a1, b1, 0.68, body)

@@ -1,4 +1,4 @@
-"""Exact outlines of the cell world's shapes as cubic Bézier pieces in µm (DESIGN.md §95.6):
+"""Exact outlines of the cell world's shapes as cubic Bézier pieces in µm:
 what the renderer draws and what the boolean operations of :mod:`.regions` combine. A piece is
 four points ``(p0, p1, p2, p3)``; a closed outline is a list of pieces end to end. No manim."""
 

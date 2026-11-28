@@ -1,4 +1,4 @@
-// vidgen/space-craft: a spacecraft kit (DESIGN.md §122.10). Part of schu-video-generator (MIT licence);
+// vidgen/space-craft: a spacecraft kit. Part of schu-video-generator (MIT licence);
 // imported by a page as "vidgen/space-craft".
 //
 //   import {craft, craftKit, attach, around, craftEnvironment} from "vidgen/space-craft";
@@ -1204,7 +1204,7 @@ export class Craft {
    * data's burns are shown: the craft turns its nose along each burn, the engines fire for `seconds` centred on
    * it, and it turns back), target (a body's name: for "target" and the dishes), sun (default the data's Sun),
    * parent (the body its velocity is measured against; default the data's), camera, height}. Or fly a flight of
-   * ctx.flight (a web scene's flight_data, DESIGN.md §123.7): fly(ctx.flight, {flight: "Plane"}) — every frame
+   * ctx.flight (a web scene's flight_data): fly(ctx.flight, {flight: "Plane"}) — every frame
    * the craft stands where the flight is and turns as it does (nose, bank, angle of attack: the data's
    * attitude), in the scene's own axes. Returns the craft. */
   fly(space, options = {}) {

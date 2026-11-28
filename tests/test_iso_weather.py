@@ -1,4 +1,4 @@
-"""Step 172: weather on an iso place (DESIGN.md §90) — shelter from rain under roofs, crowns and
+"""Step 172: weather on an iso place — shelter from rain under roofs, crowns and
 bridges, puddles with ripples, settling snow on the place's tops, and speed lines along a walk's
 diagonal; a tiny render of it."""
 

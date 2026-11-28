@@ -1,5 +1,5 @@
 """Step 87: render speed for cartoons (part drawings cached by look, redraws that only transform
-them; the stage backdrop in Manim's static image, DESIGN.md §69.20)."""
+them; the stage backdrop in Manim's static image)."""
 
 from __future__ import annotations
 

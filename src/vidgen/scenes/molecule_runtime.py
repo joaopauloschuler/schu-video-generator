@@ -1,4 +1,4 @@
-"""The process runtime of the ``molecule`` scene (DESIGN.md §95.10; a mixin of
+"""The process runtime of the ``molecule`` scene (a mixin of
 :class:`~vidgen.scenes.molecule.Molecule`, split from it in Step 211): the animations of
 ``set_state``, ``transport``, ``diffuse``, ``osmosis`` and ``action_potential`` — plans from
 ``vidgen.cellworld.transport`` played with their captions (full or short, ``notes``), the

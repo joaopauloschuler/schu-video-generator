@@ -1,4 +1,4 @@
-"""Draw a scene description's frames with three.js in headless Chromium (DESIGN.md §114.4).
+"""Draw a scene description's frames with three.js in headless Chromium.
 
 One browser per scene render: :class:`PageRenderer` starts Chromium (:class:`~vidgen.browser.chromium.Chromium`,
 shared with the ``web`` scene), serves the page and the vendored three.js from ``vidgen/data/three``
@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from vidgen.browser import chromium
-from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
+from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels, webgl_backend
 from vidgen.browser.frames_clip import FrameProgress, FramesClipWriter
 from vidgen.errors import VidgenError
 from vidgen.fonts import FONTS_DIR
@@ -53,8 +53,10 @@ def _served() -> dict[str, Path]:
 
 
 def engine_id() -> str:
-    """What draws the frames, for the cache key: the page digest and the Playwright version."""
-    return f"page={page_digest()} playwright={playwright_version() or 'none'}"
+    """What draws the frames, for the cache key: the page digest, the Playwright version and, on
+    the GPU (``VIDGEN_WEBGL=gpu``), ``webgl=gpu``."""
+    gpu = " webgl=gpu" if webgl_backend() == "gpu" else ""
+    return f"page={page_digest()} playwright={playwright_version() or 'none'}{gpu}"
 
 
 def _serve(route: Any) -> None:
@@ -140,7 +142,7 @@ class PageRenderer:
 
 def write_clip(description: dict[str, Any], path: Path, intermediate: str = "lossless") -> None:
     """Draw every frame of ``description`` in order and write them to ``path`` (FFV1 in
-    Matroska, lossless RGB; ``compact``: H.264 4:4:4, DESIGN.md §120.9); written to a
+    Matroska, lossless RGB; ``compact``: H.264 4:4:4); written to a
     ``.partial`` file first, so a failure leaves none. Each PNG is decoded and encoded in a
     thread while the next frame is drawn, with progress lines (``3d frames 30/90, ...``) as a
     ``web`` scene's (Step 351, the same :class:`FramesClipWriter` and :class:`FrameProgress`)."""

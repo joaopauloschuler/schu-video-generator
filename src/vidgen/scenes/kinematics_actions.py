@@ -1,4 +1,4 @@
-"""The beat action of the ``kinematics`` scene type (Phase Y, Step 239; DESIGN §99.8): ``boost``
+"""The beat action of the ``kinematics`` scene type (Phase Y, Step 239): ``boost``
 moves a frame continuously — the arrows of the decay products (or of the particles) change as
 the frame speeds up, the sum grows from zero, β and γ count up, and the frame's numbers morph
 into the new frame's. Written against ``vidgen.api``; the scene draws

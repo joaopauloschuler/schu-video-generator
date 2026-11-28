@@ -1,4 +1,4 @@
-"""``vidgen parts``: a labelled contact sheet of the ready-made three.js parts (DESIGN.md §122.5).
+"""``vidgen parts``: a labelled contact sheet of the ready-made three.js parts.
 
 The parts live in the registry ``vidgen/parts`` (``data/web/modules/parts.js``); each shipped
 module describes its own in ``data/web/parts/<module>.js`` with ``definePart(info, make)``, whose

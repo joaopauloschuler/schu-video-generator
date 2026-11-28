@@ -186,7 +186,7 @@ def test_effects_follow_their_mover_and_leave_it_alone() -> None:
     lines = MotionEffect(MotionEffectCue("speed_lines", 0.0, 1.0), pip, delay=0.0, seed=3)
     lines.update(0.5)
     assert lines.get_right()[0] < pip.get_left()[0]   # behind its back, going along with it
-    assert list(pip.get_family()) == family   # nothing added to the character (DESIGN.md §69.22)
+    assert list(pip.get_family()) == family   # nothing added to the character
 
     ball = Circle(radius=0.15)
     flying = MotionEffect(MotionEffectCue("speed_lines", 0.0, 1.0), ball, delay=0.0, seed=4)

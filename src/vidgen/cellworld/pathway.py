@@ -1,4 +1,4 @@
-"""Signalling pathways as data (DESIGN.md §95.12): a graph of nodes (ligands, receptors,
+"""Signalling pathways as data: a graph of nodes (ligands, receptors,
 proteins, complexes, second messengers, genes, outcomes) in compartment bands (extracellular
 space, plasma membrane, cytosol, ER, mitochondrion, nucleus) joined by SBGN-inspired arcs
 (activation arrows, inhibition T-bars, catalysis, phosphorylation, binding, translocation,

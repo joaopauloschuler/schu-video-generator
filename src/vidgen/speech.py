@@ -1,4 +1,4 @@
-"""Speech timing: where the words of a beat are spoken (DESIGN.md §17, §43).
+"""Speech timing: where the words of a beat are spoken.
 
 - :func:`spoken_words` counts the words a narrator says for a text (numbers and acronyms take
   longer), :func:`speech_bounds` finds the speech in an MP3 (leading / trailing silence cut off);

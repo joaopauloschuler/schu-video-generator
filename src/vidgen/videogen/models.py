@@ -1,5 +1,4 @@
-"""OpenRouter's public video model list: fetch (no key), cache, checks and cost estimates
-(DESIGN.md §113).
+"""OpenRouter's public video model list: fetch (no key), cache, checks and cost estimates.
 
 ``GET https://openrouter.ai/api/v1/videos/models`` lists each model's supported durations,
 resolutions, aspect ratios, sizes, frame types, ``generate_audio`` / ``seed`` capability,
@@ -12,7 +11,7 @@ resolution tier, ``with_audio`` / ``without_audio``, ``text_to_video`` / ``image
 ``reference_`` and ``video_continuation`` say when they apply); ``video_tokens`` SKUs are per
 token, estimated as ``width x height x 24 fps x seconds / 1024`` (ByteDance's Seedance token
 formula), with each video reference counted for as many seconds as the clip under a
-``with_video_input`` SKU (the real charges of Step 312, DESIGN.md §113.11); ``image_input`` / ``reference_images`` SKUs are per input picture; ``minimum_...`` is
+``with_video_input`` SKU (the real charges of Step 312); ``image_input`` / ``reference_images`` SKUs are per input picture; ``minimum_...`` is
 a floor per generation. Where several SKUs could apply, the estimate takes the highest (a
 conservative budget).
 """
@@ -67,6 +66,8 @@ class VideoModel:
     seed: bool | None = None
     passthrough: tuple[str, ...] = ()
     pricing: dict[str, str] = field(default_factory=dict)
+    #: Who runs it: ``openrouter`` (the public list) or ``comfyui`` (a workflow kept with vidgen).
+    provider: str = "openrouter"
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> VideoModel:
@@ -101,6 +102,7 @@ class VideoModel:
             "resolutions": _listed(self.resolutions), "aspect_ratios": _listed(self.aspect_ratios), "sizes": _listed(self.sizes),
             "frame_images": _listed(self.frame_types), "generate_audio": self.generate_audio, "seed": self.seed,
             "passthrough": list(self.passthrough), "pricing_skus": dict(self.pricing), "prices": price_lines(self),
+            "provider": self.provider,
         }
 
 
@@ -128,11 +130,17 @@ class Catalog:
 
     def find(self, model: str) -> VideoModel:
         """The model ``model``. Raises :class:`VidgenError` with a did-you-mean if absent."""
-        for m in self.models:
+        for m in self.with_workflows():
             if m.id == model:
                 return m
-        ids = [m.id for m in self.models]
-        raise VidgenError(f"OpenRouter lists no video model {model!r}{did_you_mean(model, ids)}; `vidgen generate models` lists them")
+        ids = [m.id for m in self.with_workflows()]
+        raise VidgenError(f"OpenRouter lists no video model {model!r} and vidgen keeps no workflow of that name{did_you_mean(model, ids)}; `vidgen generate models` lists them")
+
+    def with_workflows(self) -> list[VideoModel]:
+        """The listed models and the ComfyUI workflows kept with vidgen (:mod:`.comfyui`)."""
+        from vidgen.videogen.comfyui import workflow_records
+
+        return [*self.models, *workflow_records()]
 
 
 def default_cache_path() -> Path:
@@ -192,7 +200,7 @@ def _read_cache(path: Path) -> tuple[float, Any] | None:
 
 
 #: Model id prefixes known to run a first-frame job or a reference job, never both: with a
-#: first frame the job is accepted and the references are silently left out (DESIGN.md §113.13).
+#: first frame the job is accepted and the references are silently left out.
 #: Only models with evidence are listed.
 FIRST_FRAME_OR_REFERENCES: tuple[str, ...] = ("bytedance/seedance-",)
 
@@ -205,10 +213,14 @@ def known_first_frame_with_references(model: str) -> bool | None:
 @dataclass(frozen=True)
 class GuideOpeningTemplate:
     """How a ``first_frame_in: guide`` prompt names its inputs for one kind of model: ``opens``
-    takes ``{video}``, ``shows`` takes ``{pictures}``, ``{s}`` and ``{who}``, ``voice`` takes
-    ``{audio}`` and ``{who}``; the token fields take the input's number ``{n}`` of its kind."""
+    (``opens_final`` for a ``guide: final``) takes ``{video}``, ``shows`` takes ``{pictures}``,
+    ``{s}`` and ``{who}``, ``voice`` takes ``{audio}`` and ``{who}``, ``soundtrack`` (the film's
+    sound, ``audio: mix``) takes ``{audio}``; the token fields take the input's number ``{n}`` of
+    its kind."""
 
     opens: str
+    opens_final: str = "{video} opens on the exact starting picture of this scene and then shows the finished render of the shot"
+    soundtrack: str = "{audio} is the shot's soundtrack (narration and music): time the movement to it"
     shows: str = "{pictures} show{s} {who}"
     voice: str = "{audio} is {who}'s voice"
     image_token: str = "@image{n}"
@@ -221,6 +233,8 @@ GUIDE_OPENING_TEMPLATES: dict[str, GuideOpeningTemplate] = {
     "bytedance/seedance-": GuideOpeningTemplate(
         "{video} opens on the exact starting picture of this scene and then shows the movement as a plain 3D layout: "
         "begin the clip on that picture and follow the layout's positions and movement",
+        "{video} opens on the exact starting picture of this scene and then shows the finished computer render of the shot: "
+        "begin the clip on that picture and follow the render's positions, movement and timing",
     ),
 }
 
@@ -267,8 +281,14 @@ def _one_of(name: str, value: str, listed: tuple[str, ...] | None, model: VideoM
 
 
 def check_request(request: VideoRequest, model: VideoModel) -> RequestCheck:
-    """``request`` against ``model``'s listed settings."""
+    """``request`` against ``model``'s listed settings (a workflow's own rules for a ComfyUI workflow)."""
+    if model.provider == "comfyui":
+        from vidgen.videogen.comfyui import check_workflow_request
+
+        return check_workflow_request(request, model)
     check = RequestCheck()
+    if request.fps is not None:
+        check.problems.append(f"{model.id} makes clips at its own frame rate: fps: is for vidgen's ComfyUI workflows (ltx-2.3-union-control)")
     if request.duration is not None:
         if model.durations is None:
             check.notes.append(f"{model.id} lists no durations (its length follows its inputs): duration {request.duration} is not sent")
@@ -379,7 +399,11 @@ def estimate(request: VideoRequest, model: VideoModel, *, duration: float | None
     """The estimated cost of ``request`` from ``model``'s ``pricing_skus`` (the highest SKU
     that could apply). ``duration`` (seconds) prices a model without a duration setting (its
     length follows its audio); otherwise the request's duration, else the longest allowed.
-    ``minimum``: apply a per-generation minimum price."""
+    ``minimum``: apply a per-generation minimum price. A ComfyUI workflow costs $0."""
+    if model.provider == "comfyui":
+        from vidgen.videogen.comfyui import workflow_estimate
+
+        return workflow_estimate()
     seconds = float(duration if duration is not None else request.duration or 0) or (max(model.durations) if model.durations else 0.0)
     if not model.pricing:
         return Estimate(None, f"price unknown: {model.id} lists no prices")
@@ -429,7 +453,10 @@ def estimate(request: VideoRequest, model: VideoModel, *, duration: float | None
 
 def price_lines(model: VideoModel) -> list[str]:
     """``480p ~$0.104/s`` per listed resolution (the estimate of one second, 16:9, no
-    inputs), or one line for a model without resolutions; ``price unknown`` when none works."""
+    inputs), or one line for a model without resolutions; ``price unknown`` when none works;
+    ``$0 (comfyui)`` for a workflow."""
+    if model.provider == "comfyui":
+        return ["$0 (comfyui: your own GPU)"]
     tiers: Iterable[str | None] = sorted(model.resolutions, key=lambda r: TIER_SHORT_SIDE.get(r.lower(), 0)) if model.resolutions else [None]
     lines = []
     for tier in tiers:

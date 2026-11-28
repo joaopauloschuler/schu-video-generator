@@ -3,7 +3,7 @@ drawing: where each plot area, tick label and axis title goes. Text is measured 
 (the drawing layer passes one that measures real text; tests pass :func:`approx_measure`), so
 the same inputs always give the same layout.
 
-Style (the chart scenes' style, §33): y tick labels right-aligned left of the plot, the y title
+Style (the chart scenes' style): y tick labels right-aligned left of the plot, the y title
 above them, left-aligned (horizontal text, readable on phones), x tick labels under the plot and
 the x title under them, centred. Labels that would touch are thinned to every k-th one. Panels
 stacked in ``rows`` share their x axis (only the lowest shows its labels); panels side by side in

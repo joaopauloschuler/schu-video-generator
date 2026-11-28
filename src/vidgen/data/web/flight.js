@@ -1,4 +1,4 @@
-// vidgen's flight helper for a `web` scene with `flight_data:` (DESIGN.md §123.7). Run by Chromium after
+// vidgen's flight helper for a `web` scene with `flight_data:`. Run by Chromium after
 // vidgen's page script and its orbit helper, only on pages of such scenes: the flights travel in the
 // orbit bridge's payload (`info.orbits.flights`); this takes them out and turns them into `ctx.flight`
 // (a page with flights and no orbit data then has no `ctx.orbits`).

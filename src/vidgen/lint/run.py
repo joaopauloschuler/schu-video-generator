@@ -1,5 +1,5 @@
-"""``vidgen lint``: run the rules over a video's beat-end stills (DESIGN.md §16) and its scenes'
-activity over time (§17)."""
+"""``vidgen lint``: run the rules over a video's beat-end stills and its scenes'
+activity over time."""
 
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def _pattern(text: str) -> re.Pattern[str]:
 def rule_objects(objects: list[dict[str, Any]], rule_name: str, skips: dict[str, set[str]]) -> list[dict[str, Any]]:
     """The objects rule ``rule_name`` checks: not those of an overlay type that exempts its
     objects from it (``skips``: overlay id -> rules; a faint watermark: ``contrast``), nor a web
-    page's element opted out of it (``lint_off``: ``data-vidgen-lint="off"`` / ``"off:<rule>"``, §118.12)."""
+    page's element opted out of it (``lint_off``: ``data-vidgen-lint="off"`` / ``"off:<rule>"``)."""
     return [o for o in objects
             if rule_name not in skips.get(o.get("overlay"), ()) and not {rule_name, "all"} & set(o.get("lint_off", ()))]
 
@@ -130,7 +130,7 @@ def _scene_findings(
     still_rules = [name for name in rules if RULES[name].scope == "still"]
     for frame in layout["frames"]:
         end = frame["k"] == frame["n"]
-        # mid-beat stills show animations in progress: only rules that ask for them (§101.4)
+        # mid-beat stills show animations in progress: only rules that ask for them
         frame_rules = still_rules if end else [name for name in still_rules if RULES[name].mid_beat]
         if not end and not frame_rules:
             continue
@@ -390,7 +390,7 @@ def lint_project(
     if UNCLEAR_SPEECH in names and project.config.lint.rules.unclear_speech.severity != "off":
         speech_flags = _speech_flags(project, selected, log)
 
-    per_beat = SHORTS_STILLS if project.config.shorts_zones is not None else 1   # a Short: mid-beat stills too (§101.4)
+    per_beat = SHORTS_STILLS if project.config.shorts_zones is not None else 1   # a Short: mid-beat stills too
     to_render = [sid for sid in selected if force or not _stills_current(project, preview, sid, per_beat)]
     runs = render_scenes(project, preview, to_render, jobs=jobs, frames=per_beat)
     result = LintResult(

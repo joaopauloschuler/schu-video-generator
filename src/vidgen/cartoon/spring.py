@@ -1,5 +1,5 @@
 """A damped spring for parts that lag and wobble behind what carries them (antennae, ears, tails,
-hair, hanging signs; DESIGN.md §69.15), worked out in closed form without manim.
+hair, hanging signs), worked out in closed form without manim.
 
 A part on a spring of unit mass follows a target ``s``: ``x'' = stiffness·(s − x) − damping·x'``.
 :meth:`Spring.follow` gives ``x`` at any time as a pure function of the target's history (the

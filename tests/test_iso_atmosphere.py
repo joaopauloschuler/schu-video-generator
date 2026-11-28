@@ -1,4 +1,4 @@
-"""Step 271: iso weather (DESIGN.md §105.4) — the place's lights mirrored in its puddles at night,
+"""Step 271: iso weather — the place's lights mirrored in its puddles at night,
 fog lying over the place in bands by depth, and its plants and balloons swaying in the wind; a
 tiny render of all three."""
 

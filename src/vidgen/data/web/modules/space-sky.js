@@ -1,4 +1,4 @@
-// vidgen/space-sky: the sky of a space scene (DESIGN.md §122.6). Part of schu-video-generator (MIT
+// vidgen/space-sky: the sky of a space scene. Part of schu-video-generator (MIT
 // licence); imported by a page as "vidgen/space-sky".
 //
 //   import {spaceSky} from "vidgen/space-sky";

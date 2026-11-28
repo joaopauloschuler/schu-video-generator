@@ -1,4 +1,4 @@
-"""The file of an audio-only render (DESIGN.md §111.1): ``build/<render>/audio/mix.wav`` (48 kHz
+"""The file of an audio-only render: ``build/<render>/audio/mix.wav`` (48 kHz
 stereo 24-bit) encoded by the ``ffmpeg`` executable as ``audio_output`` asks: WAV (16 or 24-bit
 PCM), MP3 (LAME, constant bitrate), M4A (AAC) or Ogg Opus; mono (the channels' average) or
 stereo; resampled to ``sample_rate``; tagged with ``metadata`` (the title, artist, album...).

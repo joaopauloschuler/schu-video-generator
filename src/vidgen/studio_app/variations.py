@@ -1,4 +1,4 @@
-"""Variations (DESIGN.md §94.17): four siblings of a version, each a different, musically sensible
+"""Variations: four siblings of a version, each a different, musically sensible
 kind of change, made by fixed edits of its score text — the same text and shuffle counter always
 give the same four (no random numbers).
 
@@ -19,7 +19,7 @@ others when a kind has nothing to offer):
   louder or the pads opening there), the drums building in, the pad breathing over the loop.
 
 Tempo is never changed (a tempo whose piece length has a large prime factor makes every FFT of
-the renderer several times slower, §94.14), nor the key.
+the renderer several times slower), nor the key.
 
 The studio renders and checks each candidate in the background (:class:`VariationBatches`):
 ``variations/<batch>/batch.json`` and ``<letter>.yaml``. Keeping one makes it the next version

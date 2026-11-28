@@ -1,4 +1,4 @@
-"""Voice effects (DESIGN.md §100.2): the presets, the filter chains, the config, the hash and a
+"""Voice effects: the presets, the filter chains, the config, the hash and a
 real ffmpeg run over a fake Kokoro voice."""
 
 from __future__ import annotations

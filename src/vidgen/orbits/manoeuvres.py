@@ -1,4 +1,4 @@
-"""Manoeuvres for the ``orbit`` scene (Phase X, Step 231, DESIGN §98.5): impulsive burns (a
+"""Manoeuvres for the ``orbit`` scene (Phase X, Step 231): impulsive burns (a
 velocity change Δv at an instant, written in the local frame prograde / radial / normal), the
 trajectory they make (a chain of Kepler arcs, each from the state after a burn, checked for an
 arc that would hit the body orbited), and the classic transfers between circular coplanar orbits

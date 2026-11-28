@@ -1,4 +1,4 @@
-"""The molecular close-up of a membrane (DESIGN.md §95.9): which membrane a stretch of outline
+"""The molecular close-up of a membrane: which membrane a stretch of outline
 is (from the compartments on its two sides), which side is its exoplasmic leaflet, and the
 lipids along it — phospholipids, sterols (cholesterol; phytosterols in plants; none in
 bacteria or the inner mitochondrial membrane), glycolipids only on the exoplasmic leaflet,

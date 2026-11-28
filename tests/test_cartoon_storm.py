@@ -1,5 +1,5 @@
 """Step 127: lightning (flash timing, the bolt, thunder after a delay), rainbows and the sun and
-moon moving across the sky with the shadows turning (DESIGN.md §69.61)."""
+moon moving across the sky with the shadows turning."""
 
 from __future__ import annotations
 

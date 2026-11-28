@@ -1,4 +1,4 @@
-"""The studio's check panel (DESIGN.md §94.15): ``vidgen music check`` of a version, made in the
+"""The studio's check panel: ``vidgen music check`` of a version, made in the
 background from the stems the studio already keeps (nothing is rendered again), giving way to
 renders and dropped as soon as a newer version is asked for, so checking never slows editing.
 

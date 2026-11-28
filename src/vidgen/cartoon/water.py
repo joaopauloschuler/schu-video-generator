@@ -1,4 +1,4 @@
-"""A stage's water, drawn and moved with manim (DESIGN.md §69.53); the waves and the bobbing are
+"""A stage's water, drawn and moved with manim; the waves and the bobbing are
 pure functions of :mod:`vidgen.cartoon.vehicle_paths`.
 
 The water is a strip at the front of the stage, from the bottom of the frame up to its surface

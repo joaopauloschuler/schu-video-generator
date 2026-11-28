@@ -1,5 +1,5 @@
 # Gradient descent, one step at a time: a short maths-and-code explainer that uses the
-# presentation toolkit (docs/CONFIG.md; DESIGN §87):
+# presentation toolkit (docs/CONFIG.md):
 #   - actions on a spoken word: at: "@word" (a dot tracing, a vector scaling, a morph, an output)
 #   - one colour per concept: terms: (loss, gradient, learning rate) in every text, the
 #     equation's symbols, the chart's series and the karaoke captions

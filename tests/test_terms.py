@@ -1,4 +1,4 @@
-"""One colour per concept (DESIGN.md §87.3): the video's ``terms:`` map, where it colours text
+"""One colour per concept: the video's ``terms:`` map, where it colours text
 (fit_text, T, captions, callouts, line series, equations), the scene opt-out, validation, the
 ``concept_colors`` lint rule, and one tiny render."""
 

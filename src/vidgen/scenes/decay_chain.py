@@ -1,7 +1,7 @@
 """``decay_chain``: a chain of decays drawn as a tree — each unstable particle with its mean life
 τ and decay length cτ from PDG 2024 (a resonance with its width Γ), arrows to its products, the
 branching fraction of the decay when the model lists it, and each decay checked by the
-conservation checker (Phase Y, Step 241; DESIGN §99.12). Left to right in 16:9, top to bottom in
+conservation checker (Phase Y, Step 241). Left to right in 16:9, top to bottom in
 9:16; one decay per beat."""
 
 from typing import Any, Literal

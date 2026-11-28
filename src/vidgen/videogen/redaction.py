@@ -1,4 +1,4 @@
-"""Keeps a quick tunnel's secret path out of what vidgen prints or stores (DESIGN.md §115.6).
+"""Keeps a quick tunnel's secret path out of what vidgen prints or stores.
 
 A shared file's address is ``https://<words>.trycloudflare.com/<secret>/<name>``. A provider's
 error can quote it, and that text reaches the terminal, ``--json``, MCP and the ledger.

@@ -1,4 +1,4 @@
-"""The studio's local web server (DESIGN.md §94.1, §94.2): standard library only
+"""The studio's local web server: standard library only
 (:class:`http.server.ThreadingHTTPServer`), bound to 127.0.0.1, serving the page (package data,
 no build step, no CDN), the bundled fonts, the JSON API of :class:`StudioApp` and the rendered
 audio with HTTP range requests (so the browser can seek).

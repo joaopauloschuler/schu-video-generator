@@ -1,4 +1,4 @@
-"""The cartoon host pointing and reacting (DESIGN.md §71.1, §71.2): the pointing and moving
+"""The cartoon host pointing and reacting: the pointing and moving
 geometry, the host actions' checks, the scene types' reveal steps, the automatic-directing planner,
 and one tiny render with a point, a reaction, a move and an exit."""
 

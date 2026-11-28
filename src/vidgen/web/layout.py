@@ -1,9 +1,9 @@
-"""What a ``web`` page shows, as layout objects (DESIGN.md §118.12). No browser here.
+"""What a ``web`` page shows, as layout objects. No browser here.
 
 ``data/web/layout.js`` reads the page after a frame's screenshot: every element that holds visible
 text (its box, size as drawn, colour, what is behind it, opacity, what clips it) in page pixels,
 and the text the page declares with ``window.vidgen.layout(t, ctx)`` (a canvas's text). This module
-turns one reading into text objects of the layout dump (DESIGN.md §15), in frame pixels, so the
+turns one reading into text objects of the layout dump, in frame pixels, so the
 layout lint rules (``off_frame``, ``text_overlap``, ``min_font``, ``contrast``...) check them as
 they check vidgen's own text, plus ``clipped`` / ``cut`` for ``web_clipped``.
 """

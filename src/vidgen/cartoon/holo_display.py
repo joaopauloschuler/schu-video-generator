@@ -1,4 +1,4 @@
-"""A hologram display (DESIGN.md §100.10): a projector on the floor or a desk throwing a floating,
+"""A hologram display: a projector on the floor or a desk throwing a floating,
 translucent panel of light that shows moving patterns. The maths, no manim;
 :mod:`vidgen.cartoon.living_drawing` draws it.
 
@@ -33,7 +33,7 @@ TEXT_LINES = 7
 CURVE_POINTS = 72
 #: Text: seconds per line written, and how many lines show before they scroll.
 LINE_SECONDS = 0.7
-#: ``equations`` and ``timelines`` (DESIGN.md §102.10): how many glyph strokes, wings, small
+#: ``equations`` and ``timelines``: how many glyph strokes, wings, small
 #: panels and dots they draw at most (the drawing keeps this many members).
 GLYPHS = 48
 WINGS = 12
@@ -168,7 +168,7 @@ def _text(age: float, grow: float, seed: int) -> tuple[tuple[float, float, float
     return tuple(lines)
 
 
-# ----- floating formulas and timelines (DESIGN.md §102.10) ----------------------------------------
+# ----- floating formulas and timelines ----------------------------------------
 
 #: Formula symbols as strokes in a unit box (x across, y up, 0..1): a sum, an integral, equals,
 #: x, psi, pi, a root, plus.

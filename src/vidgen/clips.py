@@ -216,7 +216,7 @@ class ClipReader:
     """Decodes a clip's frames in order and returns the one showing at a time in the file, as an
     RGBA array of ``size`` = (width, height) pixels cut from ``crop`` = (x, y, w, h) fractions of
     the picture. Going back (a loop) or far ahead seeks; only the current frame is kept. A
-    compact clip of drawn frames (DESIGN.md §120.9) keeps its alpha in a second video stream
+    compact clip of drawn frames keeps its alpha in a second video stream
     titled ``alpha``: a second reader (``stream``: its index among the video streams, read as
     ``gray``) follows it and its picture becomes the alpha channel."""
 

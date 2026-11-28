@@ -1,4 +1,4 @@
-"""Iso shapes (:mod:`vidgen.cartoon.iso_drawing`) as Manim vector mobjects (DESIGN.md §90.6):
+"""Iso shapes (:mod:`vidgen.cartoon.iso_drawing`) as Manim vector mobjects:
 an iso diagram's blocks stay sharp at any zoom and can be recoloured, moved and faded one by
 one, which a Pillow picture of the place (the iso stage's drawing) cannot."""
 

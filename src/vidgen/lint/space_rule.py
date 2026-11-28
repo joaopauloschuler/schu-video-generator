@@ -1,4 +1,4 @@
-"""The ``space`` scene's lint rule (DESIGN.md §122.12): ``space_scene``, what its params show before
+"""The ``space`` scene's lint rule: ``space_scene``, what its params show before
 anything is drawn. A world whose globe turns more than ``degrees`` a frame (the orbit data's turning
 under its speed-up, or a stated ``spin``) strobes; a body drawn enlarged that reaches past another's
 middle covers it; free-standing worlds placed inside each other. The page's own checks (a subject
@@ -8,7 +8,7 @@ each time: the page reports them as warnings when it is drawn (``vidgen still``,
 The scene's narration saying "to scale" while it enlarges bodies or compresses distances is
 ``orbit_scale``'s (:mod:`vidgen.lint.orbit_rule`), which reads the scene's ``scale:``.
 
-Also (Step 392, DESIGN.md §123.14): a scene whose combination of parts costs ``seconds`` a frame or more
+Also (Step 392): a scene whose combination of parts costs ``seconds`` a frame or more
 at 1280x720 by the one cost table (:mod:`vidgen.scenes.space_costs`, printed in the space cookbook): the
 estimate, the minutes its frames take, and what is cheaper."""
 

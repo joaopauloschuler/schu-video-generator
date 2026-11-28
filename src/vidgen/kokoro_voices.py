@@ -1,4 +1,4 @@
-"""Kokoro-82M's languages and voices (DESIGN.md §68): no PyTorch, no ``kokoro`` package needed.
+"""Kokoro-82M's languages and voices: no PyTorch, no ``kokoro`` package needed.
 
 Kokoro names a language with one letter (``voice.lang``) and every voice starts with its
 language's letter, then ``f`` / ``m`` (female / male): ``af_heart`` is American English,

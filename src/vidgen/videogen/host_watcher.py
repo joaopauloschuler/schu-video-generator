@@ -1,4 +1,4 @@
-"""The small process beside a quick tunnel: cleans up when vidgen dies without closing it (DESIGN.md §115.5).
+"""The small process beside a quick tunnel: cleans up when vidgen dies without closing it.
 
 Run as a file, standard library only: ``python -I -S host_watcher.py FOLDER [ALIVE_FD]``.
 

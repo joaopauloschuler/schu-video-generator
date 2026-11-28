@@ -2,7 +2,7 @@
 and a dimension line, each with an optional label placed outside it (exported by ``vidgen.api``).
 
 ``function_plot`` draws them on its plane (data points mapped to the frame first) and a project's
-own scene can draw the same marks on anything (DESIGN §87.7). The builders take Manim points and
+own scene can draw the same marks on anything. The builders take Manim points and
 a label mobject (already made, e.g. with ``T``), and return a :class:`GeometryMark` whose label
 has been moved into place.
 """

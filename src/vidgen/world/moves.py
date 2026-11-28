@@ -1,4 +1,4 @@
-"""Moving in a platform level (DESIGN.md §86.7): walking along the tiles (stepping up and down,
+"""Moving in a platform level: walking along the tiles (stepping up and down,
 stopping at edges), climbing ladders and jumping between platforms, planned from where a body
 stands and where it is asked to go.
 
@@ -7,7 +7,7 @@ paths and parabolic arcs). The stage renders the plans; a game could feed them a
 instead of a script. A body is a box :data:`BODY_WIDTH` of its height wide standing on its feet;
 ground and platforms are solid, a cloud is one-way (a body stands on its top, walks through it and
 jumps up through it from below), a ladder is climbed and its top is a place to stand. A closed
-door and a blocker are :class:`Obstacle` s (DESIGN.md §86.8): they shut their column from their
+door and a blocker are :class:`Obstacle` s: they shut their column from their
 feet up to the tile above them. A coin or a star the body's box touches on the way is picked up
 (:func:`route_pickups`, :func:`jump_pickups`).
 """

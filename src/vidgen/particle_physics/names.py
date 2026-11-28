@@ -1,4 +1,4 @@
-"""Finding a particle by any common spelling (Phase Y, Step 237; DESIGN §99.2). No manim.
+"""Finding a particle by any common spelling (Phase Y, Step 237). No manim.
 
 Accepted: the key (``pi+``, ``anti-nu_e``, ``K0_S``, ``J/psi``), names (``proton``, ``positron``,
 ``muon``), Unicode as printed (``π⁺``, ``ν̄ₑ``, ``ν̄_μ``, ``K̄⁰``, ``Σ̄⁻``, ``Δ⁺⁺``, ``Υ(1S)``, ``e⁺``)

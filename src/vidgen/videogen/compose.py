@@ -1,4 +1,4 @@
-"""Where the picked takes go in the film (DESIGN.md §113.4).
+"""Where the picked takes go in the film.
 
 :func:`scene_placements` lists, for one scene, every generated shot whose beat shows a take
 (``generated_shot.place`` true and a take chosen, :func:`vidgen.videogen.takes.chosen_take`): the
@@ -6,11 +6,14 @@ take, the shot's start in the scene's render (its beat's start on the planned ti
 part's offset), its length (the beat's window, or the part's: the snapped clip is trimmed to it)
 and how it is laid in (``fit``, ``color_match``, fades of ``crossfade`` seconds against vidgen's
 own picture: none at the scene's start or end, where the film's transitions join scenes, and none
-between two takes that meet; the scene's last beat keeps its take through the scene's fade-out
+between two takes that meet; a part that follows the part before it is colour-matched to that
+part's last frame at the cut, eased out over a second, ``match_join``; a chained part is laid in from
+its ``lead`` frame, :mod:`vidgen.videogen.chain`); the scene's last beat keeps its take through the scene's fade-out
 and hold, so vidgen's picture never flashes between takes). The scene's renderer draws them
 (:class:`vidgen.generated_layer.GeneratedLayer`) under the overlays and captions; the scene's
 fingerprint holds them, so a new pick renders the scene again. Drafts (``--draft``, and the guide
-renders of ``vidgen generate inputs``) show vidgen's own picture.
+renders of ``vidgen generate inputs``) and a project :meth:`~vidgen.project.Project.without_takes`
+(the finished render of ``guide: final``) show vidgen's own picture.
 
 A beat split into parts (longer than the model's longest clip) has a take folder per part
 (``takes/<beat>_p<n>``); the parts share the beat's window equally, as planned.
@@ -23,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from vidgen.project import Project
+from vidgen.videogen.chain import lead_frames
 from vidgen.videogen.takes import TAKES_DIR, chosen_take
 
 
@@ -42,16 +46,22 @@ class Placement:
     fade_in: float
     fade_out: float
     color_match: float
+    #: The take follows the previous part of its beat: its colours are matched to that take's last frame at the cut.
+    match_join: bool = False
+    #: Frames of the take hidden at its start (a chained part, :mod:`vidgen.videogen.chain`): it is laid in from this frame on.
+    lead: int = 0
 
     def fingerprint(self, root: Path) -> list[Any]:
         """What the scene's render depends on (the take by size and modification time)."""
         st = self.take.stat()
         rel = self.take.relative_to(root).as_posix() if self.take.is_relative_to(root) else str(self.take)
-        return [self.shot, rel, st.st_size, st.st_mtime_ns, round(self.start, 6), round(self.length, 6), self.fit, self.fade_in, self.fade_out, self.color_match]
+        data = [self.shot, rel, st.st_size, st.st_mtime_ns, round(self.start, 6), round(self.length, 6), self.fit, self.fade_in, self.fade_out, self.color_match]
+        data += ["lead", self.lead] if self.lead else []
+        return [*data, "match_join"] if self.match_join else data
 
 
 def _wants_placing(project: Project) -> bool:
-    if getattr(project, "draft", False):
+    if getattr(project, "draft", False) or not getattr(project, "takes_shown", True):
         return False
     if not (project.root / TAKES_DIR).is_dir():
         return False
@@ -76,9 +86,11 @@ def scene_placements(project: Project, scene_id: str | None = None) -> list[Plac
         # the scene's last beat keeps its take through the scene's end (fade-out, hold): no flash
         # of vidgen's own picture between two takes
         last = project.scene(shot.scene_id).beats[-1].id == shot.beat.id
+        placed = False   # the part before this one is shown
         for k, part in enumerate(parts):
             take = chosen_take(project.root, part)
             if take is None:
+                placed = False
                 continue
             start = shot.start - shot.scene_start + k * length
             to_end = last and k == len(parts) - 1
@@ -87,7 +99,8 @@ def scene_placements(project: Project, scene_id: str | None = None) -> list[Plac
             # transitions join scenes), not between two takes (a cut)
             fade_in = crossfade if start > 1e-6 else 0.0
             fade_out = 0.0 if to_end else crossfade
-            out.append(Placement(shot.scene_id, part, take.path, take.number, take.model, start, shown, shot.spec.fit, fade_in, fade_out, settings.color_match))
+            out.append(Placement(shot.scene_id, part, take.path, take.number, take.model, start, shown, shot.spec.fit, fade_in, fade_out, settings.color_match, placed, lead_frames(k + 1, shot.spec.first_frame_source)))
+            placed = True
     out.sort(key=lambda p: (p.scene, p.start))
     for i in range(len(out) - 1):
         a, b = out[i], out[i + 1]
@@ -108,7 +121,7 @@ def _parts(root: Path, beat_shot: str) -> list[str]:
 
 def clip_takes(project: Project, scene_id: str | None = None) -> list[tuple[str, int, str]]:
     """``(shot, take number, model)`` of the takes that ``video_clip`` scenes (of ``scene_id``, or
-    every one) play from ``takes/<shot>/<n>.mp4``: the film of ``film.yaml`` (DESIGN.md §113.16),
+    every one) play from ``takes/<shot>/<n>.mp4``: the film of ``film.yaml``,
     which lays no generated shot over a beat. The model is ``?`` without a sidecar."""
     from vidgen.videogen.takes import takes_of
 

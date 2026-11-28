@@ -1,4 +1,4 @@
-"""Generated video shots, inputs and sheets (DESIGN.md §113.3): reference / style sheets made by
+"""Generated video shots, inputs and sheets: reference / style sheets made by
 the image provider (a stub), approval, per-beat shot specs resolved into requests (lengths
 snapped and split, inputs, prompts), validation with did-you-mean, the cut inputs, the dry-run
 plan and the CLI. Nothing is sent: the model list is the fixture of 2026-11-07, the image
@@ -356,7 +356,7 @@ def test_make_inputs_cuts_voice_and_guide(make_project) -> None:
     scene_clip = write_clip(root / "fake" / "s1.mp4", seconds=8.0, size="54x96", audio=False)
     act = shots[1]
 
-    def render(_project: Project, scene_id: str, passes: tuple[str, ...]) -> SceneRender:
+    def render(_project: Project, scene_id: str, passes: tuple[str, ...], _kind: str = "render") -> SceneRender:
         assert scene_id == "s1" and passes == ()
         return SceneRender(scene_clip, {"talk": 0.0, "act": shots[0].length})
 
@@ -511,7 +511,7 @@ def test_cli_plan_text_and_json(make_project, tmp_path: Path, monkeypatch: pytes
     assert "never pays" in capsys.readouterr().err
 
 
-# ----- hosted audio / video through a quick tunnel (DESIGN.md §115.2) ----------------------------------
+# ----- hosted audio / video through a quick tunnel ----------------------------------
 
 
 @pytest.mark.slow

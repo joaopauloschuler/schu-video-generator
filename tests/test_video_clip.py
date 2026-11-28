@@ -370,7 +370,7 @@ def test_clip_sound_is_mixed_under_the_narration(make_project, clip: Path, media
 @pytest.mark.slow
 @pytest.mark.render
 def test_a_take_with_its_own_sound_plays_at_full_volume_in_a_silent_clip_scene(make_project, clip: Path, media: Path) -> None:
-    """The route for ``generated_shot.sound: model`` (DESIGN.md §113.11): the take, as a file, in a
+    """The route for ``generated_shot.sound: model``: the take, as a file, in a
     ``video_clip`` scene with no beats, so nothing is mixed over it."""
     def segment(scene: dict[str, Any]) -> Any:
         project = load(make_project, clip, [scene])

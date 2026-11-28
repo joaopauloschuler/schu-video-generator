@@ -1,5 +1,5 @@
 // vidgen/space-scene-air: what the page of a declarative `space` scene in the air or beside a giant ship needs
-// besides the parts and vidgen/space-scene (DESIGN.md §123.14). Part of schu-video-generator (MIT licence);
+// besides the parts and vidgen/space-scene. Part of schu-video-generator (MIT licence);
 // imported as "vidgen/space-scene-air" by the page vidgen writes for such a scene (and by the same page written
 // out with `vidgen space-page`). A module of its own, so vidgen/space-scene's bytes (in the keys of every
 // earlier `space` scene) stay as they were.

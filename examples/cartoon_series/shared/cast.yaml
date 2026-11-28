@@ -1,4 +1,4 @@
-# The cast of the series (DESIGN.md §69.35): every episode starts from it with
+# The cast of the series: every episode starts from it with
 #   include: [../shared/cast.yaml, ../shared/sets.yaml]
 # An episode may change a character for itself: a characters: entry of the same name (its keys win).
 # Paths in an included file (an svg: look) are relative to the file that holds them.

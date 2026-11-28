@@ -1,4 +1,4 @@
-"""Relativistic kinematics (Phase Y, Step 239; DESIGN §99.7–§99.8): four-vectors, invariant
+"""Relativistic kinematics (Phase Y, Step 239): four-vectors, invariant
 masses, Källén p* for textbook decays, boosts (m² invariant), thresholds, decay lengths, SI
 conversions, PDG values in ``calculation`` symbols, the ``two_body_opening`` plot model, the
 ``kinematics`` scene's params, targets, values for ``from_scene``, the ``boost`` action and tiny

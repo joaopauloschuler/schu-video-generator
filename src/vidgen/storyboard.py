@@ -1,4 +1,4 @@
-"""``vidgen storyboard``: contact sheets of a video's frame stills (DESIGN.md §14).
+"""``vidgen storyboard``: contact sheets of a video's frame stills.
 
 :func:`make_storyboard` makes sure every selected scene has current stills (rendering with
 frame capture only the scenes whose stills are missing, made at another count/format, or stale
@@ -117,7 +117,7 @@ def scene_starts(project: Project, preview: bool) -> dict[str, float | None]:
         found.append(timings)
     frames = [round(float(t["duration"]) * fmt.fps) for t in found]
     speech = [max(b["end"] for b in t["beats"]) if t["beats"] else None for t in found]
-    overlaps = join_overlaps(project.config, fmt.fps, frames, speech)  # crossfades (DESIGN.md §49)
+    overlaps = join_overlaps(project.config, fmt.fps, frames, speech)  # crossfades
     starts: dict[str, float | None] = {}
     offset = 0.0
     for spec, timings, overlap in zip(project.config.scenes, found, overlaps):
@@ -132,7 +132,7 @@ _AutoActions = dict[tuple[str, str], tuple[ActionConfig, ...]]
 
 
 def _auto_actions(project: Project, scene_ids: list[str]) -> _AutoActions:
-    """The actions automatic directing adds to the beats of ``scene_ids`` (DESIGN.md §69.23), by
+    """The actions automatic directing adds to the beats of ``scene_ids``, by
     (scene, beat); none without ``auto_direct`` anywhere."""
     from vidgen import extensions
     from vidgen.cartoon.directing import directing_used, project_directions

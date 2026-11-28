@@ -1,4 +1,4 @@
-"""``vidgen motion check`` (DESIGN.md §121.3): the checks on synthetic frames (no ffmpeg), the
+"""``vidgen motion check``: the checks on synthetic frames (no ffmpeg), the
 thresholds, the score's events, and the command on tiny encoded clips."""
 
 from __future__ import annotations

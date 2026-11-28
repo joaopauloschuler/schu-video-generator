@@ -141,8 +141,26 @@ def clip_frame_index(grey: float) -> int:
 
 @pytest.fixture(autouse=True)
 def _no_baked_maps_in_the_real_cache(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pages drawn by tests keep no baked maps (DESIGN.md §123.2) unless a test gives its own store: the user's cache folder stays untouched."""
+    """Pages drawn by tests keep no baked maps unless a test gives its own store: the user's cache folder stays untouched."""
     monkeypatch.setenv("VIDGEN_BAKED_CACHE_MB", "0")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_colab_locks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Tests never touch the real per-session colab locks and "last call" stamps (a running keepalive reads them)."""
+    monkeypatch.setattr("vidgen.colab.LOCK_DIR", tmp_path / "colab-locks")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_ssh_to_colab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Tests never run the real ssh of ``Colab(via="ssh")``: ``colab ssh --proxy-mode -s NAME``
+    creates a missing session (it is billed), and ``~/.cache/vidgen/ssh`` stays untouched."""
+    def refuse(args: list[str], *rest: object) -> object:
+        raise AssertionError(f"a test ran real ssh: {args[:1]}; give Colab a fake runner or via='exec'")
+
+    monkeypatch.setattr("vidgen.colab_ssh.run_ssh", refuse)
+    monkeypatch.setattr("vidgen.colab_ssh.SOCKET_DIR", tmp_path / "colab-ssh")
+    monkeypatch.setattr("vidgen.colab_ssh.KEY", tmp_path / "colab-ssh-key" / "colab_ed25519")  # ~/.ssh stays untouched
 
 
 @pytest.fixture(autouse=True)

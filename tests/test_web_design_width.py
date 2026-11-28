@@ -1,4 +1,4 @@
-"""``design_width:`` of a ``web`` scene (Step 339, DESIGN.md §118.17): a page built in fixed
+"""``design_width:`` of a ``web`` scene (Step 339): a page built in fixed
 pixels is laid out in a window that many CSS pixels wide and drawn at the output size. The
 param's checks, the window and scale, the cut of a screenshot, the cache key and the lint units
 without a browser; tiny pages in Playwright's Chromium (``slow``, skipped when it is missing)."""

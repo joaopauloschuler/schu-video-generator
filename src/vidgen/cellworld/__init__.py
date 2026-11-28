@@ -1,4 +1,4 @@
-"""The cell world (DESIGN.md §95): a cell's compartments, membranes and contents as plain data
+"""The cell world: a cell's compartments, membranes and contents as plain data
 in real units, the location rules, the fine structure of its organelles, and the
 physical-scale camera's levels, level of detail and scale bar. No manim imports (a test
 checks): ``vidgen validate`` and lint use it without rendering; ``vidgen.cell_vector`` and

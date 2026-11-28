@@ -1,5 +1,5 @@
 // vidgen/music-time: song time, bars and beats, the score's events and the pictures' reactions to
-// them, for `web` scenes of music videos (DESIGN.md §121.1). Part of schu-video-generator (MIT
+// them, for `web` scenes of music videos. Part of schu-video-generator (MIT
 // licence); imported by a page as "vidgen/music-time". Plain JavaScript: no three.js, no DOM.
 //
 // Song time T is seconds into the music (`ctx.music.time(t)` with `music_data:`). A page that draws

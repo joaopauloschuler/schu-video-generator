@@ -1,4 +1,4 @@
-"""Vehicles moving on an iso place (DESIGN.md §105): the part of a ``stage`` that drives a car,
+"""Vehicles moving on an iso place: the part of a ``stage`` that drives a car,
 sails a boat, rolls a train car along its track and lifts a rocket off. Written against
 ``vidgen.api`` only; :class:`IsoDriving` is a part of :class:`~vidgen.scenes.stage.Stage`.
 
@@ -7,7 +7,7 @@ place's pictures (a train car's track is drawn along its whole run instead, a ro
 tower stay) and drawn as an :class:`IsoVehicle`, a body of the place like a character (its front
 picture, the draw order by boxes). Its moves are planned by the rules
 (:func:`~vidgen.world.iso_vehicles.plan_vehicle`) from where it and everyone stand once the moves
-planned so far are over, as the walks are (§89.9).
+planned so far are over, as the walks are.
 """
 
 from fnmatch import fnmatchcase
@@ -20,7 +20,7 @@ SMOKE_AFTER = 2.5
 
 
 class IsoDriving:
-    """The vehicles' part of a ``stage`` on an iso place (DESIGN.md §105)."""
+    """The vehicles' part of a ``stage`` on an iso place."""
 
     def _iso_driven(self, place: Any) -> dict[str, str]:
         """The vehicles of the place the scene moves (``drive_to``, ``sail_to``, ``lift_off``):

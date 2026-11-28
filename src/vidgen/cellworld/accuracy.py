@@ -1,4 +1,4 @@
-"""The accuracy lint's knowledge (DESIGN.md §95.14): text checks of narration against textbook
+"""The accuracy lint's knowledge: text checks of narration against textbook
 facts — directions (5′→3′ synthesis, N→C, motors, pumps), where processes happen, numbers
 (ATP, NADH, protons, ions per pump cycle, cells after division) — and the helpers the lint's
 scene checks share (sentences, numbers, words for transport). Each check is narrow on purpose:

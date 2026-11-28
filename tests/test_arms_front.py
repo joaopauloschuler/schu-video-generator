@@ -1,5 +1,4 @@
-"""Steps 281-282: arms that read as arms at the sides (``look.arms`` / ``cartoon_arms``, DESIGN.md
-§110), the default since Step 282; ``classic`` is the opt-out."""
+"""Steps 281-282: arms that read as arms at the sides (``look.arms`` / ``cartoon_arms``), the default since Step 282; ``classic`` is the opt-out."""
 
 from __future__ import annotations
 

@@ -12,8 +12,7 @@ tiles each scene's first still into one 64-colour PNG. Run from the repository r
     python tools/make_sets_gallery.py --work /tmp/rooms --out docs/gallery/media/sets_indoors.png \\
         classroom kitchen shop living_room bedroom
 
-``--styles`` draws one set in each drawing style of :data:`STYLES` instead (``drawing:``, DESIGN.md
-§79; ``docs/gallery/media/drawing_styles.png``), each thumbnail a quarter of the still around the
+``--styles`` draws one set in each drawing style of :data:`STYLES` instead (``drawing:``; ``docs/gallery/media/drawing_styles.png``), each thumbnail a quarter of the still around the
 left character, so outlines and grain show::
 
     python tools/make_sets_gallery.py --work /tmp/styles --out docs/gallery/media/drawing_styles.png --styles --colors 48 park

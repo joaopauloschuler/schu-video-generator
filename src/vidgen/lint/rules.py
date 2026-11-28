@@ -7,9 +7,9 @@ yielding :class:`Issue` objects. The runner (:mod:`vidgen.lint.run`) turns issue
 the config's severities and ``lint_ignore`` entries and merges repeats.
 
 Scopes: ``still`` rules (:mod:`vidgen.lint.layout_rules`) get a :class:`StillContext`, one per
-beat-end still of a scene, built from the layout dump (DESIGN.md §15). ``scene`` rules
+beat-end still of a scene, built from the layout dump. ``scene`` rules
 (:mod:`vidgen.lint.timing_rules`) get a :class:`SceneContext`, one per scene, built from the
-scene's activity file (DESIGN.md §17); their issues say which beat and when. The report format
+scene's activity file; their issues say which beat and when. The report format
 is the same for all.
 """
 

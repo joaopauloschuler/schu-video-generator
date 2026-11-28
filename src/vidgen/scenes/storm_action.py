@@ -1,4 +1,4 @@
-"""The ``lightning`` and ``rainbow`` beat actions (DESIGN.md §69.61) on a ``stage``: a flash of
+"""The ``lightning`` and ``rainbow`` beat actions on a ``stage``: a flash of
 lightning with a bolt and thunder after it, and a rainbow fading in (or out) in the sky. Written
 against ``vidgen.api`` only, like project actions. They draw nothing themselves (``animates =
 False``, like ``light``): the runner cues them when their beat starts and the stage shows them on

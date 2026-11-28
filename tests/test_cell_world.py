@@ -1,4 +1,4 @@
-"""The cell world, Step 202 (DESIGN.md §95): units, the model and its location rules, the camera
+"""The cell world, Step 202: units, the model and its location rules, the camera
 levels, level of detail, scale bar and zoom path — all without manim."""
 
 from __future__ import annotations

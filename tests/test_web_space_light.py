@@ -1,4 +1,4 @@
-"""Suns and light, ``vidgen/space-light`` (Step 372, DESIGN.md §122.8): the module is served by its
+"""Suns and light, ``vidgen/space-light`` (Step 372): the module is served by its
 import name and imports only ``three``, ``vidgen/music-time`` and ``vidgen/space-sky``; its parts are
 registered; in Node (when it is installed): the stars' options and errors with a did-you-mean,
 colours by temperature, spots, loops and the corona's map from a seed, how much of a sun shows past

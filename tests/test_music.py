@@ -1,4 +1,4 @@
-"""Background music and the final mix (Step 45, DESIGN.md §48): the generated beds, music files,
+"""Background music and the final mix (Step 45): the generated beds, music files,
 loudness measurement, ducking, the limiter, the ``music:`` / ``audio:`` config, ``vidgen
 list-music`` and the mix of a rendered video."""
 

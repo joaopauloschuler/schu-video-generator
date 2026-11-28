@@ -1,4 +1,4 @@
-"""The beat actions of the population genetics scenes (DESIGN.md §96.16–96.17): ``simulate`` and
+"""The beat actions of the population genetics scenes: ``simulate`` and
 ``resample`` (a ``population`` scene's generations and individuals) and ``regional`` (a ``gwas``
 scene's zoom into a locus). Timed like any action (``at: "@word"``). Written against
 ``vidgen.api``; the scenes draw (``scenes/population.py``, ``scenes/gwas.py``)."""

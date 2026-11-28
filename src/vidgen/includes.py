@@ -1,4 +1,4 @@
-"""Shared casts and sets: ``include:`` files and named ``sets:`` (DESIGN.md §69.35). No manim.
+"""Shared casts and sets: ``include:`` files and named ``sets:``. No manim.
 
 A project's config may start from other files: ``include: [cast.yaml, ../shared/sets.yaml]``
 (paths relative to the file that names them) holding ``characters``, ``voices``, ``sets``,
@@ -10,7 +10,7 @@ the earlier entry of that name), other values replace.
 A stage scene's ``set: <name>`` starts its ``params`` from that set (:func:`apply_set`); the
 scene's own params win. :func:`expand_sets` applies the sets of every scene before the config is
 validated, so the stage itself never sees ``set``. A name the project's ``sets:`` lacks falls back
-to a built-in set (:func:`builtin_sets`, DESIGN.md §76).
+to a built-in set (:func:`builtin_sets`).
 
 Problems keep pointing at the text the user wrote: :class:`Origin` entries map a location of the
 merged config to the file and location the value is written at (:func:`attributed`).
@@ -36,17 +36,17 @@ from vidgen.errors import Problem, VidgenError
 INCLUDABLE_KEYS: tuple[str, ...] = ("include", "characters", "voices", "sets", "variants")
 #: Set params that are one choice: a stage that gives any of them drops all of the set's.
 BACKGROUND_KEYS = frozenset({"image", "generate", "background"})
-#: A stage's indoor set (DESIGN.md §69.42): another choice of backdrop, see :func:`apply_set`.
+#: A stage's indoor set: another choice of backdrop, see :func:`apply_set`.
 ROOM_KEY = "room"
-#: Set params a stage with a platform ``level`` does not take from its set (DESIGN.md §86.2): what
+#: Set params a stage with a platform ``level`` does not take from its set: what
 #: stands at a depth (props), the water and a room; everything on a level stands on its tiles.
 LEVEL_DROPPED_KEYS = frozenset({"props", "water", ROOM_KEY, "ground_color"})
-#: Set params a stage with an ``iso`` place does not take from its set (DESIGN.md §89.7): the
+#: Set params a stage with an ``iso`` place does not take from its set: the
 #: place is the whole set; the set gives the sky, the light, the ambience, the weather.
 ISO_DROPPED_KEYS = frozenset({*LEVEL_DROPPED_KEYS, "layers", "fog", "width"})
 #: Set params whose lists combine with the stage's (the set's entries first).
 COMBINED_LISTS: tuple[str, ...] = ("characters", "props", "layers", "particles")
-#: The built-in sets (DESIGN.md §76): every ``*.yaml`` file here holds ``sets:``.
+#: The built-in sets: every ``*.yaml`` file here holds ``sets:``.
 BUILTIN_SETS_DIR = Path(__file__).resolve().parent / "data" / "sets"
 
 
@@ -318,7 +318,7 @@ def _read_builtin_sets() -> dict[str, dict[str, Any]]:
 
 
 def builtin_sets() -> dict[str, dict[str, Any]]:
-    """The built-in sets (DESIGN.md §76), name -> stage params: what ``set: NAME`` uses when the
+    """The built-in sets, name -> stage params: what ``set: NAME`` uses when the
     project's ``sets:`` has no set of that name (a copy: changing it changes nothing)."""
     return copy.deepcopy(_read_builtin_sets())
 
@@ -358,9 +358,9 @@ _CHARACTER_SIZES = ("small", "medium", "large")
 
 
 def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
-    """``data`` with the video's ``character_size`` (DESIGN.md §86.10) given to every ``stage``
+    """``data`` with the video's ``character_size`` given to every ``stage``
     scene whose params (after its set) give neither ``character_size`` nor ``size`` nor an ``iso`` place
-    (one with ``wide: fixed`` takes it: its view's scale, DESIGN.md §106), and
+    (one with ``wide: fixed`` takes it: its view's scale), and
     ``origins`` pointing those at the video's key; the scene's own setting wins."""
     updated = dict(origins)
     named = data.get("character_size") if isinstance(data, Mapping) else None
@@ -371,7 +371,7 @@ def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any
         params = scene.get("params", {}) if isinstance(scene, Mapping) else None
         iso = params.get("iso") if isinstance(params, Mapping) else None
         if (not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params
-                or (iso is not None and not (isinstance(iso, Mapping) and iso.get("wide") == "fixed"))):   # an iso place sets its own size (§89.7), but wide: fixed (§106)
+                or (iso is not None and not (isinstance(iso, Mapping) and iso.get("wide") == "fixed"))):   # an iso place sets its own size, but wide: fixed
             scenes.append(scene)
             continue
         scenes.append({**scene, "params": {**params, "character_size": named}})

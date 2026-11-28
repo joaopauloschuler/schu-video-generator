@@ -1,5 +1,4 @@
-# Built-in pronunciation entries for Kokoro's English voices (lang a, American, and b, British),
-# DESIGN.md §88. Same format as a project's pronunciation_file. Every project whose beat is said
+# Built-in pronunciation entries for Kokoro's English voices (lang a, American, and b, British). Same format as a project's pronunciation_file. Every project whose beat is said
 # by such a voice uses them unless it sets `pronunciation_defaults: false`; a project entry with
 # the same term replaces one, `term: null` removes one. `vidgen list-pronunciation` shows them.
 #

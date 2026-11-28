@@ -4,7 +4,7 @@
 it walks the scene's mobjects and records one *object* per visible text, shape, shape group or
 image, measured in output-frame pixels with the scene's camera (a moving/zoomed camera frame is
 taken into account). The worker writes the result to ``build/.../layout/<scene>.json`` next to
-the stills; ``vidgen lint`` reads it. Format: DESIGN.md §15 and docs/CONFIG.md.
+the stills; ``vidgen lint`` reads it. Format: docs/CONFIG.md.
 
 Grouping: a text mobject (``Text``, ``MarkupText``, ``Paragraph``, ``Tex``/``MathTex``,
 ``DecimalNumber``) is one object, not one per glyph; the paragraphs of a ``Code`` listing are
@@ -187,7 +187,7 @@ class LayoutRecorder:
         )
 
     def _page_texts(self, scene: NarratedScene, captured: CapturedFrame, objects: list[dict[str, Any]]) -> dict[str, Any]:
-        """A ``web`` scene's page (DESIGN.md §118.12): its texts, read from the page at this frame
+        """A ``web`` scene's page: its texts, read from the page at this frame
         (``scene.page_layout(frame)`` -> the reading and the mobject showing the page), go into
         ``objects`` just above the page's picture, mapped to the box it is drawn in; returns the
         frame's ``web`` key. Nothing when the scene has no page or the picture is not visible."""
@@ -229,7 +229,7 @@ class LayoutRecorder:
         return walk.objects
 
     def _iso_covers(self, walk: _Walk) -> None:
-        """On an iso place (DESIGN.md §89.11): each picture of the place drawn over a character's
+        """On an iso place: each picture of the place drawn over a character's
         eyes and mouth (its ``features``) gets ``covers`` (character name -> which points of a
         :func:`~vidgen.lint.cartoon_rules.face_grid` over them its opaque pixels cover, ``1`` /
         ``0`` per point), so lint ``hidden_speaker`` measures what hides the face, not the
@@ -307,7 +307,7 @@ class LayoutRecorder:
         y0, y1 = (config.frame_height / 2 - safe.y1) * sy, (config.frame_height / 2 - safe.y0) * sy
         shorts: dict[str, Any] = {}
         project = getattr(scene, "project", None)
-        if project is not None and project.config.shorts_zones is not None:   # a Short (DESIGN.md §101)
+        if project is not None and project.config.shorts_zones is not None:   # a Short
             from vidgen.overlays import shorts_area
             from vidgen.regions import frame_region
 
@@ -349,7 +349,7 @@ class LayoutRecorder:
             for obj in walk.objects[first:]:
                 obj["bubble"] = speaker
         tagged = getattr(mob, "name_tag_of", None)
-        if isinstance(tagged, str):  # a name tag over a speaker on an iso place (§89.11)
+        if isinstance(tagged, str):  # a name tag over a speaker on an iso place
             for obj in walk.objects[first:]:
                 obj["name_tag"] = tagged
 
@@ -373,8 +373,7 @@ class LayoutRecorder:
         from vidgen.vector_mobject import VectorPicture
 
         # a stage's shadows, stars, puddles, glows, steam, birds, fallen fruit, poured water,
-        # settled snow, fog, lightning and rainbows: not placed by authors (§69.31, §69.39, §69.54,
-        # §69.55, §69.56, §69.60, §69.61; an iso place's puddles §90.2)
+        # settled snow, fog, lightning and rainbows: not placed by authors (also an iso place's puddles)
         unplaced = (StageShadows, StarField, Puddles, IsoPuddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
         if id(mob) in walk.seen or isinstance(mob, unplaced):
             return
@@ -388,12 +387,12 @@ class LayoutRecorder:
         if isinstance(mob, AbstractImageMobject):
             self._emit_parts(walk, mob, path, name, "image", [mob])
             if getattr(mob, "scenery", False) and walk.objects and walk.objects[-1]["id"] == self._id(mob):
-                walk.objects[-1]["scenery"] = True   # a piece of the set (a level's tiles, §86.10): cut by the frame on purpose
+                walk.objects[-1]["scenery"] = True   # a piece of the set (a level's tiles): cut by the frame on purpose
             return
         if isinstance(mob, Icon):
             self._emit_parts(walk, mob, path, name, "icon", [m for m in mob.get_family() if _drawn(m)], icon=mob.icon_name)
             return
-        if isinstance(mob, HostFigure):  # the host and its floor line: one object (DESIGN.md §71)
+        if isinstance(mob, HostFigure):  # the host and its floor line: one object
             self._emit_parts(walk, mob, path, mob.host_name, "host", [m for m in mob.get_family() if _drawn(m)])
             if walk.objects and walk.objects[-1]["id"] == self._id(mob):
                 keys = {**_character_keys(walk, mob.character), "side": mob.side, "below": mob.layout.below}
@@ -401,7 +400,7 @@ class LayoutRecorder:
                     keys["pointing_at"] = mob.pointing_at
                 walk.objects[-1].update(keys)
             return
-        if getattr(mob, "host_pointer_of", None) is not None:  # a host's pointer line (DESIGN.md §71.1)
+        if getattr(mob, "host_pointer_of", None) is not None:  # a host's pointer line
             self._emit_parts(walk, mob, path, mob.host_pointer_of, "pointer", [mob])
             return
         if isinstance(mob, Character):  # one figure, not one object per part
@@ -418,12 +417,12 @@ class LayoutRecorder:
                     walk.objects[-1]["shape"] = mob.shape
                 walk.objects[-1].update(_prop_keys(mob))
             return
-        if isinstance(mob, EffectSymbol):  # one symbol over a head (§69.40)
+        if isinstance(mob, EffectSymbol):  # one symbol over a head
             self._emit_parts(walk, mob, path, name or mob.kind, "effect", [m for m in mob.get_family() if _drawn(m)])
             if walk.objects and walk.objects[-1]["id"] == self._id(mob):
                 walk.objects[-1].update({"effect": mob.kind, "effect_of": mob.effect_of})
             return
-        if isinstance(mob, MotionEffect):  # dust, speed lines, stars or a whoosh (§69.41)
+        if isinstance(mob, MotionEffect):  # dust, speed lines, stars or a whoosh
             self._emit_parts(walk, mob, path, name or mob.kind, "motion_effect", [m for m in mob.get_family() if _drawn(m)])
             if walk.objects and walk.objects[-1]["id"] == self._id(mob):
                 walk.objects[-1].update({"motion_effect": mob.kind, "effect_of": mob.effect_of})
@@ -442,7 +441,7 @@ class LayoutRecorder:
         if family and not any(_text_kind(m, True) is not None or isinstance(m, AbstractImageMobject) for m in family):
             self._emit_parts(walk, mob, path, name, "group", [m for m in mob.get_family() if _drawn(m)])
             if _scenery(mob) and walk.objects and walk.objects[-1]["id"] == self._id(mob):
-                walk.objects[-1]["scenery"] = True   # a cell's world in µm (§95): cropped by a zoomed view on purpose
+                walk.objects[-1]["scenery"] = True   # a cell's world in µm: cropped by a zoomed view on purpose
             return
         if own:  # a group that draws something itself and contains text
             self._emit_parts(walk, mob, path, name, "shape", own)
@@ -517,7 +516,7 @@ class LayoutRecorder:
 
 
 def _reach_px(scene: NarratedScene, mob: Mobject) -> list[float] | None:
-    """In a Short (DESIGN.md §101.4), an overlay mobject's ``overlay_reach`` (units: where that
+    """In a Short, an overlay mobject's ``overlay_reach`` (units: where that
     overlay goes over the moments around this one, e.g. all captions of the line being spoken) as
     a pixel box of the whole frame; ``None`` elsewhere or without one."""
     from manim import config
@@ -539,14 +538,14 @@ def intersection_box(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float,
 
 
 def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
-    """What the cartoon lint rules read about a character (DESIGN.md §69.17): ``facing``,
+    """What the cartoon lint rules read about a character: ``facing``,
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
     shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way), ``walked_in`` and
-    ``holding`` (hand -> prop name, §69.27), ``sitting_on`` / ``leaning_on`` (a prop name, §69.28),
-    ``riding`` (the vehicle it rides, §69.52), ``hand_in_hand`` (whose hand it holds, §100.10),
-    ``kissing`` (whom it kisses, §102.15),
-    ``hidden`` (a shot with ``clear`` hides it, §100.6),
-    ``depth`` (how far back it stands on a stage, when not at the front, §69.44)."""
+    ``holding`` (hand -> prop name), ``sitting_on`` / ``leaning_on`` (a prop name),
+    ``riding`` (the vehicle it rides), ``hand_in_hand`` (whose hand it holds),
+    ``kissing`` (whom it kisses),
+    ``hidden`` (a shot with ``clear`` hides it),
+    ``depth`` (how far back it stands on a stage, when not at the front)."""
     keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
     depth = float(getattr(figure, "stage_depth", 0.0))
     if depth > 0:
@@ -560,13 +559,13 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
                 "riding": figure.riding, "hand_in_hand": getattr(figure, "hand_in_hand", None), "kissing": getattr(figure, "kissing", None),
                 "hidden": True if getattr(figure, "hidden_by_shot", False) else None}
     keys.update({key: value for key, value in optional.items() if value is not None})
-    if getattr(figure, "iso_feet", None) is not None:   # on an iso place (DESIGN.md §89.11)
+    if getattr(figure, "iso_feet", None) is not None:   # on an iso place
         keys.update(_iso_character_keys(walk, figure))
     return keys
 
 
 def _iso_character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
-    """What lint reads about a character on an iso place (DESIGN.md §89.11): ``features`` (the box
+    """What lint reads about a character on an iso place: ``features`` (the box
     of its eyes and mouth: what must show for the viewer to see who speaks) and ``name_tag``
     (its name tag shows: it speaks while small on screen)."""
     keys: dict[str, Any] = {}
@@ -580,7 +579,7 @@ def _iso_character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
 
 
 def _prop_keys(prop: Any) -> dict[str, Any]:
-    """What ``prop_overlap`` reads about a prop (DESIGN.md §69.51): ``prop`` (its kind: a
+    """What ``prop_overlap`` reads about a prop: ``prop`` (its kind: a
     built-in prop's name or ``svg``), ``depth`` (how far back it stands, when not at the front, as
     for a character), ``raised`` (lifted, or hanging on a wall) and ``flat`` (lying flat on the
     floor, a rug), each only when true."""

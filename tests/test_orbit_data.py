@@ -1,4 +1,4 @@
-"""Orbit data for ``web`` scenes (Step 367, DESIGN.md §122.3): the numbers the page is given are
+"""Orbit data for ``web`` scenes (Step 367): the numbers the page is given are
 the orbit model's (and the flat ``orbit`` scene's), per frame on vidgen's clock, in the ecliptic
 frame; rotation, planes, a ship's burns, a flyby, n-body; the cache and the keys; ``ctx.orbits``
 on a page."""

@@ -1,4 +1,4 @@
-"""The ``cell`` scene type and the ``zoom_to`` action, Step 202 (DESIGN.md §95): params and their
+"""The ``cell`` scene type and the ``zoom_to`` action, Step 202: params and their
 errors, targets, validation of zoom_to, and tiny renders in 16:9 and 9:16 (the camera in µm,
 level of detail, screen-sized labels and scale bar)."""
 

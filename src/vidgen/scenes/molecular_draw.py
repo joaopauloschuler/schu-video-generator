@@ -1,5 +1,4 @@
-"""Drawing helpers of the molecular genetics scenes (``mutation``, ``crispr``, ``dna_lab``;
-DESIGN.md §96.13–96.15): base tiles in the base colours of Phase U's DNA drawings (A green, T red,
+"""Drawing helpers of the molecular genetics scenes (``mutation``, ``crispr``, ``dna_lab``): base tiles in the base colours of Phase U's DNA drawings (A green, T red,
 G blue, C yellow, letters dark on every theme), codon groups, amino-acid chips, cards.
 Written against ``vidgen.api``."""
 

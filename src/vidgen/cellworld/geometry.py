@@ -1,4 +1,4 @@
-"""Flat shapes of the cell world, in µm (DESIGN.md §95.3): ellipses (cells, nuclei, round
+"""Flat shapes of the cell world, in µm: ellipses (cells, nuclei, round
 organelles), capsules (mitochondria) and arc bands (ER sheets, Golgi cisternae, ER tubules).
 Each tells whether a point is inside, its outline, an inset copy (the next membrane in), its
 surface points with outward normals (for things bound to a membrane) and its bounds. A cell

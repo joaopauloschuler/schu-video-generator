@@ -1,4 +1,4 @@
-"""The structure library, Step 203 (DESIGN.md §95.9): plant and bacterial cells, fine structure as
+"""The structure library, Step 203: plant and bacterial cells, fine structure as
 compartments (the ER one lumen with the perinuclear space, pores, cristae, cis/medial/trans
 Golgi, thylakoids, intraluminal vesicles), the cytoskeleton and motors, the lipids of a bilayer,
 the parts a zoomed view names — all without manim."""

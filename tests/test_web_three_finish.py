@@ -1,5 +1,4 @@
-"""vidgen's finishing module for three.js ``web`` scenes, ``vidgen/three-finish`` (Step 350, DESIGN.md
-§120.11): served by its import name, only through the import map, in the loaded-files record (so in
+"""vidgen's finishing module for three.js ``web`` scenes, ``vidgen/three-finish`` (Step 350): served by its import name, only through the import map, in the loaded-files record (so in
 the cache keys) of a page that imports it and of no other; its options checked with a did-you-mean
 (run in Node when it is installed); in Chromium (``slow``): two fresh pages draw the same frames, a
 shutter of 0 is exactly no motion blur, the chain with every effect off equals ``renderer.render``
@@ -8,6 +7,7 @@ shutter of 0 is exactly no motion blur, the chain with every effect off equals `
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -34,7 +34,7 @@ def test_the_module_is_served_by_its_import_name_only() -> None:
     assert IMPORT_MAP["imports"]["vidgen/three-finish"] == f"/{URL_PATH}"
     assert vidgen_file("modules/three-finish.js") == MODULE and MODULE.is_file()
     assert vidgen_file("modules/other.js") is None and vidgen_file("modules/../modules/three-finish.js") is None
-    assert MODULE.stat().st_size < 60_000
+    assert MODULE.stat().st_size < 64_000
 
 
 def test_the_module_imports_only_three_and_shipped_add_ons() -> None:
@@ -107,10 +107,101 @@ out.push(F.shutterTimes(1, 30, 5, 180), F.shutterTimes(1, 30, 4, 360), F.shutter
     assert closed == [1] and one == [1]
 
 
+def test_the_sensor_is_off_unless_asked_and_on_when_given(tmp_path: Path) -> None:
+    out = _run_in_node(tmp_path, """
+const off = F.resolveOptions({});
+out.push([off.noise.amount, off.range.stops, off.sharpen.amount]);
+const on = F.resolveOptions({noise: true, range: true, sharpen: true});
+out.push([on.noise, on.range, on.sharpen]);
+out.push([F.resolveOptions({noise: {size: 2}}).noise.amount, F.resolveOptions({range: {black: 0.01}}).range.stops, F.resolveOptions({sharpen: 0.3}).sharpen.amount]);
+out.push([F.resolveOptions({noise: false}).noise.amount, F.resolveOptions({range: 0}).range.stops, F.resolveOptions({noise: {amount: 0}}).noise.amount]);
+out.push(err(() => F.resolveOptions({noise: {colour: 1}})), err(() => F.resolveOptions({range: 0.5})), err(() => F.resolveOptions({sharpen: {radius: 9}})));
+""")
+    assert out[0] == [0, 0, 0]
+    assert out[1] == [{"amount": 0.012, "color": 0.5, "size": 1, "floor": 0.05}, {"stops": 2.5, "shoulder": 0.05, "black": 0},
+                      {"amount": 0.5, "radius": 1, "limit": 0.06}]
+    assert out[2] == [0.012, 2.5, 0.3] and out[3] == [0, 0, 0]
+    assert 'unknown option noise."colour" (did you mean "color"?)' in out[4]
+    assert "range.stops must be a number from 1 to 16, got 0.5" in out[5] and "sharpen.radius must be a number from 0.5 to 4, got 9" in out[6]
+
+
+def test_the_sensor_curves(tmp_path: Path) -> None:
+    """The JavaScript twins of the shaders' curves: the range keeps the shadows and mid tones, stretches the highlights
+    to clip at the white with a soft shoulder, crushes the blacks; the noise is `amount` at mid grey once encoded,
+    larger in the shadows than in the highlights, none where the picture clips, `floor` of it at black."""
+    out = _run_in_node(tmp_path, """
+const top = 0.77, vs = Array.from({length: 201}, (_, i) => i / 200);
+out.push(vs.map((v) => F.rangeCurve(v, top, {shoulder: 0.05})), vs.map((v) => F.rangeCurve(v, top, {shoulder: 0.05, black: 0.02})));
+out.push([F.rangeWhite(2.5), F.rangeCurve(0.5, 1, {shoulder: 0}), F.rangeCurve(1.2, 0.8, {shoulder: 0})]);
+const enc = (x) => x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055, h = 1e-4;
+const encoded = (v) => F.noiseSigma(v, 0.012, 0.05) * (enc(v + h) - enc(Math.max(v - h, 0))) / (v + h - Math.max(v - h, 0));
+out.push([0.18, 0.02, 0.05, 0.5, 0.8, 0.95, 1].map(encoded));
+out.push([F.noiseSigma(0, 0.012, 0.05) / Math.sqrt(F.noiseSigma(0.18, 0.012, 0.05) ** 2 / (1 - 0.18 ** 2) ** 2), F.noiseSpread(0.012, 0.05, "gamma2.2").scale]);
+""")
+    curve, crushed, (white, flat, clipped), noise, (floor, gamma) = out[0], out[1], out[2], out[3], out[4]
+    assert all(b >= a for a, b in zip(curve, curve[1:])) and all(b >= a for a, b in zip(crushed, crushed[1:]))
+    assert curve[:78] == pytest.approx([i / 200 for i in range(78)])          # below half the white: unchanged
+    assert 0.98 < curve[154] < 1 and set(curve[162:]) == {1}                    # the white (0.77) at the shoulder; 5 % above it, clipped
+    assert 0.95 < curve[150] < curve[154] and crushed[-1] == pytest.approx(1)
+    assert crushed[2] < curve[2] * 0.5 and crushed[100] == pytest.approx(curve[100] ** 2 / (curve[100] + 0.02) * 1.02)
+    assert white == pytest.approx(0.18 * 2 ** 2.5) and flat == 0.5 and clipped == 1
+    mid, *rest, at_white = noise
+    assert mid == pytest.approx(0.012, rel=1e-3) and at_white == 0
+    assert rest[0] > rest[1] > mid > rest[2] > rest[3] > rest[4] > 0               # more in the shadows than in the highlights
+    assert floor == pytest.approx(0.05) and gamma > 0
+
+
+def test_the_lens_is_off_unless_asked_and_on_when_given(tmp_path: Path) -> None:
+    out = _run_in_node(tmp_path, """
+const off = F.resolveOptions({});
+out.push([off.distort.amount, off.edges.soft, off.edges.fringe, off.halation.amount]);
+const on = F.resolveOptions({distort: true, edges: true, halation: true});
+out.push([on.distort, on.edges, on.halation]);
+out.push([F.resolveOptions({edges: 2}).edges, F.resolveOptions({edges: 0}).edges, F.resolveOptions({distort: {mm: 16}}).distort, F.resolveOptions({halation: {radius: 4}}).halation.amount]);
+out.push([err(() => F.resolveOptions({edges: {sfot: 1}})), err(() => F.resolveOptions({distrot: 1})), err(() => F.resolveOptions({distort: {mm: 2}})),
+          err(() => F.resolveOptions({halation: {radius: 40}}))]);
+""")
+    assert out[0] == [0, 0, 0, 0]
+    assert out[1] == [{"amount": 1, "mm": None}, {"soft": 1.2, "fringe": 0.8, "power": 2},
+                      {"amount": 0.25, "radius": 6, "threshold": 0.4, "color": [1, 0.32, 0.1]}]
+    assert out[2] == [{"soft": 2, "fringe": 0.8, "power": 2}, {"soft": 0, "fringe": 0, "power": 2}, {"amount": 1, "mm": 16}, 0.25]
+    assert 'unknown option edges."sfot" (did you mean "soft"?)' in out[3][0] and 'unknown option "distrot" (did you mean "distort"?)' in out[3][1]
+    assert "distort.mm must be a number from 4 to 5000, got 2" in out[3][2] and "halation.radius must be a number from 1 to 16, got 40" in out[3][3]
+
+
+def test_the_lens_geometry(tmp_path: Path) -> None:
+    """The JavaScript twins of the lens: distortion grows as the lens widens and is none from 50 mm; the corners and the
+    middle stay put, nothing outside the picture is read (no black border), and a straight line off the middle bows
+    outwards (its middle farther from the centre than its ends)."""
+    out = _run_in_node(tmp_path, """
+out.push([16, 24, 35, 50, 135, 600].map((mm) => F.lensDistortion(mm)), [F.lensDistortion(16, 2), F.lensDistortion(4, 4)]);
+out.push([F.focalLength(2 * Math.atan(12 / 16) * 180 / Math.PI), F.focalLength(2 * Math.atan(12 / 50) * 180 / Math.PI)]);
+const d = F.lensDistortion(16), a = 16 / 9;
+out.push([F.distortSource(0, 0, d, a), F.distortSource(1, 1, d, a), F.distortSource(0.5, 0.5, d, a), F.distortSource(0.3, 0.6, 0, a)]);
+const grid = []; for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) grid.push(F.distortSource(i / 40, j / 40, d, a));
+out.push([Math.min(...grid.flat()), Math.max(...grid.flat())]);
+// a horizontal line in the picture (source y = 0.8): where it is drawn, from the edge to the middle
+const drawnAt = (x) => { let lo = 0.5, hi = 1; for (let k = 0; k < 60; k++) { const m = (lo + hi) / 2; if (F.distortSource(x, m, d, a)[1] < 0.8) lo = m; else hi = m; } return lo; };
+out.push([0, 0.25, 0.5].map(drawnAt));
+out.push([0, 0.5, 1, 1.5].map((r) => F.edgeShare(r, 2)));
+""")
+    (wide, *_, fifty, long, tele), (double, capped) = out[0], out[1]
+    assert wide == pytest.approx(0.04675) and _[0] > _[1] > 0 and fifty == long == tele == 0
+    assert double == pytest.approx(2 * wide) and capped == 0.3
+    assert out[2] == pytest.approx([16, 50])
+    corner0, corner1, middle, straight = out[3]
+    assert corner0 == pytest.approx([0, 0]) and corner1 == pytest.approx([1, 1]) and middle == [0.5, 0.5] and straight == pytest.approx([0.3, 0.6])
+    assert out[4][0] >= -1e-12 and out[4][1] <= 1 + 1e-12
+    edge, quarter, centre = out[5]
+    assert centre > quarter > edge > 0.8 and (centre - edge) * 720 > 3      # bowed by a few pixels at 720p, 16 mm
+    assert out[6] == [0, 0.25, 1, 1]
+
+
 PAGE = """import * as THREE from "three";
 import {Finish, studioEnvironment} from "vidgen/three-finish";
 let renderer, scene, camera, finish, spin;
-const update = (t) => { spin.rotation.z = t * 20; };
+let widen = false;
+const update = (t) => { spin.rotation.z = t * 20; if (widen) { camera.fov = 40 + 30 * t; camera.updateProjectionMatrix(); } };
 export function load(ctx) {
   renderer = new THREE.WebGLRenderer({canvas: ctx.canvas});
   renderer.setSize(ctx.width, ctx.height, false);
@@ -123,6 +214,7 @@ export function load(ctx) {
   const back = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12), new THREE.MeshBasicMaterial({color: new THREE.Color(3, 2, 1)}));
   back.position.set(1.5, 0.5, -6);
   scene.add(spin, back);
+  widen = !!ctx.data.widen;
   if (ctx.data.mode === "plain") return;
   finish = new Finish(renderer, scene, camera, ctx, {update, ...ctx.data.finish});
   finish.warmUp(0);
@@ -167,6 +259,66 @@ def test_the_chain_draws_the_same_frames_every_time(tmp_path: Path) -> None:
     plain, plain_loaded = _frames(tmp_path, {"mode": "plain"})
     assert np.abs(chain[0].astype(int) - plain[0].astype(int)).max() <= 1
     assert URL_PATH in plain_loaded   # imported by the page, so in its record
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_sensor_draws_the_same_frames_and_off_changes_nothing(tmp_path: Path) -> None:
+    """Sensor noise, range and sharpening: two pages draw the same frames, the noise is new each frame, each
+    effect changes the picture, and each one given as off draws exactly the picture without it."""
+    _chromium_or_skip()
+    (tmp_path / "finish.js").write_text(PAGE, encoding="utf-8")
+    sensor = {**OFF, "noise": True, "range": {"stops": 1.5, "black": 0.02}, "sharpen": 1}
+    first, _ = _frames(tmp_path, {"finish": sensor}, (3, 4))
+    again, _ = _frames(tmp_path, {"finish": sensor}, (3, 4))
+    assert np.array_equal(first[0], again[0]) and np.array_equal(first[1], again[1])
+    plain, _ = _frames(tmp_path, {"finish": OFF}, (3, 4))
+    assert not np.array_equal(first[0], plain[0])
+    # the noise alone: new each frame (seeded by the frame number), the background the same on average
+    noisy, _ = _frames(tmp_path, {"finish": {**OFF, "noise": 0.03}}, (3, 4))
+    corner = (slice(0, 20), slice(0, 30), slice(0, 3))
+    assert not np.array_equal(noisy[0][corner], noisy[1][corner]) and np.array_equal(plain[0][corner], plain[1][corner])
+    # (noise added in linear light and encoded after darkens a dark background a little on average, as in a camera)
+    assert abs(noisy[0][corner].astype(float).mean() - plain[0][corner].astype(float).mean()) < 3
+    for look in ({"range": True}, {"sharpen": True}):
+        changed, _ = _frames(tmp_path, {"finish": {**OFF, **look}})
+        assert not np.array_equal(changed[0], plain[0]), look
+    given_off, _ = _frames(tmp_path, {"finish": {**OFF, "noise": 0, "range": 0, "sharpen": 0}}, (3, 4))
+    assert np.array_equal(given_off[0], plain[0]) and np.array_equal(given_off[1], plain[1])
+    # with grain, FXAA, bloom and tone mapping on (the defaults), the sensor given as off changes nothing either
+    defaults, _ = _frames(tmp_path, {"finish": {}})
+    defaults_off, _ = _frames(tmp_path, {"finish": {"noise": False, "range": False, "sharpen": False}})
+    assert np.array_equal(defaults[0], defaults_off[0])
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_lens_draws_the_same_frames_follows_the_camera_and_off_changes_nothing(tmp_path: Path) -> None:
+    """Distortion, edges and halation: two pages draw the same frames, each changes the picture, the distortion is the
+    camera's lens at the frame's time (a widening camera = the same frame with that focal length given), none from
+    50 mm, and each one given as off draws exactly the picture without it."""
+    _chromium_or_skip()
+    (tmp_path / "finish.js").write_text(PAGE, encoding="utf-8")
+    lens = {**OFF, "distort": True, "edges": True, "halation": {"amount": 0.5, "threshold": 0.5}}
+    first, _ = _frames(tmp_path, {"finish": lens})
+    again, _ = _frames(tmp_path, {"finish": lens})
+    assert np.array_equal(first[0], again[0])
+    plain, _ = _frames(tmp_path, {"finish": OFF})
+    for look in ({"distort": True}, {"edges": True}, {"halation": {"amount": 0.5, "threshold": 0.5}}):
+        changed, _ = _frames(tmp_path, {"finish": {**OFF, **look}})
+        assert not np.array_equal(changed[0], plain[0]), look
+    fifty, _ = _frames(tmp_path, {"finish": {**OFF, "distort": {"mm": 50}}})
+    assert np.abs(fifty[0].astype(int) - plain[0].astype(int)).max() <= 1
+    # frame 3 at 10 fps: t = 0.3, the widening camera's field of view 49 degrees
+    widening, _ = _frames(tmp_path, {"widen": True, "finish": {**OFF, "distort": True}})
+    given, _ = _frames(tmp_path, {"widen": True, "finish": {**OFF, "distort": {"mm": 12 / math.tan(math.radians(49) / 2)}}})
+    fixed, _ = _frames(tmp_path, {"widen": True, "finish": {**OFF, "distort": {"mm": 12 / math.tan(math.radians(40) / 2)}}})
+    assert np.abs(widening[0].astype(int) - given[0].astype(int)).max() <= 1 and not np.array_equal(widening[0], fixed[0])
+    given_off, _ = _frames(tmp_path, {"finish": {**OFF, "distort": 0, "edges": 0, "halation": 0}})
+    assert np.array_equal(given_off[0], plain[0])
+    defaults, _ = _frames(tmp_path, {"finish": {}})
+    defaults_off, _ = _frames(tmp_path, {"finish": {"distort": False, "edges": False, "halation": False}})
+    assert np.array_equal(defaults[0], defaults_off[0])
 
 
 @pytest.mark.slow

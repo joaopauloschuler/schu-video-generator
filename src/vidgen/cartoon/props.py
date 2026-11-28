@@ -1,4 +1,4 @@
-"""Props for a ``stage`` (DESIGN.md §69.8): things that stand on the ground line or hang in the sky.
+"""Props for a ``stage``: things that stand on the ground line or hang in the sky.
 
 A built-in prop (:data:`PROP_KINDS`) is drawn from primitives only (rectangles, rounded
 rectangles, circles, ellipses, polygons, lines and unions of them), filled with two colours
@@ -10,12 +10,12 @@ prop (:func:`svg_prop`) is sanitised and loaded by :func:`vidgen.vector_mobject.
 Either way the result is a :class:`Prop`: one group whose :meth:`Prop.feet` is the middle of its
 bottom edge, so a stage places it like a character (``stage_layout``). A door and an umbrella are
 drawn in two shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shape`); a basket and an open
-umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIGN.md §69.37.
-The :data:`FURNITURE` furnishes a room (§69.43); a picture and a clock hang on its wall
-(:data:`PROP_HANGS`). The :data:`SMALL_PROPS` are everyday things to hold (§69.56): a book, a
-letter and a gift open too. The :data:`OUTDOOR_PROPS` furnish the built-in outdoor sets (§76),
-the :data:`INDOOR_PROPS` the built-in rooms with the furniture (§77); the :data:`STORY_PROPS`
-play a part in a platform level's rules (a key that opens a locked door, §86.8).
+umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`).
+The :data:`FURNITURE` furnishes a room; a picture and a clock hang on its wall
+(:data:`PROP_HANGS`). The :data:`SMALL_PROPS` are everyday things to hold: a book, a
+letter and a gift open too. The :data:`OUTDOOR_PROPS` furnish the built-in outdoor sets,
+the :data:`INDOOR_PROPS` the built-in rooms with the furniture; the :data:`STORY_PROPS`
+play a part in a platform level's rules (a key that opens a locked door).
 """
 
 from __future__ import annotations
@@ -73,26 +73,26 @@ from vidgen.helpers import resolve_color
 from vidgen.svgclean import CleanSvg
 from vidgen.theme import Theme
 
-#: The furniture among the built-in props (DESIGN.md §69.43): drawn as seen from the front of a
+#: The furniture among the built-in props: drawn as seen from the front of a
 #: room, their backs to its wall (a bed and a desk side on, along it).
 FURNITURE: tuple[str, ...] = (
     "sofa", "armchair", "bed", "bookshelf", "counter", "fridge", "picture", "rug", "houseplant", "clock", "tv", "desk",
     "fireplace",
 )
-#: The everyday small props (DESIGN.md §69.56): things to hold, give, open and put on a table.
+#: The everyday small props: things to hold, give, open and put on a table.
 SMALL_PROPS: tuple[str, ...] = (
     "cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can", "flower", "scanner", "takeout", "crystal",
 )
-#: The outdoor props the built-in sets use (DESIGN.md §76): a street, a park, a beach, a forest.
+#: The outdoor props the built-in sets use: a street, a park, a beach, a forest.
 OUTDOOR_PROPS: tuple[str, ...] = (
     "shop", "bench", "bus_stop", "road", "path", "fountain", "flowers", "fence", "beach_umbrella", "shell", "pine",
     "mushroom", "log",
 )
-#: The indoor props the built-in rooms add to the furniture (DESIGN.md §77): a classroom, a shop, a bedroom.
+#: The indoor props the built-in rooms add to the furniture: a classroom, a shop, a bedroom.
 INDOOR_PROPS: tuple[str, ...] = ("blackboard", "school_desk", "shelf_with_goods", "till", "wardrobe")
-#: The story props of a platform level (DESIGN.md §86.8): a key (to hold, give, and open a locked door with).
+#: The story props of a platform level: a key (to hold, give, and open a locked door with).
 STORY_PROPS: tuple[str, ...] = ("key",)
-#: Science-fiction props (DESIGN.md §100.4, §100.10): a portal that opens in space, a hologram display.
+#: Science-fiction props: a portal that opens in space, a hologram display.
 SCIFI_PROPS: tuple[str, ...] = ("portal", "hologram_display")
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
@@ -187,7 +187,7 @@ TV_CASE = "#2B2F3A"
 #: A fireplace's sooty hollow and its logs (fixed: dark and wooden in every theme).
 HEARTH_HOLLOW = "#2A1F1C"
 LOG_WOOD = "#7A4E2D"
-#: Small props (DESIGN.md §69.56), fixed where no theme token fits every theme: a candle's flame
+#: Small props, fixed where no theme token fits every theme: a candle's flame
 #: and its bright core, a page and the lines written on it, green stems and leaves, a flower's heart.
 CANDLE_FLAME = "#FFB547"
 LIGHT_FLAME = "#FFF1B8"
@@ -227,20 +227,20 @@ class Prop(VGroup):
     """A prop on a stage: its drawn shapes, ``name`` (the layout dump and action targets use it),
     ``kind`` (a :data:`PROP_KINDS` name or ``svg``) and ``facing``. ``height_factor``: its
     height in the heights of a character next to it (the stage sets it; ``None``: not known).
-    ``held_by`` / ``hand``: the character holding it and which hand (DESIGN.md §69.27).
+    ``held_by`` / ``hand``: the character holding it and which hand.
     ``seat`` / ``lean``: the middle of its seat line (x, y) and the edges a character leans its
-    back on (left x, right x), in prop units as it faces (``None``: it has none; DESIGN.md §69.28).
+    back on (left x, right x), in prop units as it faces (``None``: it has none).
     ``seat_places``: the x of each place on a seat for more than one sitter (a sofa, a bed), prop
-    units as it faces (empty: one place, the seat's middle; §69.43).
+    units as it faces (empty: one place, the seat's middle).
 
-    ``shapes`` (DESIGN.md §69.37): a prop drawn in several shapes (a door or an umbrella closed and open)
+    ``shapes``: a prop drawn in several shapes (a door or an umbrella closed and open)
     gets them instead of ``drawn``, shape name -> its members, the first shown. Every shape stays
     in the family for the prop's life; the hidden ones have no points (like a character's part
-    shapes, §69.22), and :meth:`show_shape` draws another from its points in prop units through an
+    shapes), and :meth:`show_shape` draws another from its points in prop units through an
     invisible anchor that moves, scales and mirrors with the prop. ``grips``: shape (``None`` for
     a prop with one shape) -> where a hand holds it, prop units as drawn facing right.
     ``anchored``: give it an anchor even without shapes or grips (a prop that moves by itself
-    places its moving parts by it, DESIGN.md §69.54)."""
+    places its moving parts by it)."""
 
     def __init__(
         self, *drawn: VMobject, name: str, kind: str, facing: str = "right",
@@ -271,7 +271,7 @@ class Prop(VGroup):
         self._members: dict[str, list[VMobject]] = {}
         self._drawings: dict[str, tuple[np.ndarray, ...]] = {}
         self._anchor: VMobject | None = None
-        #: A vehicle's turning parts (DESIGN.md §69.52): each wheel's group and axle, the cranks'
+        #: A vehicle's turning parts: each wheel's group and axle, the cranks'
         #: (prop units as drawn facing right), and how far they have turned (degrees as drawn).
         self.wheels = list(wheels)
         self.crank = crank
@@ -280,7 +280,7 @@ class Prop(VGroup):
         #: The y of the ground line under it while it rides in depth (``None``: its stage's).
         self.ground_y: float | None = None
         #: How far a vehicle is turned about its feet now (degrees counterclockwise on screen: a
-        #: boat rocking, a toy rocket's nose along its way, DESIGN.md §69.53).
+        #: boat rocking, a toy rocket's nose along its way).
         self.tilt = 0.0
         #: Where a boat rests on the water (its feet before bobbing; ``None``: not afloat), and a
         #: flying vehicle's last flight: its course and seconds (the rocket's smoke reads it).
@@ -366,7 +366,7 @@ class Prop(VGroup):
         x = float(self.feet()[0])
         return x + self.lean[0] * self.height, x + self.lean[1] * self.height
 
-    # ----- vehicles (DESIGN.md §69.52) ---------------------------------------------------------
+    # ----- vehicles ---------------------------------------------------------
 
     @property
     def is_vehicle(self) -> bool:
@@ -747,7 +747,7 @@ def _napkin(p: _Paint) -> list[VMobject]:
 
 
 def _kettle(p: _Paint) -> list[VMobject]:
-    """A round-bellied kettle, its spout up to the right (the steam leaves its tip, DESIGN.md §69.55)."""
+    """A round-bellied kettle, its spout up to the right (the steam leaves its tip)."""
     dark = p.dark(p.main)
     return [
         _poly([(0.3, 0.14), (0.42, 0.4), (0.69, 0.66), (0.63, 0.72), (0.34, 0.5), (0.24, 0.3)], p.main, p, round_by=0.02),
@@ -760,7 +760,7 @@ def _kettle(p: _Paint) -> list[VMobject]:
     ]
 
 
-# ----- everyday small props (DESIGN.md §69.56) ----------------------------------------------------
+# ----- everyday small props ----------------------------------------------------
 
 
 def _icing(left: float, right: float, top: float, drip: float, p: _Paint) -> VMobject:
@@ -834,7 +834,7 @@ def _phone(p: _Paint) -> list[VMobject]:
     ]
 
 
-#: A handheld scanner's screen (prop units: left, bottom, right, top; DESIGN.md §102.13), where a
+#: A handheld scanner's screen (prop units: left, bottom, right, top), where a
 #: switched-on scanner shows its readout (:mod:`vidgen.cartoon.living_drawing`).
 SCANNER_SCREEN = (-0.21, 0.52, 0.21, 0.88)
 
@@ -914,7 +914,7 @@ def _gift(p: _Paint) -> dict[str, list[VMobject]]:
     side, sparkles rising out of the box."""
     dark = p.dark(p.main)
 
-    def body() -> list[VMobject]:   # each shape has its own members (§69.37)
+    def body() -> list[VMobject]:   # each shape has its own members
         return [
             _rect(-0.5, 0.0, 0.5, 0.62, p.main, p),
             _rect(-0.07, 0.0, 0.07, 0.62, p.detail, p, outline=False),
@@ -1009,8 +1009,8 @@ def _watering_can(p: _Paint) -> list[VMobject]:
     ]
 
 
-# ----- furniture (DESIGN.md §69.43): seats at 0.14 of a character's height, below every generated
-# character's hips, so a sitter's hips rest on the seat line (§69.36) ---------------------------------
+# ----- furniture: seats at 0.14 of a character's height, below every generated
+# character's hips, so a sitter's hips rest on the seat line ---------------------------------
 
 
 def _upholstered(p: _Paint, half: float, arm: float, seat: float, cushions: int) -> list[VMobject]:
@@ -1151,7 +1151,7 @@ def _clock(p: _Paint) -> list[VMobject]:
         _line(0.0, 0.5, 0.2 * math.cos(hour), 0.5 + 0.2 * math.sin(hour), p.ink, 2.5 * OUTLINE_WIDTH),
         _line(0.0, 0.5, 0.3 * math.cos(minute), 0.5 + 0.3 * math.sin(minute), p.ink, 2.0 * OUTLINE_WIDTH),
     ]
-    for hand, part in zip(hands, ("hour", "minute")):   # a running clock turns them (DESIGN.md §69.54)
+    for hand, part in zip(hands, ("hour", "minute")):   # a running clock turns them
         setattr(hand, LIVING_PART, part)
     return [
         _circle(0.0, 0.5, 0.5, p.detail, p),
@@ -1193,7 +1193,7 @@ def _desk(p: _Paint) -> list[VMobject]:
 
 
 #: How many of a fireplace's last members are its front logs: a burning fire's flames go before
-#: them (they burn behind the logs, DESIGN.md §69.55).
+#: them (they burn behind the logs).
 FIREPLACE_FRONT = 2
 
 
@@ -1215,7 +1215,7 @@ def _fireplace(p: _Paint) -> list[VMobject]:
     ]
 
 
-# ----- outdoor props for the built-in sets (DESIGN.md §76) -------------------------------------------
+# ----- outdoor props for the built-in sets -------------------------------------------
 
 #: Fixed colours where no theme token fits every theme: a kerb's light stone, a flower bed's soil, a
 #: beach umbrella's pale pole.
@@ -1424,7 +1424,7 @@ def _log(p: _Paint) -> list[VMobject]:
     ]
 
 
-# ----- indoor props for the built-in rooms (DESIGN.md §77) -------------------------------------------
+# ----- indoor props for the built-in rooms -------------------------------------------
 
 #: Chalk on a blackboard, and a shop's goods in four bright colours (fixed: the same in every theme).
 CHALK = "#F4F6FA"
@@ -1538,7 +1538,7 @@ def _key(p: _Paint) -> list[VMobject]:
 
 
 def _portal(p: _Paint) -> list[VMobject]:
-    """A sealed portal (DESIGN.md §100.4): a faint zig-zag seam in the air where it opens, in an
+    """A sealed portal: a faint zig-zag seam in the air where it opens, in an
     invisible box as large as the open portal with its sparks (so it is placed and sized the same
     open or sealed); it opens as a prop that moves by itself (:mod:`vidgen.cartoon.portal`)."""
     from vidgen.cartoon.portal import CENTRE, EXTENT, HALF_HEIGHT
@@ -1557,7 +1557,7 @@ def _portal(p: _Paint) -> list[VMobject]:
 
 
 def _hologram_display(p: _Paint) -> list[VMobject]:
-    """A hologram display switched off (DESIGN.md §100.10): a low round projector in ``detail``
+    """A hologram display switched off: a low round projector in ``detail``
     with a lens of ``main`` colour, in an invisible box as large as its panel of light (placed and
     sized the same on or off); the panel is a prop that moves by itself
     (:mod:`vidgen.cartoon.holo_display`)."""
@@ -1594,7 +1594,7 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
 
 
 def _fruits(p: _Paint) -> list[VMobject]:
-    """A tree's fruits (DESIGN.md §69.55): at each of :data:`FRUIT_SPOTS` a round fruit with a
+    """A tree's fruits: at each of :data:`FRUIT_SPOTS` a round fruit with a
     shine and a stalk, every member tagged with its spot's index (:data:`FRUIT_INDEX`)."""
     members: list[VMobject] = []
     for k, (x, y) in enumerate(FRUIT_SPOTS):
@@ -1653,9 +1653,9 @@ def draw_prop(
     wide as a character's ``character_height`` tall (default: ``height``), at least one pixel.
     ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first). ``living``: a
     clock, television, lamp, fireplace or kettle that moves by itself gets its moving parts and an
-    anchor (:func:`~vidgen.cartoon.living_drawing.living_overlays`, DESIGN.md §69.54, §69.55).
+    anchor (:func:`~vidgen.cartoon.living_drawing.living_overlays`).
     ``fruit``: a tree carries a few fruits (:func:`_fruits`). ``view``: the place a living portal shows
-    inside it (DESIGN.md §100.13)."""
+    inside it."""
     if kind not in _DRAWERS and kind not in VEHICLES:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:

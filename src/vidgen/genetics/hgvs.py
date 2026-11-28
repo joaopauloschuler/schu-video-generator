@@ -1,4 +1,4 @@
-"""Sequence variants on a coding sequence in HGVS notation (DESIGN.md §96.13). No manim.
+"""Sequence variants on a coding sequence in HGVS notation. No manim.
 
 - **The coding sequence** (:class:`CodingSequence`): the coding strand's exonic DNA from ``c.first``
   (``c.1`` is the A of the ATG), its coding exons as ``c.`` ranges, the intron sequences when they

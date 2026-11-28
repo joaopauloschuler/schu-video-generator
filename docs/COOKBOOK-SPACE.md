@@ -80,7 +80,10 @@ into the same star file, every naked-eye star at its place.
 Each recipe is a whole scene for `scenes:` and validates as it stands (`tests/test_docs.py`); the
 numbers are the ones drawn for this cookbook (stills at 480x270 and 1280x720). Times are seconds of
 the scene unless they are bars. An orbital scene has no `world:`; it may have `orbits:` (true
-positions and timing), `bodies:`, `craft:`, `phenomena:`.
+positions and timing), `bodies:`, `craft:`, `phenomena:`. Every `space` scene is filmed by the
+default camera look `camera` (Step 401: sensor noise, a short dynamic range, light sharpening, the
+lens's bend, faint fringes and halation; nobody holding it), so space scenes look different from
+before; `camera_look: none` gives the clean render of before.
 
 **A sunrise over a limb.** The camera rides round the world so that the sun's upper edge meets
 the limb exactly at `at` (here 4 s; `at: 'bar 4'` with `music_data`); `air` allows for the air
@@ -94,6 +97,24 @@ that holds the first light back (degrees); `rate` is how fast the camera rides (
     sky: {seed: 7, look: rich}
     bodies: [{name: Earth}]
     camera: {move: reveal, behind: Earth, at: 4, rate: 1.0, air: 0.1, lens: wide-normal}
+```
+
+**The same sunrise through a spacecraft's window.** `camera_look: window_handheld` (Step 400) is
+handheld footage through glass: a calm braced hand and a horizon a degree off at the start, the
+camera's noise, a short dynamic range (the sun clips into a round white core), a warm halation and
+a wide bloom round it, the glass's veil lifting the black a little, darker corners, the lens's bend.
+An orbital scene has no meter, so the look's automatic exposure is left out here. Any of its options
+can be given over it: `finish: {vignette: 0.2}`, `operator: {horizon: false}`.
+
+```yaml
+- id: sunrise_window
+  type: space
+  duration: 8
+  params:
+    sky: {seed: 7, look: rich}
+    bodies: [{name: Earth}]
+    camera: {move: reveal, behind: Earth, at: 4, rate: 1.0, air: 0.1, lens: wide-normal}
+    camera_look: window_handheld
 ```
 
 **A ringed planet as a crescent.** `arc` goes round the subject from one phase to another; the
@@ -386,7 +407,29 @@ place's own frame, with its air, sea, ground and cloud decks, flights planned in
 flying them, and the air moves above. Its recipes (a dusk at sea, a skim, a volcano, a climb through
 a deck, a chase, a wingtip view, a fly-past, the descent from orbit), what is true and what is a
 look there, and the two pages that still need code are in [COOKBOOK-AIR.md](COOKBOOK-AIR.md). Its
-costs are in the one table below.
+costs are in the one table below. Any `space` scene can add a camera operator over its moves,
+off unless given: `operator: {hand: handheld, horizon: true}` (a person's drift, late corrections and a
+horizon a degree off at each cut; `hand: mounted` only vibrates), and in a surface scene `exposure: true`
+(an automatic exposure that lags and hunts).
+
+**Camera looks** (`camera_look:`, Steps 400–401): one word for a matched
+finish and operator, the scene's own `finish:` and `operator:` over it key by key (a number sets a
+group's main value: `finish: {noise: 0.006}`; `false` turns a group off). Without `camera_look:` a scene
+gets `camera`; `camera_look: none` is the clean render (as before Step 401).
+
+| look | for | what it adds |
+|---|---|---|
+| `camera` (the default) | every scene that names none | the sensor and the lens only: fine noise, 2.8 stops of range, light sharpening, the lens's own bend, faint fringes towards the corners, a faint warm halation, a light vignette (0.2); no hand, no horizon error, no automatic exposure |
+| `window_handheld` | the view from a cabin | a braced hand, a gentle meter, the horizon 0.8° off; noise, 2 stops of range, the glass's veil, wide bloom, warm halation, heavy corners, the lens's bend |
+| `drone` | a sweep over sea or ground | gimbal vibration, a smooth meter; fine noise, 2.4 stops, crisp, a little saturated, the wide lens's bend and fringes |
+| `broadcast_long_lens` | a launch or a ship seen from far away (give the moves `lens: long` or `tele`) | a heavy head's slow sway, the iris ridden slowly; a big sensor's fine noise, 2.8 stops with a soft knee, strong detail halos, long-lens colour fringes |
+| `phone` | someone filming by hand | a light hand, a quick meter that hunts, the horizon 1.5° off; blotchy noise, heavy sharpening, punchy colour, lifted blacks |
+| `chase_mount` | a camera bolted to the craft or a chase plane | the engine's vibration, an automatic exposure; the ultra-wide bend with soft fringed corners, contrasty, 2 stops |
+
+The full settings are in CONFIG.md (`space`). Orbital scenes leave the looks' automatic exposure out;
+motion blur stays the scene's (`finish: {motion_blur: 3}`). Before and after on four views: the
+cloud tops of a rise clip near white with every look, the glitter into a low sun blows out wide
+with `drone` (`range: 3` keeps a little more), and `phone` is the loudest (turn its noise down if it shows).
 
 ## 7. What YAML does not reach
 
@@ -425,7 +468,8 @@ the sun; no code of your own).
 One table (`vidgen/scenes/space_costs.py` holds it; `vidgen lint` estimates a surface or hull
 scene from its rows, a test compares the two). Seconds a frame at 1280x720 on 2 cores in headless
 Chromium with software GL (SwiftShader); orbital rows through `vidgen/three-finish` with a bloom (the
-`space` scene's default), air rows straight to the canvas (a surface scene's default). A render
+`space` scene's finish), air rows straight to the canvas (`camera_look: none`); the default camera
+look (Step 401) adds the finish's passes, about +0.3 to +0.7 s a frame on a sea-and-cloud view. A render
 adds the screenshot and the encoder (about 0.2 s a frame at 720p). Budget a film by adding its
 shots: a 60 s film at 30 fps is 1,800 frames, so 0.5 s a frame is 15 minutes, 1.2 s a frame 36
 minutes. A draft (`--draft`, 426x240) costs about a fifth.
@@ -471,7 +515,7 @@ minutes. A draft (`--draft`, 426x240) costs about a fifth.
 | hull-reveal (the hull overhead) | 1.1 |
 | scale-zoom | 0.8 |
 
-`quality: fast` saves about a quarter (the clouds' `fine` is four times dearer); motion blur
+Since Step 395 (cloud decks that never repeat) a frame with decks costs about a quarter more than its row near the sea and two fifths more from 20–60 km up (measured on one rise over a sea under `fair`; the rows are older). Since Step 396 (a sea that does not weave) a frame with a sea costs up to about a fifth more close to a rough or stormy sea, a tenth more over a calm one or from 20 km. `quality: fast` saves about a quarter (the clouds' `fine` is four times dearer); motion blur
 (`finish: {motion_blur: 3}`) multiplies a frame by its samples; depth of field adds about a tenth.
 
 **Opening a page** bakes its maps once; vidgen keeps them in the [cache of baked
@@ -536,7 +580,7 @@ warm. A page may take 90 s to open before vidgen gives up.
   the Galilean moons): the IAU WGCCRE models, **written from memory** of the reports (no network
   in the step that wrote them), checked against the published periods and tilts. Neptune's
   rotation uses the 2009 report's **16.11 h**; the 2015 report may give about 15.97 h. To be
-  checked against the reports by a person (DESIGN.md §122.2 has the table).
+  checked against the reports by a person.
 - **Light**: the stops between a sunlit ground and the sky's look (20), city lights (10), the
   Earth's light on the Moon and the stars' colours by temperature are **from memory and
   arithmetic**, not from a cited source; the worlds' tilts and flattenings too.

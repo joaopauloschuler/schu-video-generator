@@ -1,4 +1,4 @@
-"""``metabolism``: energy metabolism at university level (DESIGN.md §95.13) — glycolysis (ten
+"""``metabolism``: energy metabolism at university level — glycolysis (ten
 steps, the investment and payoff phases, ATP and NADH counted per glucose), pyruvate oxidation
 (into the matrix, pyruvate dehydrogenase), the citric acid cycle as a cycle diagram (eight steps,
 3 NADH, 1 FADH₂, 1 GTP and 2 CO₂ per turn), the mitochondrial electron transport chain

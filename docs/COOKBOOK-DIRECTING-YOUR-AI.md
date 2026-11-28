@@ -9,7 +9,7 @@ the "AI does" lines tell you what to expect.
 
 The example is "Get It All In": a 20-second portrait film (`bytedance/seedance-2.0-mini` through
 OpenRouter, 480p, `sound: model`). Measured figures are in [What it cost](#what-it-cost-and-what-is-measured);
-the mechanics behind every card are in [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md).
+the mechanics behind every card are in [COOKBOOK-3D-SCENE-TO-SEEDANCE.md](COOKBOOK-3D-SCENE-TO-SEEDANCE.md).
 
 **What you need:** an AI coding agent that can run commands on your computer (such as Claude),
 an OpenRouter account with a little credit, and `cloudflared`. The commands used here (`vidgen generate frames`,
@@ -23,7 +23,7 @@ Replace `[...]` with your own details; `shot1`, `take N` are examples.
 
 ## For the AI: when the person gives short prompts
 
-This section is written for you, the AI agent. The person may direct the film with the short prompts below instead of pasting the cards. Each short prompt means: carry out its cards in full, in order, with every detail the card states, and stop where the table says. A short prompt is not a lighter version of the cards. Before acting, read each card, its "AI does" and "You check" lines, and [A complete shot](#a-complete-shot) for the YAML. Match the person's words by meaning, not letter by letter. "Read its cookbooks" means this file and [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); read the other cookbooks only when a topic needs them.
+This section is written for you, the AI agent. The person may direct the film with the short prompts below instead of pasting the cards. Each short prompt means: carry out its cards in full, in order, with every detail the card states, and stop where the table says. A short prompt is not a lighter version of the cards. Before acting, read each card, its "AI does" and "You check" lines, and [A complete shot](#a-complete-shot) for the YAML. Match the person's words by meaning, not letter by letter. "Read its cookbooks" means this file and [COOKBOOK-3D-SCENE-TO-SEEDANCE.md](COOKBOOK-3D-SCENE-TO-SEEDANCE.md); read the other cookbooks only when a topic needs them.
 
 **Always on, from the first prompt, without being asked:** Card 5 (standing rules) and Card 11 (the ledger check after every paid shot).
 
@@ -78,13 +78,13 @@ Install cloudflared on this computer. Then run the free tunnel test, vidgen gene
 ```
 
 AI does: installs `cloudflared`, runs `vidgen generate host-test` (free).
-You check: `host test OK`. What the tunnel exposes: [section 5](COOKBOOK-GENERATED-VIDEO.md#5-sharing-voice-and-video-inputs-safely) of the generated video cookbook.
+You check: `host test OK`. What the tunnel exposes: [section 5](COOKBOOK-3D-SCENE-TO-SEEDANCE.md#5-sharing-voice-and-video-inputs-safely) of the generated video cookbook.
 
 On the OpenRouter website (only you can do this):
 
 - Create a key and give it a spending limit.
 - If "ZDR endpoints only" is on in your account, turn it off for the key that makes video: with it on every video model is refused.
-- Read [section 3](COOKBOOK-GENERATED-VIDEO.md#3-privacy-zero-data-retention) of the generated video cookbook: video generation cannot use Zero Data Retention, and what you send goes to the model's provider. Send no real people's faces or voices and nothing private.
+- Read [section 3](COOKBOOK-3D-SCENE-TO-SEEDANCE.md#3-privacy-zero-data-retention) of the generated video cookbook: video generation cannot use Zero Data Retention, and what you send goes to the model's provider. Send no real people's faces or voices and nothing private.
 
 **Card 3**
 
@@ -98,7 +98,7 @@ You check: you set it yourself; the key never appeared in the chat; the AI answe
 **Card 4**
 
 ```text
-Create a new project folder for this film with a video.yaml for a portrait video: format 1080x1920 at 30 fps, preview 480x854 at 24 fps. Under videogen set provider openrouter, budget_usd 3, host quick_tunnel and sound model. Add no scenes yet; the file will not pass vidgen validate until it has scenes. The shots will use the model bytedance/seedance-2.0-mini at 480p. Read docs/COOKBOOK-GENERATED-VIDEO.md and docs/COOKBOOK-DIRECTING-YOUR-AI.md first, and tell me the two rules you must follow before any money is spent.
+Create a new project folder for this film with a video.yaml for a portrait video: format 1080x1920 at 30 fps, preview 480x854 at 24 fps. Under videogen set provider openrouter, budget_usd 3, host quick_tunnel and sound model. Add no scenes yet; the file will not pass vidgen validate until it has scenes. The shots will use the model bytedance/seedance-2.0-mini at 480p. Read docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md and docs/COOKBOOK-DIRECTING-YOUR-AI.md first, and tell me the two rules you must follow before any money is spent.
 ```
 
 AI does: creates the project with `videogen: {provider: openrouter, budget_usd: 3, host: quick_tunnel, sound: model}` and no scenes, reads the cookbooks. A file with no scenes fails `vidgen validate` ("scenes: Field required"): that is expected until Card 9. Choosing voices waits for Card 9.
@@ -235,7 +235,7 @@ In the film, the arm that rises out of the water was placed in the 3D scene on t
 Assemble the film. Write a film.yaml beside video.yaml with the same format, output: <film name> so that it does not overwrite the 3D preview, and one video_clip scene per picked take: path takes/<shot>/<take>.mp4, region: bleed, fit: cover, fade: false, no beats, duration set to the take's length from ffprobe. Run vidgen render film.yaml --preview and show me the result and the frames around each cut. Do not make the final render until I approve the preview.
 ```
 
-AI does: `film.yaml` with its own `output:` name and one `video_clip` per take (`region: bleed`, `fit: cover`, `fade: false`, no beats, `duration` from `ffprobe`), `vidgen render film.yaml --preview`. The description file and `vidgen lint` then say the footage is AI-generated. Details: [section 8](COOKBOOK-GENERATED-VIDEO.md#8-in-the-film) of the generated video cookbook.
+AI does: `film.yaml` with its own `output:` name and one `video_clip` per take (`region: bleed`, `fit: cover`, `fade: false`, no beats, `duration` from `ffprobe`), `vidgen render film.yaml --preview`. The description file and `vidgen lint` then say the footage is AI-generated. Details: [section 8](COOKBOOK-3D-SCENE-TO-SEEDANCE.md#8-in-the-film) of the generated video cookbook.
 You check: no dark frames at the cuts; the sound in step; clips in order.
 
 **Card 17**

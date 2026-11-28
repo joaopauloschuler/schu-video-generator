@@ -1,4 +1,4 @@
-"""Live and animated ``plot`` scenes (Phase W, DESIGN §97.8): series that grow over their beat
+"""Live and animated ``plot`` scenes (Phase W): series that grow over their beat
 (or a ``grow`` action) with a head marker and a live readout, axes that widen smoothly while
 the data reach their edge, panels growing together on a shared time, trails for phase-space
 plots, and ``zoom`` to a region of the data and back. A mixin of :class:`Plot` (``plot.py``),

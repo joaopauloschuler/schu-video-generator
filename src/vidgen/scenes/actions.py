@@ -1,5 +1,5 @@
 """Built-in per-beat actions: ``reveal``, ``dim``, ``highlight``, ``zoom``, ``pan``, ``follow``
-and ``transform`` (DESIGN.md §26, §27, §69.7).
+and ``transform``.
 
 Written against ``vidgen.api`` only, like project actions. ``dim`` and ``highlight`` change only
 opacity resp. colour, so they combine and undo (``until:``) independently; both also work on
@@ -131,8 +131,7 @@ def _parts(scene: NarratedScene, targets: list[Target]) -> list[tuple[Target, Mo
 
 def _targets_box(scene: NarratedScene, targets: list[Target]) -> tuple[float, float, float, float]:
     """``(left, bottom, right, top)`` round the targets: each one's own box where the scene knows
-    it (``target_box``: an iso place's object, whose picture spans more than the object, DESIGN.md
-    §109), else its on-screen parts' (else its mobject's)."""
+    it (``target_box``: an iso place's object, whose picture spans more than the object), else its on-screen parts' (else its mobject's)."""
     own = getattr(scene, "target_box", None)
     boxes: list[tuple[float, float, float, float]] = []
     for target in targets:
@@ -498,7 +497,7 @@ class Zoom(Action):
             return scene.zoom_region(targets, self.options.x, self.options.y)  # type: ignore[attr-defined]
         left, bottom, right, top = _targets_box(scene, targets)
         fw, fh = scene.frame_width, scene.frame_height
-        base = scene.zoom_base() if hasattr(scene, "zoom_base") else 1.0   # an iso place's fixed wide view (DESIGN.md §106)
+        base = scene.zoom_base() if hasattr(scene, "zoom_base") else 1.0   # an iso place's fixed wide view
         if self.options.scale is not None:
             factor = base * self.options.scale
         else:
@@ -512,7 +511,7 @@ class Zoom(Action):
         center = view_center_within(scene.camera_bounds(), ((left + right) / 2, (bottom + top) / 2), width, height)
         self.before = camera_view(scene)
         self.shot = getattr(scene, "camera_shot", None)
-        if self.options.cut:   # a cut: the view is there at once (DESIGN.md §101.4)
+        if self.options.cut:   # a cut: the view is there at once
             scene.camera.frame.set_width(width).move_to(np.array([*center, 0.0]))
             return []
         return [MoveCamera(scene, width, np.array([*center, 0.0]))]
@@ -530,7 +529,7 @@ class Zoom(Action):
         zoom lasts)."""
         if getattr(self, "region", False):
             return scene.zoom_back()  # type: ignore[attr-defined]
-        if self.options.hold:   # stays zoomed in (DESIGN.md §101)
+        if self.options.hold:   # stays zoomed in
             return []
         before, shot = getattr(self, "before", None), getattr(scene, "camera_shot", None)
         if before is not None and shot is not None and shot is not getattr(self, "shot", None):
@@ -568,7 +567,7 @@ def move_camera_back(scene: NarratedScene, view: tuple[float, np.ndarray] | None
 
 
 def end_shot(scene: NarratedScene) -> None:
-    """A ``pan`` or ``follow`` takes the camera from a ``shot`` (DESIGN.md §69.29): the shot is
+    """A ``pan`` or ``follow`` takes the camera from a ``shot``: the shot is
     over, and the next beat does not go back to the view before it."""
     scene.camera_shot = None
     scene.shot_home = None
@@ -641,12 +640,12 @@ class Pan(Action):
         place's) x."""
         scene.follow_with_camera(None)
         end_shot(scene)
-        point = getattr(scene, "pan_point", None)   # an iso place: across and up the picture (DESIGN.md §89.10)
+        point = getattr(scene, "pan_point", None)   # an iso place: across and up the picture
         found = point([t.mobject for t in targets], self.options.to) if point is not None else None
         if found is not None:
             self.before = camera_view(scene)
             frame = scene.camera.frame
-            width = scene.pan_width()   # from the wide view it moves in (§89.13)
+            width = scene.pan_width()   # from the wide view it moves in
             height = width * frame.height / frame.width
             center = np.array([*view_center_within(scene.camera_bounds(), found, width, height), 0.0])
             if abs(width - frame.width) < 1e-6 and np.allclose(center[:2], frame.get_center()[:2], atol=1e-6):
@@ -692,10 +691,10 @@ class _MoveThenFollow(MoveCamera):
 
     def interpolate_mobject(self, alpha: float) -> None:
         end = self.target_copy
-        y = self.y_of() if self.y_of is not None else self.target_y   # an iso place: up and down the picture too (§89.10)
+        y = self.y_of() if self.y_of is not None else self.target_y   # an iso place: up and down the picture too
         x, y = view_center_within(self.bounds(), (self.x_of(), y), end.width, end.height)
         settle = getattr(self.x_of, "settle", None)
-        if settle is not None:   # an iso place's fixed wide view: on the ground, the target near the middle (§106)
+        if settle is not None:   # an iso place's fixed wide view: on the ground, the target near the middle
             sx, sy = settle(float(end.width), (x, y))
             reach_x, reach_y = FOLLOW_MAX_OFFSET * end.width, FOLLOW_MAX_OFFSET * end.height
             x, y = min(max(sx, x - reach_x), x + reach_x), min(max(sy, y - reach_y), y + reach_y)
@@ -712,9 +711,9 @@ class Follow(Action):
     """Keep the camera on a character (its feet) as it moves, at the camera's zoom, inside the
     stage: from this beat to the end of the scene, or until ``until: <beat>`` starts (the camera
     then stays where it is). The camera first pans to it (``run_time``). A ``pan`` or another
-    ``follow`` ends it. On a platform level it follows gently, up and down too (DESIGN.md §86.10);
-    on an iso place too, zooming in first until the character is as large as on a plain stage
-    (§89.10)."""
+    ``follow`` ends it. On a platform level it follows gently, up and down too;
+    on an iso place too, zooming in first until the character is as large as on a plain stage.
+    """
 
     run_time = 1.0
     reversible = True
@@ -732,7 +731,7 @@ class Follow(Action):
         end_shot(scene)
         follower = getattr(scene, "camera_follower", None)   # a stage's own way of following (a level's)
         self.x_of = (follower(targets[0].mobject) if follower is not None else None) or _x_of(targets[0].mobject)
-        start = getattr(scene, "follow_start", None)   # an iso place: zoom in on it first (DESIGN.md §89.10)
+        start = getattr(scene, "follow_start", None)   # an iso place: zoom in on it first
         view = start(targets[0].mobject) if start is not None else None
         if view is not None:
             width, center, y_of = view

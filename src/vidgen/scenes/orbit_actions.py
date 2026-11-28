@@ -1,4 +1,4 @@
-"""The beat actions of the ``orbit`` scene type (Phase X, Step 230, DESIGN §98.4): ``sweep``
+"""The beat actions of the ``orbit`` scene type (Phase X, Step 230): ``sweep``
 starts a body's equal-time sectors on a word (``sweep: "sectors:Comet"``, ``at: "@equal"``) and
 ``launch`` fires Newton's cannon (``launch: "shot:3"``). Both happen at the moment they fall due
 on the scene's clock (the bodies keep moving; nothing pauses). ``reveal`` shows the geometry

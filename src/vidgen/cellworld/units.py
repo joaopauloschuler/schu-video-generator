@@ -1,4 +1,4 @@
-"""Physical lengths of the cell world (DESIGN.md §95.3): everything is measured in micrometres
+"""Physical lengths of the cell world: everything is measured in micrometres
 (µm) inside the model; YAML may write a number (µm) or a string with a unit (``"25 nm"``,
 ``"1.5 um"``, ``"20 µm"``, ``"0.1 mm"``). No manim."""
 

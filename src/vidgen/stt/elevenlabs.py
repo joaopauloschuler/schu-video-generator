@@ -1,4 +1,4 @@
-"""The ``elevenlabs`` speech-to-text provider (DESIGN.md §57): ElevenLabs Speech to Text
+"""The ``elevenlabs`` speech-to-text provider: ElevenLabs Speech to Text
 (``POST /v1/speech-to-text``, model ``scribe_v1``), with the ``ELEVENLABS_API_KEY`` that
 ``vidgen tts`` uses. Standard library only; paid per audio hour.
 """

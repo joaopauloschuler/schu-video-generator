@@ -1,4 +1,4 @@
-"""The files a ``web`` scene's page loaded, as recorded beside its clip (DESIGN.md §118.10).
+"""The files a ``web`` scene's page loaded, as recorded beside its clip.
 
 ``WebPage`` notes every file it serves (a project file, or one of vidgen's under ``__vidgen__/``)
 with its SHA-256, and a project file that was asked for but missing as ``None``. The clip's
@@ -25,7 +25,7 @@ VIDGEN_PREFIX = "__vidgen__/"
 #: (``libs/<package>/<file>``, :mod:`vidgen.web.libs`) and the bundled fonts (``fonts/<family folder>/<file>``).
 THREE_FILES: tuple[str, ...] = ("three.module.js", "three.core.js")
 #: The folder of the shipped three.js add-ons after ``three/`` (``examples/jsm/`` of the npm
-#: package ``three`` of :data:`THREE_VERSION`, copied unmodified; DESIGN.md §118.14).
+#: package ``three`` of :data:`THREE_VERSION`, copied unmodified).
 ADDONS_FOLDER = "addons"
 THREE_VERSION = "0.186.1"
 #: Every shipped add-on file, by its path under :data:`ADDONS_FOLDER`: the chosen ones and the
@@ -48,28 +48,29 @@ FONT_SUFFIXES: tuple[str, ...] = (".ttf", ".otf")
 #: The folder of vidgen's own ES modules for pages after ``__vidgen__/`` (``data/web/modules/``).
 MODULES_FOLDER = "modules"
 #: vidgen's own modules a page may import, by import name -> file in :data:`MODULES_FOLDER`
-#: (``vidgen/three-finish``: finishing for three.js scenes, DESIGN.md §120.11; ``vidgen/music-time``
-#: and ``vidgen/three-kit``: building blocks for music videos, DESIGN.md §121.1; ``vidgen/title-cards``:
-#: an opening title and an end card for films, DESIGN.md §121.7; ``vidgen/space-scale``: astronomical
-#: scales in three.js, floating origin and depth slices, DESIGN.md §122.4; ``vidgen/parts``: the registry
-#: of ready-made parts, DESIGN.md §122.5; ``vidgen/space-sky``: the sky of a space scene, and
-#: ``vidgen/space-sky-stars``, the star file its real sky reads, DESIGN.md §122.6; ``vidgen/space-bodies``:
-#: planets, moons and rings from a seed, DESIGN.md §122.7; ``vidgen/space-craft``: the spacecraft kit, DESIGN.md §122.10;
-#: ``vidgen/space-camera``: camera moves for space scenes, DESIGN.md §122.11; ``vidgen/space-scene``: what the page of a
-#: declarative ``space`` scene needs besides the parts, DESIGN.md §122.12; ``vidgen/baked``: pictures baked once and kept
-#: between pages in vidgen's cache, DESIGN.md §123.2; ``vidgen/space-air``: the sky seen from inside an
-#: atmosphere and aerial perspective, DESIGN.md §123.3; ``vidgen/space-sea``: water to the horizon under that
-#: sky, DESIGN.md §123.4; ``vidgen/space-clouds``: cloud decks, towers, lightning and a giant's decks under that sky,
-#: DESIGN.md §123.5; ``vidgen/space-land``: ground with relief under that sky, the same world's as
-#: ``vidgen/space-bodies`` paints from orbit, DESIGN.md §123.6; ``vidgen/space-plane``: parametrized space
-#: plane parts and ready-made planes built on ``vidgen/space-craft``, DESIGN.md §123.8; ``vidgen/space-effects``:
-#: re-entry glow, vapour trails, exhaust in air and condensation round a craft, DESIGN.md §123.9;
-#: ``vidgen/space-hull``: hulls of giant ships built on ``vidgen/space-craft``, DESIGN.md §123.10;
-#: ``vidgen/space-hull-detail``: their fine detail, windows, bays and lights, DESIGN.md §123.11;
+#: (``vidgen/three-finish``: finishing for three.js scenes; ``vidgen/music-time``
+#: and ``vidgen/three-kit``: building blocks for music videos; ``vidgen/title-cards``:
+#: an opening title and an end card for films; ``vidgen/space-scale``: astronomical
+#: scales in three.js, floating origin and depth slices; ``vidgen/parts``: the registry
+#: of ready-made parts; ``vidgen/space-sky``: the sky of a space scene, and
+#: ``vidgen/space-sky-stars``, the star file its real sky reads; ``vidgen/space-bodies``:
+#: planets, moons and rings from a seed; ``vidgen/space-craft``: the spacecraft kit;
+#: ``vidgen/space-camera``: camera moves for space scenes; ``vidgen/space-scene``: what the page of a
+#: declarative ``space`` scene needs besides the parts; ``vidgen/baked``: pictures baked once and kept
+#: between pages in vidgen's cache; ``vidgen/space-air``: the sky seen from inside an
+#: atmosphere and aerial perspective; ``vidgen/space-sea``: water to the horizon under that
+#: sky; ``vidgen/space-clouds``: cloud decks, towers, lightning and a giant's decks under that sky,
+#: ``vidgen/space-land``: ground with relief under that sky, the same world's as
+#: ``vidgen/space-bodies`` paints from orbit; ``vidgen/space-plane``: parametrized space
+#: plane parts and ready-made planes built on ``vidgen/space-craft``; ``vidgen/space-effects``:
+#: re-entry glow, vapour trails, exhaust in air and condensation round a craft;
+#: ``vidgen/space-hull``: hulls of giant ships built on ``vidgen/space-craft``;
+#: ``vidgen/space-hull-detail``: their fine detail, windows, bays and lights;
 #: ``vidgen/space-camera-air``: camera moves in the air and beside giant ships, on ``vidgen/space-camera``'s rig,
-#: DESIGN.md §123.12; ``vidgen/space-descent``: one world from orbit to the ground (globe, air, sea, ground and
-#: decks joined), DESIGN.md §123.13; ``vidgen/space-scene-air``: the helpers of a declarative space scene in the air
-#: or beside a giant ship, DESIGN.md §123.14).
+#: ``vidgen/space-descent``: one world from orbit to the ground (globe, air, sea, ground and
+#: decks joined); ``vidgen/space-scene-air``: the helpers of a declarative space scene in the air
+#: or beside a giant ship; ``vidgen/camera-looks``: camera looks, matched sets of the finish's and
+#: the camera operator's options).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
                                   "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
                                   "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js",
@@ -84,7 +85,7 @@ VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vid
                                   "vidgen/space-hull-detail": "space-hull-detail.js",
                                   "vidgen/space-camera-air": "space-camera-air.js",
                                   "vidgen/space-descent": "space-descent.js",
-                                  "vidgen/space-scene-air": "space-scene-air.js"}
+                                  "vidgen/space-scene-air": "space-scene-air.js", "vidgen/camera-looks": "camera-looks.js"}
 #: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
 #: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
 PARTS_FOLDER = "parts"

@@ -1,4 +1,4 @@
-"""The genetic system of a cross or a pedigree (DESIGN.md §96.3): loci with their alleles, the
+"""The genetic system of a cross or a pedigree: loci with their alleles, the
 dominance between them, lethal alleles, penetrance and expressivity, the chromosome each locus
 is on, linkage groups with recombination frequencies, and epistasis between two loci. Built from
 plain YAML data by :func:`build_system`, which refuses mistakes with the reason and a

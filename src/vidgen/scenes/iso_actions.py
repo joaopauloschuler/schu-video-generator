@@ -1,4 +1,4 @@
-"""The ``iso_diagram`` beat actions (DESIGN.md §90.9): ``build``, ``raise``, ``lower``,
+"""The ``iso_diagram`` beat actions: ``build``, ``raise``, ``lower``,
 ``explode``, ``collapse``, ``flow``, ``focus`` and ``relabel``, timed like any action (``at: 0.5``,
 ``at: "@word"``). Written against ``vidgen.api`` only, like project actions; the scene does the
 drawing (``IsoDiagram.iso_*``)."""

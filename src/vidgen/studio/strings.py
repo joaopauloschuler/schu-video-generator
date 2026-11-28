@@ -1,4 +1,4 @@
-"""Bowed strings for score files (DESIGN.md §120.5): violins, violas, cellos and double basses,
+"""Bowed strings for score files: violins, violas, cellos and double basses,
 each a section or a solo, with four strokes (sustained, spiccato, tremolo, pizzicato),
 synthesised from the things that make a string sound bowed.
 
@@ -317,7 +317,7 @@ def _hiss_bands(name: str, mute: float) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _rosin_room(body: Body, freq: float, s: Mapping[str, float], bitten: np.ndarray) -> np.ndarray:
-    """How much of the rosin hiss a held note lets through, per sample, 0 to 1 (DESIGN.md §121.8).
+    """How much of the rosin hiss a held note lets through, per sample, 0 to 1.
     The hiss lies in the highs, where a dark tone (``brightness`` under 0.5, or the darker tone
     of a bow not yet biting, ``bitten`` under 1) has little: there it stood alone, a breath. In
     every octave band above half the bridge hill it may stand out of the tone no more than it

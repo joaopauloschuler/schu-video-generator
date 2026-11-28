@@ -1,5 +1,5 @@
 """Camera geometry shared by the camera actions (``zoom``, ``pan``, ``follow``) and scenes that
-move the camera themselves (DESIGN.md §69.7). No manim.
+move the camera themselves. No manim.
 
 A camera *view* is the part of the scene the frame shows: its centre and its width and height in
 Manim units. *Bounds* are ``(left, right, bottom, top)``: the box a view stays inside
@@ -29,7 +29,7 @@ def _clamp(value: float, low: float, high: float) -> float:
     return min(max(float(value), low), high)
 
 
-#: A :class:`SmoothFollow` camera (a platform level's, DESIGN.md §86.10): the followed character
+#: A :class:`SmoothFollow` camera (a platform level's): the followed character
 #: may move this share of the view's width either side of its centre before the camera moves...
 FOLLOW_DEAD_ZONE = 0.08
 #: ... and never more than this share of it, however fast it moves.
@@ -65,7 +65,7 @@ class SmoothFollow:
     room above its head and below its feet. Called, it gives the character's x (as the plain
     follow's function does); ``followed`` is the character (an ``exit`` stops following it);
     ``settle(width, centre)`` moves the centre the camera eases to (an iso place's fixed wide
-    view keeps it on the ground, DESIGN.md §106)."""
+    view keeps it on the ground)."""
 
     def __init__(self, x_of: Callable[[], float], span_of: Callable[[], tuple[float, float]] | None = None, followed: Any = None,
                  settle: Callable[[float, tuple[float, float]], tuple[float, float]] | None = None) -> None:

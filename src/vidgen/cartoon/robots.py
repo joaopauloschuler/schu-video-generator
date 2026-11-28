@@ -1,4 +1,4 @@
-"""Original robot characters of the generator (DESIGN.md §69.58): ``look.species: robot`` and its
+"""Original robot characters of the generator: ``look.species: robot`` and its
 ``look.robot`` (``head``: ``box`` or ``round``; ``face``: ``eyes`` or ``screen``; ``antenna``;
 ``moves_on``: ``legs`` or ``wheels``).
 

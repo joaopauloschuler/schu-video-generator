@@ -678,7 +678,7 @@ tracks:
 ## 11. Making it expressive
 
 Marks make a line breathe: dynamics, hairpins, slurs and per-note settings (Step 346;
-reference: [CONFIG](CONFIG.md#score-files-vidgen-music-render), DESIGN §120.7). A score without
+reference: [CONFIG](CONFIG.md#score-files-vidgen-music-render)). A score without
 them sounds exactly as before, so add them to a finished piece one track at a time and compare
 with `vidgen music check ... --compare`.
 

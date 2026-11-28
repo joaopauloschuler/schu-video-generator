@@ -1,4 +1,4 @@
-"""``vidgen music plan`` (Step 359, DESIGN.md §121.2): a music video's scenes proposed from a score
+"""``vidgen music plan`` (Step 359): a music video's scenes proposed from a score
 file without playing it: roles of the sections, cuts on bar lines (long sections split on a phrase
 line, short ones joined), moments (drops, breaths, silent bars, risers), a colour per scene, the
 tracks each scene follows, and the draft project it writes (validated, not rendered). The three

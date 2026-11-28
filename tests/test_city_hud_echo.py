@@ -1,5 +1,5 @@
-"""A city at night on an iso place, glowing particles, the HUD overlay and echo characters
-(DESIGN.md §102): towers, traffic lanes of hover pods, ``glow`` on particles, ``hud``, ``echo``."""
+"""A city at night on an iso place, glowing particles, the HUD overlay and echo characters:
+towers, traffic lanes of hover pods, ``glow`` on particles, ``hud``, ``echo``."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Walks and jumps on a platform level, drawn (DESIGN.md §86.7): the plans of the rules
+"""Walks and jumps on a platform level, drawn: the plans of the rules
 (:mod:`vidgen.world.moves`, tile units) played with the cartoon motion of :class:`Walk` and
 :class:`Jump` (the walk cycle, a crouch before a jump, squash and stretch, follow-through).
 
@@ -6,7 +6,7 @@ The animations only draw the plans; :class:`~vidgen.cartoon.level_stage.LevelFra
 units to Manim units. A character's ``ground_y`` follows the floor under it on every frame, so its
 shadow lies on the tile below it (none over a gap). The coins and stars a move picks up pop on the
 frame its feet get there (``pickups``), and a :class:`Reaction` (a new expression, an effect
-symbol) starts at its moment during or after the move (DESIGN.md §86.8).
+symbol) starts at its moment during or after the move.
 """
 
 from __future__ import annotations

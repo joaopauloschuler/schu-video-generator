@@ -1,4 +1,4 @@
-"""How clearly two generated characters differ (DESIGN.md §69.49). No manim.
+"""How clearly two generated characters differ. No manim.
 
 :func:`contrast_score` is a pure function of two :class:`LookFeatures`: a weighted sum
 (:data:`WEIGHTS`) of three parts, each from 0 (the same) to 1 (fully different):
@@ -49,7 +49,7 @@ HEAD_SIZE_SPAN = 0.4
 MIN_CONTRAST: float = LookAlikeRule.model_fields["min_contrast"].default
 #: Colours closer than this (CIEDE2000) are named as shared in :func:`compare`'s advice.
 CLOSE_COLOUR = 10.0
-#: Accessories that change the outline of the head (with the costume pieces worn there, §69.58).
+#: Accessories that change the outline of the head (with the costume pieces worn there).
 HEADWEAR: tuple[str, ...] = ("hat", "cap", "bow", "crown", "wizard_hat", "party_hat")
 #: What to change, per shared feature, in :func:`compare`'s advice.
 _FIXES: dict[str, str] = {
@@ -98,7 +98,7 @@ def look_features(look: CharacterLook | Mapping[str, Any], colors: CharacterColo
     details = {a for a in worn if a not in HEADWEAR}
     details |= {f"{key} {getattr(look, key)}" for key in ("facial_hair", "pattern", "shoes") if getattr(look, key) != "none"}
     details |= {f"eyes {look.eyes}", *([f"nose {look.nose}"] if look.nose != "none" else [])}
-    if look.species == "robot":   # two robots differ by their build (§69.58)
+    if look.species == "robot":   # two robots differ by their build
         robot = look.robot_look()
         details |= {f"robot head {robot.head}", f"robot face {robot.face}", f"robot on {robot.moves_on}", *(["antenna"] if robot.antenna else [])}
     resolved = {key: _resolve(getattr(colors, key), theme) for key in ("clothes", "skin", "hair", "accessory")}
@@ -210,7 +210,7 @@ def character_pairs(config: VideoConfig, theme: Theme | None) -> list[tuple[str,
     """``(scene id, pair)`` for each two generated characters on the video's stages (in the
     order they first appear), with the scene where the later of the two first appears
     (characters drawn from an SVG file are not compared, nor an echo with anyone: it is someone's
-    other self on purpose, and its tint sets it apart; DESIGN.md §102.6)."""
+    other self on purpose, and its tint sets it apart)."""
     entries = {entry.name: entry for entry in config.characters}
     first_scene: dict[str, str] = {}
     for scene in config.scenes:

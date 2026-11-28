@@ -1,4 +1,4 @@
-"""Where the vertices and lines of a Feynman diagram go (Phase Y, Step 238; DESIGN §99.5). No
+"""Where the vertices and lines of a Feynman diagram go (Phase Y, Step 238). No
 manim; deterministic.
 
 Coordinates: ``t`` is time (0: the incoming legs' ends, 1: the outgoing legs' ends) and ``y``

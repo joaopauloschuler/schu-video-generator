@@ -1,5 +1,5 @@
-"""A quick tunnel is cleaned up when vidgen is signalled, killed or interrupted during its close
-(DESIGN.md §115.5). Real child processes: a fake cloudflared and a driver that opens a host, so
+"""A quick tunnel is cleaned up when vidgen is signalled, killed or interrupted during its close.
+Real child processes: a fake cloudflared and a driver that opens a host, so
 signals and process death really happen. Everything is under the test's own temporary folder."""
 
 from __future__ import annotations

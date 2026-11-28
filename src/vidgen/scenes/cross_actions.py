@@ -1,4 +1,4 @@
-"""The beat actions of ``cross`` scenes (DESIGN.md §96.7): ``form_gametes`` (a parent's homologues
+"""The beat actions of ``cross`` scenes: ``form_gametes`` (a parent's homologues
 part and its gametes fly out: segregation and independent assortment; recombinants of linked
 loci), ``fill`` (Punnett cells fill in, cell by cell, by row or by column — the gametes of the
 row and column moving in — or the branch diagram grows), ``count`` (the offspring counted into

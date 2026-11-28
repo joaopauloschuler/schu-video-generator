@@ -1,4 +1,4 @@
-// The ready-made grounds of vidgen/space-land (DESIGN.md §123.6) for the registry vidgen/parts (§122.5):
+// The ready-made grounds of vidgen/space-land for the registry vidgen/parts:
 // what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas ({finish: false}: the
 // dome and the ground apply the tone curve themselves), at the quality "fast" (the sheet's tiles are small).
 import {definePart} from "vidgen/parts";

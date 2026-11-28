@@ -1,4 +1,4 @@
-// Listening notes and "Ask an agent" (DESIGN.md §94.16). While listening (playing or paused), a
+// Listening notes and "Ask an agent". While listening (playing or paused), a
 // click on the notes lane under the timeline, the "+ note" button or the N key pins a short note
 // at that moment: the server records its bar, beat, section and the version heard. Notes show as
 // pins on the lane and in the Notes tab (edit, resolve, delete; click to play from a little

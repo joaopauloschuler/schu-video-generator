@@ -1,4 +1,4 @@
-"""``pedigree``: a family chart in standard human pedigree nomenclature (DESIGN.md §96.8; NSGC
+"""``pedigree``: a family chart in standard human pedigree nomenclature (NSGC
 recommendations, Bennett et al. 2008) with its genetic analysis. Generations are rows (Roman
 numerals at the left, individuals numbered left to right: II-3), sibships in birth order under
 their parents' mating line, partners from outside beside the relative; the symbols, marks and

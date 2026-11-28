@@ -1,6 +1,6 @@
 # Isometric cartoons: craft notes
 
-Craft notes for `stage` scenes with an `iso:` place. The author guide (`AGENTS.md`) says what the
+Craft notes for `stage` scenes with an `iso:` place. The author guide (`vidgen guide iso`) says what the
 iso features are; this page is about making the picture *and the sound* work: framing the place,
 and voices that sound like they are in it.
 

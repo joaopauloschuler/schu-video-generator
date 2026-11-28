@@ -1,4 +1,4 @@
-// vidgen/three-kit: three.js building blocks for music videos (DESIGN.md §121.1). Part of
+// vidgen/three-kit: three.js building blocks for music videos. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/three-kit", next to
 // "vidgen/music-time" (song time, the score's events, reactions) and "vidgen/three-finish".
 //

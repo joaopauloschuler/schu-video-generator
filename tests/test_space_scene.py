@@ -1,4 +1,4 @@
-"""Step 376: the declarative ``space`` scene (DESIGN.md §122.12): its words checked in Python, the
+"""Step 376: the declarative ``space`` scene: its words checked in Python, the
 page it writes (stable bytes, every param in them), the runtime helpers ``vidgen/space-scene`` in Node,
 ``vidgen space-page``, ``vidgen music plan --style space`` and the ``space_scene`` / ``orbit_scale`` lint."""
 
@@ -79,6 +79,10 @@ def test_names_come_from_the_shipped_modules() -> None:
     assert "clouds" in n["world_options"]["ocean"] and "bands" in n["world_options"]["gas"] and "clouds" not in n["world_options"]["gas"]
     assert "disc" in n["phenomena"]["black-hole"] and "latitude" in n["phenomena"]["aurora"]
     assert n["finish_options"]["bloom"] == ["strength", "radius", "threshold", "scale"] and "fStop" in n["finish_options"]["dof"]
+    assert n["finish_options"]["noise"] == ["amount", "color", "size", "floor"] and n["finish_options"]["range"] == ["stops", "shoulder", "black"]
+    assert n["finish_options"]["sharpen"] == ["amount", "radius", "limit"]
+    assert n["finish_options"]["distort"] == ["amount", "mm"] and n["finish_options"]["edges"] == ["soft", "fringe", "power"]
+    assert n["finish_options"]["halation"] == ["amount", "radius", "threshold", "color"]
     assert "link" in n["end_options"] and "link" not in n["title_options"]
 
 
@@ -137,6 +141,16 @@ def test_the_demonstrations_validate(space: Any) -> None:
     ({"phenomena": [{"kind": "black-hole", "disk": False}]}, "did you mean 'disc'"),
     ({"finish": {"bloom": {"strenght": 1}}}, "did you mean 'strength'"),
     ({"finish": {"depth_of_field": {"f_stp": 2}}}, "did you mean 'f_stop'"),
+    ({"finish": {"noise": {"colour": 0.5}}}, "did you mean 'color'"),
+    ({"finish": {"range": {"stop": 2}}}, "did you mean 'stops'"),
+    ({"finish": {"edges": {"sfot": 2}}}, "did you mean 'soft'"),
+    ({"finish": {"halation": {"colour": [1, 0.5, 0.2]}}}, "did you mean 'color'"),
+    ({"operator": {"hand": "handhled"}}, "did you mean 'handheld'"),
+    ({"operator": {"exposure": True}}, "operator.exposure is a surface scene's"),
+    ({"camera_look": "windw_handheld"}, "did you mean 'window_handheld'"),
+    ({"camera_look": "drone", "finish": False}, "leave out finish: false"),
+    ({"camera_look": "phone", "operator": {"exposure": True}}, "operator.exposure is a surface scene's"),
+    ({"camera_look": "drone", "finish": {"noise": {"colour": 1}}}, "did you mean 'color'"),
     ({"title": {"title": "T", "sied": "left"}}, "'side'?"),
     ({"scale": 50}, "scale: goes with orbits"),
     ({"camera": [{"move": "arc", "subject": "Saturn"}, {"move": "arc", "subject": "Titan"}]}, "with several moves each gives over"),
@@ -208,6 +222,9 @@ def test_review_fixes_of_the_page(space: Any) -> None:
     (("seed",), 2), (("sky", "seed"), 5), (("sky", "look"), "sparse"), (("sun", "direction"), [1, 0, 0]), (("sun", "glare"), 0.5),
     (("bodies", 0, "seed"), 3), (("bodies", 0, "rings"), False), (("bodies", 1, "at", 0), "1300000 km"), (("light", "exposure"), "camera"),
     (("camera", "distance", "radii"), 7), (("camera", "lens"), "wide"), (("finish",), False), (("finish",), {"grain": 0.05}),
+    (("finish",), {"noise": 0.01}), (("finish",), {"range": {"stops": 2, "black": 0.01}}), (("finish",), {"sharpen": True}),
+    (("finish",), {"distort": True}), (("finish",), {"edges": {"soft": 2}}), (("finish",), {"halation": 0.3}),
+    (("operator",), {"hand": True}), (("operator",), {"horizon": 2}), (("camera_look",), "drone"), (("camera_look",), "none"),
     (("title",), "Saturn"), (("end_card",), {"title": "End", "link": "x"}), (("data",), {"a": 1}),
 ])
 def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: Any) -> None:
@@ -217,6 +234,72 @@ def test_every_param_changes_the_page(space: Any, path: tuple[Any, ...], value: 
         target = target.setdefault(key, {}) if isinstance(key, str) else target[key]
     target[path[-1]] = value
     assert page(space, raw) != page(space, RINGS)
+
+
+def test_a_camera_look_sets_the_finish_and_the_operator_and_the_scene_wins(space: Any) -> None:
+    """camera_look: (Step 400) writes the look's finish and operator into the page, the scene's own finish and operator
+    over them key by key (the space finish's defaults under both); an orbital scene leaves the look's automatic
+    exposure out (no meter there); camera_look: none has no look line."""
+    from vidgen.web.space_names import camera_looks
+
+    bare = page(space, {**RINGS, "camera_look": "none"})
+    assert "camera look" not in bare and "vidgen/camera-looks" not in bare
+    look = camera_looks()["looks"]["window_handheld"]
+    p = params(space, {**RINGS, "camera_look": "window-handheld", "finish": {"noise": 0.02, "grain": 0.05, "grade": {"saturation": 1.2}},
+                       "operator": {"horizon": False, "seed": 4}})
+    o = p.finish.options()
+    assert p.camera_look == "window_handheld"
+    assert o["noise"] == {**look["finish"]["noise"], "amount": 0.02} and o["grain"] == 0.05 and o["antialias"] == "none"
+    assert o["grade"] == {**look["finish"]["grade"], "saturation": 1.2} and o["halation"] == look["finish"]["halation"]
+    assert p.operator.options() == {"hand": look["operator"]["hand"], "horizon": False, "seed": 4}       # no exposure: an orbital scene
+    text = page(space, {**RINGS, "camera_look": "window_handheld"})
+    assert "// camera look window_handheld (vidgen/camera-looks)" in text and 'S.view = operate(S.view, {"hand": {"style": "handheld", "amount": 0.6}' in text
+    line = next(x for x in text.splitlines() if "new Finish(" in x)
+    assert '"noise": {"amount": 0.01}' in line and '"range": {"stops": 2, "shoulder": 0.08}' in line and '"antialias": "none"' in line
+
+
+def test_a_space_scene_has_the_camera_look_unless_it_says_none(space: Any) -> None:
+    """Step 401: a space scene without camera_look: gets the camera look (the sensor and the lens: noise, range,
+    sharpen, distort, edges, halation, a lighter vignette) and no operator; camera_look: none (or null) gives the page
+    of before, with none of them; the scene's own finish: goes over the camera's; finish: false is still no finish."""
+    from vidgen.web.space_names import camera_looks
+
+    camera = camera_looks()["looks"]["camera"]
+    assert camera["operator"] == {} and set(camera["finish"]) == {"noise", "range", "sharpen", "distort", "edges", "halation", "vignette"}
+    p = params(space, RINGS)
+    assert p.camera_look == "camera" and p.operator is None
+    text = page(space, RINGS)
+    line = next(x for x in text.splitlines() if "new Finish(" in x)
+    assert "// camera look camera (vidgen/camera-looks)" in text and "operate" not in text
+    assert all(f'"{k}"' in line for k in ("noise", "range", "sharpen", "distort", "edges", "halation")) and '"vignette": 0.2' in line
+    assert '"bloom": {"strength": 0.3, "radius": 0.5, "threshold": 1}' in line and '"motionBlur": false' in line   # the space finish's own
+    for none in ("none", "None", None):
+        p = params(space, {**RINGS, "camera_look": none})
+        assert p.camera_look is None and p.operator is None
+        line = next(x for x in page(space, {**RINGS, "camera_look": none}).splitlines() if "new Finish(" in x)
+        assert all(f'"{k}"' not in line for k in ("noise", "range", "sharpen", "distort", "edges", "halation")) and '"vignette": 0.3' in line
+    own = next(x for x in page(space, {**RINGS, "finish": {"noise": 0.02, "sharpen": False, "vignette": 0.5}}).splitlines() if "new Finish(" in x)
+    assert '"noise": {"amount": 0.02}' in own and '"sharpen": false' in own and '"vignette": 0.5' in own
+    assert "new Finish(" not in page(space, {**RINGS, "finish": False}) and params(space, {**RINGS, "finish": False}).camera_look is None
+    assert "did you mean 'none'" in problem(space, {**RINGS, "camera_look": "nne"})
+
+
+def test_the_camera_sensor_is_off_unless_given(space: Any) -> None:
+    """finish.noise, range and sharpen (Step 397) reach the page only when given or by a look: camera_look: none and
+    no finish of them leaves them out."""
+    line = next(x for x in page(space, {**RINGS, "camera_look": "none"}).splitlines() if "new Finish(" in x)
+    assert all(k not in line for k in ('"noise"', '"range"', '"sharpen"'))
+    line = next(x for x in page(space, {**RINGS, "camera_look": "none", "finish": {"noise": True, "range": {"stops": 2}, "sharpen": 0.4}}).splitlines() if "new Finish(" in x)
+    assert '"noise": true' in line and '"range": {"stops": 2}' in line and '"sharpen": 0.4' in line
+
+
+def test_the_camera_lens_is_off_unless_given(space: Any) -> None:
+    """finish.distort, edges and halation (Step 398) reach the page only when given or by a look: camera_look: none
+    and no finish of them leaves them out."""
+    line = next(x for x in page(space, {**RINGS, "camera_look": "none"}).splitlines() if "new Finish(" in x)
+    assert all(k not in line for k in ('"distort"', '"edges"', '"halation"'))
+    line = next(x for x in page(space, {**RINGS, "camera_look": "none", "finish": {"distort": True, "edges": {"fringe": 1}, "halation": 0.3}}).splitlines() if "new Finish(" in x)
+    assert '"distort": true' in line and '"edges": {"fringe": 1}' in line and '"halation": 0.3' in line
 
 
 def test_floats_are_written_exactly() -> None:

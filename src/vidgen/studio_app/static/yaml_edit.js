@@ -1,4 +1,4 @@
-// The score file, editable (DESIGN.md §94.13): a transparent textarea over the highlighted text,
+// The score file, editable: a transparent textarea over the highlighted text,
 // so typing keeps the colours and line numbers. Typed text is checked as you go (problems with
 // their line, the CLI's did-you-mean messages); text that stays valid for 0.8 s becomes the next
 // version and the controls follow. Text with problems is a draft: it is never a version, the

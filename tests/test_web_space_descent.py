@@ -1,5 +1,5 @@
 """One world from orbit to the ground, ``vidgen/space-descent`` and the moves ``descend`` / ``ascend`` of
-``vidgen/space-camera-air`` (Step 391, DESIGN.md §123.13): the module is served by its import name; its
+``vidgen/space-camera-air`` (Step 391): the module is served by its import name; its
 parts are registered; in Node (when it is installed): the handover's weights are smooth, monotonic and
 share a pixel with what is left, what is drawn at which height, the distance to the sphere, the globe's
 turn, options with a did-you-mean, the descent's height profile, its end joined to a ``skim`` and its
@@ -194,5 +194,6 @@ def test_the_joined_world_draws_from_orbit_to_the_surface_in_chromium(tmp_path: 
     # picture (the surface) and its top rows (the sky) change by bounded steps
     ground = np.array([plain[k][45:].mean(axis=(0, 1)) for k in range(2, 12)])
     sky = np.array([plain[k][:12].mean(axis=(0, 1)) for k in range(2, 12)])
-    assert np.abs(np.diff(ground, axis=0)).max() < 32 and np.abs(np.diff(sky, axis=0)).max() < 40
+    # the decks' shadows on the sea (Step 403) change the ground's mean as other clouds come into view: up to 34 levels between two heights
+    assert np.abs(np.diff(ground, axis=0)).max() < 40 and np.abs(np.diff(sky, axis=0)).max() < 40
     assert plain[0][:8].mean() < 40 and plain[n - 1][:8, :, 2].mean() > 90                # black over the limb from orbit, a blue sky at the surface

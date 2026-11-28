@@ -1,4 +1,4 @@
-"""The beat actions of the ``standard_model`` scene type (Phase Y, Step 237; DESIGN §99.4):
+"""The beat actions of the ``standard_model`` scene type (Phase Y, Step 237):
 ``antiparticles`` turns quark and lepton cells into their antiparticles (charge reversed, the
 symbol barred, the name changed; mass and spin stay) and ``couplings`` shows which particles a
 boson couples to. Written against ``vidgen.api``; the scene draws

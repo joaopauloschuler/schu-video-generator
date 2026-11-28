@@ -1,5 +1,5 @@
 """The ``orbit`` scene's bodies as written in YAML and their resolution into a
-:class:`orbits.System` (Phase X, DESIGN §98): a body from a preset (the planets on their J2000
+:class:`orbits.System` (Phase X): a body from a preset (the planets on their J2000
 orbits, the Moon, an ISS-like orbit, a geostationary one, Halley's comet), from orbital elements
 (``a`` and ``e``, ``periapsis`` and ``apoapsis``, ``periapsis`` and ``e``, ``altitude``) or from a
 position and velocity, with values written with their units (``"1 AU"``, ``"7.8 km/s"``)."""

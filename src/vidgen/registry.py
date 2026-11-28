@@ -1,4 +1,4 @@
-"""Scene-type, action and overlay registry (DESIGN.md §6.2, §26, §41).
+"""Scene-type, action and overlay registry.
 
 Scene types (``@scene``), per-beat action types (``@action``) and overlay types (``@overlay``) are
 registered the same way, in two layers each:

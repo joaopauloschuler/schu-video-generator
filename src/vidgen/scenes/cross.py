@@ -1,4 +1,4 @@
-"""``cross``: a genetic cross at university level (DESIGN.md §96.7). The parents (genotypes in
+"""``cross``: a genetic cross at university level. The parents (genotypes in
 standard notation, their homologous chromosomes with the alleles, their phenotype pictures; the
 P generation and its F1 when asked), their gametes formed by segregation and independent
 assortment (linked loci: parental and recombinant gametes at their exact frequencies), a Punnett

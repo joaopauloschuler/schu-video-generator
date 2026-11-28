@@ -1,4 +1,4 @@
-"""Flight data for ``web`` scenes (Step 385, DESIGN.md §123.7): ``flight_data:`` declares flights in
+"""Flight data for ``web`` scenes (Step 385): ``flight_data:`` declares flights in
 words (:mod:`vidgen.flight.spec`: a start, legs), the ground they must stay over, the world and the
 scene's anchor; :mod:`vidgen.flight` computes, for every frame of the scene on vidgen's clock, each
 flight's float64 position, velocity, attitude quaternion and the numbers a picture reads (speed,
@@ -230,7 +230,7 @@ def _orbit_state(name: str, at: float, fps: int, orbits: dict[str, Any] | None, 
 def make_flight_data(settings: FlightData, fps: int, frames: int, scene_frames: int, music: dict[str, Any] | None = None,
                      orbits: dict[str, Any] | None = None) -> dict[str, Any]:
     """The data for ``frames`` frames at ``fps`` of a scene whose own frames are ``scene_frames`` (the rest
-    hold the last moment): see the module docstring and DESIGN.md §123.7. ``music``: the scene's
+    hold the last moment): see the module docstring. ``music``: the scene's
     ``ctx.music`` (bars); ``orbits``: its orbit data (a start from orbit)."""
     if scene_frames < 1 or frames < 1:
         raise VidgenError("flight_data: the scene has no frames")
@@ -288,7 +288,7 @@ def _approximations(settings: FlightData, world: Any) -> list[str]:
     if world.invented:
         out.append(f"the invented world '{world.name}': its gravity from the Earth's mean density")
     if any(leg.reentry is not None for f in settings.flights for leg in f.legs):
-        out.append("re-entry: the orbit's motion blended into an equilibrium glide, S-turns and the end a look (DESIGN.md §123.7)")
+        out.append("re-entry: the orbit's motion blended into an equilibrium glide, S-turns and the end a look")
     if settings.ground.kind == "land":
         out.append("the ground's heights are vidgen/space-land's heightAt; far ground is drawn smoother than that")
     return out

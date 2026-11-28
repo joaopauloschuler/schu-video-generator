@@ -1,4 +1,4 @@
-"""``mutation``: a sequence variant on a real coding sequence (DESIGN.md §96.13). The reference
+"""``mutation``: a sequence variant on a real coding sequence. The reference
 coding strand in codons (base tiles in the reading frame from the ATG, the amino acid under each
 codon with its residue number), the variant row made from it by the change — a base swapped, bases
 deleted or inserted with the rest sliding through the fixed codon frame (so a frameshift visibly

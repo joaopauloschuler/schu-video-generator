@@ -1,4 +1,4 @@
-"""``--jobs auto``: how many scenes to render in parallel on this machine (DESIGN.md §70).
+"""``--jobs auto``: how many scenes to render in parallel on this machine.
 
 ``jobs = min(available physical memory // PER_JOB_BYTES, CPU cores)``, at least 1. "Available"
 is the memory the system can give without swapping (Linux ``MemAvailable``, or less when a cgroup

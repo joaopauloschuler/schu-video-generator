@@ -1,4 +1,4 @@
-"""Text normalisation for comparing what was written with what was heard (DESIGN.md §57).
+"""Text normalisation for comparing what was written with what was heard.
 
 ``vidgen readback`` compares a beat's spoken text with a speech-to-text transcript of its MP3.
 Both go through :func:`normalize_words` so that differences in *writing* do not count as

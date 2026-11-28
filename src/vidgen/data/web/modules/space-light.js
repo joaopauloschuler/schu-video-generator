@@ -1,4 +1,4 @@
-// vidgen/space-light: suns and the light of a space scene (DESIGN.md §122.8). Part of
+// vidgen/space-light: suns and the light of a space scene. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-light".
 //
 //   import {star, spaceLight} from "vidgen/space-light";
@@ -94,7 +94,7 @@ export const STARS = Object.freeze({
   "white": Object.freeze({temperature: 8500, seed: 14, light: 2.0, saturation: 1.3, granulation: 0.3, cells: 40, spots: 0, spotSize: 1, faculae: 0.2, limb: 0.8, corona: 0.9, streamers: 0.7, prominences: 0}),
   "blue-giant": Object.freeze({temperature: 22000, seed: 15, light: 2.3, saturation: 1.2, granulation: 0.12, cells: 12, spots: 0, spotSize: 1, faculae: 0, limb: 0.65, corona: 1.2, streamers: 0.45, prominences: 0}),
 });
-/** A star's options and their defaults (see DESIGN.md §122.8 for each). */
+/** A star's options and their defaults. */
 export const STAR_DEFAULTS = Object.freeze({name: null, temperature: 5772, seed: 1, light: 1.2, saturation: 3, granulation: 1, cells: 32, boil: 1, spots: 5, spotSize: 1, faculae: 1,
   limb: 1, corona: 1, reach: 6, streamers: 1, prominences: 4, spin: 0, tilt: 0, glare: 1, spikes: 6, spikeAngle: 15, spikeLength: 1, flare: 0.5, quality: "standard",
   direction: null, angularRadius: SUN_ANGULAR_RADIUS / RAD, display: "auto"});

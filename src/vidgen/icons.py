@@ -1,4 +1,4 @@
-"""Icon registry: the vendored icon set and a project's own icons (DESIGN.md §22).
+"""Icon registry: the vendored icon set and a project's own icons.
 
 Built-in icons are package data (``vidgen/data/icons``): SVG files of one open-licensed set
 (Lucide, ISC) with a ``manifest.json`` giving each icon's name, category, search tags and

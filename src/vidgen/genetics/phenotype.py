@@ -1,4 +1,4 @@
-"""Phenotypes from genotypes (DESIGN.md §96.3): dominance at each locus (complete, incomplete,
+"""Phenotypes from genotypes: dominance at each locus (complete, incomplete,
 codominant, a hierarchy of multiple alleles), penetrance (an exact share of the genotype's
 carriers showing the trait), epistasis between two loci, lethal genotypes, and the textbook
 order of phenotype classes (so ratios read 9:3:4, 12:3:1, 1:2:1). No manim."""

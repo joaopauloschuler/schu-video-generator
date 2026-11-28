@@ -1,5 +1,4 @@
-"""``kinematics``: momentum-vector pictures of relativistic kinematics (Phase Y, Step 239; DESIGN
-§99.8). A two-body decay (``decay: "pi+ -> mu+ nu_mu"``) in the parent's rest frame — the products
+"""``kinematics``: momentum-vector pictures of relativistic kinematics (Phase Y, Step 239). A two-body decay (``decay: "pi+ -> mu+ nu_mu"``) in the parent's rest frame — the products
 back to back with p* from the Källén function — and in the lab where the parent moves
 (``momentum: 10 GeV/c``), side by side (16:9) or stacked (9:16); or particles given in the lab
 (``particles:``) with their sum and the system's rest frame. Arrows to scale with their

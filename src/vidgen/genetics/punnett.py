@@ -1,4 +1,4 @@
-"""What a ``cross`` scene shows, worked out without drawing (DESIGN.md §96.7): the parents (as
+"""What a ``cross`` scene shows, worked out without drawing: the parents (as
 written, or the F1 of a P cross, a test cross's tester, a reciprocal cross), each parent's gametes
 in textbook order with their exact frequencies and which homologue each allele came from
 (parental or recombinant), the Punnett square's cells (each ``fertilize(egg, sperm)``), the

@@ -1,4 +1,4 @@
-"""Hosting audio / video inputs through a Cloudflare quick tunnel (DESIGN.md §115). No network:
+"""Hosting audio / video inputs through a Cloudflare quick tunnel. No network:
 the share server is real (127.0.0.1), cloudflared is a fake Python script that prints a
 trycloudflare address and starts a child process, and "the public address" is mapped back to
 the local server."""

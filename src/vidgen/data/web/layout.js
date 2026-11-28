@@ -1,4 +1,4 @@
-// vidgen's layout reader for a `web` scene (DESIGN.md §118.12). web/page.py evaluates this function
+// vidgen's layout reader for a `web` scene. web/page.py evaluates this function
 // after a frame's screenshot, never before one, so reading changes nothing drawn. It returns the
 // text the page shows and where, in page pixels: one item per element that holds visible text
 // (its text nodes and those of its inline children; an SVG <text> with its <tspan>s), plus what the

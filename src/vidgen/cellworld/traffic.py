@@ -1,4 +1,4 @@
-"""Membrane traffic and motors as plans (DESIGN.md §95.10): the rules and the planned shapes of
+"""Membrane traffic and motors as plans: the rules and the planned shapes of
 the ``cell`` scene's ``motor_walk``, ``endocytosis`` and ``exocytosis`` actions, as plain data
 without manim. A motor walks hand over hand along its filament (kinesin-1 8 nm steps to the
 microtubule's + end, cytoplasmic dynein 8 nm steps to its − end, myosin V 36 nm steps to the

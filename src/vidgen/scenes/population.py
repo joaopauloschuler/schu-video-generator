@@ -1,4 +1,4 @@
-"""``population``: population genetics (DESIGN.md §96.16), computed by
+"""``population``: population genetics, computed by
 ``vidgen.genetics.population``.
 
 - ``model: hardy_weinberg``: a population of dots coloured by genotype (half and half for a

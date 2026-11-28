@@ -1,8 +1,9 @@
-"""The author guide for AI agents (``vidgen guide``, DESIGN.md §59).
+"""The author guide for AI agents (``vidgen guide``).
 
-The guide is one Markdown file shipped as package data (``data/guide/AGENTS.md``; the
-repository's ``AGENTS.md`` is a copy of it). Topics are its ``##`` sections, each introduced by a
-marker line ``<!-- topic: NAME (also: ALIAS, ALIAS) -->``; ``vidgen guide TOPIC`` prints one.
+The guide is package data in ``data/guide/``: a short entry page, ``AGENTS.md`` (the repository's
+``AGENTS.md`` is a copy of it), and one Markdown file per topic (``scenes.md``, ``web.md``, ...).
+Each topic file starts with a marker line ``<!-- topic: NAME (also: ALIAS, ALIAS) -->``.
+``vidgen guide`` prints the entry page, ``vidgen guide TOPIC`` one topic.
 """
 
 from __future__ import annotations
@@ -14,38 +15,60 @@ from pathlib import Path
 
 from vidgen.errors import VidgenError
 
-#: The packaged guide (the repository's ``AGENTS.md`` is a copy of this file).
-GUIDE_FILE = Path(__file__).resolve().parent / "data" / "guide" / "AGENTS.md"
+#: The folder of the packaged guide.
+GUIDE_DIR = Path(__file__).resolve().parent / "data" / "guide"
+#: The short entry page (the repository's ``AGENTS.md`` is a copy of this file).
+GUIDE_FILE = GUIDE_DIR / "AGENTS.md"
+#: The topics in the order ``vidgen guide --list`` shows them; topic NAME is the file ``NAME.md``.
+TOPIC_NAMES: tuple[str, ...] = (
+    "start", "workflow", "pacing", "social", "scenes", "design", "actions", "cartoons", "platform", "iso",
+    "biology", "genetics", "science", "orbits", "space-scenes", "three-d", "web", "particle-physics",
+    "overlays", "audio", "examples", "outputs", "troubleshooting",
+)
 
 _MARKER = re.compile(r"^<!-- topic: ([a-z][a-z0-9-]*)(?: \(also: ([^)]*)\))? -->$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
 class GuideTopic:
-    """One section of the guide: its ``name``, other names it answers to, ``##`` title and text."""
+    """One topic of the guide: its ``name``, other names it answers to, ``##`` title, text and file."""
 
     name: str
     title: str
     aliases: tuple[str, ...]
     text: str
+    path: Path
 
 
-def guide_text() -> str:
-    """The whole guide as Markdown, without the topic marker lines."""
-    return _strip_markers(_raw())
+def topic_file(name: str) -> Path:
+    """The packaged file of the topic called ``name`` (its exact name, not an alias)."""
+    return GUIDE_DIR / f"{name}.md"
+
+
+def entry_page_text() -> str:
+    """The short entry page (``AGENTS.md``): what ``vidgen guide`` prints with no topic."""
+    return _read(GUIDE_FILE)
+
+
+def all_topics_text() -> str:
+    """Every topic's text, in order, joined into one Markdown text (without the marker lines);
+    the entry page is not part of it."""
+    return "\n".join(topic.text for topic in guide_topics())
 
 
 def guide_topics() -> list[GuideTopic]:
     """The guide's topics in order."""
-    raw = _raw()
-    markers = list(_MARKER.finditer(raw))
     topics = []
-    for i, match in enumerate(markers):
-        end = markers[i + 1].start() if i + 1 < len(markers) else len(raw)
-        text = raw[match.end() : end].strip("\n") + "\n"
+    for name in TOPIC_NAMES:
+        path = topic_file(name)
+        raw = _read(path)
+        match = _MARKER.match(raw)
+        if match is None or match[1] != name or len(_MARKER.findall(raw)) != 1:
+            raise VidgenError(f"the guide file {path} must start with its one marker <!-- topic: {name} ... -->")
+        text = raw[match.end() :].strip("\n") + "\n"
         heading = re.search(r"^## (.+)$", text, re.MULTILINE)
         aliases = tuple(a.strip() for a in (match[2] or "").split(",") if a.strip())
-        topics.append(GuideTopic(match[1], heading[1].strip() if heading else match[1], aliases, text))
+        topics.append(GuideTopic(name, heading[1].strip() if heading else name, aliases, text, path))
     return topics
 
 
@@ -72,16 +95,12 @@ def topic_lines(topics: list[GuideTopic]) -> list[str]:
         also = f"  (also: {', '.join(topic.aliases)})" if topic.aliases else ""
         lines.append(f"{topic.name:<{width}}  {topic.title}{also}")
     lines.append("")
-    lines.append("vidgen guide TOPIC prints one topic; vidgen guide the whole guide.")
+    lines.append("vidgen guide TOPIC prints one topic, vidgen guide alone the short entry page. Read only the topics your video needs.")
     return lines
 
 
-def _raw() -> str:
+def _read(path: Path) -> str:
     try:
-        return GUIDE_FILE.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except OSError as exc:  # a broken install
-        raise VidgenError(f"cannot read the guide {GUIDE_FILE}: {exc}") from None
-
-
-def _strip_markers(text: str) -> str:
-    return _MARKER.sub("", text).replace("\n\n\n", "\n\n")
+        raise VidgenError(f"cannot read the guide {path}: {exc}") from None

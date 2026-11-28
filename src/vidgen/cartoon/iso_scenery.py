@@ -1,4 +1,4 @@
-"""An isometric place as shapes (DESIGN.md §89.6): its flat ground (drawn once, behind everything)
+"""An isometric place as shapes: its flat ground (drawn once, behind everything)
 and its *pieces*, the raised blocks, walls and objects that can hide a character, each in the box
 it stands in for the draw order. No manim.
 
@@ -50,7 +50,7 @@ WINDOW_TOP = 2.15
 class IsoColors:
     """The ground's and the walls' colours (``#rrggbb``); objects take their own (``ObjectLook``).
     ``doors``: how a room's map doors look and open: ``swing`` (wooden, swinging into the room)
-    or ``slide`` (steel panels sliding apart, DESIGN.md §102.11)."""
+    or ``slide`` (steel panels sliding apart)."""
 
     grass: str = "#A5D67E"
     earth: str = "#B98A5E"
@@ -62,8 +62,8 @@ class IsoColors:
     wall: str = "#EDE1CC"
     cut: str = "#8A664A"
     doors: str = "swing"
-    strips: tuple[str, str] | None = None   # neon strips: the left back wall's, the right one's (§102.18)
-    #: the surfaces' textures that are not their own (DESIGN.md §107): (surface, texture) pairs of
+    strips: tuple[str, str] | None = None   # neon strips: the left back wall's, the right one's
+    #: the surfaces' textures that are not their own: (surface, texture) pairs of
     #: :data:`TEXTURED_SURFACES` and :data:`TEXTURES`
     textures: tuple[tuple[str, str], ...] = ()
 
@@ -74,14 +74,14 @@ class IsoColors:
 
 
 #: The ground's surfaces that take a texture: outdoors grass (``.``) and paths (``:``), indoors
-#: the floor (``.``) and the tiled floor (``:``), DESIGN.md §107.
+#: the floor (``.``) and the tiled floor (``:``).
 TEXTURED_SURFACES: tuple[str, ...] = ("grass", "path", "floor", "tiles")
 #: The textures: none, tufts of grass, a striped mown lawn, stones, a checkerboard, terrazzo
 #: chips, floorboards, tiles in two shades.
 TEXTURES: tuple[str, ...] = ("plain", "tufts", "lawn", "stones", "checker", "terrazzo", "boards", "tiles")
 #: Each surface's own texture.
 DEFAULT_TEXTURES: dict[str, str] = {"grass": "tufts", "path": "stones", "floor": "boards", "tiles": "tiles"}
-#: The colours a ``style`` gives the ground (DESIGN.md §107; the place's ``colors`` win) and its
+#: The colours a ``style`` gives the ground (the place's ``colors`` win) and its
 #: textures (the place's ``textures`` win): ``retro``, the world of tomorrow's pastels — a mint
 #: lawn, cream checker paths, turquoise water, terrazzo floors and turquoise walls.
 STYLE_COLORS: dict[str, dict[str, str]] = {
@@ -94,7 +94,7 @@ CHECKER_TONE = ("#C98A6A", 0.22)
 TERRAZZO_CHIPS = ("#FF7F6B", "#3FC1B5", "#F2B33D", "#8A93A3")
 
 
-#: Neon strip lights along a room's standing walls (``wall_lights``, DESIGN.md §102.18): the
+#: Neon strip lights along a room's standing walls (``wall_lights``): the
 #: glowing tube's band and the softer glow round it (tile units over the wall's base).
 STRIP_CORE = (2.66, 2.74)
 STRIP_HALO = (2.58, 2.82)
@@ -118,7 +118,7 @@ class IsoPiece:
     """Something that can hide what stands behind it: its ``name`` (a cell's ``block_3_4`` /
     ``wall_3_4``, a map door's ``door_1``, an object's own), the box it stands in and its shapes
     back to front as it is unless the scene changes it; ``kind``: an object's kind, ``door`` for a
-    map door (``None``: a block or a wall); ``redraw``: its shapes in another state (DESIGN.md §89.10)."""
+    map door (``None``: a block or a wall); ``redraw``: its shapes in another state."""
 
     name: str
     box: Box3
@@ -202,7 +202,7 @@ def _surface_name(place: IsoPlace, ground: str) -> str | None:
 
 
 def _texture(texture: str, color: str, column: int, row: int, z: float, seed: int) -> list[Shape]:
-    """What ``texture`` lays on a cell's top of ``color`` at height ``z`` (DESIGN.md §107), placed
+    """What ``texture`` lays on a cell's top of ``color`` at height ``z``, placed
     by the cell (the same in every render): two darker quarters of a checkerboard, terrazzo's
     chips, a mown lawn's darker stripe on every other row, tufts, stones, floorboards' seams or a
     tile's darker shade."""
@@ -454,7 +454,7 @@ def _wall_window(side: str, column: int, row: int, x1: float, y1: float, base: f
 
 
 def window_faces(place: IsoPlace) -> list[tuple[tuple[float, float, float], ...]]:
-    """The frame of each window of a room that shows into it (DESIGN.md §100.7: shutters close
+    """The frame of each window of a room that shows into it (shutters close
     over them): four world points each, bottom left, bottom right, top right, top left as seen;
     none outdoors."""
     if not place.indoor:
@@ -474,7 +474,7 @@ def window_faces(place: IsoPlace) -> list[tuple[tuple[float, float, float], ...]
     return found
 
 
-#: A sliding door (``doors: slide``, DESIGN.md §102.11): its steel frame, its two panels, the
+#: A sliding door (``doors: slide``): its steel frame, its two panels, the
 #: light over it and the glowing seam where its panels meet, a keypad's light beside it.
 SLIDE_FRAME = "#4A505E"
 SLIDE_PANEL = "#9AA3B2"

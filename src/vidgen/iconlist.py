@@ -1,4 +1,4 @@
-"""``vidgen list-icons``: the available icons as text, JSON or a labelled contact sheet (§22).
+"""``vidgen list-icons``: the available icons as text, JSON or a labelled contact sheet.
 
 The sheet draws every icon with the same code as a render (:func:`vidgen.icon_mobject.build_icon`
 and Manim's Cairo camera), so what it shows is what a scene shows; names and categories are

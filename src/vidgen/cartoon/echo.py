@@ -1,7 +1,7 @@
-"""Echo characters (DESIGN.md §102.6): a character's other self from another timeline or a
+"""Echo characters: a character's other self from another timeline or a
 memory seen overlapping the present — a translucent figure that keeps its own costume.
 
-Unlike a hologram (§100.3), which maps every colour through one tint, an echo keeps the colours
+Unlike a hologram, which maps every colour through one tint, an echo keeps the colours
 it was drawn with (a uniform stays a uniform, a gold medal gold), moved a little towards the
 echo's colour and made translucent; its outlines glow in a light tint of that colour. The stage
 leaves an echo out of its light grade (it shines the same at night) and flickers it softly like

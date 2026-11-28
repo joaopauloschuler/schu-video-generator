@@ -1,4 +1,4 @@
-"""``iso_diagram``: a diagram of blocks in the isometric view (DESIGN.md §90.6, §90.8-90.10):
+"""``iso_diagram``: a diagram of blocks in the isometric view:
 boxes, slabs, cylinders and databases, flat tiles, stacks of layers and group plates on a grid,
 joined by connectors along the grid, with flat labels that stay readable, and the actions that
 build, raise, explode, recolour and relabel it, flow along its connectors and focus on its parts
@@ -1742,7 +1742,7 @@ class IsoDiagram(NarratedScene):
                 anims.append(Veil(group, self._veiled.pop(key), hide=False))
         return anims
 
-    # ----- lint (DESIGN.md §90.10) -----------------------------------------------------------
+    # ----- lint -----------------------------------------------------------
 
     def layout_keys(self, beat_id: str | None) -> dict[str, Any]:
         """What the layout dump adds to a still: ``iso_diagram`` with the labels shown (text,

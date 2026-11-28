@@ -1,5 +1,5 @@
 """Non-speech voice sounds in a beat's text: ``[gasp]``, ``[hmm]``, ``[laugh]``, ``[sigh]``,
-``[giggle]``, ``[groan]`` (DESIGN.md §69.33) and a robot's ``[beep]`` (§69.58).
+``[giggle]``, ``[groan]`` and a robot's ``[beep]``.
 
 - :func:`take_out_sounds` finds the markers (a trailing ``s`` is allowed: ``[laughs]``) and
   returns the text without them plus each :class:`VoiceSound` with the number of words before

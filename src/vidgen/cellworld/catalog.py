@@ -1,4 +1,4 @@
-"""What a cell world is made of (DESIGN.md §95.2, §95.9): compartments, membranes, the kinds of
+"""What a cell world is made of: compartments, membranes, the kinds of
 things placed in them with their real sizes, which cells have them and where each may be (the
 location rules' data), and what each membrane's lipids are. Plain data, no manim. Sizes are
 textbook-consensus values (Alberts, Molecular Biology of the Cell; Lodish, Molecular Cell

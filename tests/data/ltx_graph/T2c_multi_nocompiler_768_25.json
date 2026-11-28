@@ -1,0 +1,371 @@
+{
+ "1": {
+  "class_type": "UnetLoaderGGUF",
+  "inputs": {
+   "unet_name": "ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"
+  }
+ },
+ "2": {
+  "class_type": "LTXMultiICLoRA",
+  "inputs": {
+   "model": [
+    "1",
+    0
+   ],
+   "ic_lora_count": 2,
+   "noisy_blend": 1.0,
+   "lora_a": "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors",
+   "strength_a": 1.0,
+   "guide_index_a": 0,
+   "enable_a": true,
+   "lora_b": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+   "strength_b": 1.0,
+   "guide_index_b": 1,
+   "enable_b": true
+  }
+ },
+ "3": {
+  "class_type": "DualCLIPLoader",
+  "inputs": {
+   "clip_name1": "gemma_3_12B_it_fp8_scaled.safetensors",
+   "clip_name2": "ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
+   "type": "ltxv",
+   "device": "default"
+  }
+ },
+ "4": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "Reference sheet: top left, a grey jet glider seen from behind and above, delta wings with red tips, two tail fins, two engine nozzles; top right, the same glider in side view; bottom left, the same glider from above; bottom right, a rough open sea under a low afternoon sun. Generated video: a grey glider flies low over a rough open sea and banks gently, the chase camera following close behind. Real 35 mm aerial footage shot from a chase plane: natural daylight, real atmosphere and haze, real waves, spray and whitecaps, fine film grain, low afternoon sun; photographic, not computer graphics",
+   "clip": [
+    "3",
+    0
+   ]
+  }
+ },
+ "5": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "pc game, console game, video game, cartoon, childish, ugly",
+   "clip": [
+    "3",
+    0
+   ]
+  }
+ },
+ "6": {
+  "class_type": "LTXVConditioning",
+  "inputs": {
+   "positive": [
+    "4",
+    0
+   ],
+   "negative": [
+    "5",
+    0
+   ],
+   "frame_rate": 24.0
+  }
+ },
+ "7": {
+  "class_type": "VAELoaderKJ",
+  "inputs": {
+   "vae_name": "ltx-2.3-22b-distilled_video_vae.safetensors",
+   "device": "main_device",
+   "weight_dtype": "bf16"
+  }
+ },
+ "8": {
+  "class_type": "VAELoaderKJ",
+  "inputs": {
+   "vae_name": "ltx-2.3-22b-distilled_audio_vae.safetensors",
+   "device": "main_device",
+   "weight_dtype": "bf16"
+  }
+ },
+ "9": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "trial2_first_768x448.png"
+  }
+ },
+ "10": {
+  "class_type": "LoadVideo",
+  "inputs": {
+   "file": "trial2_canny_25_768x448.mp4"
+  }
+ },
+ "11": {
+  "class_type": "GetVideoComponents",
+  "inputs": {
+   "video": [
+    "10",
+    0
+   ]
+  }
+ },
+ "12": {
+  "class_type": "EmptyLTXVLatentVideo",
+  "inputs": {
+   "width": 768,
+   "height": 448,
+   "length": 25,
+   "batch_size": 1
+  }
+ },
+ "13": {
+  "class_type": "LTXVImgToVideoConditionOnly",
+  "inputs": {
+   "vae": [
+    "7",
+    0
+   ],
+   "image": [
+    "9",
+    0
+   ],
+   "latent": [
+    "12",
+    0
+   ],
+   "strength": 1.0,
+   "bypass": true
+  }
+ },
+ "14": {
+  "class_type": "LTXAddVideoICLoRAGuide",
+  "inputs": {
+   "positive": [
+    "42",
+    0
+   ],
+   "negative": [
+    "42",
+    1
+   ],
+   "vae": [
+    "7",
+    0
+   ],
+   "latent": [
+    "42",
+    2
+   ],
+   "image": [
+    "11",
+    0
+   ],
+   "frame_idx": 0,
+   "strength": 1.0,
+   "latent_downscale_factor": [
+    "2",
+    2
+   ],
+   "crop": "disabled",
+   "use_tiled_encode": false,
+   "tile_size": 256,
+   "tile_overlap": 64
+  }
+ },
+ "15": {
+  "class_type": "LTXVEmptyLatentAudio",
+  "inputs": {
+   "frames_number": 25,
+   "frame_rate": 24,
+   "batch_size": 1,
+   "audio_vae": [
+    "8",
+    0
+   ]
+  }
+ },
+ "16": {
+  "class_type": "LTXVConcatAVLatent",
+  "inputs": {
+   "video_latent": [
+    "14",
+    2
+   ],
+   "audio_latent": [
+    "15",
+    0
+   ]
+  }
+ },
+ "17": {
+  "class_type": "RandomNoise",
+  "inputs": {
+   "noise_seed": 42
+  }
+ },
+ "18": {
+  "class_type": "KSamplerSelect",
+  "inputs": {
+   "sampler_name": "euler_ancestral_cfg_pp"
+  }
+ },
+ "19": {
+  "class_type": "ManualSigmas",
+  "inputs": {
+   "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+  }
+ },
+ "20": {
+  "class_type": "CFGGuider",
+  "inputs": {
+   "model": [
+    "2",
+    0
+   ],
+   "positive": [
+    "14",
+    0
+   ],
+   "negative": [
+    "14",
+    1
+   ],
+   "cfg": 1.0
+  }
+ },
+ "21": {
+  "class_type": "SamplerCustomAdvanced",
+  "inputs": {
+   "noise": [
+    "17",
+    0
+   ],
+   "guider": [
+    "20",
+    0
+   ],
+   "sampler": [
+    "18",
+    0
+   ],
+   "sigmas": [
+    "19",
+    0
+   ],
+   "latent_image": [
+    "16",
+    0
+   ]
+  }
+ },
+ "22": {
+  "class_type": "LTXVSeparateAVLatent",
+  "inputs": {
+   "av_latent": [
+    "21",
+    0
+   ]
+  }
+ },
+ "23": {
+  "class_type": "LTXVCropGuides",
+  "inputs": {
+   "positive": [
+    "14",
+    0
+   ],
+   "negative": [
+    "14",
+    1
+   ],
+   "latent": [
+    "22",
+    0
+   ]
+  }
+ },
+ "24": {
+  "class_type": "LTXVTiledVAEDecode",
+  "inputs": {
+   "vae": [
+    "7",
+    0
+   ],
+   "latents": [
+    "23",
+    2
+   ],
+   "horizontal_tiles": 2,
+   "vertical_tiles": 2,
+   "overlap": 6,
+   "last_frame_fix": false,
+   "working_device": "auto",
+   "working_dtype": "auto"
+  }
+ },
+ "26": {
+  "class_type": "VHS_VideoCombine",
+  "inputs": {
+   "images": [
+    "24",
+    0
+   ],
+   "frame_rate": 24.0,
+   "loop_count": 0,
+   "filename_prefix": "t2_T2c_multi_nocompiler_768_25",
+   "format": "video/h264-mp4",
+   "pix_fmt": "yuv420p",
+   "crf": 16,
+   "save_metadata": true,
+   "trim_to_audio": false,
+   "pingpong": false,
+   "save_output": true
+  }
+ },
+ "40": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "trial2_sheet_768x448.png"
+  }
+ },
+ "41": {
+  "class_type": "RepeatImageBatch",
+  "inputs": {
+   "image": [
+    "40",
+    0
+   ],
+   "amount": 25
+  }
+ },
+ "42": {
+  "class_type": "LTXAddVideoICLoRAGuide",
+  "inputs": {
+   "positive": [
+    "6",
+    0
+   ],
+   "negative": [
+    "6",
+    1
+   ],
+   "vae": [
+    "7",
+    0
+   ],
+   "latent": [
+    "13",
+    0
+   ],
+   "image": [
+    "41",
+    0
+   ],
+   "frame_idx": 0,
+   "strength": 1.0,
+   "latent_downscale_factor": [
+    "2",
+    1
+   ],
+   "crop": "disabled",
+   "use_tiled_encode": false,
+   "tile_size": 256,
+   "tile_overlap": 64
+  }
+ }
+}

@@ -1,4 +1,4 @@
-"""Everyday small props (DESIGN.md §69.56): cake, muffin, book, phone, letter, gift, balloons,
+"""Everyday small props: cake, muffin, book, phone, letter, gift, balloons,
 vase, watering can; a ringing phone, balloons let go, a watering can pouring."""
 
 from __future__ import annotations

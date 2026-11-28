@@ -1,4 +1,4 @@
-"""Generated video shots of a project (DESIGN.md §113.3): each beat's ``generated_shot:``
+"""Generated video shots of a project: each beat's ``generated_shot:``
 resolved into one or more :class:`~vidgen.videogen.VideoRequest` s with their inputs, and the
 dry-run plan of ``vidgen generate plan``.
 
@@ -7,18 +7,21 @@ dry-run plan of ``vidgen generate plan``.
   the shortest length it allows that covers it (:func:`~vidgen.videogen.models.snap_duration`;
   the clip is trimmed later); a beat longer than the model's longest clip is split into equal
   parts (``<beat>_p2``...). A model without lengths (heygen/avatar-iv) follows its audio: the
-  beat's length is sent as nothing and priced in whole seconds.
+  beat's length is sent as nothing and priced in whole seconds. A ComfyUI workflow's lengths
+  depend on the shot's ``fps:`` (:func:`shot_durations`: at most 121 frames, 1-5 s at 24 fps,
+  2-10 s in even seconds at 12 fps).
 - **Inputs** (made by :mod:`vidgen.videogen.inputs` into ``build/videogen/<shot>/``): the
-  beat's voice cut to the part (``audio.mp3``), a silent low-resolution render of the part
-  (``guide.mp4``) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
-  of the part (``guide.<pass>.mp4``, DESIGN.md §113.8), the render's first frame
+  beat's voice cut to the part (``audio.mp3``; ``audio: mix``: the film's sound over the part), a
+  silent low-resolution render of the part (``guide.mp4``; ``guide: final``: the finished render,
+  ``guide.final.mp4``) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
+  of the part (``guide.<pass>.mp4``), the render's first frame
   (``first_frame.png``); pictures of approved reference sheets
   (:mod:`vidgen.videogen.sheets`) and your own pictures. The first frame goes in as a frame image
   where the model lists ``first_frame``, else as a picture reference.
 - **Prompt**: the kind's framing and the shot's ``prompt``, the setting, the characters' sheet
   words, the line said, what a guide pass is (:data:`GUIDE_PROMPTS`; a mask also lists the
   stand-ins' colours), the style sheet's words and "no on-screen text". A shot with a guide video
-  (DESIGN.md §113.12) leaves the framing to the guide: a talking shot says
+  leaves the framing to the guide: a talking shot says
   :data:`GUIDED_TALKING_FRAMING`, and the framing instructions of the characters' sheet words are
   left out (:func:`without_framing`; the plan notes what was left out).
 - **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet or no longer
@@ -26,27 +29,33 @@ dry-run plan of ``vidgen generate plan``.
   an earlier job is reused free and only gets a note), or whose audio / video needs a hosted URL
   (``videogen.host: none``) is planned and priced but not ready to pay for. With ``inline_media: all`` (and no host) the audio / video would go inline, which
   OpenRouter refuses: that is a problem (``run --pay`` refuses it before sending).
-- **Shared** (``videogen.host: quick_tunnel``, DESIGN.md §115): a paid run shares the shot's audio
+- **Shared** (``videogen.host: quick_tunnel``): a paid run shares the shot's audio
   / video inputs (:attr:`Shot.shared`) through a Cloudflare quick tunnel while its job runs; the
   plan lists exactly those files and the tunnel's maximum lifetime; without ``cloudflared`` the
   shot is blocked with the install hints.
 - **Earlier wording**: a guided shot paid for under the earlier prompt wording is blocked, not
   paid again by itself (:data:`EARLIER_WORDING_BLOCKED`).
-- **Sound** (:attr:`Shot.sound`, DESIGN.md §113.11): ``mix`` (no sound asked of the model) or
+- **Sound** (:attr:`Shot.sound`): ``mix`` (no sound asked of the model) or
   ``model`` (``generate_audio: true``): ``generated_shot.sound``, else
   ``videogen.models.<model>.sound``, else ``videogen.sound``. A model the list says cannot make
   sound is blocked, one it says nothing about gets a note.
-- **Where the starting picture goes** (:attr:`Shot.first_frame_in`, DESIGN.md §113.13): ``frame``
+- **Where the starting picture goes** (:attr:`Shot.first_frame_in`): ``frame``
   (a first frame image) or ``guide`` (spliced into the guide video, ``guide_name(kind,
   opening=True)``; no frame image is sent and the prompt starts with a role sentence where the
   model has a template). A shot that would send a true first frame and references to a model
   known to separate the modes is a problem (or a note when already paid for).
-- **The last frame of another shot** (``first_frame: last_of:<shot id>``, DESIGN.md §113.14): the
+- **The last frame of another shot** (``first_frame: last_of:<shot id>``): the
   picture is cut from the take that shot shows (:func:`~vidgen.videogen.takes.chosen_take`) into
   ``build/videogen/<shot>/last_of.<source>.<take>.png``. An unknown shot, the shot itself or a
   cycle is a problem; a source with no take blocks the shot, so a run never pays for it in the
   same pass as the clip it starts from.
-- **A painted starting picture** (``first_frame: painted``, DESIGN.md §113.15): the picture
+- **Chained parts**: in a split beat with a starting picture (any ``first_frame`` but ``none``),
+  part 1 uses ``first_frame`` and every later part starts from the last frame of the part before
+  it, as with ``last_of:`` (:func:`_link_last_of`).
+- **A restyled first frame** (``first_frame: restyled``): the render's first
+  frame made photoreal on the ComfyUI server (``first_frame.restyled.png``, made by
+  ``vidgen generate inputs --guide``); it needs ``videogen.provider: comfyui``.
+- **A painted starting picture** (``first_frame: painted``): the picture
   ``vidgen generate frames`` made from ``paint_first_frame:``; until it exists the shot is blocked.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
@@ -63,15 +72,17 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from vidgen.config import PAINTED_FIRST_FRAME, BeatConfig, FileRef, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
+from vidgen.config import PAINTED_FIRST_FRAME, RESTYLED_FIRST_FRAME, BeatConfig, FileRef, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
+from vidgen.videogen import COMFYUI_PROVIDER, MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
+from vidgen.videogen.chain import lead_frames
 from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
 from vidgen.videogen.models import (
     TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, guide_opening_template, known_first_frame_with_references, money, snap_duration,
 )
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
+from vidgen.videogen.subjects import PanelSources
 from vidgen.videogen.takes import Take, chosen_take, takes_of
 
 #: Where the cut inputs of each shot are written, relative to the project (rebuilt any time).
@@ -108,18 +119,27 @@ _SHEET_ONLY_CLAUSE = re.compile(
     r"|^(?:alone|solo)[,;.]?$|^(?:not|no|never)\s",
     re.IGNORECASE,
 )
-#: What a guide pass is, said in the prompt when one is sent as the guide (DESIGN.md §113.8).
+#: What a guide pass is, said in the prompt when one is sent as the guide.
 GUIDE_PROMPTS: dict[str, str] = {
     "depth": "The guide video is a depth map (near is white, far is dark): follow its layout and camera motion",
     "outline": "The guide video is an outline drawing (white edges on black): follow its shapes, layout and camera motion",
+    "canny": "The guide video is an edge map (white edges on black) of the computer render of this shot: follow its shapes, layout and camera motion",
     "mask": "The guide video is a colour mask (each object one flat colour on black): follow its layout and motion",
+    "final": (
+        "The guide video is the finished computer render of this shot: keep its layout, framing, camera motion and timing, "
+        "and remake it as real camera footage, with real light, surfaces and detail instead of a computer-graphics look"
+    ),
 }
+#: What the prompt says of the film's sound sent with ``audio: mix``.
+MIX_PROMPT = "The reference audio is the shot's soundtrack (narration and music): time the movement to it"
 #: A mask guide's prompt lists the stand-ins' colours when the scene has at most this many.
 MASK_NAMES_MAX = 4
 #: What the plan says each guide is.
 GUIDE_WHAT: dict[str, str] = {
     "render": "silent draft render",
-    "depth": "depth pass of the beat's 3D scene",
+    "final": "silent finished render of the beat",
+    "canny": "canny edges of the beat's finished render",
+    "depth": "depth pass of the beat's scene",
     "outline": "outline pass of the beat's 3D scene",
     "mask": "mask pass of the beat's 3D scene",
 }
@@ -142,7 +162,7 @@ EARLIER_WORDING_BLOCKED = (
     "To pay for a new take with the new wording: set or change seed: on the shot, or change its prompt:"
 )
 #: The problem of a shot that sends a true first frame and references to a model that separates
-#: the two modes (DESIGN.md §113.13).
+#: the two modes.
 FIRST_FRAME_WITH_REFERENCES_PROBLEM = (
     "{model} takes a first frame or references, never both: with this shot's first frame the job would be accepted and the voice, "
     "the guide and the pictures ignored (no error, the no-reference price). Set first_frame_in: guide to put the starting picture "
@@ -151,7 +171,7 @@ FIRST_FRAME_WITH_REFERENCES_PROBLEM = (
 )
 #: What the plan says each sound setting is.
 SOUND_WHAT: dict[str, str] = {
-    "mix": "vidgen's voice and music; the model is asked for no sound",
+    "mix": "the take plays under vidgen's own voice and music, if the film has any; the model is asked for no sound",
     "model": "the model makes the clip's own sound and vidgen keeps it",
 }
 #: Picture files a shot may name in ``refs`` / ``first_frame``.
@@ -238,9 +258,20 @@ class Shot:
     last_of: str | None = None
     last_of_take: Take | None = None
     last_of_picture: Path | None = None
+    #: The film's frame rate (the frames of a chained part, :mod:`vidgen.videogen.chain`).
+    fps: int = 24
     #: A guided shot's prompt under the earlier wording, when it differs from :attr:`prompt` (else
     #: empty): what a clip paid for before the wording changed was asked with.
     earlier_prompt: str = ""
+    #: ``sheet:``: the stylesheet picture sent with the guide (``None``: none, or the file is missing).
+    sheet: Path | None = None
+    #: ``subjects:``: the sheet's panel texts, built from the subjects' views (``None``: no subjects).
+    subject_prompt: str | None = None
+
+    @property
+    def lead(self) -> int:
+        """Frames the take starts before the part (a chained part, :func:`vidgen.videogen.chain.lead_frames`)."""
+        return lead_frames(self.part, self.spec.first_frame_source)
 
     @property
     def starting_picture(self) -> Path | None:
@@ -266,10 +297,11 @@ class Shot:
             return None
         return VideoRequest(
             model=self.model.id, prompt=self.prompt, duration=self.duration if self.duration is not None else max(1, math.ceil(self.length - 1e-9)),
-            resolution=self.resolution, aspect_ratio=self.aspect_ratio,
+            resolution=self.resolution, size=self.spec.size, aspect_ratio=self.aspect_ratio,
             frame_images=tuple(i.media() for i in self.inputs if i.frame),
             references=tuple(i.media() for i in self.inputs if not i.frame), seed=self.spec.seed,
-            generate_audio=self.sound == "model",
+            generate_audio=self.sound == "model", sheet=MediaInput("image", path=self.sheet) if self.sheet is not None else None,
+            fps=generation_fps(self.spec),
         )
 
     @property
@@ -278,12 +310,34 @@ class Shot:
         return float(math.ceil(self.length - 1e-9)) if self.duration is None else None
 
 
+def generation_fps(spec: GeneratedShot) -> int | None:
+    """The frame rate a shot's request asks its ComfyUI workflow to generate at: ``fps:`` when it is
+    not the workflow's own (``None``: the workflow's own, so a shot with ``fps: 24`` keeps the key of one without)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(spec.model)
+    return None if spec.fps is None or workflow is None or spec.fps == workflow.fps else spec.fps
+
+
+def shot_durations(model: VideoModel, spec: GeneratedShot) -> tuple[int, ...] | None:
+    """The clip lengths ``model`` makes for ``spec``: a ComfyUI workflow's at the shot's ``fps:``,
+    else the model's list (``None``: it takes no length)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(model.id)
+    return workflow.durations(spec.fps) if workflow is not None else model.durations
+
+
 def guide_name(source: str, *, opening: bool = False) -> str:
     """The guide file of a shot: ``guide.mp4`` for the draft render, ``guide.<pass>.mp4`` for a
     guide pass of a ``3d`` scene; with ``opening``, the guide with the shot's starting picture
     (``guide.opening.mp4``, ``guide.<pass>.opening.mp4``, for ``first_frame_in: guide``)."""
     base = "guide" if source == "render" else f"guide.{source}"
     return f"{base}{'.opening' if opening else ''}.mp4"
+
+
+#: The restyled first frame (``first_frame: restyled``), in the shot's folder.
+RESTYLED_NAME = "first_frame.restyled.png"
 
 
 def last_of_name(source: str, take: int) -> str:
@@ -407,12 +461,92 @@ def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], 
         parts.append(GUIDE_PROMPTS[guide])
         if guide == "mask":
             parts += _mask_names(project, shot.scene_id)
+    if spec.audio_source == "mix" and shot.first_frame_in != "guide":   # in a guide, the role sentence says it
+        parts.append(MIX_PROMPT)
     style = project.config.style_sheet
     if style is not None and style.words():
         parts.append(f"Style: {style.words()}")
     parts.append(NO_TEXT)
     opening = _guide_opening_sentences(shot)
-    return " ".join(_sentence(p) for p in [*opening, *parts])
+    text = " ".join(_sentence(p) for p in [*opening, *parts])
+    sheet_prompt = spec.sheet_prompt or shot.subject_prompt
+    return f"{SHEET_HEAD}{_sentence(_clean(sheet_prompt))} {SHEET_TAIL}{text}" if sheet_prompt else text
+
+
+#: The start of the prompt of a shot with a ``sheet:`` (trial run T2c's format, 2026-11-25):
+#: ``Reference sheet: <sheet_prompt>. Generated video: <the shot's prompt>``.
+SHEET_HEAD = "Reference sheet: "
+SHEET_TAIL = "Generated video: "
+#: How far a sheet's aspect ratio may be from the clip's (1 %; it is scaled to the clip's size).
+SHEET_ASPECT_TOLERANCE = 0.01
+
+
+def _subjects_sheet(project: Project, shot: Shot, panels: PanelSources, size: tuple[int, int]) -> None:
+    """Set ``shot.subject_prompt`` and, once composed from current panels, ``shot.sheet``; else
+    block the shot with the command that makes what is missing. Panels not approved block it too
+    (the sheet may still be composed, to look at)."""
+    from vidgen.videogen.freshness import recorded_matches
+    from vidgen.videogen.subjects import (
+        SHEET_NAME, approve_command, background_picture, contact_path, is_approved, sheet_background, sheet_source, shot_panels, shot_sheet_prompt,
+    )
+
+    assert shot.spec.subjects is not None
+    found = shot_panels(project, shot.spec.subjects)
+    background = sheet_background(project, shot.spec.sheet_background, found)
+    shot.subject_prompt = shot_sheet_prompt(found, *size, background)
+    picture = background_picture(project, background)
+    if picture is not None and not picture.is_file():
+        shot.problems.append(f"{shot.location}.sheet_background: {background!r} is not black, location, a colour #rrggbb or a picture file of the project")
+        return
+    waiting = [f"{p.label}: {why}" for p in found if (why := panels.state(p)) is not None]
+    if waiting:
+        shot.blocked.append(f"sheet panels not ready ({'; '.join(waiting)}): run `vidgen generate subjects` (the image model on the ComfyUI server), "
+                            f"then `{inputs_command(project, False)}` composes the sheet")
+        return
+    unapproved = [p for p in found if not is_approved(p)]
+    if unapproved:
+        names = list(dict.fromkeys(p.subject for p in unapproved))
+        contacts = ", ".join(contact_path(project, n).relative_to(project.root).as_posix() for n in names)
+        shot.blocked.append(f"sheet panels not approved ({', '.join(p.label for p in unapproved)}): look at {contacts}, then `{approve_command(names)}`")
+    dest = project.root / INPUTS_DIR / shot.id / SHEET_NAME
+    if not recorded_matches(dest, sheet_source(project, found, *size, background)):
+        made = "is not composed from the current panels" if dest.is_file() else "is not composed yet"
+        shot.blocked.append(f"the sheet {dest.relative_to(project.root).as_posix()} {made}: `{inputs_command(project, False)}` (free)")
+        return
+    shot.sheet = dest
+
+
+def _sheet_input(project: Project, shot: Shot, panels: PanelSources | None = None) -> None:
+    """Set ``shot.sheet`` from ``sheet:`` (a picture file with the clip's aspect ratio) or from
+    ``subjects:`` (``panels``: their current sources), else a problem or a blocked reason."""
+    from PIL import Image
+
+    from vidgen.videogen.comfyui import find_workflow
+
+    spec, where = shot.spec, f"{shot.location}.sheet"
+    workflow = find_workflow(spec.model)
+    if spec.subjects is not None and workflow is not None and panels is not None:
+        _subjects_sheet(project, shot, panels, workflow.size(shot.aspect_ratio, spec.size))
+    if spec.sheet is None or workflow is None:
+        return
+    path = _picture(project, spec.sheet, where, shot.problems)
+    if path is None:
+        return
+    try:
+        with Image.open(path) as picture:
+            sheet_w, sheet_h = picture.size
+    except OSError as exc:
+        shot.problems.append(f"{where}: cannot read the picture {spec.sheet}: {exc}")
+        return
+    width, height = workflow.size(shot.aspect_ratio, spec.size)
+    if abs(math.log((sheet_w / sheet_h) / (width / height))) > SHEET_ASPECT_TOLERANCE:
+        shot.problems.append(
+            f"{where}: {spec.sheet} is {sheet_w}x{sheet_h}, the clip {width}x{height}: make the sheet with the clip's aspect ratio "
+            "(it is scaled to the clip's size; cropping would cut its panels)"
+        )
+        return
+    shot.sheet = path
+
 
 
 def _guide_opening_sentences(shot: Shot) -> list[str]:
@@ -443,11 +577,14 @@ def _guide_opening_sentences(shot: Shot) -> list[str]:
             audio = audio or template.audio_token.format(n=audios)
     if in_guide and not video:
         return []
-    sentences = [template.opens.format(video=video)] if in_guide else []
+    opens = template.opens_final if shot.spec.guide_source == "final" else template.opens
+    sentences = [opens.format(video=video)] if in_guide else []
     shows = [template.shows.format(pictures=_joined(found), s="s" if len(found) == 1 else "", who=who) for who, found in tokens.items()]
     if shows:
         sentences.append(", ".join(shows))
-    if audio and in_guide:
+    if audio and in_guide and shot.spec.audio_source == "mix":
+        sentences.append(template.soundtrack.format(audio=audio))
+    elif audio and in_guide:
         who = display_name(shot.speaker) if shot.speaker else "the narrator"
         sentences.append(template.voice.format(audio=audio, who=who))
     return sentences
@@ -589,7 +726,10 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     source = spec.first_frame_source
     first: Path | None = None
     what = ""
-    if source == "sheet":
+    if shot.last_of is not None or spec.last_of_shot is not None:   # last_of: or a chained part
+        if shot.last_of_picture is not None and shot.last_of_take is not None:
+            first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
+    elif source == "sheet":
         owner = shot.speaker if spec.kind == "talking" and shot.speaker else (shot.characters[0] if shot.characters else None)
         sheet = _sheet_of(owner, sheets) if owner else None
         if owner is None:
@@ -602,9 +742,8 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             needs.add(owner)
     elif source == "render":
         first, what = folder / "first_frame.png", "first frame of the beat's render"
-    elif spec.last_of_shot is not None:
-        if shot.last_of_picture is not None and shot.last_of_take is not None:
-            first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
+    elif source == RESTYLED_FIRST_FRAME:
+        first, what = folder / RESTYLED_NAME, "first frame of the beat's render, restyled as a photograph"
     elif source == PAINTED_FIRST_FRAME:
         from vidgen.videogen.frames import painted_picture
 
@@ -622,7 +761,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
         if source == "none":
             shot.problems.append(f"{where}: first_frame_in: guide needs a starting picture (first_frame: a picture file, render or sheet)")
         if spec.guide_source is None:
-            shot.problems.append(f"{where}: first_frame_in: guide needs a guide video to put the picture in (guide: true, depth, outline or mask)")
+            shot.problems.append(f"{where}: first_frame_in: guide needs a guide video to put the picture in (guide: true, final, depth, outline or mask)")
     elif first is not None:
         role = "first_frame" if frame_ok else "portrait" if spec.kind == "talking" else "first_frame"
         shot.inputs.append(ShotInput(role, "image", first, what, frame=frame_ok))
@@ -631,7 +770,8 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             shot.notes.append(f"{shot.model.id} lists no first-frame images: the {role.replace('_', ' ')} goes in as a picture reference")
     shot.inputs += reference_inputs(project, shot.spec.refs if shot.spec.refs is not None else _default_refs(project, shot), sheets, used, needs, f"{where}.refs", shot.problems)
     if spec.wants_audio:
-        shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"the beat's voice, {shot.length:.2f} s"))
+        heard = "the film's sound (voice, music, effects)" if spec.audio_source == "mix" else "the beat's voice"
+        shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"{heard}, {shot.length:.2f} s"))
     guide = spec.guide_source
     if guide is not None:
         opening = shot.opening_picture is not None
@@ -645,8 +785,8 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             shot.blocked.append(sheet.problem() or "")
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
-        shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source == 'render')}`")
-    if shot.shared:
+        shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source in ('render', RESTYLED_FIRST_FRAME))}`")
+    if shot.shared and project.config.videogen.provider != COMFYUI_PROVIDER:   # ComfyUI gets the files themselves
         settings = project.config.videogen
         if settings.inline_media == "all" and settings.host != "quick_tunnel":
             shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
@@ -738,18 +878,20 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
                 if beat.generated_shot is not None:
                     found = _beat_shots(project, scene, beat, f"scenes[{i}].beats[{j}].generated_shot", slot.start + beat_slot.start, window, catalog)
                     for shot in found:
-                        shot.scene_start, shot.scene_end = slot.start, slot.start + slot.duration
+                        shot.scene_start, shot.scene_end, shot.fps = slot.start, slot.start + slot.duration, fps
                     shots += found
         _link_last_of(project, shots, parts_known=catalog is not None)
+        panels = PanelSources(project) if any(s.spec.subjects for s in shots) else None
         for shot in shots:
-            _fill_shot(project, shot, sheets)
+            _fill_shot(project, shot, sheets, panels)
     return shots
 
 
 def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool) -> None:
     """Find the source of every ``first_frame: last_of:`` shot among ``shots``: its problems (an
     unknown shot, itself, a cycle), or the take to cut from, or why it is blocked. A beat's id
-    means its last part; ``parts_known`` false (no model list): ``<beat>_p<n>`` is taken on trust."""
+    means its last part; ``parts_known`` false (no model list): ``<beat>_p<n>`` is taken on trust.
+    A later part of a split beat with a starting picture starts from the part before it."""
     ids = {s.id: s for s in shots}
     last_part = {s.beat.id: s.id for s in shots}
     sources: dict[str, str] = {}
@@ -768,6 +910,11 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
             shot.problems.append(f"{where}: last_of:{name}: a shot cannot start from its own last frame")
         else:
             sources[shot.id] = source
+    previous: dict[str, str] = {}   # beat id -> the id of its part seen last
+    for shot in shots:
+        before, previous[shot.beat.id] = previous.get(shot.beat.id), shot.id
+        if shot.part > 1 and before is not None and shot.spec.first_frame_source != "none":
+            sources[shot.id] = before
     for shot in shots:
         source = sources.get(shot.id)
         if source is None:
@@ -780,6 +927,8 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
             shot.problems.append(f"{shot.location}.first_frame: last_of: these shots wait for each other's last frame: {' -> '.join([*chain, at])}")
             continue
         shot.last_of = source
+        if shot.part > 1:
+            shot.notes.append(f"part {shot.part} of {shot.parts}: starts from the last frame of part {shot.part - 1} (shot {source})")
         take = chosen_take(project.root, source)
         if take is None:
             why = "shows no take (none is picked, or every take has QA errors)" if takes_of(project.root, source) else "has no take yet"
@@ -789,13 +938,12 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
             )
             continue
         shot.last_of_take, shot.last_of_picture = take, project.root / INPUTS_DIR / shot.id / last_of_name(source, take.number)
-        if shot.parts > 1 and shot.part == 1:
-            shot.notes.append(f"this beat is split into {shot.parts} parts: every part starts from the last frame of shot {source}")
 
 
-def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:
+def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None], panels: PanelSources | None) -> None:
     """Fill ``shot``'s inputs, its sound checks and its prompt (every shot id is known by now)."""
     _resolve_inputs(project, shot, sheets)
+    _sheet_input(project, shot, panels)
     if shot.spec.paint_first_frame is not None:
         from vidgen.videogen.frames import paint_references
 
@@ -822,6 +970,19 @@ def _beat_shots(
             model = catalog.find(spec.model)
         except VidgenError as exc:
             problems.append(f"{where}.model: {exc}")
+    if model is not None:
+        from vidgen.videogen.comfyui import guide_problem
+        from vidgen.videogen.run import provider_mismatch
+
+        if (model.provider == COMFYUI_PROVIDER) != (config.videogen.provider == COMFYUI_PROVIDER):
+            problems.append(f"{where}.model: {provider_mismatch(model.id, model.provider, config.videogen.provider)}")
+        elif (guided := guide_problem(model.id, spec.guide_source)) is not None:
+            problems.append(f"{where}.guide: {guided}")
+    if spec.first_frame == RESTYLED_FIRST_FRAME and (config.videogen.provider != COMFYUI_PROVIDER or (model is not None and model.provider != COMFYUI_PROVIDER)):
+        problems.append(f"{where}.first_frame: restyled is made on the ComfyUI server: it needs videogen.provider: comfyui and a ComfyUI workflow model (ltx-2.3-union-control)")
+    for key in ("sheet", "subjects"):
+        if getattr(spec, key) is not None and config.videogen.provider != COMFYUI_PROVIDER:
+            problems.append(f"{where}.{key}: the sheet goes to vidgen's ComfyUI workflow: it needs videogen.provider: comfyui")
     names = [e.name for e in config.characters]
     speaker = _speaker(config, scene, beat)
     for name in spec.characters or []:
@@ -831,8 +992,9 @@ def _beat_shots(
     if spec.kind == "talking" and spec.characters:
         speaker = chosen[0] if chosen else speaker
     parts = 1
-    if model is not None and model.durations:
-        parts = max(1, math.ceil(window / max(model.durations) - 1e-9))
+    durations = shot_durations(model, spec) if model is not None else None
+    if durations:
+        parts = max(1, math.ceil(window / max(durations) - 1e-9))
     length = window / parts
     shots = []
     for k in range(parts):
@@ -843,11 +1005,20 @@ def _beat_shots(
             first_frame_in=config.videogen.first_frame_in_for(spec.model, spec.first_frame_in), opening_dissolve_seconds=config.videogen.first_frame_dissolve,
         )
         if model is not None:
-            shot.duration = snap_duration(length, model.durations) if model.durations else None
-            shot.resolution = spec.resolution or lowest_resolution(model)
+            # a chained part's take starts its lead frames early (``config.format.fps``)
+            lead = lead_frames(k + 1, spec.first_frame_source) / config.format.fps
+            shot.duration = spec.duration or (snap_duration(length + lead, durations) if durations else None)
+            shot.resolution = None if spec.size else spec.resolution or lowest_resolution(model)
             shot.aspect_ratio = spec.aspect_ratio or pick_aspect(config, model)
+            if spec.duration is not None and spec.duration < length - 1e-6:
+                shot.notes.append(f"duration: {spec.duration} s is shorter than the part ({length:.2f} s): the clip follows the start of the part's guide")
             if parts > 1 and k == 0:
-                shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({max(model.durations or [0])} s): split into {parts} parts")
+                longest = max(durations or [0])
+                at = f" at {spec.fps} fps" if spec.fps is not None and model.provider == COMFYUI_PROVIDER else ""
+                shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip{at} ({longest} s): split into {parts} parts; "
+                                  f"for one clip, make the beat at most {longest} s (its words plus pause:)")
+        if spec.first_frame == "none" and spec.first_frame_prompt is not None and k == 0:
+            shot.notes.append("first_frame_prompt: is not used with first_frame: none (kept for first_frame: restyled)")
         shots.append(shot)
     return shots
 
@@ -908,7 +1079,7 @@ class ShotPlan:
         end = shot.start + shot.length
         part = f", part {shot.part} of {shot.parts}" if shot.parts > 1 else ""
         r = self.request
-        what = [spec.model, r.resolution if r else None, r.aspect_ratio if r else None]
+        what = [spec.model, r.size or r.resolution if r else None, r.aspect_ratio if r else None]
         lines = [f"shot {shot.id} ({spec.kind}, scene {shot.scene_id}, beat {shot.beat.id}{part}, {_clock(shot.start)}-{_clock(end)}, {shot.length:.2f} s): {', '.join(w for w in what if w)}"]
         if shot.model is not None:
             if shot.duration is None:
@@ -916,6 +1087,8 @@ class ShotPlan:
             else:
                 trim = shot.duration - shot.length
                 lines.append(f"  length: asks for {shot.duration} s, trimmed to {shot.length:.2f} s later" if trim > 1e-6 else f"  length: {shot.duration} s")
+                if (frames := _frames_line(shot)) is not None:
+                    lines.append(frames)
         lines.append(f"  sound: {shot.sound} ({SOUND_WHAT[shot.sound]})")
         if shot.first_frame_in == "guide":
             shown = _shown(shot.opening_picture, root) if shot.opening_picture is not None else "none"
@@ -923,6 +1096,9 @@ class ShotPlan:
         for item in shot.inputs:
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
             lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
+        if shot.sheet is not None:
+            made = f"composed from subjects {', '.join(shot.spec.subjects)}, " if shot.spec.subjects else ""
+            lines.append(f"  sheet: {_shown(shot.sheet, root)} ({made}stylesheet, given with the guide; its panels are described at the start of the prompt)")
         if shot.fake_addresses and not self.cached and not self.previous_job:
             lines.append("  mock provider: these inputs stay on this machine (fake addresses; nothing is shared)")
         if shot.share_minutes is not None and not self.cached and not self.previous_job:
@@ -932,7 +1108,7 @@ class ShotPlan:
             )
             lines += [f"    {_shown(i.path, root)} ({share_size(i)})" for i in shot.shared]
         if self.cached:
-            lines.append("  cached: the clip is already made (nothing to pay)")
+            lines.append("  cached: the clip is already made (nothing to pay); for another take, set or change the shot's seed:")
         if self.previous_job:
             lines.append(f"  job {self.previous_job} of this request was paid already: a run downloads it (not paid again)")
         if self.request_bytes is not None:
@@ -949,6 +1125,22 @@ class ShotPlan:
         lines += [f"  blocked: {b}" for b in shot.blocked]
         lines.append(f"  prompt: {shot.prompt}")
         return lines
+
+
+def _frames_line(shot: Shot) -> str | None:
+    """A ComfyUI workflow shot's frames as the plan shows them (``None``: no workflow)."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    workflow = find_workflow(shot.spec.model)
+    if workflow is None or shot.duration is None:
+        return None
+    fps = shot.spec.fps or workflow.fps
+    frames = workflow.frames(shot.duration, fps)
+    limit = f"at most {workflow.max_frames}: {workflow.lengths_text(fps)} s at {fps} fps"
+    if fps == workflow.fps:
+        return f"  frames: {frames} at {fps} fps ({limit})"
+    return (f"  frames: {frames} generated at {fps} fps ({limit}), doubled by RIFE in the same ComfyUI job "
+            f"to {workflow.stored_frames(frames, fps)} at {workflow.fps} fps")
 
 
 def _shown(path: Path, root: Path) -> str:
@@ -981,6 +1173,8 @@ class VideoGenPlan:
     unresolved_intents: list[SubmitIntent] = field(default_factory=list)
     #: Entries of the config that have no effect (a ``videogen.models`` id OpenRouter does not list).
     warnings: list[str] = field(default_factory=list)
+    #: The subjects' sheet panels and whether each is current (none without ``subjects:``).
+    subject_lines: list[str] = field(default_factory=list)
 
     @property
     def clips_cost(self) -> float:
@@ -1000,6 +1194,7 @@ class VideoGenPlan:
         if not self.shots:
             out.append("no generated shots (add generated_shot: to a beat)")
         out += self.sheet_lines
+        out += self.subject_lines
         unknown = sum(1 for s in self.shots if s.estimate is None or s.estimate.cost is None)
         extra = f" (+ {unknown} of unknown price)" if unknown else ""
         sheets = f"; sheets: {self.sheets_todo} picture(s), estimated {money(self.sheets_cost)}" + (f" (+ {self.sheets_unknown} of unknown price)" if self.sheets_unknown else "")
@@ -1019,6 +1214,19 @@ def _unlisted_models(models: Iterable[str], catalog: Catalog) -> list[str]:
     """A warning for each ``videogen.models`` id the model list does not have (a typo has no effect)."""
     known = [m.id for m in catalog.models]
     return [f"videogen.models: OpenRouter lists no video model {m!r}{did_you_mean(m, known)}: its entry has no effect" for m in models if m not in known]
+
+
+def _no_sheet_warnings(project: Project, shots: Sequence[Shot]) -> list[str]:
+    """A warning for each shot of a ComfyUI workflow that takes a sheet but has no ``subjects:`` and no ``sheet:``."""
+    from vidgen.videogen.comfyui import find_workflow
+
+    if project.config.videogen.provider != COMFYUI_PROVIDER:
+        return []
+    return [
+        f"shot {s.id}: no subjects: and no sheet:, so nothing keeps its subject looking the same across shots (`vidgen guide outputs`, section Stylesheets)"
+        for s in shots
+        if s.spec.subjects is None and s.spec.sheet is None and (w := find_workflow(s.spec.model)) is not None and w.takes_sheet
+    ]
 
 
 def plan_shots(
@@ -1053,6 +1261,11 @@ def plan_shots(
         [], budget, sheet_cost, len(sheets.plan.todo), sheet_unknown, sheet_lines(sheets, project.root, prompts=False)[:-1] if sheets.sheets else [],
         ledger.unresolved_intents(), _unlisted_models(settings.models, catalog),
     )
+    if project.config.subjects:
+        from vidgen.videogen.subjects import panel_lines
+
+        plan.subject_lines = panel_lines(project, PanelSources(project))
+    plan.warnings += _no_sheet_warnings(project, shots)
     left = budget.remaining_usd - sheet_cost if budget.remaining_usd is not None else None
     sources = InputSources(project)
     for shot in shots:
@@ -1070,7 +1283,7 @@ def plan_shots(
                     shot.blocked.append(EARLIER_WORDING_BLOCKED)
                 item.check = clip.check
                 item.estimate = clip.estimate or estimate(item.request, shot.model, duration=shot.priced_seconds)
-                if not clip.cached:
+                if not clip.cached and shot.model.provider != COMFYUI_PROVIDER:
                     item.request_bytes = request_bytes(item.request, project.root)
                     if item.request_bytes > MAX_INLINE_BYTES:
                         shot.problems.append(
@@ -1100,6 +1313,6 @@ def plan_shots(
 
 
 __all__ = [
-    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "project_sheet_map", "reference_inputs", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
+    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "project_sheet_map", "reference_inputs", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "RESTYLED_NAME", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio", "without_framing",
 ]

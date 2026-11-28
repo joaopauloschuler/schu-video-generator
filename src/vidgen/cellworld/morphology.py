@@ -1,4 +1,4 @@
-"""The fine structure of the cell world's things, as geometry in µm (DESIGN.md §95.9): cristae
+"""The fine structure of the cell world's things, as geometry in µm: cristae
 with their junctions, the nuclear envelope opened by its pores, heterochromatin and the
 nucleolus's components, ER sheets joined to the envelope and the smooth-ER network, Golgi
 cisternae with dilated rims and buds, thylakoids in grana, intraluminal vesicles, centrioles,

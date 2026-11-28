@@ -1,4 +1,4 @@
-"""The beat actions of molecular processes (DESIGN.md §95.10): ``set_state`` (a molecule morphs
+"""The beat actions of molecular processes: ``set_state`` (a molecule morphs
 to another state: a channel opens, a carrier turns, a pump is phosphorylated), ``transport`` (a
 channel, carrier, pump or aquaporin moves its solutes, cycle by cycle), ``diffuse`` (simple
 diffusion down a concentration gradient), ``osmosis`` (water towards the side with more

@@ -1,4 +1,4 @@
-"""The params of the ``plot`` scene type (Phase W, DESIGN §97.4–97.6) and how they become numbers:
+"""The params of the ``plot`` scene type (Phase W) and how they become numbers:
 axes, series (lines, points, histograms) with error bars, fits and annotations, resolved from
 inline values or a CSV in the project, checked with clear messages. The scene (``plot.py``)
 draws what :meth:`PlotParams.resolve` returns."""

@@ -1,4 +1,4 @@
-"""Pronunciation dictionary, Step 42 (DESIGN.md §45): config and file entries, matching rules,
+"""Pronunciation dictionary, Step 42: config and file entries, matching rules,
 the TTS text and audio hash (urlopen mocked), word times mapped back to the written words
 (alignment and estimate), SRT / captions keep the written text, lint's spoken words, validate
 warnings, variants, render fingerprints."""

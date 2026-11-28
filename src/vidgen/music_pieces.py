@@ -1,5 +1,5 @@
-"""Project pieces: score files (DESIGN.md §93) under the project's ``assets/music`` played as
-background music like the built-in beds (§93.10).
+"""Project pieces: score files under the project's ``assets/music`` played as
+background music like the built-in beds.
 
 ``music: my_theme`` plays ``assets/music/my_theme.yaml`` (or ``.yml``; a piece in a sub-folder is
 ``themes/my_theme``); ``source: assets/music/my_theme.yaml`` (any ``.yaml`` / ``.yml`` path under

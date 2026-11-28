@@ -1,4 +1,4 @@
-"""Music theory for score files (DESIGN.md §93): note names, keys and modes, chords written as
+"""Music theory for score files: note names, keys and modes, chords written as
 Roman numerals or chord names, chord tones by degree, and close voicings."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Nature that moves by itself, drawn with manim (DESIGN.md §69.55); the maths is in
+"""Nature that moves by itself, drawn with manim; the maths is in
 :mod:`vidgen.cartoon.nature`.
 
 A :class:`Flock` is a mobject of its own in a stage's sky (drawn after the sky, before its layers,
@@ -67,7 +67,7 @@ class Flock(VGroup):
             wings.submobjects[1].points = wing_curve(corners[2], corners[3], corners[4])
         return self
 
-    # ----- the living interface of a stage (DESIGN.md §69.54) ----------------------------------
+    # ----- the living interface of a stage ----------------------------------
 
     def changing(self, start: float, end: float) -> bool:
         """Whether a bird is in the air (or sets off or leaves) between scene times ``start`` and

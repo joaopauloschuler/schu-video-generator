@@ -1,4 +1,4 @@
-"""Which flat picture shows a phenotype (DESIGN.md §96.7): a pea (round or wrinkled, yellow or
+"""Which flat picture shows a phenotype: a pea (round or wrinkled, yellow or
 green), a flower (its petal colour), an eye, a fruit fly (body colour, wings, eye colour), an
 animal's coat, a feather, a squash fruit (colour, shape), a blood drop with the ABO group, a seed
 capsule, an affected / unaffected mark, or a plain colour swatch. Chosen from the trait's name and

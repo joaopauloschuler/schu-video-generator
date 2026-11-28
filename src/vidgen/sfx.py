@@ -1,4 +1,4 @@
-"""Sound effects (DESIGN.md §47): a procedurally synthesised set of short sounds, the project's
+"""Sound effects: a procedurally synthesised set of short sounds, the project's
 own sounds in ``assets/sfx/``, loudness measurement and the video's SFX track.
 
 Built-in sounds are made by small deterministic generators (numpy only: noise from a seeded
@@ -705,7 +705,7 @@ def _sigh(s: Synth) -> np.ndarray:
     return (body + 0.25 * _normalized(hum)) * _bump(s.u, 0.2)
 
 
-# ----- story sounds (DESIGN.md §100.8): a lab, an alarm, a rift ------------------------------------------
+# ----- story sounds: a lab, an alarm, a rift ------------------------------------------
 
 #: The alarm's two tones (Hz) and how long each sounds (s): whole cycles in each half, so a loop of
 #: whole periods repeats without a seam (the ambience's ``alarm`` bed).
@@ -1086,7 +1086,7 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
         ),
     )
 }
-#: The music stings of a beat's ``sting:`` (DESIGN.md §69.19): kind -> built-in sound.
+#: The music stings of a beat's ``sting:``: kind -> built-in sound.
 STING_SOUNDS: dict[str, str] = {"reveal": "sting_reveal", "comic": "sting_comic", "sad": "sting_sad"}
 
 
@@ -1290,8 +1290,8 @@ class SfxEvent:
     """One sound effect of a scene: when (``time``, seconds), which ``sound``, ``gain`` (dB),
     ``pan`` (-1 left to 1 right), ``align`` (``start``: it starts at ``time``; ``end``: it ends
     there), the sound's ``params``, the ``beat`` it belongs to (``None``: none), ``duck``:
-    whether it ducks under the narration (a beat's music sting, DESIGN.md §69.19) and the
-    ``room`` it sounds in (a :data:`vidgen.staging.ROOM_PRESETS` name; ``None``: dry, §112)."""
+    whether it ducks under the narration (a beat's music sting) and the
+    ``room`` it sounds in (a :data:`vidgen.staging.ROOM_PRESETS` name; ``None``: dry)."""
 
     time: float
     sound: str
@@ -1336,8 +1336,8 @@ class SfxEvent:
 
 
 def repeated(sound: str, at: float, repeat: int, every: float, params: Mapping[str, Any]) -> list[tuple[float, dict[str, Any]]]:
-    """``(time, params)`` of a cue played ``repeat`` times ``every`` seconds from ``at``
-    (DESIGN.md §112): footsteps alternate feet as a walk's do
+    """``(time, params)`` of a cue played ``repeat`` times ``every`` seconds from ``at``:
+    footsteps alternate feet as a walk's do
     (:data:`vidgen.cartoon.foley.FEET`: every second one lower and softer, unless ``params``
     give the pitch or intensity)."""
     from vidgen.cartoon.foley import FEET, STEP_SOUNDS

@@ -1,4 +1,4 @@
-"""Caption cues: a beat's narration cut into short, readable pieces (DESIGN.md §43).
+"""Caption cues: a beat's narration cut into short, readable pieces.
 
 Both the SRT file (:mod:`vidgen.subtitles`) and burned-in captions (the ``captions`` overlay)
 use :func:`segment_cues`, so they show the same pieces: words are grouped into cues of at most
@@ -56,8 +56,7 @@ INNER_SENTENCE = 3.0
 def phrase_break_cost(before: str, after: str, language: str | None = None) -> float:
     """How bad a break between the words ``before`` and ``after`` is (0 after a sentence), in
     ``language`` (BCP-47; ``None``: English). Punctuation counts in every language; the word
-    lists (conjunctions, prepositions, clinging articles) only where schu-video-generator has them (DESIGN.md
-    §54): another language breaks plainly between any other words."""
+    lists (conjunctions, prepositions, clinging articles) only where schu-video-generator has them: another language breaks plainly between any other words."""
     if _SENTENCE_END.search(before):
         return COST_SENTENCE
     if _CLAUSE_END.search(before) or _DASH.match(after) or after.startswith(("¿", "¡", "«")):
@@ -234,7 +233,7 @@ def caption_cues(
     return out
 
 
-# ----- overlapping lines (DESIGN.md §69.34) -------------------------------------------------------
+# ----- overlapping lines -------------------------------------------------------
 
 #: Most cues shown at once when lines overlap (the newest ones).
 MAX_STACK = 2

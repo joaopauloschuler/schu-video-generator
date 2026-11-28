@@ -1,4 +1,4 @@
-// The song strip (DESIGN.md §94.12): key, tempo and seed edited in place, the chord progression
+// The song strip: key, tempo and seed edited in place, the chord progression
 // as Roman numerals with each chord's name (the chord playing lit), for the section looped or
 // under the playhead: its own progression when it has one, else the score's. Clicking the
 // chords edits them as text, with the names shown live while typing.

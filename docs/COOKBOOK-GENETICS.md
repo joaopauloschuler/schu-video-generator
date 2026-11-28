@@ -1,7 +1,7 @@
 # Cookbook: genetics at university level
 
 Craft notes for lectures, medical and biology students and science channels explaining heredity
-with schu-video-generator's genetics scene types (DESIGN §96): what to choose, how to write the notation, how to
+with schu-video-generator's genetics scene types: what to choose, how to write the notation, how to
 keep every number exact, how to read a pedigree aloud, and how to speak about families. The
 reference for every key is `docs/CONFIG.md` ([`cross`](CONFIG.md#cross),
 [`pedigree`](CONFIG.md#pedigree), [`linkage_map`](CONFIG.md#linkage_map),

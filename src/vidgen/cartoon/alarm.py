@@ -1,4 +1,4 @@
-"""An alarm on a stage and the shutters of an iso room (DESIGN.md §100.7): the maths, no manim.
+"""An alarm on a stage and the shutters of an iso room: the maths, no manim.
 
 While an alarm runs (the ``alarm`` action: ``start`` .. ``stop``) the stage's light is a dark room
 lit by a red light that rises and falls (:func:`alarm_grade`): between pulses the set is dark

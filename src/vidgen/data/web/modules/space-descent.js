@@ -1,4 +1,4 @@
-// vidgen/space-descent: one world from orbit to the ground (DESIGN.md §123.13). Part of
+// vidgen/space-descent: one world from orbit to the ground. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-descent".
 //
 //   import {world} from "vidgen/space-descent";
@@ -124,7 +124,7 @@ export function sunOf(sun) {
 }
 
 const OPTIONS = Object.freeze({planet: null, at: null, sun: Object.freeze([35, 200]), air: null, sea: false, land: false, clouds: false, globe: null, handover: null, match: 1,
-  exposure: "film", ev: 0, quality: "standard", stars: null, scene: null});
+  exposure: "film", ev: 0, quality: "standard", stars: null, scene: null, shadows: true});
 /** The options in full (pure; no drawing): the planet and the place from a ground's preset when not stated,
  * the air from the planet's name, the handover from what lies under the air. */
 export function resolveWorld(options = {}) {
@@ -207,19 +207,24 @@ export class World {
    * vidgen/space-sea, vidgen/space-land (`preset` ...), vidgen/space-clouds (`sky` ...)), `globe` (more
    * options for the planet: `size`, `clouds`, ...), `handover` (a name of HANDOVERS or {near, height}),
    * `match` (the globe's brightness beside the local picture's, 1), `exposure`, `ev`, `quality`, `stars`,
-   * `scene` (the air's own: the lights are added to the scene). */
+   * `scene` (the air's own: the lights are added to the scene), `shadows` (vidgen/space-air's: true by default, the
+   * decks' and the ground's shadows in the air, and the decks' on the ground and the sea; false: none; or {reach,
+   * share, steps}). */
   constructor(renderer, options = {}) {
     if (!renderer || !renderer.isWebGLRenderer) throw fail("world(renderer, options): the first argument must be the page's THREE.WebGLRenderer");
     const o = this.options = resolveWorld(options);
     this.renderer = renderer;
     const airWhat = typeof o.air === "string" ? o.air : {...o.air};
     /** The air (vidgen/space-air): the sky, the limb, the exposure, the lights. */
-    this.sky = air(renderer, airWhat, {sun: o.sun, ground: false, exposure: o.exposure, ev: o.ev, quality: o.quality, ...(o.stars ? {stars: o.stars} : {}), ...(o.scene ? {scene: o.scene} : {})});
+    this.sky = air(renderer, airWhat, {sun: o.sun, ground: false, exposure: o.exposure, ev: o.ev, quality: o.quality, shadows: o.shadows, ...(o.stars ? {stars: o.stars} : {}), ...(o.scene ? {scene: o.scene} : {})});
     this.radius = this.sky.model.radius;
     /** The ground (vidgen/space-land), the decks (vidgen/space-clouds), the sea (vidgen/space-sea): null when not asked for. */
     this.ground = o.land ? land(renderer, this.sky, {quality: o.quality, ...o.land}) : null;
     this.weather = o.clouds ? clouds(renderer, this.sky, {quality: o.quality, ...o.clouds, ...(this.ground ? {behind: this.ground.behind} : {})}) : null;
-    this.water = o.sea ? sea(renderer, this.sky, {quality: o.quality, ...o.sea, ...(this.ground ? {depth: this.ground.depth} : {})}) : null;
+    // with shadows in the air the decks shade the ground and the sea too, from the same map (Step 403)
+    const shade = this.weather ? this.weather.mapShade : null;
+    if (shade && this.ground && !o.land.shade) this.ground.shadedBy(shade);
+    this.water = o.sea ? sea(renderer, this.sky, {quality: o.quality, ...(shade ? {shade} : {}), ...o.sea, ...(this.ground ? {depth: this.ground.depth} : {})}) : null;
     /** The globe (vidgen/space-bodies), without air, turned so that the place is under the origin. */
     const size = new THREE.Vector2(); renderer.getDrawingBufferSize(size);
     this.body = planet(renderer, o.planet, {size: size.y >= 300 ? 1024 : 512, ...(this.weather || !("clouds" in resolveOptions(o.planet)) ? {} : {clouds: 0}), ...(o.globe ?? {}), tilt: 0, spin: null, air: false, quality: o.quality});

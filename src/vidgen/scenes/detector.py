@@ -1,5 +1,4 @@
-"""``detector``: event displays in a schematic cylindrical detector (Phase Y, Step 240; DESIGN
-§99.10). The transverse (x–y) or longitudinal (r–z) view of a generic general-purpose detector —
+"""``detector``: event displays in a schematic cylindrical detector (Phase Y, Step 240). The transverse (x–y) or longitudinal (r–z) view of a generic general-purpose detector —
 tracker, solenoid, ECAL, HCAL, iron yoke, muon chambers; labelled schematic — with a simulated
 event: tracks bending in the field with the right sign and radius (p_T = 0.3 B R), calorimeter
 towers proportional to the energy, muon-chamber hits, jets as cones, the missing transverse

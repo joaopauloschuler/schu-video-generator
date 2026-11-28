@@ -1,7 +1,7 @@
 """Layout regions: the safe area, named regions, grids and ``place()`` (exported by ``vidgen.api``).
 
 A :class:`Region` is an axis-aligned rectangle in Manim units, computed from the active frame
-(``config.frame_width/height``: the shorter side is 8 units, DESIGN.md §5.2). Named regions
+(``config.frame_width/height``: the shorter side is 8 units). Named regions
 adapt to the frame's orientation: in a vertical (9:16) frame ``left``/``right`` become the
 upper/lower half, so a two-column layout written for 16:9 turns into two rows. The safe area
 (frame minus :data:`MARGIN_X`/:data:`MARGIN_Y`, or a scene's ``margin_x``/``margin_y``) is the

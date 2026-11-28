@@ -1,4 +1,4 @@
-"""A gene's expression in a ``cell`` scene (DESIGN.md §95.11): with a ``gene`` param, the actions
+"""A gene's expression in a ``cell`` scene: with a ``gene`` param, the actions
 ``transcribe``, ``export``, ``translate``, ``to_golgi`` and ``secrete`` follow its products
 through the cell — nucleus, nuclear pores, cytosol or rough ER, Golgi, plasma membrane or
 lysosome — the camera following them. A mixin of :class:`~vidgen.scenes.cell.Cell`: the checks

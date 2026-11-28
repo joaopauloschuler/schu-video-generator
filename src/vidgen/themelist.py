@@ -1,5 +1,5 @@
 """``vidgen list-themes``: every theme preset (built-in and project) with its resolved values,
-contrast check and palette distinctness, as text, JSON or a swatch sheet PNG (DESIGN.md §20)."""
+contrast check and palette distinctness, as text, JSON or a swatch sheet PNG."""
 
 from __future__ import annotations
 

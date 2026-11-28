@@ -1,4 +1,4 @@
-"""Cut a style sheet picture into named panels (DESIGN.md §113.16): ``vidgen split-sheet``.
+"""Cut a style sheet picture into named panels: ``vidgen split-sheet``.
 
 Free and local (ffmpeg, like the owner's first cut: ``crop``, then ``scale`` with ``flags=lanczos``;
 the same filters give the same pixels). The panels go into a folder of PNGs, by a grid of equal

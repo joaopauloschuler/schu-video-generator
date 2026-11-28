@@ -1,4 +1,4 @@
-"""Syllables, a soloist and a whispered tone for the choir (DESIGN.md §121.4). Still synthesis:
+"""Syllables, a soloist and a whispered tone for the choir. Still synthesis:
 the voices sing no words.
 
 - **A syllable** is a short consonant into a vowel (``la``, ``na``, ``ma``, ``da``, ``loo`` ...)

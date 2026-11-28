@@ -1,4 +1,4 @@
-"""``vidgen generate run | status | takes | pick`` (DESIGN.md §113.4).
+"""``vidgen generate run | status | takes | pick``.
 
 :func:`run_shots` goes through the plan (:func:`vidgen.videogen.shots.plan_shots`) in video
 order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``pay``:
@@ -11,7 +11,8 @@ order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``p
   ready shots over what the budget has left, before anything is paid or a tunnel opened;
 - each ready shot then goes through :func:`vidgen.videogen.run.generate_clip` (``pay=True``,
   ``duration=shot.priced_seconds``; the ledger keeps the running budget); blocked shots are
-  skipped and named;
+  skipped and named; on the comfyui provider one provider serves the whole run, so the models
+  are unloaded once, before its first job;
 - a ``first_frame: last_of:`` shot is skipped as blocked when the take its source shows changed
   during this run (it was planned against the old picture);
 - every clip returned (paid now, cached, or an earlier job downloaded) becomes a take
@@ -33,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.videogen import COMFYUI_PROVIDER
 from vidgen.videogen.models import Catalog, load_catalog, money
 from vidgen.videogen.openrouter import OpenRouterVideoProvider
 from vidgen.videogen.takes import Take, add_take, chosen_take, load_picks, takes_of
@@ -95,20 +97,21 @@ def run_shots(
     inputs are hosted (default: ``videogen.host``). Raises :class:`VidgenError` when a paid run is
     refused (nothing paid) or stopped by a failure (``details``: the outcomes)."""
     from vidgen.videogen.ledger import intent_refusal
-    from vidgen.videogen.run import _cap, generate_clip
+    from vidgen.videogen.run import _cap, generate_clip, get_provider
     from vidgen.videogen.shots import plan_shots
 
     root = project.root
     settings = project.config.videogen
     catalog = catalog if catalog is not None else load_catalog()
-    if share is None and settings.host == "quick_tunnel":
+    if share is None and settings.host == "quick_tunnel" and settings.provider != COMFYUI_PROVIDER:
         from vidgen.videogen.host import ShareOptions
 
         share = ShareOptions.from_config(settings, out=lambda line: out(f"  {line}"))
     plan = plan_shots(project, catalog=catalog, budget_usd=budget_usd, shot_ids=shot_ids)
     report = RunReport(paid=pay)
     if pay:
-        if _cap(settings, budget_usd) is None:
+        free = all(s.cost == 0 and s.estimate is not None and s.estimate.cost == 0 for s in plan.shots if not s.shot.blocked)
+        if _cap(settings, budget_usd) is None and not free:
             raise VidgenError("--pay needs a budget: set videogen: {budget_usd: 2.0} in video.yaml or pass --budget USD (a hard cap)")
         broken = [s for s in plan.shots if s.shot.problems or s.check.problems]
         if broken:
@@ -127,6 +130,8 @@ def run_shots(
         left = plan.budget.remaining_usd
         if left is not None and due > left + 1e-9:
             raise VidgenError(f"not paying: the ready shots are estimated at {money(due)}, more than the budget has left ({plan.budget.text()}); nothing was paid")
+    if pay and provider is None and settings.provider == COMFYUI_PROVIDER:
+        provider = get_provider(settings)
     fmt = project.config.format
     for item in plan.shots:
         shot = item.shot
@@ -167,11 +172,16 @@ def run_shots(
             run.take, run.new_take = add_take(
                 root, shot.id, result.path, key=result.plan.key, model=model, provider=result.plan.provider,
                 job_id=result.job.id if result.job else None, cost=result.cost, length=shot.length, width=fmt.width, height=fmt.height, sound=shot.sound,
-                warnings=result.warnings, opening_picture=shot.starting_picture,
+                warnings=result.warnings, opening_picture=shot.starting_picture, usage=result.job.usage if result.job else None,
+                sheet=shot.sheet,
             )
-            what = "new take" if run.new_take else "already take"
+            what = "new take" if run.new_take else "the same request as take"
             cost = f", {money(result.cost)}" if result.cost is not None else ""
+            if result.job is not None and result.job.usage and result.job.usage.get("gpu_seconds") is not None:
+                cost += f", {result.job.usage['gpu_seconds']:.0f} s GPU, {result.job.usage['compute_units']:.3f} compute units"
             out(f"shot {shot.id}: {status}{cost}: {what} {run.take.number} ({run.take.path.relative_to(root).as_posix()}, {run.take.qa.get('summary')})")
+            if not run.new_take:
+                out(f"shot {shot.id}: no new take: the request is unchanged; for another take, set or change the shot's seed:")
             for warning in result.warnings:
                 out(f"shot {shot.id}: warning: {warning}")
             run.message = "; ".join(result.warnings)

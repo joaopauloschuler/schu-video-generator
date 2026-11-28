@@ -1,4 +1,4 @@
-"""Stage geometry: marks, the ground line and depth (DESIGN.md §69.6). No manim.
+"""Stage geometry: marks, the ground line and depth. No manim.
 
 A stage places things (characters and props) by a *mark* (a named x position) or
 an x position, on a ground line, at a *depth*: 0 stands on the ground line at full size, 1 at the
@@ -44,7 +44,7 @@ class StageItem:
     """One thing to place: its name, kind (``character`` or ``prop``), mark or x, depth, own
     scale, ``lift`` (how far above the ground line it hangs, a fraction of the frame height) and
     ``hang`` (how far above that it hangs on a wall, in the heights of a character of scale 1 at
-    its depth: a picture, a clock; DESIGN.md §69.43)."""
+    its depth: a picture, a clock)."""
 
     name: str
     kind: str
@@ -134,7 +134,7 @@ def feet_point(x_fraction: float, depth: float, ground: float, frame_width: floa
 def ground_top(ground: float, items: Sequence[StageItem] = ()) -> float:
     """The top of the ground area (a fraction of the frame height above the bottom edge): the
     ground line, or higher, the line where the deepest item standing on the ground (``lift`` 0)
-    stands, so everything at a depth stands on the drawn ground, not above it (§69.6). Items
+    stands, so everything at a depth stands on the drawn ground, not above it. Items
     with a ``lift`` hang in the air and do not count."""
     depths = [item.depth for item in items if item.lift == 0]
     return ground + FAR_RISE * max(depths, default=0.0)
@@ -188,11 +188,11 @@ def facing_towards_centre(x_fraction: float) -> str:
 
 def facing_sign(facing: str, front: float = 1.0) -> float:
     """+1 for a thing facing ``right``, -1 for ``left``, ``front`` for one facing the viewer
-    (``front``, DESIGN.md §69.44): which way "ahead of it" is on screen."""
+    (``front``): which way "ahead of it" is on screen."""
     return 1.0 if facing == "right" else -1.0 if facing == "left" else front
 
 
-# ----- walking in depth (DESIGN.md §69.44) -------------------------------------------------------
+# ----- walking in depth -------------------------------------------------------
 
 #: How far a walk from depth 0 to depth 1 goes, in the walker's heights where it starts: a walk
 #: in depth takes about as long as a walk across the stage of that many heights.
@@ -248,7 +248,7 @@ def depth_slot(depth: float, others: Sequence[tuple[float, bool]], current: int)
     """Where a character at ``depth`` belongs among ``others`` (the other things on the stage in
     drawing order, back to front: ``(depth, is_character)``), as the number of them drawn before
     it, starting from ``current`` (where it is now): after everything deeper and after the props
-    at its depth (a character stands in front of a prop at the same depth, §69.8), before
+    at its depth (a character stands in front of a prop at the same depth), before
     everything nearer; among characters at its depth it keeps its place."""
     low = 0
     high = len(others)

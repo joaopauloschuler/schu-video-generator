@@ -1,4 +1,4 @@
-"""Step 219 (DESIGN.md §96.18): the genetics accuracy lint rules.
+"""Step 219: the genetics accuracy lint rules.
 
 Each text check is run on wrong statements (each must be found) and on correct textbook ones
 (none may be); the scene checks on small projects built from the genetics scene types (no render)."""

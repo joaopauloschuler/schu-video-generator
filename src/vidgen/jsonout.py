@@ -193,7 +193,7 @@ def validate_document(
 
 
 def images_json(project: Project, images: Iterable[SceneImage]) -> dict[str, Any]:
-    """The generated pictures of one config (DESIGN.md §58): ``{variant, generated, missing,
+    """The generated pictures of one config: ``{variant, generated, missing,
     pictures: [{key, scenes, path, exists, prompt}]}``, each distinct request once."""
     pictures: dict[str, dict[str, Any]] = {}
     for image in images:
@@ -358,9 +358,9 @@ def tts_document(
 ) -> dict[str, Any]:
     """The ``vidgen tts --json`` document (a dry run or a run): every beat to voice (``action``
     ``generate`` or ``copy`` from the base audio folder, its voice, characters billed and the
-    spoken text when pronunciation changed it (and the built-in entries that did, §88), provider, model and provider voice, Kokoro's
+    spoken text when pronunciation changed it (and the built-in entries that did), provider, model and provider voice, Kokoro's
     ``lang`` / ``device``, estimated cost), the characters per voice, the estimated total with
-    its basis (OpenRouter, DESIGN.md §66; Kokoro: 0, "free (local)", §68), notes and problems, the cost the provider reported in a run, the beats generated (none
+    its basis (OpenRouter; Kokoro: 0, "free (local)"), notes and problems, the cost the provider reported in a run, the beats generated (none
     in a dry run) and up to date, and the orphaned MP3s."""
     from vidgen.tts.cache import orphaned_audio
 
@@ -597,7 +597,7 @@ def list_sfx_document(
 def list_pronunciation_document(
     project: Project | None, lists: Iterable[Mapping[str, Any]], users: Mapping[str, int], warnings: Iterable[Mapping[str, Any]] = ()
 ) -> dict[str, Any]:
-    """The ``vidgen list-pronunciation --json`` document (DESIGN.md §88): the project (or
+    """The ``vidgen list-pronunciation --json`` document: the project (or
     ``null``), whether it uses built-in entries, and each list
     (:func:`vidgen.pronunciation.builtin_listing`) with the number of beats using it."""
     return envelope(
@@ -613,9 +613,9 @@ def list_pronunciation_document(
 def guide_document(
     topic: GuideTopic | None, topics: Iterable[GuideTopic], text: str | None, warnings: Iterable[Mapping[str, Any]] = ()
 ) -> dict[str, Any]:
-    """The ``vidgen guide --json`` document: the topic printed (``null``: the whole guide or the
+    """The ``vidgen guide --json`` document: the topic printed (``null``: the entry page or the
     list), every topic ``{name, title, aliases}``, the Markdown ``text`` (``null`` with
-    ``--list``) and the packaged guide file."""
+    ``--list``) and the packaged file it comes from (the topic's file, else the entry page)."""
     from vidgen.guide import GUIDE_FILE
 
     return envelope(
@@ -626,7 +626,7 @@ def guide_document(
         title=None if topic is None else topic.title,
         topics=[{"name": t.name, "title": t.title, "aliases": list(t.aliases)} for t in topics],
         text=text,
-        path=_path(GUIDE_FILE),
+        path=_path(GUIDE_FILE if topic is None else topic.path),
     )
 
 
@@ -877,7 +877,7 @@ def render_document(
     warnings: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """The ``vidgen render --json`` document (``disk``: bytes of the build folder, of its frames
-    clips, free on its disk and deleted in this run, DESIGN.md §120.9)."""
+    clips, free on its disk and deleted in this run)."""
     timings = result.timings
     worker_warnings = [warning(message, scene) for scene, message in result.warnings]
     scenes = [
@@ -923,11 +923,11 @@ def render_document(
 
 
 def audio_render_document(project: Project, result: AudioRenderResult, preview: bool, elapsed: float) -> dict[str, Any]:
-    """The ``vidgen render --audio-only --json`` document (DESIGN.md §111): ``audio_only: true``,
+    """The ``vidgen render --audio-only --json`` document: ``audio_only: true``,
     the ``timing`` used, what was ``left_out``, ``outputs.audio``, ``outputs.timings`` and the
     transcripts (``outputs.transcript_<kind>``), the mix report, the loudness ``check``
-    (§111.2; ``null`` without a preset), the ``stereo`` mono-compatibility check (§111.4;
-    ``null`` without staging), chapters and the scenes with their beats."""
+    (``null`` without a preset), the ``stereo`` mono-compatibility check
+    (``null`` without staging), chapters and the scenes with their beats."""
     timings = result.timings
     scenes = [
         {
@@ -961,7 +961,7 @@ def audio_render_document(project: Project, result: AudioRenderResult, preview: 
         stereo=timings.get("stereo"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
-        **({"files": timings["audio_output"]["files"]} if result.files else {}),   # audio_output.split (§112.3); outputs.audio: the playlist
+        **({"files": timings["audio_output"]["files"]} if result.files else {}),   # audio_output.split; outputs.audio: the playlist
     )
 
 
@@ -1022,7 +1022,7 @@ def translate_template_document(project: Project, result: TemplateResult, warnin
 
 def translation_json(project: Project) -> dict[str, Any] | None:
     """``{file, language, applied, stale, unknown, untranslated}`` of the project's translation
-    file (key lists except ``applied``, a count), or ``None`` without one (DESIGN.md §54)."""
+    file (key lists except ``applied``, a count), or ``None`` without one."""
     report = project.translation
     if report is None:
         return None

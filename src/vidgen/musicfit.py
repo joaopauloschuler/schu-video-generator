@@ -1,4 +1,4 @@
-"""Composed music that follows the video (DESIGN.md §84). A ``compose:`` cue without ``bars`` is
+"""Composed music that follows the video. A ``compose:`` cue without ``bars`` is
 composed for the real timings of the video it plays under:
 
 - it lasts exactly as long as the cue, and every scene change falls on a bar line: each scene

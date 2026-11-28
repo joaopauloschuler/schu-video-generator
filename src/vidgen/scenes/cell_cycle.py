@@ -1,5 +1,4 @@
-"""``cell_cycle``: the eukaryotic cell cycle and cell division at university level (DESIGN.md
-§95.13). ``mode: cycle`` draws the cycle as a ring (G1 → S → G2 → M, the exit to G0, the
+"""``cell_cycle``: the eukaryotic cell cycle and cell division at university level. ``mode: cycle`` draws the cycle as a ring (G1 → S → G2 → M, the exit to G0, the
 restriction point, the G1/S, G2/M and spindle assembly checkpoints) beside the levels of the
 four cyclin–CDK complexes over the cycle, with a "now" marker on both; ``advance`` moves the
 cell round the cycle and ``checkpoint`` shows what a checkpoint checks and the regulators that

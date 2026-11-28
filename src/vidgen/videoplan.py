@@ -1,9 +1,9 @@
 """The video's planned timeline: where every scene and beat will be, before anything is rendered.
 
-Overlays (DESIGN.md §41) are drawn inside each scene's own render, but some depend on the whole
+Overlays are drawn inside each scene's own render, but some depend on the whole
 video: a lower third that runs on after a cut, a progress bar, a chapter indicator. Each scene
 is rendered in its own process, so they cannot wait for the other scenes' renders; instead every
-scene's length is *planned* from what fixes it (DESIGN.md §5):
+scene's length is *planned* from what fixes it:
 
 - a narrated beat lasts ``d + narration.pad`` rounded to whole frames, ``d`` being its MP3's
   length (decoded, as the scene measures it) or, without audio, the word-count estimate; one
@@ -11,7 +11,7 @@ scene's length is *planned* from what fixes it (DESIGN.md §5):
 - a narrated scene lasts its beats plus its type's ``outro`` (the fade-out of ``finish()``,
   Manim plays ``ceil(outro * fps)`` frames);
 - a silent scene lasts its ``duration``;
-- transitions (DESIGN.md §49, :mod:`vidgen.transitions`): a scene is held longer when the
+- transitions (:mod:`vidgen.transitions`): a scene is held longer when the
   transition out of it needs more silent frames than its end has (``hold``), and a crossfade
   starts the next scene that many frames before the previous one ends (``overlap``). The plan is
   the one source of the scenes' start times: overlays, chapters, captions, and the join all
@@ -43,7 +43,7 @@ from vidgen.transitions import effective, has_transitions, requested_frames, sil
 class BeatSlot:
     """A beat as planned: ``start`` / ``end`` in seconds from its scene's start (``end`` is the
     end of its narration, ``start + d``, or where the next beat interrupts it; the pad follows,
-    or the next beat starts before it, DESIGN.md §69.34), and its text."""
+    or the next beat starts before it), and its text."""
 
     id: str
     start: float
@@ -53,7 +53,7 @@ class BeatSlot:
 
 @dataclass(frozen=True)
 class TransitionSlot:
-    """The transition into a scene as planned (DESIGN.md §49), in frames of the plan's fps:
+    """The transition into a scene as planned, in frames of the plan's fps:
     ``overlap`` frames shared by the end of the scene before and the start of this one
     (crossfade, push, wipe), ``fade_out`` frames at the end of the scene before faded to ``color`` and
     ``fade_in`` frames at the start of this one faded in from it (fade_color; an iris closes and
@@ -100,18 +100,18 @@ class SceneSlot:
     @property
     def cut(self) -> float:
         """Where the video passes to the next scene: its start (``end - overlap_out``). The
-        scene's overlays are drawn until then, the next scene's from then on (DESIGN.md §49)."""
+        scene's overlays are drawn until then, the next scene's from then on."""
         return self.end - self.overlap_out
 
 
 @dataclass(frozen=True)
 class Chapter:
-    """A chapter of the video (DESIGN.md §42): its ``title``, ``number`` as written (``None``:
+    """A chapter of the video: its ``title``, ``number`` as written (``None``:
     not numbered), the ``scene`` it starts at, ``start`` / ``end`` in the video (seconds; a
     chapter ends where the next starts, the last one at the video's end), its position
     ``index`` (1-based), the number of chapters ``count``, and whether it starts with a
     ``chapter`` card (``card``). ``intro``: the chapter added at 0:00 before the first one in
-    published lists (MP4, YouTube; DESIGN.md §52), which no scene marks."""
+    published lists (MP4, YouTube), which no scene marks."""
 
     title: str
     number: str | None
@@ -224,7 +224,7 @@ class VideoPlan:
         return max(b.end for b in beats) if beats else None
 
     def transition(self, i: int) -> TransitionSlot:
-        """The planned transition into scene ``i`` (DESIGN.md §49; a cut for most scenes)."""
+        """The planned transition into scene ``i`` (a cut for most scenes)."""
         if i not in self._transitions:
             config = self.project.config
             t = effective(config, i) if self._any_transition else None
@@ -352,11 +352,11 @@ class VideoPlan:
 
 
 def video_chapters(project: Project, fps: int | None = None, intro: bool = False) -> tuple[Chapter, ...]:
-    """The chapters of ``project``'s video (DESIGN.md §42): ``chapter`` scenes and scenes with a
+    """The chapters of ``project``'s video: ``chapter`` scenes and scenes with a
     ``chapter:`` field, each with its title, number, scene, planned ``start`` / ``end`` in seconds
     (at ``fps``, default the final format's), position and count. Empty without chapters.
 
-    ``intro``: the list as the render publishes it (MP4 chapters, YouTube list; DESIGN.md §52),
+    ``intro``: the list as the render publishes it (MP4 chapters, YouTube list),
     starting at 0:00: when the first chapter starts later, a chapter titled ``chapters.intro``
     is added before it (``Chapter.intro``), or with ``intro: false`` the first chapter is moved
     to 0:00. Without, the list is the one overlays use (nothing before the first chapter).

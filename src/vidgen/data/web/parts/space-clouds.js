@@ -1,4 +1,4 @@
-// The ready-made skies of vidgen/space-clouds (DESIGN.md §123.5) for the registry vidgen/parts (§122.5):
+// The ready-made skies of vidgen/space-clouds for the registry vidgen/parts:
 // what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas ({finish: false}: the
 // dome, the sea and the clouds apply the tone curve themselves).
 import {definePart} from "vidgen/parts";

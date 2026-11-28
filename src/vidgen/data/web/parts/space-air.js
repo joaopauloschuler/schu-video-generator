@@ -1,4 +1,4 @@
-// The ready-made airs of vidgen/space-air (DESIGN.md §123.3) for the registry vidgen/parts (§122.5):
+// The ready-made airs of vidgen/space-air for the registry vidgen/parts:
 // what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas ({finish: false}: the
 // dome applies the tone curve itself; the meshes of the haze tile get the renderer's ACES curve while they are drawn).
 import * as THREE from "three";

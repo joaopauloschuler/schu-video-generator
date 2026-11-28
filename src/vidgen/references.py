@@ -1,4 +1,4 @@
-"""References and figure credits of a video (DESIGN.md §95.14): the formats of a reference's
+"""References and figure credits of a video: the formats of a reference's
 identifiers (DOI, PubMed ID, ISBN, URL) checked offline, one number per distinct reference across
 the whole video (in order of first appearance), the on-screen citation texts and the numbered
 reference list of the video's description. No network, no manim."""
@@ -227,6 +227,12 @@ def description_text(scenes: Sequence[Any]) -> str:
 def has_citations(scenes: Sequence[Any]) -> bool:
     """Whether any scene has references or a figure credit."""
     return any(getattr(s, "references", None) or getattr(s, "figure_credit", None) is not None for s in scenes)
+
+
+def draws_overlays(config: Any) -> bool:
+    """Whether a video ``config`` draws overlays on its scenes: the video's ``overlays:``, a
+    scene's own ``overlays:`` mapping, or the citations (references, figure credits)."""
+    return bool(config.overlays) or any(isinstance(s.overlays, dict) for s in config.scenes) or has_citations(config.scenes)
 
 
 __all__ = [

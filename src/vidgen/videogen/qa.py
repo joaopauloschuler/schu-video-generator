@@ -1,5 +1,4 @@
-"""Checks of a generated clip before it goes into the film, and its contact sheet (DESIGN.md
-§113.4). Nothing here pays or sends anything.
+"""Checks of a generated clip before it goes into the film, and its contact sheet. Nothing here pays or sends anything.
 
 :func:`check_clip` decodes the clip small (64 px wide, grey, at its own frame rate up to 30 fps)
 and reports:

@@ -1,4 +1,4 @@
-"""Wavy hair (DESIGN.md §102.17): long waving locks past the jaw that leave the face, the chin
+"""Wavy hair: long waving locks past the jaw that leave the face, the chin
 and the chest clear, trailing in the wind like long hair."""
 
 from __future__ import annotations

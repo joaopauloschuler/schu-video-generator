@@ -1,4 +1,4 @@
-"""The lint rule on the project pieces a video plays (``music_check``, DESIGN.md §93.10).
+"""The lint rule on the project pieces a video plays (``music_check``).
 
 ``music_check`` reads the config, not a still: every ``music:`` cue playing a project piece (a
 score file under ``assets/music``) is checked as ``vidgen music check`` does (without the demo

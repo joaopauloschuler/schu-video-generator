@@ -1,4 +1,4 @@
-"""N-body motion: every body with mass pulls on every other (Phase X, DESIGN §98), integrated
+"""N-body motion: every body with mass pulls on every other (Phase X), integrated
 with Phase W's integrators (:mod:`vidgen.plotcore.integrate`): velocity Verlet / leapfrog
 (symplectic: the energy error stays bounded over many orbits, the default) or adaptive
 Dormand–Prince RK45 (accurate over a short run, but its energy drifts). The equations are solved

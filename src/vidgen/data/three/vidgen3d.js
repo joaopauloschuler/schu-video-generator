@@ -1,4 +1,4 @@
-// vidgen's 3D page (DESIGN.md §114): builds a three.js scene from vidgen's scene description
+// vidgen's 3D page: builds a three.js scene from vidgen's scene description
 // (JSON, version 1: shapes, labels, groups, stand-ins; tracks of position, rotation, scale,
 // opacity, emissive glow, arrow length and the camera) and draws the frame at a time vidgen
 // gives, as it looks or as a guide pass (depth, outline, mask). Time comes only from frame(t):
@@ -280,7 +280,7 @@ function applyTimeline(t) {
   camera.updateMatrixWorld();
 }
 
-// ----- guide passes (DESIGN.md §114.14) -----------------------------------------------------
+// ----- guide passes -----------------------------------------------------
 // Every part of every object gets the pass's own flat material (no light); labels and name tags
 // are hidden. Values are written as they are (no colour conversion), so a mask colour or a depth
 // grey reaches the PNG exactly.

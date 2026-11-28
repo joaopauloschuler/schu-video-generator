@@ -1,4 +1,4 @@
-"""Step 289: music cues for dramas (DESIGN.md §112.2): named themes that scenes and sections play,
+"""Step 289: music cues for dramas: named themes that scenes and sections play,
 cross-fading at the changes, motifs on beats, stings on words, ducking presets with a swell into
 the pauses, theme variations rendered from their score, and the dense-dialogue music check.
 Narration is mocked: each beat's "MP3" is a WAV tone (PyAV reads it by its content)."""

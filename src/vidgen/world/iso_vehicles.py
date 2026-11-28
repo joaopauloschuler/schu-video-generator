@@ -1,4 +1,4 @@
-"""Vehicles moving on an isometric place (DESIGN.md §105): a ``car`` driving along path cells, a
+"""Vehicles moving on an isometric place: a ``car`` driving along path cells, a
 ``boat`` sailing across water, a ``train_car`` rolling along its track and a ``rocket`` lifting
 off. Plain data and pure functions, no manim, like :mod:`vidgen.world.iso_moves` for walks.
 
@@ -92,7 +92,7 @@ class VehicleRoute:
     def turning(self, distance: float) -> tuple[Cell, Cell] | None:
         """The turn it is half-way through ``distance`` along (the ways it heads before and
         after), or ``None``: in the middle half of a corner's leg it heads along the diagonal
-        between them (drawn turned, DESIGN.md §105.8); a U-turn has no in-between."""
+        between them (drawn turned); a U-turn has no in-between."""
         for (a, b), (before, after) in zip(zip(self.points, self.points[1:]), self.turns):
             leg = math.dist(a, b)
             if distance <= leg + 1e-9:

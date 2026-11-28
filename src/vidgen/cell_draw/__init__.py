@@ -1,4 +1,4 @@
-"""The renderer of the cell world (DESIGN.md §95.6, §95.9): Manim drawings of
+"""The renderer of the cell world: Manim drawings of
 :mod:`vidgen.cellworld` worlds, split by family (organelles, plant, bacteria, cytoskeleton,
 molecular close-ups) round :class:`CellDrawing`."""
 

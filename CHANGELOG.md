@@ -1,11 +1,251 @@
 # Changelog
 
 The project and its pip distribution are `schu-video-generator`; the command and the Python
-package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in `HANDOFF.md`
-("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
-each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
+package are `vidgen`. Step numbers are those of the commits `Step N: ...` in the git history.
+`HANDOFF.md`, the per-step log up to Step 440, was removed in Step 441, and `DESIGN.md`, the
+design document (with the release notes of 0.2.0 and each step's details), in Step 443; both are
+in the git history.
 
-## Steps 193–394
+## Steps 193–416
+
+### A keepalive test tool for idle Colab sessions (Step 416)
+
+- `tools/colab/keepalive.py SESSION`, started only by hand, tests whether Colab ends idle
+  sessions: one tiny `colab exec` per idle round, one log line per round. vidgen's Colab calls
+  now touch a "last call" stamp next to the session's lock.
+
+### Colab file transfers through quick tunnels (Step 415)
+
+- Every file between this computer and a Colab VM (`vidgen remote`, the `comfyui` provider on
+  Colab, `setup_session.py`) now goes through Cloudflare quick tunnels, not `colab upload` /
+  `colab download`: a full 260 MB project now syncs (it failed before). One tunnel a side per
+  command, a secret path, 404 for anything else, SHA-256 checked, retried, then a clear error.
+- `setup_session.py` installs `cloudflared` 2026.10.7 on the VM. `cloudflared` must be on PATH here.
+
+### No repeated frame at a chained join (Step 414)
+
+- A later part of a split beat now starts from the last frame the film shows of the part before
+  (it was one frame earlier), its guide starts on that same frame, and its first frame (LTX's copy
+  of that picture) is not shown.
+
+### Fewer and steadier Colab calls (Step 413)
+
+- **`vidgen remote`**: one upload, one exec to check the version and start, a few polls (after 2 s,
+  5 s, then every 10 s) and one download of a tar with the results; the VM's file list is kept in
+  `.vidgen-remote/` (the VM reports files it lacks, and they are sent).
+- **Every colab call**: one at a time per session across vidgen processes (a lock file);
+  `colab exec` cut at 30 s, retried after 3, 10, 20, 30 s; uploads and downloads cut by size. Also
+  for `setup_session.py` and the `comfyui` provider on Colab (whose upload is unpacked and started
+  in one exec).
+
+### Chained parts, a better restyle prompt, two recipes (Step 412)
+
+- **Chained parts**: in a beat split into parts with a starting picture, every part after the first
+  starts from the last frame of the take the part before it shows (as `first_frame: last_of:`).
+- **The join of placed parts**: the later part is colour-matched to the earlier one's last frame at
+  the cut, eased out over 1 s.
+- **Restyle prompt**: the default `first_frame: restyled` instruction names the usual CG giveaways
+  (repeating ripple and texture patterns, plastic surfaces, too-clean edges) and adds nothing new.
+- **Guide**: recipes "Real footage from a web scene" and "Use a Colab session" (the whole pipeline);
+  `generate inputs` and `generate run --pay` print the next command.
+
+### The canny guide and the restyled first frame (Step 410)
+
+- **`guide: canny`**: white Canny edges on black of the beat's finished render (the same frames and
+  timing as `guide: final`), with the edges in bright areas removed (a sun glint a model draws as
+  foam): `canny: {low: 92, high: 200, glint: 150}`, `glint: false` keeps them. Made with numpy/scipy
+  (no OpenCV needed), the same edges as OpenCV's Canny. `ltx-2.3-union-control` takes it (and `depth`).
+- **`first_frame: restyled`** (`provider: comfyui`): the render's first frame made photoreal by
+  Qwen-Image-Edit-2511 on the same ComfyUI server, by `vidgen generate inputs --guide`; its GPU
+  seconds and units are kept in `inputs.json`, it is made again only when the render, prompt or seed
+  changes. `first_frame_prompt:` replaces the default edit instruction. Works with `vidgen remote`.
+- `tools/colab/build_image_workflow.py` now uses vidgen's graph (`src/vidgen/videogen/qwen_graph.py`).
+
+### WebGL on the GPU of a Colab session (Step 411)
+
+- `tools/colab/setup_session.py NAME` (also `--vidgen-only`) adds the NVIDIA Vulkan and EGL vendor
+  files Colab leaves out and, when Chromium's WebGL then names the GPU, sets `VIDGEN_WEBGL=gpu` for
+  `vidgen remote` runs (`/content/vidgen.env`): `3d` and `web` scenes draw on the L4
+  (`ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA L4 ...))`), about 5x faster per frame.
+- `VIDGEN_WEBGL=gpu|swiftshader` (default `swiftshader`, unchanged locally); `gpu` is in the `3d`/`web`
+  cache key, so GPU frames are their own build.
+
+### The `comfyui` video provider (Step 409)
+
+- **`videogen: {provider: comfyui, comfyui: {colab: <session>} | {url: http://host:port}}`** runs
+  generated shots on your own ComfyUI: no money, no budget needed; `--pay` still starts the run. The
+  take records the job's GPU seconds and compute units (`units_per_hour`, 1.94 for an L4).
+- **`model: ltx-2.3-union-control`**, a workflow kept with vidgen (LTX-2.3 + IC-LoRA union control):
+  the shot's `guide: depth` is the control video, `first_frame:` optional; vidgen fits them to 512p
+  (960x512 for 16:9) and 8k+1 frames at 24 fps. Listed by `vidgen generate models`, $0 in `generate plan`.
+- With `colab:` the job runs on that VM from this computer (colab CLI); `vidgen remote <session>
+  generate run --pay` uses the VM's ComfyUI directly. `tools/colab/build_workflow.py` now uses the
+  same graph (`src/vidgen/videogen/ltx_graph.py`).
+
+### vidgen on a Colab session (Step 408)
+
+- **`vidgen remote NAME ARGS...`** runs a vidgen command on Colab session `NAME` from the project
+  folder: it syncs the changed files up (SHA-256 manifest; never `build/`, `output/`, `exports/`,
+  `media/`, `--exclude DIR`), refuses when the VM's vidgen is not this computer's code (and prints
+  the setup command), runs `vidgen ARGS` there detached while streaming its log, and brings back the
+  files the command's JSON document names outside `build/` (plus the render's `timings.json`) and the
+  files the run made or changed. `build/` stays on Colab. Standard library only on this side.
+- **`tools/colab/setup_session.py`** also installs this checkout's vidgen (`setup_vidgen.sh`:
+  ffmpeg, LaTeX, cairo/pango, espeak-ng, Playwright's Chromium once; vidgen into
+  `/content/vidgen-venv` when its code hash changes). `--no-vidgen` skips it, `--vidgen-only` does
+  only it. The `colab` helpers moved to `vidgen.colab`, shared by both.
+
+### The LTX HOWTO tightened (Step 407)
+
+- **`docs/HOWTO-restyle-with-ltx-on-colab.md`** opens with the recommended setup (photoreal first
+  frame + glint-masked canny) and why, and is shorter; the tests' raw log is in
+  `docs/howto/ltx-colab-runlog.md`. The depth-pass Step 403 is called Step 403b in the docs.
+
+### One Colab setup command (Step 406)
+
+- **`python tools/colab/setup_session.py <name> [--gpu L4] [--no-image] [--latest]`** sets up a Colab
+  GPU session for `docs/HOWTO-restyle-with-ltx-on-colab.md` in one command: it reuses or creates the
+  session (retrying HTTP 503), skips each part that is done (done markers on the VM, or all files
+  present; a ComfyUI that answers), installs ComfyUI + LTX-2.3 and the image models side by side,
+  starts ComfyUI and prints a summary. It never stops the session; several sessions can run under
+  different names. The HOWTO's scripts moved from `docs/howto/ltx-colab/` to `tools/colab/`
+  (with a README); `setup.sh` and `setup_image.sh` keep existing clones and write the done markers
+  only after every file is checked (`vm_state.py`). No change to vidgen itself.
+
+### A photoreal first frame for LTX-2.3 (Step 405)
+
+- **`docs/HOWTO-restyle-with-ltx-on-colab.md` §6.4**: make a photoreal version of the shot's first
+  frame on the same Colab GPU with Qwen-Image-Edit-2511 (GGUF + 4-step Lightning LoRA, ungated), check
+  its alignment with an edge overlay, then give it to LTX-2.3 as the first frame. Tested: real-looking
+  footage that keeps the glider, the open sea and a level horizon (no invented beach); best with a canny
+  whose sun-glint edges are masked (`make_canny_soft.py`). New scripts (now in `tools/colab/`)
+  (`setup_image.sh`, `build_image_workflow.py`, `prep_image_inputs.py`, `align_check.py`,
+  `make_canny_soft.py`, `start_bg.py`, `free_vram.py`, `object_info_image.py`).
+- **HOWTO fixes from its first replay**: keep and reuse the session between experiments (`colab
+  sessions` first); the first `colab exec` of a session can drop without running anything; setup takes
+  3-5.5 min; long VM work (the canny) runs detached; `check_hf.sh` follows redirects (`--image` added);
+  `start_setup.py` runs any setup script (`SCRIPT`). No change to vidgen itself.
+
+### A HOWTO: restyle a render with LTX-2.3 on Colab (Step 404)
+
+- **`docs/HOWTO-restyle-with-ltx-on-colab.md`**: how to send a shot's `guide.final.mp4` /
+  `guide.depth.mp4` (plus a canny of the render) to LTX-2.3 with the union-control IC-LoRA in ComfyUI
+  on a Colab L4, by hand: inputs, install (pinned commits), downloads (all ungated), the API graph,
+  polling, comparison, stopping the session, costs, errors, and the test's results (real-looking only
+  without the CG first frame, and then with invented content). Replayable scripts (now in
+  `tools/colab/`). No change to vidgen itself.
+
+### A web scene's exact depth (Step 403b)
+
+- **`guide: depth` on `space` and `web` scenes**: the scene's own depth buffer from three.js
+  (not an estimate), drawn with the finished render (same size, frame rate, camera and frames), by
+  the scene's own shaders (a displaced sea keeps its waves). The shot's `guide.depth.mp4` is grey as
+  1 / distance: near white, far dark, the sky black; one range for the whole shot; through the
+  lens's distortion like the colour frame, without film effects, captions or overlays. A `web` page
+  must draw through `vidgen/three-finish`. For depth-control video models.
+- **Space scenes draw their frames again once**: `vidgen/three-finish` changed, so a `space` scene's
+  web frames (and those of pages that use the module) are redrawn on the next render.
+
+### Shadows in the air (Step 403)
+
+- **Shadows in the air** (Step 403): **surface scenes and pages with `vidgen/space-air` and cloud decks
+  or ground look different.** What casts a shadow now darkens the air in it: the haze under a cloud
+  deck is in the deck's shadow (dim and grey under a closed deck, the glow round a low sun held in the
+  gaps of a broken one), mountains' shadows lie across the haze in front of them, and in a surface scene
+  the decks now shade the sea and the ground too (before, the sun hidden by a cloud still lit the sea's
+  glitter). On by default; `world: {shadows: false}` in a surface scene, or `air(renderer, what,
+  {shadows: false})` in code, gives the picture of before; `{reach, share, steps}` tunes it. It costs
+  about +0.4 s a frame at 1280x720 under a deck, nothing where nothing casts a shadow. The Earth's
+  shadow rising opposite the sun at dusk, with the pink band above it, was already in the sky model
+  and is unchanged. Light shafts are soft and broad, not sharp beams; they show most in a hazy air
+  with a low sun. In code: `sky.addCaster` for shadows of your own, `sky.shadowsInto(material)` for
+  shaders of your own, `clouds.mapShade` (the decks' shadow from the same map).
+
+### The finished render to a video model (Step 402)
+
+- **`guide: final`** on a generated shot (any scene type): the beat's finished render (the video's
+  size and frame rate, the scene's full look, silent, no overlays and no placed take) goes to the
+  video model as its video reference, and the prompt asks for the same shot as real camera footage.
+  It reuses the film's own scene render when nothing is drawn over the scene; otherwise the scene is
+  rendered once more without overlays and takes into `build/final_source/`.
+- **`audio: mix`**: the film's own sound over the shot (voice, music and effects), cut from the
+  rendered film, goes in as the audio reference (`vidgen render` first). Talking shots keep `audio: beat`.
+
+### Footage, not a render (Steps 397–401)
+
+- **A camera by default** (Step 401): **space scenes now look different.** Every `space` scene
+  (orbital and surface) that gives no `camera_look:` is filmed by the new look `camera`: the sensor
+  and the lens of a good small camera with nobody holding it (fine noise, 2.8 stops of dynamic range,
+  light sharpening, the lens's own barrel distortion, faint fringes towards the corners, a faint warm
+  halation, a vignette of 0.2 in place of 0.3); no hand, no horizon error, no automatic exposure, no
+  motion blur. `camera_look: none` restores the clean render of before, pixel for pixel; the named
+  looks still add their operator; the scene's own `finish:` and `operator:` still win; `finish: false`
+  still draws straight to the canvas. A surface scene is now drawn through the finish (about +0.3 to
+  +0.7 s a frame at 1280x720). Pages of your own and `vidgen/three-finish`'s defaults are unchanged.
+- **Camera looks** (Step 400): `camera_look:` of a `space` scene turns on a matched set of the
+  sensor, the lens, the operator and the finishing for one kind of camera: `window_handheld`
+  (handheld through a spacecraft's window), `drone`, `broadcast_long_lens`, `phone`, `chase_mount`.
+  The scene's own `finish:` and `operator:` go over the look key by key (`finish: {noise: 0.006}`
+  keeps the rest of the look's noise); an unknown name gets a did-you-mean; orbital scenes leave the
+  look's automatic exposure out. The meters are gentle and the range short, so sunlit cloud tops
+  still clip near white. In code: `cameraLook(name, {finish, operator})` of the new module
+  `vidgen/camera-looks`. Without a look nothing changes.
+- **A camera operator** (Step 399): a `space` scene's `operator:` (and `operate` /
+  `cam.operator` of `vidgen/space-camera-air` in code) puts a person behind the camera, over all
+  its moves, off unless given. `hand: handheld` drifts slowly and is corrected late with a little
+  overshoot, slips off now and then and is put back, with a hand's tremor and breath; it shows more
+  on a long lens. `hand: mounted` only vibrates. `exposure: true` (surface scenes) is a camera's
+  automatic exposure that lags and hunts after big changes of brightness: it opens up inside a
+  cloud deck, flashes on the break-out into the sun and settles a stop down; it meters an estimate
+  of the frame from the camera's view, the sun, the decks and the ground. `horizon: true` starts
+  every shot with the horizon a degree off and levels it after a couple of seconds. Each is a
+  function of the time and a seed, so stills are frames; did-you-mean on every key; scenes that do
+  not ask draw exactly the same pixels, at no measurable cost a frame. The sum-of-sines `shake`
+  and a climb's `adapt` stay as they were.
+
+- **A camera's lens in `vidgen/three-finish`** (Step 398): three more finishing options, off
+  unless given, also under a `space` scene's `finish:`. `distort` bends the picture as a wide
+  lens does, from the camera's own lens at every frame: strong at ultra-wide (the corners pulled
+  in by 4.7 % at 16 mm), none from 50 mm, so a camera that widens over a move bends more as it
+  widens; the picture is scaled in so the corners stay put and no border shows (`distort: true`,
+  a factor, or `{amount, mm}`). `edges` softens the frame and splits red from blue more and more
+  towards the edges (`edges: true`, a softness, or `{soft, fringe, power}`). `halation` adds a
+  warm glow bleeding round the brightest parts (`halation: true` or an amount, or
+  `{amount, radius, threshold, color}`). Scenes that do not ask draw exactly the same pixels; all
+  three cost about 0.06 s a frame at 1280x720. New exports `focalLength`, `lensDistortion`,
+  `distortSource`, `edgeShare`.
+
+- **A camera's sensor in `vidgen/three-finish`** (Step 397): three new finishing options, off
+  unless given, also under a `space` scene's `finish:`. `noise` is a camera sensor's noise in
+  place of the film grain: stronger in the shadows than in the highlights, none where the picture
+  clips, coloured, at the sensor's pixel size, new each frame (`noise: true` or an amount, or
+  `{amount, color, size, floor}`). `range` limits the dynamic range: highlights clip to white
+  with a short shoulder, `black` crushes the shadows (`range: true`, a number of stops above mid
+  grey, or `{stops, shoulder, black}`). `sharpen` adds in-camera sharpening with faint halos
+  (`sharpen: true` or an amount, or `{amount, radius, limit}`). Scenes that do not ask draw
+  exactly the same pixels; all three cost about 0.05 s a frame at 1280x720. New exports
+  `rangeWhite`, `rangeCurve`, `noiseSpread`, `noiseSigma`.
+
+### Breaking repeating patterns (Steps 395–396)
+
+- **A sea that does not weave** (Step 396): close up, the finest waves of a steep sea in
+  `vidgen/space-sea` no longer read as a woven texture: each short wave's crests are bent by
+  endless noise of about its own size, and the normals follow them. The foam's streaks are read
+  so the pattern never repeats and bend with the crests. The gusts' patches are endless noise
+  instead of six crossed sines, so the glitter seen from 20–60 km up shows no fine grid. Calm seas
+  look the same; the glitter's patches are other ones and softer. Every picture with a sea
+  changes; frames cost up to about a fifth more close to a rough sea, a tenth more from 20 km.
+  New exports `FINE_WARP`, `GUST_WEIGHT` (`GUST_SHIFT` removed) of `vidgen/space-sea`;
+  `latticeNoise`, `NOISE_GLSL` of `vidgen/space-clouds`.
+
+- **Clouds that never repeat** (Step 395): seen from high up, the cloud decks of
+  `vidgen/space-clouds` no longer show the same shapes in rows. Each reading of the noise tile is
+  cut into cells that read it at their own offsets and turns, blended softly at their edges, and
+  the clouds are warped by endless noise besides; from about 10 km over a deck the broad weather
+  has more say, so from 20–400 km the decks read as bands and clear patches (a closed deck stays
+  closed). The cover asked for is still the cover seen round the place. Every picture with cloud
+  decks or their shadows changes; such frames cost about a quarter more near the sea and two
+  fifths more from 20–60 km up. New exports `untiled`, `warpNoise`, `aloft`, `UNTILE`, `ALOFT`.
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 

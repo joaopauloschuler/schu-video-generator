@@ -71,11 +71,11 @@ class RenderResult:
     when stills were requested, else ``None``; ``chapters`` the YouTube chapter list
     ``<output>_chapters.txt`` when one was written (the video has chapters and
     ``chapters.youtube``), else ``None``; ``thumbnail`` the thumbnail written after the join
-    (with a ``thumbnail:`` config and ``auto``, DESIGN.md §53), else ``None``.
-    ``guide_passes``: the guide pass files of each ``3d`` scene whose render has them (DESIGN.md
-    §114.14), by scene id. ``disk``: the build folder's size, of it in frames clips, and the
+    (with a ``thumbnail:`` config and ``auto``), else ``None``.
+    ``guide_passes``: the guide pass files of each scene whose render has them (a ``3d`` scene's,
+    a web scene's depth), by scene id. ``disk``: the build folder's size, of it in frames clips, and the
     free disk after the join; ``removed``: the bytes of frames clips deleted in this run
-    (``render.keep_intermediates: false``, DESIGN.md §120.9).
+    (``render.keep_intermediates: false``).
     """
 
     output: Path
@@ -170,7 +170,7 @@ def warn_audio(project: Project) -> None:
 
 def warn_images(project: Project) -> None:
     """Log a warning naming scenes whose generated picture is not made yet (a placeholder is
-    rendered; DESIGN.md §58). Needs the project session's registry."""
+    rendered). Needs the project session's registry."""
     from vidgen.imagegen import find_images
 
     missing = [i.scene_id for i in find_images(project) if not i.request.exists]
@@ -184,7 +184,8 @@ def _usable_render(
 ) -> bool:
     """True if a previous render of the scene exists and matches the current format/audio mode
     (and, when ``frames`` stills per beat are requested, was made with them; when
-    ``guide_passes`` are requested and the scene is a ``3d`` one, it drew them and they are there)."""
+    ``guide_passes`` are requested and the scene is a ``3d`` one, it drew them and they are there;
+    a scene drawn in Chromium was drawn with the WebGL backend asked for now, :func:`_same_webgl`)."""
     video = scene_video_path(project, preview, scene_id)
     timings_file = scene_timings_path(project, preview, scene_id)
     if not (video.is_file() and timings_file.is_file()):
@@ -201,35 +202,87 @@ def _usable_render(
         and (no_audio or meta.get("audio") is True)
         and (not frames or (meta.get("frames") == frames and _has_stills(project, preview, scene_id)))
         and _has_guide_passes(project, preview, scene_id, meta, guide_passes)
+        and _same_webgl(project, scene_id, meta)
     )
 
 
-def _has_guide_passes(project: Project, preview: bool, scene_id: str, meta: dict[str, Any], guide_passes: tuple[str, ...]) -> bool:
-    """Whether the render (its ``meta``) of a ``3d`` scene drew ``guide_passes`` and their files
-    are there (other scene types have none to draw: always true)."""
-    if not guide_passes or project.scene(scene_id).type != "3d":
-        return True
-    from vidgen.three_d.passes import pass_files
+def scene_webgl(project: Project, scene_id: str) -> str | None:
+    """The WebGL backend (``gpu`` or ``swiftshader``, :func:`~vidgen.browser.chromium.webgl_backend`)
+    ``scene_id`` is drawn with now when it is drawn in Chromium (a ``3d`` scene, a web scene:
+    ``web``, ``space``, a type built on ``web``); ``None`` for every other scene."""
+    from vidgen.browser.chromium import webgl_backend
+    from vidgen.config import is_web_scene_type
 
+    kind = project.scene(scene_id).type
+    return webgl_backend() if kind == "3d" or is_web_scene_type(kind) else None
+
+
+def _same_webgl(project: Project, scene_id: str, meta: dict[str, Any]) -> bool:
+    """Whether a render (its ``meta``) of a scene drawn in Chromium was drawn with the WebGL backend
+    asked for now (:func:`scene_webgl`; a render that records none was made before vidgen recorded
+    it and counts as SwiftShader, the default); other scenes: always true."""
+    wanted = scene_webgl(project, scene_id)
+    return wanted is None or meta.get("webgl", "swiftshader") == wanted
+
+
+def _record_webgl(project: Project, preview: bool, scene_id: str) -> dict[str, Any]:
+    """The timings the worker just wrote for ``scene_id``, with ``render.webgl`` added (and written)
+    for a scene drawn in Chromium: the backend the worker ran under (its environment is this one's)."""
+    path = scene_timings_path(project, preview, scene_id)
+    timings = json.loads(path.read_text(encoding="utf-8"))
+    webgl = scene_webgl(project, scene_id)
+    if webgl is not None and isinstance(timings.get("render"), dict):
+        timings["render"]["webgl"] = webgl
+        write_json(path, timings)
+    return timings
+
+
+def scene_pass_clips(project: Project, preview: bool, scene_id: str, passes: tuple[str, ...] | list[str]) -> dict[str, Path]:
+    """The lossless clips of those guide ``passes`` a render of ``scene_id`` draws (pass -> file): all three
+    of a ``3d`` scene (``<render_dir>/three_d/<scene>.<pass>.mkv``), ``depth`` of a web
+    scene (``<render_dir>/web/<scene>.depth.mkv``); none of other scene types."""
+    from vidgen.three_d.passes import pass_clip
+    from vidgen.web.depth import WEB_GUIDE_PASSES
+    from vidgen.web.entry import is_web_type
+
+    kind = project.scene(scene_id).type
+    if kind == "3d":
+        return {mode: pass_clip(project.render_dir(preview) / "three_d", scene_id, mode) for mode in passes}
+    if is_web_type(kind):
+        return {mode: pass_clip(project.render_dir(preview) / "web", scene_id, mode) for mode in passes if mode in WEB_GUIDE_PASSES}
+    return {}
+
+
+def _scene_pass_files(project: Project, preview: bool, scene_id: str, passes: tuple[str, ...] | list[str]) -> list[Path]:
+    """The files those guide ``passes`` of ``scene_id`` leave: their clips (:func:`scene_pass_clips`) and,
+    for a ``3d`` scene's mask, its colour table."""
+    from vidgen.three_d.passes import mask_table_path
+
+    files = list(scene_pass_clips(project, preview, scene_id, passes).values())
+    if "mask" in passes and project.scene(scene_id).type == "3d":
+        files.append(mask_table_path(project.render_dir(preview) / "three_d", scene_id))
+    return files
+
+
+def _has_guide_passes(project: Project, preview: bool, scene_id: str, meta: dict[str, Any], guide_passes: tuple[str, ...]) -> bool:
+    """Whether the render (its ``meta``) of a scene drew those of ``guide_passes`` it draws
+    (:func:`scene_pass_clips`) and their files are there (a scene that draws none: always true)."""
+    drawn = list(scene_pass_clips(project, preview, scene_id, guide_passes))
     made = meta.get("guide_passes") or []
-    folder = project.render_dir(preview) / "three_d"
-    return all(p in made for p in guide_passes) and all(f.is_file() for f in pass_files(folder, scene_id, guide_passes))
+    return all(p in made for p in drawn) and all(f.is_file() for f in _scene_pass_files(project, preview, scene_id, drawn))
 
 
 def guide_pass_outputs(project: Project, preview: bool) -> dict[str, list[Path]]:
-    """The guide pass files of each ``3d`` scene whose current render drew some (its timings
-    record them), by scene id (DESIGN.md §114.14)."""
-    from vidgen.three_d.passes import pass_files
-
+    """The guide pass files of each scene whose current render drew some (its timings record them:
+    a ``3d`` scene's passes, a web scene's depth), by scene id."""
     out: dict[str, list[Path]] = {}
     for spec in project.config.scenes:
-        if spec.type != "3d":
-            continue
         try:
             meta = json.loads(scene_timings_path(project, preview, spec.id).read_text(encoding="utf-8")).get("render", {})
         except (OSError, ValueError):
             continue
-        files = [f for f in pass_files(project.render_dir(preview) / "three_d", spec.id, meta.get("guide_passes") or []) if f.is_file()]
+        made = meta.get("guide_passes") or []
+        files = [f for f in _scene_pass_files(project, preview, spec.id, made) if f.is_file()] if made else []
         if files:
             out[spec.id] = files
     return out
@@ -239,7 +292,7 @@ def current_render(
     project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0, guide_passes: tuple[str, ...] = ()
 ) -> bool:
     """True if the scene's render is usable (:func:`_usable_render`) and was made from the inputs
-    it has now (its recorded render fingerprint matches, DESIGN.md §63)."""
+    it has now (its recorded render fingerprint matches)."""
     from vidgen.render.fingerprint import scene_fingerprint
 
     if not _usable_render(project, preview, scene_id, no_audio, frames, guide_passes):
@@ -282,7 +335,7 @@ def _run_worker(
     on_progress: Callable[[str], None] | None = None,
 ) -> _WorkerRun:
     """Run the worker for one scene; its output is captured (and echoed to stderr if ``live``);
-    each progress line it prints (frames drawn, DESIGN.md §120.10) is passed to ``on_progress``."""
+    each progress line it prints (frames drawn) is passed to ``on_progress``."""
     cmd = [
         sys.executable, "-m", "vidgen.render.worker", str(project.config_file), scene_id,
         "--quality", "draft" if project.draft else "preview" if preview else "final",
@@ -297,15 +350,17 @@ def _run_worker(
         cmd += ["--frames", str(frames)]
     if guide_passes:
         cmd += ["--guide-passes", ",".join(guide_passes)]
-    cmd += ["--intermediate", project.config.render.intermediate]   # also when the command line chose it (§120.9)
+    cmd += ["--intermediate", project.config.render.intermediate]   # also when the command line chose it
     if project.bare:
         cmd.append("--bare")
+    if not project.takes_shown:
+        cmd.append("--source")
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
     env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
     env.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
     # A fixed hash seed makes renders reproducible: with Python's per-process random seed, the
     # frames of a camera move differed by a few pixel values between renders (set iteration
-    # order); the scene gallery's committed GIFs must not change on every run (DESIGN.md §60).
+    # order); the scene gallery's committed GIFs must not change on every run.
     env.setdefault("PYTHONHASHSEED", "0")
     started = time.monotonic()
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=project.root)
@@ -346,8 +401,7 @@ def _runs(
 
     ``jobs == 1`` runs them one after the other in this thread. Otherwise a thread pool runs
     ``jobs`` workers at once; if the consumer stops early, queued scenes are cancelled and the
-    running ones are waited for. ``after``: ``{scene: scene it must start after}`` (a carry,
-    DESIGN.md §50); the earlier scene must come first in ``scene_ids``, so it has started (the
+    running ones are waited for. ``after``: ``{scene: scene it must start after}`` (a carry); the earlier scene must come first in ``scene_ids``, so it has started (the
     pool starts tasks in order) before the later one waits for it.
     """
     if jobs == 1:
@@ -387,8 +441,7 @@ def _carry_from_current(project: Project, preview: bool, scene_id: str, before: 
 
 
 def with_carried(project: Project, preview: bool, scene_ids: list[str]) -> list[str]:
-    """``scene_ids`` (in config order) plus what continuity needs rendered with them (DESIGN.md
-    §50): the scene before a scene that carries objects, when its record of them is missing or
+    """``scene_ids`` (in config order) plus what continuity needs rendered with them: the scene before a scene that carries objects, when its record of them is missing or
     was made from other inputs; and a scene carrying objects from a scene in the list, when its
     render did not start from that scene's current end."""
     deps = carry.carried_from(project.config)
@@ -415,7 +468,7 @@ def _render_scenes(
 
     Without ``keep_going`` the first failure raises (with ``jobs > 1``, scenes already running
     finish first). ``post_scene`` is dispatched here, in the parent, after each success; then,
-    with ``render.keep_intermediates: false``, the scene's frames clip is deleted (§120.9).
+    with ``render.keep_intermediates: false``, the scene's frames clip is deleted.
     """
     live = jobs == 1 and sys.stderr.isatty()
     scene_ids = with_carried(project, preview, scene_ids)
@@ -447,7 +500,7 @@ def _render_scenes(
                 runs.warnings.append((run.scene_id, line.removeprefix("warning: ")))
                 if not live:  # re-print the worker's warnings (live output has shown them already)
                     say(line, err=True)
-        timings = json.loads(scene_timings_path(project, preview, run.scene_id).read_text(encoding="utf-8"))
+        timings = _record_webgl(project, preview, run.scene_id)
         say(
             f"[{order[run.scene_id] + 1}/{total}] {run.scene_id}: done, "
             f"{timings['duration']:.2f} s of video in {run.seconds:.1f} s"
@@ -546,7 +599,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
 
 
 def audio_language(project: Project) -> str | None:
-    """The ISO 639-2 code written as the audio stream's language (DESIGN.md §54), or ``None``."""
+    """The ISO 639-2 code written as the audio stream's language, or ``None``."""
     return language_rules(project.config.language).iso639_2 if project.config.language else None
 
 
@@ -560,19 +613,19 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
 
     The scenes' sound effects (their timings' ``sfx``, scene times) are placed at video times on
     one track for the whole video, ``padded/sfx.wav`` (none without effects or with
-    ``no_audio``), which the final mux adds to the narration track (DESIGN.md §47). Unless
+    ``no_audio``), which the final mux adds to the narration track. Unless
     ``no_audio``, :func:`vidgen.mix.mix_audio` then adds the music, ducks and normalises it into
     ``padded/mix.wav`` (with music or ``audio.normalize``; else it only measures the loudness)
-    and the combined timings gain ``mix``, its report (§48).
+    and the combined timings gain ``mix``, its report.
 
-    Crossfades (§49) start a scene before the one before it ends: every later time (beats, SRT,
+    Crossfades start a scene before the one before it ends: every later time (beats, SRT,
     effects, music, chapters) follows the overlapped starts, the scenes' sound is summed into
     ``padded/voice.wav`` (the earlier scene's silent tail fading out) and the pictures are
     blended by :func:`vidgen.render.ffmpeg.join` (the video is then encoded once instead of
     stream-copied). Scenes with a transition get ``transition: {type, duration, overlap}`` in the
     combined timings.
 
-    The published chapters (§52: starting at the joined scenes' starts, from 0:00) go into the
+    The published chapters (starting at the joined scenes' starts, from 0:00) go into the
     combined timings' ``chapters`` and, with ``chapters.metadata``, into the MP4 with its tags
     (``padded/metadata.txt``, FFMETADATA).
     """
@@ -615,7 +668,7 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
         }
         if scene_sfx:
             entry["sfx"] = [e.to_json() for e in scene_sfx]
-        if timings.get("ambience"):  # a stage's rain bed (DESIGN.md §69.39), at video times
+        if timings.get("ambience"):  # a stage's rain bed, at video times
             entry["ambience"] = [
                 {**bed, "start": round(offset + bed["start"], 6), "end": round(offset + bed["end"], 6)} for bed in timings["ambience"]
             ]
@@ -627,7 +680,7 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
                 entry["transition"]["direction"] = way
         kinds.append(transitions.xfade_name(transition, portrait))
         clip = scene_overlay_path(project, preview, spec.id)
-        if transitions.moves_pictures(transition) and clip.is_file():  # its moving frames' overlays (§50)
+        if transitions.moves_pictures(transition) and clip.is_file():  # its moving frames' overlays
             clips.append((clip, start_frame))
         start_frame += round(duration * fmt.fps) - (overlaps[i + 1] if i + 1 < len(overlaps) else 0)
         scenes.append(entry)
@@ -638,7 +691,7 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
     if shifted:
         log.warning(
             "overlays timed in the video are off where a scene does not start where it was planned "
-            "(an earlier scene ran longer or shorter than its narration; DESIGN.md §41): %s", "; ".join(shifted)
+            "(an earlier scene ran longer or shorter than its narration): %s", "; ".join(shifted)
         )
     voice = padded_dir / "voice.wav"
     remove_file(voice)
@@ -649,12 +702,12 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
     remove_file(track)
     if events and not no_audio:
         samples = round(offset * ff.AUDIO_RATE)
-        # music stings duck under the narration like the music (DESIGN.md §69.19)
+        # music stings duck under the narration like the music
         ducking = mix.sting_ducking(project, {"scenes": scenes}, samples) if any(e.duck for e in events) else None
         library = sfx.SoundLibrary(project.root)
         stings = musicfit.composed_stings(project, {"scenes": scenes}, events, library)  # played by composed music's instruments
         sfx.write_track(track, events, samples, library, project.config.sfx.gain, ducking, stings)
-    if designs_ambience(project.config.scenes):   # the scenes' and beats' ambience beds (DESIGN.md §112), at video times
+    if designs_ambience(project.config.scenes):   # the scenes' and beats' ambience beds, at video times
         _add_designed_ambience(project, scenes, offset)
     combined: dict[str, Any] = {
         "title": project.config.title,
@@ -726,7 +779,7 @@ def _scene_renders(project: Project, preview: bool) -> list[tuple[Path, dict[str
 
 
 def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, Any], float]]) -> list[int]:
-    """Frames each scene overlaps the one before (crossfades, pushes, wipes; DESIGN.md §49), from
+    """Frames each scene overlaps the one before (crossfades, pushes, wipes), from
     the renders; warns where one had to be shortened (a reused render ends with less silence
     than the plan gave it)."""
     config = project.config
@@ -741,7 +794,7 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
         if overlaps[i] < wanted:
             log.warning(
                 "the %s into '%s' is %.2f s instead of %.2f s: '%s' ends with only that much silence "
-                "(render it again so it is held for the transition; DESIGN.md §49)",
+                "(render it again so it is held for the transition)",
                 t.type, spec.id, overlaps[i] / fps, wanted / fps, config.scenes[i - 1].id,
             )
     return overlaps
@@ -756,10 +809,10 @@ def video_cues(project: Project, timings: dict[str, Any]) -> list[Cue]:
 
 def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any], warn: bool = True) -> Path | None:
     """Write the description file ``<output>_chapters.txt``: the YouTube chapter list from the
-    combined timings' ``chapters`` (DESIGN.md §52; why YouTube would ignore it is logged unless
+    combined timings' ``chapters`` (why YouTube would ignore it is logged unless
     not ``warn``: an audio-only render's list is for a podcast's show notes) and,
-    after it, the numbered references and figure credits of the scenes (§95.14) and, when the
-    film shows generated takes, "Includes AI-generated footage (models)." (§113.4); returns its
+    after it, the numbered references and figure credits of the scenes and, when the
+    film shows generated takes, "Includes AI-generated footage (models)."; returns its
     path, or ``None`` (and removes an old file) when there is none of these (no chapters or
     ``chapters.youtube`` false, no references or ``citations.description`` false, no takes)."""
     path = project.chapters_path(preview)
@@ -769,7 +822,7 @@ def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any],
     cited = description_text(project.config.scenes) if project.config.citations.description else ""
     from vidgen.videogen.compose import credit_line
 
-    footage = credit_line(project)   # generated takes in the film (§113.4)
+    footage = credit_line(project)   # generated takes in the film
     if footage:
         cited = f"{cited}\n\n{footage}" if cited else footage
     if not chapters and not cited:
@@ -835,7 +888,7 @@ def write_frames_index(project: Project, preview: bool, timings: dict[str, Any],
 def _warn_room(project: Project, preview: bool, to_render: list[str], jobs: int) -> None:
     """Warn when the disk has less room than the frames clips of ``to_render`` are expected to
     take (all of them kept, or with ``render.keep_intermediates: false`` the ``jobs`` largest at
-    a time; DESIGN.md §120.9)."""
+    a time)."""
     settings = project.config.render
     keep = settings.keep_intermediates
     needed = expected_bytes(project, preview, to_render, None if keep else jobs)
@@ -891,7 +944,7 @@ def render_project(
     """Render ``project`` (already loaded with its variant) and write the final MP4 + SRT.
 
     Scenes whose render is current (:func:`current_render`: same format and audio mode, nothing
-    it depends on changed — the render fingerprint, DESIGN.md §63) are reused; ``force`` renders
+    it depends on changed — the render fingerprint) are reused; ``force`` renders
     every scene (and draws a ``web`` scene's frames again). ``scenes``: render these ids and reuse existing renders of the others, current
     or not (scenes without a usable render, e.g. never rendered or rendered at another format,
     are rendered too).
@@ -900,7 +953,7 @@ def render_project(
     ``frames``: also save that many PNG stills per beat of every scene (1: the end of each beat)
     under ``build/.../frames/``; reused scenes without such stills are rendered again. 0: none.
     ``guide_passes``: also draw these guide passes (``depth``, ``outline``, ``mask``) of every
-    ``3d`` scene, beside its 3D clip (DESIGN.md §114.14); reused ``3d`` scenes without them are
+    ``3d`` scene, beside its 3D clip; reused ``3d`` scenes without them are
     rendered again (their 3D clip is reused).
     ``max_scenes``: render at most that many of the scenes to render (config order); when more
     are left, the video is not joined and a :class:`VidgenError` names them (details
@@ -945,14 +998,14 @@ def render_project(
             to_render, later = to_render[:max_scenes], to_render[max_scenes:]
         frames_index = project.render_dir(preview) / "frames" / "index.json"
         remove_file(frames_index)  # rewritten below when stills are requested; never stale
-        if force:  # a web scene's frames are drawn again too (its clip is otherwise reused, §118.10)
+        if force:  # a web scene's frames are drawn again too (its clip is otherwise reused)
             from vidgen.web.clip import forget_web_clips
             from vidgen.web.entry import is_web_type
 
             forget_web_clips(project.render_dir(preview) / "web", [sid for sid in to_render if is_web_type(project.scene(sid).type)])
         from vidgen.web.music import prepare_music_data
 
-        prepare_music_data(project, preview, to_render)   # once, before the workers (DESIGN.md §120.8)
+        prepare_music_data(project, preview, to_render)   # once, before the workers
         _warn_room(project, preview, to_render, jobs)
         runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames, guide_passes)
         if runs.failed:
@@ -971,7 +1024,7 @@ def render_project(
             )
         print("joining scenes", flush=True)
         output, timings = join_scenes(project, preview, no_audio, ffmpeg)
-        if not project.config.render.keep_intermediates:   # every scene's render is current now (§120.9)
+        if not project.config.render.keep_intermediates:   # every scene's render is current now
             runs.removed += remove_frames_clips(project, preview, known)
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)

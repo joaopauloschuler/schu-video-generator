@@ -1,4 +1,4 @@
-"""The story effects of a ``stage`` (DESIGN.md §100.6-§100.12): what a cartoon in a lab, a rift
+"""The story effects of a ``stage``: what a cartoon in a lab, a rift
 and a flashback needs, written against ``vidgen.api`` only; :class:`StoryStaging` is a part of
 :class:`~vidgen.scenes.stage.Stage`.
 
@@ -18,7 +18,7 @@ from vidgen.api import *
 
 
 class FlashbackSetting(SceneParams):
-    """A stage's ``flashback:`` as a mapping (DESIGN.md §100.12)."""
+    """A stage's ``flashback:`` as a mapping."""
 
     tint: ThemeColor = FLASHBACK_TINT
     """The warm colour the set is graded towards (a theme token or #hex)."""
@@ -43,12 +43,12 @@ DEMATERIALISE_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
 #: Shutters: the slam as they hit the sill (closing), the rattle of them rolling up (opening).
 SHUTTER_SLAM: tuple[str, dict[str, float]] = ("slam", {"gain": -1.0})
 SHUTTER_ROLL: tuple[str, dict[str, float]] = ("swoosh", {"gain": -9.0, "duration": 1.3, "pitch": -8.0})
-#: A kiss: a soft, high chime as the faces meet (sound, params; DESIGN.md §102.15).
+#: A kiss: a soft, high chime as the faces meet (sound, params).
 KISS_CHIME: tuple[str, dict[str, float]] = ("chime", {"gain": -13.0, "pitch": 9.0, "duration": 1.6})
 
 
 class _Flicker:
-    """A hologram's flicker (DESIGN.md §100.9): its opacity factor ``flicker`` on every frame,
+    """A hologram's flicker: its opacity factor ``flicker`` on every frame,
     except while it walks in or out through a door (that fade is its own)."""
 
     def __init__(self, figure: Any, seed: int) -> None:
@@ -64,7 +64,7 @@ class _Flicker:
 class StoryStaging:
     """The story effects of a stage (see the module docstring)."""
 
-    # ----- the characters (DESIGN.md §100.9, §100.10) -----------------------------------------------
+    # ----- the characters -----------------------------------------------
 
     def _start_story(self) -> None:
         """After the characters are made and lit: each one's flicker, iridescence and afterimages,
@@ -84,7 +84,7 @@ class StoryStaging:
             entry = entries.get(name)
             if entry is None or not fancy:
                 continue
-            hologram = entry.hologram_look() or entry.echo_look()   # an echo flickers like a hologram (§102.6)
+            hologram = entry.hologram_look() or entry.echo_look()   # an echo flickers like a hologram
             if hologram is not None and hologram.flicker:
                 self.figure_fx.append(_Flicker(figure, motion_seed(self.spec.id, name, "flicker")))
             iridescent = entry.iridescent_look()
@@ -94,7 +94,7 @@ class StoryStaging:
             if after is not None:
                 self.figure_fx.append(Afterimages(figure, place=lambda ghost, f=figure: self._place_ghost(ghost, f), remove=self._drop_ghost,
                                                   spacing=after.spacing, life=after.life, opacity=after.opacity))
-        for name, figure in self.cast.items():   # a glowing pendant shines at night and pulses (§102.14)
+        for name, figure in self.cast.items():   # a glowing pendant shines at night and pulses
             glowing = [(m, getattr(m, PENDANT_GLOW)) for m in figure.get_family() if getattr(m, PENDANT_GLOW, None)]
             if glowing:
                 for member, _ in glowing:
@@ -107,7 +107,7 @@ class StoryStaging:
             if isinstance(thing, (IsoBlinkers, IsoScreens, IsoTraffic, IsoHaze)):
                 unmark_lit(thing)   # a lab's lights, a city's screens and pods shine at night too
             elif isinstance(thing, IsoGadgets):
-                for piece in thing.glowing:   # a quantum core's glow (§103)
+                for piece in thing.glowing:   # a quantum core's glow
                     unmark_lit(piece)
         if getattr(self, "story_things", []):
             self._watch_living()
@@ -117,7 +117,7 @@ class StoryStaging:
             self.add_updater(self._story_updater)
 
     def _fill_lights(self) -> None:
-        """Each character's fill light (DESIGN.md §100.15): the stage's ``fill_light``, or an
+        """Each character's fill light: the stage's ``fill_light``, or an
         iridescent character's own ``glow`` when that is more; holograms are not graded at all."""
         entries = {entry.name: entry for entry in self.project.config.characters}
         color = self.params.fill_color
@@ -181,7 +181,7 @@ class StoryStaging:
                 drawn.remove(ghost)
 
     def hold_hands(self, a: str, b: str) -> None:
-        """``a`` and ``b`` hold hands from now on (DESIGN.md §100.10)."""
+        """``a`` and ``b`` hold hands from now on."""
         key = (a, b) if a < b else (b, a)
         if key in self.hand_holds:
             return
@@ -193,7 +193,7 @@ class StoryStaging:
             self.add_updater(self._story_updater)
 
     def kiss(self, a: str, b: str, *, seconds: float, hearts: bool, color: str) -> list[Animation]:
-        """``a`` and ``b`` kiss over ``seconds`` from now (DESIGN.md §102.15): both turn to each
+        """``a`` and ``b`` kiss over ``seconds`` from now: both turn to each
         other, lean in until their faces touch, close their eyes and lean back at the end; a small
         burst of hearts and sparkles rises as their faces meet (``hearts``), with a soft chime
         (foley)."""
@@ -222,7 +222,7 @@ class StoryStaging:
         return freed
 
     def shot_clear(self, keep: list[str] | None) -> None:
-        """A shot with ``clear`` (DESIGN.md §100.6): hide every character but ``keep``; ``None``:
+        """A shot with ``clear``: hide every character but ``keep``; ``None``:
         show the ones hidden again."""
         for name in self._shot_hidden:
             figure_alpha(self.cast[name]).set("shot", 1.0).apply()
@@ -236,7 +236,7 @@ class StoryStaging:
                 figure.hidden_by_shot = True   # the layout dump: lint leaves it out
                 self._shot_hidden.append(name)
 
-    # ----- the set (DESIGN.md §100.7, §100.12) -----------------------------------------------------
+    # ----- the set -----------------------------------------------------
 
     def alarm(self, on: bool, time: float, color: str, period: float) -> None:
         """The alarm starts (or stops) at scene ``time``: the light pulses in ``color`` every

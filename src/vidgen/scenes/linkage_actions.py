@@ -1,4 +1,4 @@
-"""The beat actions of ``linkage_map`` scenes (DESIGN.md §96.9): ``cross_over`` (non-sister
+"""The beat actions of ``linkage_map`` scenes: ``cross_over`` (non-sister
 chromatids join at a chiasma in an interval and swap the segments beyond it, giving recombinant
 chromatids) and ``measure`` (a distance on the map with the RF its map function gives). Timed like
 any action (``at: "@word"``); the built-in ``reveal`` plays the steps of a worked test cross.

@@ -1,4 +1,4 @@
-"""Placing the cytoskeleton, a bacterium's appendages and motor proteins (DESIGN.md §95.9):
+"""Placing the cytoskeleton, a bacterium's appendages and motor proteins:
 microtubules radiating from the centrosome (minus ends there, plus ends out at the periphery) or,
 in plant cells, cortical arrays under the plasma membrane; the actin cortex, stress fibers and
 single actin filaments; intermediate filaments from the nucleus to the cell's edge; flagella and

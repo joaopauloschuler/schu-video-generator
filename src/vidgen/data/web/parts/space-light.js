@@ -1,5 +1,5 @@
-// The ready-made stars and lights of vidgen/space-light (DESIGN.md §122.8) for the registry
-// vidgen/parts (§122.5): what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas
+// The ready-made stars and lights of vidgen/space-light for the registry
+// vidgen/parts: what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas
 // (a star, a body and the sky each apply the tone curve themselves); a small tile bakes small maps.
 import {definePart} from "vidgen/parts";
 import {planet} from "vidgen/space-bodies";

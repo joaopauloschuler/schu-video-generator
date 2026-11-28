@@ -1,4 +1,4 @@
-"""Markdown outlines and plain-text scripts as a list of blocks, for ``vidgen plan`` (DESIGN.md §61).
+"""Markdown outlines and plain-text scripts as a list of blocks, for ``vidgen plan``.
 
 A deliberately small Markdown reader (no dependency): ATX and setext headings, paragraphs,
 bullet and numbered lists (nested items become an item's ``children``), pipe tables, fenced code

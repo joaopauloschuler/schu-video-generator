@@ -1,4 +1,4 @@
-"""Music agents can write (Phase S, DESIGN.md §93): score files in YAML — key, tempo, sections,
+"""Music agents can write (Phase S): score files in YAML — key, tempo, sections,
 chords, tracks of step patterns with effects — rendered with schu-video-generator's own synthesizer.
 
 Self-contained: it uses only :mod:`vidgen.music`'s building blocks, :mod:`vidgen.sfx`,

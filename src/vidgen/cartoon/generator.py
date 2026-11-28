@@ -1,10 +1,10 @@
-"""The parametric character generator (DESIGN.md §69.1, §69.47): ``look:`` parameters -> character parts.
+"""The parametric character generator: ``look:`` parameters -> character parts.
 
 Every figure is built from primitives (circles, ellipses, rounded rectangles, polygons and lines)
 in character units (origin between the feet, ``y`` up), then scaled so its top is at 1. The
 proportions come from :func:`resolve_proportions` (numbers only): the look's values, its
 ``proportions`` (adult or kid), varied a little by ``seed``. Facing right, the face sits a little
-to the right and the nose points right. The front view (``front=True``, DESIGN.md §69.44) draws
+to the right and the nose points right. The front view (``front=True``) draws
 the same parts and shapes with the face in the middle of the head, the pupils looking ahead, a
 symmetric nose, hair and body, and temples on both sides of glasses. What is worn on the body
 (the outfit, its pattern, shoes, scarf, bag, backpack, necklace) is drawn by
@@ -50,7 +50,7 @@ from vidgen.errors import VidgenError
 COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory", "trim")
 #: The whites of the ``oval`` and ``round`` eyes.
 EYE_WHITE = "#FFFFFF"
-#: The ``bright`` eye (DESIGN.md §108): width and height (× the eye radius), the rim (× the outline
+#: The ``bright`` eye: width and height (× the eye radius), the rim (× the outline
 #: width), the pupil's width (× the eye's) and its catchlight's radius (× the pupil's width).
 BRIGHT_EYE: tuple[float, float, float, float, float] = (0.36, 0.46, 0.3, 0.42, 0.2)
 #: (width, height) of each body shape, in character units before the figure is scaled to height 1.
@@ -62,7 +62,7 @@ BODY_SIZES: dict[str, tuple[float, float]] = {
 SEED_VARIATION = 0.08
 #: ``proportions`` other than ``adult``: factors on the adult proportions. A small kid has a big
 #: head and eyes on a short body and legs; a tall kid is lankier, with a smaller head than a
-#: small kid's (DESIGN.md §69.47).
+#: small kid's.
 PROPORTION_FACTORS: dict[str, dict[str, float]] = {
     "kid": {"head_radius": 1.3, "eye_gap": 1.3, "eye_size": 1.12, "body_width": 0.85, "body_height": 0.72, "leg_length": 0.72, "arm_length": 0.78},
     "tall_kid": {"head_radius": 1.12, "eye_gap": 1.12, "eye_size": 1.05, "body_width": 0.8, "body_height": 0.85, "leg_length": 0.95, "arm_length": 0.9},
@@ -197,7 +197,7 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
         _, _, thigh_color, shin_color = robots.limb_colors(look, c, limb_colors(look, c))
     for name, side in (("leg_left", 1.0), ("leg_right", -1.0)):
         parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, thigh_color, c, w))}, (side * x, hip)))
-        if robot:   # a knee bolt, and a block foot or a wheel (§69.58)
+        if robot:   # a knee bolt, and a block foot or a wheel
             if look.robot_look().moves_on == "wheels":
                 shin = VGroup(_segment(side * x, knee, robots.WHEEL_RADIUS, shin_color, c, w), *robots.wheel(side * x, f.front, c, w))
             else:
@@ -213,11 +213,11 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     return parts
 
 
-#: How a generated figure's arms hang (DESIGN.md §110): ``classic`` (on the body's edges; the far
+#: How a generated figure's arms hang: ``classic`` (on the body's edges; the far
 #: arm of the side view behind the body, a sliver of it showing) or ``front`` (both read as arms
 #: at the sides: hanging just clear of the body, the side view's far arm drawn over the body).
 ARM_STYLES: tuple[str, ...] = ("classic", "front")
-#: How the arms hang unless a look or the video says (DESIGN.md §110.1, Step 282: ``front``
+#: How the arms hang unless a look or the video says (Step 282: ``front``
 #: everywhere; ``classic`` is the opt-out).
 DEFAULT_ARMS = "front"
 #: ``front`` arms: the gap between a hanging forearm and hand and the body (character units),
@@ -277,11 +277,11 @@ def _arm(
     top, wrist = shoulder_y + 0.02 - LIMB_WIDTH / 2, shoulder_y + 0.02 - p.arm_length
     elbow = (top + wrist) / 2
     upper_color, lower_color, _, _ = limb_colors(look, c)
-    if look.species in animals.WINGED:   # a wing, whatever the sleeves (§69.48)
+    if look.species in animals.WINGED:   # a wing, whatever the sleeves
         upper, lower = animals.wing(x, top, elbow, wrist, c, w)
-    elif look.species == "penguin":   # a flipper, whatever the sleeves (§69.57)
+    elif look.species == "penguin":   # a flipper, whatever the sleeves
         upper, lower = animals.flipper(x, top, elbow, wrist, c, w)
-    elif robots.is_robot(look):   # bolted joints and a gripper (§69.58)
+    elif robots.is_robot(look):   # bolted joints and a gripper
         upper_color, lower_color, _, _ = robots.limb_colors(look, c, limb_colors(look, c))
         upper = VGroup(_segment(x, top, elbow, upper_color, c, w), robots.joint(x, shoulder_y, c, w))
         lower = VGroup(_segment(x, elbow, wrist, lower_color, c, w), robots.hand(x, wrist, c, w), robots.joint(x, elbow, c, w))
@@ -331,7 +331,7 @@ def _hair_cap(look: CharacterLook, f: Frame) -> VMobject:
     """The hair over the top of the head: an arc (zigzag for ``spiky``) and a fringe above the eyes."""
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     radii = [1.35 * r if k % 2 else 1.0 * r for k in range(19)] if look.hair == "spiky" else [1.06 * r] * 25
-    if look.hair == "pompadour":   # a quiff swept up over the brow (§107): highest over the front (from the front: the middle)
+    if look.hair == "pompadour":   # a quiff swept up over the brow: highest over the front (from the front: the middle)
         peak = 90.0 if f.front else 62.0
         radii = [r * (1.06 + 0.36 * math.exp(-(((-10 + 200 * k / 24) - peak) / 32) ** 2)) for k in range(25)]
     outer = arc_points(cx, cy, radii, -10, 190)
@@ -350,7 +350,7 @@ def _braid(x: float, top: float, r: float) -> VGroup:
     return VGroup(*lobes, tie)
 
 
-#: Wavy hair (DESIGN.md §102.17): how far below the head's middle its locks fall (× the head
+#: Wavy hair: how far below the head's middle its locks fall (× the head
 #: radius) and how many waves run down each side.
 WAVY_LENGTH, WAVY_WAVES = 1.95, 2.5
 
@@ -404,7 +404,7 @@ def _hair_back(look: CharacterLook, f: Frame) -> list[VMobject]:
         return [trailing(hair, (cx, cy + 0.4 * r), "long")]
     if look.hair == "wavy":
         return [trailing(polygon(_wavy_outline(f)), (cx, cy + 0.4 * r), "long")]
-    if look.hair == "bob":   # chin length, its ends flipped out (§107)
+    if look.hair == "bob":   # chin length, its ends flipped out
         top = arc_points(cx, cy, [1.12 * r] * 25, 0, 180)
         ends = ([(-1.14, -0.5), (-1.32, -0.8), (-0.9, -0.78), (0.9, -0.78), (1.32, -0.8), (1.14, -0.5)] if f.front
                 else [(-1.14, -0.5), (-1.32, -0.82), (-0.85, -0.8), (0.55, -0.6), (1.06, -0.15)])
@@ -494,8 +494,8 @@ def _facial_hair(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) 
 
 def _head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> VGroup:
     """Back hair, ears, the head, the hair cap, facial hair and the nose (all move with the head);
-    an animal's ears, head and face (muzzle, snout or beak, nose, whiskers) instead (§69.48)."""
-    if robots.is_robot(look):   # its own neck, head and face plate or screen; no hair (§69.58)
+    an animal's ears, head and face (muzzle, snout or beak, nose, whiskers) instead."""
+    if robots.is_robot(look):   # its own neck, head and face plate or screen; no hair
         return VGroup(*robots.head(look, f, c, w))
     group = VGroup(*(outlined(m, c["hair"], c["outline"], w) for m in _hair_back(look, f)))
     if animals.is_animal(look):
@@ -534,7 +534,7 @@ def _open_eye(look: CharacterLook, x: float, f: Frame, c: Mapping[str, str], w: 
         half = polygon([(px, y + (py - y) * 2 * height / width) for px, py in lower])
         lid = Line([x - width * 0.65, y + 0.01, 0], [x + width * 0.65, y + 0.01, 0]).set_stroke(c["features"], width=w)
         return VGroup(filled(half, c["features"]), lid)
-    if look.eyes == "bright":   # a clear white, a fine rim, a small pupil with a catchlight (DESIGN.md §108)
+    if look.eyes == "bright":   # a clear white, a fine rim, a small pupil with a catchlight
         _, _, rim, pupil_share, spark = BRIGHT_EYE
         size = pupil_share * width
         pupil = Circle(radius=size / 2).move_to([x + look_x * 0.6, y - 0.06 * height, 0])
@@ -549,11 +549,11 @@ def _open_eye(look: CharacterLook, x: float, f: Frame, c: Mapping[str, str], w: 
 def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
     """Eyes (``open`` / ``closed`` and the Step 125 shapes), brows (``default`` / ``angry`` /
     ``sad``), mouth (``smile`` / ``open``, the viseme shapes ``A E O U M F L W`` and the Step 125
-    shapes) and the ``cheeks`` (§69.59)."""
+    shapes) and the ``cheeks``."""
     r, fx = f.p.head_radius, f.face_x
     width, height = _eye_size(look, f)
     xs = _eye_xs(f)
-    if robots.has_screen(look):   # glowing on the screen (§69.58)
+    if robots.has_screen(look):   # glowing on the screen
         open_eyes = VGroup(*(robots.screen_eye(look.eyes, x, f.eye_y, width, height) for x in xs))
     else:
         open_eyes = VGroup(*(_open_eye(look, x, f, c, w) for x in xs))
@@ -570,7 +570,7 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
             for x, (left, right) in zip(xs, ends)
         ))
 
-    # the mouth: on the face, or (an animal, §69.48) on its muzzle, under its snout, smaller
+    # the mouth: on the face, or (an animal) on its muzzle, under its snout, smaller
     mx, my, size = animals.mouth_place(look, f)
     mr = r * size   # the head radius the mouth is drawn for
     mouth_r = 0.3 * mr * f.p.mouth_width
@@ -582,7 +582,7 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
         return filled(Ellipse(width=width * mouth_r, height=height * mr).move_to([mx, mouth_y, 0]), c["features"])
 
     closed = Line([mx - 0.75 * mouth_r, mouth_y + 0.03 * mr, 0], [mx + 0.75 * mouth_r, mouth_y + 0.03 * mr, 0]).set_stroke(c["features"], width=w)
-    # viseme shapes (DESIGN.md §69.4): A open, E wide, O round, U small round, M closed lips,
+    # viseme shapes: A open, E wide, O round, U small round, M closed lips,
     # F a thin line (lip under the teeth), L open, W puckered
     speech = {
         "A": opening(1.6, 0.42), "E": opening(1.8, 0.18), "O": opening(0.95, 0.36), "U": opening(0.6, 0.24),
@@ -623,7 +623,7 @@ def _cap(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
 
 
 def _fedora(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
-    """A fedora (DESIGN.md §107): a crown pinched in the middle, a band in the trim colour and a
+    """A fedora: a crown pinched in the middle, a band in the trim colour and a
     brim snapped down at the front (from the front: level, the dent in the middle)."""
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     y = cy + 0.6 * r
@@ -643,7 +643,7 @@ def _fedora(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
 
 
 def _pillbox(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
-    """A pillbox hat (DESIGN.md §107): a small round box worn towards the back of the head, its
+    """A pillbox hat: a small round box worn towards the back of the head, its
     top rim lighter, a band in the trim colour."""
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     x = cx if f.front else cx - 0.18 * r
@@ -694,7 +694,7 @@ def _worn_on_head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float)
         group.add(*_pillbox(f, c, w))
     if "bow" in look.accessories:
         group.add(*_bow(f, c, w))
-    for piece, drawing in costumes.HEADWEAR_DRAWINGS.items():   # a crown, a wizard hat, a party hat (§69.58)
+    for piece, drawing in costumes.HEADWEAR_DRAWINGS.items():   # a crown, a wizard hat, a party hat
         if piece in look.accessories:
             group.add(*drawing(f, c, w))
     return group
@@ -708,8 +708,8 @@ def generate_parts(
     ``colors`` maps every key of :data:`COLOR_KEYS` to a Manim colour (``trim`` may be left out
     for an outfit that does not use it); ``outline_width`` is the stroke width of outlines and
     feature lines (the :class:`Character` scales it with its height); ``front``: its front view,
-    the same parts and shapes seen from the front (DESIGN.md §69.44); ``arms``: how the arms
-    hang (:data:`ARM_STYLES`, DESIGN.md §110). The same look always gives the same shapes."""
+    the same parts and shapes seen from the front; ``arms``: how the arms
+    hang (:data:`ARM_STYLES`). The same look always gives the same shapes."""
     f = animals.species_frame(look, Frame.of(resolve_proportions(look), front))
     w = outline_width
     body = body_shapes(look, f, _body_shape(look, f), colors, w)
@@ -719,7 +719,7 @@ def generate_parts(
             shape.add_to_back(drawn(f, colors, w))
     over_body = [*(robots.chest_panel(f, colors, w) if robots.is_robot(look) else []),
                  *(costumes.cape_clasp(f, colors, w) if "cape" in look.accessories else [])]
-    if over_body:   # a robot's chest panel, a cape's ties and clasp (§69.58)
+    if over_body:   # a robot's chest panel, a cape's ties and clasp
         for k, shape in enumerate(body.values()):
             shape.add(*(m if k == 0 else m.copy() for m in over_body))
     head = _head(look, f, colors, w)
@@ -742,7 +742,7 @@ def generate_parts(
     return _scaled_to_unit_height(parts)
 
 
-#: The Step 125 parts and shapes (DESIGN.md §69.59), which never set the figure's height (hair
+#: The Step 125 parts and shapes, which never set the figure's height (hair
 #: standing up reaches above it), so every look keeps the size it had before.
 EXPRESSION_ONLY: dict[str, frozenset[str]] = {
     "eyes": frozenset(expression_shapes.EYE_SHAPES), "mouth": frozenset(expression_shapes.MOUTH_SHAPES),

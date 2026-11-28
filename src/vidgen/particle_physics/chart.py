@@ -1,4 +1,4 @@
-"""The Standard Model chart as data (Phase Y, Step 237; DESIGN §99.4): which particle sits in
+"""The Standard Model chart as data (Phase Y, Step 237): which particle sits in
 which cell in the wide (16:9) and tall (9:16) arrangements, the groups, the text of each cell
 for particles and antiparticles, and which bosons couple to which particles. No manim; the
 ``standard_model`` scene draws it.

@@ -1,7 +1,7 @@
-"""The author guide for AI agents (AGENTS.md / ``vidgen guide``, DESIGN.md §59): its topics
-resolve, the command prints them, and everything it names exists: commands and their options,
-scene types and their params, actions, presets, lint rules, sounds; every YAML snippet is a
-valid project once wrapped into a config."""
+"""The author guide for AI agents (``vidgen guide``): the short entry page (AGENTS.md) and one
+packaged file per topic. The topics resolve, the command prints them, and everything the guide
+names exists: commands and their options, scene types and their params, actions, presets, lint
+rules, sounds; every YAML snippet is a valid project once wrapped into a config."""
 
 from __future__ import annotations
 
@@ -18,14 +18,18 @@ from vidgen import cli, config, extensions, registry
 from vidgen.composer import MOODS
 from vidgen.errors import VidgenError
 from vidgen.gallery import sample_asset
-from vidgen.guide import GUIDE_FILE, find_topic, guide_text, guide_topics
+from vidgen.guide import GUIDE_FILE, TOPIC_NAMES, all_topics_text, entry_page_text, find_topic, guide_topics, topic_file
 from vidgen.music import BUILTIN_BEDS as BEDS
 from vidgen.presets import BUILTIN_PRESETS
 from vidgen.project import Project
 from vidgen.sfx import BUILTIN_SOUNDS
 
 ROOT = Path(__file__).resolve().parents[1]
-GUIDE = GUIDE_FILE.read_text(encoding="utf-8")
+GUIDE = GUIDE_FILE.read_text(encoding="utf-8")   # the short entry page
+#: Every packaged guide file and its text: the entry page, then each topic's file.
+GUIDE_FILES = {path.name: path.read_text(encoding="utf-8") for path in (GUIDE_FILE, *map(topic_file, TOPIC_NAMES))}
+#: The entry page must stay short: agents read it whole.
+ENTRY_PAGE_LIMIT = 16_000
 FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
 def asset_file(rel: str) -> Path:
     """The file copied into a snippet's project for a path it names: the scene gallery's
@@ -63,8 +67,29 @@ def test_root_agents_md_is_the_packaged_guide() -> None:
 
 
 def test_the_guide_is_package_data() -> None:
+    """The glob ``data/guide/*`` ships the entry page and every topic file: the folder is flat,
+    and no Markdown file in it is left out of the topic list."""
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert '"data/guide/*"' in pyproject
+    package = ROOT / "src" / "vidgen"
+    shipped = {p.relative_to(package).as_posix() for p in package.glob("data/guide/*") if p.is_file()}
+    assert shipped == {f"data/guide/{name}" for name in GUIDE_FILES}
+
+
+def test_the_entry_page_is_short_and_lists_every_topic() -> None:
+    assert len(GUIDE.encode("utf-8")) < ENTRY_PAGE_LIMIT
+    assert "<!-- topic:" not in GUIDE   # the entry page is no topic
+    assert "Never read all the topics" in GUIDE[:1500]
+    for name in TOPIC_NAMES:
+        assert f"- `{name}`: " in GUIDE, name   # the list "every topic, and when to print it"
+
+
+def test_every_topic_file_starts_with_its_marker_and_resolves() -> None:
+    for name in TOPIC_NAMES:
+        text = topic_file(name).read_text(encoding="utf-8")
+        assert text.startswith(f"<!-- topic: {name}") and text.count("<!-- topic:") == 1, name
+        topic = find_topic(name)
+        assert topic.path == topic_file(name) and topic.text.strip() and topic.text in text, name
 
 
 def test_both_agent_files_say_who_they_are_for() -> None:
@@ -87,9 +112,8 @@ def test_topics_are_unique_and_resolve_by_name_and_alias() -> None:
             assert find_topic(alias) == topic
     required = {"workflow", "pacing", "social", "scenes", "design", "actions", "overlays", "audio", "examples", "outputs", "troubleshooting"}
     assert required <= {t.name for t in topics}
-    intro = GUIDE[: GUIDE.find("<!-- topic:")]
-    for topic in topics:   # the list of topics at the top names every one
-        assert f"`{topic.name}`" in intro, topic.name
+    for topic in topics:   # the entry page names every one
+        assert f"`{topic.name}`" in GUIDE, topic.name
 
 
 def test_the_biology_topic_covers_the_cell_types() -> None:
@@ -309,16 +333,18 @@ def test_unknown_topic_suggests() -> None:
         find_topic("scene")
 
 
-def test_guide_text_has_no_markers_and_every_section() -> None:
-    text = guide_text()
+def test_all_topics_text_has_no_markers_and_every_topic() -> None:
+    text = all_topics_text()
     assert "<!--" not in text and "\n\n\n" not in text
     for topic in guide_topics():
         assert topic.text.strip() in text
+    assert GUIDE.strip() not in text   # the entry page is not a topic
 
 
-def test_cli_prints_the_guide_a_topic_and_the_list(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_prints_the_entry_page_a_topic_and_the_list(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["guide"]) == 0
-    assert capsys.readouterr().out == guide_text()
+    out = capsys.readouterr().out
+    assert out == entry_page_text() and "## Choosing the scene type" not in out   # the short page only
     assert cli.main(["guide", "vertical"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("## Vertical and social videos") and "## Choosing the scene type" not in out
@@ -340,7 +366,10 @@ def test_cli_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert doc["ok"] and doc["command"] == "guide" and doc["topic"] == "pacing"
     assert doc["title"] == "Storytelling and pacing" and doc["text"] == find_topic("pacing").text
     assert {"name": "social", "title": "Vertical and social videos", "aliases": list(find_topic("social").aliases)} in doc["topics"]
-    assert Path(doc["path"]) == GUIDE_FILE
+    assert Path(doc["path"]) == topic_file("pacing")
+    assert cli.main(["guide", "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["topic"] is None and doc["text"] == entry_page_text() and Path(doc["path"]) == GUIDE_FILE
     assert cli.main(["guide", "--list", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["topic"] is None and doc["text"] is None and len(doc["topics"]) == len(guide_topics())
@@ -353,11 +382,13 @@ def test_cli_json(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def code_fragments() -> list[str]:
-    """Inline code spans outside fenced blocks, and every line of the fenced blocks."""
+    """Inline code spans outside fenced blocks, and every line of the fenced blocks, of every
+    guide file."""
     fragments = []
-    for _, body in FENCE.findall(GUIDE):
-        fragments.extend(body.splitlines())
-    fragments.extend(re.findall(r"`([^`\n]+)`", FENCE.sub("", GUIDE)))
+    for text in GUIDE_FILES.values():
+        for _, body in FENCE.findall(text):
+            fragments.extend(body.splitlines())
+        fragments.extend(re.findall(r"`([^`\n]+)`", FENCE.sub("", text)))
     return fragments
 
 
@@ -366,6 +397,12 @@ def test_every_command_and_option_named_exists() -> None:
     subparsers = next(a for a in parser._actions if a.dest == "command").choices
     seen = set()
     for fragment in code_fragments():
+        # `vidgen remote [--exclude DIR] NAME ARGS`: remote's own options, then ARGS as a command of their own
+        remote = re.search(r"\bvidgen remote((?: --[a-z-]+ \S+)*) [A-Za-z0-9_<>-]+ (?=[a-z])", fragment)
+        if remote:
+            assert all(f in subparsers["remote"]._option_string_actions for f in re.findall(r"--[a-z-]+", remote[1])), fragment
+            seen.add("remote")
+            fragment = fragment[:remote.start()] + "vidgen " + fragment[remote.end():]
         for match in re.finditer(r"\bvidgen ([a-z][a-z-]*)(.*?)(?=\bvidgen |$)", fragment):
             command, rest = match[1], match[2].split("#")[0]
             assert command in subparsers, f"`vidgen {command}` is not a command ({fragment!r})"
@@ -450,11 +487,13 @@ def test_presets_actions_rules_and_sounds_are_real_and_complete() -> None:
 
 
 def yaml_snippets() -> list[tuple[str, str]]:
+    """Every YAML block of every guide file, named ``FILE:lineN``."""
     snippets = []
-    for match in FENCE.finditer(GUIDE):
-        if match[1] == "yaml":
-            line = GUIDE.count("\n", 0, match.start()) + 1
-            snippets.append((f"line{line}", match[2]))
+    for name, text in GUIDE_FILES.items():
+        for match in FENCE.finditer(text):
+            if match[1] == "yaml":
+                line = text.count("\n", 0, match.start()) + 1
+                snippets.append((f"{name}:line{line}", match[2]))
     return snippets
 
 

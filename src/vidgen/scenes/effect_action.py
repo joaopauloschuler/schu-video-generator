@@ -1,9 +1,9 @@
-"""The ``effect`` beat action (DESIGN.md §69.40): a symbol over a character's head (a sweat drop,
+"""The ``effect`` beat action: a symbol over a character's head (a sweat drop,
 an anger mark, an idea bulb, a question or exclamation mark, sleepy Zs, hearts, dizzy stars, a
 sparkle, a tear). Written against ``vidgen.api`` only, like project actions.
 
 Each symbol is an :class:`EffectSymbol` of its own, never added to the character (a character's
-parts never change, §69.22): it follows the head on every frame (walks, jumps, turns, shots), pops
+parts never change): it follows the head on every frame (walks, jumps, turns, shots), pops
 in with a little bounce, keeps moving (a drip, a pulse, rising Zs...) and shrinks away when the
 effect ends: at the next beat, or at its ``until`` beat. It is not graded by the stage's light (it
 is not marked lit, like speech bubbles) and keeps clear of a speech bubble on screen; a bubble

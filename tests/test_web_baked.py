@@ -1,4 +1,4 @@
-"""The cache of baked maps (Step 380, DESIGN.md §123.2): ``vidgen/baked`` is served by its import
+"""The cache of baked maps (Step 380): ``vidgen/baked`` is served by its import
 name and the space modules bake through it; the key covers every input; the store writes entries
 whole, finds a damaged one and removes it, evicts the least recently used above its limit, is
 cleared and reported by ``vidgen cache``; ``WebPage`` answers the page's requests; in Node (when

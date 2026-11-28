@@ -1,4 +1,4 @@
-"""The hulls of giant ships, ``vidgen/space-hull`` (Step 388, DESIGN.md §123.10): the module is served by
+"""The hulls of giant ships, ``vidgen/space-hull`` (Step 388): the module is served by
 its import name and builds on ``vidgen/space-craft``; its parts are registered (every family, a fleet,
 a hull with a small craft beside it as kind ``craft``; the kit's shapes, surfaces and atlas as
 ``craft-part``); in Node (when it is installed): the atlas is laid without overlap, a bank of bells
@@ -38,7 +38,7 @@ STATIC_IMPORT = re.compile(r"^import\b[^;]*?\bfrom\s*['\"]([^'\"]+)['\"]", re.M 
 FAMILIES = ["spine", "carrier", "cluster", "lance", "wheel", "ark", "twin"]
 CRAFT = {f"hull-{k}" for k in FAMILIES} | {"hull-burn", "hull-scale", "hull-fleet"}
 CRAFT_PARTS = {"hull-part-shapes", "hull-part-drive", "hull-surfaces", "hull-charts"}
-#: The most triangles a hull may have at each detail (DESIGN.md §123.10: the stated budget).
+#: The most triangles a hull may have at each detail (the stated budget).
 BUDGET = {"near": 60_000, "far": 20_000}
 
 

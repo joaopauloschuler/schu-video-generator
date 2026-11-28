@@ -1,4 +1,4 @@
-// The ready-made seas of vidgen/space-sea (DESIGN.md §123.4) for the registry vidgen/parts (§122.5):
+// The ready-made seas of vidgen/space-sea for the registry vidgen/parts:
 // what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas ({finish: false}: the
 // dome and the sea apply the tone curve themselves).
 import {definePart} from "vidgen/parts";

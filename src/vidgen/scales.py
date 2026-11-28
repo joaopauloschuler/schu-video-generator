@@ -1,7 +1,7 @@
 """Type scales: named sets of the six built-in font sizes, selected with ``theme: {scale: NAME}``.
 
 A scale is shorthand for the sizes ``title``, ``subtitle``, ``heading``, ``body``, ``caption``
-and ``small`` (DESIGN.md §20). ``auto`` picks a scale from the frame's orientation: ``large``
+and ``small``. ``auto`` picks a scale from the frame's orientation: ``large``
 for portrait (9:16) video, ``standard`` otherwise. This module does not import manim.
 """
 
