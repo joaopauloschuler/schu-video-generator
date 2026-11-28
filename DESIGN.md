@@ -1222,2251 +1222,811 @@ Rules:
   readable size; <remedy>`.
 ## 41. Refinements (Step 38, overlays: framework, `lower_third`, `watermark`)
 
-- **Config.** `VideoConfig.overlays: list[OverlayConfig]` (`config.OverlayConfig`, `extra="allow"`
-  like actions): `type`, `id` (default the type; `<type><n>` (1-based) when several id-less entries
-  share a type), `scenes` (`all` | ids), `exclude`, `from` / `to` (field `from_`, alias `from`:
-  seconds in the video, or a scene id = its start / its end), `reserve`; every other key is an
-  option of the type (`OverlayConfig.options`). `SceneConfig.overlays: bool | {id: bool |
-  mapping}` (default `true`): `false` = none on the scene; per id `false`, or a mapping of option
-  overrides (+ `reserve`; the other common keys are an error); a mapping with `type` under an id
-  that is no video-level id = an overlay of that scene only (no `scenes`/`exclude`/`from`/`to`).
-  Reference: docs/CONFIG.md "Overlays".
-- **Registry.** A third kind next to scene types and actions (`registry.OverlayType`,
-  `register_overlay`, decorator `overlay(name, *, override=False)`, `find_overlay`,
-  `overlay_names`, `all_overlays`, `unknown_overlay_message`; same two layers and collision rules;
-  `Snapshot` is now a triple). `overlays.check_overlay_class`: `Options` an `OverlayOptions`, no
-  option named like a common key, `build` implemented, `layer` an int. Built-ins in
-  `scenes/overlays.py` (only `from vidgen.api import *` + `.image` helpers).
-- **`Overlay`** (one instance per scene render): `options`, `config`, `context`, `id`, `scenes`
-  (ids it is drawn on), `span` (`from`/`to` in video seconds, `inf` without an end). Subclass
-  API: `build()` (full look, placed on the whole frame, once per render), `window()` (video
-  seconds or `None`), `state(t)` (hashable or `None`; **a pure function of video time**, so the
-  look is identical on both sides of a cut), `pose(mobject, state)` (a copy), `settled(state)`
-  (full look, for lint), classmethod `validate_project(options, project, scenes)`, class
-  attributes `layer`, `lint_skip`; helpers `interval()`, `transition(t, start, end, enter, exit)`
-  (smooth 0..1), property `timed` (span bounded or a window; a subclass sets `timed = True` when
-  `state` reads the video time otherwise, e.g. Step 39's progress bar). `with_opacity(mob, f)`
-  (exported) scales fill / stroke / image alpha of a copy.
-- **Timeline contract** (`vidgen/videoplan.py`, `VideoPlan(project, fps)`, lazy and cached): each
-  scene renders alone, so its position in the video is planned: a beat lasts `round((d + pad) x
-  fps)` frames, `d` = the MP3's decoded length (`scene.audio_duration`, cached by path + size +
-  mtime) else the word estimate; a narrated scene = its beats + `ceil(outro x fps)` (the type's
-  class attribute `outro`); a silent one `max(round(duration x fps), round((duration - outro) x
-  fps) + ceil(outro x fps))`. `SceneSlot(index, id, type, start, duration, beats: BeatSlot(id,
-  start, end, text), chapter)`, `Chapter(title, number, scene, start)` from `chapter` scenes
-  (Steps 39/49), `scene_start`, `duration`, `resolve(value, end)`. Built-in scenes match it exactly
-  (tested: every frame count equal, half-frame durations aside). Overrunning scenes / extensions
-  with their own timing shift later scenes: the worker records `render.overlays = {ids, timed,
-  start, duration}` in the scene's timings, and `join_scenes` warns when a scene with timed
-  overlays starts more than 1.5 frames away from its planned start. Only timed overlays make the
-  layer read the plan (reading every MP3 before the scene).
-- **Fingerprint.** With any overlay, `_overlay_inputs`: per scene id, type, duration, chapter
-  title, `overlays`, beats' ids, texts and MP3 stats (what the plan reads), so editing another
-  scene's narration re-renders scenes with overlays; projects without overlays are unaffected
-  (the key is `null`).
-- **Drawing: composited in the renderer, not mobjects of the scene.** `OverlayLayer` wraps
-  `renderer.add_frame` *after* `FrameCapture` attached (outermost), so stills, the layout dump and
-  the motion signal see the composited frames, and nothing in `scene.mobjects` changes: the
-  `MovingCamera` (zoom, focus) and `clear_all`/outro fades never touch overlays; they never change
-  timing or frame counts (tested against renders without them). Frame `k` is drawn at video time
-  `start + k / fps`. A frozen wait (one frame written N times) is split into runs of equal states
-  (a lower third sliding in during a silent card is drawn frame by frame; static overlays cost one
-  call). Why not an updater following `camera.frame`: it would make every wait non-frozen (each
-  frame redrawn), add the overlay to `scene.mobjects` (clear_all, scene walks, targets) and have to
-  undo scaling for a zoom; why not ffmpeg afterwards: stills, layout and lint would not see it.
-- **Patches.** Each distinct tuple of states is drawn once (LRU of 64) with two Manim `Camera`s
-  showing the whole frame over black and over white: Cairo draws premultiplied while Manim
-  composites images with PIL in straight alpha, so a single transparent camera gives wrong
-  colours where they mix; the two opaque renders give exact premultiplied colour (`on_black`) and
-  `255 - alpha` (`on_white - on_black`) for both. The patch is cropped to its visible box;
-  compositing a frame is `colour + under x (255 - alpha) / 255` on that box (uint16) — within 2
-  levels of Cairo drawing directly on the frame (tested).
-- **Layout dump.** `LayoutRecorder` appends the overlays shown at the still (`layer.posed(frame)`),
-  measured with the layer's whole-frame camera (`_Walk.camera`), after every scene object (`order`
-  + 1000), paths `overlay:<id>/...`, key `overlay` (the id); frames gain `overlays: [{id, type,
-  settled, skip}]`. `safe_area` is now `scene.safe_area` (equal unless reserved).
-- **Reserved space.** `reserve: true` → `NarratedScene._reserved` (the built mobject's box) and
-  `safe_area` = the margins' safe area cut by `overlays.avoid(area, box, gap=0.2)` (the largest of
-  the four parts above / below / left / right of the box). Static for the whole scene (a layout
-  is built once), so a lower third with `reserve` shrinks the scene also while it is not shown.
-  The global `regions.safe_area()` is unchanged (built-ins lay out in `self.safe_area`).
-- **Lint.** `overlay_overlap` (layout rule after `max_words`, default warning, `min_overlap` 0.05
-  of the scene object's box): an overlay's union box over a scene text/code/math/number/icon.
-  `safe_area` skips overlay objects; `text_overlap` skips overlay-vs-scene pairs; `covered_text`
-  skips an overlay shape over scene text (all `overlay_overlap`'s). The runner drops objects of
-  overlays not `settled` (sliding / fading at a beat end, like mid-beat stills) and, per rule,
-  objects of overlays whose type's `lint_skip` names it (`watermark`: `contrast`).
-- **Validation** (`overlays.overlay_problems`, in `cli.project_problems` and
-  `pipeline._check_scenes` via `check_overlays`): unknown types (did-you-mean), duplicate ids,
-  unknown scene ids in `scenes`/`exclude`/`from`/`to`, numeric `to <= from`, misplaced keys in scene
-  overrides / scene-only overlays, unknown override ids; options as written (at `overlays[i]`)
-  and with each scene's overrides (new problems at `scenes[j].overlays.<id>`), theme tokens
-  checked; the type's `validate_project`. `scene_overlays(project, spec, theme, plan)` builds the
-  scene's instances (sorted by `layer`), skipping timed ones whose interval misses the scene.
-- **Listing / schema.** `list-scenes` prints an `overlays` section; `--json` adds `overlays:
-  [{name, origin, builtin, overrides_builtin, doc, layer, lint_skip, options}]` (within version
-  1). `vidgen schema`: `OverlayConfig.type` an `enum`, per type `if`/`then` with its options and
-  `additionalProperties: false` (`overlay.NAME` defs); scene overrides only by shape.
-- **`lower_third`**: name (bold, heading role) and optional title / icon on a `surface` plate
-  (0.92) with an accent bar, wrapped at the readable size within `max_width` (0.6 of the safe
-  width; 9:16 the whole width), placed with `place(..., align)` in the safe area (9:16: raised by
-  `PORTRAIT_LIFT` 0.12 of the safe height). Window: its scene's planned start + `at` (seconds or a
-  beat's start) for `duration`, cut at that scene's end unless `across_cuts`. State: the eased
-  progress (3 decimals); pose: opacity x p, shifted `SLIDE` 0.5 x (1 - p) from its side (from
-  below / above when centred).
-- **`watermark`**: one of `image` (`image.load_image`, height `size` x the shorter side, at most
-  0.3 of the frame wide), `icon`, `text`; `opacity` applied at build; placed `inset` (0.025 of the
-  shorter side) from the frame's corner; `fade` at a bounded `from` / `to`. `lint_skip =
-  ("contrast",)`.
-- **For Steps 39–41.** A progress bar: `timed = True`, `state` from `t / context.duration`
-  (quantised to a pixel); a chapter indicator: `context.chapters` / `context.scene.chapter`;
-  captions: `context.scene.beats` (planned scene times and texts; karaoke word times can be spread
-  in a beat's `[start, end]`). Callouts on any scene (Step 41) need scene targets, i.e. scene-level
-  actions rather than overlays.
-- Known limits: the plan cannot see what a scene's code does beyond the contract (warning at
-  join); `reserve` is per scene, not per moment; overlays are drawn at the render's resolution
-  from vector / image mobjects (no video overlays).
+- **Config**: `VideoConfig.overlays: list[OverlayConfig]` (`extra="allow"`): `type`, `id` (default
+  the type; `<type><n>` when several id-less entries share it), `scenes` (`all` | ids), `exclude`,
+  `from` / `to` (field `from_`; seconds or a scene id = its start / end), `reserve` (`bool | None`);
+  other keys = type options. `SceneConfig.overlays: bool | {id: false | overrides}`; a mapping with
+  `type` under an unknown id = a scene-only overlay. Keys: docs/CONFIG.md "Overlays"; custom types:
+  docs/EXTENDING.md §9.
+- **Registry**: a third kind beside scene types and actions (`register_overlay`, decorator
+  `overlay(name, *, override=False)`, `find_overlay`, `overlay_names`, `all_overlays`,
+  `unknown_overlay_message`; `Snapshot` is a triple). `overlays.check_overlay_class`: `Options` an
+  `OverlayOptions` with no common-key names, `build` implemented, `layer` an int. Built-ins in
+  `scenes/overlays.py`, `scenes/progress.py`, `scenes/captions.py`.
+- **`Overlay`** (one per scene render): `options`, `config`, `context`, `id`, `scenes`, `span`
+  (video seconds, `inf` open). API: `build()` (full look, whole frame, once), `window()`,
+  `state(t)` (hashable or `None`, **a pure function of video time**, so both sides of a cut agree),
+  `pose(mobject, state)` (a copy), `settled(state)` (for lint), `shown_in(start, end)` (§42),
+  `default_reserve()` (§43), `yields` (§51), classmethod `validate_project`; class attributes
+  `layer`, `lint_skip`; helpers `interval()`, `transition(...)`, property `timed` (set `timed =
+  True` when `state` reads video time). `with_opacity(mob, f)` is exported.
+- **Timeline contract** (`vidgen/videoplan.py`, `VideoPlan(project, fps)`): each scene renders
+  alone, so its place is planned. A beat lasts `round((d + pad) x fps)` frames (`d` = the MP3's
+  decoded length, cached by path + size + mtime, else the word estimate); a narrated scene = beats +
+  `ceil(outro x fps)` (`outro` = the type's attribute or `outro_seconds(params)`); a silent one
+  `max(round(duration x fps), round(max(duration - outro, 1 / fps) x fps) + ceil(outro x fps))`. `SceneSlot(index, id, type, start, duration, beats:
+  BeatSlot(id, start, end, text), chapter, overlap_in, overlap_out, cut)`, `chapters`, `resolve`.
+  Built-ins match it frame-exactly; `join_scenes` warns when a scene with timed overlays starts
+  > 1.5 frames from its plan (`render.overlays` in the timings). Only timed overlays read the plan.
+- **Fingerprint**: with any overlay, `_overlay_inputs` = `{scenes, voices}`: per scene id, type,
+  duration, `chapter` (+ a card's `number`), `overlays`, `transition`, and per beat id, text, spoken
+  text, voice, MP3 and `.align.json` stats; plus the `voices` / `subtitles` sections. Without
+  overlays the key is `null`.
+- **Drawn in the renderer, not as mobjects**: `OverlayLayer` wraps `renderer.add_frame` outermost
+  (after `FrameCapture`), so stills, layout dump and motion signal see composited frames while
+  `scene.mobjects`, camera moves, `clear_all`, timing and frame counts are untouched. Frame `k` is
+  video time `start + k / fps`; frozen waits split into runs of equal states. Not an updater (would
+  unfreeze waits), not ffmpeg afterwards (stills and lint would miss it).
+- **Patches**: cached per `(overlay, state)` (LRU 64 each), drawn by two cameras over black and
+  white cropped to the posed pixel box (+ strokes + 3 px): Cairo is premultiplied, Manim images are
+  straight alpha, so `on_black` = colour and `on_white - on_black` = `255 - alpha` exactly. Shown
+  patches blend in layer order (uint16), within 2 levels of direct drawing.
+- **Layout dump**: overlays at the still after all scene objects (`order` + 1000), paths
+  `overlay:<id>/...`, key `overlay`; frames have `overlays: [{id, type, settled, skip}]`.
+- **Reserve**: a reserving overlay's built box (`NarratedScene._reserved`) cuts `scene.safe_area`
+  via `overlays.avoid(area, box, gap=0.2)` (largest of the four parts around it), static for the
+  whole scene. Built-ins lay out in `self.safe_area` (incl. `chart_title(..., area=)`, `title`,
+  `end_card`); `regions.safe_area()` is unchanged.
+- **Lint**: `overlay_overlap` (warning, `min_overlap` 0.05): an overlay's box over scene
+  text/code/math/number/icon; `safe_area`, `text_overlap`, `covered_text` skip overlay pairs;
+  unsettled overlays and rules in `lint_skip` are dropped.
+- **Validation** (`overlays.overlay_problems`, in `cli.project_problems` and `pipeline._check_scenes`):
+  unknown types (did-you-mean), duplicate ids, unknown scene ids, numeric `to <= from`, misplaced
+  override keys, unknown override ids, options as written and with each scene's overrides
+  (`scenes[j].overlays.<id>`), theme tokens, `validate_project`. `scene_overlays(project, spec,
+  theme, plan)` builds a scene's instances by `layer`, skipping timed ones missing the scene.
+- **Listing / schema**: `list-scenes --json` `overlays: [{name, origin, builtin, overrides_builtin,
+  doc, layer, lint_skip, options}]`; `vidgen schema`: `type` an enum, per type `if`/`then`
+  (`overlay.NAME` defs, `additionalProperties: false`).
+- **`lower_third`**: name / title / icon on a `surface` plate with an accent bar, `max_width` 0.6 of
+  the safe width (9:16 all), `place(..., align)` (9:16 raised `PORTRAIT_LIFT` 0.12). Window: its
+  scene's start + `at` for `duration`, cut at the scene end unless `across_cuts`; state = eased
+  progress (3 decimals), sliding `SLIDE` 0.5. **`watermark`**: `image` (height `size` x short side,
+  ≤ 0.3 wide) | `icon` | `text`, `inset` 0.025, `fade`; `lint_skip = ("contrast",)`.
+- Limits: `reserve` is per scene, not per moment; no video overlays.
 
 ## 42. Refinements (Step 39, chapters, `progress_bar`, `chapter_indicator`)
 
-- **Chapters** (`vidgen/chapters.py`, config only): a chapter starts at a `chapter` scene
-  (`params.title`, `params.number`) and at any scene with **`SceneConfig.chapter`**: a string
-  (the title) or `ChapterConfig {title, number?}` (`number` int or non-empty text). On a
-  `chapter` scene the field renames the chapter in lists/indicators and keeps the card's number
-  unless it gives one. `chapter_marks(scenes) -> [ChapterMark(title, number: str | None, scene,
-  scene_index, card)]`. `chapter_problems(scenes)` runs in `VideoConfig`'s validator (so `parse_config`,
-  `validate` and every command reject them): the same (title casefolded, number) twice; integer
-  numbers not strictly increasing (text numbers and repeated chapters are skipped); a non-card
-  mark right after a chapter card (the card would be a chapter of its own). Two cards in a row
-  are allowed (two chapters).
-- **Planned chapters** (`VideoPlan.chapters`): `Chapter(title, number, scene, start, end, index,
-  count, card)` (+ `label` = number or index, `duration`); a chapter ends where the next starts,
-  the last at the planned video end. `chapter_of(scene_id)`, `chapter_at(t)`; `SceneSlot.chapter`
-  stays the title (now also from `chapter:` fields). **Public**: `vidgen.api.video_chapters(project,
-  fps=None)` (default the final format's fps) and `Chapter` — what Step 49 (MP4 chapter metadata,
-  YouTube list) reads; Step 49 adds the "Intro" chapter at 0:00 YouTube needs when the first
-  chapter starts later (`video_chapters(..., intro=True)`, published lists only, §52).
-  `OverlayContext.chapters` (all), `.chapter` (the scene's).
-- **Fingerprint**: a scene's own `chapter:` is excluded from its dump (no pixels depend on it
-  without overlays); `_overlay_inputs` carries every scene's `chapter` and a card's `number`.
-- **`Overlay.shown_in(start, end)`** (default `True`, asked of timed overlays for the scene's
-  slot ∩ interval): `False` drops the overlay from that scene's render, so it neither draws nor
-  **reserves** there. This is the cheap part of the Step 38 "reserve is per scene" gap; an
-  overlay shown during part of a scene still reserves for the whole scene (a layout is built
-  once; documented in CONFIG.md `reserve`).
-- **Reserved space respected by chart titles**: built-ins called `chart_title(...)` without
-  `area`, i.e. in the global safe area, so a `reserve`d overlay at the top did not move their
-  header (seen in 9:16 with two-line titles); every built-in now passes `area=self.safe_area`.
-- **Drawing per overlay with cropped cameras** (`OverlayLayer`): patches are cached per
-  `(overlay, state)` (LRU 64 per overlay) instead of per combination of states, and each is drawn
-  by two cameras (black / white) cropped to the posed mobject's pixel box (points' box + strokes
-  + 3 px, clamped to the frame; same pixels-per-unit and an integer pixel offset, so Cairo and
-  image drawing match the whole-frame result — tested within 2 levels). A progress bar changing
-  every few frames costs a strip, not two 1080p captures plus a redraw of every other overlay.
-  Compositing blends the shown patches in layer order (the over operator; equal to drawing them
-  together up to rounding).
-- **`progress_bar`** (`scenes/progress.py`, `timed = True`): track segments (`track_color`
-  `dim` at 0.35) and played segments (`color` `primary`) along the top/bottom edge, `thickness`
-  0.006 of the shorter side (≥ 2 px), `inset` 0 (flush; outside the safe area, so no reserve
-  needed); with `chapters`, gaps of max(2 x thickness, 3 px) at every chapter start inside the
-  video. State: the number of played pixel columns, `round(t / duration x width_px)` — a pure
-  function of video time, quantised to a pixel (one patch per column, ≤ width states per video).
-  The fraction is of the whole planned video even with `from` / `to` / `exclude`.
-- **`chapter_indicator`** (`timed = True`): one `MarkupText` label per chapter (number bold in
-  `number_color`, separator and title in `color`; `total` → "index/count"; `number: false` →
-  title only), at least the readable size, shortened word by word with "…" to `max_width` (0.4
-  of the frame width; 9:16 min(2x, 0.85)), optional rounded plate (`background`), `opacity`
-  0.85, placed `inset` from the `corner`. `build()` returns all labels (so `reserve` keeps clear
-  of the widest); `pose` shows one or two. **Runs**: the scenes it is drawn on that have a
-  chapter, minus chapter cards (unless `on_chapter_cards`), consecutive scenes of one chapter
-  merged; runs touching another run (a `chapter:` field change, no card) cross-fade over `fade`
-  centred on the cut; free ends fade in/out over `fade` inside the run. State: `((chapter
-  position, opacity 2 decimals), ...)`; settled = one label at full opacity. `shown_in` is false on
-  cards and before the first chapter, so those scenes get no reserve.
-- **Example**: `examples/gallery` has a top `progress_bar` (3 chapter segments) and a top-left
-  `chapter_indicator` with `reserve: true`; lint 0 findings in all 8 variants.
+- **Chapters** (`vidgen/chapters.py`): start at a `chapter` scene and at any scene with
+  `SceneConfig.chapter` (title or `{title, number?}`; on a card it renames and keeps the card's
+  number). `chapter_marks(scenes) -> [ChapterMark(title, number, scene, scene_index, card)]`;
+  `chapter_problems` (in `VideoConfig`'s validator): repeated (casefolded title, number), integer
+  numbers not increasing, a non-card mark right after a card.
+- **Planned** (`VideoPlan.chapters`): `Chapter(title, number, scene, start, end, index, count,
+  card)` (+ `label`, `duration`); `chapter_of`, `chapter_at`. **Public**:
+  `vidgen.api.video_chapters(project, fps=None, intro=False)` and `Chapter`; `OverlayContext.chapters`
+  / `.chapter`. A scene's own `chapter:` is out of its config dump (in overlay inputs).
+- **`shown_in(start, end)`** `False` drops a timed overlay from that scene's render (no draw, no
+  reserve); one shown in part of a scene reserves for all of it.
+- **`progress_bar`** (`timed`): track (`dim` 0.35) and played (`primary`) along an edge,
+  `thickness` 0.006 of the short side (≥ 2 px), `inset` 0; `chapters` → gaps of max(2 x thickness,
+  3 px). State = played pixel columns `round(t / duration x width_px)`, of the whole video.
+- **`chapter_indicator`** (`timed`): a label per chapter (`number` / `total` / title), shortened
+  with "…" to `max_width` 0.4 (9:16 min(2x, 0.85)), `opacity` 0.85, `corner`; `build()` returns all
+  labels (reserve clears the widest). Runs of a chapter's scenes (minus cards unless
+  `on_chapter_cards`) cross-fade over `fade` at touching cuts; `shown_in` false on cards and before
+  the first chapter.
 
 ## 43. Refinements (Step 40, burned-in captions)
 
-- **Word times** (`vidgen/speech.py`, render input; `spoken_words`, `speech_bounds`,
-  `SILENCE_DB` moved here from `lint/timing_rules.py`, which re-imports them). `WordTime(text,
-  start, end)`. `beat_word_times(audio_dir, beat_id, text, start, end)`: (1) a stored alignment
-  that belongs to the beat's current MP3 and text; (2) else `estimate_word_times` within the MP3's
-  speech (`speech_bounds`: leading / trailing silence below -40 dB of the peak cut, as lint's
-  `narration_speed`); (3) else the estimate over `start..end` (no audio: the word-count `d`). The
-  estimate gives each word `syllables(word) + 0.05 x letters` (vowel groups, a silent final `e`
-  dropped; acronyms a syllable per letter; numbers 2 per spoken word) and a pause after it of 2
-  syllables at a sentence end, 1 at a comma / semicolon / colon / dash, scaled to fill the span.
-- **Alignment seam.** `voice.timestamps` (default `false`, not hashed: the audio is the same)
-  makes `vidgen tts` call `provider.synthesize_timed(text, previous, next) -> (audio,
-  alignment | None)` when the provider has it; ElevenLabs implements it with
-  `POST /v1/text-to-speech/{voice}/with-timestamps` (JSON: `audio_base64`, `alignment {characters,
-  character_start_times_seconds, character_end_times_seconds}`; the non-normalised alignment, whose
-  characters are the text sent). `write_alignment` stores `<audio_dir>/<beat>.align.json`
-  `{version: 1, text, audio_sha1, characters, starts, ends}` after the MP3 and before the hash; a
-  beat generated without timings removes an old one; a variant copying base audio copies its
-  alignment. `read_alignment` accepts it only for the same text and MP3 bytes (sha1), so a stale
-  file is ignored, never wrong. Words map to characters by position (`\S+` runs of the text, or of
-  its whitespace-normalised form). Tests mock urlopen; the real endpoint was never called.
-- **Cue cutting** (`vidgen/cues.py`, shared by SRT and captions). `segment_cues(words, widths,
-  space, max_width, max_lines, max_words)`: dynamic programming over cue ends; a cue's best line
-  split is found by trying every split into ≤ `max_lines` lines that fit. Costs: each break by
-  `phrase_break_cost(before, after)` — sentence end 0, clause mark or dash 1, before a conjunction 2,
-  before a preposition 3, plain 4.5, right after an article / preposition / determiner 9; per cue
-  1; an under-filled cue `3 x (1 - fill)^2` (fill = width share of `max_lines x max_width`, or of
-  `max_words`); unequal lines `4 x (widest - narrowest) / max_width`; a sentence ending inside a
-  line 3. A word wider than a line gets a line of its own. `caption_cues` times them: the first
-  cue at the beat's start, the others at their first word's start, each until the next, the last
-  until `until` (captions: the next beat's start / the scene's end; SRT: the narration end).
-- **SRT change**: `subtitles.split_text` / `beat_cues` now use this cutting (was `textwrap` at
-  42 characters + pairs of lines) and cue times follow word times (was: proportional to
-  characters); `write_srt(path, timings, audio_dir)` (the pipeline passes `project.audio_dir`, so
-  MP3 speech bounds and alignments time the SRT too). SRT and burned-in captions therefore cut at
-  the same kind of boundaries; their cues are identical only when the caption width in characters
-  equals the SRT's 42 (captions measure real text widths).
-- **`captions` overlay** (`scenes/captions.py`, `timed`, `layer` 10, `lint_skip = ("max_words",)`:
-  the captions are the narration, not extra words on screen). Reads `context.scene.beats`
-  (planned scene times) and the project's audio folder; `shown_in` is false on scenes without
-  beats (no reserve there). `build()`: an invisible band (`max_lines` lines + padding, `max_width`
-  + padding) placed at the safe area's bottom (9:16: raised by `lift` 0.12 of the safe height, like
-  the lower third), top or centre, then every cue of the scene as `VGroup(plate, *line Texts)`
-  placed in the band (bottom / top / centre aligned). Lines are `Text`s with ligatures off,
-  baselines one pitch apart (glyphs standing on the baseline are lined up), shrunk together when
-  a word is wider than the line. State: the cue index (subtitles) or `(cue, word)` (karaoke, the
-  last word whose start ≤ t; -1 before the first); `pose` returns the cue, karaoke a copy with the
-  word's glyphs in the highlight colour scaled by `pop`, capped so it grows by at most 0.25 of a
-  space per side (0.45 until Step 48: neighbours nearly touched) (the plate is that much wider). Glyph indices: Manim keeps a submobject per
-  character with spaces (0.21) or without (0.19); other counts (ligatures) → no highlight.
-- **Colours**: the text colour (default the best of `text`, background, white, black) and the plate
-  opacity are chosen so `plate_contrast` (the plate over black and over white: the worst case of
-  whatever is behind) reaches `lint.rules.contrast.min_ratio`, raising the opacity in 0.05 steps;
-  a highlight that does not reach it is replaced by the first accent token that does (warning).
-  `background: null`: no plate; the text gets a background-coloured outline (lint may then report
-  contrast over busy scenes — the user's choice).
-- **Reserve default** (framework): `OverlayConfig.reserve` is `bool | None` (default `None`);
-  `Overlay.reserves` = the entry's / scene override's value, else `default_reserve()` (base
-  `False`). Captions return `position != "center"`: a caption band at the top or bottom shrinks
-  the scenes' safe area; centred karaoke text does not (it would cut the frame in half), so lint's
-  `overlay_overlap` reports scene text under it. The reserved box is the band (stable across
-  scenes), not the scene's own cues.
-- **Fixes found with it**: `title` and `end_card` centred their card on the frame origin, not on
-  `self.safe_area` (with a reserved bottom band their last line ran into it); both now centre on
-  the safe area.
-- **Fingerprint**: `_overlay_inputs` beats also carry the `.align.json` stat.
-- **Example**: `examples/minimal` variants `subtitled` (16:9, `captions`) and `social` (9:16,
-  `captions` `style: karaoke`); `vidgen lint` 0 findings for both.
-- Known limits: cue times between alignment-less words are estimates (good to a few hundred ms on
-  even speech; numbers and pauses vary); karaoke highlights one word at a time (no fill sweep);
-  the caption band is reserved per scene (a scene with only one-line cues still keeps room for
-  `max_lines`); a lower third and bottom captions are both placed in the global safe area and can
-  overlap in 9:16 (move one with `align` / `position` or `lift`).
+- **Word times** (`vidgen/speech.py`: `WordTime`, `spoken_words`, `speech_bounds`, `SILENCE_DB`
+  −40 dB). `beat_word_times(audio_dir, beat_id, text, start, end, spoken=None)`: a stored alignment
+  of the current MP3 and text, else `estimate_word_times` within the MP3's speech bounds, else over
+  `start..end`. Estimate weight per word = syllables + 0.05 x letters, pauses 2 syllables at a
+  sentence end and 1 at `, ; : —`.
+- **Alignment**: `voice.timestamps` (default false, not hashed) makes `vidgen tts` call
+  `provider.synthesize_timed(text, previous, next) -> (audio, alignment | None)` (ElevenLabs
+  `/with-timestamps`). `write_alignment` → `<audio_dir>/<beat>.align.json` `{version: 1, text,
+  audio_sha1, characters, starts, ends}` (written after the MP3, before the hash; removed when a
+  beat is made without timings; copied with variant audio). `read_alignment` accepts it only for the
+  same text and MP3 sha1.
+- **Cue cutting** (`vidgen/cues.py`, shared by SRT and captions): `segment_cues(words, widths, space,
+  max_width, max_lines, max_words)` by dynamic programming; break costs `phrase_break_cost(before,
+  after, language)` (sentence end 0, clause / dash 1, before conjunction 2, before preposition 3,
+  plain 4.5, after article / preposition 9) + 1 per cue + under-fill `3(1 - fill)²` + unequal lines
+  `4 Δwidth / max_width` + 3 for a sentence end inside a line. `caption_cues`: first cue at the
+  beat start, others at their first word, the last until `until`. The SRT (`subtitles.split_text`,
+  `beat_cues`, `write_srt(path, timings, audio_dir, ...)`) uses it at 42 characters.
+- **`captions`** (`scenes/captions.py`, `timed`, `layer` 10, `lint_skip = ("max_words",)`): an
+  invisible band (`max_lines` + padding) at the safe area's bottom (9:16 `lift` 0.12) / top / centre
+  holds each cue as `VGroup(plate, *line Texts)` (ligatures off, shared baselines). State: cue index,
+  or `(cue, word)` for karaoke (word glyphs scaled by `pop`, ≤ `POP_ROOM` 0.25 of a space per side;
+  odd glyph counts → no highlight). Text colour and plate opacity (+0.05 steps) are chosen so
+  `plate_contrast` (over black and white) reaches `lint.rules.contrast.min_ratio`; a failing
+  highlight falls back to the first accent that passes (warning); `background: null` = outline.
+- **Reserve default**: `Overlay.reserves` = `reserve`, else `default_reserve()` (base `False`;
+  captions `position != "center"`); the band is reserved, not the cues.
 
 ## 44. Refinements (Step 41, the `callout` beat action)
 
-- **A beat action, not an overlay** (Step 38's note): a callout points at a scene's targets, which
-  only exist inside the scene's render, and should move with a zoom like the rest of the scene,
-  so it is a per-beat action (`scenes/callout_action.py`, built on the §26 framework and the §37
-  helpers), not a screen-fixed overlay. Syntax as every action: `- callout: "bar:4K"` + options,
-  or `{action: callout, area: [x, y, w, h], ...}` without a target. It reuses the action
-  machinery: target validation and suggestions, `at`, `until`, `run_time`, timing inside waits,
-  the JSON Schema, `list-scenes`.
-- **Options**: `kind` (`box` default | `circle` | `arrow` | `label` | `spotlight` | `magnifier`),
-  `label`, `area` (`[x, y, w, h]` / `[x, y]`, top-left origin as in §37), `within` (`frame` |
-  `safe`, areas without a target), `units` (`fraction` | `px`), `color` (`highlight`),
-  `label_size` (`caption`), `side`, `curved` (arrow), `zoom` (magnifier), `keep`, `name`.
-  Checks in the model (area shape and range, kind-only options, `label` needs text, magnifier
-  needs an area) and in `problems()` (a target or an area; a magnifier needs a target; `within`
-  only without a target; `keep` with `until`).
-- **What it points at**: the targets' outline (`Target.outline`, e.g. a bar with its value),
-  else their parts on screen; several targets → one callout around all of them. With `area`
-  and a target: fractions (or `px`) of the target's largest picture (an `ImageMobject` or clip
-  in its family — so `image` / `screenshot` areas read off the image file), else of its box.
-  Without a target: fractions of the **visible view** (`within: frame`, the camera frame when
-  zoomed) or of its safe area (`within: safe`); `px` are pixels of the output frame.
-- **Where labels go** (`bounds`, `avoid` of the §37 helpers): inside `scene.safe_area` (which
-  already excludes `reserve`d overlays); while the camera is zoomed in, inside the view minus
-  margins x scale, and the callout is built with `scale` = view width / frame width so it reads
-  at its normal size (§37). `avoid`: boxes of every `Text` / `MarkupText` / `Paragraph` / TeX
-  mobject on screen, callouts on screen (targets whose mobject is a `Callout`), the scene's other
-  targets on screen smaller than 20 % of the view that do not hold the area's centre (a node,
-  a bar; not the axes or a map), and the overlays' boxes (mapped into a zoomed view). The arrow
-  and `label` kinds prefer spots off the targets. `label` = a `callout_label` placed by
-  `label_spot` at gaps 0.15 / 0.35 / 0.7 (a mark-less note). Z-index: above everything on
-  screen (+2; a spotlight +1, under other callouts).
-- **Lifetime** (framework): new `Action.until_next_beat` (class attribute; requires reversible,
-  not temporary) and `default_until(later)`; the runner stores `ActionUse.until` = `until` or
-  the default, and undoes at that beat's start as for `until`. The callout goes when the next
-  beat starts (`keep: true`: stays to the scene's fade-out; on the last beat it stays anyway).
-  Decision: not "by the end of its beat" like `zoom`, because beat-end stills — what storyboard
-  and lint look at — would never show it. Undoing fades the parts out (`fade_out`).
-- **Named callouts** (framework): `Action.provides()` lists target names a use registers when
-  applied; `scene_actions` lets later actions (same beat after it, or later beats) name them,
-  checks the name (`TARGET_NAME`, not taken by the scene or an earlier callout). The callout
-  registers itself with `on_fill = (label text, plate)`, so `dim` / `highlight` keep its label
-  readable (Step 37's routed item). `Action.problems()` reports use-level checks (key, message).
-- **Magnifier**: needs a still picture in the target (`image`, `screenshot` `image`); a clip or
-  no picture is a render-time `VidgenError` (static checks cannot see the mobjects).
-- **`screenshot` `caption`** (+ `caption_size`, `caption_color`), as `video_clip`'s: a line
-  under the picture (the picture shrinks to make room), target `caption`, kept clear by callout
-  labels (`_keep_off`); `target_names` moved from `video_clip` to `screenshot`. The caption (of
-  both types) fades out when a `focus` step moves the camera in and back with the whole frame
-  (enlarged under the picture it ran into the watermark in the gallery's `contrast` / `neon`).
-- Known limits: placement is the §37 scored search (labels avoid text and small targets, not
-  lines: an arrow or a label may cross a chart line or an edge); a callout added before a `zoom`
-  scales with the scene (built for the camera of the moment it appears); a callout with `at` in
-  the same frame as a `zoom` plays after the zoom-in, built for the zoomed view
-  (`Action.after_camera`, Step 48).
+- **A beat action, not an overlay** (`scenes/callout_action.py`, §26 / §37 helpers): it points at
+  in-scene targets and moves with a zoom. `- callout: "bar:4K"` or `{action: callout, area: ...}`.
+  Options: `kind` (`box` | `circle` | `arrow` | `label` | `spotlight` | `magnifier`), `label`,
+  `area` (`[x, y, w, h]` / `[x, y]`, top-left), `within` (`frame` | `safe`), `units` (`fraction` |
+  `px`), `color`, `label_size`, `side`, `curved`, `zoom`, `keep`, `name`. `problems()`: a target or
+  an area; magnifier needs a target and an area; `within` only without a target; `keep` with `until`.
+- **Geometry**: around `Target.outline` (else on-screen parts) of all targets; `area` with a
+  target = fractions / px of its largest picture, else its box; without = of the visible view or
+  its safe area. Labels stay in `scene.safe_area` (zoomed: the view, built at `scale` = view /
+  frame width) and `avoid` on-screen text, callouts, small targets (< 20 % of the view) and overlay
+  boxes; z-index +2 (spotlight +1).
+- **Lifetime**: `Action.until_next_beat` (reversible, not temporary) and `default_until(later)`: a
+  callout fades out when the next beat starts (`keep`: at the fade-out), not at its beat end,
+  because beat-end stills must show it.
+- **Named callouts**: `Action.provides()` registers target names later actions may use (`TARGET_NAME`,
+  unused); a callout's `on_fill = (label, plate)` keeps it readable under `dim` / `highlight`.
+  `Action.problems()` returns `(key, message)`s.
+- **Magnifier** needs a still picture in the target, else a render-time `VidgenError`.
+- **`screenshot` `caption`** (+ size / colour), like `video_clip`'s: a line under the picture, target
+  `caption`; captions fade out during a `focus` move.
 
 ## 45. Refinements (Step 42, pronunciation dictionary)
 
-- **Config** (`config.py`): top-level `pronunciation: {term: value}` with value = the spoken form
-  (text), `PronunciationEntry {say, case_sensitive: true, whole_word: true, regex: false}` or
-  `null` (removes the term: how a variant or the config drops a file's / the base's entry; the map
-  deep-merges in variants like any mapping); `pronunciation_file: PATH | [PATH, ...]` (YAML or
-  JSON mappings of the same form, relative to the project). Effective entries = the files' in
-  order, then `pronunciation:` over them. A value that is neither form is reported once per
-  mistake (a `mode="before"` check, not pydantic's per-branch union errors); a regex that does
-  not compile, matches the empty string or whose `say` refers to a missing group is a config error.
-  The files are read when the `Project` is built (`Project.pronunciation`), so a missing or invalid
-  file is a load error with `pronunciation_file (<file>)` problem locations (`validate --json`
-  lists them).
-- **Matching** (`vidgen/pronunciation.py`, no manim): each entry is a compiled pattern: a plain
-  term is escaped; `whole_word` adds `(?<!\w)` / `(?!\w)` on the sides where the term starts /
-  ends with a word character (so `C++` and `K-Phi-3's` work); a regex gets both lookarounds;
-  `case_sensitive: false` → `re.IGNORECASE`. All matches of all entries in the **written** text
-  are collected and chosen greedily by start, then length, then entry order; replacements are
-  never matched again (no cascades). `Pronunciation.apply(text) -> Spoken(text, spoken,
-  replacements, matched, conflicts)`; `say(text)`; `Project.spoken_texts()` (beat id → spoken).
-- **TTS and hash**: everything sent to the provider is the spoken text (the beat and its
-  `previous_text` / `next_text` context); the cache key is `provider.cache_key(spoken)` (formula
-  of §7 unchanged), so a beat no entry matches keeps the hash of its written text: adding a
-  dictionary does not invalidate existing audio (the committed kphi3 MP3s stay valid; kphi3 has
-  no entries), and changing an entry re-voices only the beats whose spoken text changes.
-  `audio_status` compares with the spoken text. `vidgen tts --dry-run` prints `says: <spoken>`
-  under each beat to generate whose spoken text differs; the character count is of the spoken text.
-  Variant audio rule (§7): "a beat's text differs" now reads "a beat's spoken text differs" (each
-  config with its own pronunciation; `Project.has_own_audio` is cached per project).
-- **Alignment / word timings** (Step 40 interaction): the stored alignment (`voice.timestamps`)
-  is of the spoken text (`write_alignment(..., spoken, ...)`; `read_alignment` needs the spoken
-  text). Subtitles, captions and storyboards keep the written text; their word times come from
-  `beat_word_times(audio_dir, beat_id, text, start, end, spoken)`: when `spoken.changed`, the
-  spoken words are timed (alignment, else the estimate within the MP3's speech — so the spoken
-  syllables are weighed — else over the beat) and `map_word_times(spoken, times)` maps them back.
-  Mapping: `Spoken.word_groups()` gives, per written word (`\S+`), the spoken words (`\S+` of the
-  spoken text) its characters became: unchanged characters shift by the replacements before them,
-  a character inside a replacement maps to the whole replacement; a written word's time runs from
-  its first spoken word's start to its last one's end ("K-Phi-3" → "kay fye three": 3 → 1); a
-  word said as nothing gets a zero-length time at the next spoken word's start (or the previous
-  end); written words joined by one replacement share its words' time. The SRT gets the project's
-  pronunciation (`write_srt(path, timings, audio_dir, pronunciation)`), captions read
-  `context.project.pronunciation`.
-- **Lint**: `SceneContext.spoken` (beat id → spoken text, from `Project.spoken_texts()`);
-  `narration_speed` counts `spoken_words` of the spoken text. The no-audio duration estimate
-  (`words_per_second`) still counts written words (unchanged, so renders do not move).
-- **Render fingerprint**: `pronunciation` / `pronunciation_file` are excluded from the config
-  part (they change only audio, which is tracked); with overlays, each beat's spoken text joins
-  the overlay inputs (captions' word times depend on it).
-- **`vidgen validate` warnings** (not problems; `--json` `warnings`): an entry that matches no
-  beat; an entry that matches but never applies because a longer entry always holds it; two
-  entries matching the same span or crossing spans in a beat (which one is used there). An entry
-  inside a longer one that also applies elsewhere is intended (no warning). `cli.validate_warnings`
-  = theme contrast + pronunciation (`log_theme_warnings` became `log_validate_warnings`).
-- **Example**: `examples/minimal` (no committed audio): `LaTeX: lah-tek`, `JSON: jay-son`.
-- Known limits / not done: no SSML `<phoneme>` (IPA) entries — ElevenLabs reads phoneme tags only
-  with some models (not `eleven_multilingual_v2`), the tags would be billed characters and the
-  alignment would no longer be of plain words; no ElevenLabs server-side pronunciation
-  dictionaries (`pronunciation_dictionary_locators`); no per-beat `say:` override; matching is
-  per beat (a term split across two beats never matches); `whole_word` uses Python's `\w`
-  (Unicode letters and digits).
-- Built-in lists under the project's entries, per TTS engine and language: §88 (Step 165).
-
+- **Config**: `pronunciation: {term: say | PronunciationEntry {say, case_sensitive: true,
+  whole_word: true, regex: false, language} | null}` (`null` removes a term; deep-merged in variants)
+  and `pronunciation_file: PATH | [PATH, ...]` (same form, YAML / JSON); effective = files in order,
+  then the inline map. Files load with the `Project` (`Project.pronunciation`; errors at
+  `pronunciation_file (<file>)`). Bad regexes (no compile, empty match, missing group) are config
+  errors. Users: docs/CONFIG.md "Pronunciation".
+- **Matching** (`vidgen/pronunciation.py`, no manim): `whole_word` adds `(?<!\w)` / `(?!\w)` only
+  where the term starts / ends with a word character; all matches in the **written** text are
+  chosen greedily by start, length, entry order, never re-matched. `Pronunciation.apply(text) ->
+  Spoken(text, spoken, replacements, matched, conflicts)`; `Project.spoken_texts()`. Per beat only.
+- **TTS / hash**: everything sent to the provider is spoken text; the key is
+  `provider.cache_key(spoken)` (§7), so unmatched beats keep their hashes. `audio_status` and the
+  variant audio rule compare spoken text; `tts --dry-run` prints `says: <spoken>`.
+- **Written text stays on screen**: alignments are of the spoken text; `map_word_times(spoken,
+  times)` maps spoken word times back via `Spoken.word_groups()` (a written word spans its spoken
+  words; one said as nothing gets a zero-length time at the next spoken word). `narration_speed`
+  counts spoken words; the no-audio estimate counts written words.
+- **Fingerprint**: `pronunciation` / `pronunciation_file` are out of the config part.
+- **Validate warnings**: an entry matching no beat, one always shadowed by a longer entry, two
+  entries on the same / crossing spans (`cli.validate_warnings`).
+- No SSML phonemes and no server-side dictionaries. Built-in lists: §88.
 
 ## 46. Refinements (Step 43, multiple voices)
 
-- **Config** (`config.py`): top-level `voices: {name: VoiceEntry}` — every key of `voice:`
-  optional (`provider`, `voice_id`, `model_id`, `output_format`, `settings` as
-  `VoiceSettingsOverride` with every value optional, `context`, `timestamps`) plus `label` and
-  `color`; `SceneConfig.voice` and `BeatConfig.voice` (identifiers); `VoiceConfig` gains `label`
-  (default `None`: the base voice is not tagged) and `color` (`ColorRef`: hex or a theme token);
-  top-level `subtitles: {speakers: off | name}`. `default` is reserved (the base voice; a
-  `voices:` key `default` is an error). Names are checked after the model validates, in
-  `parse_config` (`voices.voice_reference_problems`): `scenes[i].voice` /
-  `scenes[i].beats[j].voice: unknown voice 'x'; did you mean 'y'? voices: default, ...` as
-  problems with locations (variant problems are attributed to the variant as usual). Colour
-  tokens are checked by `vidgen validate` with the project's theme (`voice.color`,
-  `voices.<name>.color`); a voice no beat uses is a warning (`validate_warnings`). Variants
-  deep-merge `voices:` like any mapping.
-- **Effective voice** (`vidgen/voices.py`, no manim): a beat's voice is its `voice`, else its
-  scene's, `default` → `None` (the base). `resolve_voice(config, name)`: the base voice's
-  `model_dump` without `label` / `color`, the entry's non-`None` keys over it, `settings` merged
-  key by key; `label` / `color` only from the entry (a speaker's name is never inherited).
-  `Project.voice_names()` (beat id → name | `None`, video order), `Project.voice(name)` (cached),
-  `Project.beat_voice(beat_id)`, `Project.speaker_tags(mode)`.
-- **Hash / cache key**: unchanged formula (§7), computed by the provider of the beat's effective
-  voice: `tts.beat_providers(project)` (one provider per voice). Beats of the base voice are hashed
-  exactly as before, so a project without the new keys keeps every hash (kphi3's committed audio:
-  27 ok); editing one named voice re-voices only its beats; moving a beat to another voice
-  re-voices it; `label` / `color` are not hashed. `audio_status`, `plan_tts` and `run_tts` use the
-  per-beat providers; their optional `provider` argument replaces all of them (tests). Variant
-  audio rule (§7): own folder when the base voice's audio fields differ (`audio_fields`: all but
-  `label` / `color`) or a shared beat's spoken text **or effective voice** differs; unchanged beats
-  are copied from `audio/` (checked with the beat's own provider).
-- **Context decision**: `previous_text` / `next_text` are the neighbouring beats in video order
-  (across scenes, as before) **only when they have the same voice name**; at a change of speaker
-  none is sent (`tts.run.context_texts`). Reason: ElevenLabs' request context (and request
-  stitching, which is defined for one voice) treats the text as the same speaker's surrounding
-  speech; another speaker's line would be read as this voice's own words (e.g. the rising tone of
-  a question carried into the answer). A speaker's lines separated by another speaker's reply
-  are not joined either (a turn is a prosodic reset). Not hashed (unchanged). ElevenLabs' newer
-  multi-speaker *text-to-dialogue* endpoint (v3) is not used: it returns one file for many lines,
-  which does not fit the beat-per-MP3 cache.
-- **`vidgen tts`**: `--voice NAME` (repeatable; `default` = the base voice; unknown → error with
-  suggestion) restricts the plan like `--beat` (both: intersection). When `voices:` is non-empty,
-  `--dry-run` adds `, voice <name>` to every `would generate` line and after the summary one line
-  per voice `  voice <name> (<voice_id>): N beat(s), C characters` (beats to synthesise, copies
-  excluded); projects without `voices:` print exactly as before. `TTSPlan.voices`,
-  `TTSPlan.characters_by_voice()`. `timestamps` is read from each beat's voice.
-- **`vidgen validate`** (human) prints `voices:    default (N beats), ana (M beats)` when
-  `voices:` is set.
-- **Speakers in subtitles** (`subtitles.speakers: name`): `voices.speaker_tags(config)` gives a
-  label for every beat whose voice differs from the previous beat's (video order; the first beat
-  included) and that has a label (named voices: `label` or the name with `_` as spaces and a
-  capital first letter; the base voice only with `voice.label`). `write_srt(..., speakers)` /
-  `cues_from_timings(..., speakers)` / `beat_cues(..., speaker=)` start that beat's first cue with
-  `"<label>:"` (`speaker_prefix`). The tag is cut with the text as `caption_cues(prefix=,
-  prefix_width=)`: glued to the first word (its width added to the first word's), so a cue never
-  holds the tag alone; `CaptionCue.prefix` holds it and `words` excludes it.
-- **Captions** (`captions` option `speakers`: `off | name | color | both`, default
-  `subtitles.speakers`): `name` adds the tag (glyphs in the speaker's colour); `color` draws each
-  cue in its speaker's colour (`speaker_color`: the voice's `color`; a named voice without one:
-  `theme.palette_color(index in voices)`; the base voice: `voice.color` or the caption's text
-  colour); `both` does both. The plate opacity is raised (0.05 steps) until every speaker colour of
-  the scene reaches `lint.rules.contrast.min_ratio`; one that cannot even at opacity 1 falls back
-  to the text colour with a warning. Karaoke's word glyph map skips the tag's words (never
-  highlighted).
-- **Fingerprint**: `voices` and `subtitles` are excluded from the config part (they change only
-  audio, which is tracked by the MP3 stats, and captions); with overlays, the overlay inputs carry
-  each beat's voice name and the `voices` / `subtitles` sections (a scene's tag depends on the
-  previous beat's speaker, possibly in another scene). The overlay inputs are now `{scenes,
-  voices}` (renders with overlays count as stale once).
-- **Pronunciation (§45)**: one dictionary for every voice; the hash covers the spoken text and
-  the voice, so both edits re-voice exactly the beats they change. Per-voice entries are not
-  implemented (a variant with its own `pronunciation:` covers another-language voice).
-- **Example**: `examples/minimal` names a `guest` voice (another `voice_id`, `stability`, label,
-  `secondary` colour), the `note` scene is a two-line dialogue (guest asks, narrator answers),
-  `subtitles.speakers: name`, and the `subtitled` variant's captions use `speakers: both`.
-- Known limits: storyboard labels and `timings.json` do not name speakers; the tag shows only on
-  a beat's first cue (karaoke shows it briefly: prefer `color`); no per-voice `narration.pad` or
-  `words_per_second`; no ElevenLabs text-to-dialogue.
-
+- **Config**: `voices: {name: VoiceEntry}` (every `voice:` key optional, `settings` merged key by
+  key, plus `label`, `color`), `SceneConfig.voice`, `BeatConfig.voice`, `VoiceConfig.label` /
+  `color`, `subtitles: {speakers: off | name}`. `default` is reserved for the base voice.
+  `voices.voice_reference_problems` (in `parse_config`): unknown names with did-you-mean; unused
+  voices warn. Users: docs/CONFIG.md "Multiple voices".
+- **Effective voice** (`vidgen/voices.py`): beat `voice`, else scene's; `resolve_voice(config,
+  name)` = base dump without `label` / `color` + the entry's non-`None` keys; `label` / `color`
+  never inherited. `Project.voice_names()`, `voice(name)`, `beat_voice(id)`, `speaker_tags(mode)`.
+- **Hash**: §7 formula by the beat's own provider (`tts.beat_providers`); base-voice beats hash as
+  without `voices:`; `label` / `color` unhashed. Variant audio: own folder when `audio_fields` of
+  the base voice differ or a shared beat's spoken text or effective voice differs.
+- **Context**: `previous_text` / `next_text` only from neighbouring beats of the same voice
+  (`tts.run.context_texts`): providers read context as the same speaker. Not hashed.
+- **`vidgen tts --voice NAME`** (repeatable; intersects with `--beat`); `TTSPlan.voices`,
+  `characters_by_voice()`.
+- **Speaker tags**: `voices.speaker_tags(config)` labels each beat whose voice differs from the
+  previous beat's and has a label (named: `label` or the name capitalised with `_` → space); the
+  first cue starts `"<label>:"`, glued to the first word in cutting (`caption_cues(prefix=,
+  prefix_width=)`, `CaptionCue.prefix`). `captions` `speakers: off | name | color | both`
+  (`speaker_color`: the voice's `color`, else `theme.palette_color(index)`); plate opacity rises
+  until every speaker colour passes contrast, else text colour (warning).
+- **Fingerprint**: `voices` / `subtitles` are out of the config part (in overlay inputs, §41).
 
 ## 47. Refinements (Step 44, sound effects)
 
-- **Sounds** (`vidgen/sfx.py`, no manim): eleven built-in sounds (five more since Step 86, §69.19) (`BUILTIN_SOUNDS`: whoosh,
-  swoosh, pop, click, tick, typing, riser, chime, success, error, thud), each a deterministic
-  numpy generator (`BuiltinSound(name, generate, duration, duration_range, description, use)`;
-  noise from `default_rng(crc32(name))`; filters as zero-phase magnitude responses in the
-  frequency domain, time-varying band-passes by STFT) taking `Synth(n, ratio, intensity, rng)`:
-  `params` `duration` (within the sound's range), `pitch` (semitones, ±24) and `intensity` (0–1:
-  timbre, and ±3 dB around 0.5). Finishing (`_finish`): high-pass 25 Hz, raised-cosine fades
-  (first and last sample exactly 0), the mean removed by subtracting a scaled Hann window (zero
-  at the ends, so DC is 0 and the ends stay 0), then the level: the loudest 400 ms window
-  (BS.1770 K-weighting at 48 kHz, applied as a magnitude response; `loudness()`) at
-  `LOUDNESS_TARGET` −27 LUFS (one channel), peaks capped at `PEAK_CEILING` −9 dBFS (short clicks
-  and ticks are peak-limited, so they measure quieter). Calibration: the committed kphi3
-  ElevenLabs MP3s measure −18.5 to −21.4 LUFS the same way (peaks −4 to −8 dBFS), so a sound at
-  gain 0 sits ~7 dB under narration (a test keeps it ≥ 5 dB under the quietest beat).
-- **Decision: synthesised when the video is joined, cached per process** (`synthesize`,
-  `lru_cache`), not shipped as package-data WAVs: the params are continuous (pre-rendered files
-  could only give the defaults), every sound takes 5–110 ms, and nothing (~1 MB of WAVs) is
-  added to the wheel. `vidgen list-sfx --render-dir DIR` writes previews for a human.
-- **Project sounds**: `assets/sfx/<name>.<wav|flac|ogg|mp3>` (`project_sounds`; `.wav` first
-  when a name has several; invalid names skipped with a warning) extend or replace built-ins by
-  name (`SoundLibrary`; `list-sfx` marks `overrides_builtin`); decoded with PyAV to 48 kHz
-  (mono or stereo kept); played at their own level, no `params` (a problem when given).
-- **Where sounds come from**: `NarratedScene.sfx(sound, at=None, *, gain, pan, align, **params)`
-  (scene seconds; default `renderer.time`) validates with the config model `SfxCue` and the
-  library and appends an `SfxEvent(time, sound, gain, pan, align, params, beat)` to `sfx_log`;
-  nothing is drawn, no time passes. A scene's `sfx:` list (`SfxCue`: `sound`, `at` seconds,
-  `gain` dB −60..12, `pan` −1..1, `align` `start|end`, `params` `SfxParams`; a plain string =
-  `{sound}`; on a silent scene `at` < `duration`) is recorded in the constructor. The beat action
-  `sfx` (`scenes/sfx_action.py`) — `- sfx: NAME` (or `sound:`), options `gain`, `pan`, `align`,
-  `params` — is cued by the runner. `timings()` gains `sfx` (the events) when there are any.
-- **Framework** (`vidgen.actions`, compatible): `Action.scene_targets` (False: `target` is not
-  checked against / resolved among the scene's targets; the action's `problems()` checks it) and
-  `Action.animates` (False: the runner calls `cue(scene, time)` when the beat starts, with the
-  due frame's time — `at` rounded to a frame like any action — and marks the use applied; it is
-  never queued for a wait; `check_action_class`: such actions implement `cue`, not `apply`, and
-  cannot be reversible). **Decision**: a sound plays exactly at `at`, even while the scene's own
-  animation runs (animating actions wait for it), so `at: 0` lands with the beat's entrance;
-  syncing to a delayed action's start is left to `sfx.auto`.
-- **Auto** (`sfx: {auto: true}`; `SfxConfig.auto`, default off): `ActionRunner._build` calls
-  `scene.auto_sfx(name)` when a *built-in* action's `apply` returns animations (so a no-op
-  `reveal` makes no sound), at the moment it starts playing — `AUTO_ACTION_SFX`: reveal → pop
-  −3 dB, highlight → tick −3, callout → click −2, zoom → whoosh 0.5 s −6, transform → swoosh −6
-  — except in beats that have their own non-animating (`sfx`) actions; and scene types with
-  `entrance_sfx` (`chapter`: whoosh −3 dB) get it at time 0. Scene types' own reveal steps get no
-  automatic sounds (a pop per bullet / bar / node was judged too busy).
-- **Mixing (no Manim sound)**: the worker stores the events in `timings/<id>.json` (always, also
-  with `--no-audio`). `join_scenes` shifts them by each scene's offset (combined `timings.json`
-  scenes gain `sfx`, video times) and, unless `no_audio`, writes **one SFX track for the whole
-  video**, `padded/sfx.wav` (`write_track`: 48 kHz stereo s16, exactly `round(total * 48000)`
-  samples = the sum of the padded scene WAVs; event start sample `round(time * 48000)`, minus
-  its length for `align: end`; parts before 0 / after the end cut; written in 10 s blocks;
-  sums clipped, never wrapped), with `sfx.gain` (master dB) added. Pan: equal-power, centre =
-  full level on both channels (as a mono narration MP3 is duplicated, since Step 48 by
-  `scene.add_narration`; see §51), so loudness compares 1:1. `ffmpeg.join(..., sfx=)` adds it to the concatenated narration with
-  `amix=inputs=2:duration=first:dropout_transition=0:normalize=0` (a plain sum) before the one
-  AAC encode. Sounds therefore run across scene cuts (a sound after its scene's end is a warning),
-  are sample-exact in the timeline, and do not resample the narration (Manim's pydub mix would
-  place at 1 ms and resample the MP3 to the sound's rate). Scene renders and storyboards have no
-  effects. Without events (or with `--no-audio`) the join is byte-for-byte the old command.
-- **For Step 45 (music, ducking, loudness)**: the voice track (concatenated `padded/<id>.wav`:
-  narration + clip sound) and the SFX track stay separate until the final mux, so music can be
-  ducked with the voice track alone as the sidechain (`sidechaincompress`), then voice + SFX +
-  ducked music summed and `loudnorm`ed; the SFX levels are relative (−27 LUFS ≈ 7 dB under
-  narration) and survive a normalisation of the sum.
-- **Checks**: `vidgen validate` (`cli.project_problems` + `sfx.config_problems`): unknown sounds
-  with did-you-mean and the list, params on project files, durations outside the range, at
-  `scenes[i].sfx[k].<key>` and `scenes[i].beats[j].actions[k].<target|sound|params.duration|
-  run_time>`; the render pre-check raises them; `NarratedScene.sfx` raises `VidgenError`.
-- **Listing**: `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` (`sound_entries`: name,
-  origin, description — precise words for an author who cannot listen — use, duration, range,
-  channels, loudness, peak, preview); `list-scenes` shows `sfx` as "(at its time, does not
-  animate)", JSON actions gain `scene_targets`, `animates` (within version 1). `sfx.py` is not a
-  render-fingerprint input (sounds never change pixels); scene `sfx:` lists and `sfx` actions
-  are part of the scene's config, so editing them re-renders that scene's stills.
-- Known limits: no per-scene switch for `auto` (a variant can turn it off); a sound still
-  playing at the video's end is cut without a fade; project sounds are not loudness-normalised;
-  built-ins are mono (pan places them).
+- **Built-ins** (`vidgen/sfx.py`, numpy): `BUILTIN_SOUNDS` (§69.19 lists the set) of
+  `BuiltinSound(name, generate, duration, duration_range, description, use)`, deterministic (noise
+  seed `crc32(name)`). `params`: `duration` (in range), `pitch` (±24 semitones), `intensity` (0–1).
+  `_finish`: high-pass 25 Hz, ends exactly 0, DC removed, loudest 400 ms at `LOUDNESS_TARGET` −27
+  LUFS, peaks ≤ `PEAK_CEILING` −9 dBFS (~7 dB under narration; a test keeps ≥ 5 dB). Synthesised at
+  join, `lru_cache` per process (no shipped WAVs: params are continuous).
+- **Project sounds**: `assets/sfx/<name>.<wav|flac|ogg|mp3>` (`project_sounds`, `.wav` first)
+  extend / replace built-ins (`SoundLibrary`), decoded to 48 kHz, own level, no `params`.
+- **Sources**: `NarratedScene.sfx(sound, at=None, *, gain, pan, align, **params)` → `SfxEvent(time,
+  sound, gain, pan, align, params, beat)` in `sfx_log`; scene `sfx:` list (`SfxCue`: `sound`, `at`,
+  `gain` −60..12 dB, `pan` −1..1, `align` `start|end`, `params`); the `sfx` beat action
+  (`scenes/sfx_action.py`). Users: docs/CONFIG.md "Sound effects (`sfx`)".
+- **Framework**: `Action.scene_targets = False` (target not resolved among scene targets) and
+  `Action.animates = False` (runner calls `cue(scene, time)` at the due frame; never queued; must
+  implement `cue`, not `apply`, not reversible). A sound plays exactly at `at`.
+- **`sfx.auto`** (default off): built-in actions that animate get `AUTO_ACTION_SFX` (reveal pop −3,
+  highlight tick −3, callout click −2, zoom whoosh 0.5 s −6, transform swoosh −6) except in beats
+  with their own `sfx`; types with `entrance_sfx` (`chapter`: whoosh −3) at 0.
+- **Mixing**: events go to `timings/<id>.json`; `join_scenes` shifts them to video time and writes
+  `padded/sfx.wav` (`write_track`: 48 kHz stereo s16, exactly `round(total * 48000)` samples, start
+  `round(time * 48000)`, `align: end` subtracts the length, clipped sums, master `sfx.gain`);
+  equal-power pan with centre = full level on both channels. Sounds cross cuts (past the scene
+  end warns); scene renders have none. Mix: §48.
+- **Checks**: `sfx.config_problems` (unknown sounds, params on files, durations) in validate and
+  the render pre-check; `NarratedScene.sfx` raises `VidgenError`. `vidgen list-sfx [--render-dir]
+  [--json]` (`sound_entries`). `sfx.py` is not a render input; `sfx:` lists are scene config.
 
 ## 48. Refinements (Step 45, background music, ducking, loudness)
 
-- **Config** (`config.py`): top-level `music:` (`MusicSetting`): a source name, one `MusicCue`,
-  a list of cues, or `false` / null. `MusicCue`: `source` (a bed name or a path under the
-  project), `volume` dB (−60..12), `start` s, `loop` (true), `crossfade` s (2), `fade_in` (1.5),
-  `fade_out` (3), `duck` (`DuckConfig` or a bool: `false` = depth 0), `from` / `to` scene ids.
-  `VideoConfig._music_problems`: known scenes, `from` not after `to`, no two cues on one scene.
-  `VideoConfig.music_cues` gives the list. Scene `music: true | false | {volume}`
-  (`SceneMusic`). Top-level `audio:` (`AudioConfig`): `normalize: auto | true | false`,
-  `target_lufs` (−16, −40..−5), `true_peak` (−1.5 dBTP, −9..0). `vidgen validate`
-  (`music.config_problems`) reports a source that is neither a bed nor a file; the render
-  pre-check raises it. `music` / `audio` and a scene's `music` are not render-fingerprint
-  inputs, nor are `music.py`, `mix.py`, `loudness.py` (music never changes pixels or timing).
-- **Beds** (`vidgen/music.py`, numpy only): `calm` (60 s, D major, no beat), `pulse` (40 s,
-  A minor, 96 BPM), `bright` (48 s, C major, 120 BPM); Step 129 adds `cartoon` and `lullaby`
-  (§69.63), Step 179 `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, Step 181 `ascent`,
-  `horizon`, `beacon`, `neon` (§91). Pads by PADsynth: each chord's harmonics
-  as Gaussian bumps (18–30 cents wide) with random phases in one spectrum, one inverse FFT → a
-  periodic wave whose length divides the chord's segment; chords cross-fade with equal-power
-  windows of 1.6 s; an airy layer an octave up swells with an LFO whose period divides the loop;
-  a sub-bass under each chord; `pulse` / `bright` add plucked eighth-note arpeggios (patterns
-  picked per bar), a soft thump per beat (`pulse`) or a sparse bell melody (`bright`). Tone
-  shaping per partial (high-pass 40 Hz, low-pass 3.5–4.5 kHz, both second order): nothing harsh,
-  no rumble (tests: < −30 dB of the energy above 5 kHz, < −30 dB below 35 Hz). Everything is
-  rendered **circularly** (notes past the loop's end continue at its start; the waves are
-  periodic in the loop), so the loop tiles without a seam. Seed `crc32("music:<name>")`;
-  `bed_loop(name)` is cached per process (~1–1.5 s to make). Level: `MUSIC_LEVEL` −28 LUFS
-  integrated (−30 until Step 48, §51). **Decision: a loop tiled to the needed length**, not a piece generated for the
-  whole video: generation cost is fixed, loops of 40–60 s with chord changes every 4–7.5 s and
-  slow LFOs rarely sound repetitive under narration, and a loop is trivially seamless.
-- **Files**: decoded with PyAV (`sfx.decode_audio`), mono duplicated, cached per (path, size,
-  mtime); measured (integrated) and scaled to `MUSIC_LEVEL`. `music.Source(cue, root)`: from
-  `start` on; looping files play `body[:-X]` once, then a loop whose first `X` samples are the
-  head cross-faded (equal power) with the tail, so every repeat continues exactly where the
-  previous pass stopped; `loop: false` → silence after the end (the cue's fade-out ends there).
-- **Loudness** (`vidgen/loudness.py`): BS.1770-4 integrated loudness (400 ms blocks, 100 ms
-  step, absolute gate −70 LUFS, relative gate −10 LU), K-weighting as the filter's magnitude
-  response applied by FFT to 10 s blocks read with 0.5 s margins (circular per block; the margins
-  absorb the edges), `LoudnessMeter` fed in order, true peak by 4x polyphase windowed-sinc
-  interpolation (Kaiser, 12 taps a side). Checked against FFmpeg's `ebur128` on a rendered mix
-  (−16.1 / −1.6 dBTP both). ~0.2 s per 10 s of audio per pass.
-- **Ducking** (`vidgen/mix.py`): **decision: a gain curve computed from the narration's timing,
-  not an audio envelope follower or FFmpeg `sidechaincompress`**. The key is where speech is: each
-  beat from its start to the end of its speech (`speech.speech_bounds` of its MP3; the whole beat
-  without audio), so it is exactly "the narration track only" (clip sound and SFX are mixed into
-  the same WAVs / track and could not be told apart by level), deterministic, and able to look
-  ahead (offline). `duck_curve` at 100 Hz: pauses shorter than `hold` filled; in dB, `-depth`
-  where speech is, raised-cosine ramps of `attack` s ending at a speech start and `release` s
-  after its end (max of both). Defaults 12 dB / 0.4 s / 1.0 s / 1.5 s: ElevenLabs beats are
-  ~1 s apart (lead/trail silence + pad), so with a shorter hold the music pumped up between
-  every beat. With `duck.clips` (default) a `video_clip` scene whose clip has sound (not
-  `mute`, `volume` ≠ 0, the file has an audio stream) is foreground for its whole span.
-- **Per scene and per cue gain** (`plan_music` → `Placement`s, 10 ms frames, interpolated per
-  sample): `10^(volume/20)` × fades (raised cosine; fade-out ends at the cue's end or the
-  source's) × scene levels (`false` → 0, `{volume}` → dB; steps smoothed by `smooth_steps`:
-  a running minimum then a moving average, 0.75 s, so a ramp lies on the louder side — the
-  quieter scene has its level from its first to its last sample) × ducking. A cue spans its
-  `from` scene's start to its `to` scene's end (the last cue to the video's exact end).
-- **The mix** (`mix_audio`, called by `join_scenes` unless `--no-audio`): tracks read block by
-  block — `WavTrack` (the padded scene WAVs, the SFX track) and `MusicTrack`. **Decision:
-  normalisation `auto` by default — on when the video has music, off otherwise** — so every
-  existing narration-only video keeps its exact audio (the join command is byte-for-byte the
-  old one; the mix is only measured), while a video with music, whose level is new anyway, comes
-  out at −16 LUFS. Not while the video has narrated beats but none has its MP3 (a preview timed
-  from word counts: the gallery measured +25 dB of gain on music and effects alone; logged at
-  info level, `normalized: false`). With music or `normalize: true`: pass 1 measures the sum (no true peak),
-  gain = target − measured; pass 2 writes `padded/mix.wav` (48 kHz stereo **24-bit**: the gain
-  and fades stay clean) through `limit()` — the gain each sample needs for its true-peak
-  envelope to stay `LIMITER_MARGIN_DB` (0.4 dB since Step 48, was 0.1) under `true_peak`, a running minimum (±5 ms) then a 10 ms moving
-  average, so the gain never exceeds the need and moves smoothly; block margins make it exact
-  across blocks — and measures the output. `ffmpeg.join(..., mix=)` then uses the WAV as the
-  audio (one AAC encode). `MixReport` → combined `timings.json` `mix` and `render --json` `mix`:
-  `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp,
-  limited_db, music: [{source, kind, from, to, start, end, volume, duck}]}`; the human render
-  output adds a `loudness:` line.
-- **Levels measured**: committed kphi3 MP3s are −21.4 LUFS integrated (as stereo). Until Step
-  48 a rendered narration track was −24.4 (Manim's MP3 conversion upmixed mono −3 dB per
-  channel) and `MUSIC_LEVEL` was −30; Step 48 plays narration at the MP3s' level and sets
-  `MUSIC_LEVEL` −28, so music is ~6.5 dB under the voice in pauses and ~18.5 dB under it when
-  ducked, and the Step 44 SFX level (≈ 7 dB under narration) holds as stated (§51).
-- **`vidgen list-music [PROJECT] [--render-dir DIR] [--json]`** (`music.music_entries`,
-  `jsonout.list_music_document`): every bed with a precise description, use, tempo, key, chords,
-  loop length and measured loudness; the project's `assets/music` files (any path works as a
-  source; that folder is only what is listed); previews of one loop per bed.
-- Known limits: cues do not cross-fade into each other (the first fades out, the next fades
-  in); the beds are fixed (no tempo / key parameters); a file is decoded whole into memory
-  (~23 MB per stereo minute); music is not in scene renders or storyboards; the AAC encode may
-  raise the true peak by ~0.2 dB (inside the limiter's margin); no LRA / short-term loudness targets.
-
+- **Config**: `music:` (`MusicSetting`: a source, a `MusicCue`, a list, or `false`); `MusicCue`
+  `source` (bed or project path), `volume` (−60..12 dB), `start`, `loop` (true), `crossfade` (2),
+  `fade_in` (1.5), `fade_out` (3), `duck` (`DuckConfig` | bool), `from` / `to` scene ids
+  (`_music_problems`: known, ordered, one cue per scene); scene `music: true | false | {volume}`;
+  `audio: {normalize: auto | true | false, target_lufs: −16, true_peak: −1.5}`.
+  `music.config_problems` checks sources. None of `music`, `audio`, scene `music`, `music.py`,
+  `mix.py`, `loudness.py` is a render input. Users: docs/CONFIG.md "Background music (`music`)".
+- **Beds** (`vidgen/music.py`, numpy): `calm`, `pulse`, `bright` (more: §69.63, §91), PADsynth
+  pads etc., rendered **circularly** so loops tile seamlessly; seed `crc32("music:<name>")`;
+  `bed_loop(name)` cached; level `MUSIC_LEVEL` −28 LUFS integrated. A tiled loop, not a whole-video
+  piece (fixed cost, seamless).
+- **Files**: PyAV, mono duplicated, cached per (path, size, mtime), scaled to `MUSIC_LEVEL`;
+  `music.Source`: looping plays `body[:-X]` once, then a loop whose head is cross-faded with the
+  tail (equal power); `loop: false` → silence after the end.
+- **Loudness** (`vidgen/loudness.py`): BS.1770-4 integrated (400 ms / 100 ms, gates −70 / −10),
+  K-weighting by FFT on 10 s blocks with 0.5 s margins, `LoudnessMeter`, true peak by 4x polyphase
+  sinc; matches FFmpeg `ebur128`.
+- **Ducking** (`vidgen/mix.py`): a gain curve from narration timing (beat start to the end of its
+  speech, `speech.speech_bounds`), not an envelope follower: exact, deterministic, looks ahead,
+  unaffected by SFX / clip sound. `duck_curve` (100 Hz): gaps < `hold` filled, `-depth` on speech,
+  raised-cosine `attack` / `release`. `DuckConfig` defaults depth 12, attack 0.4, release 1.0, hold
+  1.5 (shorter holds pump between beats); `clips` (true) treats a sounding `video_clip` as speech.
+- **Gain** (`plan_music` → `Placement`s, 10 ms): `10^(volume/20)` × fades × scene levels
+  (`smooth_steps`: running min then 0.75 s average, so the quieter scene keeps its level) × ducking.
+  A cue spans its `from` start to its `to` end (the last to the video end); cues do not cross-fade.
+- **The mix** (`mix_audio`, in `join_scenes` unless `--no-audio`): `normalize: auto` = on only with
+  music (narration-only videos keep their exact audio), never while narrated beats lack MP3s. On:
+  pass 1 measures, gain = target − measured; pass 2 writes `padded/mix.wav` (48 kHz stereo 24-bit)
+  through `limit()` (per-sample gain keeping the true peak `LIMITER_MARGIN_DB` 0.4 under
+  `true_peak`) and measures. Off: `ffmpeg.join(..., sfx=)` sums with
+  `amix=inputs=2:duration=first:dropout_transition=0:normalize=0`. One AAC encode. `MixReport` →
+  `timings.json` / `render --json` `mix` `{mixed, normalized, target_lufs, true_peak_limit, gain_db,
+  integrated_lufs, true_peak_dbtp, limited_db, music: [...]}`.
+- `vidgen list-music [--render-dir] [--json]` (`music.music_entries`); music is not in scene renders.
 
 ## 49. Refinements (Step 46, transitions: crossfade and fade through a colour)
 
-- **Config** (`config.py`): `TransitionConfig {type: cut | crossfade | fade_color, duration,
-  color}` (`duration` 0 < d ≤ 5, default per type `TRANSITION_DURATIONS`: crossfade 0.5,
-  fade_color 1.0; a cut has no duration; `color` only on fade_color: a theme token, `background`
-  or hex, default the theme's background); a plain string is the type (`TransitionSetting`).
-  `SceneConfig.transition` = the way **into** that scene; `VideoConfig.transition` = the default
-  for every scene but the first (`transitions.effective(config, i)`). A crossfade on the first
-  scene is a config error; `fade_color` there fades the video in. `vidgen validate` checks colour
-  tokens (`transitions.color_problems`) and warns about holds (below).
-- **Timing contract (decision): a crossfade overlaps the two scenes, a fade_color does not.** A
-  real cross-dissolve needs both pictures at once, so the next scene starts `overlap` frames before
-  the previous one ends and the video gets shorter by it; a fade through a colour needs no second
-  picture, so the previous scene's last `fade_out` frames fade to the colour and the next scene's
-  first `fade_in` frames fade in from it (`round(duration x fps / 2)` each), and the video keeps
-  its length. **Speech never overlaps**: a transition may cover only the *silent tail* of the scene
-  before it — its frames after the last beat's narration end (`start + d`: the pad and the
-  fade-out), the whole scene when it is silent, never the frames its own incoming transition uses
-  (`transitions.silent_tail`). When the tail is shorter, that scene is **held** on its last
-  picture by the difference (`hold`, added in `NarratedScene.tear_down`) — a decision for
-  "extend" over "clamp": the author gets the transition asked for, and pacing changes by the
-  hold only, which `vidgen validate` reports. Defaults need no hold for built-ins (tail = pad 0.35
-  + outro 0.5 ≥ 0.5). The incoming scene's narration starts with it, so it may speak during a
-  crossfade (over the previous scene's silence).
-- **The plan is the one source of start times** (`videoplan`): frame-based now — a scene's own
-  frames (beats + outro, or its duration), `transition(i) -> TransitionSlot(type, seconds, color,
-  overlap, fade_out, fade_in, hold)` (frames; a cut for every scene of a video without
-  transitions, which keeps the old plan exactly), `scene_duration(i)` = own + the hold of the
-  transition out of it, `start(i) = start(i-1) + frames(i-1) - overlap(i)`. `SceneSlot` gains
-  `overlap_in`, `overlap_out` (seconds) and `cut` (= `end - overlap_out`, where the next scene
-  starts). Chapters, the progress bar, the chapter indicator (runs now end at `cut`), lower
-  thirds (`min(end, slot.cut)`), `resolve(scene id, end=True)` (= `cut`), captions (per scene
-  times), all follow it. The join computes the same overlaps from the renders
-  (`transitions.join_overlaps`: the requested frames limited to the measured silent tail and the
-  scene's length; equal to the plan when renders match it, and a shortened crossfade is warned
-  about), and every later time — combined `timings.json` starts and beats, the SRT, SFX events,
-  music cues and ducking spans, the frames index, storyboard times (`storyboard.scene_starts`) —
-  is derived from the overlapped starts. `Project.estimated_duration` subtracts crossfades.
-- **How a scene ends** (`NarratedScene`): with a transition other than a cut after it,
-  `finish()` holds the picture for the outro frames instead of `clear_all` (same frame count),
-  so a crossfade blends the full picture (no dip through the background) and a colour fade fades
-  the picture itself. Extension scenes that fade out themselves still work (the crossfade blends
-  their faded picture). `transition_in` / `transition_out` hold the planned slots; the scene
-  reads the plan only when the video has transitions.
-- **Video at the join** (`ffmpeg.join(..., crossfades, frames, fps)`): consecutive scenes joined by
-  cuts form runs (one concat list each); runs are blended with `xfade=transition=fade`, chained,
-  each starting half a frame before its first shared frame (`crossfade_graph`): weights
-  `(j + 0.5) / n`, symmetric, the middle frame of an odd crossfade 50/50, and exactly
-  `sum - overlaps` output frames (tested). The video is then encoded once (libx264, CRF 18
-  `VIDEO_CRF`, yuv420p) — decision: re-encoding only the transitions would need cuts at arbitrary
-  frames of stream-copied H.264 (keyframes), and CRF 18 over Manim's CRF 23 sources is visually
-  lossless; it costs about real time at 1080p. Without crossfades the join is the old stream copy.
-  `xfade` also has wipes and slides (Step 47). Each run enters `xfade` through
-  `ffmpeg.constant_rate` (Step 64): `tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=<fps>,
-  trim=end_frame=<run frames>,settb=AVTB`. `xfade` refuses an input without a constant frame
-  rate, and FFmpeg 7.0 / 7.1's `setpts` clears it ("1/0 is invalid"; 6.x keeps it, 8.x clears
-  it only with `strip_fps`), so `fps` sets it after the `setpts`; FFmpeg 4.4 / 5.1's `fps`
-  drops a stream's last frame (their end of stream is at that frame's timestamp), hence the
-  one-frame `tpad` before and the `trim` back to the exact count after. Tested on 4.4, 5.1,
-  6.1, 7.0, 7.1 and 8.1. ffmpeg 4.4 or newer is required (`ffmpeg.MIN_VERSION`; 4.3 lacks
-  `amix=normalize`, 4.2 `xfade`); an ffmpeg error from an older one says so (`version_hint`).
-- **Audio at the join**: the padded scene WAVs keep their exact lengths; with overlaps they are
-  summed into `padded/voice.wav` (`transitions.write_voice_track`, sample offsets from the same
-  cumulative rounding as before, so nothing drifts), the earlier scene's tail fading out (raised
-  cosine) under the next scene's start at full level — that tail has no narration by the
-  contract; only clip sound can be there. `voice.wav` replaces the per-scene list for the final
-  mux and `mix.mix_audio`.
-- **fade_color inside the render** (`transitions.ColorFade`): wraps `renderer.add_frame`
-  outermost (after the overlay layer), so the colour blends the scene's picture and the overlays
-  are drawn on top; colour weight `1 - k / fade_in` at the start, `(j + 1) / fade_out` at the end
-  (the scenes' boundary frames are the pure colour); frozen waits are split per faded frame. The
-  last frames are found from the planned length (the plan contract; a scene that overruns would
-  fade early — the join's drift warning covers it). Stills, the layout dump and storyboards see it.
-- **Overlays in a crossfade (decision: the incoming scene's on both sides)**: overlays are
-  composited inside each scene's render, so a crossfade blends two composited pictures. Overlay
-  states are a pure function of video time, but *which* overlays a scene draws is not (captions
-  show the scene's own cues, a chapter card has no indicator, a scene may turn overlays off): A's
-  tail would show A's last caption while B's head shows B's first — a doubled, half-transparent
-  caption. So `OverlayLayer` takes `following` (the next scene's overlays, built with
-  `scene_overlays(next)`) and a `cut` time: from the next scene's start on, A's render draws B's
-  overlays instead of its own. Both renders then hold identical overlay pixels in every shared
-  frame and, the blend being linear, `α (o + (1 - a) A) + (1 - α) (o + (1 - a) B) = o + (1 - a)
-  (α A + (1 - α) B)`: the overlays come out exactly as if drawn over the blended pictures (tested:
-  caption region and progress bar equal in both renders, the intro shows the talk's caption over
-  its last frames). Overlay changes therefore happen at the *start* of a crossfade. Own overlays
-  still decide the scene's `reserve`; `scene_overlays` drops overlays that end before `cut`.
-- **Lint / storyboard**: beat-end stills are before the transitions (the overlap lies in the
-  outro), so layout rules are unaffected. `dead_air`: the activity file gains `overlap_out`
-  (frames the crossfade covers) and a still run ends there (the held outro would otherwise add
-  0.5 s of "no change"). Storyboard sheet times are video times with overlaps.
-- **Fingerprint**: a scene's render depends on the transition out of it (held vs faded, colour
-  fade, hold) — `next_transition` (its config and what limits it: the next scene's duration,
-  beats and MP3 stats; `"cut"` for a cut, so adding a transition elsewhere does not re-render
-  unrelated scenes); its own `transition` is in its config dump; with overlays every scene's
-  `transition` joins the overlay inputs (crossfades move later scenes).
-- **JSON**: combined `timings.json` scenes with a transition gain `transition: {type, duration,
-  overlap}` (within version 1); activity `overlap_out`.
-- **For Step 47 (push, wipe, continuity; done, see §50)**: `type` grows (`push`, `wipe`) with a `direction`
-  option; `crossfade_graph` maps them to `xfade`'s `slideleft/right/up/down` and
-  `wipeleft/...`. Unlike a fade, a slide or wipe is not linear in the two pictures per pixel, so
-  overlays baked into both scenes would slide/wipe with them (a watermark moving). Suggested
-  approach: the incoming scene's worker also writes its overlay layer for the overlap frames as a
-  separate RGBA clip (or both scenes render the overlap *without* overlays), the join slides the
-  bare pictures and overlays the RGBA clip on top (`overlay` filter). The timing contract
-  (overlap, silent tail, hold) carries over unchanged. A match-cut helper can use the plan to
-  know the previous scene and its last state.
-- Known limits: the join re-encodes the whole video when any crossfade exists; `fade_color` and
-  crossfades happen at planned frames, so an extension scene that times itself differently from
-  the contract is faded/overlapped where the plan expected it (warned at join); a crossfade into a
-  scene shorter than the crossfade is shortened to that scene; no transition after the last scene
-  (an `end_card` fades out by itself); transitions are not previewed in a single scene's render
-  (`vidgen render --scene X` shows the scene's held tail, the blend happens at the join).
+- **Config**: `TransitionConfig {type: cut | crossfade | fade_color | push | wipe, duration, color,
+  direction, soft}` (0 < duration ≤ 5; `TRANSITION_DURATIONS` crossfade 0.5, fade_color 1.0, push /
+  wipe 0.6; `color` fade_color only, default the background); a string = the type.
+  `SceneConfig.transition` = the way **into** the scene; `VideoConfig.transition` the default for
+  all but the first (`transitions.effective`). An overlapping type on the first scene is an error;
+  `fade_color` there fades in. Users: docs/CONFIG.md "Transitions".
+- **Timing contract**: overlapping types (`OVERLAPPING_TRANSITIONS`) start the next scene `overlap`
+  frames early (video shortens); `fade_color` fades the last / first `round(duration x fps / 2)`
+  frames (length kept). **Speech never overlaps**: a transition covers only the previous scene's
+  silent tail (`transitions.silent_tail`); a short tail **holds** the last picture
+  (`NarratedScene.tear_down`; extend, not clamp; `validate` warns). Built-in defaults need no hold.
+- **The plan is the one source of starts**: `transition(i) -> TransitionSlot(type, seconds, color,
+  overlap, fade_out, fade_in, hold)`, `scene_duration(i)` = own + hold, `start(i) = start(i-1) +
+  frames(i-1) - overlap(i)`, `SceneSlot.cut = end - overlap_out`. Overlays, chapters,
+  `resolve(id, end=True)` follow it. The join recomputes overlaps from renders
+  (`transitions.join_overlaps`, limited to the measured tail; shortening warns) and every later
+  time (timings, SRT, SFX, music, frames index, storyboard) derives from them.
+- **Scene end**: before a non-cut, `finish()` holds the picture instead of `clear_all` (same frame
+  count). `transition_in` / `transition_out` hold the slots.
+- **Join video**: cut runs concat, chained `xfade` (`crossfade_graph`, half a frame early: weights
+  `(j + 0.5) / n`, exactly `sum - overlaps` frames), then one libx264 encode (`VIDEO_CRF` 18);
+  without overlaps a stream copy. Each run passes `ffmpeg.constant_rate` (`tpad`, `setpts`, `fps`,
+  `trim`, `settb`) because `xfade` needs a constant rate across FFmpeg 4.4–8.x. ffmpeg ≥ 4.4
+  required (`ffmpeg.MIN_VERSION`, `version_hint`).
+- **Join audio**: with overlaps, padded WAVs sum into `padded/voice.wav`
+  (`transitions.write_voice_track`, cumulative rounding, earlier tail faded under the next start).
+- **`fade_color`** (`transitions.ColorFade`) wraps `add_frame` outermost (overlays fade too);
+  boundary frames are pure colour.
+- **Overlays in a crossfade**: from the next scene's start, the outgoing render draws the incoming
+  scene's overlays (`OverlayLayer(following=, cut=)`); the blend is linear, so overlays come out as
+  if drawn once. Own overlays still decide `reserve`.
+- **Fingerprint**: `next_transition` (its config plus the next scene's duration, beats, MP3 stats;
+  `"cut"` for a cut); own `transition` in the config dump. `timings.json` scenes get `transition:
+  {type, duration, overlap}`; activity `overlap_out` (ends `dead_air` runs).
 
 ## 50. Refinements (Step 47, push, wipe, continuity)
 
-- **Config.** `TransitionConfig.type` adds `push` and `wipe` (default 0.6 s), with `direction`
-  (`left | right | up | down`: where the pictures / the edge move; push / wipe only) and `soft`
-  (wipe only). `config.OVERLAPPING_TRANSITIONS = (crossfade, push, wipe)`,
-  `TransitionConfig.overlaps`; every place that tested `type == "crossfade"` (plan, join
-  overlaps, head frames, estimated duration, first-scene check, join warnings) now tests
-  `overlaps`. Default direction (`transitions.direction(t, portrait)`): `left` in a wide or square
-  frame, `up` in a tall one (the next scene comes in from the right / from below), resolved per
-  render format, so one video-level `push` suits the 16:9 video and its 9:16 variant.
-  `transitions.xfade_name`: `fade`, `slide<dir>`, `wipe<dir>`, soft → `smooth<dir>` (FFmpeg's
-  soft-edged wipes). Checked empirically: `slideleft` moves both pictures left with the next one
-  entering from the right, `wipeup` uncovers the next one from the bottom; with the half-frame
-  early offset the next scene covers `(j + 0.5) / n` of the picture at shared frame `j` (tested
-  with solid colours, all four directions).
-- **Timing**: exactly the crossfade contract (overlap of the silent tail, hold, the plan as the
-  one source of starts, voice track summed over the overlap).
-- **Overlays (decision: rendered once, outside both pictures, composited at the join).** A slide
-  or wipe is not per-pixel linear, so overlays baked into both renders would move (a sliding
-  watermark, two half captions). So: the outgoing scene draws **no** overlays from the planned
-  cut on (`OverlayLayer` without `following`: `_build_overlays` gives `following` only for a
-  crossfade, the own overlays stop at `cut` as before); the incoming scene's worker calls
-  `OverlayLayer.split_head(overlap, path)` (`NarratedScene.overlay_head` = the planned overlap
-  of an incoming push / wipe): its first `overlap` frames are written bare and the overlays of
-  those frames go, per frame and as a pure function of video time like everything else, into an
-  RGBA clip `scenes/<id>.overlay.mov` (`RgbaClip`: QuickTime + PNG, straight alpha;
-  `OverlayLayer.rgba(states, h, w)` blends the cached premultiplied patches over transparency, so
-  it is the same picture `composite` would draw, within 2 levels — tested). The join (`ffmpeg.join
-  (kinds=, overlays=[(clip, first output frame)])`, `overlay_graph`) draws each clip after the
-  `xfade` chain with `overlay=eof_action=pass:format=yuv444`, the clip shifted half a frame early
-  so frame `j` lands exactly on output frame `start + j`; `RgbaClip.close` appends a transparent
-  frame because `overlay` stops showing a clip at its last frame's timestamp (found by test: the
-  last frame was dropped). Which overlays: the incoming scene's, from the transition's start, as
-  for a crossfade (§49). The clip covers the incoming scene's first frames whatever overlap the
-  join ends up using, so a shortened overlap stays correct. Timings `render.overlays.head`
-  records the frames; a clip is used only when the transition into the scene is still a push /
-  wipe. Alternative rejected: compositing in Python at the join (decode + re-encode the overlaps
-  ourselves) — more code, and the join already re-encodes once.
-- **Continuity (`carry`).** `SceneConfig.carry: list[CarryEntry(source, dest)]` from `name` /
-  `"a -> b"` strings (`CarrySetting`: dumped back as the strings; target-name syntax
-  `config.TARGET_NAME_PATTERN`, now shared with `actions.TARGET_NAME`; one destination once; not
-  on the first scene). `carry.carry_problems` (validate + before any render) checks sources
-  against the scene before's `target_names(params)` and destinations against the scene's (types
-  that declare `target_patterns` only; synonyms `title`/`heading` as for actions);
-  `carry_warnings`: a carry through `fade_color` / `push` / `wipe` (they fade or move the
-  carried objects with the picture).
-  - **Recording** (scene A): `NarratedScene.carry_out` = the next scene's sources; `finish()`
-    fades everything but their on-screen parts (`clear_all(keep=)`: a group holding a kept part
-    fades only its other submobjects); `tear_down` records each source's on-screen parts as
-    plain shape data (`carry.parts_state`: per vector family member with points, its points,
-    fill / stroke / background-stroke RGBAs, widths, z, joint / cap style; images are skipped
-    with a warning) into `carry_state`; the worker writes `carry/<A>.json` `{version, scene,
-    fingerprint, objects: {source: [shapes]}}`. Decision: **re-created shapes, not pickled
-    mobjects** (no class identity, updaters or file paths to carry; pixel-identical — tested
-    within 1 level on text, strokes and fills).
-  - **Showing** (scene B): the worker reads A's record (missing → `VidgenError` naming A) into
-    `scene.carried_in` and notes `render.carry_from` = A's fingerprint; `setup()` adds the
-    rebuilt `VGroup` of each entry from frame 0. `entrance(target)` (what built-ins use to bring
-    targets in) returns `carry_move(copy, target.mobject)` for a target a copy waits for:
-    `Transform` of the copy into a flat copy of the target's shapes, then the target itself in
-    its place (so later actions find it) when both have as many shapes (same text / icon:
-    glyphs glide), else Manim's `FadeTransform` (stretched cross-fade between boxes). `play()`
-    fades out a copy whose destination is brought in another way (it is in the play's
-    animations) or does not exist (warning). `carry_in(name)` hands the copy to custom code.
-  - **Order of renders** (decision: B depends on A's artifact, not on recomputing A's end):
-    `pipeline.with_carried` adds to any render list the scene before a carrying scene whose
-    record is missing or has another fingerprint than A's current one, and a carrying scene
-    whose `carry_from` is not A's current fingerprint when A is rendered; `_runs(after=)` makes a
-    carrying scene's task wait for the scene before (thread events; the pool starts tasks in
-    list order, so the awaited one has started: no deadlock). Works for `render` (with
-    `--scene` / `--jobs`), `storyboard` and `lint` (all go through `_render_scenes`).
-  - **Fingerprint**: A gains `next_carry` (what it keeps), B `carry` + `carry_from` (A's
-    fingerprint, recursively), only when there are carries; a scene's own `carry` is left out of
-    its config dump, so projects without carries keep their fingerprints (adding the
-    `direction` / `soft` keys changes those of scenes with transitions once).
-- **Example**: `examples/gallery`: `structure` (chapter) → `tradeoff` cut with `carry: ["title ->
-  heading"]` (different words: a stretched cross-fade into the heading), `part2` → `speedup` cut
-  with `carry: [icon]` (glides into the stat's icon), `schedule` `push`, `cost` `{wipe, right,
-  soft}`.
-- Known limits: carried objects are vector shapes only, in scene coordinates (a camera zoomed at
-  the end of A is not undone); a push / wipe still blends pictures whose overlays were *chosen*
-  per scene (the incoming scene's from the transition's start, like a crossfade); stills taken in
-  a push / wipe's frames show no overlays (beat-end stills never are); `vidgen render --scene X`
-  alone shows neither the slide nor the carry's partner (the join and the scene before do).
-
+- **push / wipe**: `direction` (`left | right | up | down`; default `transitions.direction`: left
+  wide / square, up tall, per format), `soft` (wipe). `xfade_name`: `slide<dir>`, `wipe<dir>`,
+  `smooth<dir>`. Timing is §49's.
+- **Overlays rendered once, composited at the join** (a slide is not per-pixel linear): the
+  outgoing scene draws none after its cut; the incoming worker's `OverlayLayer.split_head(overlap,
+  path)` writes its first frames bare and their overlays to `scenes/<id>.overlay.mov` (`RgbaClip`,
+  PNG straight alpha, plus a trailing transparent frame). `ffmpeg.join(kinds=, overlays=)` /
+  `overlay_graph` lays it over the `xfade` chain (`overlay=eof_action=pass:format=yuv444`).
+  `render.overlays.head` records it.
+- **Continuity `carry`**: `SceneConfig.carry: [name | "a -> b"]` (`CarryEntry`, names match
+  `config.TARGET_NAME_PATTERN`; not on the first scene). `carry.carry_problems` checks names against
+  `target_names(params)`; `carry_warnings` for fade_color / push / wipe.
+  - A: `carry_out` keeps those parts through `finish()` (`clear_all(keep=)`); `tear_down` stores
+    their vector shapes (`carry.parts_state`; images skipped with a warning) → `carry/<A>.json`
+    `{version, scene, fingerprint, objects}`. Re-created shapes, not pickled mobjects.
+  - B: reads it (missing → `VidgenError`), `render.carry_from` = A's fingerprint, shows the copies
+    from frame 0; `entrance(target)` → `carry_move` (`Transform` when shape counts match, else
+    `FadeTransform`); unmatched copies fade out; `carry_in(name)` for custom code.
+  - Order: `pipeline.with_carried` adds stale partners; `_runs(after=)` makes B wait for A.
+  - Fingerprint: A `next_carry`, B `carry` + `carry_from` (only with carries).
 
 ## 51. Refinements (Step 48, review 3: overlays, captions, audio, transitions)
 
-- **Narration level**: `NarratedScene.narrate` adds a beat's MP3 through `scene.add_narration`,
-  which decodes it (`sfx.decode_audio`, 48 kHz) and hands Manim a stereo WAV (`sfx.stereo`: a
-  mono file at full level on both channels, as sound effects have always been). Given the MP3,
-  Manim's `convert_audio` encoded it with PyAV's default stereo layout, i.e. libswresample's
-  mono → stereo matrix at −3.01 dB per channel: every rendered video since Step 4 was 3 dB
-  quieter than its MP3s (kphi3: −24.4 → now −21.4 LUFS integrated, true peak −2.2 dBTP). Clip
-  sound (`clips.clip_audio`, FFmpeg `aformat` stereo) keeps the standard −3 dB upmix for mono
-  clips; it is under the narration at a chosen `volume` anyway. Recalibrated: `MUSIC_LEVEL` −28
-  LUFS (Step 45 had planned −28 and set −30 only to make up for the bug): ~6.5 dB under
-  narration in pauses, ~18.5 dB when ducked; the SFX level (−27 LUFS loudest 400 ms) needs no
-  change — it was calibrated on the MP3s and is now ~7 dB under the voice as stated.
-- **Limiter margin** `mix.LIMITER_MARGIN_DB` 0.4 (was 0.1): the AAC encode raised the gallery's
-  true peak 0.2 dB over the WAV's, past the −1.5 dBTP ceiling.
-- **Scene lengths** (`ffmpeg.probe`): duration = frames / the stream's nominal rate
-  (`guessed_rate`, `r_frame_rate`) instead of the average rate, which Manim's joined partial
-  movies put off by a few 1/10000 (15.0003 for 15 fps): the join's starts drifted up to ~3 ms
-  from the plan over the gallery (chapter start ≠ scene start) and each padded WAV was a few
-  samples short of its video.
-- **Overlays making way** (`Overlay.yields`, `clear_of`, `clear_area`; `overlays.build_overlays`
-  used by `OverlayLayer`): yielding overlays are built after the others and know the boxes of
-  those that reserve room; the built-in `lower_third` yields and, where it would come within the
-  reserve gap of such a box (bottom captions in 9:16 *and* 16:9 when `align: bottom`), is placed
-  again in `avoid(area, box)` — above the captions. Nothing moves when nothing is in its way.
-  Decision: a class attribute on the overlay type (which one gives way is a property of the
-  kind of overlay), not a priority number in the config.
-- **Actions due with a camera move** (`Action.after_camera`; `callout` sets it): in a frame
-  where a `moves_camera` action is due, after-camera actions are ordered last and get a batch of
-  their own after it, so a callout written next to a `zoom` (same `at`) is built for the zoomed
-  view (it was built for the camera before the zoom and then scaled with the scene).
-- **Karaoke pop**: `captions.POP_ROOM` 0.25 of a space per side (was 0.45: the popped word
-  nearly touched its neighbour in 9:16).
-- **Not changed, documented**: `reserve` stays per scene (a layout is built once; a time-ranged
-  reserve would mean re-laying out scenes mid-way) — several reserving overlays add up (the
-  gallery's voiced clip in 16:9: captions + lower third + indicator + watermark leave the clip
-  small). The SRT's / captions' first cue of a beat starts at the beat's start (not at the
-  speech onset ~50–90 ms later), by design (`cues.caption_cues`). Joins with a crossfade, push
-  or wipe re-encode the whole video: measured on the gallery preview (3:49, 854x480, 2 CPUs)
-  ~40 s of a ~60 s join+mix, ~10 s of it decoding / filtering, the rest x264; stream-copying the
-  parts between transitions would need re-encoded head / tail pieces whose H.264 parameters
-  (SPS/PPS) match Manim's encoder for a concat copy, and Manim's keyframes fall at its
-  partial-movie boundaries, not at the transitions — not robust enough for the gain (the
-  scenes' own renders take 2–3x longer than the join).
+- **Narration level**: `scene.add_narration` decodes the MP3 (`sfx.decode_audio`, 48 kHz) and gives
+  Manim a stereo WAV with mono at full level on both channels (`sfx.stereo`), so videos play at the
+  MP3s' level (Manim's own path upmixes at −3 dB).
+- **Scene lengths** (`ffmpeg.probe`): frames / nominal rate (`r_frame_rate`), not the average rate.
+- **Overlays making way**: `Overlay.yields` (class attribute), `clear_of`, `clear_area`,
+  `overlays.build_overlays`: yielding overlays build after reserving ones; `lower_third` yields
+  (moves above bottom captions).
+- **`Action.after_camera`** (`callout`): in a frame with a `moves_camera` action due, such actions
+  get their own batch after it.
+- By design: a beat's first cue starts at the beat start; overlapping transitions re-encode the
+  whole video.
 
 ## 52. Refinements (Step 49, chapters in the MP4 and a YouTube chapter list)
 
-- **Config** (`config.py`): top-level `chapters: ChaptersConfig {metadata: true, youtube: true,
-  intro: "Intro" | false}` and `metadata: MetadataConfig {title, artist, album, comment,
-  description, copyright, date, genre}` (all optional text; `title` defaults to the video's
-  `title`). Both are left out of scene fingerprints (they change no pixels and no timing).
-- **Published chapters** (`chapter_export.py`): the list written to the outputs starts at 0:00.
-  When the first chapter starts later (an opening title scene), `published_chapters` adds a
-  chapter titled `chapters.intro` before it (`Chapter.intro = True`, `scene` = the first scene,
-  no number, not a card), or with `intro: false` moves the first chapter's start to 0:00;
-  `index` / `count` are renumbered in that list. A first chapter starting within 1 ms of 0
-  counts as starting at 0. **Decision: the intro exists only in published lists.** Overlays
-  (progress bar gaps, chapter indicator) keep the plain `VideoPlan.chapters` — an indicator saying
-  "Intro" over a title card would be noise, and Step 39's runs, fades and reserves stay as they
-  were. `video_chapters(project, fps, intro=True)` returns the published list from the plan
-  (what `vidgen validate` checks).
-- **Times in the outputs come from the join**, not from the plan: `joined_chapters(config,
-  scenes, duration)` starts each chapter at its scene's start in the combined timings (the
-  overlapped starts of §49: a crossfade / push / wipe into a chapter card starts the chapter where
-  the transition starts) and ends the last at the joined duration. For scenes that keep to the
-  plan (all built-ins; §51) they equal `video_chapters(..., intro=True)` exactly; for a scene
-  that does not, the outputs follow the real video. Found while testing: at 5 fps a silent
-  `chapter` card of 1.2 s plans 7 frames and renders 6 (`(duration - outro) x fps` = 3.5 frames:
-  the plan rounds the tie up, the scene's waits end a frame shorter) — a half-frame tie only;
-  routed to Step 60. The test uses 10 fps.
-- **MP4** (`ffmpeg.join(..., metadata=)`): the pipeline writes `padded/metadata.txt`
-  (FFMETADATA: global tags, then one `[CHAPTER]` per chapter with `TIMEBASE=1/1000`, `START` /
-  `END` rounded to the millisecond, `END > START`, titles on one line; `\ = ; #` and newlines
-  escaped) and the final mux adds it as the last input with `-map_metadata N -map_chapters N`.
-  FFmpeg's MP4 muxer stores the chapters as a QuickTime chapter text track (a `bin_data` data
-  stream in ffprobe) plus a Nero `chpl` list, which is what players read; ffprobe
-  `-show_chapters` reads them back (tested: starts equal the plan within 1 ms). With
-  `chapters.metadata: false` the file has no `[CHAPTER]` entries (tags still). The join now
-  always maps metadata from this file (the concat demuxer's input tags are no longer copied;
-  they were only FFmpeg's `encoder`, which the muxer writes anyway).
+- **Config**: `chapters: {metadata: true, youtube: true, intro: "Intro" | false}`, `metadata:
+  {title, artist, album, comment, description, copyright, date, genre}` (title defaults to the
+  video's). Out of scene fingerprints. Users: docs/CONFIG.md "Chapters in the outputs".
+- **Published chapters** (`chapter_export.py`): start at 0:00 — `published_chapters` adds an intro
+  chapter (`Chapter.intro = True`) or with `intro: false` moves the first to 0 (within 1 ms counts
+  as 0). Only in outputs; overlays use `VideoPlan.chapters`. Output times come from the join
+  (`joined_chapters`).
+- **MP4**: `padded/metadata.txt` (FFMETADATA, `[CHAPTER]` `TIMEBASE=1/1000`, `END > START`, `\ = ; #`
+  and newlines escaped) mapped with `-map_metadata N -map_chapters N`; `metadata: false` → no
+  chapters (tags still).
 - **YouTube list** (`pipeline.write_chapter_list`): `<output>[_<variant>][_preview]_chapters.txt`
-  (`Project.chapters_path`), one `M:SS Title` line per published chapter (`H:MM:SS` from an hour
-  on), UTF-8. **Timestamps round down** to the second: a click lands at the chapter's first frame
-  or before it, never after (rounding to nearest could skip up to half a second of a card).
-  Rules checked (`youtube_problems`, on the rounded times, since that is what YouTube sees): at
-  least 3 chapters, each ≥ 10 s (the first at 0:00 holds by construction); each broken rule is
-  one warning starting `chapters:` naming the chapter, its span and a remedy (for a short intro:
-  begin with a chapter or `intro: false`). The render logs them (so `render --json` lists them
-  in `warnings`) and writes the file anyway; `vidgen validate` reports the same from the plan
-  (`chapter_warnings`, part of `validate_warnings`). Without chapters, or with `youtube: false`,
-  no file is written and an old one is removed (it would describe another video).
-- **JSON**: combined `timings.json` gains `chapters` (published, `chapter_json`: the `Chapter`
-  fields, times to 1 µs; also when both outputs are off); `render --json` gains top-level
-  `chapters` (the same list) and `outputs.chapters` (the file or `null`); `post_render` hooks get
-  `chapters` (the file or `None`); `RenderResult.chapters`. All within version 1.
-- **Titles**: the chapter's title on one line (whitespace runs → one space), without its number
-  (numbers are part of the on-screen design; "2 · Results" would read oddly in a menu next to
-  the player's own numbering).
-- Known limits: chapter titles are not translated per variant beyond what the variant's config
-  says; a chapter's `number` is not shown in the outputs; YouTube also requires the list in the
-  description to be the video's own (schu-video-generator only writes the file); the MP4 has no chapter
-  thumbnails.
+  (`Project.chapters_path`), `M:SS Title` (`H:MM:SS` ≥ 1 h), times **rounded down**.
+  `youtube_problems` (≥ 3 chapters, each ≥ 10 s) are `chapters:` warnings at render and validate
+  (`chapter_warnings`); the file is written anyway, and removed when chapters / `youtube` are off.
+- **JSON**: `timings.json` / `render --json` `chapters`, `outputs.chapters`;
+  `RenderResult.chapters`; `post_render` hooks get `chapters`. Titles on one line, without numbers.
 
 ## 53. Refinements (Step 50, thumbnail and GIF / clip export)
 
-- **Config** (`config.py`): top-level `thumbnail: ThumbnailConfig | None` — a frame of a scene
-  (`scene`, `beat` id or 1-based number, `at` seconds ≥ 0, `overlays` default true) or a designed
-  card (`title` default the video's `title`, `subtitle`, `icon` | `image`, `preset`,
-  `background`), plus `jpeg` (false) and `auto` (true). Frame and design keys together, frame keys
-  without `scene`, `icon` with `image`: config errors; `VideoConfig.thumbnail_problems(thumb)`
-  checks the scene and beat (also a beat on a silent scene); `vidgen validate` checks icon, image
-  file, preset and colour token (`thumbnail.thumbnail_problems`, also run by `render`'s scene
-  checks). `ThumbnailConfig()` (no section) = a designed card of the title. Out of scene
-  fingerprints.
-- **Size** (`thumbnail.thumbnail_size`): from the final `format`'s orientation (`scales.frame_orientation`):
-  landscape 1280x720 (YouTube's recommendation), portrait 1080x1920 (Shorts / Reels covers),
-  square 1080x1080. Every picture is cover-fitted (centre crop) to it with Lanczos.
-- **Files**: `Project.thumbnail_path(preview, suffix)` = `<output>[_<variant>][_preview]_thumbnail.png`
-  (and `.jpg`), the small copy `build/<render dir>/thumbnail/<name>_small.png` (long side
-  `SMALL_LONG_SIDE` 320 px: YouTube's grid size, for the author — an AI agent opens it as an
-  image). JPEG (`jpeg` / `--jpeg`): qualities 92 → 55 until ≤ 2 MB (YouTube's limit); without
-  it an old JPEG is removed. Atomic writes.
-- **Frame thumbnails** (`_frame_thumbnail`): the frame comes from the **scene's own render**
-  (`scenes/<id>.mp4`), not from the joined video: a frame of a scene is the same with or without
-  transitions, and it can be (re)made alone. `render_current` (format + fingerprint, §14) decides
-  whether the scene is rendered first (`pipeline.render_scenes`, no join). Frame number
-  (`frame_number`): a beat without `at` → its last frame, `round(start·fps) + round((end − start
-  + pad)·fps) − 1`, capped by the next beat's first frame (the beat-end still of §13, computed
-  from the timings instead of capturing stills, so a plain render is reused); `at` → `floor((beat
-  start | 0) + at)·fps`; nothing → the last beat's end, or for a silent scene the frame before
-  its fade-out (`duration − outro`, the scene type's `outro`); past the scene's end → error.
-  Decoded with PyAV (exact frame, no seek rounding). From a render smaller than the thumbnail
-  (e.g. `--preview`) an `info` check says it was scaled up.
-- **Without overlays** (`overlays: false` / `--no-overlays`): overlays are composited inside the
-  render (§41), so the picture without them needs another render. `Project.without_overlays()`
-  is the project with `overlays: []` and every scene `overlays: false`, `bare = True`, whose
-  `render_dir` is `build/<final|preview>[_<variant>]_bare`; the pipeline passes worker `--bare`,
-  which does the same in the worker process. Its fingerprints differ (no overlay inputs), so the
-  bare renders are reused while current; carries render the scene before into the bare folder
-  too (`with_carried`). Decision: a separate folder rather than a flag on the normal render, so
-  the normal renders (and the joined video) are never replaced by overlay-less ones. The scene
-  lays out without the room reserving overlays take (the frame shows the scene as designed for
-  a clean frame).
-- **Designed thumbnails** (`design_thumbnail`, Pillow; the icon through Manim's Cairo camera as
-  in `list-icons --sheet`, on the disc colour so no alpha is needed): in 16:9 the text on the
-  left 58 %, the icon (on a `surface` disc, `primary`, ≥ 3:1 on the disc) or the image (a bleed
-  panel) on the right; in 9:16 / square the visual on top (≈ 45 %), text centred below. Text
-  sizes in units of the short side S (720 / 1080 px): margins 0.075 S; the title (font role
-  `heading`, bold) the largest even size from 0.2 S down to 0.078 S whose balanced wrap
-  (narrowest width keeping the line count) fits in 3 lines (4 in portrait) and the box; at the
-  smallest size the rest is cut with `…` (`fit`). Then an accent bar (0.22 S x 0.016 S, theme
-  `accent`), the subtitle (role `body`, 0.068 S, ≤ 2 lines). Colours: background = `background`
-  (token / hex) or the theme's; title `text` unless below 4.5:1 there (then black / white, the
-  stronger); subtitle the first of `highlight`, `primary`, `accent` ≥ 4.5:1, else the title's.
-  `preset` uses `Theme.derive(ThemeConfig(preset=...))`: the preset alone, not the project's
-  overrides (which would otherwise win over the preset). Fonts: the bundled file of the theme's
-  family (`fonts.bundled_font_file`), else an installed font of that name, else
-  `sheets.load_font`.
-- **Checks** (`ThumbnailCheck(rule, severity, message)`, lint names where they mean the same):
-  designed cards are measured at the small size (factor `320 / long side`): `min_font` title
-  < 14 px / subtitle < 10 px (the title's minimum size 0.078 S is exactly 14 px small in both
-  orientations), `contrast` < 4.5:1 (WCAG via `lint.color`), `fit`, `max_words` > 6 (info);
-  all kinds: `file_size` > 2 MB, frame thumbnails `resolution` (info). A frame thumbnail's text
-  is not measured (a plain render has no layout dump; `vidgen lint` checks scenes) — documented.
-- **Render**: with `thumbnail:` and `auto`, `render_project` makes the thumbnail after the join,
-  outside its extension session (a frame thumbnail may run `render_scenes`, which opens its own);
-  the scene's render is current then, so nothing is rendered again unless `overlays: false`.
-  Warnings are logged (`render --json` `warnings`); `RenderResult.thumbnail` (`ThumbnailResult`),
-  `render --json` `outputs.thumbnail`, human `thumbnail:` line. Since Step 60 `post_render` runs
-  after it (in a second extension session) with `thumbnail` (its path, else `None`) — §63.
-- **`vidgen thumbnail`** (`cmd_thumbnail`): the config's thumbnail, or `--scene` (+ `--beat`
-  id or number — a digit string is a number unless the scene has a beat of that id —, `--at`,
-  `--no-overlays`) checked like the config; `--preview`, `--jpeg`, `--jobs`, `--json`
-  (`jsonout.thumbnail_document`).
-- **`vidgen export gif|clip`** (`export.py`): source = the joined video + `timings.json` of the
-  render dir (error naming `vidgen render [--preview]` when missing; durations must agree within
-  0.1 s). `resolve_range`: with `--scene` times from its start (default the whole scene, `end`
-  kept within it — `start + duration`, so a transition out of it is included), else video times.
-  Default path `exports/<output>[_<variant>][_preview]_<scene|video>[_<from>-<to|end>s].<gif|mp4>`;
-  `--output` elsewhere. Decision: an `exports/` folder in the project (not next to the output) —
-  shareable artefacts, many per video, easy to ignore in git (`**/exports/`, also in the init
-  template's `.gitignore`).
-  - **GIF**: one FFmpeg pass, `fps, scale=W:-1:flags=lanczos, split, palettegen=stats_mode=full,
-    paletteuse=dither=sierra2_4a:diff_mode=rectangle` (`stats_mode=full`: explainer graphics are
-    mostly still, one palette for all frames avoids colour pumping; `diff_mode=rectangle`: only
-    changed areas are re-dithered, no shimmer, smaller files), `-loop 0`. Defaults: width 480
-    (270 for 9:16), ≤ the video's; 12 fps, ≤ the video's. **Budget** `--max-mb`: `next_try` —
-    size ≈ width² · fps, needed factor × 0.9 split as fps × factor^(1/3) (≥ 5 fps) and the width
-    taking the rest (≥ 160 px); at most `MAX_ATTEMPTS` 6 encodes or until nothing can be lowered;
-    still too big → warning (`within_budget: false`). Attempts listed in the JSON.
-  - **Clip**: stream copy when the start lies within half a frame of a keyframe (PyAV demux,
-    packets only) and neither `--width` nor `--fps` changes the picture: `-ss <keyframe> -i`,
-    `-c:v copy -frames:v N` (`-t` alone let a copy run 2 frames long); with `--with-audio` the
-    sound comes from a second input seeked to the same time and is encoded AAC 192k (copied AAC
-    packets started up to a packet early: the clip opened with 0.15 s of sound before its first
-    picture). Otherwise re-encoded (`libx264 -crf 18 -pix_fmt yuv420p`, accurate input seek,
-    `scale=W:-2`, `fps=F`). Chapters dropped. A joined video without crossfades / pushes / wipes
-    stream-copies the scenes, so scene starts are keyframes and `export clip --scene X` copies.
-- Known limits: frame thumbnails are not checked for text size / contrast; a designed card has
-  one layout (title + bar + subtitle + one visual) and no background image behind the text; the
-  `_bare` render folder is not cleaned up; GIF budgets assume size ∝ width² · fps (static
-  explainer frames compress better, so it can take a few encodes); in a re-encoded join
-  (transitions) keyframes fall where x264 put them, so most clips of it are re-encoded.
+- **Config** `thumbnail:` (`ThumbnailConfig`): a frame (`scene`, `beat` id or 1-based number, `at`,
+  `overlays`: true) or a designed card (`title`, `subtitle`, `icon` | `image`, `preset`,
+  `background`), plus `jpeg` (false), `auto` (true); mixing kinds is a config error
+  (`thumbnail_problems`). Out of fingerprints. Users: docs/CONFIG.md "Thumbnail".
+- **Size** (`thumbnail_size`): 1280x720 / 1080x1920 / 1080x1080 by the final format's orientation,
+  cover-fitted. **Files**: `Project.thumbnail_path(preview, suffix)` =
+  `<output>[_<variant>][_preview]_thumbnail.png` (`.jpg`: quality 92 → 55 until ≤ 2 MB), small copy
+  `build/<render dir>/thumbnail/<name>_small.png` (`SMALL_LONG_SIDE` 320). Atomic writes.
+- **Frame thumbnails** come from the scene's own render `scenes/<id>.mp4` (rendered first when not
+  `render_current`). `frame_number`: a beat's last frame (the §13 still, capped by the next beat), or
+  `floor(((beat start | 0) + at) x fps)`, or the last beat's end / a silent scene's frame before its
+  fade-out; past the end → error.
+- **Bare renders**: `Project.without_overlays()` (`overlays: []`, every scene `overlays: false`,
+  `bare = True`, `render_dir` `build/<final|preview>[_<variant>]_bare`; worker `--bare`), a separate
+  folder so normal renders are never replaced. Also used by decks (§55).
+- **Designed thumbnails** (`design_thumbnail`, Pillow; icon via Cairo): 16:9 text left / visual
+  right, else visual on top; title the largest even size 0.2 S → 0.078 S (S = short side) fitting 3
+  lines (4 portrait), else cut with `…`; colours chosen for ≥ 4.5:1; `preset` =
+  `Theme.derive(ThemeConfig(preset=...))`.
+- **Checks** (`ThumbnailCheck(rule, severity, message)`) at the small size: `min_font` (title 14 /
+  subtitle 10 px), `contrast` 4.5:1, `fit`, `max_words` > 6 (info), `file_size` > 2 MB, `resolution`
+  (info). Frame thumbnails' text is not measured.
+- **Render**: with `auto`, made after the join outside the extension session, then `post_render`
+  (§63). `RenderResult.thumbnail`, `outputs.thumbnail`. `vidgen thumbnail` (`--scene`, `--beat`: a
+  digit string is a number unless the scene has such a beat id, `--at`, `--no-overlays`,
+  `--preview`, `--jpeg`, `--json`).
+- **`vidgen export gif|clip`** (`export.py`): source = joined video + `timings.json` (missing →
+  error naming `vidgen render`; durations agree within 0.1 s). `resolve_range`: `--scene` times
+  from its start, default the whole scene incl. its outgoing transition. Default
+  `exports/<output>[_<variant>][_preview]_<scene|video>[_<from>-<to|end>s].<gif|mp4>`. Users:
+  docs/CONFIG.md "Export: GIF and clip".
+  - GIF: one pass `palettegen=stats_mode=full` + `paletteuse=dither=sierra2_4a:diff_mode=rectangle`,
+    `-loop 0`; width 480 (9:16 270) and 12 fps, each ≤ the video's; `--max-mb` re-encodes
+    (`next_try`, ≥ 5 fps, ≥ 160 px, `MAX_ATTEMPTS` 6; else `within_budget: false`).
+  - Clip: stream copy (`-c:v copy -frames:v N`) when the start is within half a frame of a keyframe
+    and no `--width` / `--fps`; `--with-audio` encodes AAC 192k from a second seeked input; else
+    libx264 CRF 18. Chapters dropped.
 
 ## 54. Refinements (Step 51, multi-language variants)
 
-- **`language`** (`config.LanguageTag`, top level, so per variant by deep merge): a BCP-47 tag
-  (`^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$`) normalised (`pt-br` → `pt-BR`, scripts title case,
-  regions upper case). `None` = the English rules and nothing sent: every project without the key
-  behaves exactly as before. `vidgen/languages.py` (no manim): `LanguageRules(code, name,
-  conjunctions, prepositions, clinging, words_per_second, silent_final_e, iso639_2)` for `en`
-  (Step 40's lists), `pt`, `es`, `fr`, `de`, `it`; any other language gets a neutral set (no word
-  lists, no word rate, ISO 639-2 from a small table). `language_matches(entry, video)`: subtag
-  prefix match (`pt` ⊂ `pt-BR`; no language = `en`).
-- **Cues** (`vidgen.cues`): `phrase_break_cost(before, after, language=None)` uses the language's
-  lists; punctuation counts in every language (sentence ends incl. `。！？`, clause marks incl.
-  `،、，；：`, a break before `¿ ¡ «` is a clause break). `segment_cues`, `split_cues`,
-  `caption_cues`, `subtitles.split_text / beat_cues / cues_from_timings / write_srt` take
-  `language` (the SRT uses the combined timings' `language` by default; the pipeline passes the
-  project's); captions read `project.config.language`. `speech.syllables(word, language)`: the
-  silent final `e` only in English and French; `estimate_word_times` / `beat_word_times` pass it.
-- **Lint** `narration_speed`: `unit: auto | words | characters`, `min_rate` / `max_rate` now
-  default `None` = the language's range (`NarrationSpeedRule.limits(language) -> (unit, min,
-  max)`); auto uses words for languages with a word rate, else characters per second
-  (`speech.spoken_characters`: letters and digits; 8-17/s). `SceneContext.language`.
-  Decision: per-language word ranges rather than one character mode for all, so English results
-  are unchanged and the familiar unit stays where it is meaningful.
-- **ElevenLabs `language_code`**: `VoiceConfig.language_code` / `VoiceEntry.language_code` (`str |
-  false | None`). `voices.resolve_voice` stores the code actually sent
-  (`languages.elevenlabs_language_code`): the configured code, `false` → none, `None` (auto) → the
-  video language's ISO 639-1 subtag for `LANGUAGE_CODE_MODELS` (`eleven_turbo_v2_5`,
-  `eleven_flash_v2_5`; other models reject the field). The provider sends it in the body and
-  inserts `language_code=<code>` into the §7 hash parts before the text only when it sends one
-  (hashes without a code are unchanged; no legacy kphi3 hash then). `Project._audio_differs`
-  compares resolved voices, so a variant whose code is sent gets its own audio folder.
-- **MP4 / outputs**: `ffmpeg.join(..., language=<ISO 639-2>)` tags the audio stream
-  (`-metadata:s:a:0 language=por`); the combined `timings.json` gains `language`. Per-variant
-  SRT, chapter list and thumbnail are already separate files (§52, §53); they carry the
-  language through their (translated) texts. No `language` tag in FFMETADATA (the MP4 muxer
-  stores no global language).
-- **Pronunciation**: `PronunciationEntry.language` (tag or list); `load_pronunciation` leaves out
-  entries for other languages (`pronunciation.applies_to`). `translation.language_warnings`: a
-  variant in another primary language that keeps base inline entries unchanged (and matching a
-  beat) gets a validate warning.
+- **`language`** (`config.LanguageTag`, BCP-47, normalised `pt-BR`; per variant). `None` = English
+  rules, nothing sent. `vidgen/languages.py`: `LanguageRules(code, name, conjunctions, prepositions,
+  clinging, words_per_second, silent_final_e, iso639_2, abbreviations)` for en, pt, es, fr, de, it;
+  others neutral. `language_matches(entry, video)`: subtag prefix. Users: docs/CONFIG.md "Languages
+  and translations".
+- **Language-aware**: `phrase_break_cost(..., language)` (and every cue / SRT function; punctuation
+  of all scripts), `speech.syllables(word, language)`, lint `narration_speed` (`unit: auto | words
+  | characters`, `min_rate` / `max_rate` `None` = the language's range via
+  `NarrationSpeedRule.limits(language)`; characters 8–17/s where no word rate).
+- **ElevenLabs `language_code`** (`str | false | None` on voices): `voices.resolve_voice` stores the
+  code sent (`languages.elevenlabs_language_code`; auto only for `LANGUAGE_CODE_MODELS`
+  `eleven_turbo_v2_5`, `eleven_flash_v2_5`). Only a sent code enters the body and the §7 hash
+  (`language_code=<code>` before the text).
+- **Outputs**: audio stream tagged with ISO 639-2 (`ffmpeg.join(..., language=)`); `timings.json`
+  `language`. `PronunciationEntry.language` filters entries (`pronunciation.applies_to`).
 - **Translation files** (`vidgen/translation.py`, no manim):
-  - *Markers*: `TextMarker(kind)` in `Annotated` metadata (JSON Schema `x-vidgen-text: text|ref`);
-    `TranslatableStr = Annotated[str, TRANSLATABLE]`, `TextRef = Annotated[str, TEXT_REF]` (in
-    `vidgen.api`). Every built-in `Params` / action / overlay text field is marked (titles,
-    headings, captions, labels, items, table cells, legend / axis names, units, notes, callout
-    labels, a lower third's name / title, a watermark's text, chapter `number` text, stat
-    separators); refs: `bar_chart` / `pie` / `icon_grid` `highlight` (+ `groups`), `heatmap` /
-    `scatter` `highlight`, `timeline` `highlight` / `now`, `map` arc ends. Shorthands:
-    `SceneParams.text_shorthand` (`{type: "text" | ("field", F) | ("after", SEP) | ("fields",
-    names) | ("model", M)}`) and `text_defaults` (`{"label": "id"}`), read with `getattr` so any
-    pydantic model may set them.
-  - *Keys*: `parse_key` / `format_key` over `Seg(kind, value)`: `.name` (mapping key, or the id of
-    an item of `scenes` / `beats` (default `<scene>_b<n>`) / top-level `overlays` (type /
-    `<type><n>`)), `[n]`, `["key"]`, `{"key"}` (the key itself, last), `=field`, `$sep` (last).
-    Beat texts are `scenes.<id>.beats.<id>.text`. `_Cursor` reads / writes the raw mapping by key;
-    `=field` wraps a string as `{field: string}` (written back only when a field is added) and
-    makes the next field default to it.
-  - *Extraction* (`extract_texts(data, scene_model, action_model, overlay_model)`, needs the
-    models; `project_texts(project)` inside a project session): top-level `title`, `metadata`
-    title / album / comment / description, `chapters.intro`, `thumbnail` title / subtitle,
-    overlay options, then per scene `chapter`, params (walked by the field types: unions pick the
-    member that fits the raw value — marked `str` first; lists by their first item; dicts by the
-    model whose fields cover most keys; aliases and header synonyms), beat texts, action options
-    (canonical or shorthand form, `ActionConfig.resolved`'s rule) and scene overlay overrides.
-    Only values present in the raw config are listed (defaults are not). References: `TextRef`
-    values and action targets naming a params text of the scene (whole, after `kind:`, or before
-    `@`) → that text's key.
-  - *File*: `TranslationFile {version: 1, language, source_language, entries: {key:
-    TranslationEntry {source, hash, text, stale, old_source, obsolete} | text}, references}`
-    (extra keys forbidden, keys parsed); `source_hash` = sha1[:10] of the source. Written with a
-    comment header by `dump_translation_file` (YAML, `allow_unicode`, insertion order).
-  - *Applying* (`apply_translations(data, doc) -> (data, TranslationReport)`; registry-free):
-    `Project.load` merges the variant, validates, and when the merged config has `translations:`
-    applies the file to the **raw** mapping and validates again (`Project.source_data` /
-    `source_config` keep the untranslated form, `Project.translation` the report). Texts first,
-    mapping-key renames last, then references (`_renamed`: whole value, `kind:` suffix, `@`
-    prefix). An entry is applied when it has a text and its `hash` (or `source`) matches the
-    current text and it is not `stale`; else the source stays (`untranslated` / `stale` /
-    `unknown` in the report). Text is used as written (no stripping: `" min"`), a YAML block's
-    final line break dropped. A missing file is not an error (`missing`, a validate warning).
-    Decision: **apply at load on the raw config**, so every consumer (TTS, audio hash and folder,
-    SRT, captions, scenes, chapters, tags, thumbnail, lint, storyboard) sees one translated
-    config with no special cases, and applying needs no scene types (keys are plain paths;
-    what needed the models — which fields are text, which places are references — was resolved
-    when the template was written). Decision: **stale translations are not used** (gettext's
-    fuzzy rule): after a source edit the old text may say something else; validate lists them.
-  - *Merging* (`merge_template`): (1) same key, same hash → kept (a hand-written entry without
-    source / hash is kept and gets them); (2) the same hash under another key of the same scene →
-    moved (an item inserted before it); (3) the key remains, source changed → `stale: true`,
-    `old_source`, text kept; leftovers: translated → `obsolete: true`, untranslated → dropped.
-    References are rewritten from the current config every run.
-  - *Command* `vidgen translate-template [--variant] [--lang] [--output] [--json]`
-    (`write_template` → `TemplateResult`): the file is the variant's `translations:` or
-    `translations/<variant>.yaml`; the language is `--lang`, else the variant's own `language`;
-    prints a hint when the config does not name the file yet. JSON: `translate_template_document`.
-  - *Validate*: `translation_warnings` (texts showing the source, stale, unknown keys, references
-    the file lacks or that broke, file language ≠ video language, missing file) and
-    `language_warnings` join `validate_warnings`; human `language [pt]: pt-BR (file: N
-    translated, M stale)`; `validate --json` `language` / `translations` at the top level and per
-    variant (`jsonout.translation_json`).
-- **Fingerprint**: `translations` excluded from the config part (the texts are in the scenes /
-    config already); `translation.py` is not a render input; `languages.py` is (captions).
-    `language` is in the config part. Renders made before Step 51 are stale once (new config keys
-    in the dump).
-- **Example**: `examples/minimal` variant `pt` (`pt-BR`, `translations/pt.yaml`: 54 of 73 texts
-  translated — title, intro, steps, feedback, sizes, trend, outro; picture, saying, math,
-  listing and note left in English on purpose; the variant's own pronunciation of LaTeX / JSON;
-  captions). `vidgen lint` of the translated scenes: 0 findings (two Portuguese texts were
-  shortened: 44 words on the bullets slide, 6.3 s of dead air in a longer beat).
-- Known limits: a translation file only changes texts present in the config (a stat's default
-  `decimal_mark` cannot be added); number formats and the map's country names are not
-  localised; a map arc shorthand `"A -> B"`, `lint_ignore` object patterns and targets naming a
-  translated point label (`point:<series>@<label>`) do not follow translations; languages
-  without spaces are cut at punctuation only; the storyboard / lint labels of schu-video-generator itself stay
-  English.
+  - Markers: `TranslatableStr`, `TextRef` (in `vidgen.api`; schema `x-vidgen-text: text|ref`) on
+    every built-in text field; `SceneParams.text_shorthand` / `text_defaults` describe shorthands.
+  - Keys: `parse_key` / `format_key` (`.name` = mapping key or an item id of `scenes` / `beats`
+    (`<scene>_b<n>`) / `overlays`; `[n]`, `["key"]`, `{"key"}` the key itself, `=field`, `$sep`).
+  - `extract_texts(data, scene_model, action_model, overlay_model)` / `project_texts(project)`:
+    only values present in the raw config, plus references (`TextRef` values, action targets naming
+    a text).
+  - File `TranslationFile {version: 1, language, source_language, entries: {key: TranslationEntry
+    {source, hash, text, stale, old_source, obsolete} | text}, references}`; `source_hash` =
+    sha1[:10]; `dump_translation_file` (YAML, header, insertion order).
+  - **Applied at load to the raw config** (`apply_translations(data, doc) -> (data,
+    TranslationReport)`; `Project.source_data` / `source_config` keep the original), so every
+    consumer sees one translated config: texts, then key renames, then references. An entry applies
+    only with text, a matching hash and not `stale` (**stale translations are not used**).
+  - `merge_template`: keep (same key + hash), move (same hash, other key in the scene), mark
+    `stale` with `old_source`, or `obsolete` / drop leftovers. `vidgen translate-template [--variant]
+    [--lang | --language] [--output] [--json]` (`write_template`): file = the variant's
+    `translations:` or `translations/<variant>.yaml`.
+  - Validate: `translation_warnings`, `language_warnings`; `validate --json` `language` /
+    `translations`.
+- **Fingerprint**: `language` is in the config part, `translations` is not; `languages.py` is a
+  render input, `translation.py` is not.
+- Limits: number formats and map country names are not localised; arc shorthands, `lint_ignore`
+  patterns and targets naming a translated point label do not follow translations.
 
 ## 55. Refinements (Step 52, slides export: HTML)
 
-- **Key frames** (`vidgen/deck.py`, no manim; shared with the PDF deck of Step 53, §56):
-  `deck_frames(project, *, preview=True, mode="beat"|"scene", per_beat=1, overlays=True,
-  dedupe=True, jobs=1, force=False) -> Deck`. The stills are the §13 frame stills, made current
-  the §14 way (`storyboard.stills_current` → `pipeline.render_scenes(..., frames=per_beat)` for
-  the stale or missing scenes only), so a deck after `storyboard` / `lint` / `render --frames`
-  renders nothing. `overlays=False` uses `Project.without_overlays()` (§53: `build/..._bare`).
-  - `beat` (default): every still is a slide — one per beat (its last frame: for reveal-per-beat
-    scenes the fully built state, so the deck "builds" like a presentation), N per beat with
-    `per_beat`, a silent scene's still(s) before its fade-out. `scene`: the scene's last still,
-    all its beats as notes (`per_beat` > 1 is an error there). Decision: **beat by default** —
-    scenes whose content is replaced per beat (walkthroughs, derivations, screenshot steps,
-    maps) lose everything but the last state in scene mode; dedupe keeps beat decks compact.
-  - **Dedupe** (`stills_alike`): consecutive stills of one scene whose pictures (at most 320 px
-    wide, box-filtered) differ in at most 0.05 % of their pixels by more than 24 levels on a
-    channel are one slide: the later still (the more finished one), both beats' notes, the first
-    one's start (`DeckSlide.merged` counts the stills). Never across scenes. Burned-in captions
-    or a moving progress bar make beats differ, so with those overlays nothing merges.
-  - `DeckSlide(index, scene, scene_type, scene_number, scene_title, chapter, still, beats, k, n,
-    time, scene_time, at, until, merged)`; `notes` (the beats' texts, a blank line between: the
-    configured text, translated by the variant's translation file at load, §54 — not the
-    pronunciation); `alt_text()` (`"<type> scene “<title>”: <narration, ≤ 160 chars>"`, the
-    title from `params` `title` / `heading` / `text` / `name` / `quote`). `DeckChapter(title,
-    label, index)` from `chapters.chapter_marks` (no planned timeline needed). `time` = §14
-    `scene_starts` (transition overlaps included) + the still's scene time.
-  - **Deck timeline** (play mode): the scenes' rendered durations back to back (no overlaps,
-    so every slide gets its full time); a slide is on from the still before it in its scene (0 for
-    the first) to its own still, the scene's last slide to the scene's end. `DeckClip(beat, audio,
-    at, duration)` for each beat with an MP3 in `project.audio_dir` (the file the render used; its
-    speech `start` / `end` from the scene timings).
+- **Key frames** (`vidgen/deck.py`): `deck_frames(project, *, preview=True, mode="beat"|"scene",
+  per_beat=1, overlays=True, dedupe=True, jobs=1, force=False) -> Deck`, from §13 stills made
+  current the §14 way (only stale scenes render). `beat` (default: content replaced per beat would
+  be lost otherwise) = a slide per beat still; `scene` = the last still, all beats as notes
+  (`per_beat` > 1 is an error). Dedupe (`stills_alike`, within a scene: ≤ 0.05 % of pixels at
+  320 px differ by > 24 levels) keeps the later still. `DeckSlide(index, scene, scene_type,
+  scene_number, scene_title, chapter, still, beats, k, n, time, scene_time, at, until, merged)`,
+  `notes` (translated text, not pronunciation), `alt_text()`; `DeckChapter`; `DeckClip(beat, audio,
+  at, duration)`. The play timeline puts rendered scene durations back to back (no overlaps).
 - **Page** (`vidgen/slides.py`): `make_slides(project, ..., image_format="webp", quality=80,
-  max_width=None, audio=False, separate=False, output=None) -> SlidesResult` and
-  `slides_html(deck, images, size, audio)`. Default path `slides_path` =
-  `exports/<output>[_<variant>][_preview]_slides.html` (the §53 `exports/` folder). One HTML file:
-  pictures as base64 `data:` URIs (Pillow: WebP `method=4`, JPEG optimised progressive, or PNG;
-  Lanczos down to `max_width`), CSS / JS read from package data `data/slides/deck.css` /
-  `deck.js` and inlined, the deck data as `<script type="application/json" id="deck-data">`
-  (`</` escaped), the MP3s as `<audio>` data URIs with `--audio`. `separate`: pictures
-  `slide-NNN.<ext>` and `<beat>.mp3` in `<name>_files/` (earlier `slide-*` / `*.mp3` there
-  removed first), referenced relatively. Pages over 50 MB log a warning. Each picture appears
-  once in the HTML; the overview and the notes' "next" preview copy its `src` at run time.
-  Decision: **WebP q80** default (every current browser; ≈ 3x smaller than PNG for these flat
-  graphics, text stays clean); JPEG for old viewers, PNG for exact pixels.
-- **Behaviour** (`deck.js`, no libraries, ES5-compatible syntax): one `<section class="slide">`
-  visible at a time (others `hidden`), the `<img>` `object-fit: contain` in a black stage
-  (letterboxed at any window shape); keys → / ↓ / Space / PageDown / Enter next, ← / ↑ /
-  Shift+Space / PageUp / Backspace previous, Home / End, digits + Enter jump (a "Go to N" box,
-  Esc / timeout clears), S / N notes, O / G overview, F fullscreen (bars hide after 2.5 s idle),
-  P / K play, ? / H help, Esc closes / stops; clicks on the stage's left third go back, else
-  forward; horizontal swipes (> 50 px). URL hash `#N` (`history.replaceState`, `hashchange`
-  followed). Notes panel: beside the stage (30 %), below it on screens ≤ 760 px or portrait,
-  with the slide's meta line and the next slide; its state kept in `localStorage` (guarded).
-  Overview: a dialog layer, buttons grouped under chapter headings. Accessibility: slides are
-  `role="group"` `aria-roledescription="slide"`, alt text, a polite live region announcing
-  "Slide N of M, <chapter — title>", visible focus rings, icon buttons with labels / titles;
-  `prefers-reduced-motion` drops the 0.22 s fade. Print CSS: one slide per page.
-- **Play mode**: a clock (`performance.now`) runs along the deck timeline; the slide shown is the
-  last one whose `at` ≤ t; the clip whose span contains t plays, re-seeked when it drifts > 0.3 s;
-  navigating while playing seeks to the slide's `at`; it stops at the end. Without `--audio` it is
-  a timed slideshow at the video's pace. Decision: clock-driven rather than chained `ended`
-  events, so silent scenes, beats without MP3s, pads and seeking all follow one rule.
-- **CLI** `vidgen slides` (`cmd_slides`), `--json` (`jsonout.slides_document`: options, page,
-  pictures, `duration`, `stills`, `merged`, `rendered` / `reused`, per slide `{index, scene, type,
-  chapter, beats, notes, k, n, merged, time, scene_time, at, until, still}`). `deck.py` /
-  `slides.py` are not render inputs (fingerprints unchanged).
-- **Tests**: fake stills + stubbed rendering for selection, dedupe, timelines, translated notes,
-  page structure (parsed; pictures decoded with Pillow), separate files, CLI / JSON; one render
-  test; a Playwright (Chromium) smoke test of navigation, notes, overview, hash and play mode
-  with sound (skipped without Playwright; Playwright is not a dependency).
-- Known limits: no per-slide `--scene` selection; titles and help texts of the page are English
-  (the notes and pictures follow the variant's language); the deck shows frames, not motion
-  (animations, clips); a merged slide's notes are joined without saying where the picture
-  changed; slides of a 9:16 video are tall (letterboxed on landscape screens).
+  max_width=None, audio=False, separate=False, output=None) -> SlidesResult`, `slides_html(deck,
+  images, size, audio)`; default `exports/<output>[_<variant>][_preview]_slides.html`. One file:
+  pictures as `data:` URIs (each once), package data `data/slides/deck.css` / `deck.js` inlined, deck
+  data in `<script type="application/json" id="deck-data">`, MP3s with `--audio`; `separate` puts
+  files in `<name>_files/`. > 50 MB warns.
+- **`deck.js`**: no libraries, ES5; keyboard / click / swipe navigation, hash `#N`, notes,
+  overview, fullscreen, help, accessible slide groups and live region, print CSS. Play mode is
+  driven by one clock along the deck timeline (re-seeks clips drifting > 0.3 s), not by chained
+  `ended` events.
+- **CLI** `vidgen slides` (`jsonout.slides_document`). `deck.py` / `slides.py` are not render
+  inputs. Users: docs/CONFIG.md "Slides".
 
 ## 56. Refinements (Step 53, slides export: PDF)
 
-- **Command**: `vidgen slides --format pdf` (one command, two deck formats; `--format html` the
-  default) rather than a separate `slides-pdf`: the frame options (`--variant`, `--preview` /
-  `--final`, `--mode`, `--per-beat`, `--overlays`, `--no-dedupe`, `--jobs`, `--force`) and the
-  picture options (`--image-format`, `--quality`, `--max-width`) are shared. HTML-only `--audio`
-  / `--separate` with a PDF, and PDF-only `--notes` / `--title-page` / `--paper` with HTML, are
-  errors (`cli._slides_options`, before loading). `--image-format` / `--quality` defaults now
-  depend on the format (HTML webp q80, PDF jpeg q85), so the parser's defaults are `None`.
-- **Library** (`vidgen/slides_pdf.py`): **fpdf2**, a base dependency since Step 322
-  (`fpdf2>=2.7.9`; also in `dev`, with `pypdf` for the tests). Decision: fpdf2 is pure Python
-  (≈ 340 KB), embeds subsets of TrueType fonts with a ToUnicode map (extractable, searchable
-  Unicode text — pt-BR accents), writes outlines, page labels, document info / XMP and alt text,
-  and embeds JPEG files as they are (`DCTDecode`, no re-encode). Its dependency fontTools (~5 MB
-  wheel with compiled speed-ups, pure-Python fallback) and LGPL-3.0 licence were why it was an
-  extra until Step 322; schu-video-generator does not bundle it. Without it, `make_slides_pdf` raises
-  `VidgenError(incomplete_install("fpdf2"))` before rendering anything. Alternatives
-  rejected: cairo's PDF surface (already installed with Manim) cannot load a font file through
-  pycairo (fontconfig / Windows system fonts only) — the bundled Inter would not be guaranteed;
-  ReportLab is several times larger for what this needs. fontTools' INFO logging (subsetting steps) is set to
-  WARNING when fpdf2 is imported.
-- **Pages**: `make_slides_pdf(project, *, preview, mode, per_beat, overlays, dedupe, notes=False,
-  title_page=False, paper="a4", image_format="jpeg", quality=85, max_width=None, output=None,
-  jobs, force) -> PdfResult(path, bytes, pages, options: PdfOptions, width, height, bookmarks,
-  thumbnail, deck)`; `write_pdf(deck, options)` builds it from a `Deck`. Default file `pdf_path`
-  = `exports/<output>[_<variant>][_preview]_slides.pdf`, `_notes.pdf` with notes.
-  - **Slide pages**: `slide_page_size` — the video's aspect ratio, the long side 960 pt (13.33 in,
-    a widescreen presentation's page; 16:9 → 960 x 540, 9:16 → 540 x 960); the picture fills it.
-  - **Notes pages** (`notes=True`): A4 595.28 x 841.89 / Letter 612 x 792 pt portrait, margins
-    48 pt; header (chapter `label · title` left, bold; the video's title right; a rule), the
-    picture full width (at most half the page high, centred: 9:16) with a hairline border, a
-    meta line (`Slide N / M · <scene title> · <m:ss.s> in the video`, 9 pt), the narration of
-    the slide's beats (`DeckBeat.text`: the configured, i.e. translated, text) as paragraphs at
-    11.5 / 17 pt in Inter, left-aligned, footer `page / total` (fpdf2's `{nb}` alias). Long
-    notes break onto further pages with the same header (auto page break only on notes pages).
-    A silent scene says "No narration (a silent scene)." in italics.
-  - **Title page** (`title_page=True`): the thumbnail `vidgen thumbnail` wrote
-    (`Project.thumbnail_path`, this quality's, else the other's; not made here — a designed
-    thumbnail would need the theme session and a frame thumbnail a render), full page on a
-    slide-page deck; otherwise / on notes paper: (the thumbnail above) the title (`metadata.title`
-    else `title`) bold, the thumbnail config's `subtitle`, `artist · date`, and on notes paper
-    "N slides with speaker notes · m:ss of narration".
-- **Outline**: the title page (its title), then chapters (`DeckChapter`: `label · title`) at
-  level 0 with their slides (`N. <scene title or id>`) at level 1; slides before the first
-  chapter at level 0. Each entry points at the slide's first page (added right after
-  `add_page`, so a notes page continued over several pages is found at its start).
-  `page_mode = USE_OUTLINES` opens the bookmarks panel.
-- **Document info**: `/Title` (metadata title or title), `/Author` (`metadata.artist`),
-  `/Subject` (`description`, else `comment`), `/Keywords` (`album`, `genre`), `/Creator`
-  `vidgen <version>`, creation date (now, UTC), catalog `/Lang` (the video's `language`).
-- **Pictures**: `slides.encode_still` (JPEG optimised progressive at `quality`, or PNG),
-  scaled down to `max_width`; alt text = `DeckSlide.alt_text()`. Each picture once per PDF.
-- **Fonts**: the bundled Inter Regular / Bold / Italic (§21) via `add_font`, subset-embedded.
-  Characters Inter lacks (CJK, Arabic, Hebrew, Devanagari, emoji) are left out (fpdf2 warns);
-  no fallback fonts (none bundled for those scripts).
-- **JSON**: `jsonout.slides_pdf_document` — the `slides` document with `output_format: "pdf"`,
-  `pages`, `notes`, `title_page`, `thumbnail`, `paper`, `bookmarks` (no `files_dir` / `audio`);
-  the HTML document gains `output_format: "html"`. Per-slide entries are shared
-  (`jsonout._deck_slides`). `slides_pdf.py` is not a render input.
-- **Tests** (`tests/test_slides_pdf.py`, fake stills from `test_slides`, read back with pypdf):
-  page count and sizes (16:9, 9:16, A4, Letter), JPEG embedded as `DCTDecode`, PNG as
-  `FlateDecode`, outline tree and destinations (incl. notes continued over pages), document
-  info and `/Lang`, notes / header / footer text extracted, fonts are Inter, pt-BR text with
-  accents and typographic quotes extracted exactly, quality / max width shrink the file, option
-  errors, missing fpdf2, CLI / JSON. Layout was checked by eye on `pdftoppm` renders of
-  `examples/minimal` (title page with thumbnail, notes pages, the 9:16 variant, pt-BR notes) and
-  `examples/gallery` (chapter headers, typeset title page).
-- Known limits: the page's own words (`Slide`, `in the video`, `No narration`, `slides with
-  speaker notes`) are English, like the HTML deck's; no theme colours on a typeset title page
-  (white; the thumbnail gives a themed one); no per-slide `--scene` selection; no fallback font
-  for scripts Inter lacks.
+- `vidgen slides --format pdf` shares frame and picture options with HTML; HTML-only (`--audio`,
+  `--separate`) and PDF-only (`--notes`, `--title-page`, `--paper`) options on the other format are
+  errors (`cli._slides_options`); picture defaults depend on the format (parser defaults `None`).
+- **fpdf2** (`fpdf2>=2.7.9`, base dependency): pure Python, subset TrueType with ToUnicode,
+  outlines, JPEG embedded as is. Not cairo (pycairo cannot load the bundled font file). Missing →
+  `VidgenError(incomplete_install("fpdf2"))` before rendering.
+- `make_slides_pdf(project, *, preview, mode, per_beat, overlays, dedupe, notes=False,
+  title_page=False, paper="a4", image_format="jpeg", quality=85, max_width=None, output=None, jobs,
+  force) -> PdfResult(path, bytes, pages, options: PdfOptions, width, height, bookmarks, thumbnail,
+  deck)`, `write_pdf(deck, options)`; default `exports/<output>[_<variant>][_preview]_slides.pdf`
+  (`_notes.pdf`). Slide pages: the video's aspect, long side 960 pt. Notes pages: A4 / Letter
+  portrait with header, picture, meta line, narration, `page / total`. Title page: the existing
+  thumbnail (not made here) or a typeset title. Outline: chapters (level 0) → slides (level 1).
+  Info: `/Title`, `/Author`, `/Subject`, `/Keywords`, `/Creator vidgen <version>`, `/Lang`.
+- Fonts: bundled Inter (§21), no fallback (missing glyphs dropped). JSON
+  `jsonout.slides_pdf_document` (`output_format: "pdf"`). `slides_pdf.py` is not a render input.
 
 ## 57. Refinements (Step 54, readback check: speech to text)
 
-- **Purpose**: the AI author cannot listen. `vidgen readback` transcribes each beat's MP3 and
-  compares the transcript with what the beat should say, so mispronounced terms, misread numbers
-  and dropped / added words show up as text an agent can act on (a pronunciation entry, a
-  regenerated beat).
-- **Provider seam** (`vidgen.stt`, like §7's TTS seam): `STTProvider` protocol (`name`,
-  `check_available()`, `transcribe(path) -> Transcript`); `Transcript(text, words:
-  tuple[TranscriptWord(text, start, end)], language)` with `to_json` / `from_json`,
-  `word_texts()` / `word_times()`; `get_stt_provider(project)`; `stt_settings(project) ->
-  {provider, model, language}` (resolved defaults, no provider import: the cache and the lint
-  rule use it). Constructing a provider loads nothing and needs no key.
-  - `faster_whisper` (`stt/faster_whisper.py`, base dependency since Step 322:
-    `faster-whisper>=1.0`; not in `dev`: ~70 MB of CTranslate2 / ONNX Runtime and a model
-    download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(audio,
-    language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
-    vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
-    words are not cut). `audio` is the beat decoded by schu-video-generator (`load_audio`: the ffmpeg
-    executable via `render.ffmpeg.decode_mono(path, 16000)`, 1-D float32, since Step 141; PyAV
-    before), not the path: faster-whisper's own decoder passes `metadata_errors`, which PyAV 19
-    removed. Each word keeps its `probability` (§78). Missing package → `VidgenError(incomplete_install("faster-whisper"))`; a model
-    that cannot load (download refused, bad folder) → `VidgenError` naming the model.
-  - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
-    `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,
-    `tag_audio_events=false`, `file`), `ELEVENLABS_API_KEY` as for TTS. The TTS provider's
-    retry / error / key-scrubbing loop moved to `tts.elevenlabs.post_with_retries` (shared; TTS
-    behaviour unchanged). Only `type: word` entries of the response are words.
-  - No OpenAI provider (the task's "openai?" was optional; the seam takes one more module).
-- **Config** `stt: {provider: faster_whisper | elevenlabs, model, language, device}`
-  (`SttConfig`): `model` default `small.en` for English / `small` otherwise (faster-whisper),
-  `scribe_v1` (ElevenLabs); `language` default the video's language subtag (`en` without one),
-  `auto` = detected (`None` sent); `device` `auto|cpu|cuda` (faster-whisper; not part of the cache
-  key). `stt` is excluded from the render fingerprint; `stt/`, `readback.py`, `textnorm.py` are
-  not render inputs.
-- **Normaliser** (`vidgen.textnorm`, no manim): `normalize_words(words, language) ->
-  [Token(text, source)]` (source = index of the input word, so differences map back),
-  `normalize_text`, `fold` (casefold + accents removed: `você` = `voce`; STT accent slips are
-  more common than accent-only minimal pairs), `number_words` / `english_number` /
-  `portuguese_number`. Hyphens, dashes, slashes, `_` split words; apostrophes dropped inside
-  words (`let's` → `lets`); numbers by the language's marks (en `1,000.5`, pt `1.000,5`), English
-  decimals digit by digit (`one point zero eight`), Portuguese decimals as a number (`um vírgula
-  cinquenta e sete`; digit by digit after a leading 0 or beyond 3 digits), `%` / currency symbols
-  / English ordinals (`22nd`); other languages keep digits (canonical, group marks removed);
-  `& + = × @` as words; dotted acronyms and runs of ≥ 2 single capitals joined (`G.P.U.`, `G P
-  U` → `gpu`). The same function normalises both sides, so a convention only needs to be
-  consistent, not linguistically perfect.
-- **Comparison** (`vidgen.readback`): reference = the beat's **spoken** text (pronunciation
-  applied, §45); `align(ref, hyp)` Levenshtein with ties broken towards more matches, then
-  substitutions; `word_error_rate`. Ops are assigned to **written** words (spoken word → written
-  word via `Spoken.word_groups()`; an insertion goes with the next word when that one differs
-  too, else the previous one), and consecutive differing written words form one `Edit(kind,
-  expected, heard, written, said, errors, at, after, term, entry, suggestion)`. An edit is dropped
-  when its words are equal once joined (`overparameterized`, `KPhi3`) or when the heard words
-  equal the normalised *written* words (the STT wrote `K-Phi-3` for "kay fye three"): these are
-  writing differences. `errors` = non-equal ops of the block (S + D + I), so WER = Σ errors /
-  normalised spoken words. `at` = start time of the first differing heard word.
-- **Terms and suggestions**: `hard_term` (a digit, two capitals, a non-ASCII letter, or a
-  capitalised word inside a sentence) marks a written word a pronunciation entry can fix; an edit
-  over a replaced term has `entry: true`. Suggestions: entry → respell its spoken form; hard term
-  → `add a pronunciation entry TERM: <how to say it>` (`<the number in words>` for digits);
-  deletion → listen, `vidgen tts --force --beat ID`; insertion → listen; else a probable
-  transcription slip. A stale MP3 (hash mismatch) adds "run `vidgen tts` first". `term_reports`
-  aggregates terms over beats; `consistent` = heard differently in ≥ 2 beats (the strongest
-  signal: one slip may be the transcriber's).
-- **Flagging**: `wer > lint.rules.readback.max_wer` (default 0.1; `--max-wer` overrides). Below
-  it, edits are still reported (JSON) and counted in terms. Exit code 0 whenever the command ran;
-  the lint rule is the failing check.
-- **Cache**: `build/readback/<sha1(json({audio: sha1(mp3), provider, model, language}))>.json`
-  `{version 1, audio_sha1, stt, beat, transcript}`: content-addressed, so variants / qualities
-  sharing audio share transcripts and a regenerated MP3 is transcribed again; `--force`
-  re-transcribes. In `build/` (not `audio/`): derived, cheap to drop, never committed (kphi3's
-  committed `audio/` stays untouched). The provider is created only when something must be
-  transcribed (an all-cached run works without the extra or key).
-- **CLI** `vidgen readback [PROJECT] [--variant] [--beat ID ...] [--max-wer RATE] [--force]
-  [--json]`: progress `[n/N] transcribed <beat> (s)`, then `report_lines` (settings + counts,
-  skipped beats, flagged beats with each edit `describe()` + `@ time` and `fix:` lines, worst
-  beats, terms misheard in several beats). JSON `jsonout.readback_document` (version 1, new
-  document): `project, variant, audio_dir, stt, max_wer, transcribed, cached, elapsed, summary
-  {beats, flagged, words, errors, wer, worst}, beats[], skipped[], terms[]`.
-- **Lint rule** `readback` (scope `scene`, default warning, `ReadbackRule{severity, max_wer}`,
-  last in `LINT_RULES`): `SceneContext.readback` (beat id → `BeatReadback`) is filled by the
-  runner from `readback.cached_readback` only when the rule runs and is not `off`; it never
-  transcribes, so without `vidgen readback` it reports nothing ("off unless transcripts exist").
-  The finding: `value` = WER, `limit` = `max_wer`, time = the beat's start, message quoting up to
-  3 edits and the first suggestion, pointing to `vidgen readback --beat ID`.
-- **Tests** (`tests/test_readback.py`, all mocked): number words (en / pt), digits in other
-  languages, case / punctuation / hyphens / acronyms / pt-BR accents, alignment and WER, writing
-  differences not counted, misheard pronunciation entry, terms without entry, insertions /
-  deletions with times, pt-BR names, `hard_term`, settings defaults and config errors, a fake
-  `faster_whisper` module (options, model loaded once, load error, missing package), ElevenLabs
-  multipart request / response / errors with a mocked `urlopen`, the transcript cache (hits,
-  `--force`, new audio, new settings), skipped / stale / unknown beats, the CLI (human + JSON,
-  documented keys), the lint rule end to end on fake renders and as a unit, the fingerprint.
-- **Known limits**: no real STT run was possible while building it (Hugging Face model downloads
-  were refused by the build environment's proxy; see HANDOFF.md Step 54); number words only for
-  English and Portuguese; English "and" inside spoken numbers ("two hundred and five") and years
-  read in pairs ("twenty twenty-four") are not normalised; STT errors on ordinary words are
-  reported as possible slips, not filtered.
+- **Purpose**: the agent cannot listen; `vidgen readback` transcribes each beat's MP3 and compares
+  it with the beat's spoken text.
+- **Seam** (`vidgen.stt`): `STTProvider` (`name`, `check_available()`, `transcribe(path) ->
+  Transcript(text, words: (TranscriptWord(text, start, end), ...), language)`),
+  `get_stt_provider(project)`, `stt_settings(project)`. Constructing loads nothing.
+  - `faster_whisper` (base dependency): model loaded on first use, `beam_size=5,
+    word_timestamps=True, condition_on_previous_text=False, vad_filter=False`; audio decoded by
+    vidgen (`render.ffmpeg.decode_mono(path, 16000)`); words keep `probability` (§78). Missing →
+    `VidgenError(incomplete_install("faster-whisper"))`.
+  - `elevenlabs`: `POST /v1/speech-to-text` (`scribe_v1`, `timestamps_granularity=word`), shared
+    retry loop.
+- **Config** `stt: {provider: faster_whisper | elevenlabs, model, language, device}`: model `small.en`
+  for English, else `small` (`scribe_v1`); language = the video's subtag, `auto` = detect; `device`
+  not in the cache key. Out of the fingerprint. Users: docs/CONFIG.md "Readback".
+- **Normaliser** (`vidgen.textnorm`): `normalize_words(words, language) -> [Token(text, source)]`,
+  `fold` (casefold, accents removed), number words for en / pt, acronyms joined. Both sides use it.
+- **Comparison** (`vidgen.readback`): Levenshtein `align` (ties: more matches), WER over normalised
+  spoken words; edits mapped to **written** words (`Spoken.word_groups()`) as `Edit(kind, expected,
+  heard, written, said, errors, at, after, term, entry, suggestion)`; writing-only differences are
+  dropped. `hard_term`, suggestions (pronunciation entry, `vidgen tts --force --beat ID`),
+  `term_reports` (`consistent` = misheard in ≥ 2 beats). Flag: `wer > lint.rules.readback.max_wer`
+  (0.1). Exit 0 whenever it ran.
+- **Cache**: `build/readback/<sha1(json({audio: sha1(mp3), provider, model, language}))>.json`,
+  content-addressed; `--force` redoes. The provider is created only when something needs
+  transcribing.
+- **CLI** `vidgen readback [--variant] [--beat ID ...] [--max-wer] [--force] [--json]`
+  (`jsonout.readback_document`, version 1).
+- **Lint rule** `readback` (last in `LINT_RULES`): reads cached transcripts only
+  (`readback.cached_readback`), never transcribes.
 
 ## 58. Refinements (Step 55, generated images)
 
-- **Purpose**: pictures for `image` scenes (and extension scene types) from a prompt, made once
-  (they cost money), stored with the project and reused; the video can be previewed, laid out
-  and linted before any picture exists.
-- **Param** `GenerateImage` (`vidgen.imagegen`, exported by `vidgen.api`; a plain pydantic model,
-  extra keys forbidden, a string = the prompt): `prompt` (required), `negative` (`""`), `style`
-  (preset / words / `none`; default `imagegen.style`), `aspect` (`auto|landscape|portrait|square`),
-  `seed` (≥ 0). The `image` scene's `path` became optional with `generate` beside it; exactly one is
-  required (model validator). A scene type opts in by having a top-level field holding a
-  `GenerateImage`; `find_images` discovers it through the registry (built-ins and extensions).
+- **Param** `GenerateImage` (`vidgen.imagegen`, in `vidgen.api`; a string = the prompt): `prompt`,
+  `negative`, `style`, `aspect` (`auto|landscape|portrait|square`), `seed`, `format` (§65). `image`
+  takes exactly one of `path` / `generate`; any type with a top-level `GenerateImage` field opts in
+  (`find_images`).
 - **Config** `imagegen: {provider: openai, model: gpt-image-1, size: auto | WxH, quality, style,
-  negative}` (`ImagegenConfig`). Part of the render fingerprint (it decides which picture or
-  placeholder a scene shows); the pictures themselves are files under `assets/` (already tracked).
-- **Request** (`image_request(project, generate) -> ImageRequest`): size = `imagegen.size`, or the
-  model family's size for the aspect (`auto` = the final `format`'s orientation, so a 9:16 variant
-  gets portrait pictures): gpt-image `1536x1024 / 1024x1536 / 1024x1024`, dall-e-3 `1792x1024 /
-  1024x1792 / 1024x1024`, dall-e-2 `1024x1024`; quality default medium / standard / none. Text sent
-  = `<prompt>. Style: <words>. Avoid: <negative; imagegen.negative>.` (OpenAI has no negative
-  prompt). Style presets `photo, illustration, flat, isometric, watercolor, line_art, render_3d,
-  cinematic` (`STYLE_PRESETS`). **Key** = sha1(json{v: 1, provider, model, size, quality, seed,
-  prompt: text})[:16]; files `assets/generated/<key>.png` + `<key>.json` (`prompt, negative, style,
-  sent_prompt, revised_prompt, provider, model, size, quality, seed, created (UTC date), scenes`).
-  Content-addressed: no "stale" state; a changed request is "missing", the old file an orphan
-  (reported, never deleted); equal requests share one file. Meant to be committed (like `audio/`).
-- **Provider seam**: `ImageProvider` protocol (`name`, `check_credentials()`, `generate(request)
-  -> GeneratedPicture(data: PNG bytes, revised_prompt)`), `get_image_provider(project)`. One
-  provider: `OpenAIImageProvider` (`imagegen/openai.py`, stdlib urllib): `POST
-  https://api.openai.com/v1/images/generations`, `Authorization: Bearer $OPENAI_API_KEY` (read at
-  request time, never stored / logged / in errors), body `{model, prompt, n: 1, size, quality}` +
-  `response_format: b64_json` for DALL·E models (gpt-image models always return base64); response
-  `data[0].b64_json` (+ `revised_prompt`), non-PNG data converted with Pillow. Retries: 3 (backoff
-  4 / 8 / 16 s or `Retry-After`, cap 60 s, timeout 240 s) on 429 / 5xx / timeouts — not on a 429
-  for `insufficient_quota` / `billing_hard_limit`. The ElevenLabs loop moved to
-  `vidgen.httpapi.post_with_retries(url, data, headers, service, secret, ..., transient=)`
-  (`tts.elevenlabs.post_with_retries` keeps its signature and messages).
-- **Placeholder** (`imagegen/placeholder.py`, Pillow): the request's aspect at long side 1280 px,
-  surface → surface/primary gradient, rounded outline in dim, a picture glyph in primary, "IMAGE
-  TO GENERATE", the prompt (wrapped, ≤ 6 lines, shrunk then cut) in text, "placeholder · run vidgen
-  imagegen" in dim; the whole block centred so a `cover` fit crops margins, not text. Cached as
-  `build/imagegen/<key>-<sha1(version, colours, font, size, prompt)[:10]>.png`.
-  `generated_image(project, generate, theme)` returns the stored PNG or this placeholder.
-- **Never a provider call outside `vidgen imagegen`**: `validate` warns (`imagegen_warnings`):
-  pictures not made yet, and prompts that quote text or mention text words (text, words, letters,
-  label, title, logo, slogan, says, written, font...) or charts / diagrams / tables, unless negated
-  ("no text", "without lettering"); summary line `images: N generated, M missing` (and per variant
-  whose pictures differ). `render` / `storyboard` log `generated image not made yet for <scenes>`.
-- **CLI** `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]`:
-  distinct requests in video order; dry run prints each key, scenes, size, model, quality, cost
-  estimate and the full prompt, then the total (`PRICES`: OpenAI list prices of 2025 per model /
-  quality / square-or-not; unknown → "of unknown price"); a real run checks the key first, writes
-  PNG + JSON atomically per picture, and on an error names the scene and how many were done.
-  Orphans are listed (base config + all variants count as users).
-- **Responsible use**: no content filter beyond the provider's (its refusals surface as errors);
-  CONFIG.md asks not to generate misleading pictures of real people or brands.
-- **Tests** (`tests/test_imagegen.py`, urlopen mocked): prompt composition, style / negative
-  resolution, sizes per format / aspect / model, the cache key's inputs, text-in-prompt detection,
-  `image` params (`path` xor `generate`), validate warnings and summary (+ variant), render
-  warning, provider request / response / conversion / bad responses, 429 retry with Retry-After,
-  timeouts, quota and 400 errors not retried with the key scrubbed, missing key, dry run without a
-  key, generate / skip / force / `--scene`, orphans, an error midway, a stub provider, the
-  placeholder card and its cache, the fingerprint, a render of the placeholder and of a stored
-  picture (16:9 and 9:16).
-- **Not done**: `generate:` on `screenshot` (its `px` callouts and magnifier need the real
-  picture's pixels) and as a thumbnail background (designed thumbnails have no picture behind the
-  text yet); no `--json` for `vidgen imagegen`; no image editing / variations endpoints; no second
-  provider; prices are a snapshot. (Step 59 added `--json`; Step 61 the OpenRouter provider with
-  looked-up prices, §64.)
+  negative}` (+ §64, §65), a render input (picture vs placeholder). Users: docs/CONFIG.md "Generated
+  images".
+- **Request** (`image_request(project, generate) -> ImageRequest`): size from the model family and
+  aspect (`auto` = the final format's orientation); text `<prompt>. Style: <words>. Avoid:
+  <negative>.`; `STYLE_PRESETS`. **Key** = sha1(json{v: 1, provider, model, size, quality, seed,
+  prompt: text})[:16]; files `assets/generated/<key>.png` + `<key>.json` sidecar. Content-addressed
+  (changed = missing; old files are orphans, reported, never deleted); committed.
+- **Seam**: `ImageProvider` (`name`, `check_credentials()`, `generate(request) ->
+  GeneratedPicture(data, revised_prompt, cost)`, optional `check_requests`),
+  `get_image_provider(project)`. `OpenAIImageProvider` (`POST /v1/images/generations`,
+  `OPENAI_API_KEY` read at request time). Retries via `vidgen.httpapi.post_with_retries(url, data,
+  headers, service, secret, ..., transient=)` (3, backoff 4 / 8 / 16 s or `Retry-After`, cap 60 s,
+  timeout 240 s; never on quota / billing errors; key scrubbed).
+- **Placeholder** (`imagegen/placeholder.py`) with the prompt, cached in `build/imagegen/`;
+  `generated_image(project, generate, theme)` returns the PNG or the placeholder.
+- **Only `vidgen imagegen` calls a provider** (`[--dry-run] [--force] [--scene] [--variant]
+  [--json]`); validate warns about missing pictures and text-in-picture prompts
+  (`imagegen_warnings`); render logs missing ones. `screenshot` has no `generate:`.
 
 ## 59. Refinements (Step 56, the author guide for AI agents)
 
-- **Two agent files, two audiences**: `CLAUDE.md` is for agents developing schu-video-generator; `AGENTS.md`
-  (repository root) is for agents **using** schu-video-generator to make videos and decks. Each says so at its
-  top and points to the other.
-- **One source, shipped**: the guide is package data, `src/vidgen/data/guide/AGENTS.md`
-  (`pyproject` package-data `data/guide/*`), so it is there after `pip install`; the root
-  `AGENTS.md` is a byte-identical copy (a test fails when they differ). Not a render input
-  (`guide.py` is in `NOT_RENDER_INPUTS`; the data folder is outside the source digest).
-- **Topics**: each `##` section is introduced by a marker line `<!-- topic: NAME (also: ALIAS,
-  ...) -->` (invisible when the Markdown is rendered). `vidgen.guide`: `GUIDE_FILE`,
-  `GuideTopic(name, title, aliases, text)`, `guide_text()` (markers removed), `guide_topics()`,
-  `find_topic(name)` (name or alias, case-insensitive; unknown → `VidgenError` with
-  did-you-mean and the topic list), `topic_lines()`. Topics: `start`, `workflow`, `pacing`,
-  `social`, `scenes`, `design`, `actions`, `cartoons` (Step 85, §69.18), `overlays`, `audio`,
-  `examples`, `outputs`, `troubleshooting`.
-- **CLI** `vidgen guide [TOPIC] [--list] [--json]`: the whole guide, one topic, or the list
-  (`TOPIC` with `--list` is an error). No PROJECT argument (the guide does not depend on one).
-  `--json` (in `JSON_COMMANDS`): `{topic, title, topics: [{name, title, aliases}], text, path}`.
-- **Kept true by tests** (`tests/test_guide.py`): every `vidgen <command>` in a code span or
-  block exists, with every `--option` written after it; the scene chooser table covers every
-  built-in type, its params column names real params (or their `title` / `heading` synonyms);
-  every type has a snippet; the presets, actions and lint-rule tables list exactly the
-  built-in ones; every sound and music bed is named; and every fenced `yaml` block, wrapped
-  into a config (a scene list, a partial config, or top-level keys plus one scene; files under
-  `assets/` copied from the examples), passes `vidgen validate`'s checks (`validate_all`).
+- `CLAUDE.md` is for developers of vidgen, `AGENTS.md` for authors using it. The guide is package
+  data `src/vidgen/data/guide/AGENTS.md`; the root `AGENTS.md` is a byte-identical copy (tested).
+- Topics: a marker `<!-- topic: NAME (also: ALIAS, ...) -->` before each `##`. `vidgen.guide`:
+  `GUIDE_FILE`, `GuideTopic(name, title, aliases, text)`, `guide_text()`, `guide_topics()`,
+  `find_topic(name)` (unknown → `VidgenError`), `topic_lines()`. `vidgen guide [TOPIC] [--list]
+  [--json]`. Not a render input.
+- `tests/test_guide.py` keeps it true: commands and options exist, every built-in type / preset /
+  action / lint rule / sound / bed is listed, every `yaml` block validates.
 
 ## 60. Refinements (Step 57, scene gallery)
 
-- **`vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
-  [--clips | --no-clips] [--jobs N] [--force] [--json]`** (`vidgen.gallery.make_gallery`): every
-  registered scene type rendered from one canonical sample at 16:9 and 9:16 into a Markdown
-  gallery, default `docs/gallery` (committed in this repository). `PROJECT` (or a config file in
-  the current folder) adds the project's own types, its theme (unless `--theme`) and extensions.
-- **Samples: one source.** A built-in type's sample is its snippet in the guide's `scenes` topic
-  (`guide_samples()`: the yaml blocks are split into list items, keeping the text as written; the
-  first of a type, a later one replacing a `generate:` snippet that only renders a placeholder);
-  the block's first comment line (`# data`) is the index group, the chooser table's first column
-  the "use it for" line (`chooser_uses()`). A project's type takes its first scene in
-  `video.yaml` (`project_samples()`, YAML dumped). A name whose class is registered under an
-  earlier name (`flowchart` → `diagram`) is an alias: listed, not rendered (`GalleryType.alias_of`).
-  Files under `assets/` in the guide's snippets map to stand-ins shipped in `data/gallery/`
-  (`sample_asset()`: `picture.png` for `image`, `app.png` for other pictures, `clip.webm` for
-  videos — made by `tools/make_gallery_clip.py` from `app.png`).
-- **Work project** `<project or .>/build/gallery/video.yaml`: every sample (id = type name),
-  preview 640x360 @ 12 fps, variant `portrait` 360x640; always all samples and files, so a
-  `--types` run does not make the others' fingerprints stale (they see the config and `assets/`).
-  Rendered with `render_scenes(..., frames=1)`; current stills are reused (`stills_current`). The
-  "audio missing" warning is filtered (samples have no audio by design).
-- **Media**: the last still of each scene saved as an optimised PNG (`media/<type>-16x9.png`,
-  `-9x16.png`; 640x360 / 360x640); a GIF of the scene up to its last beat's end (no fade-out:
-  full-frame changes cost the most bytes), 320 / 180 px wide, 6 fps, 32-colour palette without
-  dithering (flat graphics), last frame held 1.5 s (since Step 182: 2 s, at the GIF's start, the
-  empty opening skipped, §60.1) (`export.write_gif(..., colors, dither, hold)`,
-  shared with `vidgen export gif`). Deterministic: no times or paths in the pages, Pillow and
-  FFmpeg outputs are reproducible for the same inputs and versions, and render workers now run
-  with `PYTHONHASHSEED=0` (unless set): with a random per-process seed, frames during a camera
-  move (zoom actions, focus steps) differed by a few pixel values between two renders, so their
-  GIFs changed on every regeneration. Checked: two `--force` regenerations give byte-identical
-  files except `screenshot-9x16.gif` (the picture's sub-pixel edges while the camera moves over
-  an image differ between renders; not tracked down, the frames look the same); a regeneration
-  that reuses the renders is byte-identical.
-- **Pages**: `README.md` (by group: type, stills linked to the page, use; aliases "same type as";
-  types without a sample "no sample", types without a page in the folder "not rendered here
-  yet"; a project type's "use" is the first sentence of its docstring) and `<type>.md` (use, description = first paragraph of
-  the class / module docstring, stills, GIF links, the YAML as written, a params table from the
-  `Params` model with nested fields as `a.b`, targets, beat count). An index after a `--types`
-  run still lists every type, with whatever stills the folder has.
-- **What is committed** (decision): the pages, all stills and all GIFs, about 4.4 MB in total (1.3 MB stills, 3.1 MB GIFs), under
-  a tested 8 MB budget (`tests/test_gallery.py`): humans browsing GitHub and agents reading the
-  docs see every type without rendering; clips are small enough at 320 px / 6 fps / 32 colours (a regenerated GIF adds to the history, so they stay small). A test
-  keeps every page's YAML equal to the guide's current snippet and the index listing every type.
-  Since Step 182 (§60.1): 8.6 MB with the showcases (5.5 MB GIFs: the types' 3.6 MB, the
-  showcases' 1.9 MB; 2.9 MB stills), budget 10 MB, every GIF at most 150 KB.
-- **Routed visual fixes** (Steps 37 and 56):
-  - `map`: a regional view in a vertical frame is narrowed to the longitudes that fill the frame
-    at the view's latitudes, around its items (`_portrait_region`; before, the frame was filled
-    by growing the view north and south: `europe` showed mostly Africa, Europe tiny). Country
-    labels that need a leader avoid crossing earlier leaders and labels, and a label must not
-    stand nearer another labelled place (any step) than its own (`_misleading`); when the first
-    spot fails, `_clear_spot` searches eight directions out to 3 units (the empty bands above and
-    below the map in 9:16).
-  - `screenshot` / `video_clip`: `steps[].focus` defaults to auto (`None`): `true` in a vertical
-    frame for a landscape picture (≥ 1.2:1), else `false`; a focus view taller / wider than the
-    picture is centred on it, a smaller one stays on it. `video_clip` `fit: auto` (new default):
-    `contain`, but a landscape clip without callouts in a vertical frame (not `bleed`) is shown
-    as a nearly square part from its middle (`cover` into a square room, less the layout's 10 %
-    vertical inset).
-  - Callout labels (`kind: label`): `label_spot` gained `clearance` (soft distance from `avoid`),
-    `rivals` (a spot clearly nearer — under 0.75x the own distance — another bar, value or the
-    title than its target is penalised and counts as blocked) and `straight` (above / below /
-    beside before the corners); `side` is now honoured only while a spot on that side is clear,
-    else the best clear spot elsewhere is used (also for arrows and magnifiers with `side`).
-  - Lint rule **`label_spacing`** (warning, `min_gap` 0.02 of the shorter side): a label on its
-    own plate (filled rounded shape without an outline — an outlined badge such as the
-    timeline's "Now" tag sits in its line by design —, not the background colour, behind exactly one text, at most
-    2.2x its height and 3 heights wider; the text's backdrop is the plate) closer than `min_gap`
-    to another text (not lone symbols, not the text framed by an outline in the plate's colour:
-    the callout's own mark). `text_overlap` / `covered_text` missed these (no overlap, no
-    cover). A `box` / `circle` tag (`tag_spot`) gets the same soft `clearance` (0.2 units) and
-    the same spots one clearance further out.
+- **`vidgen gallery [PROJECT] [--output DIR] [--types] [--formats] [--theme] [--clips |
+  --no-clips] [--jobs] [--force] [--json]`** (`gallery.make_gallery`): every scene type from one
+  sample at 16:9 and 9:16 into Markdown, default `docs/gallery` (committed).
+- **Samples**: built-ins from the guide's `scenes` snippets (`guide_samples()`, groups from the
+  first comment line, uses from the chooser, `chooser_uses()`); project types from their first scene
+  (`project_samples()`); aliases are listed, not rendered (`GalleryType.alias_of`); `assets/` maps to
+  `data/gallery/` stand-ins (`sample_asset()`).
+- **Work project** `build/gallery/video.yaml` (640x360 @ 12 fps, variant `portrait`), always all
+  samples so `--types` keeps fingerprints; `render_scenes(..., frames=1)`.
+- **Media**: `media/<type>-16x9.png` / `-9x16.png`, GIFs 320 / 180 px, 6 fps, 32 colours, no
+  dither (`export.write_gif`). Deterministic: workers run with `PYTHONHASHSEED=0` (unless set).
+- **Pages**: `README.md` index and `<type>.md` (docstring, stills, GIFs, YAML, params table).
+  Size limits: `BUDGET` (main gallery), `WEB_BUDGET` (web gallery, §123.1) and `ENTRY_MAX` per
+  entry in `tests/test_gallery.py`; each GIF ≤ `gallery.CLIP_MAX_BYTES` 150 KB.
+- **Placement rules from this pass**: `map` narrows portrait regional views (`_portrait_region`),
+  `_misleading`, `_clear_spot`; `screenshot` / `video_clip` `steps[].focus` default `None` (`true`
+  for a landscape picture ≥ 1.2:1 in a vertical frame); `video_clip` `fit: auto` (contain, or a
+  near-square middle `cover` for a landscape clip without callouts in a vertical frame);
+  `label_spot` `clearance`, `rivals` (< 0.75x distance blocks), `straight`, `side` only while clear;
+  `tag_spot` clearance 0.2. Lint **`label_spacing`** (warning, `min_gap` 0.02 of the short side): a
+  label on its own outline-less plate too close to another text.
 
 ## 60.1 Animated previews and showcases (Step 182)
 
-Since Step 379 the types drawn in a web page have a gallery of their own, `docs/gallery/web` (§123.1).
+Types drawn in a web page have their own gallery, `docs/gallery/web` (§123.1).
 
-- **Previews in the index.** Each cell of `docs/gallery/README.md` shows the scene's GIFs (16:9
-  and 9:16, 180 px high), each its own link to the page, each in a `<picture>` whose
-  `<source media="(prefers-reduced-motion: reduce)">` is the still (`gallery.preview_html`;
-  GitHub renders `<picture>`). A format without a GIF in the folder (a `--no-clips` run) shows
-  its still. The column is "preview"; the pages keep their stills and GIFs as before.
-- **GIF timing** (`gallery._write_clip`, all GIFs regenerated): the clip starts at
-  `clip_start`: the first frame whose mean grey difference from the scene's first frame is
-  `CLIP_START_SHARE` (0.75) of the largest such difference in the clip, at most `CLIP_START_MAX`
-  (1 s) in (frames read at 6 fps, 64 px wide, by `render.ffmpeg.decode_gray_frames`): the empty
-  opening and most of a fade-in are skipped; a chart whose bars grow in its first second starts
-  with them mostly grown (accepted). The end is held `CLIP_HOLD` (2 s, was 1.5) **at the start
-  of the GIF** (`export.write_gif(..., hold_first=True)`: the last frame, reversed out of the
-  clip, padded and put before it): looping plays the same as a hold at the end, and the first
-  frame, which a page shows before the GIF plays (or when a viewer's browser does not animate),
-  is the finished picture, so the index never shows a grid of empty boxes. A GIF over
-  `CLIP_MAX_BYTES` (150 KB) is made again at `CLIP_FALLBACK_FPS` 5, then 4 fps (busy cartoons:
-  rain, snow, camera cuts); a test fails if one is still larger. Widths, colours and dithering
-  are unchanged.
-- **Showcases** (decision: named entries, not types). `gallery.SHOWCASES` lists `Showcase(name,
-  section, title, use)`; the YAML is `data/gallery/showcases/<name>.yaml`, a whole config with
-  one scene whose id is the name (checked by `Showcase.config`). A showcase's `section` is a guide
-  group (its rows follow the group's types in that table) or a section of its own after the
-  groups (`SECTION_NOTES` gives it a line under the heading). The guide group `cartoons` is
-  headed "2D cartoons" (`GROUP_TITLES`; the guide's own comment and the sample's group stay
-  `cartoons`); "Isometric cartoons" has only showcases and a link to `examples/iso-story`. Each
-  showcase is its own work project, `build/gallery/showcases/<name>/video.yaml` (its config with
-  the gallery's preview sizes and `portrait` variant; `--theme` applies), rendered like a sample,
-  with a page `<name>.md` (title, use, the scene types it shows linked, the GIFs, the stills, the
-  YAML as written). Names may not collide with a scene type (a test). `--types` takes showcase
-  names; a run in a project renders none and its index lists none (they are the built-in
-  gallery's). Media names follow the types' (`<name>-16x9.gif`).
-- **The eight showcases**: 2D `talk_in_a_room` (the `living_room` set, a seated listener holding
-  a muffin, a close-up for the punchline), `walk_in_depth` (`park`: one walks back to depth 0.7
-  while the other comes forward, passing), `rainy_evening` (`city_street` at sunset, rain with
-  puddles, the light going to night, the street lamp switched on, an umbrella opened over a
-  seated friend), `star_jump` (a platform level at `character_size: large`: coins, a gap, a jump
-  that catches a star); iso `iso_village` (two houses, a `meet`, a close-up, back to the wide
-  view), `iso_room` (`place: indoor`, an `enter`, a gift picked up and opened in a medium shot),
-  `iso_lamp` (night, lit windows, a walk to the lamp, `switch_on`, the speaker's name tag in the
-  wide view), `iso_snow` (`{kind: snow, settle: true}`: the village turns white). All validate;
-  `vidgen lint` is clean in 16:9; in 9:16 the built-in sets `living_room`, `park` and
-  `city_street` report their own props cut at the frame's edges or overlapping (the ready-made
-  sets are laid out for 16:9 only, backlog).
-- **README strip**: the project README shows four gallery GIFs (the iso village, `iso_diagram`,
-  `line_chart`, `code_morph`), 200 px wide, each linked to its page and in the same `<picture>`;
-  a test checks the markup and that every file exists.
+- The index shows each scene's GIFs (180 px high) in a `<picture>` with the still as
+  `prefers-reduced-motion` source (`gallery.preview_html`).
+- **GIF timing** (`gallery._write_clip`): start at `clip_start` (first frame reaching
+  `CLIP_START_SHARE` 0.75 of the clip's largest change, ≤ `CLIP_START_MAX` 1 s); the final frame
+  held `CLIP_HOLD` 2 s **at the start** (`write_gif(..., hold_first=True)`) so a static view shows the
+  finished picture; over `CLIP_MAX_BYTES` 150 KB → `CLIP_FALLBACK_FPS` 5, then 4.
+- **Showcases**: `gallery.SHOWCASES` of `Showcase(name, section, title, use)`, configs in
+  `data/gallery/showcases/<name>.yaml` (one scene, id = name, `Showcase.config`), each its own work
+  project `build/gallery/showcases/<name>/`; `section` = a guide group or its own (`SECTION_NOTES`,
+  `GROUP_TITLES`). Names may not be scene types; `--types` accepts them; project runs skip them.
+- The project README shows four gallery GIFs (tested).
 
 ## 61. Refinements (Step 58, `vidgen plan`)
 
-- **`vidgen plan INPUT [--output DIR|FILE] [--title] [--format 16:9|9:16] [--preset] [--language]
-  [--force] [--json]`**: a draft project from a Markdown outline or a plain-text script. **No LLM
-  and no network**: deterministic heuristics, so the same input gives byte-identical output (no
-  times, no absolute paths in the file). The draft is scaffolding for an agent, which is why every
-  decision is written down as a `# plan:` comment and every doubt as a `# TODO:`.
-- **Pipeline** (all without manim): `outline.parse_outline(text, plain)` → blocks (`Heading`,
-  `Paragraph` (lines kept, joined by newlines), `ListBlock` of `ListItem(text, children)`, `Table`,
-  `Code`, `Math(formulas)`, `Image`, `Quote(text, author, source)`); `outline.plain()` removes
-  inline Markdown and collects links. `plan.make_plan(blocks, PlanOptions)` → `Plan(title, scenes:
+- **`vidgen plan INPUT [--output] [--title] [--format] [--preset] [--language] [--force] [--json]`**:
+  a draft project from Markdown or plain text. **No LLM, no network**: deterministic, byte-identical
+  output (no times or absolute paths); decisions as `# plan:` comments, doubts as `# TODO:`.
+- **Pipeline** (no manim): `outline.parse_outline(text, plain)` → blocks (`Heading`, `Paragraph`,
+  `ListBlock`/`ListItem`, `Table`, `Code`, `Math`, `Image`, `Quote`; links incl. bare domains,
+  `outline._DOMAIN`) → `plan.make_plan(blocks, PlanOptions) -> Plan(title, scenes:
   [PlannedScene(id, type, params, beats, duration, reason, todos)], language, chapters, assets,
-  notes)`. `plan_yaml.plan_yaml(plan, fmt, preset, source)` → the commented text;
-  `plan_yaml.write_plan(...)` → `PlanResult(root, config, assets, created)`; the CLI then loads and
-  validates the draft (`validate_all`) and reports.
-- **Structure**: a single leading H1 is the title; the highest remaining heading level makes
-  sections, the next one units (a unit = heading + blocks → scenes); deeper headings and short
-  `Label:` lines label the next block (comparison columns). Chapters: estimated narration over
-  `CHAPTER_SECONDS` (120) and ≥ 3 sections → a silent `chapter` card (2.5 s) before each
-  section's first scene + `overlays: [{type: progress_bar}]` (the guide's rule). The last unit is
-  the closing one when it (or its section) is called Summary / Conclusion / Recap / Takeaways /
-  Next steps (en, pt, es, de, it, fr words): its last prose beat narrates an `end_card` whose
-  `lines` are the unit's links (scheme stripped).
-- **Prose to beats** (`prose.py`): `split_sentences` (end marks before a capital / digit /
-  opening mark; `LanguageRules.abbreviations` — a new field, per language — and initials never end
-  one; `etc.` / `usw.` / `ecc.` before a capital do); `split_long` (a DP over cut points: break
-  cost `cues.phrase_break_cost` of the language + 0.04 x (piece − 10)²; pieces ≥ 4 words);
-  `merge_short` (a DP grouping consecutive pieces: ≤ 15 words unless already one piece, nearest
-  10, +4 per word under 6). Scenes that reveal steps get one beat per step (`_Planner.fit`):
-  sentences as written first (so "one sentence per item" survives), then merged; the sentences
-  after the block as the steps' when they count right (those before = intro); then a match by
-  shared content-word stems (first 5 letters, in order); then the items' own sentences; then the
-  beats as they are (TODO when more than one extra beat); placeholders last (TODO). An intro of
-  one sentence joins beat 1 when the two stay ≤ 18 words, else becomes prose scenes before.
-- **Compression** (`prose.compress(text, max_words, language)`): parentheses out; `head: tail`
-  keeps the head (or the tail after a generic lead: Step / Tip / Passo...); leading filler
-  phrases and filler words (en, pt lists) out; over the limit: cut at the first comma (the main
-  clause when the head starts with a conjunction / preposition: "On a miss, query the database"),
-  then articles out, then truncate; a cut label never ends on a clinging word, conjunction,
-  preposition, auxiliary or quantifier. Limits: heading 5, item 6, label 3 (stages, chart labels,
-  nodes, comparison headings), title / card 7, comparison points 4.
-- **Cue rules** (first match): dated items (all) → `timeline`; numbered 2–8 → `process`;
-  unordered 2–12 nouns ≤ 3 words with a distinct icon each (`icons.match_icon`, score ≤ 3: name,
-  name prefix / alias, a word of the name / alias, an exact tag; then the label's words, longest
-  first, and their singular) → `icon_grid`; else `bullets` (`numbered`, `dim_previous` over 5).
-  Two-column table with all second cells numeric (`$`, unit, `%`) and 2–12 rows → `bar_chart`
-  (common unit, `value_format` for a currency, `highlight` = the label the last of 2+ beats names,
-  a beat per change from the raw sentences); else `table` (`reveal: all` when the prose has
-  fewer sentences than rows). Code ≤ 15 lines → `code` (highlight per blank-line block per
-  beat), else `code_walkthrough` (2–6 steps from the blocks / beats). Math: 1–2 formulas →
-  `equation`, ≥ 3 → `equation_derivation`. Image → copied into `assets/` (name de-duplicated),
-  else `generate:` its alt text. Quote → `quote` (≤ 2 beats). A paragraph made only of arrow
-  chains → `diagram`. Comparison: an "A vs B" / "A x B" / "A or B?" heading with two lists, or a
-  `Pros:` and a `Cons:` list (tones positive / negative, no `vs` badge), or a vs heading over
-  prose (points from the sentences naming one side only). Prose: a beat with a prominent number
-  (`%`, `x` / times, currency with magnitude, "N million", "from X to Y" → `comparison: {kind:
-  before}`; pt / es / fr / de / it read `3,5` and set `decimal_mark`) → `stat` with one beat (two
-  with a comparison: beat 2 reveals it; a second beat without one was lint `dead_air`); else
-  `bullets` of compressed beats (≤ 5, a lone leftover joins) or a `text_card` for one beat. An
-  opening beat with a number becomes the hook `stat` before the `title`.
-- **YAML writer**: hand-written so comments sit above each scene; flow style for short scalar
-  lists and small mappings (≤ 96 characters), block style for beats (`- text: "..."`), literal
-  blocks for code (`|2-` when the first line is indented); strings plain only when word-like and
-  not a YAML 1.1 keyword, single-quoted when they hold backslashes (LaTeX), else JSON-quoted;
-  floats with a mantissa dot. The text is checked to load back to exactly `plan_config(plan)`.
-- **Decisions**: the example `examples/plan/video.yaml` is committed as a golden file (a test
-  regenerates it), unedited, so the README / guide can point at what a draft looks like; its
-  `vidgen lint` has 1 finding (see Step 58 in HANDOFF). `vidgen init`'s scaffolding is now
-  `cli.scaffold_project(target, example)` (shared). `--output` defaults to a folder named after
-  the input in the current folder (like `vidgen init NAME`). A draft with validate problems is
-  still written (exit code 1, `ok` false) — it should never happen and the agent needs the file
-  to fix it. The new modules are not render inputs (fingerprint); `languages.py` and `icons.py`
-  changed, so render fingerprints change once.
+  notes)` → `plan_yaml.plan_yaml` / `write_plan -> PlanResult(root, config, assets, created)` →
+  `validate_all` (a draft with problems is still written, exit 1).
+- **Rules**: H1 = title, next levels = sections / units; chapters (cards + `progress_bar`) when
+  narration > `CHAPTER_SECONDS` 120 and ≥ 3 sections; a closing unit narrates an `end_card` with its
+  links. `prose.py`: `split_sentences` (`LanguageRules.abbreviations`), `split_long` / `merge_short`
+  (DPs on `phrase_break_cost`), `compress(text, max_words, language)` (heading 5, item 6, label 3,
+  title 7, comparison point 4 words). Block → type cues (dated → `timeline`, numbered 2–8 →
+  `process`, iconable nouns → `icon_grid`, numeric 2-column table → `bar_chart`, code, math, image,
+  quote, arrows → `diagram`, vs / pros-cons → `comparison`, prominent numbers → `stat`, else
+  `bullets` / `text_card`) live in `plan.py`.
+- **YAML writer**: hand-written (comments above scenes, flow style ≤ 96 characters, literal code
+  blocks, quoting rules); must load back to exactly `plan_config(plan)`.
+- `examples/plan/video.yaml` is a golden file. `cli.scaffold_project(target, example)` is shared
+  with `init`. Plan modules are not render inputs.
 
 ## 62. Refinements (Step 59, MCP server)
 
-- **`vidgen mcp [--root DIR]`** (and the console script `vidgen-mcp`): a Model Context Protocol
-  server on stdio, the official MCP Python SDK (`mcp>=1.19`, a base dependency since Step 322).
-  Written against SDK 2.x's `MCPServer` (`mcp.server.mcpserver`); with a 1.x SDK it uses
-  `FastMCP` (the same decorator API; 1.19 is the first that passes a returned `CallToolResult`
-  through). Results are built as `CallToolResult.model_validate({...camelCase wire names...})`,
-  which both generations accept. Without the SDK, `vidgen mcp` is a `VidgenError` naming the
-  extra.
-- **Tools** (`mcp_server.build_server`): `guide`, `init`, `plan`, `validate`, `schema`,
-  `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
-  `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-  `translate_template`; Step 83 adds `character_sheet` (§69.16), Step 90 `direct` (§69.24), Step 91
-  `screenplay` (§69.25; `input_path` or `screenplay_text`, `out`, `cast` (§69.35), `species`, `seed`
-  (§69.49), `force`), Step 115 `cast` (§69.49; `count`, `seed`, `species`, `out`, `provider`,
-  `narrator`, `model`, `force`). Parameters mirror the command's options (snake_case; lists for repeatable
-  options), with pydantic `Field` descriptions and bounds. Result: one text block with the
-  command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
-  `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
-  missing cost confirmation) are SDK `ToolError`s. Tool annotations: read-only for guide / list /
-  schema / validate, open-world for tts / imagegen / readback.
-- **Process model: a fresh subprocess per call** (`run_vidgen`: `sys.executable -m vidgen
-  <command> ... --json`, cwd = root, stdin = devnull, list arguments). Why not in-process: Manim's
-  `config` and vidgen's registries / runtime context are process-global and not re-entrant
-  (render already uses worker processes for that reason); a long-lived server must survive a
-  crashing scene, extension or native library; the CLI's JSON mode already guarantees exactly
-  one document on stdout with everything else on stderr. Cost: ~1 s of interpreter + import per
-  call, negligible next to rendering. stdout is collected whole; stderr is split into lines (on
-  `\n` and `\r`), kept as a 30-line tail (shown when a command prints no JSON) and forwarded as
-  `ctx.report_progress(n, None, line)` at most every 0.5 s (no-op when the client sent no
-  progress token). Cancellation kills the process — its whole process group on POSIX
-  (`start_new_session`), so render workers go too. Rendering tools (storyboard, lint, render,
-  tts, imagegen, readback, slides, thumbnail, export, gallery) hold one `anyio.Lock`: they share
-  build folders and CPUs; listing / checking tools run concurrently.
-- **Root policy** (`mcp_tools.RootPolicy`): every path argument is resolved (`Path.resolve`, so
-  `..` and symbolic links are followed) against the root and must be the root or under it
-  (`PathOutsideRoot`, a `VidgenError`). Option values are passed as `--name=value` so a value
-  starting with `-` is never read as an option; positionals are resolved absolute paths or
-  checked names (no leading `-`). Pictures are only returned from inside the root. Files the
-  server asks for itself go to `build/mcp/` (icon sheet, swatches, gallery: `build/mcp/gallery`,
-  no GIFs). Files a project's own `video.yaml` names are confined too since Step 60 (§63:
-  `VIDGEN_CONFINE_ROOT`).
-- **Secrets**: the subprocess inherits the server's environment (API keys are needed by tts /
-  imagegen / readback); nothing returned contains environment values (documents hold paths and
-  results; provider errors were already scrubbed of keys, §58).
-- **Cost guard**: `tts` and `imagegen` default to `dry_run=True`; `dry_run=False` without
-  `confirm_cost=True` is refused before any process starts (`mcp_tools.cost_refusal` tells the
-  agent to show the dry run to the user first). `readback` asks for `confirm_cost` when the
-  project's `stt.provider` (loaded in-process with `Project.load`, which imports no Manim) is in
-  `PAID_STT` (`elevenlabs`).
-- **Pictures** (`mcp_tools.prepare_picture`): scaled to ≤ 1568 px on the long side (Claude's
-  vision limit; larger costs tokens and is downscaled by the client anyway), PNG unless over
-  800 KB, then JPEG q85. `page_of`: `images` (default 3, ≤ 8) from `image_offset`; the document
-  gets `mcp_images: {total, offset, returned, next_offset}`. Storyboard sheets are ordered
-  whole-video first, then per scene.
-- **Agent-friendly defaults** that differ from the CLI: `render`, `thumbnail`, `export` preview by
-  default; `gallery` writes `build/mcp/gallery` without clips; `plan` takes `markdown_text` (written
-  to a temporary file outside the root; pictures it names are not copied) as well as
-  `input_path`; `validate` has no `variant` (it checks every variant); `schema` refuses to return
-  the whole schema (~370 KB compact, ~100k tokens: over most clients' tool-output limits) unless
-  `full=true` / `all_types=true` — `scene=TYPE` (~6 KB) is what an agent needs.
-- **Resources**: `vidgen://guide`, `vidgen://guide/<topic>` (static, one per topic, read
-  in-process), `vidgen://schema` (a `vidgen schema --json` subprocess in the root), and
-  `vidgen://gallery/index` / `vidgen://gallery/<type>` for `docs/gallery/*.md` under the root
-  when present (the repository's gallery; not shipped in the wheel).
-- **JSON gaps closed** (every wrapped command has a JSON mode): `vidgen init --json`
-  (`{project, config_file, example}`), `vidgen tts --json` (dry run and run: beats with action
-  generate / copy, voice, characters, spoken text; characters per voice; generated, up to date,
-  orphaned), `vidgen imagegen --json` (pictures with prompt, sent prompt, size, model, estimated
-  cost; totals and price note; generated, up to date, orphaned), `validate --json` `images`
-  (`jsonout.images_json`, per config whose pictures differ, from `cli.variant_images`, which the
-  human summary uses too). Human `vidgen validate` now checks every variant even when one does
-  not load (`validate_all(keep_going=True)`), so its error lists them all (`[variant NAME]`
-  lines, like the JSON problems).
-- `mcp_server.py` and `mcp_tools.py` are not render inputs (fingerprint).
+- **`vidgen mcp [--root DIR]`** / `vidgen-mcp`: stdio MCP server (`mcp>=1.19`, base dependency; SDK
+  2.x `MCPServer`, else 1.x `FastMCP`; results via `CallToolResult.model_validate`).
+- **Tools** (`mcp_server.build_server`): one per command (`guide`, `init`, `plan`, `validate`,
+  `schema`, `list_*`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+  `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet` §69.16, `direct` §69.24,
+  `screenplay` §69.25, `cast` §69.49), parameters mirroring options. Result = the command's `--json`
+  document (compact) + images; `ok` false → `isError`. Argument errors are `ToolError`s.
+- **A fresh subprocess per call** (`run_vidgen`: `sys.executable -m vidgen ... --json`, cwd = root,
+  stdin devnull): Manim and the registries are process-global, the server must survive crashes.
+  stderr → progress (≤ every 0.5 s) and a 30-line tail. Cancel kills the process group (POSIX) /
+  `taskkill /F /T` (Windows). Rendering tools share one `anyio.Lock`.
+- **Root policy** (`mcp_tools.RootPolicy`): resolved paths must be inside the root
+  (`PathOutsideRoot`); options as `--name=value`; server files in `build/mcp/`;
+  `VIDGEN_CONFINE_ROOT` set for every command (§63). Nothing returned holds environment values.
+- **Cost guard**: `tts` / `imagegen` default `dry_run=True`; a real run needs `confirm_cost=True`
+  (`mcp_tools.cost_refusal`); `readback` too when `stt.provider` is in `PAID_STT`; free TTS:
+  §68.
+- **Pictures** (`prepare_picture`): ≤ 1568 px, PNG unless > 800 KB (then JPEG q85); `images`
+  (default 3, ≤ 8) from `image_offset`, `mcp_images` in the document.
+- **Defaults vs CLI**: render / thumbnail / export preview; gallery to `build/mcp/gallery` without
+  clips; `plan` takes `markdown_text`; `validate` checks all variants; `schema` needs `full=true` /
+  `all_types=true` for the whole schema (use `scene=TYPE`).
+- **Resources**: `vidgen://guide[/<topic>]`, `vidgen://schema`, `vidgen://gallery/index|<type>`.
+- Every wrapped command has `--json` (`init`, `tts`, `imagegen` included); human `validate` checks
+  all variants (`validate_all(keep_going=True)`). `mcp_server.py` / `mcp_tools.py` are not render
+  inputs.
 
 ## 63. Refinements (Step 60, final review; version 0.2.0)
 
-- **Incremental `vidgen render`**: `render_project(..., force=False)` renders only the scenes for
-  which `pipeline.current_render` is false — no usable render (`_usable_render`: format, audio
-  mode, `--frames` stills) or a recorded `render.fingerprint` that differs from
-  `scene_fingerprint` now (§14) — and reuses the others (`RenderResult.reused`, `render --json`
-  scene `status: reused`). `--force` (CLI, MCP `render` `force`) renders every scene; `--scene`
-  keeps its meaning (those scenes, plus the ones without a usable render). Continuity
-  (`with_carried`) and the `pre_render` hook apply as before. A render after a storyboard / lint
-  of the same format joins only, and keeps their stills and layout dumps. Files a scene reads
-  outside `assets/` are not tracked (as for the storyboard): `--force`.
+**Release notes of 0.2.0** (Steps 8–60 over 0.1; details in the sections named).
+
+New:
+- `--json` on every command, `vidgen schema`; self-checks `vidgen storyboard`, `vidgen lint`,
+  `vidgen readback` (§57).
+- Theme presets and type scales, bundled fonts, icons (`vidgen list-icons`), layout regions.
+- Scene types `stat`, `chapter`, `comparison`, `table`, `timeline`, `diagram` / `flowchart`,
+  `process`, `network`, `scatter`, `histogram`, `pie` / donut, `heatmap`, `code_walkthrough`,
+  `equation_derivation`, `screenshot`, `video_clip`, `map`; per-beat actions (`reveal`,
+  `highlight`, `dim`, `zoom`, `transform`, `callout`, `sfx`).
+- Overlays (`lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, §41–§43);
+  pronunciation, several voices, sound effects, music with ducking and loudness (§45–§48);
+  transitions and `carry` (§49, §50).
+- Outputs: MP4 chapters and YouTube list (§52), thumbnail, GIF / clip export (§53), language
+  variants and translation files (§54), HTML / PDF decks (§55, §56), generated images (§58), the
+  author guide (§59), the gallery (§60), `vidgen plan` (§61), the MCP server (§62).
+
+Behaviour changes for 0.1 projects:
+- **Incremental `vidgen render`**: `render_project(..., force=False)` renders only scenes for which
+  `pipeline.current_render` is false (no usable render — `_usable_render`: format, audio mode,
+  `--frames` stills — or `render.fingerprint` ≠ `scene_fingerprint`, §14) and reuses the rest
+  (`RenderResult.reused`, scene `status: reused`). `--force` renders all; `--scene` renders those
+  plus scenes without a usable render. Files read outside `assets/` are not tracked: use `--force`.
+- **Narration plays 3 dB louder** (at the MP3s' level, §51); mono clip sound is panned to both
+  channels at full level (`clips.clip_audio`: `pan=stereo|c0=c0|c1=c0`; `ClipInfo.channels`).
+- **SRT cues** are cut at phrase boundaries and timed by word times (§43).
+- The first render after upgrading renders every scene (new fingerprint inputs).
+
+Rules set in 0.2.0:
 - **Silent scenes render exactly their planned frames**: `NarratedScene.timeline()` waits to
-  `round(d * fps)` frames from its start and `hold()` to `round(target * fps)` frames, the same
-  rounding as `VideoPlan` (whose silent part is now `max(duration - outro, 1 / fps)`, as the
-  scene's). Before, rounding the remainder after a step could lose a frame on a half frame (5 fps,
-  a 1.2 s `chapter` card: plan 7 frames, render 6).
-- **`code` highlight band**: `scenes.code.readable_band` picks the strongest band opacity of
-  `BAND_OPACITIES` (0.2, 0.16, 0.12, 0.1) at which every syntax colour keeps `INK_RATIO` (4.6:1)
-  over the window and the band; below the last one the colours that fall short are mixed towards
-  the theme's `text` (as `code_walkthrough` does). GitHub-dark's keyword red on dark_tech's band
-  was 4.15:1 (lint `contrast` on `examples/plan`).
-- **Mono clip sound** (`clips.clip_audio`): a mono stream is panned to both channels at full level
-  (`pan=stereo|c0=c0|c1=c0`) instead of FFmpeg's −3 dB upmix, like the narration (§51).
-  `ClipInfo.channels` (0 when unknown) added.
-- **`post_render` after the thumbnail**: with a `thumbnail:` config the hook is dispatched after
-  `make_thumbnail`, in a second extension session (the thumbnail must run outside the first, a
-  frame thumbnail may render); hook data gains `thumbnail` (`Path | None`, also `None` without a
-  thumbnail).
-- **Config files confined under MCP**: `Project.load` checks, when `VIDGEN_CONFINE_ROOT`
-  (`project.CONFINE_ENV`) is set, that every string under a `PATH_KEYS` key anywhere in the raw
-  config (variants included: `path`, `logo`, `image`, `source`, `pronunciation_file`,
-  `translations`, `extensions`, `output_dir` since Step 66, `svg` since Step 102; and the `.pt` parts of a
-  Kokoro `voice`, against the project folder and the current folder) resolves (links followed) inside that folder
-  (`confinement_problems`); else a `VidgenError` "files outside the allowed folder". The MCP
-  server sets it to its root for every command it runs. Non-path values under those keys (a
-  quote's `source`, a music bed name) resolve inside the folder and pass.
-- **MCP cancel on Windows**: `_kill` runs `taskkill /F /T` (the process tree: render workers).
-- **`vidgen plan`**: a stat whose number comes right before one or two words ("40x faster") is
-  labelled "faster with a cache" (the English subject before its verb, not a pronoun); a number
-  ending a range ("between 20 and 80 percent") is not a stat; bare web addresses
-  (`batteryuniversity.com`, `www.x.org/docs`) are links (`outline._DOMAIN`, end card `lines`);
-  placeholder beats of `process` / `bullets` steps say the whole item, not the label cut from it.
-- **CLI consistency**: `translate-template --language` (alias of `--lang`, as `plan --language`;
-  MCP `translate_template` parameter renamed `language`); `init` suggests the storyboard / lint
-  loop.
-- **Packaging**: version 0.2.0; PEP 639 metadata (`license = "MIT"`, `license-files` with
-  `THIRD_PARTY_NOTICES.md`; build needs setuptools ≥ 77); `data/geo/LICENSE` carries the ISC / MIT
-  notices of the map data in the wheel. Wheel ~2.0 MB (fonts 2.0 MB of it), sdist ~2.2 MB.
+  `round(d * fps)` frames from its start and `hold()` to `round(target * fps)`, the rounding of
+  `VideoPlan` (silent part `max(duration - outro, 1 / fps)`).
+- **`code` highlight band**: `scenes.code.readable_band` takes the strongest of `BAND_OPACITIES`
+  (0.2, 0.16, 0.12, 0.1) keeping every syntax colour at `INK_RATIO` 4.6:1; below that, short colours
+  mix towards `text`.
+- **`post_render` after the thumbnail**, in a second extension session; hook data `thumbnail`
+  (`Path | None`).
+- **Confinement**: with `VIDGEN_CONFINE_ROOT` (`project.CONFINE_ENV`) set, `Project.load` requires
+  every string under a `PATH_KEYS` key anywhere in the raw config (variants too: `path`, `logo`,
+  `image`, `source`, `pronunciation_file`, `translations`, `extensions`, `output_dir`, `svg`, and a
+  Kokoro `voice`'s `.pt` parts) to resolve (links followed) inside the folder
+  (`confinement_problems`), else `VidgenError` "files outside the allowed folder"; non-path values
+  under those keys resolve inside and pass.
+- `translate-template --language` (alias of `--lang`); packaging with PEP 639 metadata (`license =
+  "MIT"`, `license-files` incl. `THIRD_PARTY_NOTICES.md`; setuptools ≥ 77), `data/geo/LICENSE`.
 
 ## 64. Refinements (Step 61, OpenRouter image provider)
 
-- **API facts** (OpenRouter's OpenAPI spec `https://openrouter.ai/openapi.yaml`, its image
-  generation guide and the public endpoints, checked 2026-10-08). Base `https://openrouter.ai/api/v1`.
-  - `POST /images` (`createImages`): body `{model, prompt}` required; optional `n` (1–10),
-    `aspect_ratio` (`1:1 1:2 1:4 1:8 2:1 2:3 2.35:1 3:2 3:4 4:1 4:3 4:5 5:2 5:4 5:7 7:5 8:1 9:16
-    16:9 9:19.5 19.5:9 9:20 20:9 9:21 21:9 auto`; "providers clamp to their supported subset"),
-    `resolution` (`512 768 1K 1.5K 2K 4K`), `size` (a tier or explicit `WxH`; explicit pixels are
-    authoritative and a mismatched `resolution` / `aspect_ratio` is a 400), `quality` (`auto low
-    medium high xhigh max`; ignored by providers without it), `seed`, `output_format` (`png jpeg
-    webp svg`; svg only for vectorisation models, UTF-8 SVG base64 in `b64_json`), `background`,
-    `output_compression`, `input_references` (image to image), `provider` (routing), `stream`
-    (OpenAI-backed models only), `user`, `session_id`, `trace`. Response `{created, data:
-    [{b64_json, media_type?}], usage?: {prompt_tokens, completion_tokens, total_tokens, cost}}` —
-    always base64, never a URL; `cost` in US dollars when available. Errors `{error: {code,
-    message}}` with 400, 401, 402 (insufficient credits), 403, 404, 413, 429, 500, 502 (provider
-    error; a generation that does not complete is a 502 and not billed), 524 (edge timeout), 529
-    (provider overloaded).
-  - `GET /images/models` (public, no key): `{data: [{id, name, description, created, architecture:
-    {input_modalities, output_modalities}, supported_parameters: {name: {type: enum, values} |
-    {type: range, min, max} | {type: boolean}}, supports_streaming, endpoints: "/api/v1/images/
-    models/{id}/endpoints"}]}` (61 image models on 2026-10-08, 50 of them text-to-image raster).
-  - `GET /images/models/{author}/{slug}/endpoints` (public): `{id, endpoints: [{provider_name,
-    provider_slug, provider_tag, supported_parameters, allowed_passthrough_parameters,
-    supports_streaming, pricing: [{billable: output_image | input_image | input_text | ...,
-    unit: image | megapixel | token | request, cost_usd, variant?}]}]}`; 404 `{error: {message:
-    'No image model found for "x"', code: 404}}` for an unknown model. `variant` is a resolution
-    tier (`2k`, `4k`) for tiered prices. Samples: seedream-4.5 $0.04 per image, flux.2-klein-4b
-    $0.014 per megapixel, gpt-image-2 $0.00003 per output token, recraft-v4.1-flash $0.007 per
-    image.
-  - `GET /models?output_modalities=image` (the general catalog) has per-token strings only
-    (`pricing.image_output` etc.), so schu-video-generator uses the image-specific records above.
-  - The older route — `POST /chat/completions` with `modalities: ["image", "text"]` and
-    `image_config` — also exists; schu-video-generator uses the dedicated `/images` endpoint (one picture,
-    base64, a cost in the response).
-  - App identification headers (optional): `HTTP-Referer` (the app's URL; creates the app's page
-    in OpenRouter's rankings), `X-OpenRouter-Title` (display name; `X-Title` is the older alias),
-    `X-OpenRouter-Categories`. schu-video-generator sends `HTTP-Referer:
-    https://github.com/joaopauloschuler/schu-video-generator` and `X-OpenRouter-Title:
-    schu-video-generator` on every request (`openrouter.APP_HEADERS`).
-- **Config** `imagegen.provider: openai | openrouter` (`openai` stays the default; unknown values
-  are a config error), new `imagegen.resolution` (OpenRouter tiers). An `ImagegenConfig` model
-  validator: `provider: openrouter` needs an explicit `model` in `author/name` form, a `quality`
-  from `config.OPENROUTER_QUALITIES`, and not both a `WxH` size and a resolution; `resolution`
-  with `openai` is an error. All surface in `vidgen validate` and the JSON Schema.
-- **Request** (`image_request`): OpenRouter's `size: auto` sends `aspect_ratio` = the listed
-  ratio nearest the final format with the same orientation (`openrouter_aspect`; 16:9 → `16:9`,
-  9:16 → `9:16`, 4:3 → `4:3`), or `16:9` / `9:16` / `1:1` for a `generate.aspect` other than the
-  video's; plus `resolution`. `ImageRequest` gained `aspect_ratio`, `resolution`,
-  `explicit_size` (defaults keep old constructors working) and `shape`; with an aspect ratio,
-  `size` is the nominal `WxH` at the tier's long side (1K = 1024 without a tier;
-  `nominal_size`) — the placeholder's shape and the per-megapixel estimate. Default quality for
-  OpenRouter: none (not sent). `estimated_cost` is OpenAI-only (`PRICES`).
-- **Cache key**: `request_key(..., extra)` adds `{aspect_ratio, resolution}` for OpenRouter only,
-  so every OpenAI key is unchanged (pinned in a test). Sidecar: OpenRouter pictures record
-  `aspect_ratio`, `resolution`, `size` (`null` unless explicit) and, when reported, `cost_usd`.
-- **Provider** `imagegen/openrouter.py` (`OpenRouterImageProvider`, stdlib): `POST /images`
-  through `httpapi.post_with_retries` (retries on 429 / 500 / 502 / 503 / 504 / 524 / 529 with
-  `Retry-After` / backoff 4·2^n s, cap 60 s, timeout 240 s; 402 and other 4xx not retried; key
-  scrubbed). Key only from `OPENROUTER_API_KEY` at request time. Body (`request_body`): `model,
-  prompt, n: 1`, then `size` (explicit) or `aspect_ratio` (+ `resolution`), `quality`, `seed`
-  unless the model's record lists no seed (then it only names another picture, as for OpenAI),
-  `output_format: png` when listed. `negative` / `style` go into the prompt (no negative-prompt
-  parameter). Response (`decode_response` → `RawPicture(data, media_type, cost,
-  revised_prompt)`, then `parse_response`): SVG (`image/svg+xml` or `<svg` / `<?xml` bytes) is
-  refused with a clear message (vector output is Step 61b: it plugs in at `RawPicture`); JPEG /
-  WebP converted to PNG (`openai.as_png(data, service)`). `GeneratedPicture.cost` (new, default
-  `None`).
-- **Checks before paying**: the `ImageProvider` protocol gained an optional
-  `check_requests(requests)`; `run_imagegen` calls it (when present) after `check_credentials`.
-  OpenRouter fetches each model's public record once (`model_info`) and refuses, in one message:
-  a model OpenRouter does not have (404 / no endpoints), a `quality` / `resolution` the model
-  lacks or whose value it does not list, SVG-only models, models needing an input picture
-  (`input_references.min ≥ 1`). Notes (not errors): an aspect ratio the model does not list
-  (the provider clamps), no aspect-ratio parameter, a seed not sent. When the records cannot be
-  reached nothing is refused and the body is sent as configured.
-- **Prices** (`openrouter.quote(request, lookup) -> PriceQuote(cost, basis)`; `PriceQuote` in
-  `vidgen.imagegen`): from the endpoint records' `output_image` lines — `image` / `request` units
-  as is, `megapixel` × the request's (nominal) pixels, `$0` = free, `token` = unknown ("the
-  tokens per picture are not listed"); a `variant` matching the resolution tier, else the
-  untiered line, else the highest; with several endpoints the highest ("the highest of N
-  providers"). `lookup_models` fetches each distinct model once (`LOOKUP_TIMEOUT` 5 s) and stops
-  after the first unreachable answer (offline costs one short wait). `run.price_plan` fills the
-  plan's `quotes`, `notes`, `problems` and `price_notes` (`OpenRouter prices of <UTC date>` or
-  `OpenRouter prices unknown (its model list could not be reached)`; OpenAI keeps its 2025 note).
-  Only the dry run looks prices up.
-- **Output**: dry-run lines for OpenRouter `would generate KEY.png for S (16:9, openrouter MODEL
-  QUALITY, ~$0.040 | price unknown)` then `price: <basis>`, `note:` / `problem:` lines, the
-  prompt; the total line says how many a run would refuse. A run prints each picture's reported
-  cost and ends `done: N picture(s) generated ($X charged by openrouter)` (`cost not reported by
-  openrouter` without usage). OpenAI output is unchanged. `imagegen --json` images gain
-  `aspect_ratio, resolution, price_basis, notes, problems`; the document gains `charged`;
-  `price_note` is the plan's. MCP: same tool (description names OpenRouter); real runs still
-  need `confirm_cost`.
-- **Not render inputs**: `imagegen/openrouter.py` (fingerprint); the `imagegen` config stays in.
-- **Tests** (`tests/test_imagegen_openrouter.py`, urlopen mocked, real endpoint records of
-  2026-10-08 in `tests/data/openrouter_endpoints.json`): config errors, schema, pinned OpenAI
-  keys, aspect ratios / tiers / explicit sizes / keys, the body, headers (app identification,
-  no key on lookups), JPEG / WebP / SVG / bad responses, retried 429 / 529, 402 / 400 not retried
-  with the key scrubbed, missing key, quotes per image / megapixel / token / free / tiers / several
-  endpoints / offline, lookups stopping offline, model checks, dry run human / JSON / offline /
-  refusals, a run with costs and sidecars, refusals before any POST, an unreachable lookup not
-  blocking.
-- **Live check** `tools/live_check_openrouter.py` (not shipped, not tested): lists the cheapest
-  text-to-image models with schu-video-generator's estimates, then one picture's dry run; `--yes` generates
-  that picture through `run_imagegen` in a temporary project and prints the PNG, sidecar and
-  reported cost.
-- **Not done**: SVG output (Step 61b; done, §65); per-token prices (no tokens-per-picture data); input
-  pictures / editing; provider routing preferences (`provider.only`, `sort`); streaming; the
-  input-text price lines are not added to the estimate (prompts are short).
+- **API** (base `https://openrouter.ai/api/v1`): `POST /images` (`{model, prompt, n, aspect_ratio,
+  resolution, size, quality, seed, output_format, ...}` → base64 `data[].b64_json`, `usage.cost`
+  in USD; explicit `size` with a mismatched ratio / resolution is a 400; 402 = no credits); public
+  `GET /images/models` (`supported_parameters`) and `GET /images/models/{author}/{slug}/endpoints`
+  (`pricing: [{billable, unit: image | megapixel | token | request, cost_usd, variant?}]`). Every
+  request sends `openrouter.APP_HEADERS` (`HTTP-Referer` of the repository, `X-OpenRouter-Title:
+  schu-video-generator`).
+- **Config**: `imagegen.provider: openai | openrouter`, `imagegen.resolution`; `openrouter` needs an
+  explicit `author/name` model, a quality in `OPENROUTER_QUALITIES`, not both `WxH` and a
+  resolution; `resolution` with `openai` is an error. Users: docs/CONFIG.md "OpenRouter provider".
+- **Request**: `size: auto` → `aspect_ratio` nearest the final format (`openrouter_aspect`) or
+  `16:9` / `9:16` / `1:1` for another `aspect`; `ImageRequest.aspect_ratio`, `resolution`,
+  `explicit_size`, `shape`, nominal `size` (`nominal_size`, 1K = 1024). No default quality.
+- **Key**: `request_key(..., extra)` adds `{aspect_ratio, resolution}` for OpenRouter only (OpenAI
+  keys unchanged, pinned). Sidecar adds `aspect_ratio`, `resolution`, `size`, `cost_usd`.
+- **Provider** `imagegen/openrouter.py`: retries 429 / 500 / 502 / 503 / 504 / 524 / 529 (not 402 /
+  4xx), key from `OPENROUTER_API_KEY`; `seed` only when listed; `output_format: png` when listed;
+  `decode_response` → `RawPicture(data, media_type, cost, revised_prompt)`; JPEG / WebP → PNG
+  (`openai.as_png`).
+- **Before paying**: `check_requests` refuses unknown models, unsupported quality / resolution,
+  models needing input pictures; notes for clamped ratios and unsent seeds; unreachable records
+  refuse nothing. **Prices** (`openrouter.quote -> PriceQuote(cost, basis)`): image / request as
+  is, megapixel × nominal pixels, token = unknown; matching tier, else untiered, else highest;
+  several endpoints → highest. `lookup_models` (`LOOKUP_TIMEOUT` 5 s, stops at the first
+  unreachable). Only the dry run looks prices up; `imagegen --json` has `price_basis`, `notes`,
+  `problems`, `charged`. Not a render input. Live check: `tools/live_check_openrouter.py`.
 
 ## 65. Refinements (Step 61b, vector (SVG) generated images; data-policy errors)
 
-- **API facts** (OpenRouter's public `GET /api/v1/images/models`, the per-model endpoint records,
-  `openapi.yaml` and the image generation guide, checked 2026-10-08):
-  - `output_format: svg` exists "for vectorization models (e.g. Quiver)"; the SVG markup comes
-    UTF-8 base64 in `b64_json` with `media_type: image/svg+xml`. No Quiver model is in the image
-    list; the models listing `output_format` `svg` (and only svg) are Recraft's:
-    `recraft/recraft-v4.1-vector`, `recraft/recraft-v4-vector` ($0.08 per image),
-    `recraft/recraft-v4.1-pro-vector`, `recraft/recraft-v4-pro-vector` ($0.30 per image) — **text
-    prompt in, SVG out** (`input_references` 0–1, optional), aspect ratios `1:1 4:3 3:4 16:9
-    9:16 auto`, no seed / quality / resolution, passthrough `style`, `controls`, `text_layout`;
-    and `recraft/recraft-v4-styles-vector` ($0.05 + $0.005 per reference) /
-    `-styles-pro-vector`, which need 1–10 style reference pictures (refused as input-picture
-    models). So no two-call "PNG then vectorise" pipeline is needed (nor possible: no
-    vectorise-only model is listed).
-  - `GET /api/v1/endpoints/zdr` (public) lists every endpoint with Zero Data Retention
-    (`data: [{model_id, provider_name, tag, ...}]`, 942 on 2026-10-08). Image models among them:
-    Seedream 4.5 / 5.0 flash / lite / pro, Gemini image models, Krea 2, MAI image 2.5 / 2.6,
-    Tencent HY image 3.5, Ming image design. **No SVG model** (Recraft has no ZDR endpoint), nor
-    FLUX. An account requiring ZDR gets HTTP 404 `No endpoints available matching your guardrail
-    restrictions and data policy ... ZDR violation (account settings). Configurable at
-    https://openrouter.ai/settings/privacy` (seen live by the coordinator for
-    `recraft/recraft-v4.1-flash` and `black-forest-labs/flux.2-klein-4b`).
-- **Param** `GenerateImage.format: png | svg` (default `png`). **Config** `imagegen.svg_model`
-  (openrouter only, `author/name`; default `model`): the model of `format: svg` pictures, so one
-  video can mix raster and vector pictures. `imagegen_problems(project)` (in `vidgen validate`'s
-  project problems, so any scene type's `generate:`): `format: svg` needs `provider: openrouter`.
-  `vector_warnings` (in `imagegen_warnings`): a `format: svg` model not in the snapshot
-  `SVG_MODELS` (and without "vector" in its id), an SVG-only model asked for `png`, and the
-  sanitiser's warnings for stored SVGs (with the scene's `simplify`; `SceneImage.params` added).
-- **Request** (`image_request`): `format: svg` → model `svg_model or model`, `aspect_ratio` as
-  §64 (`auto` = nearest the video), no quality / resolution, nominal size at 1K, `path
-  <key>.svg`, `ImageRequest.format`; key `extra` gains `format: svg` (PNG keys unchanged,
-  pinned). Body: `output_format: svg`. `check_request`: `format: svg` with a model not listing
-  svg → problem naming the SVG models; `png` with an SVG-only model → "add format: svg".
-  `parse_response(body, format)`: svg must be vector (`media_type` or `<svg` / `<?xml`) and pass
-  the sanitiser, stored as sent; raster when svg was asked (or the reverse) → error. Sidecar
-  `format: svg` (only for svg). `run_imagegen` / `price_plan`: svg with another provider is a
-  problem / refused before paying. Orphans: `.png` and `.svg`. Messages and `--json` use the
-  file name; JSON images gain `format`. Prices as §64 (per image).
-- **Sanitiser** (`vidgen/svgclean.py`, no manim; svgelements from Manim for colours, paths,
-  transforms): refuses > 20 MB, `<!ENTITY` declarations, non-SVG roots, unparsable XML, nothing
-  drawable left. Removes (warning): `script`, `foreignObject`, `image`, `filter` (+ `filter=`),
-  `mask` / `clipPath` (+ attributes; "shapes they hid may show"), `text` (with a hint to use
-  schu-video-generator's captions), `use` / `href` to other files; silently: metadata, title, desc, animation
-  elements, gradients / patterns after flattening, `on*` attributes, other `url()` style
-  properties. Flattens `fill` / `stroke` `url(#id)` (attribute or `style`) to the mean of the
-  gradient's stops (following `href`), a pattern's first shape fill, else `#888888`. Manim
-  quirks shared with icons (`fix_manim_quirks`, `insert_box`, `view_box`; icon_mobject now uses
-  them): `currentColor` → a marker (icons) / black (pictures), `stroke: none` → zero width, the
-  invisible viewBox rectangle first. Caps: `MAX_SHAPES` 1500 (smallest by transformed box area
-  dropped), `MAX_SEGMENTS` 60 000 (paths and polylines keep 1 point in k, as lines); `simplify`
-  (% of the viewBox area; `true` = 0.05) drops smaller shapes first (a note, not a warning).
-  `CleanSvg(data, view_box, shapes, segments, warnings, notes)`. Measured: an SVG at the caps
-  loads in ~6 s and draws a 1080p frame in ~0.25 s.
-- **Shapes** (`vidgen/vector_mobject.py`): `load_vector(path, *, height, recolor, theme,
-  simplify, where) -> VectorPicture` (sanitised copy in the icon work folder, `SVGMobject`,
-  invisible box, SVG stroke widths → Manim units for the height, sanitiser warnings logged).
-  `SvgDrawing` (new base of `Icon` and `VectorPicture` in `icon_mobject.py`): box / parts and
-  `scale(scale_stroke=True)`; `scale_icon_strokes` handles any `SvgDrawing`. Fill-only parts get
-  a zero-width outline in their fill colour at opacity 1, so `DrawBorderThenFill` traces them.
-  `recolor: theme` (`svgclean.theme_color`): saturation < 0.2 or lightness < 0.06 / > 0.96 → the
-  neutral (`background`, `surface`, `dim`, `text`) of nearest lightness; else hue and saturation of
-  the theme colour (`primary`, `secondary`, `tertiary`, `accent`, `highlight`, palette) of
-  nearest hue, the original lightness kept (a halfway lightness was tried: flat-looking).
-  `vidgen.api` exports `VectorPicture`, `load_vector`.
-- **`image` scene**: `.svg` accepted as `path` (validate runs the sanitiser); `draw` (bool),
-  `recolor` (`none | theme`), `simplify` (bool | 0–5) — a config error unless the picture is
-  vector. Vector sources (stored SVG, `.svg` file) load with `load_vector`; the placeholder
-  before generation stays a PNG (faded in). Fit, cover, caption and Ken Burns work unchanged
-  (`scale_to_fit_width` scales strokes). `draw: true`: the entrance is `DrawBorderThenFill`,
-  played with `reveal(fraction=0.75, cap=2.5)` (fades: 0.6 / 1.0).
-- **Layout dump / lint**: a `VectorPicture` is one object, kind `vector`, class `VectorPicture`,
-  `fill` / `stroke` of its largest part; lint's `covered_text` treats it like a shape (pixels),
-  not like an opaque image.
-- **Data-policy errors**: `openrouter.is_policy_error` (an HTTP 404 whose body mentions data
-  policy / ZDR / guardrail / settings/privacy) → `policy_message(model, svg)`: the account's
-  privacy settings exclude every provider of the model, the settings link, and the image models
-  (SVG ones for `format: svg`) with a ZDR endpoint now (`zdr_image_models`: the ZDR list ∩ the
-  image list, 5 s timeout, `None` offline → "could not be reached to suggest models"). Not
-  retried; the provider's `zdr` callable is injectable.
-- **Live check** `tools/live_check_openrouter.py`: `--zdr` restricts the cheapest pick to models
-  with a ZDR endpoint; `--svg` picks the cheapest text-to-SVG model and generates one vector
-  picture (dry run unless `--yes`), printing the sanitiser's report.
-- **Tests** `tests/test_vector_images.py` (urlopen mocked; fixture `tests/data/vector_hills.svg`,
-  hand-written): sanitiser (fixture, removed parts, refusals, caps, simplify, thinning),
-  theme colours, keys / paths / config / params / validate warnings and problems, check and
-  body, SVG responses, dry run + run storing the SVG, OpenAI refusal, policy error with / without
-  suggestions and offline, the ZDR lists, loading (box, strokes, recolor), draw states, the
-  layout object, scene renders (generated SVG drawn, file SVG with cover + Ken Burns) at
-  160x90 / 90x160, validate of an `.svg` path.
-- **Not done**: `fill-rule: evenodd` holes and per-element `stroke-linecap` follow Manim's SVG
-  parser; text is removed, not converted to schu-video-generator text; recolor is per colour, not per region;
-  no SVG model can be used by an account that requires ZDR (none has a ZDR endpoint).
-
+- `GenerateImage.format: png | svg`; `imagegen.svg_model` (default `model`). svg needs `provider:
+  openrouter` (`imagegen_problems`); `vector_warnings` (model not in `SVG_MODELS` / without
+  "vector", SVG-only model for png, sanitiser warnings). svg requests: no quality / resolution,
+  nominal 1K, path `<key>.svg`, key `extra` `format: svg` (PNG keys unchanged), body `output_format:
+  svg`; `parse_response(body, format)` rejects a raster / vector mismatch; sidecar `format: svg`.
+- **Sanitiser** (`vidgen/svgclean.py`): refuses > 20 MB, `<!ENTITY`, non-SVG roots, bad XML,
+  nothing drawable; removes `script`, `foreignObject`, `image`, `filter`, `mask` / `clipPath`,
+  `text`, external `use` / `href` (warnings), metadata, animation, `on*`, other `url()`; flattens
+  gradient / pattern paints to one colour (else `#888888`); shared Manim fixes (`fix_manim_quirks`,
+  `insert_box`, `view_box`); caps `MAX_SHAPES` 1500, `MAX_SEGMENTS` 60 000; `simplify` (% of the
+  viewBox; `true` = 0.05). `CleanSvg(data, view_box, shapes, segments, warnings, notes)`.
+- **Shapes** (`vidgen/vector_mobject.py`): `load_vector(path, *, height, recolor, theme, simplify,
+  where) -> VectorPicture`; `SvgDrawing` is the base of `Icon` and `VectorPicture`; `recolor:
+  theme` (`svgclean.theme_color`) maps near-greys to the nearest-lightness neutral, others to the
+  nearest-hue theme colour keeping lightness. `vidgen.api` exports `VectorPicture`, `load_vector`.
+- **`image`**: `.svg` paths; `draw`, `recolor` (`none | theme`), `simplify` only for vector
+  pictures; `draw: true` = `DrawBorderThenFill`. Layout dump kind `vector`; `covered_text` treats it
+  as a shape.
+- **Data policy**: `openrouter.is_policy_error` (404 mentioning data policy / ZDR / guardrail /
+  settings/privacy) → `policy_message(model, svg)` with the settings link and ZDR-capable models
+  (`zdr_image_models`, from public `GET /endpoints/zdr`; 5 s). Not retried.
 
 ## 66. Refinements (Step 62, OpenRouter TTS provider; one provider per video)
 
-- **API facts** (checked 2026-10-08 from `https://openrouter.ai/openapi.yaml`, the TTS guide
-  `docs/guides/overview/multimodal/tts`, the Python SDK's `tts.create_speech` page and the public
-  endpoints; no key used): `POST /api/v1/audio/speech` (OpenAI-compatible) `{model, input,
-  voice?, instructions?, response_format?: mp3 | pcm (default pcm), speed?, input_references?,
-  provider?: {zdr, data_collection, options}, session_id?, user?}` → **raw audio bytes** (not
-  JSON), headers `Content-Type` (`audio/mpeg` / `audio/pcm`: 16-bit LE mono, 24 kHz) and
-  `X-Generation-Id`. No cost in the response: `GET /api/v1/generation?id=<id>` (with the key)
-  gives `data.total_cost`. `instructions`: OpenAI gpt-4o-mini-tts and Gemini TTS only, others
-  ignore it; `speed`: OpenAI, others ignore it or return 400 for a value other than 1; Gemini TTS
-  returns only `pcm` (`mp3` → 400 "only supports response_format=\"pcm\""); multi-speaker
-  `input` (a list of turns): Gemini only. Errors `{error: {code, message}}`; 402 / 429 / 502 /
-  503 / 524 / 529 as for images. Models: `GET /api/v1/models?output_modalities=speech` (public):
-  32 models with `supported_voices` (null for some: Fish Audio, Seed Audio) and list `pricing
-  {prompt, completion}`; `GET /api/v1/models/{author}/{slug}/endpoints` (public): each
-  provider's `pricing` (they differ: Kokoro $0.00000062 DeepInfra vs $0.000004 Together; Voxtral
-  $0.000016 vs $0.0000176 EU). "Most TTS models are priced per character of input text"
-  (`pricing.prompt`), per-second / per-audio-token models report `pricing.completion` (Gemini
-  TTS: prompt per text token + completion per audio token; Seed Audio: per second). ZDR (`GET
-  /api/v1/endpoints/zdr`, field `model_id`): 27 of the 32 TTS models (all but MiniMax speech-2.8
-  hd / turbo, Qwen TTS flash / plus, Grok voice).
-- **Config**: `VoiceConfig.provider: elevenlabs | openrouter` (`config.TTS_PROVIDERS`), new
-  optional `model`, `voice`, `instructions`, `speed` (0.25–4; not sent when absent); a model
-  validator requires `model` (`author/name`) for openrouter. Keys of the provider not in use are
-  **ignored, not errors** (`ELEVENLABS_VOICE_KEYS` / `OPENROUTER_VOICE_KEYS`): a variant that
-  switches the provider deep-merges onto the base voice, whose other-provider keys stay. The
-  same four keys are optional on `VoiceEntry`.
-- **One provider per video**: `voices.voice_provider_problems(config)` (in `parse_config`, after
-  the model validates, beside the voice-name check): a named voice with another `provider` →
-  `voices.<name>.provider: one TTS provider per video: ...`; a named voice setting a key of the
-  other provider (`voice_id`, `settings`, `context`... in an OpenRouter video; `model`, `voice`,
-  `instructions`, `speed` in an ElevenLabs one) → `voices.<name>.<key>: ...`. Problems with
-  locations; a variant's are attributed to it. A variant may switch the provider: its effective
-  voice differs, so `Project.has_own_audio` gives it `audio/<variant>/` (§7 rule unchanged); a
-  named voice's ElevenLabs keys are cleared in the variant with `null` (`voices: {guest:
-  {voice_id: null, settings: null, voice: ...}}`).
-- **Provider** `tts/openrouter.py` (`OpenRouterTTSProvider`, `name = "openrouter"`, stdlib):
-  `POST /audio/speech` through `httpapi.post_with_retries` (new optional `response_headers`
-  dict; same retries as images: 429 / 5xx / 524 / 529), headers `Authorization: Bearer`, the
-  app identification of §64, `Accept: audio/mpeg, audio/*`. Body `{model, input,
-  response_format}` + `voice` / `instructions` / `speed` when set; **no** `previous_text` /
-  `next_text` (the API has none: the run passes them, the provider ignores them), **no**
-  `language_code` (`voices._with_language` returns `None` for any provider but elevenlabs: the
-  language follows the text and voice), no `input_references`, no multi-speaker input. Format:
-  `mp3` asked for, `pcm` for `google/` models (`PCM_ONLY_PREFIXES`) and after a 400 naming
-  `response_format` and `pcm` (then remembered); `as_mp3`: MP3 kept (ID3 / frame sync, or
-  `audio/mpeg`), WAV and PCM (`s16le`, rate from `Content-Type` `rate=` else 24000, mono)
-  converted with ffmpeg (`libmp3lame`, 128 kb/s) in a temporary folder; anything else (JSON,
-  HTML) → error quoting its start. `X-Generation-Id`s are kept on the provider;
-  `reported_cost()` reads `GET /generation?id=` for each, never raises (retries: §67). Key:
-  `imagegen.openrouter.read_api_key("tts")` (the missing-key
-  message names `vidgen tts --dry-run`).
+- **API**: `POST /api/v1/audio/speech` `{model, input, voice?, instructions?, response_format: mp3 |
+  pcm, speed?}` → raw audio (`audio/mpeg` or `audio/pcm` s16le 24 kHz mono) + `X-Generation-Id`;
+  the cost comes from `GET /api/v1/generation?id=` (§67). Public model and endpoint lists give
+  `supported_voices` and per-provider `pricing {prompt, completion}`.
+- **Config**: `VoiceConfig.provider: elevenlabs | openrouter | kokoro` (`TTS_PROVIDERS`), `model`,
+  `voice`, `instructions`, `speed` (0.25–4), also on `VoiceEntry`; `openrouter` requires `model`.
+  Other providers' keys are ignored on `voice:` (`PROVIDER_VOICE_KEYS`), so a variant can switch
+  provider by deep merge (its audio goes to `audio/<variant>/`).
+- **One provider per video** (`voices.voice_provider_problems`, in `parse_config`): a named voice
+  with another `provider`, or setting another provider's key, is a problem at `voices.<name>.<key>`.
+- **Provider** `tts/openrouter.py`: `httpapi.post_with_retries(..., response_headers=)`; no
+  context texts, no `language_code`; `pcm` for `PCM_ONLY_PREFIXES` (`google/`) and after a 400
+  naming it; `as_mp3` converts WAV / PCM with ffmpeg (`convert_to_mp3`, 128 kb/s). Key via
+  `imagegen.openrouter.read_api_key("tts")`.
 - **Hash**: `sha1(json.dumps({provider, model, voice, instructions, speed}, sort_keys=True,
-  ensure_ascii=False) + "|" + spoken_text)` — every key that changes the audio; ElevenLabs keys
-  are untouched (two ElevenLabs keys pinned in `tests/test_tts_openrouter.py`, kphi3's 27
-  committed hashes still "ok").
-- **Data policy**: a 404 recognised by `imagegen.openrouter.is_policy_error` → `policy_message`:
-  the shared first line (`policy_intro`, factored out of §65's message) and "Text-to-speech
-  models with a ZDR endpoint now: ..." (`zdr_tts_models`: the ZDR list ∩ the speech model list;
-  offline: "could not be reached to suggest models"). Not retried.
-- **Prices** (`tts.run.price_tts`, dry run and before a paid run): `lookup_speech_models`
-  reads the speech model list once (5 s timeout) and each used model's endpoint records;
-  `character_rate`: the highest `prompt` over the endpoints (the list price when the records
-  cannot be read), "free" at 0, **unknown** when any endpoint has a non-zero `completion` (the
-  generated audio is billed and its length is not known beforehand), offline or for a missing
-  model. `TTSPlan` gains `beat_voices`, `rates`, `notes`, `problems`, `price_notes`, `charged`,
-  `beat_cost(beat)`, `cost`, `price_note`, `synthesised()`, `engine(beat)`. ElevenLabs is never
-  estimated (`ELEVENLABS_PRICE_NOTE`: plan quota).
-- **Checks**: `vidgen validate` (no network) warns via `tts.tts_warnings(project)` (in
-  `validate_warnings`) from the bundled snapshot `data/openrouter/tts_models.json` (dated; ids,
-  voices, ZDR flag, list prices): a model not listed (did-you-mean), a voice the model does not
-  list, no voice for a model that lists some, `timestamps: true` (no timings; captions estimate).
-  Warnings, not errors: lists may be incomplete and change. `vidgen tts --dry-run` / a real run use
-  the live list: a model OpenRouter does not have is a `problem:` (a real run refuses before any
-  paid request), an unlisted voice or `instructions` / `speed` on a model not documented to use
-  them (`INSTRUCTION_PREFIXES` `openai/`, `google/`; `SPEED_PREFIXES` `openai/`) a `note:`.
-  Offline: nothing refused, "price unknown".
-- **`vidgen tts`**: ElevenLabs output unchanged. With OpenRouter beats the dry run adds `,
-  ~$0.0002` (or `, price unknown`) to each `would generate` line, one `voice <name> (openrouter
-  <model>, voice <v>[, instructions '...'][, speed s]): N beat(s), C characters` line per voice
-  (also without `voices:`), `price of <model>: <basis>`, `note:` / `problem:` lines and `cost:
-  estimated $X (OpenRouter prices of <date>)`. A real run prints `note:` lines first and ends
-  `done: N beat(s) generated (C characters, $X charged by openrouter), ...` (or `cost not
-  reported by openrouter`; `for K of N requests` when only some were). Captions / SRT / lint /
-  readback need nothing new: the MP3s are ordinary, `speech.read_alignment` finds no
-  `.align.json`, so word times are estimated within the MP3's speech bounds.
-- **JSON** (`tts --json`): top level `provider`, `estimated_cost`, `unknown_cost`, `price_note`,
-  `prices {model: {per_character, basis}}`, `notes`, `problems`, `charged`; each beat and voice
-  gains `provider`, `model`, `provider_voice`, `instructions`, `speed` (+ beat `estimated_cost`).
-  MCP `tts` is unchanged in shape (description names OpenRouter); real runs still need
-  `confirm_cost`.
-- **Live check** `tools/live_check_openrouter.py --tts [--zdr] [--yes] [--model ID] [--voice
-  NAME]`: prices every TTS model with a per-character price, picks the cheapest (an English /
-  neutral voice of its list), prints `vidgen tts --dry-run` of one 12-word beat in a temporary
-  project and with `--yes` voices it through `run_tts`, printing the MP3 path, duration and the
-  reported cost. Free part run here: cheapest ZDR model `hexgrad/kokoro-82m` ($0.000004 per
-  character, the highest of 2 providers; ~$0.00024 for the beat).
-- **Not done**: voice cloning (`input_references`), multi-speaker input, provider routing
-  preferences (`provider.zdr` is not sent: the account setting decides), per-token / per-second
-  estimates (Gemini TTS, Seed Audio), streaming; no real paid request was made here (no key).
+  ensure_ascii=False) + "|" + spoken_text)`; ElevenLabs hashes unchanged.
+- **Prices** (`tts.run.price_tts`): `character_rate` = highest `prompt` over endpoints, unknown when
+  any `completion` is non-zero or offline; `TTSPlan` carries `rates`, `notes`, `problems`,
+  `price_notes`, `charged`, `beat_cost`, `cost`. ElevenLabs is never estimated.
+- **Checks**: `tts.tts_warnings` (validate, offline) from `data/openrouter/tts_models.json`; the dry
+  run / run use the live list (unknown model refused before paying; `INSTRUCTION_PREFIXES`,
+  `SPEED_PREFIXES` notes). Policy 404s → `policy_message` with `zdr_tts_models`. No alignment: word
+  times are estimated. `tts --json` adds `provider`, `estimated_cost`, `prices`, per-beat `model`,
+  `provider_voice`, `instructions`, `speed`; `voice_id` `null` for non-ElevenLabs videos.
 
 ## 67. Refinements (Step 63, review of Phase F)
 
-- **Live results** (the coordinator, owner's key, account requiring ZDR, 2026-10-09): image
-  models without a ZDR endpoint (`recraft/recraft-v4.1-flash`, `black-forest-labs/flux.2-klein-4b`)
-  → HTTP 404 `0 endpoints out of 1 requested are available matching your guardrail restrictions
-  and data policy ... ZDR violation (account settings) ...` with `metadata.ineligibility_reasons:
-  [{reason: zdr-violation-by-account, ...}]` (recognised by `is_policy_error`; pinned in
-  `conftest.LIVE_ZDR_404`); `bytedance-seed/seedream-5-0-flash` 1K 1:1 → 1024x1024 PNG, 9.7 s,
-  `usage.cost` $0.018 = the estimate. TTS `hexgrad/kokoro-82m` / `af_alloy` → MP3 (24 kHz mono,
-  4.46 s); `google/gemini-3.8-flash-lite-tts` / `Kore` → PCM converted (4.68 s). Both runs
-  printed "cost not reported": the `X-Generation-Id` header was there (the line is printed only
-  for providers with ids), so `GET /generation` gave no `total_cost` within one 1 s retry. Key
-  usage rose $0.000038 for both beats: Kokoro routed to its cheapest provider (61 × $0.00000062),
-  6x below schu-video-generator's highest-provider estimate (an upper bound, as documented).
-- **Cost lookup** (`OpenRouterTTSProvider.reported_cost(timeout, waits=COST_WAITS)`):
-  OpenRouter writes generation records asynchronously, so every request whose record is not
-  there yet — HTTP 404, 429 / 5xx / 524 / 529, unreachable, a record without a numeric
-  `total_cost` — is asked again after each of `COST_WAITS` = 1, 2, 4, 8 s (all requests in one
-  round per wait: at most 15 s after a run, plus a deadline of `sum(waits) + 2·timeout`); other
-  statuses (400 / 401 / 403) and unreadable JSON are not retried. `cost_problem` (new attribute)
-  says why a request was left out (`GET /generation answered HTTP 404 for gen-...: <body, key
-  scrubbed> (still missing after waiting 15 s)`, `the generation record of ... has no total_cost
-  yet`, `N audio response(s) came without an X-Generation-Id header`); `requests` counts audio
-  responses (with or without an id). `run._reported_cost` asks every provider with `requests`
-  and prints `, cost not reported by openrouter yet (<why>; see https://openrouter.ai/activity)`
-  or `for K of N requests (<why>; see ...)`. Never fails the run.
-- **Key hygiene**: `httpapi.scrub` also removes the key as `repr` escapes it (http.client quotes a
-  rejected header value as bytes); `httpapi.get(..., secret=)` scrubs its errors (used by the
-  key-authenticated `/generation` lookup) and wraps `http.client.HTTPException`;
-  `imagegen.openrouter.read_api_key` refuses a key with spaces, control or non-ASCII characters
-  without quoting it.
-- **JSON**: `tts --json` `voices.<name>.voice_id` is `null` in an OpenRouter video (it showed
-  the ElevenLabs default id).
-- **Live check** `tools/live_check_openrouter.py`: `--generation ID [--wait S]` probes one
-  generation record (status / main fields each time, backoff 1 → 16 s); `--tts --yes` keeps the
-  provider, prints the `X-Generation-Id`s and, without a cost, `cost_problem` and the probe of the
-  first id. Options documented in the docstring.
-- **Tests** `tests/test_phase_f_review.py` (imagegen → render with a PNG and a drawn, recoloured
-  SVG; OpenRouter tts → render with captions; a variant switching provider; one-provider errors;
-  MCP dry runs offline with the `confirm_cost` guard; scrubbing; the tool never printing the
-  key) and in `tests/test_tts_openrouter.py` (records written late: 404 → no `total_cost` → cost;
-  giving up; no id; the run's message) and `tests/test_vector_images.py` (the live ZDR body).
+- **Cost lookup** (`OpenRouterTTSProvider.reported_cost(timeout, waits=COST_WAITS)`): records are
+  written late, so 404 / transient / no numeric `total_cost` are retried after `COST_WAITS` 1, 2, 4,
+  8 s (deadline `sum(waits) + 2·timeout`); 400 / 401 / 403 are not. `cost_problem` says why;
+  `run._reported_cost` prints `cost not reported by openrouter yet (<why>; see
+  https://openrouter.ai/activity)`. Never fails the run. `conftest.LIVE_ZDR_404` pins a real
+  policy body.
+- **Key hygiene**: `httpapi.scrub` also removes the `repr`-escaped key; `httpapi.get(..., secret=)`
+  scrubs and wraps `http.client.HTTPException`; `read_api_key` refuses keys with spaces, control or
+  non-ASCII characters without quoting them.
 
 ## 68. Refinements (Step 65, local Kokoro TTS; optional extra)
 
-- **Facts** (checked 2026-10-09): model `hexgrad/Kokoro-82M` v1.0 on Hugging Face, Apache-2.0
-  (weights and the `kokoro` / `misaki` packages), 82 M parameters (StyleTTS 2 + ISTFTNet),
-  `kokoro-v1_0.pth` 327,212,226 bytes, SHA256 `496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4`;
-  54 voices in `voices/` (~0.5 MB each), 9 languages `a b e f h i j p z`. PyPI `kokoro` 0.9.4
-  (2025-04-05; deps `huggingface-hub, loguru, misaki[en]>=0.9.4, numpy, torch, transformers`) and
-  `misaki` 0.9.4 both declare `Requires-Python <3.13,>=3.10`. `KPipeline(lang_code, repo_id,
-  model=True | KModel, device=None | cpu | cuda)` downloads `config.json` + the weights
-  (`hf_hub_download`) and each voice on first use; calling it with `(text, voice, speed,
-  split_pattern)` yields `Result(graphemes, phonemes, tokens, output)`, `audio` = float32 at 24
-  kHz. For `a` / `b` the tokens are misaki `MToken`s with `start_ts` / `end_ts` (seconds, from
-  the predicted durations, per chunk); other languages yield no tokens. English G2P = misaki +
-  spaCy `en_core_web_sm` (installed with `spacy.cli.download`, i.e. pip, on first use) + espeak-ng
-  fallback; `e f h i p` = espeak-ng; `j` / `z` need `misaki[ja]` / `misaki[zh]`. misaki's
-  `espeak.py` points phonemizer at the library **bundled in the `espeakng-loader` wheel** (Windows,
-  Linux, macOS) at import, so no system espeak-ng is used or needed (a Portuguese beat was voiced
-  here with no espeak-ng installed). Linux PyPI torch pulls ~4.3 GB of CUDA libraries + triton;
-  the CPU wheel index is the small path.
-- **Config** (`config.py`): `provider: kokoro` (`TTS_PROVIDERS`), `KOKORO_VOICE_KEYS = (voice,
-  speed, lang, device)`, `PROVIDER_VOICE_KEYS`; new `VoiceConfig.lang: a|b|e|f|h|i|j|p|z|null`,
-  `VoiceConfig.device: cpu|cuda|auto = cpu`; `VoiceEntry.lang`. `voice` / `speed` are shared with
-  OpenRouter. Keys of other providers are ignored on `voice:` (as §66).
-- **Resolution** (`kokoro_voices.resolve`, applied by `voices._with_language`): `lang` = given,
-  else the voice's first letter (`^[a-z][fm]_`), else the video `language` (`en`→a, `en-GB/IE/AU/NZ`
-  →b, `es` e, `fr` f, `hi` h, `it` i, `ja` j, `pt` p (also pt-PT), `zh` z; none → a); `voice` =
-  given, else the language's `default_voice` (af_heart, bf_emma, ef_dora, ff_siwis, hf_alpha,
-  if_sara, jf_alpha, pf_dora, zf_xiaobei); `speed` = given, else 1. A named voice that sets
-  `voice` without `lang` gets that voice's language (the base `lang` is not inherited then). A
-  language with no Kokoro voice and no `lang` / voice is a config error
-  (`voices._kokoro_language_problems`, inside `voice_provider_problems`, so variants too).
-- **One provider per video** (`voice_provider_problems` generalised): other-provider keys are
-  every key of the other providers not used by the base provider; the message names the owners
-  ("voice is an OpenRouter or Kokoro setting", "lang is a Kokoro setting"); a Kokoro named voice
-  changes `voice, speed, lang`. Existing ElevenLabs / OpenRouter messages unchanged.
-  `voices.audio_fields` now leaves out `device` (`RUNTIME_FIELDS`): a variant changing only the
-  device shares `audio/`.
-- **Provider** `tts/kokoro.py` (`KokoroProvider`, `name = "kokoro"`, `timings_included = True`):
-  nothing imports `kokoro` / torch until the first beat (validate, render, dry run never do; tested
-  via `sys.modules`). `check_credentials` = `check_installed(lang)`: the extra
-  (`find_spec("kokoro")`), `misaki[ja]` / `[zh]` (pyopenjtalk / jieba), `espeakng_loader` for
-  espeak languages → `VidgenError` saying to reinstall schu-video-generator (Step 322; on Python > 3.12
-  to use a Python 3.12 virtual environment instead; `misaki[ja]`: another voice provider, as its
-  pyopenjtalk has no wheels). `KokoroEngine(device)`: one `KPipeline` per language,
-  the first one's `KModel` passed to the next (`model=`), shared by every voice of the process
-  (`shared_engine`, module dict) = loaded once per `vidgen tts`. `synthesize_timed`: pipeline
-  called with `split_pattern=None`, results' float audio → 16-bit PCM (`pcm16`) → MP3 with ffmpeg
-  (`openrouter.convert_to_mp3`, new `source=` for its messages; 128 kb/s, 24 kHz mono); token
-  times shifted by each chunk's offset → `alignment_from_tokens` (each token found in order in the
-  spoken text spreads its time over its characters, other characters take the previous end;
-  `None` when < 80 % of the words are timed) → stored like ElevenLabs' alignment, so captions /
-  SRT time words exactly and pronunciation maps back (`speech.map_word_times`). Non-English: no
-  alignment (estimates). While Kokoro loads / runs, fd 1 goes to stderr (`quiet_stdout`: spaCy's
-  pip install prints to stdout, which would break `--json`) and torch's load warnings are
-  ignored. Library exceptions → `explain()`: espeak-ng (both installs named), misaki extras,
-  CUDA (`device: cpu`), downloads (Xet / CAS, proxy, offline; `HF_HUB_DISABLE_XET=1` hint),
-  else `Kokoro could not voice the text: <type>: <msg>`.
+- **Library**: `hexgrad/Kokoro-82M` v1.0 (Apache-2.0), weights `kokoro-v1_0.pth`, languages `a b e f
+  h i j p z`; `KPipeline` downloads weights and voices through the HF cache on first use; only `a` /
+  `b` yield token times. espeak-ng comes from the `espeakng-loader` wheel; `j` / `z` need
+  `misaki[ja]` / `[zh]`.
+- **Config**: `provider: kokoro`, `KOKORO_VOICE_KEYS = (voice, speed, lang, device)`, `VoiceConfig.lang`
+  (`a|b|e|f|h|i|j|p|z|null`), `device: cpu|cuda|auto = cpu`. Users: docs/CONFIG.md "Kokoro on this
+  computer".
+- **Resolution** (`kokoro_voices.resolve`): `lang` = given, else the voice's first letter, else the
+  video language (`en` a, `en-GB/IE/AU/NZ` b, es e, fr f, hi h, it i, ja j, pt p, zh z; none a);
+  `voice` = given, else the language's `default_voice`; `speed` 1. A language without a Kokoro voice
+  is a config error (`voices._kokoro_language_problems`). `audio_fields` leaves out `device`
+  (`RUNTIME_FIELDS`).
+- **Provider** `tts/kokoro.py` (`KokoroProvider`, `timings_included = True`): nothing imports
+  kokoro / torch before the first beat. `check_installed(lang)` → `VidgenError` telling to reinstall
+  (Python > 3.12: use 3.12). One `KokoroEngine` per process (`shared_engine`), pipelines share one
+  `KModel`. Audio → `pcm16` → MP3 (`convert_to_mp3`, 24 kHz mono); token times →
+  `alignment_from_tokens` (`None` under 80 % timed), stored as `.align.json`. stdout is redirected
+  to stderr while it runs (`quiet_stdout`); errors explained by `explain()`.
 - **Hash**: `sha1(json.dumps({provider: kokoro, model: hexgrad/Kokoro-82M, weights:
   kokoro-v1_0.pth, voice, lang, speed}, sort_keys=True, ensure_ascii=False) + "|" + spoken_text)`
-  with the resolved values (pinned in `tests/test_tts_kokoro.py`); not the device nor the package
-  version (an upgrade does not re-voice). ElevenLabs and OpenRouter keys pinned unchanged.
-- **Run** (`tts/run.py`): `run_tts` calls `synthesize_timed` when `voice.timestamps` **or** the
-  provider's `timings_included`; before synthesis prints `note:` lines (`kokoro.run_notes`: free
-  and local on <device>, the download still to come when the weights are not in the HF cache —
-  `hf_cache_dir()`: `HF_HUB_CACHE`, `HF_HOME/hub`, `XDG_CACHE_HOME/huggingface/hub`,
-  `~/.cache/huggingface/hub` — the extra / language packages missing). `TTSPlan.beat_cost` = 0
-  for Kokoro; `price_tts` adds `KOKORO_PRICE_NOTE` ("free (local): Kokoro-82M runs on this
-  computer") and the notes (no network); dry run prints per-voice lines `kokoro <voice> (lang x,
-  <Language>), speed s, <device>`, `note:` lines and `cost: free (local): ...`; the run summary has
-  no cost part.
-- **JSON / MCP**: `tts --json` beats and voices gain `lang` and `device` (Kokoro's; `null` for the
-  others), `model` `hexgrad/Kokoro-82M`, `provider_voice` the voice, `speed` 1.0 by default,
-  `voice_id` `null`; `estimated_cost` 0, `unknown_cost` 0, `price_note` the free note. MCP `tts`:
-  a real run needs `confirm_cost` unless the project (variant applied) loads and its
-  `voice.provider` is in `FREE_TTS = ("kokoro",)` (`mcp_server.tts_provider`); a project that
-  does not load still needs it (conservative). Tool text and server instructions say so.
-- **Validate** (`tts.tts_warnings` → `kokoro.voice_warnings` / `kokoro_voices.voice_warnings`,
-  `kokoro.install_warnings`; no network, nothing loaded): voice not in the bundled
-  `data/kokoro/voices.json` (dated 2026-10-09, did-you-mean, the language's best voices; `.pt`
-  files and blends `a,b` checked per part), voice of another language than `lang`, `lang` not the
-  video language (a / b both English: fine), `timestamps` with a language without timings, the
-  extra or `misaki[ja]` / `[zh]` not installed.
-- **Packaging**: base dependencies `kokoro>=0.9.4` and `misaki[zh]>=0.9.4`, each with
-  `python_version < '3.13'` (on 3.13 the install leaves them out instead of failing; schu-video-generator
-  explains; Step 322). `misaki[ja]` is not a dependency (pyopenjtalk has no wheels and would need a C++ compiler); package data
-  `data/kokoro/*`. Nothing of Kokoro is bundled (THIRD_PARTY_NOTICES).
-- **Live** (this workspace, 2026-10-09): Hugging Face's file CDN and Xet hosts are blocked by
-  the egress proxy, so the weights and three voices were fetched from Kokoro-FastAPI's GitHub
-  release / repository and verified against the model card's SHA256 (weights) and VOICES.md's
-  hash prefixes (af_heart `0ab5709b`, bf_emma `d0a423de`, pf_dora `07e4ff98`), then laid out as
-  an HF cache and used with `HF_HUB_OFFLINE=1` — schu-video-generator's normal `hf_hub_download` path. Python
-  3.12 venv with `pip install -e ".[dev,kokoro]"` (torch 2.14.1, transformers 5.19, manim 0.22):
-  `vidgen tts` voiced 2 English + 1 Portuguese beats (MP3 24 kHz mono; `.align.json` for the
-  English ones), a preview render's SRT kept the written words through the pronunciation;
-  ~0.7x real time on 2 CPU cores (3.6 s for 4.8 s of speech), ~10 s to load. Python 3.13:
-  the forced install above, then a real synthesis with word timestamps, worked.
-- **Not done**: Kokoro v1.1-zh (`hexgrad/Kokoro-82M-v1.1-zh`), custom `.pt` voice files are not
-  hashed by content, no streaming, no automatic download of `misaki[ja]` / `[zh]`.
-
+  with resolved values; not device or package version; `.pt` voices by name.
+- **Run**: `run_tts` uses `synthesize_timed` when `timestamps` or `timings_included`; `kokoro.run_notes`
+  (free, device, pending download via `hf_cache_dir()`); cost 0 (`KOKORO_PRICE_NOTE`). MCP `tts`
+  needs no `confirm_cost` when the loaded project's provider is in `FREE_TTS = ("kokoro",)`
+  (`mcp_server.tts_provider`).
+- **Validate** (offline): `kokoro.voice_warnings` against `data/kokoro/voices.json`, language
+  mismatches, `timestamps` without timings, `kokoro.install_warnings`.
+- **Packaging**: base dependencies `kokoro>=0.9.4` and `misaki[zh]>=0.9.4` with `python_version <
+  '3.13'`; `misaki[ja]` is not one (no pyopenjtalk wheels). Nothing of Kokoro is bundled.
 ## 69. Characters (Step 67, character model: vector parts with pivots)
 
 `cartoon/character.py`. The generator (§69.1) and SVGs (§69.2) produce `CharacterPart` lists;
