@@ -7,8 +7,7 @@ made on the same GPU, in **ComfyUI on a Google Colab L4**, driven from your mach
 (`colab ssh`). Everything downloaded is ungated on Hugging Face: no login, no token.
 
 Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.md) lists them).
-**local** = your machine, **VM** = the Colab machine. The raw lab log of the tests:
-[`howto/ltx-colab-runlog.md`](howto/ltx-colab-runlog.md).
+**local** = your machine, **VM** = the Colab machine.
 
 > **Keep the session between experiments, stop it when you are done.** A new session's setup takes
 > ~6 min and 35-85 GB of downloads; `python tools/colab/setup_session.py ltx` on a running `ltx`
@@ -485,4 +484,4 @@ vidgen generate run --pay --via exec --shot ID  # the comfyui provider on Colab
 
 [`tools/colab/`](../tools/colab/) (the [README](../tools/colab/README.md) says where each runs).
 The test's graphs, logs, `pip_freeze.txt`, candidates and clips stay outside the repo, in the owner's
-`video-projects/footage-test/ltx-test/`; its log is [`howto/ltx-colab-runlog.md`](howto/ltx-colab-runlog.md).
+`video-projects/footage-test/ltx-test/`.

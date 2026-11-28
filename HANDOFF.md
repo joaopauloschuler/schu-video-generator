@@ -29090,3 +29090,13 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
 - **Interfaces**: none changed.
 - **Test**: `tests/test_guide.py`, `tests/test_docs.py::test_generated_video_cookbook_is_valid_and_linked`,
   `tests/test_videogen_3d_guide.py::test_cookbook_example_validates_and_matches_the_example` (101 passed).
+
+## Step 439 — the LTX run log removed
+
+- **Built** (docs only): `docs/howto/ltx-colab-runlog.md` deleted (`git rm`) at the owner's request; it was the only
+  file in `docs/howto/`. `docs/HOWTO-restyle-with-ltx-on-colab.md` no longer links to it (two places).
+- **Files**: `docs/howto/ltx-colab-runlog.md` (removed), `docs/HOWTO-restyle-with-ltx-on-colab.md`, `tasklist.md`,
+  `HANDOFF.md`.
+- **Left as written**: past HANDOFF, CHANGELOG and tasklist entries that name the file. No test or source reads it.
+- **Interfaces**: none changed.
+- **Test**: `tests/test_guide.py`, `tests/test_docs.py`.
