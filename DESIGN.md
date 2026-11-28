@@ -1,25 +1,21 @@
 # schu-video-generator — design spec
 
-A configurable generator for narrated, animated explainer videos (Manim + ElevenLabs + ffmpeg).
+A configurable generator for narrated, animated explainer videos (Manim + TTS + ffmpeg).
 The project and pip distribution are called `schu-video-generator`; the command (`vidgen`, also
 `vidgen-mcp`) and the Python package (`vidgen`, `src/vidgen/`) are `vidgen`, and so is every name
 below unless it says otherwise. `vidgen.DIST_NAME` (`"schu-video-generator"`) is used where the
-distribution is meant: the reinstall hint (`errors.REINSTALL`, Step 322),
-the PDF deck's creator and the HTML deck's `generator`, and the MCP server's advertised name. The
-JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.3.0`) keep
-the command's name.
-It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, each video is a
-**project folder** with a config file, and each project can **extend** the tool with its own
-scene types, helpers, theme tokens and pipeline hooks.
+distribution is meant: the reinstall hint (`errors.REINSTALL`), the PDF deck's creator, the HTML
+deck's `generator` and the MCP server's advertised name. The JSON envelope key `vidgen`, the
+`vidgen://` MCP resources and `--version` (`vidgen 0.3.0`) keep the command's name.
+Each video is a **project folder** with a config file; the pipeline is shared, and each project
+can **extend** the tool with its own scene types, helpers, theme tokens and pipeline hooks.
 
-Status of this document: describes the implemented system (version 0.3.0: the version 0.1
-contract after the Step 7 review, plus the roadmap steps 8–60 (version 0.2.0) and 61–131
-(version 0.3.0) in tasklist.md recorded in §11 onwards; §63 is the 0.2.0 review and lists what
-changed for users of 0.1; `CHANGELOG.md` lists what changed from 0.2.0 to 0.3.0). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
-each step made it precise, and where a refinement differs from the text above it, the
-refinement is what the code does. Changing a public interface requires updating this file in
-the same commit. User documentation: README.md, docs/CONFIG.md
-(every config key, checked by `tests/test_docs.py`) and docs/EXTENDING.md.
+Status of this document: it describes the implemented system (version 0.3.0). §1–§9 are the core
+contract; each later numbered section covers one feature area. Where a later section refines an
+earlier one, the later section is what the code does. §63 lists what changed for users of 0.1 in
+0.2.0; `CHANGELOG.md` lists the changes since. Changing a public interface requires updating this
+file in the same commit. User documentation: README.md, docs/CONFIG.md (every config key, checked
+by `tests/test_docs.py`) and docs/EXTENDING.md.
 
 ---
 
@@ -28,393 +24,143 @@ the same commit. User documentation: README.md, docs/CONFIG.md
 Goals
 - One engine, many videos. A new video = a new project folder, no engine edits.
 - Config-only videos for common explainers (built-in scene library).
-- **First-class extensibility**: any project can add new scene types, helpers, theme tokens and
-  hooks in its own `extensions/` folder, and use them from config by name. A project extension can
-  later be promoted into the core library unchanged.
+- **First-class extensibility**: any project can add scene types, helpers, theme tokens and hooks
+  in its own `extensions/` folder and use them from config by name. A project extension can be
+  promoted into the core library unchanged.
 - Narration-driven timing: every beat's animation lasts as long as its audio (+ padding).
-- Incremental work: TTS only for changed beats; render one scene at a time; fast previews.
+- Incremental work: TTS only for changed beats; only changed scenes re-render; fast previews.
 - Runs on Windows (primary user platform), Linux and macOS.
 
-Non-goals (for now)
-- Voice providers other than ElevenLabs (keep a small seam, but implement ElevenLabs only).
-- Declarative animation DSL. Complex animation lives in Python scene classes.
-- GUI / web editor.
+Non-goals
+- A declarative animation DSL: complex animation lives in Python scene classes.
+- A GUI video editor.
 
 ## 2. Repository layout
 
-```
-pyproject.toml            # package "vidgen", console scripts `vidgen` (+ `vidgen-mcp`, §62), Python >= 3.10
-src/vidgen/
-  __init__.py             # __version__
-  __main__.py             # `python -m vidgen` -> cli.main()
-  api.py                  # THE public surface for project extensions (see §6)
-  cli.py                  # argparse CLI (see §8)
-  jsonout.py              # --json documents of the CLI (see §11)
-  describe.py             # scene-type/params descriptions for list-scenes
-  guide.py                # `vidgen guide`: the author guide for AI agents, its topics (§59)
-  gallery.py              # `vidgen gallery`: samples from the guide, work project, stills / GIFs, pages (§60)
-  listen.py               # `vidgen music page`: the Listen page, MP3 clips and spectrograms of the beds and sounds (§92)
-  studio/                 # score files: music written in YAML, rendered with the beds' synthesizer; no video code (§93, Phase S)
-    theory.py             #   notes, keys and modes, Roman numerals and chord names, degrees, voicings
-    patterns.py           #   step patterns ("x... x...", "1 3 5 8", "E5 - - .") and 3+3+2 accents
-    instruments.py        #   the instrument library (27 instruments) and their settings (§93.4)
-    effects.py            #   curves, filter sweeps, ducking, gates, echo, reverb, width; their catalogue (§93.7)
-    patches.py            #   `vidgen music patches`: every instrument, setting and effect in words / JSON
-    score_file.py         #   reading and checking a score (MusicScore; every problem at once, did-you-mean)
-    render.py             #   render_music_score: seamless loop or one-shot, track effects, 48 kHz, -28 LUFS, deterministic
-    templates.py          #   `vidgen music template`: the built-in beds as score files (§93.8)
-    beds/                 #   the 14 templates (<bed>.yaml, package data)
-    measure.py            #   tempo, chroma and key, loudness curve, band balance (§93.8; Step 187 builds on it)
-  outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
-  prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
-  plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
-  plan_yaml.py            # `vidgen plan` output: commented video.yaml writer, project scaffold, assets (§61; no manim);
-                          # also writes `vidgen screenplay`'s project (commented_yaml, write_project)
-  screenplay.py           # `vidgen screenplay`: screenplay -> stage scenes, set, direction grammar, looks, voices (§69.25; no manim)
-  random_cast.py          # `vidgen cast --random N`: seeded well-contrasted looks, names, voices; screenplay looks (§69.49; no manim)
-  mcp_server.py           # `vidgen mcp`: MCP server (optional SDK), tools = CLI subprocesses with --json, resources (§62)
-  mcp_tools.py            # its SDK-free parts: root folder policy, command lines, cost refusal, pictures, paging (§62)
-  schema.py               # JSON Schema export (see §12)
-  errors.py               # VidgenError, Problem
-  config.py               # pydantic v2 models for video.yaml (see §4)
-  project.py              # Project: locate/load config, resolve paths, variants
-  theme.py                # Theme object (colors, fonts, sizes, background, code style; precedence §19)
-  fonts.py                # bundled fonts (data/fonts/, OFL), Pango registration, font roles (§21); the project's fonts/ folder (§119)
-  presets.py              # theme presets: seven built-in presets (§19, §20)
-  scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
-  themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
-  icons.py                # icon registry: vendored set + project assets/icons, search (§22; no manim)
-  icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22); SvgDrawing base
-  svgclean.py             # SVG sanitiser (scripts, filters, rasters, text out; gradients flattened; caps) + theme_color (§65; no manim)
-  vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
-  cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
-                          # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
-                          # generator.py (look: parameters -> parts, §69.1), clothes.py (outfits,
-                          # patterns, shoes, things worn on the body, §69.47), animals.py (species:
-                          # heads, paws, wings, tails, a beak that talks, §69.48), robots.py (species
-                          # robot: heads, screen face, antenna, joints, wheels, §69.58), costumes.py
-                          # (crown, wizard hat, party hat, cape, §69.58), expression_shapes.py
-                          # (Step 125 eyes, mouths, cheeks, hair standing up, §69.59), contrast.py (how
-                          # clearly two looks differ, §69.49; no manim), primitives.py (the
-                          # generator's shapes, trailing and outer-hair marks, outline maths), svg_look.py (look: {svg} -> parts by
-                          # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
-                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
-                          # Walk, Gesture, Jump, §69.12; KeyedMotion, §69.14),
-                          # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
-                          # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
-                          # host.py (host: which host a scene has, its column / band, who speaks, checks,
-                          # §71; pointing and moving geometry, §71.1; no manim), host_drawing.py
-                          # (HostFigure: the host and its floor line, §71), host_directing.py (the
-                          # host's automatic directing, RevealStep, §71.2; no manim),
-                          # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
-                          # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
-                          # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
-                          # character looks: look_pose, camera_look, §69.11; walk times and cycle,
-                          # entrances and exits, gestures, jumps, §69.12; no manim), motion.py
-                          # (animation principles: anticipation, squash and stretch, overshoot,
-                          # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
-                          # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
-                          # spring for secondary motion, §69.15; no manim), foley.py (the sounds
-                          # of actions as they played, §69.19; no manim), directing.py
-                          # (auto_direct: the looks, reactions, gestures and close-ups it adds,
-                          # checked by the lint rules on predicted stills, `vidgen direct`,
-                          # §69.23, §69.24; no manim), limbs.py (arms and legs in two segments: the
-                          # two-bone solver, folded one-piece limbs, §69.26; no manim), holding.py
-                          # (props in hands: Holdings, where held / put-down / thrown props go, the
-                          # replay vidgen validate runs, §69.27; no manim), seating.py (seats,
-                          # lean edges, Postures, seated feet and the crouch, §69.28; no
-                          # manim), shots.py (the framings of a beat's shot:, §69.29; no
-                          # manim), reframe.py (reframe: the camera keeps the speaker in view,
-                          # the landscape stage a narrow frame crops, §69.30; no manim),
-                          # lighting.py (light presets, grades, fades, stars and shadow ellipses,
-                          # §69.31; no manim), shading.py (StageLight: the grade as the camera
-                          # draws, StarField, StageShadows, §69.31), drawing_style.py (the
-                          # drawing: outline / shading / texture as the camera draws and the
-                          # renderer writes, §79), wind.py (wind levels,
-                          # seeded gusts, fades, sway and trailing angles, §69.32; the felt
-                          # force and a blown prop's path, §69.38; no manim),
-                          # windblown.py (SwayingProp, StageWind, §69.32), rain.py (rain on a
-                          # stage's ground: landing band, shelter boxes, splashes, puddles,
-                          # §69.39; no manim), effects.py (effect symbols: shapes, spots on
-                          # the head, motion, pop, §69.40; no manim), effect_symbols.py
-                          # (EffectSymbol: drawn and following a head, §69.40),
-                          # motion_effects.py (dust, speed lines, impact stars, whoosh: when
-                          # they fire and their shapes, §69.41; no manim),
-                          # motion_effect_shapes.py (MotionEffect, §69.41), room.py (rooms:
-                          # wall, floor, windows, the sky outside, §69.42; no manim),
-                          # room_drawing.py (draw_room, WindowViews, §69.42), cards.py (title
-                          # cards: layout, burst rays, outlined text colours, §69.46; no manim),
-                          # vehicles.py (seats, wheels, pedals, get-in reach, §69.52; no manim),
-                          # vehicle_drawing.py (the bicycle, car, bus, boat, balloon and toy
-                          # rocket, §69.52-53), riding.py (Ride, riders on their seats,
-                          # pedalling, §69.52), vehicle_paths.py (waves, bobbing, balloon and
-                          # rocket paths, smoke, §69.53; no manim), water.py (a stage's water,
-                          # §69.53), living.py (clock hands, a tv's picture and flicker, glows,
-                          # switches, what is redrawn over moving parts, §69.54; no manim),
-                          # living_drawing.py (LivingProp, PropGlow, PropSteam, §69.54-55; a portal's
-                          # parts, §100.4), portal.py (a portal opening, crackling, sealing, §100.4;
-                          # no manim; its view, §100.13), hologram.py (hologram characters, §100.3),
-                          # alarm.py, apparition.py, holo_display.py, vignette.py (alarms, shutters,
-                          # materialise, flicker, iridescence, a display's patterns, a flashback's
-                          # grade, §100.7-§100.12; no manim but CameraVignette), figure_fx.py
-                          # (FigureAlpha, Materialise, Iridescence, Afterimages, HandHold, §100.9-10;
-                          # PendantPulse, KissPlan, KissMotion, KissBurst, §102.14-§102.15),
-                          # iso_overlays.py (IsoShutters, IsoBlinkers, §100.7, §100.11; IsoScreens,
-                          # IsoTraffic, §102.2-§102.3; IsoHaze, §102.12), iso_city.py (towers' parts, screens' lines,
-                          # pods on lanes and what hides them, §102.2-§102.3; no manim), echo.py
-                          # (echo characters, §102.6), haze.py (a haze's ribbons and sparkles,
-                          # §102.12; no manim), kiss.py (a kiss's lean, step and burst, §102.15; no manim),
-                          # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
-                          # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
-                          # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
-                          # a pour's tilt and drops, §69.56; no manim), small_props_drawing.py
-                          # (Pouring, WaterFlow, WaterDrops, §69.56), snow.py (snow that settles:
-                          # top lines, the layer's steps, blanket and caps, flakes on their floors,
-                          # §69.60; no manim), fog.py (fog bands by depth, their opacities and
-                          # waves, §69.60; no manim), storm.py (lightning strikes, their flashes,
-                          # bolts, thunder, rain storms, rainbows, §69.61; no manim), sun_path.py
-                          # (the sun's and moon's path across the sky, shadows cast by a low sun,
-                          # §69.61; no manim), weather_drawing.py (SettledSnow, SnowBlanket,
-                          # SnowCap, StageFog, FogBand, §69.60; LightningBolt, Rainbow,
-                          # StageRainbow, SkyBody, §69.61); still.py also
-                          # draws the prop, furniture, small-prop and vehicle galleries (§69.43), the look gallery
-                          # (§69.47) and `vidgen character-sheet` (§69.16)
-  iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
-  registry.py             # scene-type and action-type registry
-  actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
-  extensions.py           # discovery + import of project extensions
-  hooks.py                # hook registry + dispatch
-  runtime.py              # "current project/theme" context used by helpers and extensions
-  scene.py                # NarratedScene base class + narrate()
-  camera.py               # camera views kept inside bounds (zoom, pan, follow, a wide stage; §69.7; no manim)
-  particles.py            # particle kinds, count cap, seeded positions over time (§69.9; no manim)
-  particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9);
-                          # rain splashes, Puddles (§69.39)
-  ambience.py             # the generated sound beds (rain, fire, birdsong, city, room tone): seamless loops, levels, ducking, which a set plays (§69.39, §69.55, §69.62; no manim)
-  capture.py              # frame capture: stills at beat ends / N per beat (see §13); mid-action stills (§69.16)
-  introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
-  activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
-  storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
-  motion_check.py         # `vidgen motion check`: a rendered video watched at 160 px for blank frames, flashes, flicker, pops, strobing, frozen stretches, jumps at cuts; contact strips (§121.3);
-                          # dark frames also at 640 px: star fields, clipped discs, shimmer, banding, empty, lost (§122.5)
-  sheets.py               # contact-sheet layout and drawing with Pillow (§14)
-  lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
-                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
-                          # music_rule.py (project pieces, §93.10), three_d_rule.py (§114.12), web_rule.py (§118.12),
-                          # color.py, run.py (lint_project), findings.py, report.py
-  helpers.py              # theme-aware text helpers and generic drawing utilities
-  layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
-  regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
-  graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
-  callouts.py             # callouts: areas, label placement, box, circle, arrow, magnifier, spotlight (§37)
-  clips.py                # video clips: probe, timing, ClipMobject (frames decoded per frame), clip sound (§38)
-  geo.py                  # world map data, country lookup, Equal Earth projection, MapView (§39; no manim)
-  videoplan.py            # the planned timeline: scene / beat positions in the video before rendering (§41),
-                          # planned chapters and video_chapters() (§42)
-  chapters.py             # chapter marks from `chapter` scenes and scenes' `chapter:` keys; their checks (§42)
-  chapter_export.py       # published chapters (intro at 0:00), MP4 FFMETADATA + tags, YouTube list and rules (§52)
-  thumbnail.py            # the thumbnail: a scene's frame or a designed card, small copy, legibility checks (§53)
-  export.py               # `vidgen export gif|clip`: palette GIF with a size budget, MP4 clip copy / encode (§53)
-  deck.py                 # slide decks' key frames: stills per beat / scene, dedupe, notes, timeline (§55)
-  slides.py               # `vidgen slides`: one self-contained HTML deck (data/slides/deck.css, deck.js) (§55)
-  slides_pdf.py           # `vidgen slides --format pdf`: slide / notes pages, title page, outline (fpdf2, §56)
-  overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
-  overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
-  charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
-                          # colour scales, colour bar, readable text on fills (§34)
-  plotcore/               # the chart core for scientific plots (§97; no manim): numbers.py (10ⁿ, SI prefixes,
-                          # tick labels), ticks.py (linear / log / symlog), axis.py (Axis, AxisSpec, breaks,
-                          # reversed, equal aspect), data.py (CSV tables, units in headers), figure.py (panel layout),
-                          # fit.py / stats.py / hist.py / annotate.py (§97.5), integrate.py (RK4, RK45, Verlet),
-                          # models.py (ODEs, recurrences, random processes, registered functions), live.py (§97.7)
-  plot_draw.py            # the chart core's drawing layer: axes, ticks, gridlines, break marks, series (§97)
-  quantities/             # units and worked calculations (§97.9; no manim): units.py (dimensions, units, prefixes,
-                          # parsing, SI display), constants.py (CODATA 2022, SI 2019, IAU), quantity.py (values with
-                          # exactness and significant figures), expr.py (expressions with units, TeX), calc.py
-  orbits/                 # orbital mechanics (§98; no manim): kepler.py (Kepler's equation, every conic), elements.py
-                          # (elements <-> state vectors, vis-viva, period, energy), bodies.py (GM, radii, preset orbits
-                          # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py,
-                          # laws.py (ellipse geometry, equal-time areas, Newton's cannon, Kepler III; §98.4)
-  flight/                 # flight in the air of a world (§123.7; no manim): spec.py (a flight in words: start, legs),
-                          # plan.py (legs -> position, velocity, attitude; the ground check), profiles.py (the smooth
-                          # functions of time), frames.py (local <-> planet-fixed <-> ecliptic), terrain.py (vidgen/space-land's
-                          # heights in numpy, level ground, sea, flat world), worlds.py (radius, gravity, air), reentry.py (from orbit)
-  tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
-  tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
-  tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
-  tts/kokoro.py           # local Kokoro-82M provider (Python 3.10-3.12): engine, MP3, timings (§68)
-  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, weighted blends, validate warnings (§68, §72)
-  tts/prosody.py          # an emotion applied to speech: pauses by word timings, soft-limited gain, pitch filter (§72)
-  emotions.py             # emotion: the table (speed, pitch, gain, pauses), manner words (§72; no manim)
-  voice_effects.py        # voice effects: presets, VoiceEffect, the ffmpeg filter chain (§100.2; no manim)
-  hud.py                  # a heads-up display's motion: alert blink, lines, heart beats and trace, scan level and wave (§102.5; no manim)
-  tts/effects.py          # EffectProvider: any provider's audio through a voice's effect (§100.2)
-  stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
-                          # get_stt_provider), faster_whisper.py (local), elevenlabs.py
-  readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
-  speech_flags.py         # word flags: low recogniser confidence, pauses inside sentences, differences; fixes (§78; no manim)
-  textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
-  imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
-                          # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
-                          # provider, §64; SVG and data-policy errors, §65), placeholder.py, run.py (`vidgen imagegen`)
-  videogen/               # generated video (§113): __init__.py (VideoRequest, MediaInput, cache key, JobState),
-                          # models.py (the public video model list, cache, checks, estimates), openrouter.py
-                          # (submit / poll / download, key or proxy mode, errors), mock.py (a fake API),
-                          # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run),
-                          # pictures.py (smaller copies of pictures sent inline; §113.7),
-                          # sheets.py (reference / style sheets), shots.py (per-beat shots, the plan),
-                          # inputs.py (the cut voice, guide render, first frame; §113.3), qa.py (checks,
-                          # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
-                          # workflow.py (`generate run | status`; §113.4), host.py (audio / video inputs
-                          # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
-  generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
-  browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
-                          # check and validate warning), frames_clip.py (the frames clip writer: lossless FFV1
-                          # or compact H.264 + alpha stream, §120.9), timing.py (clip_plan: frames to draw;
-                          # planned_still_frames: the frames a capture takes stills of, §118.12)
-  web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
-                          # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
-                          # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
-                          # layout.py (the page's text as layout objects, for lint; §118.12), still.py
-                          # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8), parts.py
-                          # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5), space_names.py
-                          # (the space modules' names and options read from their source, §122.12), baked.py
-                          # (the cache of baked maps: key, store, limit; §123.2), flights.py (`flight_data:`: ctx.flight,
-                          # its cache and key), land.py (vidgen/space-land's height definition fetched from a page, kept; §123.7)
-  three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
-                          # (object transforms, groups, centres), motion.py (object actions -> per-frame
-                          # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
-                          # moves -> tracks, following objects),
-                          # description.py (the scene description JSON, its cache key), browser.py (the 3D page in
-                          # Chromium, its frames; the lossless clip), clip.py
-                          # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
-                          # mask; §114.14)
-  httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
-  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py, disk.py (frames clips:
-                          # disk estimate, warning, deleting, the build folder's size; §120.9),
-                          # fingerprint.py (what a scene's render depends on, §14),
-                          # jobs.py (`--jobs auto`: memory and cores, §70)
-  subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
-  speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
-  pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
-  voicesounds.py          # [gasp] [laugh] ... in a beat's text: markers, what each voice says, sound times (§69.33; no manim)
-  overlap.py              # overlap: / interrupt: beats: windows, voice shapes (dip / cut), talked-over words (§69.34; no manim)
-  includes.py             # include: files and named sets: merge rules, set: of a stage (built-in sets, §76), where problems are written (§69.35; no manim)
-  voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
-  languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
-  translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
-  dubbing.py              # each voice's voice in the video's language (dub:, automatic Kokoro picks), --all-languages (§80; no manim)
-  cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
-  sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
-  music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
-  music_pieces.py         # project pieces: score files in assets/music played like beds, rendered at the join and cached (§93.10)
-  composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
-  music_video_plan.py     # `vidgen music plan`: a music video's scenes from a score file (roles, cuts on bar lines, moments, colours, reactions) and its draft project (§121.2)
-  music_space_plan.py     # `vidgen music plan --style space`: the plan's cuts as `space` scenes (a world by colour, a move by role) (§122.12)
-  musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
-  score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
-  soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
-  synth.py                # composed music played with symusic: install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
-  mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
-  loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
-  transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
-  carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
-  fileio.py               # atomic writes; replacing files that Windows programs keep open
-  scenes/                 # built-in scene library (space.py, space_params.py, space_page.py: the `space` scene, its words and
-                          # the page written from them, §122.12; space_air_params.py, space_air_page.py, space_checks.py,
-                          # space_costs.py: its surface scenes, hulls, planes and their checks and costs, §123.14;
-                          # flight_data.py: a `web` scene's flights, §123.7;
-                          # registered like extensions; actions.py:
-                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
-                          # pan/follow, §69.7;
-                          # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
-                          # particles_action.py: particles, §69.9; acting.py: say, look_at, turn,
-                          # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
-                          # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
-                          # move_along, §69.14; handling.py: pick_up, hold, put_down, give,
-                          # throw, §69.27, open, close, §69.37, blow_away, §69.38;
-                          # sitting.py: sit_on, lean_on, stand_up, §69.28;
-                          # shot_action.py: shot (the beat key shot:), §69.29;
-                          # light_action.py: light (a stage's light fades), §69.31;
-                          # wind_action.py: wind (a stage's wind fades), §69.32;
-                          # effect_action.py: effect (a symbol over a head), §69.40;
-                          # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
-                          # storm_action.py: lightning, rainbow, §69.61;
-                          # knock_action.py: knock (a door), §69.62;
-                          # story_actions.py: alarm, shutters, materialise, dematerialise,
-                          # hold_hands, let_go_hands, §100.7-§100.10; stage_story.py:
-                          # StoryStaging (a part of Stage: the story effects, §100.6-§100.12);
-                          # host_actions.py: host_point, host_look, host_react, host_move,
-                          # host_enter, host_exit (the scene's host), §71.1;
-                          # overlays.py: the built-in overlays lower_third/watermark, §41;
-                          # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
-                          # hud.py: the hud overlay, §102.5;
-                          # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
-  data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
-  data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
-  data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
-  data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
-  data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
-  data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60);
-                          # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
-  data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
-  data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
-  data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118),
-                          # layout.js (reads the page's text after a screenshot, for lint; §118.12), orbits.js (ctx.orbits, §122.3),
-                          # flight.js (ctx.flight, §123.7)
-  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
-                          # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
-  data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
-  data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
-                          # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1);
-                          # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7);
-                          # space-scale.js `vidgen/space-scale` (§122.4); parts.js `vidgen/parts`: the registry of ready-made parts (§122.5);
-                          # space-sky.js `vidgen/space-sky`: the sky of a space scene, and space-sky-stars.js, its star file,
-                          # written by tools/make_star_catalogue.py (§122.6); space-bodies.js `vidgen/space-bodies`: planets,
-                          # moons and rings from a seed (§122.7); space-light.js `vidgen/space-light`: stars and the light of a
-                          # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
-                          # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10);
-                          # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11); space-scene.js
-                          # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12); baked.js
-                          # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2); space-air.js
-                          # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3); space-sea.js
-                          # `vidgen/space-sea`: water to the horizon under that sky (§123.4); space-clouds.js
-                          # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5); space-land.js
-                          # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6); space-plane.js
-                          # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8); space-effects.js
-                          # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9); space-hull.js
-                          # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10); space-hull-detail.js
-                          # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11); space-camera-air.js
-                          # `vidgen/space-camera-air`: camera moves in the air and beside giant ships, on `vidgen/space-camera`'s rig (§123.12); space-descent.js
-                          # `vidgen/space-descent`: one world from orbit to the ground: globe, air, sea, ground and decks joined (§123.13); space-scene-air.js
-                          # `vidgen/space-scene-air`: the helpers of a declarative space scene in the air or beside a giant ship (ramp, flashes, hitTimes, once; §123.14)
-  data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
-                          # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
-  data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
-  data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
-tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
-                          # make_screenshot.py, make_clip.py (example assets, §37, §38),
-                          # make_gallery_clip.py (data/gallery/clip.webm, §60),
-                          # make_sets_gallery.py (docs/gallery/media/sets_outdoors.png, §76),
-                          # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
-tests/                    # pytest; no network; slow renders marked `render`
-examples/
-  minimal/                # config-only example using built-ins
-  custom_scene/           # built-ins + one extension scene type, helper module, variant, hook
-  kphi3/                  # migrated paper video, custom scenes as extensions
-  plan/                   # outline.md + the unedited draft video.yaml `vidgen plan` writes from it (golden file, §61)
-  cartoon/                # a two-scene cartoon, two generated characters, Kokoro voices, no audio (§69.18)
-  cartoon_series/         # shared/cast.yaml + shared/sets.yaml included by two short episodes, no audio (§69.35)
-  cartoon-music-box/      # the screenplay example after hand editing, most Phase I features, no audio
-docs/
-  CONFIG.md               # config reference
-  EXTENDING.md            # how to write project extensions
-  ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
-  gallery/                # scene gallery written by `vidgen gallery`: README.md, <type>.md, media/ (§60)
-    web/                  # the web gallery: types drawn in headless Chromium, README.md, <type>.md, media/ (§123.1)
-AGENTS.md                 # the author guide for agents *using* vidgen (copy of data/guide/AGENTS.md, §59)
-DESIGN.md  CLAUDE.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
-```
+Module map of `src/vidgen/` (one line per module or family; "pure" = no manim import). The section
+named is where each is specified.
+
+**Core and CLI**
+- `__init__.py` (`__version__`, `DIST_NAME`), `__main__.py` (`python -m vidgen`), `api.py` (THE
+  public surface, §6.4), `cli.py` (argparse CLI, §8), `jsonout.py` (`--json` documents, §11),
+  `schema.py` (JSON Schema, §12), `describe.py` (scene/action descriptions for `list-scenes`),
+  `errors.py` (`VidgenError`, `Problem`, `REINSTALL`), `fileio.py` (atomic writes; replacing files
+  Windows programs keep open).
+- `config.py` (pydantic v2 models of `video.yaml`, §4), `project.py` (`Project`: locate/load config
+  with `include:` files, variants, paths, §3–§4), `includes.py` (`include:` files and named sets,
+  §69.35), `registry.py` (scene-type, action and overlay registry), `_origin.py` (builtin vs
+  extension origin), `extensions.py` (discovery/import, §6.1), `hooks.py` (§6.2), `runtime.py`
+  (active Project/Theme, §6.3), `scene.py` (`NarratedScene`, §5).
+- `render/`: `worker.py` (one scene per process, §5.2), `pipeline.py` (selection, padding, join),
+  `ffmpeg.py`, `fingerprint.py` (what a scene's render depends on, §14, §63), `jobs.py` (`--jobs
+  auto`, §70), `disk.py` (frames-clip disk estimate and cleanup, §120.9).
+- `videoplan.py` (planned timeline before rendering, §41; planned chapters, §42), `transitions.py`
+  (§49–§50, §69.45; pure), `carry.py` (continuity, §50), `cuts.py` (§101), `shorts_suggest.py`
+  (§105.6), `audio_only.py` / `audio_encode.py` / `sections.py` / `transcripts.py` / `staging.py`
+  (audio-only renders, §111), `sound_design.py` / `scoring.py` / `delivery.py` (audio dramas, §112).
+
+**Theme, layout and drawing helpers**
+- `theme.py` (precedence §19), `presets.py` (§19–§20), `scales.py` (§20), `themelist.py`
+  (`list-themes`), `fonts.py` (bundled fonts, roles, §21; project `fonts/`, §119), `terms.py`
+  (one colour per concept, §87.3).
+- `helpers.py` (theme-aware text, drawing utilities), `layout.py` (§5.3), `regions.py` (§18),
+  `graph.py` (layered graph layout, pure, §31), `callouts.py` (§37), `clips.py` (video clips,
+  §38), `geo.py` (world map, Equal Earth, pure, §39), `charts.py` (§33–§34), `geometry_marks.py`
+  (§87.7), `mathexpr.py` (safe maths expressions, §87.6), `word_anchors.py` (`at: "@word"`,
+  §87.2), `references.py` / `citations.py` (§95.14).
+- Icons and vectors: `icons.py` (registry, pure, §22), `icon_mobject.py`, `iconlist.py`
+  (`list-icons`, §22–§23), `svgclean.py` (SVG sanitiser, pure, §65), `vector_mobject.py` (§65).
+- Overlays: `overlays.py` (framework, §41), `overlay_layer.py` (compositing, §41), `hud.py`
+  (heads-up display maths, pure, §102.5).
+- Particles and camera: `particles.py` (pure, §69.9), `particle_field.py` (§69.9, §69.39),
+  `camera.py` (camera views in bounds, pure, §69.7).
+- Diagrams: `iso_blocks.py`, `iso_labels.py`, `iso_vector.py` (iso diagrams, §90).
+
+**Review and checking**
+- `capture.py` (stills, §13), `introspect.py` (layout dump, §15), `activity.py` (timings and
+  motion, §17), `storyboard.py` / `sheets.py` (contact sheets, §14), `animatic.py` (§75),
+  `motion_check.py` (`vidgen motion check`, §121.3, §122.5), `lint/` (`vidgen lint`, §16–§17:
+  `rules.py` framework, `run.py`, `findings.py`, `report.py`, `color.py`, and one `*_rule(s).py`
+  per area: layout, timing, cartoon, readback, narration, music, generated, iso, plot, calc,
+  science, genetics, orbit, particle, space, shorts, term, three_d, web).
+- `readback.py` (§57), `speech_flags.py` (§78), `textnorm.py` (§57), `stt/` (speech-to-text seam:
+  `faster_whisper.py`, `elevenlabs.py`, §57), `audio_check.py` (loudness presets, §111.2).
+
+**Outputs**
+- `subtitles.py` (SRT, §43), `cues.py` (caption cues, §43), `chapters.py` (§42),
+  `chapter_export.py` (§52), `thumbnail.py` / `export.py` (§53), `deck.py` / `slides.py` /
+  `slides_pdf.py` (§55–§56), `gallery.py` (§60), `guide.py` (`vidgen guide`, §59).
+
+**Speech and sound**
+- `tts/` (provider seam, §7, §66): `elevenlabs.py`, `openrouter.py` (§66), `kokoro.py` (§68),
+  `prosody.py` (§72), `effects.py` (`EffectProvider`, §100.2), `cache.py` (audio status), `run.py`
+  (`vidgen tts`); `httpapi.py` (POST with retries and scrubbed errors, plain GET; shared by the
+  paid providers).
+- `kokoro_voices.py` (§68), `emotions.py` (§72), `voice_effects.py` (§100.2), `voices.py` (§46),
+  `pronunciation.py` (§45, §88), `voicesounds.py` (§69.33), `overlap.py` (§69.34), `speech.py`
+  (word times, §43), `languages.py` / `translation.py` (§54), `dubbing.py` (§80) — all pure.
+- `sfx.py` (§47), `ambience.py` (§69.39, §69.62), `music.py` (beds, files, composed music, §48,
+  §82–§83), `music_pieces.py` (§93.10), `composer.py` (§83), `musicfit.py` (§84), `score.py`
+  (§82), `soundfont.py` (§81), `synth.py` (§81–§82), `mix.py` (§48), `loudness.py` (BS.1770-4,
+  §48), `listen.py` (Listen page, §92), `music_video_plan.py` (§121.2), `music_space_plan.py`
+  (§122.12).
+- `studio/` (score files, no video code, §93: `theory`, `patterns`, `instruments` and per-family
+  instrument modules, `effects`, `patches`, `score_file`, `render`, `templates`, `measure`, `check`,
+  `beds/`); `studio_app/` (`vidgen studio`, §94).
+
+**Authoring without AI**
+- `outline.py`, `prose.py`, `plan.py`, `plan_yaml.py` (`vidgen plan`, §61), `screenplay.py`
+  (§69.25), `random_cast.py` (`vidgen cast --random`, §69.49), `story_text.py` /
+  `story_places.py` / `story_draft.py` (`vidgen story draft`, §105.5) — all pure.
+
+**Cartoons and worlds**
+- `cartoon/` (§69; about 100 modules, one per topic): characters and looks (`character.py`,
+  `generator.py`, `svg_look.py`, `clothes.py`, `animals.py`, `robots.py`, …), motion and acting
+  (`poses.py`, `transition.py`, `visemes.py`, `acting.py`, `keyframes.py`, `holding.py`,
+  `seating.py`, `riding.py`, `foley.py`, …), directing (`directing.py`, `shots.py`, `reframe.py`,
+  `host*.py` §71), the stage, its props, rooms, light, weather and effects (`stage.py`, `props.py`,
+  `lighting.py`, `drawing_style.py` §79, `wind.py`, `storm.py`, `effects.py`, …), story effects
+  (§100, §102), iso worlds (`iso_*.py`, §89–§107) and platform levels (`level_*.py`, §86). Pure
+  maths modules are paired with Manim drawing modules (`*_drawing.py`, `*_shapes.py`, …).
+- `world/` (platform and iso world model, §86, §89).
+
+**Science**
+- `plotcore/` (chart core, pure, §97), `plot_draw.py` (its drawing layer), `quantities/` (units
+  and worked calculations, pure, §97.9), `orbits/` (§98), `flight/` (§123.7), `particle_physics/`
+  (§99), `cellworld/` (cell model, pure, §95), `cell_draw/` and `cell_vector.py` (its drawing,
+  §95.6), `genetics/` (§96).
+
+**Generated media, browsers, remote runs**
+- `imagegen/` (§58, §64–§65: `openai.py`, `openrouter.py`, `placeholder.py`, `run.py`).
+- `videogen/` (§113): requests and cache key (`__init__`), `models.py`, providers (`openrouter.py`,
+  `comfyui*.py` + `*_graph.py` §113.20, `mock.py`), `ledger.py` (budget), `run.py`, sheets and
+  subjects (§113.3, §113.16, §113.24), `shots.py`, `inputs.py`, `canny.py`, `chain.py`, `qa.py`,
+  `takes.py`, `compose.py`, `workflow.py`, `host*.py` (quick-tunnel hosting, §115);
+  `generated_layer.py` (takes laid into frames, §113.4); `clip_join.py` (§117).
+- `browser/` (Chromium for `3d` and `web`, frames clips, still planning, §118.5, §120.9),
+  `three_d/` (§114), `web/` (`web` scenes, §118, §120, §122–§123).
+- `mcp_server.py` / `mcp_tools.py` (§62); `remote.py`, `colab.py`, `colab_ssh.py`,
+  `colab_rsync.py`, `colab_transfer.py`, `colab_vm.py` (`vidgen remote` and the Colab route,
+  §113.20).
+
+**Scene library and package data**
+- `scenes/`: the built-in scene types, beat actions and overlays, registered like extensions;
+  `scenes/__init__.py` imports every module and its docstring lists which module holds which
+  action and overlay.
+- `templates/minimal/` (`vidgen init`), `data/`: `fonts/` (Inter, Source Serif 4, JetBrains Mono
+  NL, OFL), `icons/` (Lucide, ISC, §22), `geo/` (Natural Earth 1:110m, §39), `slides/` (§55),
+  `guide/AGENTS.md` (§59), `gallery/` (§60), `openrouter/` and `kokoro/` (dated model/voice
+  snapshots, §66, §68), `pronunciation/` (§88), `sets/` (built-in stage sets, §76–§77), `three/`
+  (three.js 0.186.1 + add-ons, §114, §118.14), `web/` (page runtime, `libs/`, `modules/`
+  (`vidgen/...` ES modules), `parts/`, `starters/`; §118–§124).
+
+**Outside `src/`**: `tools/` (maintainer scripts, not shipped: icon vendoring, world map, example
+assets, gallery media, Colab setup), `tests/` (pytest, no network), `examples/` (`minimal`,
+`custom_scene`, `kphi3`, `plan` (golden output of `vidgen plan`), `cartoon`, `cartoon_series`,
+`cartoon-music-box`, …), `docs/` (`CONFIG.md`, `EXTENDING.md`, `ICONS.md` (generated), cookbooks,
+`gallery/` written by `vidgen gallery`), `AGENTS.md` (copy of `data/guide/AGENTS.md`), `DESIGN.md`,
+`CLAUDE.md`, `README.md`, `CHANGELOG.md`, `THIRD_PARTY_NOTICES.md`, `pyproject.toml` (console
+scripts `vidgen`, `vidgen-mcp`; Python >= 3.10).
 
 ## 3. Project folder layout
 
@@ -422,330 +168,251 @@ DESIGN.md  CLAUDE.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, ico
 my_video/
   video.yaml              # config (video.json also accepted)
   extensions/             # optional; every *.py and every package here is auto-imported
-  assets/                 # images, data files referenced by scenes (paths relative to project)
-    icons/                #   optional project icons <name>.svg (+ icons.json: category, tags) (§22)
-    generated/            #   `vidgen imagegen`: <key>.png + <key>.json per generated picture (committed, §58)
-  translations/           # optional: translation files of language variants (`vidgen translate-template`, §54)
-  audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
+  assets/                 # files referenced by scenes (paths relative to the project root)
+    icons/                #   project icons <name>.svg (+ icons.json), §22
+    generated/            #   `vidgen imagegen`: <key>.png + <key>.json (committed), §58
+  translations/           # translation files of language variants, §54
+  audio/                  # generated, kept: <beat_id>.mp3 + <beat_id>.hash
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
-  build/                  # generated: manim media, per-scene mp4, timings json, concat list
-  output/                 # the deliverables (Step 66; `output_dir:` / `--output-dir` move it, see §4)
-    <output>.mp4          #   final video   (<output>_preview.mp4 for previews, <output>_draft.mp4
-    <output>.srt          #                 for drafts (§74), <output>_<variant>.mp4 for variants)
-    <output>_chapters.txt #   YouTube chapter list, when the video has chapters (Step 49, §52)
-    <output>_thumbnail.png#   thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
-    <output>_animatic.mp4 #   `vidgen animatic`: storyboard stills timed to the narration (Step 138, §75)
-  exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55, §56)
+  build/                  # generated: renders, timings, intermediate files
+  output/                 # deliverables (moved by `output_dir:` / `--output-dir`, §4)
+    <output>.mp4 / .srt   #   suffixes: _preview, _draft (§74), _<variant>
+    <output>_chapters.txt #   YouTube chapter list (§52)
+    <output>_thumbnail.png#   (+ .jpg), §53
+    <output>_animatic.mp4 #   §75
+  exports/                # `vidgen export` GIFs / clips (§53), `vidgen slides` decks (§55–§56)
 ```
 
-`build/<final|preview>[_<variant>]/` (Step 4; `build/draft[_<variant>]/` for drafts, Step 137, §74) holds: `scenes/<id>.mp4` (the scene as rendered,
-with Manim's own audio) and `scenes/<id>.wav` (Manim's uncompressed sound mix, only if the scene
-has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (Manim's
-intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
-`padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video). Step 44 /
-45 add `padded/sfx.wav` (the sound effects, §47) and `padded/mix.wav` (the final mix with
-music / normalisation, §48); Step 46 `padded/voice.wav` (the scenes' sound summed where
-crossfades overlap them) and `padded/video_concat_<k>.txt` (runs of cut-joined scenes, §49);
-Step 47 `scenes/<id>.overlay.mov` (the overlays of the frames a push / wipe into the scene
-moves, RGBA) and `carry/<id>.json` (the objects the next scene carries out of it, §50);
-Step 49 `padded/metadata.txt` (the MP4's tags and chapters, FFMETADATA, §52); Step 50
-`thumbnail/<name>_small.png` (the thumbnail at YouTube's small size, §53) and, for a frame
-thumbnail without overlays, a sibling folder `build/<final|preview>[_<variant>]_bare/` (scene
-renders of the project without overlays, §53). Step 54: `build/readback/<key>.json` (speech-to-text
-transcripts of the beats' MP3s, keyed by audio content + STT settings, shared by qualities and
-variants, §57). Step 55: `build/imagegen/<key>-<look>.png` (placeholder cards of generated pictures
-not made yet, §58). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
-`frames/index.json`, and `layout/<id>.json` (Step 12, §15).
+`build/<final|preview|draft>[_<variant>]/` (the render folder) holds:
+- `scenes/<id>.mp4` (the scene with Manim's audio), `scenes/<id>.wav` (Manim's PCM sound, only
+  if the scene has sound), `scenes/<id>.overlay.mov` (RGBA overlays of frames a push / wipe moves,
+  §50), `timings/<id>.json` (beat timings + render settings), `media/` (Manim's files),
+  `carry/<id>.json` (objects carried into the next scene, §50).
+- `padded/<id>.wav` (each scene's audio padded to its video length), `padded/video_concat.txt` /
+  `audio_concat.txt` / `video_concat_<k>.txt` (runs of cut-joined scenes, §49), `padded/voice.wav`
+  (scene sound summed over crossfades, §49), `padded/sfx.wav` (§47), `padded/mix.wav` (final mix,
+  §48), `padded/metadata.txt` (FFMETADATA tags and chapters, §52), `timings.json` (whole video).
+- `thumbnail/<name>_small.png` (§53); with `--frames`, `frames/<id>/*.png` +
+  `frames/<id>/index.json` + `frames/index.json` (§13) and `layout/<id>.json` (§15).
+- A sibling `build/<...>_bare/` holds overlay-free renders for a frame thumbnail (§53).
+
+Shared across qualities and variants: `build/readback/<key>.json` (STT transcripts keyed by audio
+content + STT settings, §57) and `build/imagegen/<key>-<look>.png` (placeholders, §58).
 
 ## 4. Config schema (`video.yaml`)
 
-Pydantic v2 models in `config.py`. Unknown top-level keys are an error (typo protection);
-`params` of scenes and `theme.colors` are open dictionaries.
+Pydantic v2 models in `config.py`. Every key is documented for users in docs/CONFIG.md; this
+example shows the core keys and their defaults.
 
 ```yaml
 title: "Saving 77% of the Parameters in LLMs"   # required
 output: kphi3_video                              # basename of output files; default: folder name
-
-format:                                          # final render
-  width: 1920
-  height: 1080
-  fps: 30
-preview:                                         # `--preview` render
-  width: 854
-  height: 480
-  fps: 15
-
-variants:                                        # optional named overrides, deep-merged onto the config
-  vertical:
-    format: {width: 1080, height: 1920}
-    preview: {width: 480, height: 854}
-
+format:  {width: 1920, height: 1080, fps: 30}    # final render
+preview: {width: 854, height: 480, fps: 15}      # `--preview` render
+variants:                                        # named overrides, deep-merged onto the config
+  vertical: {format: {width: 1080, height: 1920}, preview: {width: 480, height: 854}}
 theme:
-  preset: light_academic                         # optional (Step 16, §19); values below still win
+  preset: light_academic                         # §19; values below still win
   background: "#0E1116"
-  font: Inter                                    # sans family (Step 18: bundled, §21)
-  font_serif: Source Serif 4                     # serif family (Step 18)
-  font_mono: JetBrains Mono NL                   # mono family, code listings (Step 18)
-  fonts: {heading: serif}                        # font roles -> sans/serif/mono or a family (Step 18)
-  code_style: github-dark                        # Pygments style of `code` listings (Step 16)
-  scale: auto                                    # type scale (Step 17, §20): compact/standard/large/auto
-  colors:                                        # open dict; these names are the defaults
-    text: "#E8EAED"
-    dim: "#838B98"                               # Step 16 (was #6B7280, below WCAG AA)
-    accent: "#FF6B6B"
-    highlight: "#FFD166"
-    primary: "#58C4DD"
-    secondary: "#F2A541"
-    tertiary: "#83C167"
-    surface: "#161B24"                           # panels / code background (Step 5)
-    # projects may add any name, e.g. k2: "#F2A541"
-  palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # ordered series colors (charts, groups)
+  font: Inter                                    # sans; font_serif: Source Serif 4; font_mono: JetBrains Mono NL (§21)
+  fonts: {heading: serif}                        # font roles -> sans/serif/mono or a family
+  code_style: github-dark                        # Pygments style of `code` listings
+  scale: auto                                    # compact/standard/large/auto (§20)
+  colors:                                        # open dict; these are the defaults
+    {text: "#E8EAED", dim: "#838B98", accent: "#FF6B6B", highlight: "#FFD166",
+     primary: "#58C4DD", secondary: "#F2A541", tertiary: "#83C167", surface: "#161B24"}
+  palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # ordered series colours
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}
-
 voice:
-  provider: elevenlabs                           # or openrouter (Step 62, §66: model, voice, instructions, speed)
-                                                 # or kokoro (Step 65, §68: voice, speed, lang, device)
+  provider: elevenlabs                           # or openrouter (§66) or kokoro (§68)
   voice_id: nPczCjzI2devNBz1zQrb
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128
   settings: {stability: 0.55, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true}
   context: true                                  # send previous_text/next_text for continuity
-
-narration:
-  pad: 0.35                                      # seconds of silence after each beat
-  words_per_second: 2.6                          # duration estimate when a beat has no audio
-
-pronunciation: {K-Phi-3: kay fye three}          # Step 42 (§45): TTS text only; + pronunciation_file
-voices: {ana: {voice_id: 21m00Tcm4TlvDq8ikWAM, label: "Dr. Ana"}}   # Step 43 (§46): + scene / beat `voice: ana`
-subtitles: {speakers: off}                       # Step 43 (§46): `name` tags speakers in the SRT
-sfx: {auto: false, gain: 0}                      # Step 44 (§47): + scene `sfx:` lists, beat action `sfx`
-music: calm                                      # Step 45 (§48): bed / file / cue / cues; + scene `music:`
-audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # Step 45 (§48): the final mix
-transition: crossfade                            # Step 46 (§49): default between scenes; + scene `transition:`
-                                                 # Step 47 (§50): push / wipe {direction, soft}; scene `carry:`
-chapters: {metadata: true, youtube: true, intro: Intro}   # Step 49 (§52): MP4 chapters, <output>_chapters.txt
-metadata: {artist: "Jane Doe"}                   # Step 49 (§52): MP4 tags (title defaults to `title`)
-thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card, or {scene, beat, at, overlays}
-language: en                                     # Step 51 (§54): BCP-47; cue rules, speed lint, TTS / MP4 language
-translations: translations/pt.yaml               # Step 51 (§54): usually in a variant; texts replaced at load
-stt: {provider: faster_whisper}                  # Step 54 (§57): speech to text of `vidgen readback`
-imagegen: {model: gpt-image-1, style: flat}      # Step 55 (§58): generated pictures (`generate:` params); provider: openrouter (§64)
-
-extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
-
+narration: {pad: 0.35, words_per_second: 2.6}    # silence after each beat; estimate without audio
+extensions: [extensions]                         # dirs (relative to the project) to auto-import
 scenes:
   - id: intro                                    # required, unique, [A-Za-z0-9_]+
     type: title                                  # registered scene type (built-in or extension)
-    params:                                      # validated by the scene type's Params model, if any
-      title: "Saving 77% of the Parameters"
-      subtitle: "in Large Language Models"
+    params: {title: "Saving 77% of the Parameters"}   # validated by the type's Params model
     beats:
       - id: s1_b1                                # optional; default f"{scene.id}_b{n}" (1-based)
         text: "What if a large language model ..."
-      - text: "This technical report ..."
 ```
 
-Validation rules: beat ids unique across the whole video; scene ids unique; `type` must be
-registered after extensions load (`vidgen validate` reports unknown types with the list of known
-ones); `params` validated against the scene class's `Params` model when it defines one.
+Other top-level keys and their sections: `pronunciation` (§45), `voices`, `subtitles` (§46),
+`sfx` (§47), `music`, `audio` (§48), `transition` (§49–§50), `chapters`, `metadata` (§52),
+`thumbnail` (§53), `language`, `translations` (§54), `stt` (§57), `imagegen` (§58, §64),
+`output_dir` (below), and the later sections' keys.
 
-Refinements (Step 1):
-- Unknown keys are rejected in every structural model (not only top level): `format`, `preview`,
-  `theme`, `voice`, `voice.settings`, `narration`, scenes and beats. Open: `params`,
-  `theme.colors`, `theme.sizes`, and the bodies of `variants` (validated after merging).
-- `theme.colors` / `theme.sizes` / `theme.palette` in the config hold only what the user wrote;
-  `Theme` merges them over the built-in defaults shown above. Color values must be hex
-  (`#RGB`, `#RRGGBB` or `#RRGGBBAA`); token names follow the id pattern.
-- **Silent scenes**: a scene may have no beats (`beats: []` or omitted) if it sets
-  `duration: <seconds>`; `duration` is an error on a scene that has beats (narrated scenes are
-  timed by their audio).
-- Variants: the variant mapping is deep-merged onto the raw config (mappings merge recursively,
-  lists such as `scenes` and scalars replace), then the result is validated. A variant may not
+Rules:
+- Unknown keys are an error in every structural model (typo protection). Open dictionaries:
+  `params`, `theme.colors`, `theme.sizes` and variant bodies (validated after merging).
+- Scene ids unique; beat ids unique across the whole video; `type` must be registered after
+  extensions load (`vidgen validate` lists the known types); `params` are validated against the
+  scene class's `Params` model when it defines one.
+- `theme.colors` / `sizes` / `palette` hold only what the user wrote; `Theme` merges them over the
+  defaults. Colours are hex (`#RGB`, `#RRGGBB`, `#RRGGBBAA`); token names follow the id pattern.
+- **Silent scenes**: a scene with no beats must set `duration: <seconds>`; `duration` on a scene
+  with beats is an error (narrated scenes are timed by their audio).
+- **Variants**: the variant mapping is deep-merged onto the raw config (mappings merge
+  recursively; lists such as `scenes` and scalars replace), then validated. A variant may not
   contain `variants`. `vidgen validate` checks the base config and every variant.
-- `output` defaults to the project folder name and must be a plain file name (no path separators).
-- **Output folder** (Step 66): the deliverables — `Project.output_path` (MP4), `srt_path`,
-  `chapters_path`, `thumbnail_path` — live in `Project.output_dir`, the one property that decides
-  it: the CLI's `--output-dir DIR` (`Project.load(..., output_dir=)`, resolved from the current
-  directory; on `render`, `thumbnail`, `export`, `slides`) wins over the top-level
-  `output_dir:` (relative to the project root, or absolute; a variant may set its own), else
-  `<root>/output`. The path is not created on access; the render creates it before joining
-  (thumbnails via `write_bytes_atomic`). `build/` and `exports/` stay under the root. No
-  fallback to a video left in the root by older versions. `output_dir` is a confined path key
-  under `vidgen mcp` (§63).
-- `extensions` entries are directories relative to the project root; `Project.asset(rel)` also
-  resolves relative to the project root (e.g. `assets/logo.png`).
+- `output` must be a plain file name (no path separators).
+- **Output folder**: the deliverables (`Project.output_path`, `srt_path`, `chapters_path`,
+  `thumbnail_path`) live in `Project.output_dir`, the one property that decides it: `--output-dir
+  DIR` (`Project.load(..., output_dir=)`, relative to the current directory; on `render`,
+  `thumbnail`, `export`, `slides`, `animatic`) wins over `output_dir:` (relative to the project
+  root or absolute; a variant may set its own), else `<root>/output`. It is not created on
+  access; the render creates it before joining. `build/` and `exports/` stay under the root.
+  `output_dir` is a confined path key under `vidgen mcp` (§63).
+- `extensions` entries and `Project.asset(rel)` resolve relative to the project root.
 
 ## 5. Scene runtime
 
 ### 5.1 `NarratedScene` (in `scene.py`, subclass of `manim.Scene`)
 
-Attributes available inside `construct()`:
-- `self.spec` — the `SceneConfig` from video.yaml
-- `self.params` — validated params (instance of the class's `Params` model, or a plain dict)
-- `self.beats` — list of `BeatConfig` in order
-- `self.theme` — the active `Theme`
-- `self.project` — the active `Project` (paths: `self.project.asset(rel)` resolves assets)
+`NarratedScene` subclasses `MovingCameraScene`. Constructor (injection):
+`SceneClass(spec, project=None, theme=None, *, audio=True, **manim_scene_kwargs)`;
+`project`/`theme` default to the runtime context (§6.3), else the theme is built from
+`project.config.theme`. Constructing needs Manim's config set up; params validation does not.
 
-Methods:
-- `with self.narrate(beat) as d:` — `beat` is a beat id **or** 0-based index into `self.beats`.
-  Adds the beat's MP3 (if present) at the current time, yields its duration `d` (audio length,
-  or the word-count estimate), and on exit waits until `d + pad` has elapsed. Records
-  `(beat_id, start, end, text)` into `self.beat_log` (used for subtitles).
-- `self.beat_duration(beat) -> float`
-- (Step 14) `self.play_log` (every `play`/`wait`: `PlayRecord(start, end, beat, animations,
-  wait, requested)`), `self.beat_busy` (seconds each `narrate` body took), `self.silent_busy`;
-  recorded always, written to the activity file (§17) when stills are captured.
-- `self.clear_all(run_time=0.6)` — fade out everything.
-- `self.narrate_all()` — convenience generator: `for beat, d in self.narrate_all(): ...`.
+Attributes inside `construct()`: `self.spec` (`SceneConfig`), `self.params` (instance of the
+class's `Params` model, or a plain dict), `self.beats` (`BeatConfig`s in order), `self.theme`,
+`self.project` (`self.project.asset(rel)` resolves assets), `self.pad`.
 
-Theme-aware text: `self.text(s, size="body"|int, color="text"|"#hex", weight=...)` and
-`self.markup(...)`; sizes and colors accept theme token names or literal values.
-
-Refinements (Step 2):
-- Injection is the constructor: `SceneClass(spec, project=None, theme=None, *, audio=True,
-  **manim_scene_kwargs)`. `project`/`theme` default to the runtime context (§6.3); without a
-  context the theme is built from `project.config.theme`. Constructing needs Manim's config set
-  up (Manim creates its renderer); params validation does not: `SceneClass.validate_params(raw)`
-  (raises `pydantic.ValidationError`), `SceneClass.parse_params(raw, scene_id)` (raises
-  `VidgenError`), `SceneClass.params_model()`. `Params` must subclass `SceneParams`
-  (pydantic, `extra="forbid"`); inherited `Params` count.
+Narration:
+- `with self.narrate(beat) as d:` — `beat` is a beat id or 0-based index. Adds the beat's MP3 (if
+  present) at the current time, yields its duration `d` (audio length, or the word-count
+  estimate), and on exit waits until `d + pad` has elapsed. Narrating a beat twice is an error;
+  beats never narrated are logged as a warning at the end of the scene.
 - `audio=False` (`--no-audio`) skips `add_sound` but still takes durations from the MP3s, so
   timing is identical.
-- `self.beat_log: list[BeatTiming]`, `BeatTiming(beat_id, start, end, text)` (NamedTuple; seconds
-  from scene start; `end = start + d`). `self.timings()` returns
-  `{"scene": id, "duration": total_seconds, "beats": [{"id", "start", "end", "text"}]}`.
-- Waits are frame-exact (`self.wait_seconds(t)` rounds to whole frames), so a beat lasts
-  `d + pad` within half a frame. Narrating a beat twice is an error; beats never narrated are
-  logged as a warning at the end of the scene.
-- Silent scenes are held to `spec.duration` automatically in `tear_down()`; `self.hold(until=None)`
-  holds earlier. Subclasses overriding `tear_down` must call `super().tear_down()`.
-- Also available: `self.beat(id|index|BeatConfig)`, `self.beat_audio(beat) -> Path | None`,
-  `self.pad`. `text()`/`markup()` colors may also be `ManimColor` objects.
+- `self.beat_log: list[BeatTiming]`, `BeatTiming(beat_id, start, end, text)` (NamedTuple, seconds
+  from scene start, `end = start + d`). `self.timings()` returns
+  `{"scene": id, "duration": total, "beats": [{"id", "start", "end", "text"}]}`.
+- Waits are frame-exact (`self.wait_seconds(t)` rounds to whole frames), so a beat lasts `d + pad`
+  within half a frame.
+- `self.play_log` (every `play`/`wait`: `PlayRecord(start, end, beat, animations, wait,
+  requested)`), `self.beat_busy`, `self.silent_busy`: always recorded, written to the activity
+  file (§17) when stills are captured.
+- Also: `beat_duration(beat)`, `beat(id|index|BeatConfig)`, `beat_audio(beat) -> Path | None`,
+  `narrate_all()` (`for beat, d in self.narrate_all(): ...`), `clear_all(run_time=0.6, keep=())`.
+- Silent scenes are held to `spec.duration` in `tear_down()`; `self.hold(until=None)` holds
+  earlier. Subclasses overriding `tear_down` must call `super().tear_down()`.
+
+Theme-aware text: `self.text(s, size="body"|number, color="text"|"#hex"|ManimColor, weight=...,
+role=...)` and `self.markup(...)`; sizes and colours accept theme token names or literal values.
+
+Params: `Params` must subclass `SceneParams` (pydantic, `extra="forbid"`); inherited `Params`
+count. Class methods `params_model()`, `validate_params(raw, theme=None)` (raises
+`pydantic.ValidationError`), `parse_params(raw, scene_id, theme=None)` (raises `VidgenError`).
 
 ### 5.2 How a scene gets rendered
 
-The renderer renders **each scene in its own subprocess** (Manim's global config is not
-re-entrant): `python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview
-[--variant NAME] [--no-audio]`. The worker:
-1. loads the project + variant, builds the Theme, sets the runtime context (§6.3),
-2. imports built-in scenes and project extensions,
-3. configures Manim (resolution, fps, background, explicit `media_dir` under `build/`, explicit
-   output file name — never guess Manim's folder naming),
-4. instantiates the registered class for `scene.type`, injects spec/params/beats/theme/project,
-   renders, and writes `build/<quality>[_<variant>]/timings/<scene_id>.json` from `beat_log`.
+Each scene renders **in its own subprocess** (Manim's global config is not re-entrant):
+`python -m vidgen.render.worker <project> <scene_id> --quality final|preview|draft [--variant
+NAME] [--no-audio] [--progress] [--frames N] [--bare] [--source] [--guide-passes LIST]
+[--intermediate lossless|compact]`, run with `PYTHONUTF8=1`. The worker:
+1. `vidgen.extensions.activate(project)`: loads project + variant, builds the Theme, sets the
+   runtime context, imports built-in scenes and extensions;
+2. configures Manim: `pixel_width/height`, `frame_rate`, `background_color = theme.background`,
+   `disable_caching=True`, `media_dir = <render_dir>/media`, `video_dir`/`partial_movie_dir`
+   per scene id (parallel workers never share a folder), `text_dir = media/texts/<scene_id>` and
+   `tex_dir = media/Tex/<scene_id>` (shared SVG caches let one worker read another's half-written
+   file), `output_file = <scene_id>` — never guess Manim's folder naming;
+3. `cls = registry.get(spec.type).cls`, `scene = cls(spec, project, theme, audio=...)`,
+   `scene.render()`;
+4. moves Manim's movie (and `.wav`, if any) to `scenes/<id>.mp4|.wav` and writes
+   `timings/<id>.json` = `scene.timings()` (rounded to µs) plus a `"render"` block (width,
+   height, fps, audio, vidgen version, …). Old files of the scene are deleted first, so a failed
+   render leaves none.
 
-The parent then pads each scene's audio with silence to the exact video length, concatenates in
-config order, and writes the final MP4 and SRT (SRT times = scene offset + beat start/end).
+Exit codes: 0 ok, 1 `VidgenError` (`error: ...` on stderr), 2 other exceptions (full traceback).
 
-Refinements (Step 2): the worker does steps 1–2 with `vidgen.extensions.activate(project)`
-(returns the Theme), then `cls = vidgen.registry.get(spec.type).cls`,
-`scene = cls(spec, project, theme, audio=not no_audio)`, `scene.render()`, and writes
-`scene.timings()`. Manim caching must be disabled (`disable_caching=True`): on a cache hit Manim
-advances its clock by the unquantized duration, which would desynchronise `beat_log` from the
-frames.
-
-Refinements (Step 4):
-- **Worker** (`vidgen/render/worker.py`, extra flag `--progress` shows Manim's progress bars):
-  sets `pixel_width/height`, `frame_rate`, `background_color = theme.background`,
-  `disable_caching`, `media_dir = <render_dir>/media`, `video_dir`/`partial_movie_dir` per scene
-  id (so parallel workers never share a folder) and `output_file = <scene_id>`; after rendering
-  it moves `renderer.file_writer.movie_file_path` (and Manim's `.wav` beside it, if any) to
-  `scenes/<id>.mp4|.wav` and writes `timings/<id>.json` = `scene.timings()` (rounded to µs) plus
-  `"render": {width, height, fps, audio, vidgen}`. Old files of the scene are deleted first, so
-  a failed render leaves none. Manim cannot handle `'`, `{` or `}` in its paths (it formats them
-  with `str.format` and writes unescaped concat lists); for such project paths Manim's media
-  folder is a temporary directory instead. Exit codes: 0 ok, 1 `VidgenError` (`error: ...` on
-  stderr), 2 other exceptions (full traceback). The worker runs with `PYTHONUTF8=1`.
-- **Frame size**: Manim does not recompute `frame_width` when pixel sizes are set from code (a
-  portrait render would be squashed), so the worker sets it: the **shorter side is 8 units**
-  with square pixels (16:9 → 14.22 x 8, Manim's default; 9:16 → 8 x 14.22; 1:1 → 8 x 8). Scenes
-  read `config.frame_width/height`, or `NarratedScene.frame_width`, `.frame_height`,
-  `.is_portrait` (new read-only properties).
-- **Audio/no drift**: concatenating AAC segments drifts (every segment carries ~21 ms of encoder
-  priming that the concat demuxer does not remove — measured: +50 ms after two scene
-  boundaries). So the parent pads Manim's **PCM WAV** of each scene (silence for silent scenes
-  and `--no-audio`) to exactly the video's length (48 kHz stereo; the sample count of scene *i*
-  is `round(end_i*48000) - round(start_i*48000)`, so rounding never accumulates), concatenates
-  the videos (stream copy) and the WAVs (PCM) with two concat-demuxer lists, and encodes the
-  audio once to AAC 192k in the final mux. Measured beat onsets in the output match
-  `timings.json` within 1 ms. Scene durations are measured from the rendered videos with PyAV
-  (frames / fps). The final MP4 is written to `<name>.partial.mp4` and renamed (Step 7: if
-  the target stays locked, the partial file is kept and the error says so).
-- **Timings**: `build/<q>[_<variant>]/timings.json` = `{title, variant, preview, format: {width,
-  height, fps}, audio, duration, vidgen, scenes: [{id, type, start, duration, beats: [{id,
-  start, end, text}]}]}`, all times absolute seconds. SRT cues come from it (`subtitles.py`):
-  1-based, `HH:MM:SS,mmm`, UTF-8; beat text wrapped to 42-character lines, at most 2 lines per
-  cue, the beat's time (start → narration end, pad excluded) shared in proportion to characters.
-- **Scene selection**: no automatic up-to-date detection. Without `--scene` every scene is
-  rendered. With `--scene` those are rendered, and others are reused if their render exists and
-  was made at the current format (and with audio, unless `--no-audio`); otherwise they are
-  rendered too. Reused renders are not checked against config/extension changes.
-- **Failures**: without `--keep-going` the first failing scene stops the command (message: scene
-  id, exit code, last 60 lines of worker output — the user's traceback for exceptions in scene
-  code). With it, the remaining scenes are rendered, failures are printed as they happen, the
-  video is **not** joined, and the command fails listing the failed scenes.
-- **Parallelism**: `render_project(..., jobs=N)` / `vidgen render --jobs N` runs N workers at
-  once (default 1). Live Manim progress is shown only for `jobs == 1` on a terminal; otherwise
-  worker output is captured and its `warning:` lines are re-printed. `--jobs auto` is resolved
-  to a number by the CLI before the command runs (§70); the Python functions take an int.
-- **Audio check**: before rendering, missing/stale narration audio (`tts.audio_status`) is
-  logged as a warning recommending `vidgen tts`; ffmpeg missing is a `VidgenError` with install
-  hints (`winget install ffmpeg` on Windows).
-
-Refinements (Step 5):
-- **Worker caches**: `config.text_dir = media/texts/<scene_id>` and `config.tex_dir =
-  media/Tex/<scene_id>`. Manim caches Text/Tex SVGs by content hash in one folder; with
-  `--jobs N` two workers writing the same SVG at once made the other parse a half-written file
-  (`xml.etree.ElementTree.ParseError`). Per-scene folders cost cache reuse across scenes only.
+Invariants:
+- **Manim caching off**: on a cache hit Manim advances its clock by the unquantized duration,
+  which desynchronises `beat_log` from the frames.
+- **Paths**: Manim cannot handle `'`, `{` or `}` in its paths; for such project paths its media
+  folder is a temporary directory.
+- **Frame size**: the worker sets `frame_width/height` (Manim does not recompute them from pixel
+  sizes set in code): the **shorter side is 8 units**, square pixels (16:9 → 14.22 x 8; 9:16 →
+  8 x 14.22). Scenes read `NarratedScene.frame_width`, `.frame_height`, `.is_portrait`.
+- **No audio drift**: concatenated AAC segments drift (encoder priming per segment), so the
+  parent pads each scene's **PCM WAV** (silence for silent scenes and `--no-audio`) to exactly
+  its video length (48 kHz stereo; scene *i* gets `round(end_i*48000) - round(start_i*48000)`
+  samples, so rounding never accumulates), concatenates videos (stream copy) and WAVs (PCM) with
+  concat-demuxer lists, and encodes audio once (AAC 192k) in the final mux. Scene durations are
+  measured from the rendered videos with PyAV (frames / fps). The MP4 is written to
+  `<name>.partial.mp4` and renamed; if the target stays locked, the partial file is kept and the
+  error says so.
+- **Timings**: `timings.json` = `{title, variant, preview, format: {width, height, fps}, audio,
+  duration, vidgen, scenes: [{id, type, start, duration, beats: [{id, start, end, text}]}]}`,
+  absolute seconds. SRT cues come from it (§43; `subtitles.py`: 1-based, `HH:MM:SS,mmm`, UTF-8,
+  at most 2 lines of 42 characters).
+- **Scene selection** (`pipeline.scenes_to_render`): without `--scene`, a scene renders when its
+  render is not current (missing, other format / audio mode / stills / guide passes, or its
+  recorded fingerprint differs, §14, §63); `--force` renders all. With `--scene`, those scenes
+  render, the others' existing renders are reused current or not, and any without a usable
+  render render too (printing `--scene ID: also rendering N other scene(s) (...)`).
+- **Failures**: without `--keep-going` the first failing scene stops the command (scene id, exit
+  code, last 60 lines of worker output). With it, the rest render, failures print as they happen,
+  the video is **not** joined, and the command fails listing the failed scenes.
+- **Parallelism**: `render_project(..., jobs=N)` / `--jobs N` (default 1). Live Manim progress
+  only for `jobs == 1` on a terminal; otherwise output is captured and `warning:` lines are
+  re-printed. `--jobs auto` is resolved to a number by the CLI (§70); Python functions take an int.
+- **Before rendering**: missing/stale narration (`tts.audio_status`) is a warning recommending
+  `vidgen tts`; missing ffmpeg is a `VidgenError` with install hints (`winget install ffmpeg` on
+  Windows).
 
 ### 5.3 Scene-building API (Step 5)
 
-Added to `NarratedScene` so built-ins and extensions share it:
-- `validate_params(params, theme=None)` / `parse_params(params, scene_id, theme=None)`: the theme
-  is passed to validators as `info.context["theme"]`; the constructor passes `self.theme`.
+On `NarratedScene`, shared by built-ins and extensions:
+- `validate_params` / `parse_params` pass the theme to validators as `info.context["theme"]`.
 - `ThemeColor` (`Annotated[str, ...]`) and `ThemeSize` (`Annotated[str | float, ...]`) for
-  `Params` fields: hex syntax is always checked, token names when a theme is given (validate and
-  render). Both carry a `ThemeToken(kind)` marker; `list-scenes` prints them as `color` / `size`.
-- classmethod `validate_project(params, project) -> list[str]`: project-aware checks run by
-  `vidgen validate` (inside the project session, after params validated); each message is
-  reported as `scenes[i].params.<message>` (convention: start with the param name). Default `[]`.
-- `outro: float = 0.0` (class attribute) and `finish()` (fade out everything over `outro`).
+  `Params` fields: hex syntax always checked, token names when a theme is given. Both carry a
+  `ThemeToken(kind)` marker; `list-scenes` prints them as `color` / `size`.
+- Class method `validate_project(params, project) -> list[str]`: project-aware checks run by
+  `vidgen validate` after params validate; each message is reported as
+  `scenes[i].params.<message>` (start it with the param name). Default `[]`.
+- `beat_count: int | tuple[int, int | None] | None = None`: beats a type narrates (`None` any,
+  `2` exactly, `(1, None)` at least one, `(2, 4)` a range). `check_beat_count(n) -> str | None`
+  (`"needs exactly 2 beats, got 3"`) and `beat_count_text()`. `validate` reports
+  `scenes[i].beats: type 'x' needs ...`; the constructor raises `VidgenError("scene 'id': needs
+  ...")`. Built-ins leave it `None`.
+- `outro: float = 0.0` and `finish()` (fade out everything over `outro`; holds instead when a
+  transition follows, keeps carried targets, §49–§50).
 - `timeline()`: yields `(index, d)` per narrated beat; a silent scene yields one
-  `(0, duration - outro)` step and then holds to that time.
+  `(0, duration - outro)` step and then holds.
 - `play_steps(d, steps, fraction=0.7, cap=1.2)`: spreads steps (animation | list | callable
-  returning either) over `d` seconds, each run for `min(cap, fraction * slot)`; never longer
-  than `d` (if `d` has fewer frames than steps, consecutive steps are merged).
-- `reveal(steps, fraction, cap)`: `distribute(len(steps), len(beats))` + `timeline()` +
+  returning either) over `d` seconds, each run for `min(cap, fraction * slot)`, never longer than
+  `d` (consecutive steps merge if `d` has fewer frames than steps).
+- `reveal(steps, fraction, cap)` = `distribute(len(steps), len(beats))` + `timeline()` +
   `play_steps()` per beat.
-- `safe_width` / `safe_height` (frame minus `margin_x = 0.6`, `margin_y = 0.5` units; Step 15:
-  derived from `self.safe_area`, §18).
+- `safe_width` / `safe_height`, from `self.safe_area` (frame minus `margin_x = 0.6`,
+  `margin_y = 0.5` units, §18).
 
-Refinements (Step 6, found while porting kphi3):
-- `beat_count: int | tuple[int, int | None] | None = None` (class attribute): how many beats a
-  scene type narrates (`None` any, `2` exactly, `(1, None)` at least one, `(2, 4)` a range).
-  Types that narrate fixed beat indices set it. `check_beat_count(n) -> str | None` (e.g.
-  `"needs exactly 2 beats, got 3"`) and `beat_count_text()` (`"exactly 2 beats"`) are
-  classmethods. `vidgen validate` reports `scenes[i].beats: type 'x' needs ...`; the constructor
-  raises `VidgenError("scene 'id': needs ...")`; `vidgen list-scenes` prints `beats: ...`.
-  Built-ins leave it `None` (they adapt to any number of beats).
-
-`vidgen.layout` (exported by `vidgen.api`): `fit_text`, `measure_text` (Step 27), `shrink_to_fit`, `wrap_lines`,
+`vidgen.layout` (exported): `fit_text`, `measure_text`, `shrink_to_fit`, `wrap_lines`,
 `normalize_text`, `distribute`, `nice_ticks`, `auto_format`, `format_value`, `check_format`,
-`latex_available`, `require_latex` (+ `missing_latex_tools`, not exported). `fit_text` measures
-each word once (cached per font/weight) and searches the font size arithmetically, building the
-`Paragraph` once; `Paragraph` `line_spacing` defaults to 0.7 (Manim's -1 sets lines nearly
-touching). Highlights are applied with `t2c` index ranges (wrapping only turns spaces into line
-breaks, so indices into the normalized text stay valid).
+`latex_available`, `require_latex`. `fit_text` measures each word once (cached per font/weight),
+searches the font size arithmetically and builds the `Paragraph` once; `line_spacing` defaults
+to 0.7. Highlights use `t2c` index ranges (wrapping only turns spaces into line breaks, so indices
+into the normalized text stay valid).
 
 ## 6. Extension system (the core requirement)
 
 ### 6.1 Discovery
-For each directory in `extensions` (default `extensions/`, silently skipped if absent):
-every `*.py` file (not starting with `_`) and every sub-package is imported, in sorted order,
-under a private package name `vidgen_ext_<sanitised project name>` so that extension modules can
-import each other with relative imports (`from .common import column`). The project's
-directory is **not** put on `sys.path` globally. Import errors are reported with the file name
-and the original traceback.
+For each directory in `extensions` (default `extensions/`): every `*.py` file and every
+sub-package (a folder with `__init__.py`) is imported, in sorted order, under one private
+package `vidgen_ext_<project folder name, lower-cased, non-word characters → _>`, so extension
+modules import each other relatively (`from .common import column`). Names starting with `_` or
+`.` are skipped. Several directories share the one synthetic package (its `__path__` lists them
+all); the same module name in two directories is an error. The default `extensions/` may be
+absent; a directory written explicitly must exist. The project directory is **not** put on
+`sys.path`. The package is removed from `sys.modules` before each load. An exception while
+importing becomes a `VidgenError` with the file (relative to the project) and the traceback
+(importlib frames removed); a `VidgenError` raised during import propagates unchanged.
 
 ### 6.2 What an extension can register (all via `vidgen.api`)
 ```python
@@ -765,567 +432,194 @@ class LossPanel(NarratedScene):
 def add_watermark(ctx): ...       # ctx: HookContext(project, event, data: dict)
 
 register_theme_defaults({"k2": "#F2A541"})   # extra theme tokens; video.yaml values still win
-register_theme_preset("acme", base="light_academic", colors={"primary": "#0B5FFF"})   # Step 16
+register_theme_preset("acme", base="light_academic", colors={"primary": "#0B5FFF"})
 ```
-- **Scene types**: `@scene(name, *, override=False)`. Name collision with another extension is an
-  error. Colliding with a built-in raises unless `override=True`, which replaces it and logs a
-  warning (`vidgen list-scenes` marks it as overridden).
-- **Helpers**: plain Python functions/modules inside `extensions/`; shared via relative imports.
-- **Theme tokens**: `register_theme_defaults()`; `theme.color("k2")`, `theme.size("body")`.
-- **Hooks**: `@hook(event)`; called in registration order; exceptions abort the command with the
-  hook's name in the message.
-- **Hook data** (Step 3, TTS): `pre_tts` — `beats: list[str]` (ids about to be generated, video
-  order; a hook may remove ids to skip them or add known ids), `audio_dir: Path`, `force: bool`,
-  `dry_run: bool`; dispatched on dry runs too. `post_tts` — `generated: list[str]` (ids written,
-  in order), `audio_dir: Path`; not dispatched on dry runs or when the command fails. The API key
-  is never part of hook data.
-- **Hook data** (Step 10): `post_scene` also gets `frames` (the scene's stills folder, or `None`
-  without `--frames`), `post_render` gets `frames_index` (`frames/index.json` or `None`).
-- **Hook data** (Step 4, render; hooks run in the parent `vidgen render` process): `pre_render` —
-  `scenes: list[str]` (ids about to be rendered, config order; a hook may remove ids to reuse
-  their existing render), `preview: bool`, `variant: str | None`, `no_audio: bool`,
-  `render_dir: Path`. `post_scene` — once per scene rendered in this run (not for reused ones):
-  `scene_id`, `video: Path` (`scenes/<id>.mp4`, before padding), `timings: dict` (the scene's
-  timings file content), `preview`, `variant`. `post_render` — after the MP4, SRT and
-  `timings.json` are written: `output: Path`, `srt: Path`, `timings: dict` (combined),
-  `timings_file: Path`, `preview`, `variant` (later steps add `frames_index`, `chapters` and,
-  Step 60, `thumbnail`: the hook runs after the thumbnail is written). Not dispatched when the
-  command fails.
+- **Scene types**: `@scene(name, *, override=False)`; also `@action` (beat actions, §26),
+  `@overlay` (§41), `register_model` (plot models, §97.7). A name colliding with another
+  extension is an error. Colliding with a built-in raises unless `override=True`, which replaces
+  it and logs a warning on logger `vidgen.registry` (`override=True` with no such built-in also
+  warns); `vidgen list-scenes` marks it overridden. The CLI prints vidgen log warnings as
+  `warning: <message>` on stderr.
+- **Origin**: built-in vs extension is decided by the defining module: inside the `vidgen`
+  package is `builtin`, anything else shows as its file relative to the project root.
+- **Helpers**: plain Python modules inside `extensions/`, shared via relative imports.
+- **Theme tokens**: `register_theme_defaults(colors=None, sizes=None)`; `theme.color("k2")`,
+  `theme.size("body")`. `register_theme_preset(name, base=..., colors=..., scale=..., fonts=...)`
+  (§19–§20).
+- **Hooks**: `@hook(event)`; an unknown or missing event is a `VidgenError`. Built-in hooks run
+  before extension hooks, each group in registration order. `hooks.dispatch(event, project,
+  **data)` returns the `HookContext` (hooks may modify `ctx.data`). A failing hook aborts the
+  command: `hook <module.qualname> (<origin>) failed during <event>: ...` + traceback (a
+  `VidgenError` keeps just its message).
+- **Hook data** (render hooks run in the parent `vidgen render` process):
+  - `pre_tts`: `beats` (ids about to be generated, video order; hooks may remove ids to skip
+    them or add known ids), `audio_dir`, `force`, `dry_run`; dispatched on dry runs too.
+  - `post_tts`: `generated` (ids written, in order), `audio_dir`; not on dry runs or failure.
+  - `pre_render`: `scenes` (ids about to render, config order; removing one reuses its existing
+    render), `preview`, `variant`, `no_audio`, `render_dir`.
+  - `post_scene`: once per scene rendered in this run (not reused ones): `scene_id`, `video`
+    (`scenes/<id>.mp4`, before padding), `timings` (the scene's timings), `preview`, `variant`,
+    `frames` (its stills folder or `None`).
+  - `post_render`: after MP4, SRT, `timings.json` and the thumbnail are written: `output`, `srt`,
+    `timings` (combined), `timings_file`, `preview`, `variant`, `frames_index` (or `None`),
+    `chapters`, `thumbnail`. Not dispatched when the command fails.
+  - The API key is never part of hook data.
 - **Promotion**: an extension module copied into `src/vidgen/scenes/` works unchanged, because
-  built-ins use exactly the same `@scene` API.
+  built-ins use exactly the same API. Built-in scene modules import vidgen only through
+  `from vidgen.api import *` (a test pins this) and share code by relative imports.
 
 ### 6.3 Runtime context
-`vidgen.runtime` holds the active Project and Theme. It is set **before** extensions are imported,
-so module-level code in an extension may read theme values
+`vidgen.runtime` holds the active Project and Theme. It is set **before** extensions are
+imported, so module-level extension code may read theme values
 (`C_BASE = current_theme().color("primary")`). `api.T(...)` / `api.MT(...)` are function forms of
-`self.text`/`self.markup` that use the current theme — this makes porting old scripts easy.
+`self.text` / `self.markup` using the current theme.
 
 ### 6.4 `vidgen.api` exports (stable surface)
-`NarratedScene, SceneParams, scene, hook, HookContext, register_theme_defaults, current_theme,
-current_project, T, MT`, generic helpers from `helpers.py`, and `from manim import *`.
-Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pydantic's
-`Field, field_validator, model_validator`.
-Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
-orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19); Step 17
-gives it the keyword arguments `scale` and `fonts` (§20). Step 19 adds `icon`, `Icon` and
-`IconName` (§22). Step 21 adds `grid_shape` (§24). Step 22 (§25) adds keyword arguments only:
-`role=` on `T`, `MT`, `NarratedScene.text`/`markup`, `fit_text` and `readable_text`; `region(name,
-area)` also takes a region name as `area`; `SceneParams.also_accepts`. Step 23 (§26) adds
-`action`, `Action`, `ActionOptions`, `Target` and, on `NarratedScene`, `target_patterns`,
-`target_names()`, `target()`, `targets`, `find_targets()`, `on_screen_parts()`, `is_shown()`,
-`entrance()`. Step 24 (§27) adds, compatibly: `NarratedScene` is a `MovingCameraScene`;
-`target(..., outline=)`; `Target.outline`, `Target.rest`, `Target.rest_opacity()`; `Action`
-class attributes `temporary`, `moves_camera`, `target_options`. Step 27 adds `measure_text`.
-Step 28 (§31) adds `layered_layout`, `GraphLayout`, `GraphNode`, `GraphEdge`, `EdgeRoute`,
-`NodePlace`.
-Step 29 (§32) adds `sparse_pairs` and `group_bounds`, and compatible keyword arguments:
-`column(..., horizontal=False, skip=None)`, `edges(..., colors=None, shorten=0.0)`,
-`grouped_pairs(n, groups, m=None)`.
-Step 30 (§33) adds the chart helpers: `ChartAxis`, `ChartAxes`, `LinearFit`, `CHART_MARKERS`,
-`axis_ticks`, `short_number`, `tick_texts`, `value_axis`, `chart_axes`, `chart_label_size`,
-`chart_legend`, `auto_legend`, `legend_spot`, `sample_path`, `chart_marker`, `linear_fit`,
-`chart_title`, `chart_caption`.
-Step 31 (§34) adds `ColorScale`, `color_scale`, `color_bar`, `mix_colors`, `text_color_on`.
-Step 34 (§37) adds the callout helpers: `Callout`, `CalloutArea`, `CALLOUT_KINDS`, `callout`,
-`callout_area`, `callout_box`, `callout_circle`, `callout_arrow`, `callout_magnifier`,
-`callout_spotlight`, `callout_label`, `label_spot`.
-Step 35 (§38) adds the video clip helpers: `CLIP_SUFFIXES`, `ClipInfo`, `ClipMobject`,
-`ClipTiming`, `clip_audio`, `fit_speed`, `probe_clip`.
-Step 36 (§39) adds the map helpers: `MAP_VIEWS`, `Country`, `MapView`, `equal_earth`,
-`find_country`, `fit_view`, `view_box`, `world_countries`.
-Step 38 (§41) adds `overlay`, `Overlay`, `OverlayOptions`, `OverlayContext`, `with_opacity`, and
-`NarratedScene.overlay_layer` (compatible: `NarratedScene.safe_area` shrinks for reserved overlays).
-Step 39 (§42) adds `video_chapters`, `Chapter`. Step 40 (§43) adds `WordTime`, `beat_word_times`,
-`estimate_word_times`, `speech_bounds`, `spoken_words`, `syllables`, `CaptionCue`,
-`caption_cues`, `segment_cues`, `phrase_break_cost`, `plate_contrast`, and compatibly
-`Overlay.default_reserve()` / `Overlay.reserves`.
-Step 41 (§44) adds, compatibly, the `Action` class attribute `until_next_beat` and the methods
-`problems()`, `provides()`, `default_until(later)`.
-Step 42 (§45) adds `Pronunciation`, `Spoken`, `map_word_times`, and compatibly the optional last
-argument `spoken` of `beat_word_times`.
-Step 43 (§46) adds `speaker_label`, `speaker_color`, `speaker_prefix`, and compatibly the keyword
-arguments `prefix` / `prefix_width` of `caption_cues` and the field `CaptionCue.prefix`.
-Step 44 (§47) adds `SfxEvent`, `SfxParams`, `SoundLibrary`, `sound_library`, `synthesize`; on
-`NarratedScene` `sfx()`, `sfx_log`, `sounds`, `auto_sfx()` and the class attribute
-`entrance_sfx`; on `Action` (compatibly) the class attributes `scene_targets`, `animates` and
-the method `cue(scene, time)`.
-Step 46 (§49) adds, compatibly, `NarratedScene.transition_in` / `transition_out` (planned
-`TransitionSlot`s or `None`) and `SceneSlot.overlap_in`, `overlap_out`, `cut` (fields with
-defaults / a property); `finish()` holds instead of fading when a transition follows.
-Step 47 (§50) adds `carry_move`; on `NarratedScene` `carry_in(name)`, `carry_out`, `carry_state`,
-`carried_in`, `overlay_head`, and compatibly `clear_all(run_time, keep=())`; `entrance()` moves
-a carried copy into its target; `finish()` keeps carried targets on screen.
-Step 49 (§52) adds, compatibly, the keyword argument `intro=False` of `video_chapters` and the
-field `Chapter.intro` (default `False`).
-Step 51 (§54) adds `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rules`; on
-`SceneParams` the class attributes `text_shorthand` and `text_defaults`; and compatibly the
-keyword argument `language=None` of `caption_cues`, `segment_cues`, `phrase_break_cost`,
-`beat_word_times`, `estimate_word_times` and `syllables`.
-Step 55 (§58) adds `GenerateImage`, `generated_image`.
-Step 67 (§69) adds `Character`, `CharacterPart`, `CharacterState`, `PartPose`, `PART_NAMES`,
-`character` and the param type `CharacterName`.
-Step 70 (§69.3) adds `PoseChange` (and the `Character` methods `set_pose`, `set_expression`,
-`posed_state`, `names`).
-Step 71 (§69.4) adds `VISEMES`, `VisemeCue`, `VisemeTrack` (and the `Character` methods
-`viseme_shape`, `show_viseme`, `lip_sync`, `stop_lip_sync`; `NarratedScene.beat_visemes`).
-Step 73 (§69.6) adds the stage geometry `MARKS`, `StageItem`, `StagePlacement`, `stage_layout`,
-`mark_x`, `facing_towards_centre` and the check `pose_name_problem` (the built-in `stage` scene
-uses only `vidgen.api`, like every built-in).
-Step 74 (§69.7) adds `DEFAULT_FACTORS`, `LAYER_PLACES`, `layer_transform`, `layer_half_extent`
-and `view_center_within`; `NarratedScene` gains `camera_bounds`, `camera_place`,
-`follow_with_camera`, `camera_following`, `add_camera_listener`; `Action` gains `scene_problems`.
-Step 75 (§69.8) adds `Prop`, `draw_prop`, `svg_prop`, `PROP_KINDS`, `PROP_HEIGHTS`, `PROP_LIFTS`,
-`SVG_PROP_HEIGHT`; `StageItem` gains `lift=0.0` (compatible).
-Step 76 (§69.9) adds `PARTICLE_KINDS`, `MAX_PARTICLES`, `particle_count`, `particle_seeds`,
-`particle_states`, `ParticleField`, `ParticleSettings`, `ParticleKindName`, `particle_field`, and
-compatibly the attribute `NarratedScene.is_preview`.
-Step 77 (§69.10) adds, compatibly, the keyword argument `cartoon=False` of `generated_image`, the
-`NarratedScene` class attribute `uses_cartoon_style` (default `False`) and the method
-`generated_picture(generate)`.
-Step 78 (§69.11) adds `beat_voice`, `speaking_characters`, `say_problem`, `LookPose`,
-`look_pose`, `camera_look`; `NarratedScene` gains `current_beat`, `beat_clock`, `speak`,
-`beat_action_names`; `Action` gains `character_needs`; `Character.lip_sync` gains the keyword
-`clock=None` and `Character` the methods `sync_mouth`, `lip_sync_track` (all compatible).
-Step 79 (§69.12) adds `Walk`, `Gesture`, `Jump`, `WALK_SPEED`, `GESTURES`, `GESTURE_SECONDS`,
-`JUMP_HEIGHT`, `JUMP_SECONDS`, `walk_seconds`, `enter_path`, `exit_path`, `nearer_side`,
-`offstage_x`; `Action` gains `run_time_for` and the class attribute `alters_targets` (default
-`True`); `NarratedScene` gains `action_uses`; `Character` gains `character_height` and
-`walked_in` (all compatible).
-Step 80 (§69.13) adds `MOTION_LEVELS`, `MotionSetting`, `walk_motion_seconds`,
-`jump_motion_seconds`; `PoseChange`, `Walk`, `Gesture` and `Jump` gain the keyword `motion=None`;
-`Character` gains the constructor keyword `motion="lively"`, the attribute `motion`, the
-property `motion_strength` and `set_squash`; `character()` gains `motion=None` (all compatible;
-the default `lively` changes how the four animations look, not their end states).
-Step 81 (§69.14) adds `KeyedMotion`, `feet_of`, `CHANNELS`, `DEFAULT_EASE`, `EASE_NAMES`,
-`EaseName`, `Key`, `KeyFrame`, `MotionPath`, `ease_progress`, `key_seconds`,
-`key_time_problems`, `keyed_values`, `path_length`, `part_target_names`, `feet_point` (all
-compatible); the `stage` scene type gains the target pattern `<character>.<part>`.
-Step 82 (§69.15) adds `Spring` (compatible; follow-through in `Walk` and `Jump` now wobbles).
-Step 83 (§69.16) adds the `NarratedScene` class attribute `mid_still_actions` (default empty;
-compatible).
-Step 84 (§69.17) adds to `Character` the attributes `looked_at` and `passage` and the property
-`spoken_viseme` (all compatible).
-Step 86 (§69.19) adds `PlayedAction`, `FoleyCue`, `foley_cues`, the `NarratedScene` hook
-`action_foley(action, options, animations, start, seconds)` (does nothing by default), `Walk.heights`
-and `Walk.phases` / `Jump.phases`, and compatibly the `SfxEvent` field `duck` (default `False`).
-The fixes after Step 88 (§69.22) add `ground_top` (compatible).
-Step 89 (§69.23) adds `ActionConfig`, `AutoDirect`, `AutoDirectSetting`, `DirectedBeat`, `stage_directions` and
-the `NarratedScene` class method `auto_actions(project, spec, params)` (none by default;
-compatible); `ActionConfig` gains `automatic(data)`, the property `auto` and `shorthand()`.
-Step 90 (§69.24) adds `StageFrame`, `StagePlace` and `stage_frame`; `stage_directions` gains the
-optional `stage` argument (compatible).
-Step 92 (§69.26) adds no names; `PART_NAMES` gains `leg_left`, `leg_right` and the `_lower`
-segments, `CharacterPart` the optional `end`, and `Character` the methods `reach`, `plant`,
-`hand_point`, `foot_point`, `sole_height`, `grounded` (compatible; generated characters have
-single legs instead of `legs`).
-Step 93 (§69.27) adds `ArmMove`, `PropMove`, `Holdings`, `HoldingError`, `HandlingStep`,
-`holding_problems`, `hold_point`, `held_height`, `put_down_x`, `throw_seconds`,
-`throw_release_share`, `HAND_ORDER`, `HANDLING_ACTIONS` and the timing constants
-`PICK_UP_SECONDS`, `PUT_DOWN_SECONDS`, `GIVE_SECONDS`, `HOLD_SECONDS`, `REACH_SHARE`,
-`PUT_DOWN_REACH_SHARE`, `PUT_DOWN_LAND_SHARE`, `THROW_WIND_UP`, `THROW_SWING`, `THROW_HEIGHT`,
-`THROW_SPIN`; `Character` gains `reached_parts`, `shoulder_point` and the attribute `holding`,
-`Prop` the attributes `height_factor`, `held_by` and `hand`, `PlayedAction` the field `lands`, and
-`NarratedScene` the class method `action_sequence_problems(spec, params, uses)` (none by
-default). All compatible.
-Step 94 (§69.28) adds `BodyMove`, `Postures`, `PostureError`, `PROP_SEATS`, `PROP_LEANS`,
-`SEAT_BACKS`, `POSTURE_ACTIONS`, `SIT_SECONDS`, `LEAN_SECONDS`, `STAND_UP_SECONDS`, `CROUCH_MIN`,
-`crouch_drop`, `crouch_stoop` and `read_svg_seat_and_lean`; `Character` gains `limb_rest`,
-`hip_height`, `part_box`, `sole_points`, `planted`, `lowered`, `seated`, `leaning` and the
-attributes `sitting_on` / `leaning_on`, `reached_parts` the optional `state`; `Prop` gains `seat`,
-`lean`, `seat_point()` and `lean_edges()`; `StageFrame` the field `seat_facings` (default empty).
-`holding_problems` also replays sitting and leaning. All compatible.
-Step 95 (§69.29) adds `ShotConfig`, `SHOT_NAMES`, `SHOT_KINDS`, `SHOT_MOVE_SECONDS`, `Shot`,
-`ShotFigure`, `ShotView`, `frame_shot`, `shot_figures` and `shot_view`; `Character` gains
-`standing_height`; `NarratedScene` the attributes `camera_shot` and `shot_home`; `BeatConfig` the
-key `shot`. All compatible.
-Step 96 (§69.30) adds `ReframeSetting`, `REFRAME_SECONDS`, `REPLY_HOLD_SECONDS`, `CameraMove`,
-`ReframeBeat`, `ReframeFigure`, `reframe_needed`, `reframe_path`, `stage_base_width`,
-`plan_reframe` and `stage_reframes`; `stage_directions` gains the keyword `reframe` (default
-`False`); the `pan` action the option `cut`. Compatible, except that a `stage` whose characters
-do not fit in one view now gets automatic pans, and in a frame narrower than 16:9 is laid out as
-wide as the 16:9 frame (set `reframe: none` for the old behaviour).
-Step 97 (§69.31) adds `LIGHT_PRESETS`, `LIGHT_FADE_SECONDS`, `DEFAULT_STRENGTH`, `STAR_SKY`,
-`SHADOW_WIDTH`, `PROP_SHADOW_WIDTH`, `LightGrade`, `LightChange`, `Stars`, `ShadowEllipse`,
-`tint_grade`, `light_grade`, `blend_grades`, `grade_rgbas`, `grade_pixels`, `light_at`,
-`night_stars`, `shadow_ellipse`, `CustomLight`, `LightSetting`, `resolve_light`, `mark_lit`,
-`StageLight`, `StarField`, `ShadowCaster` and `StageShadows`; `vidgen.particle_field`'s
-`_unit_shape` becomes `particle_shape`. Compatible, except that every `stage` now draws soft
-shadows under what stands on the ground (`shadows: false` for the old picture).
-Step 98 (§69.32) adds `SWAYS`, `WIND_FADE_SECONDS`, `WIND_LEVELS`, `Sway`, `Wind`, `WindChange`,
-`WindSetting`, `bent_points`, `gust`, `sway_degrees`, `trail_degrees`, `wind_level`, `wind_seed`,
-`StageWind`, `SwayingProp` and `ParticleWind`; `Character` gains `set_wind`, `wind`,
-`has_trails` (`TRAIL_ATTRIBUTE` in `cartoon/character.py`), `ParticleField` the keyword `wind`,
-`particle_states` the keywords `blown` and `wind`, `Spring` the property `memory_seconds`,
-`Action` the class attribute `number_target`; `ActionConfig.target` keeps a number as its
-text. Compatible: a stage without `wind` (or `wind: 0`) renders the same frames as before.
-Step 99 (§69.33) adds no names: `stage_directions` also returns the speakers' faces for voice
-sounds (any `auto_direct`), `BeatConfig` gains `voice_sounds`, `Project` the method `spoken`,
-`Spoken` the method `inserted`; beats without `[laugh]`-style markers are unchanged.
-Step 100 (§69.34) adds `CueStack`, `stack_cues` and `overlapping_beats`; `NarratedScene` gains
-`beat_window` and `end_lip_sync`, `VisemeTrack` the method `until`, `BeatConfig` the keys
-`overlap` / `interrupt`, `add_narration` the argument `shape`; the `captions` overlay's karaoke
-state becomes `(caption, (word, ...))`. Compatible: beats without the keys keep their timings
-and audio (pinned in `tests/test_overlap_pinned.py`).
-Step 101 (§69.35) adds `numbered_names` and `prop_default_name` (the stage's prop and layer
-names, shared with the set merge); `Problem` gains `file`.
-Step 102 (§69.36) adds `STAR_HEAD_ROOM`; `PROP_HEIGHTS` changes for `chair`, `box` and `rock`
-(lower seats), and `Character.seated` puts the hips, not the body's lowest point, on the seat.
-Step 103 (§69.37) adds `PROP_SHAPES`, `PROP_GRIPS`, `PropReshape`, `OVERHEAD_SHAPES`,
-`OVERHEAD_FORWARD`, `OVERHEAD_HAND`, `OVERHEAD_HEIGHT`, `RESHAPE_SECONDS`, `RESHAPE_SHARE` and
-`overhead_point`; `PROP_KINDS` gains `basket`, `umbrella`, `napkin`; `Prop` gains `shapes`,
-`shape`, `show_shape`, `shape_width`, `grips`, `grip`, `grip_point` (and the keywords `shapes`,
-`grips`), `draw_prop` the keyword `shape`, `held_height` the keyword `overhead`, `ShadowCaster`
-the field `widths`; `PropMove` moves a prop by its grip (its middle unless it has one). New
-built-in actions `open` / `close`, stage prop key `open`, layout key `shape`. Compatible: props
-without a grip are moved and held by their middle as before.
-Step 104 (§69.38) adds `LIGHT_PROPS`, `blow_seconds`, `blown_point`, `felt_force` and
-`gusty_progress`; `PropMove` gains the keyword `path`, `Holdings` the method `drop`,
-`HANDLING_ACTIONS` the name `blow_away`, `PARTICLE_KINDS` `leaves` and `streaks` (last, so the
-other kinds' seeded streams are unchanged), `ParticleKind` the field `wind_shown`. New built-in
-action `blow_away`. Changed on purpose: a windy stage sways and trails more (`felt_force`, larger
-`SWAYS`, `TRAIL_WEIGHTS` for long hair, bun and hat), so its frames differ from Step 98's; a
-calm stage (`wind: 0`) renders the same frames as before.
-Step 105 (§69.39) adds `Puddles`, `RainGroundSource`, `RainGround`, `ShelterBox`, `SHELTER_PROPS`,
-`SPLASH_SECONDS`, `drop_floors`, `drop_landings`, `landing_lines`, `prop_shelter`,
-`puddle_count`, `puddle_growth`, `puddle_spots`, `rain_ground` and `splash_shapes`;
-`ParticleSettings` gains `puddles` (default `False`), `ParticleField` the keywords `ground` and
-`seed` and the attributes `drops`, `splashes`, `ended`, and `NarratedScene` the hook
-`particles_started(field, settings)` (does nothing by default). Changed on purpose: rain on a
-`stage` ends on its ground and shelters (other scene types: unchanged), and plays a rain bed with
-foley on.
-Step 107 (§69.40) adds `EFFECT_KINDS`, `EFFECT_SECONDS`, `EFFECT_STYLES`, `EXPRESSION_EFFECTS`,
-`EffectSpot`, `EffectSymbol`, `effect_color`, `effect_spot`, `head_box`, `piece_pose` and
-`pop_scale`; `PlayedAction` gains `effect`, `DIRECTING_KINDS` and `AutoDirect` the kind
-`effects`. New built-in action `effect`; layout kind `effect` (keys `effect`, `effect_of`).
-Changed on purpose: `auto_direct: true` now also adds effect symbols (a stage with
-`auto_direct` and a surprised, thinking or angry face renders a symbol it did not before;
-`{effects: false}` gives the old actions).
-Step 108 (§69.41) adds `MOTION_EFFECT_KINDS`, `FAST_SPEED`, `HARD_LANDING`, `MotionEffectCue`,
-`MotionEffect`, `effect_scale`, `motion_effect_cues`, `motion_seed`, `motion_strength`,
-`resolve_motion`, `Gait`, `WALKING`, `RUNNING` and `RUN_SPEED`; `Walk(gait=)` with
-`Walk.gait` / `Walk.step_length`; `PlayedAction` gains `step_length`, `lift`, `gesture`, `big`,
-`flight`; `NarratedScene` the hook `action_motion_effects(action, options, animations, start,
-seconds)` (does nothing by default, called right after `action_foley`). New built-in action
-`run_to`, `gesture` option `big`, top-level and stage `motion_effects`; layout kind
-`motion_effect`. Changed on purpose: with `cartoon_motion` lively or calm, jumps land in dust,
-fast walks, throws and blown props get speed lines (a default-speed walk is unchanged);
-`motion_effects: false` renders the same frames as before.
-Step 109 (§69.42) adds `DEFAULT_FLOOR`, `DEFAULT_WALL`, `DOOR_FADE_SECONDS`, `DOOR_SCALE`,
-`FLOORINGS`, `OUTDOOR_PARTICLES`, `WALL_DEPTH`, `WALLPAPERS`, `WINDOW_FRAME`, `WINDOW_HEIGHT`,
-`WINDOW_SILL`, `WINDOW_SKIES`, `WINDOW_WIDTH`, `RoomGeometry`, `SkyChange`, `WindowParts`,
-`WindowSky`, `floor_lines`, `room_geometry`, `sky_at`, `wall_depth`, `window_parts`,
-`window_sky`, `RoomColors`, `RoomDrawing`, `WindowLook`, `WindowViews`, `draw_room`,
-`room_colors` and `passage_fade`; `Walk(fade_in=, fade_out=)`; `Character.shown`; the `door`
-prop gains the shapes `closed` / `open` (`PROP_SHAPES`). New stage param `room`; `enter` /
-`exit` option `door`; `Stage.door(name)`, `Stage.window_views`; stage params' `stage_props()`,
-`stage_marks()`, `door_names()`, `wall_depth()`. Compatible: a stage without `room` renders as
-before (a `door` prop draws its closed shape as it did).
-Step 110 (§69.43) adds `FURNITURE`, `PROP_HANGS`, `FLAT_PROPS` and `SEAT_PLACES`; `PROP_KINDS`
-gains twelve furniture props, `PROP_SEATS` / `PROP_LEANS` / `SEAT_BACKS` their seats and lean
-edges; `StageItem(hang=0.0)`; `Prop(seat_places=())`, `Prop.seat_places`,
-`Prop.seat_point(place=None)`; `Postures.sit(character, prop, places=1, prefer=())` returns the
-place taken, `Postures.places`; `StageFrame.seat_places`; `holding_problems(seat_places=None)`.
-Stage prop key `against`; stage params' `stage_props()` puts props against the wall at its
-depth. Compatible: every default keeps the old behaviour and output (the prop gallery
-`props.png` is byte-identical).
-Step 111 (§69.44) adds `DEPTH_WALK_HEIGHTS`, `SAME_DEPTH`, `depth_scale`, `depth_slot`,
-`depth_walk_distance`, `facing_sign` and `walk_destination`; `Walk(depth=None, feet_y=None,
-carried=())`, `Walk.to_depth`; `Character(front=None)`, facing `front`, `has_front_view`,
-`side_facing`, `order_changes`, `stage_depth`, `ground_y`; `ShadowCaster(grows=False)` (its
-ground from the caster's `ground_y`); `StageFrame.depths`; `holding_problems(depths=None)`;
-`walk_to` / `run_to` options `depth` and `to: {mark, depth}`; `turn` `to: front`; stage
-character `facing: front`; layout key `depth`. Compatible: a scene without them renders as
-before (a generated character also carries its front view's hidden shapes).
-Step 112 (§69.45, §69.46) adds `BURST_SPIN`, `CARD_STYLES`, `CardLayout`, `burst_ray_color`,
-`burst_rays`, `card_layout`, `card_outline_width`, `card_text_inks`, `StingCue` and
-`StingSetting`; `NarratedScene.sting(sting, time)` (public; it was the private `_add_sting`).
-New built-in scene type `card`; transition types `iris_out` / `iris_in` with the keys
-`character` and `at`. Compatible: renders without them are unchanged, but the fingerprint of a
-scene with a transition next to it changes once (the transition's dump gains `character` and
-`at`), so those scenes render again once.
-Step 118 (§69.52) adds `VEHICLE_KINDS`, `VEHICLES`, `VehicleSpec`, `RIDING_ACTIONS`,
-`GET_IN_REACH`, `GET_IN_SECONDS`, `GET_OUT_SECONDS`, `get_in_gap`, `pedal_points`,
-`place_order`, `seat_count`, `seat_origin`, `wheel_degrees`, `Ride`, `RiderSeat`, `place_rider`,
-`riding_state` and `seat_point`; `PROP_KINDS` gains `bicycle`, `car`, `bus`; `Prop(wheels=(),
-crank=None)`, `Prop.is_vehicle`, `.prop_point`, `.unit`, `.standing_height`, `.turn_wheels`,
-`.wheels`, `.crank`, `.wheel_angle`, `.crank_angle`, `.ground_y`; `BodyMove(y=None)`;
-`Character.riding`; `Postures.ride`, `.get_out`, `.riders`; `PlayedAction.vehicle`;
-`StageFrame.vehicles`; `holding_problems(vehicles=None)`; `Stage.ride_in_depth`; actions
-`get_in`, `ride_to`, `get_out`; built-in sounds `bell`, `engine`, `brakes`; layout key `riding`.
-Compatible: a scene without vehicles renders as before (`props.png` is byte-identical).
-Step 119 (§69.53) adds `GROUND_VEHICLES`, `WATER_VEHICLES`, `AIR_VEHICLES`, `medium`,
-`character_unit`, `Course`, `balloon_point`, `rocket_point`, `boat_bob`, `wave_offset`,
-`smoke_puffs`, `BALLOON_ALTITUDE`, `BALLOON_DRIFT`, `ROCKET_APEX`, `WATER_COLOR` and
-`StageWater`; `VehicleSpec.medium` / `.stands`; `PROP_KINDS` gains `boat`, `hot_air_balloon`,
-`toy_rocket` (`PROP_SHAPES["toy_rocket"]`: `folded`, `chute`); `Prop.pose_at`, `.tilt`,
-`.afloat`, `.flight`; `Ride(rise=0, drift=0, away_y=None, seed=1)` and `Ride.course`;
-`StageFrame.water`; `holding_problems(water=None)`; the stage param `water`; the `ride_to`
-option `land`; motion effect `smoke`; built-in sounds `burner`, `launch`. Compatible: scenes
-without these vehicles or water render as before.
-Step 120 (§69.54) adds `DRAWN_CLOCK_SECONDS`, `GLOWS`, `LIVING_KINDS`, `MAX_CLOCK_SPEED`,
-`SWITCHED_PROPS`, `LivingProp`, `PropGlow`, `glow_box`, `hand_angles`, `parse_clock_time`,
-`redrawn_members` and `tv_picture`; `Prop(anchored=False)`; `draw_prop(living=False)`; the stage
-prop keys `on`, `time`, `speed`; `Stage.living`, `Stage.switch_props`; actions `switch_on`,
-`switch_off`. Compatible: a scene without a running clock or a tv / lamp that comes on renders as
-before, pixel for pixel.
-Step 121 (§69.55) adds `FRUIT_INDEX`, `flame_shapes`, `on_spans`, `steam_puffs`, `PropSteam`,
-`BIRD_SPAN`, `FLOCK_COUNT`, `FLOCK_HEIGHT`, `FRUIT_SPOTS`, `GROUND_ASIDE`, `GROUND_BOUNCE`,
-`HEAD_ASIDE`, `HEAD_BOUNCE`, `MAX_BIRDS`, `bird_place`, `drop_point`, `drop_timing`,
-`flock_plan`, `fruit_to_drop`, `FallenFruit`, `Flock`, `FruitDrop`, `fruit_skin` and
-`hit_stars`; `PROP_KINDS` gains `kettle` and `fireplace` (furniture); `SWITCHED_PROPS` /
-`LIVING_KINDS` gain both; `draw_prop(fruit=False)`; `Prop.prop_points`; `LivingProp(wind=None)`,
-`LivingProp.steam`, `.flames`, `.region(start, end)`; the stage prop key `fruit`, the stage param
-`birds`; `Stage.flocks`, `.add_flock`, `.drop_fruit`, `.fruit_drop_seconds`; actions `drop_fruit`,
-`birds`; the ambience bed `fire`. Compatible: a scene without these renders as before, pixel for
-pixel.
-Step 122 (§69.56) adds `SMALL_PROPS`, `WATERING_SPOUT`, `OVERHEAD_PROPS`, `FULL_SIZE_HELD`,
-`FLOATING_PROPS`, `POURING_PROPS`, `POUR_SECONDS`, `Drop`, `float_end`, `float_point`,
-`float_seconds`, `pour_drops`, `pour_flow`, `pour_tilt`, `Pouring`, `WaterDrops`, `WaterFlow`,
-`RING_BURST`, `RING_PERIOD`, `RING_TILT`, `on_since`, `ring_burst`, `ring_bursts` and
-`ring_shake`; `PROP_KINDS` gains nine small props; `PROP_SHAPES` gains `book`, `letter`, `gift`;
-`SWITCHED_PROPS` / `LIVING_KINDS` gain `phone`; `LIGHT_PROPS` gains `letter`, `balloons`;
-`Prop.drawn_points`, `Prop.anchor`; `held_height(full_size=False)`; `holding_problems(kinds=None)`;
-`HANDLING_ACTIONS` gains `let_go`, `pour`; actions `let_go`, `pour`; built-in sound `phone`.
-Compatible: a scene without them renders as before (`props.png` is byte-identical).
-Step 124 (§69.58) adds no names; `PART_NAMES` gains `antenna` and `cape` at its end (draw-order
-ties and pose-change order of the other parts unchanged; compatible).
-Step 126 (§69.60) adds `settle_problem`, `CAP_THICKNESS`, `SETTLE_SECONDS`, `SETTLE_STEP`,
-`SNOW_COLOR`, `TopLine`, `bare_patches`, `blanket_cover`, `cap_full_thickness`, `flake_floors`,
-`settle_amount`, `settled_seconds`, `FOG_COLOR`, `FOG_DENSITY`, `FOG_DEPTHS`, `band_opacities`,
-`fog_cover`, `FogBand`, `SettledSnow`, `SnowBlanket`, `SnowCap`, `StageFog` and `prop_top_line`;
-`ParticleSettings.settle` / `.settled`; the stage param `fog`; `Stage.snow_ground`,
-`Stage.snow_layers`, `Stage.fog`. Compatible: a scene without settling snow or fog renders as
-before, pixel for pixel.
-Step 127 (§69.61) adds `LightningBolt`, `Rainbow`, `SkyBody`, `StageRainbow`, `FLASH_SECONDS`,
-`MAX_DISTANCE`, `RAINBOW_FADE_SECONDS`, `RAINBOW_OPACITY`, `RAINBOW_WIDTH`, `ROOM_FLASH`,
-`STORM_EVERY`, `THUNDER_DISTANCE`, `RainStorm`, `Strike`, `bolt_paths`, `flash_grade`,
-`flash_level`, `flash_strength`, `rainbow_level`, `storm_strikes`, `thunder_cue`, `thunder_delay`,
-`thunder_pan`, `SKY_BODIES`, `PathMove`, `path_point`, `place_for`, `shadow_cast`, `flash_sky`,
-`storm_every` and `storm_problem`; `ParticleSettings.lightning`; `StageLight.strikes`, `.storms`,
-`.flash_share`, `.flash`, `.strikes_until`; `StageShadows.cast`, `.set_cast`; the `light`
-action's `move_sun` and `Stage.change_light(..., move_sun=False)`; actions `lightning`,
-`rainbow`; built-in sound `thunder`; `Stage.strike_lightning`, `.show_rainbow`,
-`.hide_rainbows`, `.bolt`, `.rainbows`, `.sky_bodies`. Compatible: a scene without them renders
-as before, pixel for pixel, but for its outro (below: a stage now fades out as one picture).
-Step 128 (§69.62) adds `SET_BEDS`, `set_ambience` and `wet_steps`; `PlayedAction.prop`,
-`.through_door`, `.opens_door`, `.pours`; `Walk(opens_door=False)`; the top-level key `ambience`
-and the stage param `ambience`; `Stage.knock_on`, `.set_beds`, `.light_marks`; action `knock`;
-built-in sounds `creak`, `knock`, `splash`; the ambience beds `birdsong`, `city`, `room_tone`.
-Pixels unchanged; the sound of a stage changes on purpose (§69.62: set beds, door creaks, water).
-Step 134 (§71.1, §71.2) adds `HAND_REACH_OUT`, `HostMove`, `facing_for`, `hand_goal`,
-`host_move_plan`, `pointed_spot`, `RevealStep`, `has_error_text` and `value_trend`;
-`Action.alters(scene)`; `NarratedScene.reveal_steps(params)` (class method, default none) and a
-default `NarratedScene.auto_actions` (the host's directing; `stage` overrides it as before);
-actions `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`; host key
-`auto_direct`; layout kind `pointer`. Compatible: a video without a host renders as before.
-Step 142 (§79) adds `DrawingConfig`, `DrawingStyle` and `mark_shaded`; the top-level key and the
-stage param `drawing`; `NarratedScene.uses_drawing_style` (class attribute, `False`; `stage`
-sets it), `NarratedScene.drawing_settings()` and the attribute `drawing`. Compatible: a video
-without `drawing` renders the same frames as before.
-Step 153 (§86.9) adds the `PlayedAction` fields `pickups` and `unlocks` (`lands` also marks a
-level jump's touch-down) and the built-in sounds `unlock`, `coin`, `twinkle`. Compatible: a
-`PlayedAction` without them gives the same cues; a stage without a level sounds as before.
-Step 184 (§93) adds `MusicScore`, `load_music_score`, `parse_music_score` and
-`render_music_score` (score files; from `vidgen.studio`, which imports no video code).
-Step 185 (§93.7) adds `patch_catalog` (the instruments and effects as data) and an optional
-`warnings` list argument to `render_music_score` (compatible: without it, it renders as before).
-Step 186 (§93.8) adds `music_template_text(bed)` (a built-in bed's score-file template, YAML
-text) and `music_template_catalog()` (every template's facts).
-Step 187 (§93.9) adds `check_music_score(score)`, `check_music_audio(samples, name)` (both →
-`MusicCheck`: verdict, facts, findings with fixes, sections, tracks) and `music_check_text(check)`
-(the report in words).
-Step 222 (§97) adds the modules `plotcore` (the chart core without manim: `AxisSpec`, `Axis`,
-`build_axis`, ticks, number formats, `read_table`, `layout_figure`, `PanelLayout`...) and
-`plot_draw` (`draw_panel`, `series_line`, `series_markers`, `text_measure`).
-Step 224 (§97.7) adds `register_model(name)` (a decorator registering a Python function as a
-model a `plot` can name: `fn(params, seed) -> {column: values}`), and to `plotcore` the
-integrators and models (`simulate_ode`, `simulate_recurrence`, `random_walk`,
-`poisson_process`, `run_registered`, `Simulation`, `rk4`, `rk45`, `verlet`...), the live-plot
-logic (`grown`, `rescale_schedule`, `domain_at`, `axis_for`, `readout_text`...) and `relabel`;
-to `plot_draw` `flat`, `morph_into`, `head_marker` and `draw_panel(cache=)`.
-Step 225 (§97.9) adds the module `quantities` (units and dimensions without manim and without a
-new dependency: `parse_unit`, `Unit`, `si_unit`, `describe_dim`, `CONSTANTS` / `constant`,
-`Quantity`, `written`, `in_unit`, the arithmetic carrying significant figures, `decimal_text`,
-`fraction_text`, expression trees `parse` / `evaluate` / `to_tex`, and worked calculations
-`work(symbols, calcs)` → `Worked` of `CalcResult`s).
-Step 227 (§97.12) adds `plotcore.layout_axes` (a panel from axes the caller built) and, in
-`quantities`, `Step.deep` / `Step.unit_variants` and `to_tex(stack=2)` (one factor per line).
-Anything not exported from `vidgen.api` is internal and may change.
+`from vidgen.api import *` gives every name of `from manim import *` plus `vidgen.api.VIDGEN_NAMES`
+(the authoritative list, about 1,200 names; `__all__` is their sorted union). The only collision
+with manim is `scene` (manim's subpackage, shadowed by the decorator); `SHADOWED_MANIM_NAMES`
+records it and a test pins it. Anything not exported is internal and may change. Groups:
+- **Core**: `NarratedScene`, `SceneParams`, `scene`, `find_scene_type`, `hook`, `HookContext`,
+  `register_theme_defaults`, `register_theme_preset`, `current_theme`, `current_project`, `T`,
+  `MT`, `VidgenError`, `resolve_color`, `ThemeColor`, `ThemeSize`, `IconName`, `one_or_many`,
+  pydantic's `Field`, `field_validator`, `model_validator`; helpers `column`, `edges`,
+  `dense_pairs`, `grouped_pairs`, `sparse_pairs`, `group_bounds`, `counter`, `fade_out`, `Fade`.
+- **Layout** (§5.3, §18, §24–§25): the `vidgen.layout` helpers; `Region`, `frame_region`,
+  `safe_area`, `region`, `grid`, `grid_shape`, `place`, `orientation`, `readable_size`,
+  `readable_text`; `role=` keywords on the text helpers; `SceneParams.also_accepts`,
+  `text_shorthand`, `text_defaults`.
+- **Actions and targets** (§26–§27, §44): `action`, `Action`, `ActionOptions`, `Target`,
+  `ActionConfig`; on `NarratedScene` the target API (`target()`, `targets`, `find_targets()`,
+  `on_screen_parts()`, `is_shown()`, `entrance()`, …).
+- **Drawing families**: graphs (§31: `layered_layout`, `GraphLayout`, …), charts (§33–§34:
+  `ChartAxes`, `chart_axes`, `ColorScale`, `color_bar`, `text_color_on`, …), callouts (§37),
+  clips (§38), maps (§39), icons (§22: `icon`, `Icon`), vectors (§65: `load_vector`,
+  `VectorPicture`), geometry marks and maths expressions (§87.6–§87.7), terms (§87.3), word
+  anchors (§87.2).
+- **Overlays, chapters, captions** (§41–§43): `overlay`, `Overlay`, `OverlayOptions`,
+  `OverlayContext`, `with_opacity`, `video_chapters`, `Chapter`, `CaptionCue`, `caption_cues`,
+  `segment_cues`, word timing (`WordTime`, `beat_word_times`, …); HUD (§102.5).
+- **Speech and sound**: `Pronunciation`, `Spoken` (§45), speakers (§46), `SfxEvent`,
+  `SoundLibrary`, `sound_library`, `synthesize` (§47), stings (§69.46), voice effects (§100.2),
+  translation and languages (§54: `TranslatableStr`, `TextRef`, `LanguageRules`), score files
+  from `vidgen.studio` (§93: `MusicScore`, `load_music_score`, `render_music_score`,
+  `check_music_score`, …).
+- **Continuity and cuts**: `carry_move` (§50), `apply_cut` (§101).
+- **Generated media**: `GenerateImage`, `generated_image` (§58); `VideoRequest`, `MediaInput`,
+  `generate_clip`, `plan_clip`, `plan_shots`, `project_shots`, `project_sheets`,
+  `scene_placements`, `check_clip`, `run_shots` (§113).
+- **Cartoons, 3D and web** (§69–§71, §79, §86, §89–§90, §100–§109, §114, §118–§123): the public
+  names and constants of the character, motion, acting, stage, prop, light, weather, effect,
+  vehicle, iso and level modules (`Character`, `character`, `PART_NAMES`, `PoseChange`, `Walk`,
+  `Gesture`, `Jump`, `KeyedMotion`, …), of `three_d` and of the `web` data inputs.
+- **Science modules** exported whole: `plotcore`, `plot_draw` (§97), `quantities` (§97.9),
+  `orbits` (§98), `flight` (§123.7), `particle_physics` (§99), `genetics` (§96), plus the
+  `cellworld` / `cell_draw` names (§95) and `register_model`.
 
 ### 6.5 Refinements (Step 2)
-- **Built-in vs extension** is decided by the module that defines the class/function: modules
-  inside the `vidgen` package are built-in, anything else is an extension. The origin shown in
-  messages and `list-scenes` is `builtin` or the defining file relative to the project root.
-- **Discovery**: names starting with `_` or `.` are skipped; folders without `__init__.py` are
-  skipped. Several `extensions` directories share the one synthetic package (its `__path__`
-  lists them all), so relative imports work across them; the same module name in two
-  directories is an error. The default `extensions/` may be absent; a directory written
-  explicitly in `extensions:` must exist. The package name is `vidgen_ext_<folder name,
-  lower-cased, non-word characters replaced by _>`; it is removed from `sys.modules` before each
-  load. An exception raised while importing becomes a `VidgenError` with the file (relative to
-  the project) and the traceback (importlib frames removed); a `VidgenError` raised during
-  import (e.g. a name collision) propagates unchanged.
-- **Override**: `override=True` replacing a built-in logs a warning on logger `vidgen.registry`;
-  `override=True` without a built-in of that name also logs a warning. The CLI prints vidgen log
-  warnings as `warning: <message>` on stderr.
-- **Isolation** (several projects/variants in one process): built-in registrations are
-  permanent (their modules stay imported); extension scene types and hooks form a per-project
-  layer. `registry.reset()/snapshot()/restore()/isolated()` and the same four in `hooks`;
-  `runtime.set_context()/clear_context()/use_context()`;
-  `extensions.activate(project)` (process-wide: context + reset + load) and
+- **Isolation** (several projects/variants in one process): built-in registrations are permanent
+  (their modules stay imported); extension scene types and hooks form a per-project layer.
+  `registry.reset()/snapshot()/restore()/isolated()` and the same four in `hooks`;
+  `runtime.set_context()/clear_context()/use_context()`; `extensions.activate(project)`
+  (process-wide: context + reset + load, returns the Theme) and
   `extensions.project_session(project)` (context manager: everything restored on exit, the
   synthetic package unloaded). Every `activate` builds a fresh Theme, so theme defaults
   registered by one project never leak into another.
-- **Hooks**: built-in hooks run before extension hooks, each group in registration order.
-  `dispatch(event, project, **data)` returns the `HookContext` (hooks may modify `ctx.data`).
-  Errors are wrapped as `hook <module.qualname> (<origin>) failed during <event>: ...` with the
-  traceback appended (a `VidgenError` from a hook keeps just its message).
-- **`vidgen.api`** additionally exports `VidgenError` (for extensions to raise clear errors) and
-  `resolve_color(color, theme=None)`. The only name shared with `from manim import *` is
-  `scene` (manim's `manim.scene` subpackage); `vidgen.api.scene` is the decorator.
-  `vidgen.api.SHADOWED_MANIM_NAMES` records this and a test pins it.
-- **Validation** (`vidgen validate`): unknown types are reported as
-  `scenes[i].type: unknown scene type 'x'; did you mean 'y'? (known types: ...)`; params errors as
-  `scenes[i].params.<field>: <message>`. Variant problems are prefixed `[variant NAME]`; problems
-  identical to the base config's are not repeated.
-- **`vidgen list-scenes [PROJECT]`** prints `name  origin  [(overrides builtin)]` and one indented
-  line per `Params` field (`name: type [= default]`), or `params: free-form`. Without a PROJECT
-  argument and no config file in the current directory it lists the built-ins only.
-- **Built-in library**: `vidgen/scenes/__init__.py` imports each scene module explicitly
-  (Step 2 ships `text_card`: params `text`, `size="title"`, `color="text"`). Step 5 adds
-  `title, bullets, bar_chart, line_chart, image, quote, equation, code, end_card` (reference:
-  docs/CONFIG.md "Built-in scenes"). Their only vidgen import is `from vidgen.api import *`
-  (a test pins this); shared code between built-ins uses relative imports (`end_card` imports
-  `check_image`/`load_image` from `.image`), exactly like extension modules.
+- **Validation** (`vidgen validate`): unknown types → `scenes[i].type: unknown scene type 'x';
+  did you mean 'y'? (known types: ...)`; params errors → `scenes[i].params.<field>: <message>`.
+  Variant problems are prefixed `[variant NAME]`; problems identical to the base config's are
+  not repeated.
+- **`vidgen list-scenes [PROJECT]`** prints `name  origin  [(overrides builtin)]`, one indented
+  line per `Params` field (`name: type [= default]`) or `params: free-form`, and `beats: ...`
+  when `beat_count` is set. Without PROJECT and no config in the current directory it lists the
+  built-ins only.
+- **Built-in library**: `vidgen/scenes/__init__.py` imports each scene module explicitly; the
+  user reference is docs/CONFIG.md "Built-in scenes".
 
 ## 7. TTS (ElevenLabs)
 
-- Endpoint `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=...`.
-  Standard library only (urllib).
-- **API key location**: read only from the environment variable `ELEVENLABS_API_KEY`
-  (Windows: `setx ELEVENLABS_API_KEY your_key` once, then open a new terminal; Linux/macOS:
-  `export ELEVENLABS_API_KEY=...`). schu-video-generator never stores the key: it is not a config field, and it
-  is never written to video.yaml, audio/, build/, logs, error messages, hook contexts or git.
-  It is sent only as the `xi-api-key` header to api.elevenlabs.io. Only `vidgen tts` (without
-  `--dry-run`) needs it; validate/render/dry-run work without it.
-- Cache key: sha1 of `voice_id | model_id | output_format | json(settings, sorted keys) | text`,
-  stored as `audio/<beat_id>.hash`. Neighbouring beats' text is sent as `previous_text` /
-  `next_text` for intonation but is **not** hashed, so editing one beat regenerates only that beat.
-- Backward compatibility: the kphi3 hash format (`sha1(voice_id + model_id + text)`) is also
-  accepted as "up to date" when settings/output_format equal the old defaults, so existing audio
-  is reused without paying for regeneration.
-- `vidgen tts [--force] [--dry-run] [--beat ID ...]`; dry run lists what would be generated and the
-  character count. Missing API key → clear error, no traceback. HTTP errors show status + body.
-- Orphaned mp3s (beat ids no longer in config) are reported, not deleted.
-- Tests mock `urllib.request.urlopen`; no network.
+This section specifies the provider seam, the audio cache and the ElevenLabs provider; OpenRouter
+is §66, Kokoro §68, emotions §72–§73, voice effects §100.2.
 
-Refinements (Step 3):
-- **Provider seam** (`vidgen.tts`): `get_provider(voice) -> TTSProvider` (ElevenLabs only; other
-  providers raise `VidgenError`). `TTSProvider`: `name`, `cache_key(text)`, `matches(text,
-  stored_hash)`, `check_credentials()`, `synthesize(text, previous_text=None, next_text=None) ->
-  bytes`. Constructing a provider never needs the key; it is read from the environment on every
-  request (stripped) and never kept on the object.
-- **Exact cache key**: `sha1("|".join([voice_id, model_id, output_format,
-  json.dumps(settings, sort_keys=True), text]).encode("utf-8"))` where `settings` is
-  `voice.settings.model_dump()` (default `json.dumps` separators). `voice.context` is not hashed.
-- **kphi3 hashes**: accepted when `output_format == mp3_44100_128` and settings equal
-  `{stability 0.55, similarity_boost 0.75, style 0.0, use_speaker_boost true}` (the defaults).
-  They are **not rewritten** to the new format: the files stay untouched (no git noise for the
-  committed kphi3 example audio); any regeneration writes a new-format hash.
-- **Requests**: JSON body `{text, model_id, voice_settings}` plus `previous_text`/`next_text` (the
-  neighbouring beats in video order, across scene boundaries, omitted at the ends) only when
-  `voice.context` is true. Timeout 120 s. Transient failures (HTTP 429/500/502/503/504, timeouts,
-  dropped connections) are retried 3 times with backoff 2, 4, 8 s (or `Retry-After`, capped at
-  30 s). Errors become `VidgenError`: `ElevenLabs returned HTTP <code>: <body, max 500 chars>` or
-  `cannot reach ElevenLabs: ...`; any occurrence of the key is replaced by `***`. The CLI prefixes
-  `beat '<id>': ` and says how many beats were done before the error.
+- **Provider seam** (`vidgen.tts`): `get_provider(voice, emotion=None) -> TTSProvider` picks by
+  `voice.provider` (`elevenlabs`, `openrouter`, `kokoro`) and wraps it in `EffectProvider` when
+  the voice has an effect. `TTSProvider`: `name`, `cache_key(text)`, `matches(text, stored)`,
+  `check_credentials()`, `synthesize(text, previous_text=None, next_text=None) -> bytes`.
+  Constructing a provider never needs a key.
+- **API key**: read only from `ELEVENLABS_API_KEY`, from the environment on every request
+  (stripped), never kept on the object. vidgen never stores it: it is not a config field and is
+  never written to video.yaml, audio/, build/, logs, error messages, hook data or git; it is sent
+  only as the `xi-api-key` header to api.elevenlabs.io. Only `vidgen tts` (not `--dry-run`) needs
+  it, and only when at least one beat must be synthesised; a missing key is a `VidgenError` with
+  setup instructions.
+- **Request**: `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=...`,
+  standard library only (urllib, via `httpapi.py`). JSON body `{text, model_id, voice_settings}`
+  plus `previous_text`/`next_text` (neighbouring beats in video order, across scenes, omitted at
+  the ends) only when `voice.context` is true. Timeout 120 s. Transient failures (HTTP
+  429/500/502/503/504, timeouts, dropped connections) are retried 3 times with backoff 2, 4, 8 s
+  (or `Retry-After`, capped at 30 s). Errors become `VidgenError`: `ElevenLabs returned HTTP
+  <code>: <body, max 500 chars>` or `cannot reach ElevenLabs: ...`, with any occurrence of the
+  key replaced by `***`. The CLI prefixes `beat '<id>': ` and says how many beats were done.
+- **Cache key** (stored as `audio/<beat_id>.hash`): `sha1("|".join([voice_id, model_id,
+  output_format, json.dumps(settings, sort_keys=True), text]).encode("utf-8"))`, `settings` =
+  `voice.settings.model_dump()` (default separators); when a language code is sent,
+  `language_code=<code>` goes before the text (§54). `voice.context` and the neighbouring texts
+  are **not** hashed, so editing one beat regenerates only that beat.
+- **kphi3 hashes** (`sha1(voice_id + model_id + text)`) also count as up to date when
+  `output_format == mp3_44100_128`, settings equal the defaults and no language code is sent.
+  They are never rewritten (no git noise for the committed kphi3 audio); a regeneration writes a
+  current-format hash.
 - **Writes**: MP3 via temp file + `os.replace` in the same folder, then the hash the same way, so a
-  hash never vouches for a partially written MP3. Already generated beats are kept on failure.
-- **Command details**: `--variant NAME` added. `--beat` restricts the selection (unknown id →
-  error) but up-to-date beats are still skipped unless `--force`. The key is required only when
-  at least one beat must be synthesised (an up-to-date project needs no key). Output: one
-  `[n/N] generated <id>.mp3 (<chars> chars)` line per beat and a summary; dry run prints
-  `would generate ...` lines and `dry run: N beat(s) to generate, C characters; U up to date`.
-  The character count is what is billed (beat text only, not context).
-- **Variant audio**: a variant uses `audio/<variant>/` when its effective `voice` (after merging)
-  differs from the base config's, or a beat id present in both configs has a different text;
-  otherwise it shares `audio/`. `Project.audio_dir` implements this (`Project.has_own_audio`,
-  `Project.base_config`), so `NarratedScene.beat_audio` picks the right files. When generating
-  into a variant folder, beats whose audio in `audio/` is up to date for the variant's voice
-  and text are copied instead of synthesised.
-- **Orphans**: MP3s in the audio folder whose id is used by no config sharing that folder (base +
-  variants) are listed, never deleted; subfolders are ignored.
+  hash never vouches for a partial MP3. Beats already generated are kept on failure.
+- **`vidgen tts`**: `--beat` restricts the selection (unknown id → error), but up-to-date beats
+  are skipped unless `--force`. Output: `[n/N] generated <id>.mp3 (<chars> chars)` per beat and a
+  summary; dry run prints `would generate ...` lines and `dry run: N beat(s) to generate, C
+  characters; U up to date`. The character count is what is billed (beat text only).
+- **Variant audio**: a variant uses `audio/<variant>/` when its effective `voice` differs from the
+  base config's or a beat id in both configs has a different text; otherwise it shares `audio/`
+  (`Project.audio_dir`, `has_own_audio`, `base_config`). Generating into a variant folder copies
+  beats whose `audio/` file is up to date for the variant's voice and text.
+- **Orphans**: MP3s whose id no config sharing the folder uses (base + variants) are listed,
+  never deleted; subfolders are ignored.
 - **Audio status** (no key): `vidgen.tts.audio_status(project) -> list[BeatAudioStatus]`
   (`scene_id, beat_id, text, state, mp3, hash_file`; state `ok` | `stale` | `missing`; stale =
-  MP3 exists but its hash is missing or does not match). `format_audio_summary(statuses)` →
-  `"18 ok, 2 stale, 1 missing"`; `orphaned_audio(project) -> list[Path]`. `vidgen validate`
-  prints `audio:     <summary>` (plus `(N orphaned mp3)`) and one `audio [<variant>]: ...` line
-  per variant with its own audio folder. `render` (Step 4) should warn, not fail, on stale/missing.
+  MP3 exists but its hash is missing or does not match), `format_audio_summary(statuses)` →
+  `"18 ok, 2 stale, 1 missing"`, `orphaned_audio(project)`. `vidgen validate` prints
+  `audio:     <summary>` (+ `(N orphaned mp3)`) and one `audio [<variant>]: ...` line per variant
+  with its own folder; `render` warns, never fails, on stale/missing audio.
+- Tests mock `urllib.request.urlopen`; no network.
 
 ## 8. CLI
 
-```
-vidgen init <dir> [--example minimal] [--json]   # scaffold a project
-vidgen mcp [--root DIR]                 # MCP server (stdio) with the commands as tools, inside DIR (§62)
-vidgen plan INPUT [--output DIR|FILE] [--title TEXT] [--format 16:9|9:16] [--preset NAME] [--language TAG]
-              [--force] [--json]                  # a draft project from an outline / script (§61)
-vidgen guide [TOPIC] [--list] [--json]  # the author guide for AI agents (AGENTS.md, §59)
-vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
-vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
-vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
-vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]   # icons (§22)
-vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with descriptions (§47)
-vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48), moods and instruments (§83)
-vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR]   # composed music as WAV + .mid (§83)
-vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
-vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
-vidgen render [PROJECT] [--preview | --draft] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
-              [--jobs N|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
-vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
-              [--width PX] [--jobs N|auto] [--force] [--json]      # contact sheets (§14)
-vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions | --no-captions] [--jobs N|auto]
-              [--output-dir DIR] [--json]   # the storyboard's stills timed to the narration (§75)
-vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
-              [--fail-on SEVERITY] [--jobs N|auto] [--force] [--json]   # layout checks (§16)
-vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at S] [--no-overlays]]
-              [--jpeg] [--jobs N|auto] [--output-dir DIR] [--json]   # output/<output>_thumbnail.png (§53)
-vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
-              [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]   # exports/ (§53)
-vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
-              [--overlays | --no-overlays] [--no-dedupe] [--image-format F] [--quality Q] [--max-width PX]
-              [--audio] [--separate] [--notes] [--title-page] [--paper a4|letter]
-              [--output FILE] [--jobs N|auto] [--force] [--output-dir DIR] [--json]   # HTML deck (§55), PDF deck (§56)
-vidgen translate-template [PROJECT] [--variant NAME] [--language TAG] [--output FILE] [--json]   # translation file (§54)
-vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
-vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
-vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
-              [--clips | --no-clips] [--jobs N|auto] [--force] [--json]   # every scene type rendered (§60)
-vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look, poses; one still (§69.1)
-vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]   # every pose, expression, mouth shape on one PNG (§69.16)
-vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--narrator VOICE] [--model NAME]
-              [--language TAG] [--force] [--json]   # a well-contrasted cast as an include file (§69.49)
-```
-PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
-or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
-and re-joins using the existing renders of the others (missing ones are rendered: each quality
-and each variant has its own renders, so the first `--scene` run there renders every scene, and
-prints `--scene ID: also rendering N other scene(s) (...)`, Step 337). Exit code
-non-zero on error.
-`render` prints one line per scene, then the output paths and the total duration (Step 45: and
-the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first prints `jobs: N
-(auto: <reason>)` (§70).
+Commands (`vidgen <command> --help` and the README.md "Commands" table give every flag):
+- Authoring: `init`, `plan` (§61), `screenplay` (§69.25), `story` (§105.5), `shorts` (§105.6),
+  `cast` (§69.49), `guide` (§59), `mcp` (§62), `schema` (§12).
+- Checking and listing: `validate`, `list-scenes`, `list-themes` (§20), `list-icons` (§22),
+  `list-sfx` (§47), `list-pronunciation` (§88), `list-music` (§48, §83), `lint` (§16), `motion`
+  (§121.3), `audio` (§111.2), `readback` (§57), `parts` (§122.5), `direct` (§69.24).
+- Media generation: `tts` (§7), `imagegen` (§58), `generate` (§113), `split-sheet` (§113.16),
+  `music` / `studio` / `soundfont` (§81–§94), `cache` (§123.2), `translate-template` (§54).
+- Rendering and outputs: `render`, `storyboard` (§14), `animatic` (§75), `still` (§120.3),
+  `thumbnail`, `export` (§53), `slides` (§55–§56), `gallery` (§60), `character`,
+  `character-sheet` (§69.1, §69.16), `space-page` (§122.12), `remote` (§113.20).
+
+Rules:
+- PROJECT defaults to the current directory; the exit code is non-zero on error; a
+  `VidgenError` prints as `error: ...` without a traceback; `--json` prints the §11 documents.
+- `render` renders the scenes whose render is not current (§5.2; `--force`: all) and joins the
+  video; it prints one line per scene, then the output paths, the total duration and the
+  measured loudness (§48).
+- Every command with `--jobs` accepts `auto`, which first prints `jobs: N (auto: <reason>)` (§70).
 
 ## 9. Testing
 
-- `pytest -q` must pass at every step. No network, no API keys.
+- No network, no API keys: paid APIs are mocked.
 - Tests that invoke Manim rendering are marked `@pytest.mark.render` and use tiny resolutions
-  (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`. The
-  slowest of them are also marked `slow` (Step 22). Since Step 327 a test marked `slow` is left
-  out of the default run (`tests/conftest.py`), and every test over about 0.4 s is marked: the
-  default run takes about 3–4 minutes on one CPU; `-m slow` runs only those, `-m "slow or not slow"`
+  (e.g. 160x90 @ 5 fps); `-m "not render"` skips them.
+- A test over about 0.4 s is marked `slow`; `tests/conftest.py` leaves slow tests out of the
+  default run (about 3–4 minutes on one CPU). `-m slow` runs only those, `-m "slow or not slow"`
   everything, and a test named by node id always runs.
-- ffmpeg is required on PATH for render tests; skip with a clear reason if missing.
-
+- ffmpeg is required on PATH for render tests; they skip with a clear reason if it is missing.
 ## 10. Refinements (Step 7, independent review)
 
 - **Audio length** (`scene.audio_duration`) = decoded samples / sample rate. The container
