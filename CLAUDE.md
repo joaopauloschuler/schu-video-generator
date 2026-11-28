@@ -3,9 +3,11 @@
 > **Who this is for:** agents **developing schu-video-generator itself** (its code, tests and
 > docs). To **make videos with schu-video-generator**, read `AGENTS.md` instead (the author guide; also
 > `vidgen guide`). The project and pip distribution are `schu-video-generator`; the command and the
-> Python package stay `vidgen` (use `vidgen.DIST_NAME` in install hints). When you
-> change a command, scene type or param that `AGENTS.md` names, update the guide in
-> `src/vidgen/data/guide/AGENTS.md` and copy it to `AGENTS.md` (`tests/test_guide.py` checks both).
+> Python package stay `vidgen` (use `vidgen.DIST_NAME` in install hints). The guide is
+> `src/vidgen/data/guide/`: a short entry page `AGENTS.md` (copied to the root `AGENTS.md`) and one
+> file per topic (`scenes.md`, `web.md`, ...; `vidgen guide TOPIC`). When you change a command,
+> scene type or param the guide names, update the topic file (and the entry page if it names it;
+> then copy it to the root). `tests/test_guide.py` checks both copies and every topic.
 
 Follow `docs/CODING-AND-COMMUNICATION-GUIDE.md`: when to write code, naming, reuse, how to run
 tests on a small machine (memory cap, timeout, one at a time), progress reports, and how to write

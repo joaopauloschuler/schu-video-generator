@@ -214,7 +214,7 @@ def plan_yaml(plan: Plan, fmt: str = "16:9", preset: str = "dark_tech", source: 
         f"# Draft written by `vidgen plan`{origin}: a deterministic starting point, not a finished video.",
         "# Every scene says why it got its type (plan) and what to check (TODO). Refine the",
         "# narration and the on-screen texts, then: vidgen validate, vidgen storyboard, vidgen lint.",
-        "# How to make a good video (pacing, scene types): `vidgen guide` (AGENTS.md)",
+        "# How to make a good video: `vidgen guide` (a short page), then `vidgen guide pacing`, `vidgen guide scenes`",
     ]
     for note in plan.notes:
         header.extend(_comment("TODO:", note, 0))

@@ -141,4 +141,6 @@ def test_the_cookbook_guide_and_reference_describe_the_cards() -> None:
     assert "github" not in section.lower()
     assert "COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films" in (ROOT / "docs" / "COOKBOOK.md").read_text(encoding="utf-8")
     assert "**Opening titles and end cards: `vidgen/title-cards`**" in (ROOT / "docs" / "CONFIG.md").read_text(encoding="utf-8")
-    assert "**Opening titles and end cards: `vidgen/title-cards`.**" in (ROOT / "src" / "vidgen" / "data" / "guide" / "AGENTS.md").read_text(encoding="utf-8")
+    from vidgen.guide import find_topic
+
+    assert "**Opening titles and end cards: `vidgen/title-cards`.**" in find_topic("web").text

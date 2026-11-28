@@ -62,7 +62,7 @@ MUSIC_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*(/[A-Za-z0-9_][A-Za-z0-9_-]
 INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
-Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
+Start with `guide` (no topic: the short entry page; then only the topics your video needs, e.g. "start" or "workflow"). Usual loop: `plan` (from \
 an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it), `story_draft` (a story \
 cartoon drafted from prose, with a report of what to refine) or `init` -> edit video.yaml (`shorts_suggest` proposes \
 Shorts cut from a finished video as variants) -> `validate` -> `storyboard` (look at the sheets it \
@@ -315,7 +315,8 @@ def build_server(root: Path) -> Any:
     # ----- guide, scaffolding --------------------------------------------------------------------
 
     @tool("The author guide (how to make a good video with schu-video-generator: workflow, pacing, scene types, design, "
-          "troubleshooting). No topic: the whole guide (long); list_topics=true: the topics.", read_only)
+          "troubleshooting). No topic: the short entry page (read it first); a topic: that part only; "
+          "list_topics=true: the topics. Read only the topics your video needs.", read_only)
     async def guide(
         ctx: Context,
         topic: Annotated[str | None, Field(description="a topic or alias, e.g. start, workflow, scenes, pacing, social")] = None,
@@ -1196,17 +1197,18 @@ def build_server(root: Path) -> Any:
 
 
 def _add_resources(server: Any, policy: RootPolicy) -> None:
-    """The guide (whole and per topic), the JSON Schema of video.yaml and the gallery pages under
+    """The guide (its entry page and each topic), the JSON Schema of video.yaml and the gallery pages under
     the root (``docs/gallery``), if any, as MCP resources."""
-    from vidgen.guide import guide_text, guide_topics
+    from vidgen.guide import entry_page_text, guide_topics
 
     def text_resource(uri: str, name: str, description: str, mime: str, read: Callable[[], Any]) -> None:
         server.resource(uri, name=name, description=description, mime_type=mime)(read)
 
     def guide_resource() -> str:
-        return guide_text()
+        return entry_page_text()
 
-    text_resource("vidgen://guide", "guide", "The schu-video-generator author guide (AGENTS.md): how to make a good video.", "text/markdown", guide_resource)
+    text_resource("vidgen://guide", "guide", "The schu-video-generator author guide's short entry page (AGENTS.md): read it first, "
+                  "then only the vidgen://guide/<topic> your video needs.", "text/markdown", guide_resource)
     for topic in guide_topics():
         text_resource(
             f"vidgen://guide/{topic.name}", f"guide-{topic.name}", f"Author guide: {topic.title}", "text/markdown", _constant(topic.text)

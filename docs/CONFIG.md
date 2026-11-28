@@ -1,8 +1,8 @@
 # schu-video-generator config reference
 
 This is the reference of every key. How to make a *good* video with them (the working loop,
-pacing, which scene type, good vs bad examples) is the author guide: [AGENTS.md](../AGENTS.md),
-also `vidgen guide`.
+pacing, which scene type, good vs bad examples) is the author guide: a short entry page,
+[AGENTS.md](../AGENTS.md) (also `vidgen guide`), and its topics (`vidgen guide --list`, `vidgen guide TOPIC`).
 
 A project is a folder with one config file: `video.yaml` (or `video.yml` / `video.json`), UTF-8.
 Unknown keys are an error everywhere except inside `params`, `theme.colors`, `theme.sizes` and
@@ -18508,7 +18508,7 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
 9:16, and writes a Markdown gallery: the repository's own is [docs/gallery](gallery/README.md).
 
 - **Samples.** A built-in type's sample is its snippet in the author guide's `scenes` topic
-  (`AGENTS.md`, `vidgen guide scenes`; the first of the type, one without `generate:` preferred),
+  (`vidgen guide scenes`, the file `data/guide/scenes.md`; the first of the type, one without `generate:` preferred),
   so the guide and the gallery show the same YAML and a test keeps the committed pages in step
   with the guide. Files a snippet names under `assets/` are stand-ins shipped with schu-video-generator (a
   landscape picture for `image`, an app screenshot for other pictures, a short screen recording
@@ -19280,14 +19280,14 @@ name, acronym or number; else `null`) and `entry`; `suggestion`.
 
 ### `vidgen guide --json`
 
-The author guide for AI agents (`AGENTS.md`, shipped with schu-video-generator; `vidgen guide [TOPIC] [--list]`).
+The author guide for AI agents (shipped with schu-video-generator; `vidgen guide [TOPIC] [--list]`): with no topic, the short entry page (`AGENTS.md`); with a topic, that topic.
 
 | key | type | |
 |---|---|---|
-| `topic`, `title` | str \| null | the topic printed and its heading (`null`: the whole guide, or `--list`) |
+| `topic`, `title` | str \| null | the topic printed and its heading (`null`: the entry page, or `--list`) |
 | `topics` | list | every topic in order: `{name, title, aliases}` (`vidgen guide NAME` takes the name or an alias) |
-| `text` | str \| null | the Markdown printed: the topic, or the whole guide (`null` with `--list`) |
-| `path` | str | the packaged guide file |
+| `text` | str \| null | the Markdown printed: the topic, or the entry page (`null` with `--list`) |
+| `path` | str | the packaged file printed: the topic's (`data/guide/NAME.md`), else the entry page's |
 
 An unknown topic is an error (`ok` false) whose message suggests the closest names.
 

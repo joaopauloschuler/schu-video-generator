@@ -20,9 +20,11 @@ def test_distribution_name_version_and_commands() -> None:
 
 
 def test_install_instructions_name_the_distribution() -> None:
-    for doc in ("README.md", "AGENTS.md", "docs/CONFIG.md", "docs/EXTENDING.md"):
-        text = (ROOT / doc).read_text(encoding="utf-8")
-        assert "vidgen[" not in text and "pip install vidgen" not in text, doc
+    guide = sorted((ROOT / "src" / "vidgen" / "data" / "guide").glob("*.md"))   # the entry page and every topic
+    assert len(guide) > 1
+    for path in [*(ROOT / doc for doc in ("README.md", "AGENTS.md", "docs/CONFIG.md", "docs/EXTENDING.md")), *guide]:
+        text = path.read_text(encoding="utf-8")
+        assert "vidgen[" not in text and "pip install vidgen" not in text, path.name
     for doc in ("README.md", "AGENTS.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")
         assert "the command and the Python package are `vidgen`" in text, doc

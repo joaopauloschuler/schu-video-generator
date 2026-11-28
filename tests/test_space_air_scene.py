@@ -519,7 +519,9 @@ def test_one_registry_of_names_for_validation_the_guide_and_the_parts_sheet() ->
     for word in [*names["planes"], *names["hulls"], *names["air_moves"], *names["ship_moves"], *names["land_presets"]]:
         prefix = "plane-" if word in names["planes"] else "hull-" if word in names["hulls"] else "land-" if word in names["land_presets"] else "camera-"
         assert f"{prefix}{word}" in parts or word in ("descend-through", "ascend"), word
-    guide = (ROOT / "src" / "vidgen" / "data" / "guide" / "AGENTS.md").read_text(encoding="utf-8")
+    from vidgen.guide import find_topic
+
+    guide = find_topic("space-scenes").text
     for key in ("air_presets", "sea_states", "waters", "skies", "land_presets", "planes", "hulls", "palettes", "air_moves", "ship_moves", "wing_views"):
         assert ", ".join(names[key]) in guide, key
 

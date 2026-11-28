@@ -2538,14 +2538,14 @@ def cmd_remote(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_guide(args: argparse.Namespace) -> CommandResult:
-    """Print the author guide for AI agents, one topic of it, or the list of topics."""
-    from vidgen.guide import find_topic, guide_text, guide_topics, topic_lines
+    """Print the author guide's short entry page, one topic of the guide, or the list of topics."""
+    from vidgen.guide import entry_page_text, find_topic, guide_topics, topic_lines
 
     if args.list and args.topic is not None:
         raise VidgenError("--list lists every topic; give either a TOPIC or --list")
     topics = guide_topics()
     topic = find_topic(args.topic) if args.topic is not None else None
-    text = None if args.list else (topic.text if topic is not None else guide_text())
+    text = None if args.list else (topic.text if topic is not None else entry_page_text())
     if args.json:
         return jsonout.guide_document(topic, topics, text)
     if text is None:
@@ -2732,7 +2732,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_cast)
 
     p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
-    p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
+    p.add_argument("topic", nargs="?", metavar="TOPIC", help="print this topic (vidgen guide --list shows them); no topic: the short entry page")
     p.add_argument("--list", action="store_true", help="list the topics")
     p.set_defaults(func=cmd_guide)
 

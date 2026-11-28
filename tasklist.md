@@ -9,7 +9,7 @@ one commit `Step N: <summary>`). When a step is finished, its items are removed 
 if only part is done, the item stays as `[~]` with a note on what is left. Work that downloads
 or calls a paid or remote service stays optional and is mocked in tests.
 
-**Next step number: 445** (the last completed step is 444). Each step raises this number in its commit.
+**Next step number: 446** (the last completed step is 445). Each step raises this number in its commit.
 
 ## Phase E — Outputs, extras, guidance
 

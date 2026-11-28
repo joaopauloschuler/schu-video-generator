@@ -200,7 +200,9 @@ out.push(w.problems());
 def test_the_reference_guide_and_cookbooks_describe_it() -> None:
     config = (ROOT / "docs" / "CONFIG.md").read_text(encoding="utf-8")
     assert "**Astronomical scales: `vidgen/space-scale`**" in config and "| `dofFocus` |" in config
-    guide = (ROOT / "src" / "vidgen" / "data" / "guide" / "AGENTS.md").read_text(encoding="utf-8")
+    from vidgen.guide import find_topic
+
+    guide = find_topic("web").text
     assert "**Astronomical scales: `vidgen/space-scale`.**" in guide and 'from "vidgen/space-scale"' in guide
     assert "vidgen/space-scale" in (ROOT / "docs" / "COOKBOOK-ORBITS.md").read_text(encoding="utf-8")
     assert "**Space at real scale.**" in (ROOT / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")

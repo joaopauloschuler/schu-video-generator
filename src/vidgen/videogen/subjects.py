@@ -432,7 +432,7 @@ def select_panels(project: Project, names: Sequence[str]) -> list[Panel]:
     """The panels of the subjects ``names`` (all subjects when empty)."""
     chosen = list(names) or list(project.config.subjects)
     if not chosen:
-        raise VidgenError("this video has no subjects: (add them to video.yaml, see `vidgen guide` / docs/CONFIG.md)")
+        raise VidgenError("this video has no subjects: (add them to video.yaml, see `vidgen guide outputs`, section Stylesheets, or docs/CONFIG.md)")
     return shot_panels(project, list(dict.fromkeys(chosen)))
 
 

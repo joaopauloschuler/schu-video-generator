@@ -1,7 +1,7 @@
 # Draft written by `vidgen plan` from outline.md: a deterministic starting point, not a finished video.
 # Every scene says why it got its type (plan) and what to check (TODO). Refine the
 # narration and the on-screen texts, then: vidgen validate, vidgen storyboard, vidgen lint.
-# How to make a good video (pacing, scene types): `vidgen guide` (AGENTS.md)
+# How to make a good video: `vidgen guide` (a short page), then `vidgen guide pacing`, `vidgen guide scenes`
 title: "Caching in three minutes"
 format: {width: 1920, height: 1080, fps: 30}
 preview: {width: 854, height: 480, fps: 15}

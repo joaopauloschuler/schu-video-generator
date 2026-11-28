@@ -613,9 +613,9 @@ def list_pronunciation_document(
 def guide_document(
     topic: GuideTopic | None, topics: Iterable[GuideTopic], text: str | None, warnings: Iterable[Mapping[str, Any]] = ()
 ) -> dict[str, Any]:
-    """The ``vidgen guide --json`` document: the topic printed (``null``: the whole guide or the
+    """The ``vidgen guide --json`` document: the topic printed (``null``: the entry page or the
     list), every topic ``{name, title, aliases}``, the Markdown ``text`` (``null`` with
-    ``--list``) and the packaged guide file."""
+    ``--list``) and the packaged file it comes from (the topic's file, else the entry page)."""
     from vidgen.guide import GUIDE_FILE
 
     return envelope(
@@ -626,7 +626,7 @@ def guide_document(
         title=None if topic is None else topic.title,
         topics=[{"name": t.name, "title": t.title, "aliases": list(t.aliases)} for t in topics],
         text=text,
-        path=_path(GUIDE_FILE),
+        path=_path(GUIDE_FILE if topic is None else topic.path),
     )
 
 
