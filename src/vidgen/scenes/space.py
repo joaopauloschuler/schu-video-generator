@@ -1,4 +1,4 @@
-"""``space``: a space scene written in ``video.yaml`` alone (DESIGN.md §122.12): a sky, a sun, worlds
+"""``space``: a space scene written in ``video.yaml`` alone: a sky, a sun, worlds
 free-standing or on their orbits, craft, phenomena, camera moves one after another, finishing,
 reactions to the music, an opening title and an end card. vidgen writes the page from these params
 and the shipped space modules and draws it exactly as a ``web`` scene (the same clip and cache,
@@ -23,7 +23,7 @@ from .web import SPARE_FRAMES, Web
 
 #: Where the pages of space scenes are written, under the project folder (served from there).
 PAGE_FOLDER = ("build", "space")
-#: What may change on a craft, a star, the sky, a black hole or a warp, by reaction (DESIGN.md §122.12).
+#: What may change on a craft, a star, the sky, a black hole or a warp, by reaction.
 REACTS_ON = {"sun", "sky", "black-hole", "warp", "craft"}
 
 
@@ -102,7 +102,7 @@ class Space(Web):
         fade: bool = True
         """false: no 0.5 s fade-out at the end (scenes cut straight into each other on bar lines)."""
         world: WorldSpec | None = None
-        """A surface scene (DESIGN.md §123.14): one world from orbit to the ground in the place's own frame (vidgen/space-descent): {planet, at: [lat, lon], sun: [elevation, azimuth] or {date, utc}, air, sea, land, clouds, globe, exposure, ev, quality}. Without it the scene is an orbital one (orbits, bodies, scale, light)."""
+        """A surface scene: one world from orbit to the ground in the place's own frame (vidgen/space-descent): {planet, at: [lat, lon], sun: [elevation, azimuth] or {date, utc}, air, sea, land, clouds, globe, exposure, ev, quality}. Without it the scene is an orbital one (orbits, bodies, scale, light)."""
         flights: FlightsSpec | None = None
         """A surface scene's flights (the flight_data vocabulary, Step 385): [{name: Plane, start: {x, z, above_ground, heading, speed}, legs: [...]}]; the ground is the world's land, else its sea, else its sphere."""
         flash: list[FlashSpec] = Field(default_factory=list)
@@ -111,8 +111,8 @@ class Space(Web):
         @model_validator(mode="before")
         @classmethod
         def _look(cls, value: Any) -> Any:
-            """``camera_look:`` -> the look's finish and operator with the scene's own over them (DESIGN.md §124.4);
-            without it the ``camera`` look (§124.5), unless ``finish: false`` (straight to the canvas, no camera);
+            """``camera_look:`` -> the look's finish and operator with the scene's own over them;
+            without it the ``camera`` look, unless ``finish: false`` (straight to the canvas, no camera);
             ``none`` (or null) -> no look, the clean render."""
             if not isinstance(value, dict):
                 return value
@@ -347,7 +347,7 @@ def written_out(params: Any, scene_id: str, script: str, seconds: float | None) 
     ``music_data``)."""
     source = page_source(params, scene_id)
     rest = source.split("\n", 2)[2]   # the first two lines say vidgen writes it
-    head = (f"// Written out by `vidgen space-page` from the space scene \"{scene_id}\" (DESIGN.md §122.12): the script of a web scene now,\n"
+    head = (f"// Written out by `vidgen space-page` from the space scene \"{scene_id}\": the script of a web scene now,\n"
             "// yours to edit. S holds every object by name; load(ctx) builds them, S.step(t) sets them to time t, frame(t) draws.")
     data = dict(params.data)
     if seconds is not None:

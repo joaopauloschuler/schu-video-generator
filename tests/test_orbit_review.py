@@ -1,4 +1,4 @@
-"""Step 236, review of Phase X (DESIGN §98.10): the orbit model against independent
+"""Step 236, review of Phase X: the orbit model against independent
 calculations (written here from the textbook formulas, with scipy's root finding and
 integration), the orbit scene's fast live text, the 16:9 column caption and the 9:16 transfer
 panel, substitutions in one common unit, and the still parts drawn once per play."""

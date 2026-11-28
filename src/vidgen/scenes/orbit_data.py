@@ -1,4 +1,4 @@
-"""Orbit data for ``web`` scenes (Step 367, DESIGN.md §122.3): ``orbit_data:`` declares bodies in
+"""Orbit data for ``web`` scenes (Step 367): ``orbit_data:`` declares bodies in
 the ``orbit`` scene's words (``central``, ``bodies``, ``span`` / ``orbits`` or ``speedup``,
 ``date``, ``dynamics``, ``transfer``, ``flyby``, ``system``), the same model resolves them
 (:func:`~vidgen.scenes.orbit_parts.resolve_model`), and the page is given, for every frame of the
@@ -166,7 +166,7 @@ def _preset_keys(model: Any) -> dict[str | None, str | None]:
 
 def make_orbit_data(settings: OrbitData, fps: int, frames: int, scene_frames: int) -> dict[str, Any]:
     """The data for ``frames`` frames at ``fps`` of a scene whose own frames are ``scene_frames``
-    (the rest hold the last moment). See the module docstring and DESIGN.md §122.3."""
+    (the rest hold the last moment). See the module docstring."""
     if scene_frames < 1 or frames < 1:
         raise VidgenError("orbit_data: the scene has no frames")
     seconds = scene_frames / fps

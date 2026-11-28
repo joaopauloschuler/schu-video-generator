@@ -1,6 +1,5 @@
 """Two-body (Kepler) orbits: classical orbital elements, their conversion to and from state
-vectors (position and velocity), the orbit's derived quantities and its motion in time (Phase X,
-DESIGN §98). SI units throughout (m, s, rad, μ = GM in m³ s⁻²).
+vectors (position and velocity), the orbit's derived quantities and its motion in time (Phase X). SI units throughout (m, s, rad, μ = GM in m³ s⁻²).
 
 An orbit is stored by its semi-latus rectum ``p`` rather than its semi-major axis ``a`` so that
 one representation serves all three conics (a parabola has no finite ``a``). Angles: ``i``

@@ -13,7 +13,7 @@ Run from the repository root::
     python tools/make_world_map.py                          # npm pack both into a temp folder
     python tools/make_world_map.py --world-atlas DIR --iso DIR   # extracted package/ folders
 
-The output (DESIGN.md §39) is compact JSON: per country its codes, a display name, aliases, a
+The output is compact JSON: per country its codes, a display name, aliases, a
 label point and a "main" bounding box (lon/lat) and its polygons as rings of integer hundredths
 of a degree, flattened ``[lon0, lat0, lon1, lat1, ...]``; outer rings counter-clockwise, holes
 clockwise (so a non-zero fill leaves holes open). ``small`` lists ISO countries too small for

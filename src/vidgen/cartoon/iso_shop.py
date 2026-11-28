@@ -1,4 +1,4 @@
-"""Home and shop iso objects (DESIGN.md §104, Phase AC Step 262): a bathtub, a wardrobe, a crib,
+"""Home and shop iso objects (Phase AC Step 262): a bathtub, a wardrobe, a crib,
 a café table with two chairs, a shop counter, a cash register, a display case of cakes or
 jewels, a market stall and a vending machine. No manim.
 

@@ -60,7 +60,7 @@ def test_tables_cover_every_prop() -> None:
 
 
 def test_umbrella_shapes_swap_without_changing_its_family() -> None:
-    """Step 103: closed and open shapes; the hidden one has no points (DESIGN.md §69.37)."""
+    """Step 103: closed and open shapes; the hidden one has no points."""
     theme = Theme()
     umbrella = draw_prop("umbrella", height=2.0, theme=theme).shift([1.0, -1.0, 0.0])
     assert umbrella.shapes == ("closed", "open") and umbrella.shape == "closed" and umbrella.grip is None
@@ -68,7 +68,7 @@ def test_umbrella_shapes_swap_without_changing_its_family() -> None:
     closed_width, feet = umbrella.width, umbrella.feet()
     assert umbrella.grip_point() == pytest.approx(umbrella.get_center())   # held by its middle
     umbrella.show_shape("open")
-    assert umbrella.get_family() == family and umbrella.shape == "open"   # only points change (§69.22)
+    assert umbrella.get_family() == family and umbrella.shape == "open"   # only points change
     assert umbrella.height == pytest.approx(2.0, rel=0.02) and umbrella.width > 3 * closed_width
     assert umbrella.feet()[1] == pytest.approx(feet[1], abs=1e-6) and abs(umbrella.feet()[0] - feet[0]) < 0.05
     assert umbrella.grip_point()[:2] == pytest.approx([1.0, -1.0 + 0.16 * umbrella.height], abs=0.03)   # the shaft above the hook

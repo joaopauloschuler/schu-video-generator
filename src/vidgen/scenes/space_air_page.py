@@ -1,4 +1,4 @@
-"""The page a surface ``space`` scene draws (DESIGN.md §123.14): JavaScript written from the scene's
+"""The page a surface ``space`` scene draws: JavaScript written from the scene's
 params, one world from orbit to the ground in the place's own frame (``vidgen/space-descent``: the
 air, the sea, the ground, the decks and the globe of one planet), the stars behind it
 (``vidgen/space-sky``), planes and craft on the scene's flights (``vidgen/space-plane``,
@@ -263,7 +263,7 @@ class _AirPage(_Page):
         self.out(f"checkMoves(S.cam, S.moves, S.seconds, {{fps: {CHECK_FPS}}});")
         self.out("for (const p of S.world.problems(camera)) pageNote(`world: ${p}`);")
         head = [
-            f"// The page of the space scene \"{self.id}\" (DESIGN.md §123.14), a surface scene written by vidgen from video.yaml (generator {PAGE_VERSION}).",
+            f"// The page of the space scene \"{self.id}\", a surface scene written by vidgen from video.yaml (generator {PAGE_VERSION}).",
             "// Change the scene in video.yaml; to go on in code, `vidgen space-page` writes this page out as a web scene's script.",
             'import * as THREE from "three";',
         ]

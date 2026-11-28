@@ -1,4 +1,4 @@
-"""The sky of a space scene, ``vidgen/space-sky`` (Step 370, DESIGN.md §122.6): the module and its
+"""The sky of a space scene, ``vidgen/space-sky`` (Step 370): the module and its
 star file are served by their import names; the star file is what ``tools/make_star_catalogue.py``
 writes (the fixture) and the converter reads the Bright Star Catalogue's fixed-width lines; in
 Node (when it is installed): right ascension and declination land in the ecliptic frame of

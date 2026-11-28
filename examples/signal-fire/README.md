@@ -2,7 +2,7 @@
 
 A 27 s video with no narration: an original cinematic cue played by vidgen's own orchestra, and a
 three.js night scene that reads the score while it plays. It puts four things of Phase AL
-together (DESIGN §120): the orchestral instruments, expressive notes, the built-in music data of
+together: the orchestral instruments, expressive notes, the built-in music data of
 `web` scenes and the finishing module `vidgen/three-finish`.
 
 | file | what it shows |

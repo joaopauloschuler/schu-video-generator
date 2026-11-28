@@ -1,4 +1,4 @@
-"""Effects on a whole character, drawn with manim (DESIGN.md §100.9, §100.10); the maths is in
+"""Effects on a whole character, drawn with manim; the maths is in
 :mod:`vidgen.cartoon.apparition`.
 
 - :class:`FigureAlpha`: a character's opacities as drawn and named factors on them (a shot that
@@ -99,7 +99,7 @@ class Materialise(Animation):
 
 
 class Iridescence:
-    """``figure``'s skin and clothes shifting colours like oil on water (DESIGN.md §100.9):
+    """``figure``'s skin and clothes shifting colours like oil on water:
     :meth:`update` recolours every filled member from the colour it was drawn with
     (:func:`~vidgen.cartoon.apparition.iridescent_rgb`) by its height on the figure."""
 
@@ -130,7 +130,7 @@ AFTERIMAGE_MOVE = 0.03
 
 
 class Afterimages:
-    """Faint copies of ``figure`` left where it was while it moves (DESIGN.md §100.9), each
+    """Faint copies of ``figure`` left where it was while it moves, each
     fading over ``life`` seconds; ``place(ghost)`` puts a new copy in the scene (right behind the
     figure), ``remove(ghost)`` takes one away."""
 
@@ -185,7 +185,7 @@ class Afterimages:
         self.ghosts = []
 
 
-#: A glowing pendant (DESIGN.md §102.14): its halo's light pulses between ``1 - PENDANT_PULSE``
+#: A glowing pendant: its halo's light pulses between ``1 - PENDANT_PULSE``
 #: and 1 of its drawn opacity every ``PENDANT_SECONDS``, the stone brightening with it.
 PENDANT_PULSE = 0.65
 PENDANT_SECONDS = 1.6
@@ -200,7 +200,7 @@ def pendant_level(now: float) -> float:
 
 
 class PendantPulse:
-    """``figure``'s glowing pendant pulsing (DESIGN.md §102.14): its halo's opacity follows
+    """``figure``'s glowing pendant pulsing: its halo's opacity follows
     :func:`pendant_level`, its stone a little (members marked by the clothes'
     ``PENDANT_GLOW``), times the figure's own opacity factors (a flicker, a materialise)."""
 
@@ -219,7 +219,7 @@ class PendantPulse:
             member.fill_rgbas[:, 3] = base * factor * shown
 
 
-#: A kiss's hearts and sparkles by default (DESIGN.md §102.15).
+#: A kiss's hearts and sparkles by default.
 KISS_COLOR = "#FF5C8A"
 KISS_SPARKLE = "#FFF1B8"
 #: The legs a lean turns back, so the feet stay on the ground.
@@ -236,7 +236,7 @@ def head_box(figure: Character) -> tuple[float, float, float, float]:
 
 
 class KissPlan:
-    """Two characters kissing over ``seconds`` (DESIGN.md §102.15): on its first frame they turn
+    """Two characters kissing over ``seconds``: on its first frame they turn
     to each other and the plan measures how far each leans (:func:`~vidgen.cartoon.kiss.lean_angles`)
     and steps in across the picture for their faces to touch at full lean
     (:func:`~vidgen.cartoon.kiss.step_in`); :meth:`update` poses both for a time into the kiss
@@ -398,7 +398,7 @@ class KissBurst(Animation):
 #: they meet (a share of the taller one's height).
 HAND_REACH_SECONDS = 0.4
 HAND_DROP = 0.3
-#: Two holding hands stand close enough for their hands to meet (DESIGN.md §100.15): each arm
+#: Two holding hands stand close enough for their hands to meet: each arm
 #: reaches at most this share of its length, their shoulders stay at least :data:`HAND_MIN_GAP`
 #: of the taller one's height apart and their feet :data:`HAND_MIN_APART` (side by side, not
 #: one in front of the other, whichever way they turn).
@@ -408,13 +408,13 @@ HAND_MIN_APART = 0.42
 
 
 class HandHold:
-    """Two characters holding hands (DESIGN.md §100.10): from ``start`` (scene time) each one's
+    """Two characters holding hands: from ``start`` (scene time) each one's
     hand nearer the other reaches for the point between their shoulders, a little lower
     (:data:`HAND_DROP`), wherever they stand or walk, until the hold ends. Standing further
     apart than their arms reach, they step in towards each other across the picture as the
     hands reach; walking together (both moved by their walks on a frame), the second keeps its
     place beside the first, so they go side by side instead of one behind the other
-    (:meth:`_keep_close`, §100.15)."""
+    (:meth:`_keep_close`)."""
 
     def __init__(self, a: Character, b: Character, start: float) -> None:
         self.a, self.b, self.start = a, b, float(start)

@@ -1,4 +1,4 @@
-"""Step 177: Phase R follow-ups (DESIGN.md §90.14). A raised block's label keeps off its tilted
+"""Step 177: Phase R follow-ups. A raised block's label keeps off its tilted
 connectors, pipes tilt up to raised ends (flows ride on them), lint judges a label's distance at
 the diagram's own scale under a focus, and 9:16 shots on an iso place keep characters whole."""
 

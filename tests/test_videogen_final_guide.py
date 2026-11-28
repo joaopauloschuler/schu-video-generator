@@ -1,4 +1,4 @@
-"""A shot that sends the beat's finished render and the film's sound (DESIGN.md §113.18):
+"""A shot that sends the beat's finished render and the film's sound:
 ``guide: final`` (the scene rendered without overlays or placed takes, into ``build/final_source``)
 and ``audio: mix`` (the rendered film's sound over the shot). Nothing renders or is sent: the
 scene render is a stub, the film a small clip, the model list the fixture."""

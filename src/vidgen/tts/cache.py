@@ -1,4 +1,4 @@
-"""The narration audio cache: ``<audio_dir>/<beat_id>.mp3`` + ``<beat_id>.hash`` (DESIGN.md §7).
+"""The narration audio cache: ``<audio_dir>/<beat_id>.mp3`` + ``<beat_id>.hash``.
 
 Nothing here needs an API key or the network.
 """
@@ -67,7 +67,7 @@ def is_up_to_date(provider: TTSProvider, audio_dir: Path, beat_id: str, text: st
 def audio_status(project: Project, provider: TTSProvider | None = None) -> list[BeatAudioStatus]:
     """State of every beat's audio in ``project.audio_dir``, in video order. No API key needed.
 
-    Each beat is checked with the provider of its own voice (``voices:``, DESIGN.md §46);
+    Each beat is checked with the provider of its own voice (``voices:``);
     ``provider`` replaces them all (tests)."""
     from vidgen.tts import beat_providers
 

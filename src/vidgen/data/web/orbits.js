@@ -1,4 +1,4 @@
-// vidgen's orbit helper for a `web` scene with `orbit_data:` (DESIGN.md §122.3). Run by Chromium
+// vidgen's orbit helper for a `web` scene with `orbit_data:`. Run by Chromium
 // after vidgen's own page script, only on pages of such scenes: it turns the data vidgen sends
 // (`info.orbits`, computed in Python by vidgen's orbit model) into `ctx.orbits`.
 //

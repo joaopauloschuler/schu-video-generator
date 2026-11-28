@@ -1,4 +1,4 @@
-"""A cartoon host beside any scene's content (``host:``, DESIGN.md §71). No manim.
+"""A cartoon host beside any scene's content (``host:``). No manim.
 
 Which host a scene has (the video's ``host:`` changed by the scene's), where it stands (a column
 beside the content or a band below it, inside the scene's safe area after the overlays' reserved
@@ -253,7 +253,7 @@ def host_problems(config: VideoConfig) -> list[Problem]:
     return problems + host_action_problems(config)
 
 
-#: The beat actions that act on a scene's host (DESIGN.md §71.1), and those that walk it.
+#: The beat actions that act on a scene's host, and those that walk it.
 HOST_ACTIONS: frozenset[str] = frozenset({"host_point", "host_look", "host_react", "host_move", "host_enter", "host_exit"})
 HOST_MOVES: frozenset[str] = frozenset({"host_move", "host_enter", "host_exit"})
 

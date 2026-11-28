@@ -1,4 +1,4 @@
-"""Bundled fonts and font roles (DESIGN.md §21).
+"""Bundled fonts and font roles.
 
 schu-video-generator ships three SIL OFL font families as package data (``vidgen/data/fonts``, licences next
 to the files): Inter (sans), Source Serif 4 (serif) and JetBrains Mono NL (mono, without

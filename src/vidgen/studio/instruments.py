@@ -1,4 +1,4 @@
-"""The instrument library of score files (DESIGN.md §93.4): drums, pitched voices and pads made
+"""The instrument library of score files: drums, pitched voices and pads made
 from the built-in beds' building blocks (:mod:`vidgen.music`), each with settings that have a
 default, a range and a sentence saying what they change (``vidgen music patches``)."""
 
@@ -101,7 +101,7 @@ class Instrument:
     #: The lowest and highest note it is meant for (``("E3", "C6")``); notes outside are played
     #: (and reported: :func:`vidgen.studio.render.range_warnings`).
     range: tuple[str, str] | None = None
-    #: Its response to dynamics (DESIGN.md §120.7): ``(settings, dB) -> settings`` as it plays a
+    #: Its response to dynamics: ``(settings, dB) -> settings`` as it plays a
     #: note ``dB`` louder than an unmarked one (brighter, harder; the level is the renderer's).
     #: ``None``: a dynamic changes its level only.
     respond: Callable[[Mapping[str, float], float], Mapping[str, float]] | None = None
@@ -300,7 +300,7 @@ def _orchestral(name: str, words: str, level: float, octave: int, low: str, high
     return Instrument(name, "note", words, level, octave, settings, make, group=group, seeded=True, range=(low, high), respond=respond, slurs=slurs)
 
 
-# ----- expression (DESIGN.md §120.7) ----------------------------------------------------------------
+# ----- expression ----------------------------------------------------------------
 
 _TOUCH = (0.0, 0.0, 1.0, "how much an accent or a soft note (X, o, !, ?, the accent: groups) changes the tone as well as the level: 0 the level only, "
           "1 as a dynamic mark of the same level ([f], [p]) would")

@@ -2,7 +2,7 @@
 
 A university-level cell-biology explainer (eight scenes, about 3 min 34 s with Kokoro narration)
 that follows one real protein, **α1-antitrypsin** (gene *SERPINA1*), from its gene in a liver
-cell's nucleus to the blood. It uses the five scene types of the cell-biology toolkit (DESIGN §95)
+cell's nucleus to the blood. It uses the five scene types of the cell-biology toolkit
 the way the [cell-biology cookbook](../../docs/COOKBOOK-CELL-BIOLOGY.md) recommends.
 
 ```

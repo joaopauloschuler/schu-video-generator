@@ -1,4 +1,4 @@
-"""The circular restricted three-body problem (Phase X, Step 232, DESIGN §98.6): two primaries
+"""The circular restricted three-body problem (Phase X, Step 232): two primaries
 on circles about their barycentre and a massless body moving in their field, written in the frame
 that turns with them. No manim.
 
@@ -8,7 +8,7 @@ puts the larger primary at (−μ, 0) and the smaller at (1 − μ, 0), the bary
 
 - The **Lagrange points**: the collinear L1 (between the primaries), L2 (beyond the smaller), L3
   (beyond the larger) are the real positive roots γ of Szebehely's quintics (*Theory of Orbits*,
-  1967, §4.4; γ the distance from the nearer primary, from the larger for L3), found by
+  1967; γ the distance from the nearer primary, from the larger for L3), found by
   ``numpy.roots`` and polished by Newton's method on the quintic; L4 / L5 are the apexes of the
   equilateral triangles on the primaries, (½ − μ, ±√3/2).
 - **Routh's criterion** (1875): L4 and L5 are linearly stable for μ < μ_R = (1 − √(23/27)) / 2

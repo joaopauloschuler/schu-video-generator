@@ -1,4 +1,4 @@
-"""The orbital accuracy lint rules (Phase X, Step 234, DESIGN §98.8): an ``orbit`` scene's
+"""The orbital accuracy lint rules (Phase X, Step 234): an ``orbit`` scene's
 narration and on-screen text against its model, and its model against physics.
 
 ``orbit_period`` (a period against Kepler's third law with the scene's μ), ``orbit_speed``
@@ -379,7 +379,7 @@ def orbit_issues(project: Project, scene_id: str, rules: LintRules) -> list[Scie
 
     found = facts(project)
     is_orbit = spec.type == "orbit"
-    if spec.type == "space":   # a space scene with orbit data keeps to scale what its scale: says (DESIGN.md §122.12)
+    if spec.type == "space":   # a space scene with orbit data keeps to scale what its scale: says
         from vidgen.lint.space_rule import space_picture
 
         space = space_picture(spec)

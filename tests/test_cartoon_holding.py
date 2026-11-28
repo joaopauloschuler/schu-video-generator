@@ -146,7 +146,7 @@ def test_pick_up_follow_and_put_down() -> None:
     pip.shift([2.0, 0.5, 0.0])
     cup.update()
     assert np.allclose(cup.get_center(), pip.hand_point("left"), atol=1e-6)   # follows the hand
-    assert cup not in pip.get_family()   # never added to the character (DESIGN.md §69.22)
+    assert cup not in pip.get_family()   # never added to the character
 
     down = use("put_down")
     run(down.apply(scene, [target("pip", pip)]))

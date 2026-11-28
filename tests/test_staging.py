@@ -1,5 +1,5 @@
 """Step 285: stereo staging and room acoustics of the voices, music width, the mono-compatibility
-check (DESIGN.md §111.4). Narration is mocked: each beat's "MP3" is a WAV tone."""
+check. Narration is mocked: each beat's "MP3" is a WAV tone."""
 
 from __future__ import annotations
 

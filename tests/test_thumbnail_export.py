@@ -1,4 +1,4 @@
-"""Thumbnails and GIF / clip export, Step 50 (DESIGN.md §53): the ``thumbnail:`` config, frame
+"""Thumbnails and GIF / clip export, Step 50: the ``thumbnail:`` config, frame
 numbers, designed cards (sizes, legibility checks, JPEG), frame thumbnails from renders (with and
 without overlays), ``vidgen export gif|clip`` (palette GIF, size budget, stream copy vs encode)."""
 

@@ -1,4 +1,4 @@
-"""Farm, school and office iso objects (DESIGN.md §104, Phase AC Step 265): a vegetable patch, a
+"""Farm, school and office iso objects (Phase AC Step 265): a vegetable patch, a
 wheelbarrow, a hay bale, a pupil's desk, a desk with a computer, a water cooler, an office
 printer, a floor globe and a shelf of trophies. No manim.
 

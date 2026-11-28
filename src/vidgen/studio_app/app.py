@@ -1,4 +1,4 @@
-"""What the studio's JSON API does (DESIGN.md §94.2), without HTTP: the presets, the patches,
+"""What the studio's JSON API does, without HTTP: the presets, the patches,
 loading a score into a new session, checking score text, rendering a version (whole or one
 section) into the session's render cache. The HTTP layer (:mod:`vidgen.studio_app.server`)
 only translates requests to these calls and their results to JSON.
@@ -75,7 +75,7 @@ def one_line(description: str) -> str:
 def preset_catalog() -> list[dict[str, Any]]:
     """The 17 built-in beds as presets, in the beds' order: name, title, a one-line description,
     the bed's description and use, and the template's key, tempo, time, bars, seconds, sections
-    and tracks; ``score_bed`` when the template is the bed itself (§93.12)."""
+    and tracks; ``score_bed`` when the template is the bed itself."""
     from vidgen.music import BUILTIN_BEDS
     from vidgen.studio import music_template_catalog
 
@@ -303,7 +303,7 @@ class StudioApp:
         self._facts_wanted: str | None = None
         self._facts_lock = threading.Lock()
         self._last_render = 0.0  # time.monotonic() when a render was last asked for or made
-        self._last_clean = time.monotonic()  # old renders are removed at most once a minute (§94.18)
+        self._last_clean = time.monotonic()  # old renders are removed at most once a minute
         self._played: OrderedDict[str, None] = OrderedDict()  # render keys last asked for, newest last
         # the mixes of the last renders (−28 LUFS float32 and gain), which the check reuses
         self._mixes: OrderedDict[str, tuple[np.ndarray, float]] = OrderedDict()
@@ -733,7 +733,7 @@ class StudioApp:
     # ----- disk (Step 200) ------------------------------------------------------------------
 
     def disk(self) -> dict[str, Any]:
-        """Bytes of renders and exports, the open session's and the studio's (§94.18)."""
+        """Bytes of renders and exports, the open session's and the studio's."""
         from vidgen.studio_app.cleanup import disk_use
 
         return disk_use(self.studio, self.session)
@@ -850,9 +850,9 @@ class StudioApp:
                variation: tuple[str, str] | None = None) -> dict[str, Any]:
         """Render a version of the open session (default: the current one), or one section of
         it, into the render cache (reused when the notes are unchanged): mixed from the tracks'
-        stems, only the tracks whose stems are not kept rendered (§94.14). The section is cut
+        stems, only the tracks whose stems are not kept rendered. The section is cut
         from the whole piece's render, so it sounds as in the piece (tails from before it).
-        ``mute``: tracks left out of what plays — a listening mix (§94.12), never the score;
+        ``mute``: tracks left out of what plays — a listening mix, never the score;
         names that are not tracks are ignored. ``narration``: under the narration sample.
         ``variation``: ``(batch, letter)``, a variation's candidate instead of a version (Step
         199; ``version`` is then ``null`` in the answer). ``timing`` says what took how long;

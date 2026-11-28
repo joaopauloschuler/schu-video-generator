@@ -1,4 +1,4 @@
-"""Step 279 fixes (DESIGN.md §108): a crisp blue hour (hues kept, a tone curve), a coloured fill
+"""Step 279 fixes: a crisp blue hour (hues kept, a tone curve), a coloured fill
 light, ``bright`` eyes, thin strokes one pixel of the fixed wide view (``pixel_zoom``) and a room
 framed from its back corner (``show_walls``); logic without rendering, and one small render."""
 

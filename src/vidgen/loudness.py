@@ -1,4 +1,4 @@
-"""Loudness of long signals (DESIGN.md §48): EBU R128 / ITU-R BS.1770-4 integrated loudness and
+"""Loudness of long signals: EBU R128 / ITU-R BS.1770-4 integrated loudness and
 true peak, measured block by block so a whole video's audio never has to sit in memory.
 
 Everything is plain numpy and deterministic. K-weighting is applied as the filter's magnitude

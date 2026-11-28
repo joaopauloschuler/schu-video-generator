@@ -1,4 +1,4 @@
-"""Where a ``3d`` scene's objects are on screen at a time (DESIGN.md §114.12), for lint: each
+"""Where a ``3d`` scene's objects are on screen at a time, for lint: each
 object's sphere projected by the camera of the scene description, how much of it lies outside
 the frame and how much of it nearer objects cover. A cheap estimate from spheres (no pixels):
 boxes count as a little smaller than their sphere when they cover something."""

@@ -1,4 +1,4 @@
-// vidgen/space-camera-air: camera moves inside an atmosphere and beside giant ships (DESIGN.md §123.12).
+// vidgen/space-camera-air: camera moves inside an atmosphere and beside giant ships.
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/space-camera-air", beside
 // "vidgen/space-camera" (whose rig it extends: every move of that module works on this rig too).
 //
@@ -205,7 +205,7 @@ export function shake(t, {amount = 0.25, seed = 1, rate = 7} = {}) {
  * without overshoot (a critically damped spring of time constant `settle`) to `distance`. */
 export const pushBack = (age, distance = 1, settle = 0.45) => (age <= 0 ? 0 : distance * (1 - (1 + age / settle) * Math.exp(-age / settle)));
 
-// ---------- the operator (Step 399, DESIGN.md §124.3) ----------
+// ---------- the operator (Step 399) ----------
 /** The operator's defaults. `handheld`: slow drift (`drift` degrees at `rate` Hz) that the operator corrects late
  * (`delay` seconds, then a second-order response at `correct` Hz with `damping` < 1: a little overshoot), a
  * reframe now and then (one in most spans of `reframe` seconds: the frame slips `size` degrees off over a second
@@ -225,7 +225,7 @@ export const OPERATOR = Object.freeze({
 /** What the operator's meter counts as bright (shares of a white ground in full sun): the clear sky, the sea and the
  * land in the sun, a deck's grey base seen from under it, fog just under a deck's top (darker by exp(-`deep` x the
  * share of the deck above the camera) further in), sunlit cloud tops, the sun in the frame (with its glare) and the
- * sun's glitter on the sea. A stated estimate fitted to the rendered mean of two views (DESIGN.md §124.3). */
+ * sun's glitter on the sea. A stated estimate fitted to the rendered mean of two views. */
 export const METER = Object.freeze({sky: 0.3, sea: 0.03, land: 0.12, base: 0.7, fog: 1.5, deep: 6, tops: 1.2, sun: 0.15, glint: 0.5});
 const OPERATOR_KEYS = ["hand", "exposure", "horizon", "seed", "start", "cuts"];
 const fade5 = (u) => u * u * u * (u * (u * 6 - 15) + 10);

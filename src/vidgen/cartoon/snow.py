@@ -1,4 +1,4 @@
-"""Snow that settles on a stage (DESIGN.md §69.60). No manim.
+"""Snow that settles on a stage. No manim.
 
 A ``snow`` field with ``settle: true`` on a ``stage`` ends on the ground like rain (Step 105's
 landing band and landing lines, :mod:`vidgen.cartoon.rain`) and on the props: a prop that catches

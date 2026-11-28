@@ -1,13 +1,13 @@
-"""Screenshots of a ``web`` scene's page in headless Chromium (DESIGN.md §118.3).
+"""Screenshots of a ``web`` scene's page in headless Chromium.
 
 :class:`WebPage` serves the project folder on a made-up origin (``http://vidgen-web.invalid/``;
 nothing is fetched from the network: a request elsewhere is refused with a warning), opens the
 scene's page (or vidgen's bare canvas page that imports the scene's script), waits until it is
 ready and returns frame ``n``: vidgen's clock moved to ``t = n / fps`` (the page's timers,
-animation-frame callbacks, animations and videos follow it; §118.8), the page's ``frame(t, ctx)``
+animation-frame callbacks, animations and videos follow it), the page's ``frame(t, ctx)``
 hook, then a screenshot of the whole viewport with its alpha (Chromium's default background is
 transparent, so what the page leaves transparent shows what vidgen draws behind it; the PNG
-Playwright's screenshot gives, encoded faster, §120.10). An uncaught JavaScript error, at load or on a frame,
+Playwright's screenshot gives, encoded faster). An uncaught JavaScript error, at load or on a frame,
 is a :class:`VidgenError` naming the scene, the file and the line; so is a ``load`` or a frame that
 does not return within its time limit (vidgen then stops the page's renderer process).
 """
@@ -68,7 +68,7 @@ LAYOUT_FILE = DATA_DIR / "layout.js"
 WEB_ORIGIN = "http://vidgen-web.invalid/"
 #: Where vidgen's bare page of a ``script:`` scene is served (not a project path).
 CANVAS_PATH = "__vidgen__/canvas.html"
-#: Where a page's ``vidgen/baked`` asks for and hands over baked maps (DESIGN.md §123.2; not a file, never in ``loaded``).
+#: Where a page's ``vidgen/baked`` asks for and hands over baked maps (not a file, never in ``loaded``).
 BAKED_PATH = "__vidgen__/baked/"
 #: Bytes of a baked map read from the page per CDP ``IO.read``.
 BAKED_READ_BYTES = 4 * 1024 * 1024
@@ -86,9 +86,9 @@ LOAD_TIMEOUT_S = 90.0
 #: How long one frame (its timers, animation-frame callbacks and ``frame(t, ctx)``) may take (seconds).
 FRAME_TIMEOUT_S = 10.0
 #: How long the first frame a page draws may take (seconds): a WebGL page's shaders are compiled
-#: then, so a page needs no warm-up of its own (DESIGN.md §120.10).
+#: then, so a page needs no warm-up of its own.
 FIRST_FRAME_TIMEOUT_S = LOAD_TIMEOUT_S
-#: The screenshot (DESIGN.md §120.10): ``Page.captureScreenshot`` with what Playwright's
+#: The screenshot: ``Page.captureScreenshot`` with what Playwright's
 #: ``page.screenshot(type="png")`` sends (the viewport at the visual viewport's place and scale) and
 #: ``optimizeForSpeed`` (Chromium's quicker PNG compression: the same pixels, larger files, about
 #: 0.3 s less per 1280x720 frame of a detailed page). Carets are hidden around it as Playwright
@@ -154,7 +154,7 @@ def layout_reader() -> str:
 
 
 def layout_digest() -> str:
-    """Digest of the layout reader, for the layout record beside a clip (§118.12)."""
+    """Digest of the layout reader, for the layout record beside a clip."""
     return hashlib.sha256(layout_reader().encode("utf-8")).hexdigest()
 
 
@@ -356,22 +356,22 @@ class WebPage:
 
     Starts Chromium on enter, closes it on exit; requests outside ``root`` are refused (one
     warning per URL, also in :attr:`refused`). ``theme`` (``ctx.theme``, also the CSS custom
-    properties), ``data`` (``ctx.data``) and ``beats`` (``ctx.beats``) are what the page is given
-    (§118.9); ``shape`` is the video's shape (:func:`~vidgen.web.inputs.page_shape`; default:
-    a page filling a frame of ``size``), in ``ctx`` and as attributes of ``<html>`` (§118.11).
-    ``design_width`` (§118.17): the page's window is that many CSS pixels wide (:attr:`viewport`)
+    properties), ``data`` (``ctx.data``) and ``beats`` (``ctx.beats``) are what the page is given;
+    ``shape`` is the video's shape (:func:`~vidgen.web.inputs.page_shape`; default:
+    a page filling a frame of ``size``), in ``ctx`` and as attributes of ``<html>``.
+    ``design_width``: the page's window is that many CSS pixels wide (:attr:`viewport`)
     and drawn at the device scale :attr:`scale`, so the frames are still ``size``; without it the
-    window is ``size`` at scale 1. ``music`` (§120.8): the scene's music data
+    window is ``size`` at scale 1. ``music``: the scene's music data
     (:func:`vidgen.web.music.scene_music`), given to the page as ``ctx.music`` by vidgen's music
-    helper; ``None``: no helper, no ``ctx.music``. ``orbits`` (§122.3): the scene's orbit data
+    helper; ``None``: no helper, no ``ctx.music``. ``orbits``: the scene's orbit data
     (:func:`vidgen.scenes.orbit_data.scene_orbit_data`), given as ``ctx.orbits`` by vidgen's orbit
-    helper; ``None``: no helper, no ``ctx.orbits``. ``draw_mode`` (§113.19): ``"depth"`` is given as
-    ``ctx.draw_mode`` (vidgen/three-finish then draws the depth pass); ``None``: no ``ctx.draw_mode``. ``baked`` (§123.2): the cache of baked maps the
+    helper; ``None``: no helper, no ``ctx.orbits``. ``draw_mode``: ``"depth"`` is given as
+    ``ctx.draw_mode`` (vidgen/three-finish then draws the depth pass); ``None``: no ``ctx.draw_mode``. ``baked``: the cache of baked maps the
     page's ``vidgen/baked`` uses (``True``: :func:`~vidgen.web.baked.default_store`, which is off
     when ``VIDGEN_BAKED_CACHE_MB=0``; ``False``: none; or a store); :attr:`baked_log` lists
     ``("hit" | "damaged" | "stored" | "baked", name, bytes)`` per bake (``baked``: not kept).
     :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
-    to its SHA-256, a missing project file to ``None`` (§118.10)."""
+    to its SHA-256, a missing project file to ``None``."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
@@ -397,7 +397,7 @@ class WebPage:
         self.missing: list[str] = []
         self.unshipped: list[str] = []
         self.unshipped_libs: list[str] = []
-        #: Sentences the page left for vidgen's log at load (``globalThis.__vidgenNotes``: a space scene's checks, DESIGN.md §122.12).
+        #: Sentences the page left for vidgen's log at load (``globalThis.__vidgenNotes``: a space scene's checks).
         self.notes: list[str] = []
         self.loaded: dict[str, str | None] = {}
         self._chromium: Chromium | None = None
@@ -467,7 +467,7 @@ class WebPage:
         headers["Content-Range"] = f"bytes {start}-{end}/{len(body)}"
         route.fulfill(status=206, body=body[start:end + 1], headers=headers)
 
-    # ----- baked maps (DESIGN.md §123.2) -----------------------------------------------------------
+    # ----- baked maps -----------------------------------------------------------
 
     def _serve_baked(self, route: Any, what: str) -> None:
         """``status``; ``lookup`` (POST: the bake's key and whether an entry is there); ``<key>/<n>``
@@ -632,15 +632,15 @@ class WebPage:
         context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=self._device_scale,
                                       timezone_id=TIMEZONE, locale=LOCALE)
         context.add_init_script(script=init_script(self.scene_id))
-        if self.music is not None:   # ctx.music (DESIGN.md §120.8): only on pages of scenes with music_data
+        if self.music is not None:   # ctx.music: only on pages of scenes with music_data
             from vidgen.web.music import helper_source
 
             context.add_init_script(script=helper_source())
-        if self.orbits is not None:   # ctx.orbits (DESIGN.md §122.3): only on pages of scenes with orbit_data
+        if self.orbits is not None:   # ctx.orbits: only on pages of scenes with orbit_data
             from vidgen.web.orbits import helper_source as orbit_helper
 
             context.add_init_script(script=orbit_helper())
-            if "flights" in self.orbits:   # ctx.flight (DESIGN.md §123.7): the flights travel in the orbit payload
+            if "flights" in self.orbits:   # ctx.flight: the flights travel in the orbit payload
                 from vidgen.web.flights import helper_source as flight_helper
 
                 context.add_init_script(script=flight_helper())
@@ -677,7 +677,7 @@ class WebPage:
         Asked from here every :data:`READY_POLL_MS`, not with Playwright's ``wait_for_function``:
         that polls inside the page on ``requestAnimationFrame`` or ``setTimeout``, which are
         vidgen's clock standing still at 0, so it looked once and a module still waiting for a
-        ``fetch`` at that moment was never looked at again (Step 341, DESIGN.md §120.2).
+        ``fetch`` at that moment was never looked at again (Step 341).
         ``wait_for_timeout`` keeps Playwright answering the page's requests meanwhile."""
         ready = "s => window.__vidgen.errors.length > 0 || (document.readyState === 'complete' && (!s || window.__vidgen.ready))"
         end = time.monotonic() + READY_TIMEOUT_MS / 1000
@@ -722,7 +722,7 @@ class WebPage:
 
     def layout(self, n: int) -> dict[str, Any]:
         """What text the page shows now, the page at frame ``n`` (call after :meth:`advance` or
-        :meth:`frame` of ``n``): ``data/web/layout.js``'s reading, in page pixels (§118.12)."""
+        :meth:`frame` of ``n``): ``data/web/layout.js``'s reading, in page pixels."""
         t = n / self.fps
         when = f"in layout(t={t:.3f})"
         api = chromium.sync_api()
@@ -750,7 +750,7 @@ class WebPage:
 
     def screenshot(self, n: int) -> bytes:
         """A PNG of the page as it is now (frame ``n``, for the error message), with its alpha:
-        the pixels of Playwright's ``page.screenshot(type="png")``, encoded faster (§120.10)."""
+        the pixels of Playwright's ``page.screenshot(type="png")``, encoded faster."""
         t = n / self.fps
         api = chromium.sync_api()
         frames = self._page.frames

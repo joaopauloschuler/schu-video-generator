@@ -1,4 +1,4 @@
-"""The SoundFont that composed music is played with (DESIGN.md §81; no manim).
+"""The SoundFont that composed music is played with (no manim).
 
 By default GeneralUser GS 2.0.3: downloaded on first use into vidgen's cache folder
 (:func:`cache_dir`), checked against its size and SHA-256 before it is used, never shipped in the

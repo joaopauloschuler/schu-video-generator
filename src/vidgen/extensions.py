@@ -1,4 +1,4 @@
-"""Discovery and import of built-in scenes and project extensions (DESIGN.md §6.1).
+"""Discovery and import of built-in scenes and project extensions.
 
 The usual entry points:
 

@@ -1,4 +1,4 @@
-"""The worlds a flight flies over (Step 385, DESIGN.md §123.7): radius, gravity, turning and air.
+"""The worlds a flight flies over (Step 385): radius, gravity, turning and air.
 
 The radius is the one the page's air of ``vidgen/space-air`` uses (its ``RADII``; the airless
 worlds' of ``vidgen/space-land``), so that a height here is the height the page draws over the

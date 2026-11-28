@@ -1,4 +1,4 @@
-"""Reactions and decays written as text (Phase Y, Step 237; DESIGN §99.2). No manim.
+"""Reactions and decays written as text (Phase Y, Step 237). No manim.
 
 ``"n -> p e- anti-nu_e"``, ``"mu- → e- ν̄ₑ ν_μ"``, ``"pi0 -> gamma gamma"``, ``"p p -> p p p pbar"``,
 ``"H -> Z Z*"``: one arrow (``->``, ``→``, ``=>``, ``⟶``), particles separated by spaces (a ``+``

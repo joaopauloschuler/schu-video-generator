@@ -1,4 +1,4 @@
-// vidgen/camera-looks: camera looks for three.js `web` scenes and `space` scenes (Steps 400–401, DESIGN.md §124.4–124.5).
+// vidgen/camera-looks: camera looks for three.js `web` scenes and `space` scenes (Steps 400–401).
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/camera-looks".
 //
 //   import {cameraLook} from "vidgen/camera-looks";
@@ -6,9 +6,9 @@
 //   finish = new Finish(renderer, scene, camera, ctx, look.finish);   // vidgen/three-finish
 //   view = cam.operator(view, look.operator);                         // vidgen/space-camera-air (or operate)
 //
-// A look is a matched set of vidgen/three-finish's options (the sensor of §124.1, the lens of §124.2, the bloom,
+// A look is a matched set of vidgen/three-finish's options (the sensor, the lens, the bloom,
 // vignette and grade) and the camera operator's of vidgen/space-camera-air (the hand, the automatic exposure and
-// the horizon of §124.3): one kind of camera and the person or mount holding it. The table is written as JSON
+// the horizon): one kind of camera and the person or mount holding it. The table is written as JSON
 // (quoted keys, numbers, strings; no functions) so vidgen reads the same table in Python for `camera_look:` of
 // `space` scenes. `camera` (the sensor and the lens, nobody holding it) is what a `space` scene gets unless it gives
 // `camera_look:` (`none`: the clean render); a page of your own gets nothing unless it asks. Motion blur is left to

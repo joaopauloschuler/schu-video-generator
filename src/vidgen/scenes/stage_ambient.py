@@ -1,4 +1,4 @@
-"""Ambient life on an iso place (DESIGN.md §105.7): the part of a ``stage`` that sets background
+"""Ambient life on an iso place: the part of a ``stage`` that sets background
 walkers, birds, a cat, ducks, butterflies, fireflies and flies about the place (``ambient``).
 Written against ``vidgen.api`` only; :class:`IsoAmbience` is a part of
 :class:`~vidgen.scenes.stage.Stage`.
@@ -33,7 +33,7 @@ def _rise(value: float, low: float, high: float) -> float:
 
 
 class IsoAmbience:
-    """The ambient life part of a ``stage`` on an iso place (DESIGN.md §105.7)."""
+    """The ambient life part of a ``stage`` on an iso place."""
 
     def _iso_make_ambient(self, place: Any) -> None:
         """An :class:`IsoCritter` for each creature of the scene's ``ambient`` (:attr:`iso_critters`)
@@ -110,7 +110,7 @@ class IsoAmbience:
 
     def _ambient_lanes(self, place: Any) -> set[tuple[int, int]]:
         """The water a sailing boat crosses (its routes, replayed as planned from where it
-        stands): ducks keep off it (DESIGN.md §105.8). A car's paths and a train's track are
+        stands): ducks keep off it. A car's paths and a train's track are
         :meth:`_ambient_roads`."""
         lanes: set[tuple[int, int]] = set()
         boats = {name: (place.object(name), None) for name, v in getattr(self, "iso_vehicles", {}).items() if v.kind == "boat"}

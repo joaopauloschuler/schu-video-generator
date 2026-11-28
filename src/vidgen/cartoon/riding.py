@@ -1,7 +1,7 @@
-"""Riders in vehicles, drawn and moved with manim (DESIGN.md §69.52); the geometry is in
+"""Riders in vehicles, drawn and moved with manim; the geometry is in
 :mod:`vidgen.cartoon.vehicles`.
 
-A rider is never added to its vehicle (a character's family never changes, §69.22, and a
+A rider is never added to its vehicle (a character's family never changes, and a
 vehicle's box stays its own in the layout dump): :func:`place_rider` puts it on its seat where
 the vehicle is now, at its size (a vehicle riding in depth grows or shrinks, its riders with it),
 and an updater on the rider calls it on every frame while it rides; :class:`Ride` calls it too
@@ -120,13 +120,13 @@ class Ride(Animation):
     (Manim units) at ``speed`` units per second, with the riders of ``seats``: it turns to face
     the way it goes (at once, its riders with it), speeds up, goes, slows down and stops
     (:func:`~vidgen.cartoon.acting.walk_progress`), its wheels turning by the way it goes and a
-    bicycle's rider pedalling. ``depth``: it also rides towards or away from the camera
-    (DESIGN.md §69.44), its feet to ``feet_y(depth)``, growing or shrinking by the depth scale with
+    bicycle's rider pedalling. ``depth``: it also rides towards or away from the camera,
+    its feet to ``feet_y(depth)``, growing or shrinking by the depth scale with
     its riders. ``strength``: its riders' ``cartoon_motion`` strength, for the motion effects
     (``None``: the scene's).
 
     A boat goes along the water like a car along the road, from where it rests (``afloat``: the
-    stage's water bobs it on top, DESIGN.md §69.53). A hot-air balloon or a toy rocket flies a
+    stage's water bobs it on top). A hot-air balloon or a toy rocket flies a
     :class:`~vidgen.cartoon.vehicle_paths.Course` instead: ``rise`` units high (a balloon's
     altitude, a rocket's apex), a balloon blown ``drift`` units aside by the wind on the way, and
     lands at ``x`` on its ground, or, with ``away_y``, flies on up to that y (above the frame). A

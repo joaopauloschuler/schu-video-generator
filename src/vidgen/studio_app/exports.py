@@ -1,4 +1,4 @@
-"""Exports from the studio (DESIGN.md §94.15): a version as its score file (YAML), as audio (WAV or
+"""Exports from the studio: a version as its score file (YAML), as audio (WAV or
 MP3: the piece once, N loops or N seconds, at a video's level or a listening level) for the
 browser to download, or saved into the project's ``assets/music/<name>.yaml`` as a project piece
 (``music: <name>``) with the Step 188 name rule.

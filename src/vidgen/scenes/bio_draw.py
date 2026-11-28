@@ -1,4 +1,4 @@
-"""Drawing helpers shared by the ``cell_cycle`` and ``metabolism`` scenes (DESIGN.md §95.13):
+"""Drawing helpers shared by the ``cell_cycle`` and ``metabolism`` scenes:
 captions wrapped by width, regulation rows in SBGN-like notation (nodes with activation arrows
 and inhibition T-bars, P and Ub marks on the arcs), small labels on plates, and an animation
 driven by a function of its progress. Written against ``vidgen.api``."""

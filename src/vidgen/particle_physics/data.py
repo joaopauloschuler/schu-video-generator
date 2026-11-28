@@ -1,5 +1,5 @@
 """The particles: the Standard Model's quarks, leptons and bosons and the hadrons used in
-teaching, with their antiparticles (Phase Y, Step 237; DESIGN §99.2). No manim.
+teaching, with their antiparticles (Phase Y, Step 237). No manim.
 
 Source of every mass, width and mean life: **PDG 2024** — Particle Data Group, S. Navas et al.,
 *Review of Particle Physics*, Phys. Rev. D 110, 030001 (2024), the summary tables. Values are

@@ -1,4 +1,4 @@
-"""Laboratory techniques of molecular genetics as data and rules (DESIGN.md §96.15). No manim.
+"""Laboratory techniques of molecular genetics as data and rules. No manim.
 
 - **PCR** (:func:`plan_pcr`): primers written 5′→3′ — the forward primer's sequence is on the top
   strand (it anneals to the bottom strand and is extended rightwards), the reverse primer's is the

@@ -1,4 +1,4 @@
-"""The scene description a ``3d`` scene sends to its page (DESIGN.md §114.3): plain JSON, so it can
+"""The scene description a ``3d`` scene sends to its page: plain JSON, so it can
 be stored next to the render, hashed for the cache and read again by later passes.
 
 Version 1::
@@ -41,8 +41,8 @@ from vidgen.three_d.spec import Object3D, Scene3DParams
 from vidgen.three_d.world import World
 
 DESCRIPTION_VERSION = 1
-#: Ways the page can draw a scene: as it looks, or one of the guide passes (§114.14:
-#: ``three_d/passes.py``).
+#: Ways the page can draw a scene: as it looks, or one of the guide passes
+#: (``three_d/passes.py``).
 DRAW_MODES: tuple[str, ...] = ("normal", "depth", "outline", "mask")
 #: Nearest and farthest distance the camera draws (scene units).
 CAMERA_NEAR, CAMERA_FAR = 0.1, 500.0

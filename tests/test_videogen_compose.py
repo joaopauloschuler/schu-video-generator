@@ -1,4 +1,4 @@
-"""Generated video in the film (DESIGN.md §113.4): QA of returned clips (synthetic MP4s made by
+"""Generated video in the film: QA of returned clips (synthetic MP4s made by
 FFmpeg: a moving pattern, colour bars, black, frozen, flickering, a cut), contact sheets, takes
 and picks, placing takes over their beats (cover crop, fades, colour matching, overlays on top,
 fingerprints), the run / status / takes / pick workflow with the mock provider (budget, stop on

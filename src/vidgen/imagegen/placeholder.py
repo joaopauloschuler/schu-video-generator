@@ -1,4 +1,4 @@
-"""The placeholder card shown for a generated picture not made yet (DESIGN.md §58).
+"""The placeholder card shown for a generated picture not made yet.
 
 A card at the picture's aspect ratio in the theme's colours: a soft gradient, a picture glyph,
 "Image to generate", the prompt and a hint to run ``vidgen imagegen``. Drawn with Pillow and

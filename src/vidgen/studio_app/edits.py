@@ -1,4 +1,4 @@
-"""Value edits of a score's text that keep everything else as written (DESIGN.md §94.4): a control
+"""Value edits of a score's text that keep everything else as written: a control
 changes one value in place, found with :func:`yaml.compose`'s node marks, so the comments, the
 layout and every other line stay as they were.
 

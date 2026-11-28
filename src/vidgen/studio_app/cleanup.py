@@ -1,4 +1,4 @@
-"""Cleaning up a studio's disk (DESIGN.md §94.18): renders and exports are caches, versions are
+"""Cleaning up a studio's disk: renders and exports are caches, versions are
 not. A render (about 9 MB a minute, more with its listening mixes, sections and narration) can
 always be made again from its version, and an export was downloaded by the browser when it was
 made; so old ones go, by a fixed rule:

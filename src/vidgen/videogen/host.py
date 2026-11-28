@@ -1,4 +1,4 @@
-"""Hosting a shot's audio / video inputs through a Cloudflare Quick Tunnel (DESIGN.md §115).
+"""Hosting a shot's audio / video inputs through a Cloudflare Quick Tunnel.
 
 OpenRouter takes audio and video references only as ``https://`` URLs. :class:`QuickTunnelHost`
 shares exactly the files it is given, for as short a time as it can:

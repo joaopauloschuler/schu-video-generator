@@ -1,5 +1,4 @@
-"""Integrators for systems of ordinary differential equations ``dy/dt = f(t, y)`` (Phase W,
-DESIGN §97.7), numpy only and deterministic: the classical Runge–Kutta method with a fixed step
+"""Integrators for systems of ordinary differential equations ``dy/dt = f(t, y)`` (Phase W), numpy only and deterministic: the classical Runge–Kutta method with a fixed step
 (:func:`rk4`), the adaptive Dormand–Prince 5(4) pair (:func:`rk45`, the method of scipy's
 ``RK45``) and the symplectic velocity Verlet / leapfrog scheme for ``x'' = a(t, x)``
 (:func:`verlet`), which keeps the energy of a conservative system bounded over long times

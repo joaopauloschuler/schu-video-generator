@@ -1,7 +1,7 @@
 # Cystic fibrosis, from a family to a diagnosis: a university-level medical-genetics explainer
 # (about 4 min) that follows one inherited disease through Phase V's scene types
 # (docs/CONFIG.md `pedigree`, `cross`, `karyotype`, `mutation`, `dna_lab`, `population`;
-# DESIGN §96; the craft: docs/COOKBOOK-GENETICS.md):
+# the craft: docs/COOKBOOK-GENETICS.md):
 #   - a `pedigree` in NSGC symbols: the modes of inheritance tried one by one (only autosomal
 #     recessive fits), the obligate carriers, 2/3 for the unaffected brother, the risk 1/150 for
 #     his child with a partner from the population (carrier frequency 1/25)

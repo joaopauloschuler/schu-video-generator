@@ -1,4 +1,4 @@
-"""Props in the characters' hands (DESIGN.md §69.27). No manim.
+"""Props in the characters' hands. No manim.
 
 :class:`Holdings` is the state machine of who holds which prop in which hand: ``take`` (a
 ``pick_up`` or ``hold``), ``release`` (a ``put_down`` or ``throw``) and ``give`` (from one
@@ -8,7 +8,7 @@ one (:func:`holding_problems`, with the distances), and the automatic directing 
 so it adds no arm gesture with a hand that holds something.
 
 The geometry is in Manim units and character heights: where a held prop sits (:func:`hold_point`,
-in front of the shoulder; :func:`overhead_point` for an open umbrella, §69.37), how tall it is
+in front of the shoulder; :func:`overhead_point` for an open umbrella), how tall it is
 in the hand (:func:`held_height`), where a prop is put
 down (:func:`put_down_x`) and the arc and spin of a throw (:func:`throw_point`, :func:`spin_degrees`).
 """
@@ -45,7 +45,7 @@ PUT_DOWN_AHEAD = 0.35
 #: Where a ``walk_to`` suggestion stands the character: this many heights from the prop's x.
 STAND_BESIDE = 0.4
 #: How far apart in depth (0..1) a character and the prop it sits or leans on, picks up or the
-#: character it gives to may be (DESIGN.md §69.44): further, and it must walk to that depth first.
+#: character it gives to may be: further, and it must walk to that depth first.
 DEPTH_REACH = 0.05
 #: Seconds of each action, and the share of it at which the hand reaches the prop (``pick_up``,
 #: ``give``) or the spot (``put_down``), and at which a put-down prop stands on the ground.
@@ -70,16 +70,16 @@ THROW_FLIGHT_MIN = 0.45
 THROW_FLIGHT_PER_UNIT = 0.06
 THROW_FLIGHT_MAX = 1.6
 #: The actions that hand props around, use one in a hand (``pour``) or take one out of a hand
-#: (``blow_away``, DESIGN.md §69.32; ``let_go``, §69.56).
+#: (``blow_away``; ``let_go``).
 HANDLING_ACTIONS: frozenset[str] = frozenset({"pick_up", "hold", "put_down", "give", "throw", "blow_away", "let_go", "pour"})
-#: A prop showing one of these shapes (an open umbrella) is held overhead (DESIGN.md §69.37): the
+#: A prop showing one of these shapes (an open umbrella) is held overhead: the
 #: hand ``OVERHEAD_FORWARD`` of its holder's heights in front of the feet and ``OVERHEAD_HAND``
 #: above them (where every generated look's arm reaches, or nearly), the prop
 #: ``OVERHEAD_HEIGHT`` holder heights tall (not :data:`HOLD_MAX_HEIGHT`), so an umbrella's canopy
 #: is above the head of every generated look and wide enough to cover it.
 OVERHEAD_SHAPES: frozenset[str] = frozenset({"open"})
 #: The props held overhead in an :data:`OVERHEAD_SHAPES` shape (an open book, letter or gift is
-#: held in front like any prop, DESIGN.md §69.56).
+#: held in front like any prop).
 OVERHEAD_PROPS: frozenset[str] = frozenset({"umbrella"})
 #: Props held at their full size, not made smaller than :data:`HOLD_MAX_HEIGHT` (balloons rise
 #: above the hand on their strings).
@@ -255,7 +255,7 @@ class HandlingStep:
 @dataclass
 class _Positions:
     """Each character's and prop's feet x (``None``: not known), the characters' heights, who is
-    on stage, and each one's depth (§69.44)."""
+    on stage, and each one's depth."""
 
     x: dict[str, float | None]
     heights: dict[str, float]
@@ -316,7 +316,7 @@ def _ride(
     place and depth with their riders; a target character that rides nothing is a problem. A boat
     rides on the ``water`` only (its x from .. to, Manim units), only vehicles on the ground ride
     in depth, only flying ones fly away (``land: false``: then they and their riders are
-    ``flown``, DESIGN.md §69.53)."""
+    ``flown``)."""
     problems: list[tuple[str, str]] = []
     chosen = [t for t in step.targets if t in rides]
     for who in [t for t in step.targets if t in characters]:
@@ -371,26 +371,26 @@ def holding_problems(
     message)`` per action that cannot happen then: a prop held by another or a hand full
     (``pick_up``, ``hold``, ``give``), nothing to put down, give or throw, a prop or a spot too far
     without a walk (with the ``walk_to`` that fixes it), a character to give to who is not next to
-    the giver, a keyed move of a prop someone holds; sitting or leaning (DESIGN.md §69.28): a seat
+    the giver, a keyed move of a prop someone holds; sitting or leaning: a seat
     taken, a prop held or too far to sit or lean on, a ``stand_up`` with nothing to stand up from,
     a walk, jump, turn or keyed move of a character that sits or leans, a prop picked up or moved
-    while someone sits or leans on it; ``blow_away`` (§69.32) takes a prop out of whoever's hand,
+    while someone sits or leans on it; ``blow_away`` takes a prop out of whoever's hand,
     and one blown off stage (no ``to``) cannot be used again. ``characters``: name -> (feet x, height); ``props``: name ->
     x; ``place_x`` a mark or x of the stage in Manim units (``None``: neither); ``to_fraction`` an
     x back to 0..1 of the stage; ``entering``: characters off stage until their first ``enter``;
     ``seat_places``: prop -> how many sit on it side by side (a sofa: 2; default 1); ``depths``:
-    character or prop -> its depth at the start (DESIGN.md §69.44): sitting, leaning, picking up
+    character or prop -> its depth at the start: sitting, leaning, picking up
     and giving at another depth (beyond :data:`DEPTH_REACH`) need a ``walk_to`` to that depth
     first; a put-down or thrown prop is at its holder's depth. ``vehicles``: name -> (kind, height
-    in Manim units) of the props that are vehicles (DESIGN.md §69.52): ``get_in`` needs the vehicle
+    in Manim units) of the props that are vehicles: ``get_in`` needs the vehicle
     next to the rider (:data:`~vidgen.cartoon.vehicles.GET_IN_REACH` beyond its ends, at its
     depth) and a free seat, ``ride_to`` takes the riders along (a character target that rides
     nothing is a problem), ``get_out`` needs a vehicle to get out of; a rider cannot walk, sit or
     stand up before it gets out, and a vehicle cannot be picked up or moved by keys while ridden.
-    ``water``: the x (Manim units) from and to which the stage's water goes (DESIGN.md §69.53): a
+    ``water``: the x (Manim units) from and to which the stage's water goes: a
     boat rides there only; only vehicles on the ground ride in depth; a balloon or a toy rocket
     that flies away (``land: false``) is gone for the scene with its riders. ``kinds``: prop ->
-    its built-in kind (``None``: an SVG prop; DESIGN.md §69.56): ``let_go`` needs a held prop that
+    its built-in kind (``None``: an SVG prop): ``let_go`` needs a held prop that
     floats (:data:`~vidgen.cartoon.small_props.FLOATING_PROPS`), which is then gone for the scene;
     ``pour`` needs a held one that pours (:data:`~vidgen.cartoon.small_props.POURING_PROPS`)."""
     holdings = Holdings()
@@ -495,7 +495,7 @@ def holding_problems(
                     if place is not None:
                         where.x[who] = place_x(place)
                     where.walk_depth(who, depth)
-                elif step.action == "jump" and o.get("to") is not None:   # to a place on a level (DESIGN.md §86.7)
+                elif step.action == "jump" and o.get("to") is not None:   # to a place on a level
                     where.x[who] = place_x(o["to"])
                 elif step.action in ("move_along", "keyframes"):
                     where.x[who] = None

@@ -1,4 +1,4 @@
-"""Step captions of the cell-biology processes (DESIGN.md §95.16): each step of a process has a
+"""Step captions of the cell-biology processes: each step of a process has a
 textbook caption (``TFIIH unwinds the DNA at the start site (+1): a transcription bubble of
 ~13 bp; …``); in a tall frame (a phone) the full text is dense, so a caption can be shown short —
 its first clause, the statement itself, with the details after a colon, a semicolon or a dash

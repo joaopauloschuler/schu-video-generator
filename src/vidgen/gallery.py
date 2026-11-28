@@ -1,4 +1,4 @@
-"""``vidgen gallery`` (DESIGN.md §60): every scene type rendered from one canonical sample, at
+"""``vidgen gallery``: every scene type rendered from one canonical sample, at
 16:9 and 9:16, written as Markdown pages with stills and short GIF clips.
 
 **Samples.** A built-in type's sample is its snippet in the author guide's ``scenes`` topic
@@ -19,7 +19,7 @@ with its stills), ``<type>.md`` (what it is for, stills, clips, the YAML, params
 beats) and ``media/<type>-16x9.png|gif``, ``media/<type>-9x16.png|gif``. Nothing in them depends
 on the time or the machine, so regenerating with the same schu-video-generator gives the same files.
 
-**Two galleries** (DESIGN.md §123.1): the entries of types drawn by a web page in headless
+**Two galleries**: the entries of types drawn by a web page in headless
 Chromium (``NarratedScene.drawn_in_browser``: ``web``, ``3d``, ``space``) and the showcases using
 one go to ``web/`` (its own ``README.md``, pages and ``media/``); the indexes link each other and
 the YouTube section ends the main one.
@@ -145,7 +145,7 @@ WEB_SECTION_NOTES: dict[str, str] = {
         "How to make them: [the 3D cookbook](../../COOKBOOK-3D.md), [the space cookbook](../../COOKBOOK-SPACE.md) and [the air cookbook](../../COOKBOOK-AIR.md)."
     ),
 }
-#: The web gallery's folder under the gallery's output (DESIGN.md §123.1): the entries of types drawn
+#: The web gallery's folder under the gallery's output: the entries of types drawn
 #: in headless Chromium (``NarratedScene.drawn_in_browser``: ``web``, ``3d``, ``space``) and the
 #: showcases using one, with an index of their own.
 WEB_FOLDER = "web"
@@ -234,7 +234,7 @@ class Sample:
     """The canonical example of a scene type: its scene ``config`` (a ``scenes:`` entry), the
     ``yaml`` as written in its source, the index ``group``, where it came from (``guide`` or
     the project's config file name) and the ``characters:`` entries its snippet declares (a
-    ``stage`` needs them; DESIGN.md §69.6)."""
+    ``stage`` needs them)."""
 
     type: str
     config: dict[str, Any]
@@ -262,8 +262,8 @@ class GalleryType:
 
 @dataclass(frozen=True)
 class Showcase:
-    """A small scene written for the gallery to show what a scene type can do, beyond its sample
-    (DESIGN.md §60.1): ``name`` (its scene's id, its page and media names), the index
+    """A small scene written for the gallery to show what a scene type can do, beyond its sample:
+    ``name`` (its scene's id, its page and media names), the index
     ``section`` it ends (a guide group, or a section of its own after them), its ``title`` and
     ``use`` (the "use it for" line). Its YAML is ``data/gallery/showcases/<name>.yaml``: a whole
     config with one scene."""
@@ -1107,7 +1107,7 @@ def make_gallery(
 
 def _remove_other_copy(name: str, output: Path, web: bool) -> None:
     """Remove entry ``name``'s page and media from the gallery it is not in (an entry written
-    there before it moved, DESIGN.md §123.1), so it is in one gallery only."""
+    there before it moved), so it is in one gallery only."""
     other = gallery_folder(output, not web)
     for path in [other / f"{name}.md", *(other / "media" / media_name(name, f, x) for f in FORMATS for x in (".png", ".gif"))]:
         remove_file(path)

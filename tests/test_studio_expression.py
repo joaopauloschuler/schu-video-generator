@@ -1,4 +1,4 @@
-"""Expressive notes in score files (Step 346, DESIGN.md §120.7): the marks are read, a score
+"""Expressive notes in score files (Step 346): the marks are read, a score
 without them plays as before, and what each mark does is measured on one short track."""
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
-"""Dubbing (DESIGN.md §80): which voice says each speaker's lines in the video's language. No manim.
+"""Dubbing: which voice says each speaker's lines in the video's language. No manim.
 
-A video in another language is a variant with a ``language:`` and a translation file (§54). Its
+A video in another language is a variant with a ``language:`` and a translation file. Its
 voices change by these rules, applied by :func:`vidgen.voices.resolve_voice`:
 
 - a voice's ``dub: {LANG: VOICE}`` (the base ``voice:`` or a ``voices:`` entry) names its voice
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from vidgen.config import DubSetting, VideoConfig
     from vidgen.project import Project
 
-#: Voice kinds by the second letter of a Kokoro voice name (DESIGN.md §69.25 ``voice_kind``).
+#: Voice kinds by the second letter of a Kokoro voice name (``voice_kind``).
 KOKORO_KINDS: dict[str, str] = {"f": "feminine", "m": "masculine"}
 #: Kokoro voices automatic dubbing never picks (a ``dub:`` may still name them).
 NOVELTY_VOICES: tuple[str, ...] = ("santa",)
@@ -142,7 +142,7 @@ def voice_dubs(config: VideoConfig) -> dict[str | None, Dub]:
 
 
 def config_dub_warnings(config: VideoConfig, used_names: list[str | None]) -> list[str]:
-    """What ``vidgen validate`` warns about the dubbing of ``config`` (DESIGN.md §80): a voice
+    """What ``vidgen validate`` warns about the dubbing of ``config``: a voice
     dubbed with a voice of another kind, and voices of ``used_names`` that differ in their own
     language but speak with one voice in this one."""
     from vidgen.voices import resolve_voice

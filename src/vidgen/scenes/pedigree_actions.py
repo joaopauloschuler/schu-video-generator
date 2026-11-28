@@ -1,4 +1,4 @@
-"""The beat actions of ``pedigree`` scenes (DESIGN.md §96.8): ``deduce`` (the genotypes the chart
+"""The beat actions of ``pedigree`` scenes: ``deduce`` (the genotypes the chart
 forces, carrier probabilities, obligate carriers' marks), ``analyse`` (the modes of inheritance
 tried one by one: fits, or excluded with the reason while the people it names are ringed) and
 ``risk`` (the proposed child and its risk with the factors of the product). Timed like any

@@ -1,4 +1,4 @@
-"""Ready-made genetic systems for the textbook crosses (DESIGN.md §96.3): ``preset: abo`` and
+"""Ready-made genetic systems for the textbook crosses: ``preset: abo`` and
 so on, so authors do not retype the classic loci (and cannot get their dominance wrong). Each
 is plain YAML-shaped data that :func:`~vidgen.genetics.model.build_system` checks like an
 author's. No manim."""

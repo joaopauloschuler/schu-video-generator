@@ -1,4 +1,4 @@
-"""Modes of inheritance (DESIGN.md §96.3): autosomal dominant and recessive, X-linked dominant
+"""Modes of inheritance: autosomal dominant and recessive, X-linked dominant
 and recessive, Y-linked and mitochondrial, with their textbook hallmarks as data, so the
 pedigree analysis (Step 215) and the genetics lint (Step 219) use one table. No manim."""
 

@@ -1,4 +1,4 @@
-"""Building a cell world from its spec and the location rules (DESIGN.md §95.4):
+"""Building a cell world from its spec and the location rules:
 :func:`build_cell_world` places every entry (written ``at``, the typical layout of its kind of
 cell, else scattered by ``seed``), generates what belongs to a structure (nuclear pores,
 ribosomes on the rough ER and the outer nuclear membrane, vesicles at the Golgi and at ER exit

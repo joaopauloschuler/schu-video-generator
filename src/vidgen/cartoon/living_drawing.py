@@ -1,4 +1,4 @@
-"""Props that move by themselves, drawn and moved with manim (DESIGN.md §69.54, §69.55); the
+"""Props that move by themselves, drawn and moved with manim; the
 maths is in :mod:`vidgen.cartoon.living`.
 
 A prop drawn ``living`` (:func:`living_overlays`, added by ``draw_prop(..., living=True)``) gets
@@ -84,10 +84,10 @@ STEAM = "#F4F6FA"
 STEAM_EDGE = "#AEB9C6"
 STEAM_EDGE_PIXELS = 1.5
 STEAM_EDGE_SHARE = 0.7
-#: A ringing phone (DESIGN.md §69.56): its lit screen, the middle it shakes about, the ring lines
+#: A ringing phone: its lit screen, the middle it shakes about, the ring lines
 #: beside it (prop units) and their colour (amber: it shows on light and dark backgrounds).
 LIT_SCREEN = "#E3F4FF"
-#: A switched-on scanner (DESIGN.md §102.13): its lit screen, its readout (bar and wave) and the
+#: A switched-on scanner: its lit screen, its readout (bar and wave) and the
 #: readout's colour off its scale; the attribute naming a readout member's role.
 SCANNER_LIT = "#0F3A44"
 SCANNER_READOUT = "#5FFFE0"
@@ -151,7 +151,7 @@ def living_overlays(kind: str, paint: _Paint, *, view: str | None = None) -> lis
             tag(_circle(0.0, 0.6, 0.09, paint.detail, paint, outline=False), "screen"),
             *rings,
         ]
-    if kind == "scanner":   # its lit screen, the readout's bar and wave (DESIGN.md §102.13)
+    if kind == "scanner":   # its lit screen, the readout's bar and wave
         from vidgen.cartoon.props import SCANNER_SCREEN
 
         x0, y0, x1, y1 = SCANNER_SCREEN
@@ -161,7 +161,7 @@ def living_overlays(kind: str, paint: _Paint, *, view: str | None = None) -> lis
         setattr(bar, SCAN_ROLE, "bar")
         setattr(wave, SCAN_ROLE, "wave")
         return [screen, bar, wave]
-    if kind == "crystal":   # its glowing core (§102.13)
+    if kind == "crystal":   # its glowing core
         core = _poly([(-0.1, 0.2), (-0.12, 0.6), (0.0, 0.88), (0.12, 0.6), (0.1, 0.2)], LIT_CORE, paint, outline=False)
         core.set_fill(opacity=0.85)
         return [tag(core, "lantern")]
@@ -179,8 +179,8 @@ def living_overlays(kind: str, paint: _Paint, *, view: str | None = None) -> lis
     return []
 
 
-#: A portal's parts (DESIGN.md §100.4), drawn in this order: the inside, the shapes of the place
-#: seen through it (§100.13), its depth rings, the swirls, the rim's glowing edge and bright core,
+#: A portal's parts, drawn in this order: the inside, the shapes of the place
+#: seen through it, its depth rings, the swirls, the rim's glowing edge and bright core,
 #: the sparks.
 PORTAL_PARTS: tuple[str, ...] = ("portal_inside", "portal_view", "portal_ring", "portal_swirl", "portal_rim", "portal_core", "portal_spark")
 #: How far the inside's depth rings go from the inside's colour towards the rim's.
@@ -219,12 +219,12 @@ def _portal_overlays(paint: _Paint, view: str | None = None) -> list[VMobject]:
     return members
 
 
-#: A hologram display's parts (DESIGN.md §100.10), drawn in this order: the beam from the lens,
+#: A hologram display's parts, drawn in this order: the beam from the lens,
 #: the panel, its scan lines, the pattern's bars, text lines and curves, the panel's edge.
 DISPLAY_PARTS: tuple[str, ...] = ("holo_beam", "holo_panel", "holo_scan", "holo_bar", "holo_line", "holo_curve", "holo_box", "holo_wing",
                                   "holo_glyph", "holo_dot", "holo_edge")
 #: The display's opacities: beam, panel, scan lines, bars, text lines, curves, small panels,
-#: wings, glyphs, dots (DESIGN.md §102.10), edge.
+#: wings, glyphs, dots, edge.
 DISPLAY_OPACITY: dict[str, float] = {"holo_beam": 0.16, "holo_panel": 0.22, "holo_scan": 0.18, "holo_bar": 0.75, "holo_line": 0.85,
                                      "holo_curve": 0.9, "holo_box": 0.3, "holo_wing": 0.35, "holo_glyph": 0.95, "holo_dot": 0.95,
                                      "holo_edge": 0.95}
@@ -343,9 +343,9 @@ class LivingProp:
                  scan: ScanMeter | None = None) -> None:
         self.prop = prop
         self.kind = prop.kind
-        #: A hologram display's pattern (DESIGN.md §100.10).
+        #: A hologram display's pattern.
         self.pattern = pattern
-        #: A scanner's reading (DESIGN.md §102.13; its ``at`` in scene seconds).
+        #: A scanner's reading (its ``at`` in scene seconds).
         self.scan = scan if scan is not None else ScanMeter()
         self.start = DRAWN_CLOCK_SECONDS if start is None else float(start)
         self.speed = float(speed)
@@ -355,7 +355,7 @@ class LivingProp:
         self.wind = wind
         #: Each switch: (scene time, on).
         self.switches: list[tuple[float, bool]] = []
-        #: The switches it fades over, (scene time, seconds): a lamp lit by itself at dusk (§105.3).
+        #: The switches it fades over, (scene time, seconds): a lamp lit by itself at dusk.
         self.fades: list[tuple[float, float]] = []
         self.hands ={name: living_parts(prop, name) for name in HAND_LENGTHS} if self.kind == "clock" else {}
         if self.hands:
@@ -364,18 +364,18 @@ class LivingProp:
         self.overlays = living_parts(prop, "picture") + living_parts(prop, "lantern") + self.flames + living_parts(prop, "screen")
         self._shown = _Shown(self.overlays)
         #: A phone's ring lines, shown in each burst of rings, and its whole drawing in prop
-        #: units (each member with points but the anchor), redrawn turned as it shakes (§69.56).
+        #: units (each member with points but the anchor), redrawn turned as it shakes.
         self.rings = living_parts(prop, "ring")
         self._rings = _Shown(self.rings)
         anchor = prop.anchor
         self._body = [(m, prop.drawn_points(m.points)) for m in prop.family_members_with_points() if m is not anchor] if self.kind == "phone" else []
-        #: A portal's moving parts by name (DESIGN.md §100.4; empty for other props).
+        #: A portal's moving parts by name (empty for other props).
         self.portal = {part: living_parts(prop, part) for part in PORTAL_PARTS} if self.kind == "portal" else {}
         views = self.portal.get("portal_view", [])
-        #: The place seen through a portal (§100.13; ``None``: its swirling inside).
+        #: The place seen through a portal (``None``: its swirling inside).
         self.view: str | None = getattr(views[0], "portal_view_name", None) if views else None
         self._view_drawn = [(float(m.get_fill_opacity()), m) for m in views]
-        #: A hologram display's moving parts by name (§100.10; empty for other props).
+        #: A hologram display's moving parts by name (empty for other props).
         self.display = {part: living_parts(prop, part) for part in DISPLAY_PARTS} if self.kind == "hologram_display" else {}
         self._display_drawn = {id(m): (float(m.get_fill_opacity()), float(m.get_stroke_opacity())) for ms in self.display.values() for m in ms}
         spec = GLOWS.get(self.kind)
@@ -387,7 +387,7 @@ class LivingProp:
         #: A kettle's steam (``None``: another prop), drawn right in front of it.
         self.steam = PropSteam(name=f"{prop.name}_steam") if self.kind == "kettle" else None
         for member in [m for mob in (self.movers() if self.kind not in ("clock", "kettle", "phone") else self.overlays) for m in mob.get_family()]:
-            setattr(member, LIT, False)   # a lit screen, lamp or fire shines at night too (§69.31's grade skips it); hands stay graded
+            setattr(member, LIT, False)   # a lit screen, lamp or fire shines at night too (the night grade skips it); hands stay graded
         if self.steam is not None:
             mark_lit(self.steam)   # steam is graded like the set
         self.update(0.0)
@@ -418,7 +418,7 @@ class LivingProp:
         television while it is on, a lamp when switched (or moved while on)."""
         if self.kind == "clock":
             return True
-        if self.kind == "portal":   # while open, opening or sealing (§100.4)
+        if self.kind == "portal":   # while open, opening or sealing
             return portal_changing(self.on, self.switches, start, end)
         if switch_between(self.switches, start, end) or any(s < end and s + d > start for s, d in self.fades):
             return True
@@ -500,7 +500,7 @@ class LivingProp:
             self.glow.place(*self._glow_place(), strength)
 
     def _open(self, now: float) -> None:
-        """A portal as it is at scene time ``now`` (DESIGN.md §100.4): sealed (no points, no
+        """A portal as it is at scene time ``now``: sealed (no points, no
         glow), opening, open (crackling, swirling, sparking, pulsing) or sealing."""
         shape = portal_shape(portal_openness(self.on, self.switches, now), now, self.seed)
         members = [m for part in PORTAL_PARTS for m in self.portal[part]]
@@ -533,7 +533,7 @@ class LivingProp:
             self.glow.place(*self._glow_place(), shape.glow)
 
     def _show_view(self, shape: Any, now: float) -> None:
-        """The place seen through an open portal (DESIGN.md §100.13): :func:`portal_view` in the
+        """The place seen through an open portal: :func:`portal_view` in the
         oval as large as it is now, fading in as it widens."""
         cx, cy = PORTAL_CENTRE
         rx = max(x for x, _ in shape.inside) - cx
@@ -549,7 +549,7 @@ class LivingProp:
                 member.points = np.zeros((0, 3))
 
     def _project(self, now: float) -> None:
-        """A hologram display as it is at scene time ``now`` (DESIGN.md §100.10): off (nothing but
+        """A hologram display as it is at scene time ``now``: off (nothing but
         its projector), or its beam, panel, scan lines and pattern, flickering."""
         frame = display_frame(self.pattern, on_since(self.on, self.switches, now), now, self.seed)
         members = [m for part in DISPLAY_PARTS for m in self.display[part]]
@@ -611,7 +611,7 @@ class LivingProp:
             self.glow.place(*self._glow_place(), frame.level * frame.grow)
 
     def _read(self, now: float) -> float:
-        """A switched-on scanner's readout at scene time ``now`` (DESIGN.md §102.13): a bar along
+        """A switched-on scanner's readout at scene time ``now``: a bar along
         the screen's foot filled to the reading and its live wave above it, both in the warning
         colour and the wave jittering while the reading is off its scale; returns its glow's
         strength (brighter as the reading climbs)."""

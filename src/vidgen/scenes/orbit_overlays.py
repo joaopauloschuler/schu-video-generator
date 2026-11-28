@@ -1,4 +1,4 @@
-"""Overlays of the ``orbit`` scene (Phase X, Step 230, DESIGN §98.4): the ellipse's geometry
+"""Overlays of the ``orbit`` scene (Phase X, Step 230): the ellipse's geometry
 (the empty focus and the centre, a and b, the apsides with their names), equal-time sectors
 (Kepler's second law, each area computed), velocity vectors with a key and the speed from
 vis-viva, Newton's cannonball, the side panel (readout and legend) and label placement without

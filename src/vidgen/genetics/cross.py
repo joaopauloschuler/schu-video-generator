@@ -1,4 +1,4 @@
-"""The exact cross engine (DESIGN.md §96.4): gametes by Mendel's segregation and independent
+"""The exact cross engine: gametes by Mendel's segregation and independent
 assortment, crossing over between linked loci at their recombination frequencies (coupling or
 repulsion as written, interference for three loci, none where ``rf_male`` says so), X and Y
 segregating in males, mtDNA in eggs only; offspring genotype and phenotype distributions as

@@ -1,4 +1,4 @@
-"""Cloud decks, towers, lightning and a giant's decks, ``vidgen/space-clouds`` (Step 383, DESIGN.md §123.5):
+"""Cloud decks, towers, lightning and a giant's decks, ``vidgen/space-clouds`` (Step 383):
 the module is served by its import name and imports only ``three``, ``vidgen/space-air`` and
 ``vidgen/space-bodies``; its parts are registered under the kind ``cloud``; in Node (when it is installed):
 the noise tile is the same twice and repeats, a shell's stretch of a ray against a walk along the ray, a

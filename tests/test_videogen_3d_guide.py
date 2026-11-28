@@ -1,4 +1,4 @@
-"""3D guide passes as the guide of a generated shot (DESIGN.md §113.8): ``guide: depth | outline |
+"""3D guide passes as the guide of a generated shot: ``guide: depth | outline |
 mask`` on a ``3d`` scene, validation, the plan, the request hash, the prompt and the converted
 ``guide.<pass>.mp4``. Nothing is sent or paid; one test renders a tiny scene in Chromium."""
 

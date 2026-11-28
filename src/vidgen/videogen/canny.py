@@ -1,4 +1,4 @@
-"""The ``guide: canny`` control video (DESIGN.md §113.21): white Canny edges on black, made from
+"""The ``guide: canny`` control video: white Canny edges on black, made from
 a colour clip, with the edges in bright areas (a sun glint on water) removed.
 
 The edges follow OpenCV's ``cv2.Canny(gray, low, high)`` (3x3 Sobel, L1 gradient, the same

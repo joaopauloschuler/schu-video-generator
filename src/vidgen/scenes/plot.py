@@ -1,4 +1,4 @@
-"""``plot``: scientific plots on the chart core (Phase W, DESIGN §97): line, point and histogram
+"""``plot``: scientific plots on the chart core (Phase W): line, point and histogram
 series from inline numbers or a CSV in the project (units read from the headers) on linear /
 log / symlog / reversed / broken axes with units, scientific notation and SI prefixes; error
 bars, fitted curves with their parameters ± errors, confidence and prediction bands, residual

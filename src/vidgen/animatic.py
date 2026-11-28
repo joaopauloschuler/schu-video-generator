@@ -1,4 +1,4 @@
-"""``vidgen animatic``: the storyboard's stills timed to the narration, as an MP4 (DESIGN.md §75).
+"""``vidgen animatic``: the storyboard's stills timed to the narration, as an MP4.
 
 :func:`make_animatic` makes sure every scene has current stills (rendering, like ``vidgen
 storyboard``, only the scenes whose stills are missing or stale; current stills at any count per
@@ -65,8 +65,7 @@ def hold_plan(scenes: Sequence[tuple[float, Sequence[AnimaticStill]]], frames: i
     the beat's end, so what a beat shows is on screen during that beat. A scene's first still is
     held from the scene's start (so a scene never opens on the scene before it), the video's
     first from frame 0; a scene's last still stays until the next scene's first starts (a tail or
-    pause shows the scene's end), the video's last until the end. Where scenes overlap (DESIGN.md
-    §49) a still is cut at the next scene's start, and one that would start there or later is left
+    pause shows the scene's end), the video's last until the end. Where scenes overlap a still is cut at the next scene's start, and one that would start there or later is left
     out. Times are rounded to frames; a still that would be held no frame is left out.
     """
     if fps <= 0:

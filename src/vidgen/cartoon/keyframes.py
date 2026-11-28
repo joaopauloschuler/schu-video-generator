@@ -1,4 +1,4 @@
-"""Keyframes and motion paths (DESIGN.md §69.14), worked out without manim: the values a
+"""Keyframes and motion paths, worked out without manim: the values a
 ``keyframes`` action gives its target at a moment, and the curve a ``move_along`` action follows.
 
 A target has four *channels*: ``x``, ``y``, ``rotate`` (degrees, counterclockwise) and ``scale``
@@ -8,7 +8,7 @@ action's start, or shares of the beat's narration written as ``"40%"``.
 
 Eases carry the names of Manim's rate functions (``linear``, ``smooth``, ``ease_in_out_sine``,
 ``ease_out_back`` ...; the same curves, checked by a test), plus ``lively`` and ``calm``: a smooth
-move with the anticipation and overshoot of that ``cartoon_motion`` level (§69.13).
+move with the anticipation and overshoot of that ``cartoon_motion`` level.
 """
 
 from __future__ import annotations

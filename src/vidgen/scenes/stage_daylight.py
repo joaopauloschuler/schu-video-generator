@@ -1,9 +1,9 @@
-"""A day passing in one scene (DESIGN.md §105.3): the part of a ``stage`` that fades the light to
+"""A day passing in one scene: the part of a ``stage`` that fades the light to
 another time of day (the ``time_of_day`` action) and switches the lights on by themselves as the
 light passes dusk, and off as it passes dawn. Written against ``vidgen.api`` only;
 :class:`DayPassing` is a part of :class:`~vidgen.scenes.stage.Stage`.
 
-The fade itself is the ``light`` action's (§69.31: the grade of the sky, the ground and everything
+The fade itself is the ``light`` action's (the grade of the sky, the ground and everything
 on the set, the stars fading in and out, the shadows, an iso place's pools of light growing with
 :func:`~vidgen.cartoon.lighting.pool_strength`). Where the fade crosses :data:`DUSK_DARK`
 (:func:`dusk_crossing`), each light that switches by itself (an iso place's
@@ -22,7 +22,7 @@ DARK_SWITCH_SHARE = 0.25
 
 
 class DayPassing:
-    """The day-passing part of a ``stage`` (DESIGN.md §105.3)."""
+    """The day-passing part of a ``stage``."""
 
     def _light_uses(self) -> list[Any]:
         """The scene's actions that change the light: ``light`` and ``time_of_day``."""
@@ -47,8 +47,8 @@ class DayPassing:
             crossing = crossing or dusk_crossing(before, after, begin, length)
             before, done = after, share
         if crossing is None and setting != "indoor" and darkness(before) > max(DUSK_DARK, darkness(first) + 0.05):
-            # dark from the start (a rainy day's overcast light, §89.12) to darker: the lights come
-            # on early in the fade (no dusk is crossed; those already on stay), DESIGN.md §105.8
+            # dark from the start (a rainy day's overcast light) to darker: the lights come
+            # on early in the fade (no dusk is crossed; those already on stay)
             crossing = (start + DARK_SWITCH_SHARE * seconds, True)
         if not auto_lights or setting == "indoor" or crossing is None:
             return []
@@ -63,7 +63,7 @@ class DayPassing:
             for name in self.params.iso.auto_lit():
                 time = auto_switch_time(name, crossing, start, seconds)
                 changed = name in self.iso_objects and self.iso_change(name, time, AUTO_SWITCH_SECONDS, auto=True, on=on)
-                if self.iso_switch_vehicles([name], on, time) or changed:   # a driven car's headlights (§105.1)
+                if self.iso_switch_vehicles([name], on, time) or changed:   # a driven car's headlights
                     switched.append(name)
         given = dict(zip(self.params.prop_names(), self.params.stage_props()))
         for name, live in getattr(self, "living", {}).items():

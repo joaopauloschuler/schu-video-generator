@@ -1,4 +1,4 @@
-"""Foley: the sounds tied to the characters' actions on a ``stage`` (DESIGN.md §69.19), worked
+"""Foley: the sounds tied to the characters' actions on a ``stage``, worked
 out without manim. :func:`foley_cues` turns one action *as it played* (its scene start time and
 the seconds it took, after any shortening to fit its beat; :class:`PlayedAction`) into sound
 cues of the built-in sound library (:mod:`vidgen.sfx`): footsteps on each footfall of a walk
@@ -10,10 +10,10 @@ launch as a vehicle sets off, its brakes as it stops, and a soft thud where a ba
 lands (``ride_to``, :data:`RIDE_SOUNDS`); a door's creak as it opens or closes (``open`` /
 ``close``, an ``enter`` / ``exit`` through a closed door) and its thud as it shuts, a splash as a
 boat sets off and where a watering can's water lands (``pour``), and a splash under each step on
-wet ground (:func:`wet_steps`) (DESIGN.md §69.62). On a platform level (DESIGN.md §86.9) a jump
+wet ground (:func:`wet_steps`). On a platform level a jump
 also lands with a soft thud and step, a walk or a jump plays a coin's or a star's sound at each one
 it picks up (:func:`pickup_cues`), a locked door opened with its key clicks open before it creaks,
-and a blocker stepping aside shuffles off. On an iso place (DESIGN.md §89.11) each footstep is the
+and a blocker stepping aside shuffles off. On an iso place each footstep is the
 step of the surface under it (:data:`SURFACE_STEPS`), handing a small thing about makes a soft
 sound (:func:`handling_cues`) and so do changes to the place (:func:`place_change_cues`).
 
@@ -53,10 +53,10 @@ LAST_STEP_INTENSITY = 0.3
 LAST_STEP_MIN = 0.25
 #: The actions that walk (footsteps).
 WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit", "wander", "meet"})
-#: A ride's sounds (DESIGN.md §69.52), per vehicle: the sound as it sets off (``bell`` or
+#: A ride's sounds, per vehicle: the sound as it sets off (``bell`` or
 #: ``engine``), its pitch (semitones) and gain (dB); then its brakes as it stops: pitch and gain.
 #: A boat's outboard motor is a small engine, high; a balloon roars its burner, a toy rocket fizzes
-#: off (DESIGN.md §69.53).
+#: off.
 RIDE_SOUNDS: dict[str, tuple[str, float, float]] = {
     "bicycle": ("bell", 0.0, -6.0), "car": ("engine", 0.0, -5.0), "bus": ("engine", -5.0, -4.0),
     "boat": ("engine", 6.0, -8.0), "hot_air_balloon": ("burner", 0.0, -7.0), "toy_rocket": ("launch", 0.0, -5.0),
@@ -71,7 +71,7 @@ CHUTE_POP = (-3.0, -8.0)
 ENGINE_SHARE = 0.8
 ENGINE_MIN_SECONDS = 0.8
 ENGINE_MAX_SECONDS = 6.0
-#: The sound of each effect symbol as it pops up (DESIGN.md §69.40): built-in sound, gain (dB)
+#: The sound of each effect symbol as it pops up: built-in sound, gain (dB)
 #: and its params; sleep, stars and a tear are silent. Idea's short ding is the chime cut short.
 EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
     "sweat": ("pop", -8.0, {"pitch": -5.0, "intensity": 0.3}),
@@ -82,12 +82,12 @@ EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
     "hearts": ("pop", -6.0, {"pitch": 2.0, "intensity": 0.4}),
     "sparkle": ("chime", -9.0, {"duration": 0.4, "pitch": 12.0}),
 }
-#: A door (DESIGN.md §69.62): ``(gain dB, params)`` of its creak as it opens, of the shorter,
+#: A door: ``(gain dB, params)`` of its creak as it opens, of the shorter,
 #: higher creak as it closes, and of the thud as it shuts (when its shape switches).
 DOOR_OPEN_CREAK: tuple[float, dict[str, float]] = (-8.0, {"duration": 0.9})
 DOOR_CLOSE_CREAK: tuple[float, dict[str, float]] = (-10.0, {"duration": 0.5, "pitch": 2.0})
 DOOR_SHUT: tuple[float, dict[str, float]] = (-6.0, {"duration": 0.3, "pitch": 5.0})
-#: A sliding door (DESIGN.md §102.11): the hiss as its panels slide (open or shut; gain dB,
+#: A sliding door: the hiss as its panels slide (open or shut; gain dB,
 #: params) and the soft thud as they meet.
 DOOR_HISS: tuple[float, dict[str, float]] = (-9.0, {"duration": 0.6, "pitch": 9.0})
 DOOR_SLIDE_SHUT: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.2, "pitch": 3.0})
@@ -99,7 +99,7 @@ POUR_SPLASH: tuple[float, float, float] = (-10.0, 7.0, 0.15)
 POUR_FALL_SECONDS = 0.25
 #: A step on wet ground (puddles): a tiny splash under the footstep (gain dB, params).
 WET_STEP: tuple[float, dict[str, float]] = (-14.0, {"duration": 0.25, "pitch": 4.0, "intensity": 0.2})
-#: A jump on a platform level landing (DESIGN.md §86.9): a short, soft, higher thud and a footstep
+#: A jump on a platform level landing: a short, soft, higher thud and a footstep
 #: (gain dB, params); both louder (``intensity``) after a longer drop, from
 #: :data:`LANDING_INTENSITY` by :data:`LANDING_INTENSITY_PER_HEIGHT` per character height fallen,
 #: at most :data:`LANDING_INTENSITY_MAX`.
@@ -124,7 +124,7 @@ ASIDE_STEP: tuple[float, float] = (-8.0, -3.0)
 ASIDE_SWOOSH: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.6, "pitch": -7.0, "intensity": 0.3})
 
 
-#: The footstep on each surface of an iso place (DESIGN.md §89.11): its sound, gain (dB) and pitch
+#: The footstep on each surface of an iso place: its sound, gain (dB) and pitch
 #: (semitones; added to the foot's); a surface not listed (none: a flat stage) plays ``footstep``.
 SURFACE_STEPS: dict[str, tuple[str, float, float]] = {
     "grass": ("step_grass", -7.0, 0.0), "path": ("step_gravel", -8.0, 0.0), "boards": ("step_wood", -7.0, 0.0),
@@ -133,7 +133,7 @@ SURFACE_STEPS: dict[str, tuple[str, float, float]] = {
 }
 #: The sounds of the footsteps (``wet_steps`` splashes under each).
 STEP_SOUNDS: frozenset[str] = frozenset({"footstep", *(sound for sound, _, _ in SURFACE_STEPS.values())})
-#: Handing small things about on an iso place (DESIGN.md §89.11): per action the sound, its time
+#: Handing small things about on an iso place: per action the sound, its time
 #: as a share of the action, its gain (dB) and params: a soft "bloop" as a thing is picked up
 #: (when the hand gets to it), a light swish as it is handed over, a small soft thud as it is put
 #: down.
@@ -142,7 +142,7 @@ HANDLING_SOUNDS: dict[str, tuple[str, float, float, dict[str, float]]] = {
     "give": ("swoosh", 0.35, -15.0, {"duration": 0.3, "pitch": 5.0, "intensity": 0.3}),
     "put_down": ("thud", 0.75, -12.0, {"duration": 0.2, "pitch": 9.0, "intensity": 0.3}),
 }
-#: A change of an iso place (DESIGN.md §89.11): flowers blooming (a soft, high twinkle) and an
+#: A change of an iso place: flowers blooming (a soft, high twinkle) and an
 #: object appearing (``reveal``: a twinkle), (gain dB, params).
 BLOOM_SOUND: tuple[float, dict[str, float]] = (-14.0, {"pitch": 5.0, "intensity": 0.3})
 APPEAR_SOUND: tuple[float, dict[str, float]] = (-11.0, {"intensity": 0.4})
@@ -178,11 +178,11 @@ class PlayedAction:
     flight: tuple[float, float] | None = None
     """The shares of its time between which a prop it moved flew (a ``throw``, ``blow_away``)."""
     vehicle: str | None = None
-    """The kind of the vehicle a ``ride_to`` moved (DESIGN.md §69.52)."""
+    """The kind of the vehicle a ``ride_to`` moved."""
     rolls: bool = False
-    """A walk on wheels (a robot's, DESIGN.md §69.58): no footsteps."""
+    """A walk on wheels (a robot's): no footsteps."""
     prop: str | None = None
-    """The kind of the prop an ``open`` / ``close`` reshaped (a ``door`` creaks, §69.62)."""
+    """The kind of the prop an ``open`` / ``close`` reshaped (a ``door`` creaks)."""
     through_door: bool = False
     """An ``enter`` / ``exit`` through a room's door (no whoosh or swoosh: it fades in the doorway)."""
     opens_door: bool = False
@@ -191,12 +191,12 @@ class PlayedAction:
     """The water of a ``pour`` (it lands on the ground: a splash)."""
     pickups: tuple[tuple[float, str], ...] = ()
     """The coins and stars a move on a platform level picks up, in order: ``(share, kind)``, the
-    share of the walk's distance or of the jump's flight at which it gets there (DESIGN.md §86.8)."""
+    share of the walk's distance or of the jump's flight at which it gets there."""
     unlocks: bool = False
     """An ``open`` of a locked door with its key on a platform level (the key clicks first)."""
     surfaces: tuple[tuple[float, str], ...] = ()
     """What a walk on an iso place walks on: ``(share of its distance, surface)`` from where each
-    surface starts (DESIGN.md §89.11); none: the plain ``footstep``."""
+    surface starts; none: the plain ``footstep``."""
 
 
 @dataclass(frozen=True)
@@ -291,9 +291,9 @@ def handling_cues(action: str, start: float, seconds: float) -> list[FoleyCue]:
 
 def place_change_cues(kind: str, opening: bool | None, shown: bool | None, start: float, seconds: float, *, sliding: bool = False) -> list[FoleyCue]:
     """The sounds of a change of an iso place's object of ``kind`` from scene time ``start`` over
-    ``seconds`` (DESIGN.md §89.11): a house's or a room's door opening (a creak) or closing (a
+    ``seconds``: a house's or a room's door opening (a creak) or closing (a
     shorter creak and a thud as it shuts, as :func:`door_cues`; a ``sliding`` room door hisses,
-    and closing meets with a soft thud, §102.11), flowers blooming (a soft twinkle), an object
+    and closing meets with a soft thud), flowers blooming (a soft twinkle), an object
     appearing (a twinkle); a lamp's click is the switch's."""
     if shown is True:
         return [FoleyCue(start, "twinkle", APPEAR_SOUND[0], APPEAR_SOUND[1])]
@@ -310,9 +310,9 @@ def place_change_cues(kind: str, opening: bool | None, shown: bool | None, start
 
 
 def ride_cues(played: PlayedAction) -> list[FoleyCue]:
-    """The sounds of a ``ride_to`` (DESIGN.md §69.52, §69.53): as it sets off a bicycle's bell, a
+    """The sounds of a ``ride_to``: as it sets off a bicycle's bell, a
     balloon's burner or a toy rocket's launch, or an engine (a car's, a bus's, a boat's motor) for
-    most of the ride (at least :data:`ENGINE_MIN_SECONDS`), a boat with a splash (§69.62); its brakes ending as it stops
+    most of the ride (at least :data:`ENGINE_MIN_SECONDS`), a boat with a splash; its brakes ending as it stops
     (:data:`BRAKES`); a rocket's parachute popping open at the top of a landing flight; a soft thud
     as a balloon or a rocket touches down (``played.lands``: it lands)."""
     start, seconds = played.start, played.seconds
@@ -336,7 +336,7 @@ def ride_cues(played: PlayedAction) -> list[FoleyCue]:
     return cues
 
 
-#: A vehicle moving on an iso place (DESIGN.md §105): its engine's pitch (semitones) and gain (dB)
+#: A vehicle moving on an iso place: its engine's pitch (semitones) and gain (dB)
 #: as for a ride (a train's low and long, a rocket's a deep roar under its launch); brakes as a car
 #: or a train stops (pitch, gain).
 DRIVE_SOUNDS: dict[str, tuple[float, float]] = {"car": (0.0, -5.0), "boat": (6.0, -8.0), "train_car": (-7.0, -6.0), "rocket": (-12.0, -3.0)}
@@ -345,7 +345,7 @@ LAUNCH_ROAR = (-6.0, -4.0)
 
 
 def drive_cues(played: PlayedAction) -> list[FoleyCue]:
-    """The sounds of a ``drive_to``, ``sail_to`` or ``lift_off`` (DESIGN.md §105): an engine for
+    """The sounds of a ``drive_to``, ``sail_to`` or ``lift_off``: an engine for
     most of the move (a boat's with a splash as it sets off, a rocket's under a launch roar), then
     a car's or a train's brakes as it stops."""
     start, seconds = played.start, played.seconds

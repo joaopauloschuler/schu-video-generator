@@ -1,4 +1,4 @@
-"""The coins and stars of a platform level, drawn (DESIGN.md §86.8): each a small mobject of its
+"""The coins and stars of a platform level, drawn: each a small mobject of its
 own floating in the middle of its map cell, bobbing gently, that pops (grows, rises and fades)
 when a walk or a jump of the rules (:func:`~vidgen.world.moves.route_pickups`) reaches it.
 

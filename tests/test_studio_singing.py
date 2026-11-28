@@ -1,4 +1,4 @@
-"""Syllables, a soloist and a whisper for the choir (Step 361, DESIGN.md §121.4): measured on
+"""Syllables, a soloist and a whisper for the choir (Step 361): measured on
 single notes (cheap); one short track through the renderer."""
 
 from __future__ import annotations

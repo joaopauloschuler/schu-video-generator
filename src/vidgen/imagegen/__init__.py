@@ -1,4 +1,4 @@
-"""Generated images: the provider seam of ``generate:`` params and ``vidgen imagegen`` (DESIGN.md §58).
+"""Generated images: the provider seam of ``generate:`` params and ``vidgen imagegen``.
 
 - :class:`GenerateImage` is the ``generate:`` param (prompt, negative, style, aspect, seed) a
   scene type uses in place of an image ``path`` (the built-in ``image`` scene does).
@@ -9,7 +9,7 @@
   ``assets/generated/<key>.png`` with a sidecar ``<key>.json`` (prompt, provider, model, date,
   revised prompt); both are meant to be committed, like narration audio (they cost money).
   ``format: svg`` asks for a vector picture, stored as ``<key>.svg`` (OpenRouter's SVG models;
-  drawn as shapes by :mod:`vidgen.vector_mobject`, DESIGN.md §65).
+  drawn as shapes by :mod:`vidgen.vector_mobject`).
 - Rendering and validating never call a provider: :func:`generated_image` gives the stored
   picture, or a placeholder card showing the prompt (:mod:`vidgen.imagegen.placeholder`) when
   ``vidgen imagegen`` has not made it yet.
@@ -135,7 +135,7 @@ class ImageRequest:
     """One picture to generate: what is sent (``text`` = prompt + style + negative, ``size``,
     ``quality``) and where it is stored (``path``, ``sidecar``), keyed by ``key``.
 
-    OpenRouter requests (§64) also carry ``aspect_ratio`` and ``resolution``: with
+    OpenRouter requests also carry ``aspect_ratio`` and ``resolution``: with
     ``explicit_size`` false they are sent instead of ``size``, which is then only the nominal
     pixel size (placeholder shape, per-megapixel price estimate)."""
 
@@ -154,7 +154,7 @@ class ImageRequest:
     aspect_ratio: str | None = None
     resolution: str | None = None
     explicit_size: bool = True
-    #: ``png`` (raster, stored as PNG) or ``svg`` (vector, stored as SVG; §65).
+    #: ``png`` (raster, stored as PNG) or ``svg`` (vector, stored as SVG).
     format: str = "png"
     #: Local pictures sent to the model with the prompt (``input_references``; OpenRouter only).
     #: Their contents are part of the caller's cache key (:mod:`vidgen.videogen.frames`).
@@ -335,7 +335,7 @@ def image_request(project: Project, generate: GenerateImage, *, cartoon: bool = 
     aspect_ratio: str | None = None
     explicit = cfg.size != "auto"
     model, resolution = cfg.model, cfg.resolution
-    if generate.format == "svg":  # vectors: the SVG model, an aspect ratio, no quality / resolution (§65)
+    if generate.format == "svg":  # vectors: the SVG model, an aspect ratio, no quality / resolution
         model = cfg.svg_model or cfg.model
         quality, resolution, explicit = None, None, False
         aspect_ratio = openrouter_aspect(project, generate.aspect)
@@ -506,7 +506,7 @@ def imagegen_problems(project: Project) -> list[tuple[str, str]]:
 
 def vector_warnings(images: list[SceneImage]) -> list[str]:
     """Warnings about vector pictures: a ``format: svg`` model not known to make SVG (or an
-    SVG-only model asked for PNG), and what loading a stored SVG will remove or cut (§65)."""
+    SVG-only model asked for PNG), and what loading a stored SVG will remove or cut."""
     out: list[str] = []
     seen: set[tuple[str, str]] = set()
     for image in images:

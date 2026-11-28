@@ -1,5 +1,5 @@
 // vidgen/space-clouds: cloud decks to fly under, through and over, cloud towers, lightning, and the decks
-// of a giant of gas, under a vidgen/space-air sky (DESIGN.md §123.5). Part of schu-video-generator (MIT
+// of a giant of gas, under a vidgen/space-air sky. Part of schu-video-generator (MIT
 // licence); imported by a page as "vidgen/space-clouds".
 //
 //   import {air, sunDirection} from "vidgen/space-air";

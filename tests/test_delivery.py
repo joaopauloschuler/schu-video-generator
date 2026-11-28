@@ -1,4 +1,4 @@
-"""Step 290: delivering an audio drama (DESIGN.md §112.3) — the drama loudness preset and its
+"""Step 290: delivering an audio drama — the drama loudness preset and its
 dialogue checks, one file per chapter with a playlist and per-file transcripts, spoken credits
 from the cast, a cold open. Narration is mocked: each beat's "MP3" is a WAV of speech-like
 bursts."""

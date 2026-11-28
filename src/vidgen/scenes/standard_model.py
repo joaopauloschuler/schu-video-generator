@@ -1,5 +1,4 @@
-"""``standard_model``: the chart of the Standard Model's particles (Phase Y, Step 237; DESIGN
-§99.4) — quarks and leptons in three generations, the gauge bosons and the Higgs boson, each cell
+"""``standard_model``: the chart of the Standard Model's particles (Phase Y, Step 237) — quarks and leptons in three generations, the gauge bosons and the Higgs boson, each cell
 with its mass, charge and spin (PDG 2024 values from ``vidgen.particle_physics``), in colour
 groups. Wide frames show the classic grid; tall frames put the bosons in two rows under the
 fermions. Every particle, generation, group and row is a target (``highlight``, ``dim``,

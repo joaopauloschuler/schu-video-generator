@@ -1,4 +1,4 @@
-"""vidgen's building blocks for music videos (Step 358, DESIGN.md §121.1): the modules
+"""vidgen's building blocks for music videos (Step 358): the modules
 ``vidgen/music-time`` (song time, bars, the score's events as arrays, reactions, seeded numbers,
 easing; plain JavaScript) and ``vidgen/three-kit`` (three.js: glowing lines, crystals, the
 tesseract, the nebula sky, portals, star fields, flares, shock rings, ribbons, spectrum rays,

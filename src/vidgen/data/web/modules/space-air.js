@@ -1,4 +1,4 @@
-// vidgen/space-air: the sky seen from inside an atmosphere (DESIGN.md §123.3). Part of
+// vidgen/space-air: the sky seen from inside an atmosphere. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-air".
 //
 //   import {air} from "vidgen/space-air";

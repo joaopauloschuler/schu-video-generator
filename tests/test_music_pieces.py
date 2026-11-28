@@ -1,4 +1,4 @@
-"""Project pieces: score files in ``assets/music`` played like beds (Step 188, DESIGN.md §93.10):
+"""Project pieces: score files in ``assets/music`` played like beds (Step 188):
 names and conflicts, validation, ``vidgen list-music``, the mix (rendered at the join and
 cached), the ``music_check`` lint rule."""
 

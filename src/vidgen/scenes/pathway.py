@@ -1,4 +1,4 @@
-"""``pathway``: a signalling pathway drawn with SBGN-inspired notation (DESIGN.md §95.12) —
+"""``pathway``: a signalling pathway drawn with SBGN-inspired notation —
 nodes (ligands, receptors, proteins, complexes, second messengers, genes, outcomes) with their
 states (GDP / GTP, P marks), arcs (activation arrows, inhibition T-bars, catalysis circles,
 phosphorylation, binding, translocation, transcription) laid out automatically in compartment

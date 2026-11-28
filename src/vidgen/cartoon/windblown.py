@@ -1,4 +1,4 @@
-"""Drawing a stage's wind (DESIGN.md §69.32): :class:`SwayingProp` bends a tree, bush, plant,
+"""Drawing a stage's wind: :class:`SwayingProp` bends a tree, bush, plant,
 sign or lamp about its base, and :class:`StageWind` sets, for a scene time, every swaying prop's
 lean and every character's trailing pieces (:meth:`~vidgen.cartoon.character.Character.set_wind`)
 from a :class:`~vidgen.cartoon.wind.Wind`. The maths is in :mod:`vidgen.cartoon.wind`."""

@@ -1,4 +1,4 @@
-"""Sheet panels of the generated shots' subjects (``subjects:``, DESIGN.md §113.24): ``vidgen generate subjects``.
+"""Sheet panels of the generated shots' subjects (``subjects:``): ``vidgen generate subjects``.
 
 A view with ``prompt:`` is drawn by Z-Image-Turbo from that text alone (:func:`.qwen_graph.zimage_text_graph`:
 an empty latent, no picture of ours goes in), at :data:`PANEL_SIZE`. Any other view is a still of

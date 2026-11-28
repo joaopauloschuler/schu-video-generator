@@ -1,4 +1,4 @@
-"""Population genetics (DESIGN.md §96.16): Hardy–Weinberg worked with exact numbers and seeded
+"""Population genetics: Hardy–Weinberg worked with exact numbers and seeded
 Wright–Fisher simulations — drift, selection, mutation, migration between two populations, a
 bottleneck and a founder event — for the ``population`` scene. No manim.
 

@@ -1,9 +1,9 @@
 # Changelog
 
 The project and its pip distribution are `schu-video-generator`; the command and the Python
-package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in `DESIGN.md` §63. Step numbers refer to
-`tasklist.md`; each step's details are in `DESIGN.md`. `HANDOFF.md`, the per-step log up to Step 440, was
-removed in Step 441 and is in the git history.
+package are `vidgen`. Step numbers refer to `tasklist.md`. `HANDOFF.md`, the per-step log up to Step 440,
+was removed in Step 441, and `DESIGN.md`, the design document (with the release notes of 0.2.0 and
+each step's details), in Step 443; both are in the git history.
 
 ## Steps 193–416
 

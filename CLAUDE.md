@@ -7,7 +7,6 @@
 > change a command, scene type or param that `AGENTS.md` names, update the guide in
 > `src/vidgen/data/guide/AGENTS.md` and copy it to `AGENTS.md` (`tests/test_guide.py` checks both).
 
-Read `DESIGN.md` (the contract) before changing code.
 Follow `docs/CODING-AND-COMMUNICATION-GUIDE.md`: when to write code, naming, reuse, how to run
 tests on a small machine (memory cap, timeout, one at a time), progress reports, and how to write
 to the user.
@@ -25,7 +24,7 @@ to the user.
 - `pathlib.Path` for all paths; never build paths with string concatenation; no `shell=True`.
 - Always pass `encoding="utf-8"` when reading/writing text (Windows default is not UTF-8).
 - Subprocesses: use `sys.executable`, list arguments, `check=True`, capture stderr for errors.
-- Public extension surface is `vidgen.api` only. Keep it stable; document changes in DESIGN.md.
+- Public extension surface is `vidgen.api` only. Keep it stable.
 - Small modules, docstrings on public functions, no dead code, no print-debugging left behind.
 - Errors the user can cause (bad config, missing key, unknown scene type) raise `VidgenError`
   (defined in `vidgen/errors.py`) with a clear message; the CLI prints it without a traceback.

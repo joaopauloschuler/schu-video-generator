@@ -1,4 +1,4 @@
-"""Branching ratios of common decays (Phase Y, Step 241; DESIGN §99.11) — no manim.
+"""Branching ratios of common decays (Phase Y, Step 241) — no manim.
 
 Sources, stated per table (and shown on screen by the ``branching`` scenes):
 

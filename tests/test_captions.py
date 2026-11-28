@@ -1,4 +1,4 @@
-"""Burned-in captions, Step 40 (DESIGN.md §43): word times (estimate, speech bounds, TTS
+"""Burned-in captions, Step 40: word times (estimate, speech bounds, TTS
 alignments), cue cutting shared with the SRT, the ``captions`` overlay (subtitles and karaoke,
 reserve, contrast, placement), ElevenLabs with-timestamps (mocked) and lint."""
 

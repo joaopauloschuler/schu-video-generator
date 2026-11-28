@@ -1,4 +1,4 @@
-"""The beat actions of the ``cell_cycle`` and ``metabolism`` scenes (DESIGN.md §95.13):
+"""The beat actions of the ``cell_cycle`` and ``metabolism`` scenes:
 ``advance`` (the cell moves round the cycle or through the stages of a division; a pathway's
 token moves through its steps; electrons run along a chain, pumping protons, or the gradient
 drives ATP synthase) and ``checkpoint`` (a checkpoint passes or arrests the cell, with its

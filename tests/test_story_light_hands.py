@@ -1,4 +1,4 @@
-"""Step 247 (DESIGN.md §100.15): a fill light on a stage's characters, an iridescent visitor's
+"""Step 247: a fill light on a stage's characters, an iridescent visitor's
 own glow, and two holding hands who step in close and walk side by side."""
 
 from __future__ import annotations

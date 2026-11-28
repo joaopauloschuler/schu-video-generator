@@ -1,4 +1,4 @@
-// vidgen's virtual clock for a `web` scene (DESIGN.md §118.8). A fragment: web/page.py joins
+// vidgen's virtual clock for a `web` scene. A fragment: web/page.py joins
 // clock.js, media.js and runtime.js into one script that Chromium runs before any script of the
 // page, with VIDGEN_SEED defined. Time stands at 0 ms until vidgen advances it to a frame's time.
 

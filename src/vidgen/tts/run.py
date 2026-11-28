@@ -1,8 +1,8 @@
-"""``vidgen tts``: generate the narration MP3s that are missing or stale (DESIGN.md §7).
+"""``vidgen tts``: generate the narration MP3s that are missing or stale.
 
 The caller activates the project's extensions first (so ``pre_tts``/``post_tts`` hooks are
 registered); :func:`run_tts` then plans, dispatches the hooks and generates. Each beat is voiced
-by its own voice (``voices:``, DESIGN.md §46).
+by its own voice (``voices:``).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class TTSPlan:
     -> the text sent to the TTS (the beat's text with its pronunciation applied).
     ``voices``: beat id -> the name of the voice that says it (``None``: the base voice).
     ``builtin``: beat id -> the built-in pronunciation entries that changed its spoken text
-    (DESIGN.md §88; only such beats).
+    (only such beats).
     """
 
     audio_dir: Path
@@ -46,7 +46,7 @@ class TTSPlan:
     builtin: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: Beat id -> its effective voice (provider, model, voice...).
     beat_voices: dict[str, VoiceConfig] = field(default_factory=dict)
-    #: OpenRouter model -> its price per character (:func:`price_tts`; DESIGN.md §66).
+    #: OpenRouter model -> its price per character (:func:`price_tts`).
     rates: dict[str, PriceQuote] = field(default_factory=dict)
     #: What OpenRouter's live list says about the voices (``notes``) and what a real run refuses
     #: before paying (``problems``: a model it does not have).
@@ -155,7 +155,7 @@ def plan_tts(
 
 
 def _reuse_cold_open(project: Project, plan: TTSPlan, providers: dict[str, TTSProvider]) -> None:
-    """A cold open's copied line (``cold_open_<id>``, DESIGN.md §112.3) is copied from its source
+    """A cold open's copied line (``cold_open_<id>``) is copied from its source
     beat's MP3 in the same folder when both say the same text in the same voice (equal hashes):
     the source's current audio, or what this run voices for it (:func:`_sources_first`)."""
     from vidgen.delivery import cold_open_sources
@@ -227,7 +227,7 @@ def _relative(path: Path, root: Path) -> str:
 def context_texts(project: Project, spoken: dict[str, str]) -> dict[str, tuple[str | None, str | None]]:
     """Beat id -> (previous_text, next_text) sent for continuity: the neighbouring beats in video
     order (across scenes), but only when they have the same voice — another speaker's line would
-    be taken as this voice's own surrounding speech (DESIGN.md §46)."""
+    be taken as this voice's own surrounding speech."""
     order = list(project.voice_names().items())
     out: dict[str, tuple[str | None, str | None]] = {}
     for i, (beat_id, name) in enumerate(order):
@@ -239,7 +239,7 @@ def context_texts(project: Project, spoken: dict[str, str]) -> dict[str, tuple[s
 
 #: What an ElevenLabs estimate would need (its price depends on the account's plan).
 ELEVENLABS_PRICE_NOTE = "ElevenLabs bills the characters against your plan's quota (no price estimate)"
-#: The cost of Kokoro beats (DESIGN.md §68).
+#: The cost of Kokoro beats.
 KOKORO_PRICE_NOTE = "free (local): Kokoro-82M runs on this computer"
 
 
@@ -281,7 +281,7 @@ def price_tts(plan: TTSPlan, *, lookup: Callable[[list[str]], dict[str, Any]] | 
 def describe_voice(voice: VoiceConfig) -> str:
     """``openrouter mistralai/voxtral-mini-tts-2603, voice en_paul_neutral`` / ``kokoro af_heart
     (lang a, American English), speed 1, cpu`` / an ElevenLabs voice id (as the dry run names it),
-    with ``, effect deep+chorus+hall (pitch -3)`` when the voice has an effect (DESIGN.md §100.2)."""
+    with ``, effect deep+chorus+hall (pitch -3)`` when the voice has an effect."""
     from vidgen.voice_effects import voice_effect
 
     effect = voice_effect(voice.effect)
@@ -484,7 +484,7 @@ def run_tts(
             out(f"note: {note}")
 
     context = context_texts(project, {beat.id: plan.say(beat) for _, beat in project.beats()})
-    lip_sync = bool(project.config.characters)  # viseme tracks only for a video with characters (§69.4)
+    lip_sync = bool(project.config.characters)  # viseme tracks only for a video with characters
     generated: list[str] = []
     total = len(plan.todo)
     for n, beat in enumerate(plan.todo, start=1):

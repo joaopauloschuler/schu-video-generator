@@ -1,4 +1,4 @@
-"""Gene expression as data and rules (DESIGN.md §95.11): a gene (promoter, transcribed region with
+"""Gene expression as data and rules: a gene (promoter, transcribed region with
 exons and introns, poly(A) signal), what each step of its expression makes of it and the order
 those steps must come in. No manim.
 

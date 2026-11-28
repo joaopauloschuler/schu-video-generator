@@ -1,4 +1,4 @@
-"""Weather on an iso place (DESIGN.md §105.4): the part of a ``stage`` that mirrors the place's
+"""Weather on an iso place: the part of a ``stage`` that mirrors the place's
 lights in its puddles at night, lays the stage's ``fog`` over it in bands by depth, and sways its
 trees, bushes, flowers, plants, scarecrows and balloons in the stage's ``wind``. Written against
 ``vidgen.api`` only; :class:`IsoWeather` is a part of :class:`~vidgen.scenes.stage.Stage`.
@@ -20,7 +20,7 @@ from .stage_iso import IsoObject, _moving_block
 
 
 class IsoWeather:
-    """The weather part of a ``stage`` on an iso place (DESIGN.md §105.4)."""
+    """The weather part of a ``stage`` on an iso place."""
 
     # ----- wind: swaying objects --------------------------------------------------------------------
 
@@ -38,7 +38,7 @@ class IsoWeather:
 
     def _iso_still_looks(self, looks: dict[str, Any], swaying: dict[str, str]) -> None:
         """A swaying balloon bunch is drawn whole, its balloons too (not swung by the stage as a
-        working object, §103): its look is not ``moving``."""
+        working object): its look is not ``moving``."""
         for name in swaying:
             if looks[name].moving:
                 looks[name] = replace(looks[name], moving=False)
@@ -89,7 +89,7 @@ class IsoWeather:
         return blowing is not None and blowing.wind.blowing(start, end)
 
     def iso_covers(self) -> list[Mobject]:
-        """The pictures of what stands in front of a working object (§103) or a swaying one: they
+        """The pictures of what stands in front of a working object or a swaying one: they
         follow the place's changes (:meth:`_iso_follow_change`)."""
         found = [cover for _, _, cover in getattr(self, "_iso_gadget_places", [])]
         found += [cover for _, cover in getattr(self, "iso_swayers", {}).values()]

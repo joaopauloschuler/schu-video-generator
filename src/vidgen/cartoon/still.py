@@ -1,6 +1,6 @@
-"""Stills: ``vidgen character NAME --png`` (one declared character, DESIGN.md §69.1), the prop
-gallery (every built-in prop, §69.8) and ``vidgen character-sheet`` (every pose, expression and
-mouth shape of a character on one PNG, §69.16)."""
+"""Stills: ``vidgen character NAME --png`` (one declared character), the prop
+gallery (every built-in prop) and ``vidgen character-sheet`` (every pose, expression and
+mouth shape of a character on one PNG)."""
 
 from __future__ import annotations
 
@@ -127,8 +127,8 @@ def write_looks_png(
 ) -> Path:
     """Draw each generated character of ``entries`` from the side and from the front, side by
     side, with its name below, in rows of ``columns`` characters on the theme background, and
-    write the PNG to ``path`` (folders are created; 64 colours, small enough for the docs). The
-    look gallery of DESIGN.md §69.47. A figure reaching past its character's cell (a long tail)
+    write the PNG to ``path`` (folders are created; 64 colours, small enough for the docs): the
+    look gallery. A figure reaching past its character's cell (a long tail)
     is moved back inside it."""
     from manim import Camera, Text, VGroup, tempconfig
 
@@ -194,7 +194,7 @@ WHOLE_FIGURE_KINDS: frozenset[str] = frozenset({"pose", "view"})
 @dataclass(frozen=True)
 class SheetSection:
     """A row group of a character sheet: ``kind`` ``pose`` or ``view`` (whole figure; a view is
-    a way it faces other than its side, DESIGN.md §69.47), ``expression`` or ``mouth``
+    a way it faces other than its side), ``expression`` or ``mouth``
     (close-ups of the head); ``names`` in order; ``own`` the character's own entries."""
 
     kind: SheetKind

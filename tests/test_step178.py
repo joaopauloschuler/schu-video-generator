@@ -1,5 +1,5 @@
-"""Step 178: a part of an ``iso_diagram`` that comes in never shows its final look first
-(DESIGN.md §90.15). A block grown in a ``Succession`` (after the floor or a plate fades in, or
+"""Step 178: a part of an ``iso_diagram`` that comes in never shows its final look first.
+A block grown in a ``Succession`` (after the floor or a plate fades in, or
 after the heading at the scene's start) was in the scene at full size until its turn came, then
 jumped back to nothing and grew. The tests record what every rendered frame shows of each part
 and check that it is unseen before it comes in, starts from its start state on the first frame it

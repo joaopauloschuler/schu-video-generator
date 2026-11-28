@@ -1,4 +1,4 @@
-"""The world of a platform scene (DESIGN.md §86): a level, the bodies and the story props
+"""The world of a platform scene: a level, the bodies and the story props
 (:class:`~vidgen.world.items.Item`) in it, as plain data.
 
 A *body* is a character or a prop standing in the level: its feet's ``x`` and ``y`` and its

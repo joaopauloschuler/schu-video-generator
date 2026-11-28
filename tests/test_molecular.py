@@ -1,4 +1,4 @@
-"""Step 217 (DESIGN.md §96.13–96.15): HGVS notation on real coding sequences (the variant's
+"""Step 217: HGVS notation on real coding sequences (the variant's
 consequence from the genetic code, generation and parsing, the textbook variants), CRISPR–Cas9
 (PAM finding, guide checks, the cut, NHEJ and HDR outcomes) and the laboratory methods (PCR
 counts and primer checks, gel migration, Sanger calls, NGS reads and the variant call); the

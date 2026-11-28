@@ -1,5 +1,5 @@
 """The ComfyUI API-format graphs of the image models: a photoreal version of a shot's first frame
-(``first_frame: restyled``, DESIGN.md §113.21) and the subjects' sheet panels (§113.24), shared by
+(``first_frame: restyled``) and the subjects' sheet panels, shared by
 vidgen and ``tools/colab/build_image_workflow.py`` (which loads this file by its path).
 
 Three routes (all models ungated on Hugging Face; files from tools/colab/setup_image.sh):

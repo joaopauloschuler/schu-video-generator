@@ -1,4 +1,4 @@
-"""vidgen's opening title and end card for films (Step 364, DESIGN.md §121.7): the module
+"""vidgen's opening title and end card for films (Step 364): the module
 ``vidgen/title-cards``, served by name through the import map and in a page's loaded-files record;
 its options checked with a "did you mean", its timing and layout (16:9 and 9:16) in Node when it is
 installed. In Chromium (``slow``): a page with both cards draws the same frames twice, the card

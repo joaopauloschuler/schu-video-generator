@@ -1,4 +1,4 @@
-"""A line's feeling (``emotion:``) as changes to how it is spoken (DESIGN.md §72). No manim, no
+"""A line's feeling (``emotion:``) as changes to how it is spoken. No manim, no
 PyTorch.
 
 ``emotion: excited`` on a beat (or as a voice's default) names a row of :data:`EMOTIONS`: a
@@ -8,7 +8,7 @@ dB and a factor on the pauses at punctuation inside the beat. ``emotion: {like: 
 changes some numbers of a row. ``neutral`` (or numbers that change nothing) changes nothing,
 also not the beat's audio hash. :data:`EMOTION_WORDS` maps a screenplay's manner words
 (``PIP (cross): ...``) to the rows. :data:`NAMED_CUES` says how ElevenLabs and OpenRouter speak
-each row (an audio tag, voice settings, an instruction; DESIGN.md §73).
+each row (an audio tag, voice settings, an instruction).
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class Prosody:
         return {"name": self.name, "speed": self.speed, "pitch": self.pitch, "gain": self.gain, "pauses": self.pauses}
 
 
-#: The built-in emotions (the documented table, DESIGN.md §72).
+#: The built-in emotions (the documented table).
 EMOTIONS: dict[str, Prosody] = {
     p.name: p
     for p in (
@@ -64,8 +64,7 @@ EMOTION_NAMES: tuple[str, ...] = tuple(EMOTIONS)
 
 @dataclass(frozen=True)
 class NamedCues:
-    """How providers that take words or settings rather than numbers speak an emotion (DESIGN.md
-    §73): ``tag`` (the ElevenLabs v3 audio tag put before the line), ``stability`` and ``style``
+    """How providers that take words or settings rather than numbers speak an emotion: ``tag`` (the ElevenLabs v3 audio tag put before the line), ``stability`` and ``style``
     (added to an ElevenLabs voice's ``voice_settings`` for the other models, kept in 0-1) and
     ``instruction`` (a sentence added to an OpenRouter model's ``instructions``)."""
 
@@ -75,7 +74,7 @@ class NamedCues:
     instruction: str
 
 
-#: Cues of each emotion but ``neutral`` (the documented table, DESIGN.md §73). Strong feelings
+#: Cues of each emotion but ``neutral`` (the documented table). Strong feelings
 #: lower the stability and raise the style; calm and sleepy raise the stability.
 NAMED_CUES: dict[str, NamedCues] = {
     "happy": NamedCues("[happy]", -0.10, 0.20, "Speak in a happy, warm and cheerful tone."),

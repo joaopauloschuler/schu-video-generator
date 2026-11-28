@@ -1,4 +1,4 @@
-"""The three.js add-ons shipped for ``web`` scenes (Step 334, DESIGN.md §118.14): the shipped
+"""The three.js add-ons shipped for ``web`` scenes (Step 334): the shipped
 files match the manifest and are the npm package's own, every static import of an add-on is a
 shipped file or ``three``, the import map has both prefixes, an unshipped add-on gets a clear
 message; in Chromium (``slow``): every shipped add-on imports, on one core module."""
@@ -24,7 +24,7 @@ ADDONS_DIR = THREE_DIR / ADDONS_FOLDER
 #: A static ``import``/``export … from`` at the start of a line (the add-ons' JSDoc examples are
 #: inside comments, after `` * ``, so they are not matched).
 STATIC_IMPORT = re.compile(r"^(?:import|export)\b[^;]*?\bfrom\s*['\"]([^'\"]+)['\"]|^import\s*['\"]([^'\"]+)['\"]", re.M | re.S)
-#: Left out on purpose (DESIGN.md §118.14): no shipped add-on may import one of these.
+#: Left out on purpose: no shipped add-on may import one of these.
 LEFT_OUT = ("FontLoader", "TextGeometry", "DRACOLoader", "KTX2Loader", "meshopt", "RGBELoader", "EXRLoader", "HDRLoader", "webgpu", "nodes/")
 
 

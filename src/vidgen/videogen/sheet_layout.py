@@ -1,4 +1,4 @@
-"""A shot's stylesheet composed from its subjects' panels (``generated_shot.subjects``, DESIGN.md §113.24).
+"""A shot's stylesheet composed from its subjects' panels (``generated_shot.subjects``).
 
 One picture at the clip's size, no text: the panels laid out in the grid of columns x rows that
 shows them largest (each panel scaled to fit its cell, never cropped, centred), :data:`GAP` pixels

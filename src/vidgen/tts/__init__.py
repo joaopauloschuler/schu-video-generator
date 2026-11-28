@@ -1,9 +1,8 @@
-"""Text-to-speech: the provider seam and the audio cache status (DESIGN.md §7).
+"""Text-to-speech: the provider seam and the audio cache status.
 
 - :func:`get_provider` returns the provider for a ``voice`` config: ElevenLabs
   (:mod:`vidgen.tts.elevenlabs`, the default), OpenRouter (:mod:`vidgen.tts.openrouter`) or
-  Kokoro on this computer (:mod:`vidgen.tts.kokoro`); one provider per video
-  (DESIGN.md §66, §68).
+  Kokoro on this computer (:mod:`vidgen.tts.kokoro`); one provider per video.
 - :func:`audio_status` tells, without an API key, which beats have up-to-date, stale or missing
   audio; ``vidgen render`` uses it to warn and ``vidgen validate`` to summarise.
 - :func:`vidgen.tts.run.run_tts` is the ``vidgen tts`` command.
@@ -46,9 +45,9 @@ class TTSProvider(Protocol):
 
 
 def get_provider(voice: VoiceConfig, emotion: Prosody | None = None) -> TTSProvider:
-    """The provider for ``voice.provider`` (ElevenLabs, OpenRouter: DESIGN.md §66, or Kokoro on
-    this computer: §68) speaking with ``emotion`` (Kokoro §72, the others §73), through the
-    voice's ``effect`` when it has one (§100.2). Constructing one loads no model and needs no key."""
+    """The provider for ``voice.provider`` (ElevenLabs, OpenRouter, or Kokoro on
+    this computer) speaking with ``emotion``, through the
+    voice's ``effect`` when it has one. Constructing one loads no model and needs no key."""
     provider = _plain_provider(voice, emotion)
     if voice.effect is None:
         return provider
@@ -97,7 +96,7 @@ def tts_warnings(project: Project) -> list[str]:
 
 
 def speaks_emotion_by_name(voice: VoiceConfig) -> bool:
-    """Whether ``voice`` speaks an emotion by its name only (DESIGN.md §73): ElevenLabs (an audio
+    """Whether ``voice`` speaks an emotion by its name only: ElevenLabs (an audio
     tag or voice settings) and OpenRouter models that take instructions (a sentence); Kokoro and
     the other OpenRouter models use its numbers."""
     from vidgen.tts.openrouter import takes_instructions
@@ -107,7 +106,7 @@ def speaks_emotion_by_name(voice: VoiceConfig) -> bool:
 
 def emotion_warnings(project: Project) -> list[str]:
     """What ``vidgen validate`` says about beats whose ``emotion`` their voice speaks only in
-    part (DESIGN.md §73): numbers changed from a row where only the name counts, and OpenRouter
+    part: numbers changed from a row where only the name counts, and OpenRouter
     models without instructions (speed, pitch and loudness only)."""
     from vidgen.emotions import EMOTIONS
 
@@ -143,8 +142,7 @@ def _listed(beat_ids: list[str]) -> str:
 
 
 def beat_providers(project: Project) -> dict[str, TTSProvider]:
-    """Beat id -> the provider of the beat's effective voice and emotion (DESIGN.md §46, §72,
-    §73; one provider per voice and emotion), in video order."""
+    """Beat id -> the provider of the beat's effective voice and emotion (one provider per voice and emotion), in video order."""
     made: dict[tuple[str | None, Prosody | None], TTSProvider] = {}
     out: dict[str, TTSProvider] = {}
     for beat_id, name in project.voice_names().items():

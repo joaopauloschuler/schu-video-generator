@@ -1,4 +1,4 @@
-"""Ground with relief, ``vidgen/space-land`` (Step 384, DESIGN.md §123.6): the module is served by its import
+"""Ground with relief, ``vidgen/space-land`` (Step 384): the module is served by its import
 name and imports only ``three``, ``vidgen/baked``, ``vidgen/space-air`` and ``vidgen/space-bodies``; its parts
 are registered under the kind ``land``; in Node (when it is installed): the noise (the same twice, its slope
 against a difference), recipes and presets with a did-you-mean, the relief from a seed (terraces are flat

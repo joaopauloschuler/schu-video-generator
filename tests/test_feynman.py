@@ -1,4 +1,4 @@
-"""Feynman diagrams (Phase Y, Step 238; DESIGN §99.5–§99.6): the vertex rules of the Standard
+"""Feynman diagrams (Phase Y, Step 238): the vertex rules of the Standard
 Model (allowed and forbidden), charge / lepton / baryon numbers at vertices and along fermion
 lines, colour, the presets, deterministic uncrossed layouts, the ``feynman`` scene's params,
 targets, actions and tiny renders in 16:9 and 9:16."""

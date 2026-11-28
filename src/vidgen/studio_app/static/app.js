@@ -1,4 +1,4 @@
-// vidgen studio, the page (DESIGN.md §94.7, §94.12, §94.13): the top bar's preset picker, the
+// vidgen studio, the page: the top bar's preset picker, the
 // song strip (strip.js), transport, the timeline (timeline.js), the track list (tracks.js), the
 // inspector (inspector.js), the score file editable both ways (yaml_edit.js) and the status
 // line. State lives on the server (the session); every committed edit is a new version, then

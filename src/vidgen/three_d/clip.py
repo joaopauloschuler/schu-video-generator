@@ -1,5 +1,5 @@
-"""The 3D frames of a scene render as a clip, reused while nothing that draws them changed
-(DESIGN.md §114.5)."""
+"""The 3D frames of a scene render as a clip, reused while nothing that draws them changed.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _stored(record: Path) -> dict[str, Any]:
 def make_3d_clip(folder: Path, name: str, description: dict[str, Any], intermediate: str = "lossless") -> Path:
     """``folder/<name>.mkv``: the frames of ``description``, drawn now (one Chromium) unless the
     clip there was drawn from the same description by the same page, three.js and Playwright
-    and is stored as ``intermediate`` asks (DESIGN.md §120.9: a lossless clip serves either, a
+    and is stored as ``intermediate`` asks (a lossless clip serves either, a
     compact one only ``compact``). Writes ``folder/<name>.json`` = ``{"key", "description"}``
     (+ ``"intermediate": "compact"``) beside it."""
     clip, record = folder / f"{name}.mkv", folder / f"{name}.json"

@@ -1,4 +1,4 @@
-"""Graded pictures and resized tiles kept between frames (DESIGN.md §109): a lit iso frame draws
+"""Graded pictures and resized tiles kept between frames: a lit iso frame draws
 the same as without them; logic without rendering, and one small render."""
 
 from __future__ import annotations

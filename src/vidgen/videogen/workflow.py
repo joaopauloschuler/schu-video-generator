@@ -1,4 +1,4 @@
-"""``vidgen generate run | status | takes | pick`` (DESIGN.md §113.4).
+"""``vidgen generate run | status | takes | pick``.
 
 :func:`run_shots` goes through the plan (:func:`vidgen.videogen.shots.plan_shots`) in video
 order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``pay``:

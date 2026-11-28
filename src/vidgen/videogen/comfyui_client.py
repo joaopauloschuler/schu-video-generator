@@ -1,4 +1,4 @@
-"""A ComfyUI server over HTTP: ``/upload/image``, ``/prompt``, ``/history``, ``/view`` (DESIGN.md §113.20).
+"""A ComfyUI server over HTTP: ``/upload/image``, ``/prompt``, ``/history``, ``/view``.
 
 Standard library only, no vidgen imports: the Colab transport copies this file next to a job on
 the VM and runs ``python3 comfyui_client.py job.json`` there, detached, against 127.0.0.1:8188.

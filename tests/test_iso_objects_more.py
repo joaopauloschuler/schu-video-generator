@@ -1,4 +1,4 @@
-"""More iso objects (Phase AC, DESIGN.md §104): footprints, colours, states, validation and the
+"""More iso objects (Phase AC): footprints, colours, states, validation and the
 moving parts of the working ones, without rendering; one small render of each batch."""
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ def test_town_objects_have_footprints_colours_and_states() -> None:
     for kind in TOWN:
         assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and MORE_MODULES[kind] == "iso_town" and OBJECT_KINDS[kind].height <= 4.0
         assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == TOWN_SIZES.get(kind, (1, 1))
-        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and (kind not in OBJECT_STYLES or kind == "car")   # a car has kinds since §107
+        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and (kind not in OBJECT_STYLES or kind == "car")   # a car has kinds
     assert set(TOWN) & SWITCHED_KINDS == set(TOWN_WORKING) and set(TOWN) & set(MOVING_KINDS) == set(TOWN_MOVING)
     assert set(TOWN) & LAMPLIGHT_KINDS == {"street_lamp", "phone_booth"}
 
@@ -205,7 +205,7 @@ def test_town_objects_draw_light_up_and_move() -> None:
 
 
 def test_light_pools_are_warm() -> None:
-    """A lit lamp's pool is rings of warm light (red over green over blue), not a pale tint (DESIGN.md §104)."""
+    """A lit lamp's pool is rings of warm light (red over green over blue), not a pale tint."""
     place = _placed(("street_lamp", "floor_lamp", "vending_machine", "phone_booth", "car", "campfire"))
     for item in place.objects:
         pool = [s for s in object_shapes(item, _look(item.kind), 0.0, ObjectState(on=True)) if isinstance(s, Disc) and s.pool and s.opacity < 1]
@@ -294,7 +294,7 @@ def test_nature_keys_validate() -> None:
 
 def test_pools_of_light_are_their_own_picture_and_faint_by_day() -> None:
     """A lit lamp's pool is drawn only in the picture of the pools, which shows as strong as the
-    light is dark (it was a strong orange patch by day, DESIGN.md §104); a front picture has none."""
+    light is dark (it was a strong orange patch by day); a front picture has none."""
     strengths = {name: pool_strength(light_grade(name)) for name in ("day", "morning", "indoor", "sunset", "night")}
     assert strengths["day"] == POOL_DAY < strengths["morning"] < strengths["indoor"] < strengths["sunset"] < strengths["night"] == 1.0
     assert 0.3 < strengths["indoor"] < 0.7 and 0.4 < strengths["sunset"] < 0.8
@@ -439,7 +439,7 @@ def test_fantasy_objects_draw_light_up_open_and_move() -> None:
 
 def test_a_layer_shows_its_whole_pool_of_light() -> None:
     """A switched object is drawn in its own layer, clipped to it: a torch sconce's pool lies on
-    the floor below its wall, outside its box, and was cut to a streak (DESIGN.md §104)."""
+    the floor below its wall, outside its box, and was cut to a streak."""
     place = place_objects(parse_iso_map(HALL, place="indoor"), (ObjectPlacing("torch_sconce", (4, 1), name="torch"),))
     scenery = IsoScenery(place, IsoColors(), looks(place), iso_view(place, FW, FH), 30.0, states={"torch": ObjectState(on=True)}, layered={"torch"})
     layer = scenery.layer("torch")
@@ -555,7 +555,7 @@ def test_seasons_keys_validate() -> None:
 def test_light_thrown_on_things_follows_the_light() -> None:
     """Moving light thrown on things (a fireplace's glow on the floor, a torch's on its wall, a
     lighthouse's beam) is marked ``pool`` and shown as strong as pools of light: faint by day (it
-    showed at full strength by day, DESIGN.md §104)."""
+    showed at full strength by day)."""
     fire = place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("fireplace", (2, 2)),)).object("fireplace")
     glow = object_motion(fire, _look("fireplace"), 0.0, 0.5, ObjectState(on=True))[0]
     assert glow.pool and glow.glow

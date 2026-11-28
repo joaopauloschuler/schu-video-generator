@@ -1,4 +1,4 @@
-"""The lint rules comparing what the narration says with what the picture shows (DESIGN.md §87.10).
+"""The lint rules comparing what the narration says with what the picture shows.
 
 ``said_before_shown``: the narration names an on-screen label (a short text of the scene: a
 diagram node, a callout, an axis title...) clearly before that label is on screen. ``unsaid_reveal``
@@ -32,10 +32,10 @@ if TYPE_CHECKING:
     from vidgen.project import Project
 
 #: Actions that bring something on screen at their time: the built-in ones, the cell-biology
-#: scenes' actions that bring labels, captions, badges or a zoomed view's part names (§95.14), the
-#: genetics scenes' actions that bring gametes, cells, tables, cards and plots (§96.18), and the
-#: plot and calculation actions that bring fits, notes, growing series and worked steps (§97.11),
-#: the orbit actions that bring sectors, shots, burns with their Δv labels and a flyby (§98.8).
+#: scenes' actions that bring labels, captions, badges or a zoomed view's part names, the
+#: genetics scenes' actions that bring gametes, cells, tables, cards and plots, and the
+#: plot and calculation actions that bring fits, notes, growing series and worked steps,
+#: the orbit actions that bring sectors, shots, burns with their Δv labels and a flyby.
 SHOWING_ACTIONS = frozenset({
     "reveal", "callout", "transform",
     "zoom_to", "advance", "checkpoint", "signal", "knockout", "drug", "inhibit", "amplify", "transcribe", "cap", "splice", "polyadenylate",
@@ -141,8 +141,8 @@ class ShowingAction:
 
 def _label_texts(frame: dict[str, Any], min_opacity: float) -> list[dict[str, Any]]:
     """The frame's scene texts (no overlays: captions repeat the narration; no speech bubbles; no
-    name tags: a tag names a speaker already on screen, DESIGN.md §89.12; no web page text opted
-    out with ``data-vidgen-lint="off"``, §118.12)."""
+    name tags: a tag names a speaker already on screen; no web page text opted
+    out with ``data-vidgen-lint="off"``)."""
     return [
         o
         for o in frame["objects"]

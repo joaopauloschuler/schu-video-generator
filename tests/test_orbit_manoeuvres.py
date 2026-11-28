@@ -1,4 +1,4 @@
-"""Manoeuvres and gravity assists (Phase X, Step 231; DESIGN §98.5): burns in the local frame,
+"""Manoeuvres and gravity assists (Phase X, Step 231): burns in the local frame,
 trajectories through burns with crash checks, Hohmann (LEO → GEO, Earth → Mars), bi-elliptic
 thresholds, plane changes, phasing, the turning angle of a flyby and the sign of a gravity
 assist's energy change, and the piecewise clock. Values are checked against formulas written out

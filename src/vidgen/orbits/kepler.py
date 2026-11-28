@@ -1,4 +1,4 @@
-"""Kepler's equation and the anomalies of a conic orbit (Phase X, DESIGN §98), numpy only.
+"""Kepler's equation and the anomalies of a conic orbit (Phase X), numpy only.
 
 The mean anomaly ``M`` grows uniformly with time, ``M = n (t − T)`` (``T`` the time of
 periapsis passage, ``n`` the mean motion of :func:`mean_motion`), and the true anomaly ``ν`` is

@@ -1,4 +1,4 @@
-"""``vidgen music check`` (DESIGN.md §93.9): what a piece will sound like under narration, in
+"""``vidgen music check``: what a piece will sound like under narration, in
 words and numbers, for agents who cannot listen — loudness and its steadiness, peaks and
 clipping, the tempo heard against the score's, the loop's seam, how much sound sits in the
 voice's range, the bass weight, harsh highs, whether each section does its job (does the lift
@@ -8,7 +8,7 @@ A score is played track by track (:func:`vidgen.studio.render.render_music_stems
 problem is put down to the tracks that cause it. The limits were set on the 14 built-in beds
 and their templates (all fine; the two score beds of Step 190 and the per-chord and lift checks
 of Step 191 calibrated on all 16 templates, the shipped piece and the cookbook's sketches) and on
-deliberately bad scores (all flagged); §93.9 and §93.13 have the numbers. Pictures (:func:`spectrogram_image`) and the narration demo (:func:`narration_demo`)
+deliberately bad scores (all flagged). Pictures (:func:`spectrogram_image`) and the narration demo (:func:`narration_demo`)
 are made here; the command writes them.
 """
 
@@ -33,7 +33,7 @@ from vidgen.studio.theory import note_name
 #: The narration sample the demo plays when no ``--narration`` is given: two original lines
 #: spoken by Kokoro (``af_heart``, Apache-2.0), 20 s with the music alone at the end.
 NARRATION_SAMPLE = Path(__file__).parent / "data" / "narration_sample.mp3"
-#: The level schu-video-generator's narration sits at (integrated, as stereo; DESIGN §48: the kphi3 MP3s).
+#: The level schu-video-generator's narration sits at (integrated, as stereo: the kphi3 MP3s).
 NARRATION_LUFS = -21.5
 #: schu-video-generator's default ducking (``DuckConfig()``: depth dB, attack s, release s, hold s); a test
 #: keeps them equal.
@@ -56,7 +56,7 @@ TRANSITION_INSTRUMENTS = ("riser", "boom")
 #: half time, and the 2/3 (or 4/3) a 3+3+2 figure makes the onsets show.
 TEMPO_RATIOS = {1.0: "", 2.0: "double time", 0.5: "half time", 2 / 3: "2/3", 1.5: "3/2", 4 / 3: "4/3", 0.75: "3/4"}
 
-#: The limits (calibrated: §93.9, §93.13). Each is crossed by none of the 16 beds or their templates.
+#: The limits (calibrated). Each is crossed by none of the 16 beds or their templates.
 LIMITS = {
     "steadiness_db": 8.0,  # 3 s loudness p10..p95 range (beds 0.5-1.5, skyline_lift 4.1); over: it swings under the voice
     "plr_db": 19.0,  # true peak over integrated loudness (beds 10.8-14.5); over: single hits jump out
@@ -81,7 +81,7 @@ LIMITS = {
 
 class Fix(str):
     """A line of advice (plain text, as printed) that may carry ``edits``: the score changes that
-    do what it says, when they are mechanical (DESIGN.md §94.15) — ``(label, ops)`` pairs, each
+    do what it says, when they are mechanical — ``(label, ops)`` pairs, each
     op ``{"op": "set", "path": "tracks.pad.volume", "value": -8}`` (a path as a problem's
     ``where``: the value to write there, a missing key added)."""
 

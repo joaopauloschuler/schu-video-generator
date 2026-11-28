@@ -1,5 +1,4 @@
-"""The catalogue of score-file instruments and effects in words (``vidgen music patches``,
-DESIGN.md §93.4 / §93.7): what each one sounds like, its settings with default and range, and
+"""The catalogue of score-file instruments and effects in words (``vidgen music patches``): what each one sounds like, its settings with default and range, and
 how each effect is written."""
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ def _setting(s: Setting) -> dict[str, Any]:
 def patch_catalog() -> dict[str, Any]:
     """Every instrument (name, family, kind, description, level, default octave, settings;
     ``range`` when it has a written one; ``dynamics: true`` when a dynamic mark changes its tone
-    as well as its level, ``slurs: true`` when it can slur: DESIGN.md §120.7) and every effect
+    as well as its level, ``slurs: true`` when it can slur) and every effect
     (description, example, fields), as data."""
     return {
         "instruments": [

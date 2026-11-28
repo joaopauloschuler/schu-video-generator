@@ -1,4 +1,4 @@
-"""The video's chapters as the config marks them (DESIGN.md §42).
+"""The video's chapters as the config marks them.
 
 A chapter starts at a ``chapter`` scene (its ``title`` and ``number`` params) or at any scene
 with a ``chapter:`` field (a title, or ``{title, number}``); on a ``chapter`` scene the field

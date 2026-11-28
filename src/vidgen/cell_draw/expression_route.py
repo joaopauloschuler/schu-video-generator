@@ -1,4 +1,4 @@
-"""Drawing a gene's route through a cell (DESIGN.md §95.11): its markers — mRNAs (a short strand
+"""Drawing a gene's route through a cell: its markers — mRNAs (a short strand
 with its cap), ribosomes, protein chains, a COPII vesicle, a secretory vesicle, a clathrin-coated
 vesicle — kept a few pixels across at any zoom (their real sizes, 5–100 nm, would vanish at the
 scale of organelles) and placed each frame at their world points."""

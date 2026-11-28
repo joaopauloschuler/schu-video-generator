@@ -1,4 +1,4 @@
-"""The final audio mix (DESIGN.md §48): narration (+ clip sound), sound effects and background
+"""The final audio mix: narration (+ clip sound), sound effects and background
 music, ducking, loudness normalisation and a true-peak limiter.
 
 ``vidgen render`` builds three tracks for the whole video: the *voice* track (the scenes' padded
@@ -22,13 +22,13 @@ and scaled to ``audio.target_lufs``; a look-ahead true-peak limiter (10 ms, gain
 what keeps the 4x-oversampled peak under ``audio.true_peak``) then catches the peaks. Every step
 is deterministic numpy.
 
-Opt-in (DESIGN.md §111.2): ``audio.level_voice`` puts a gentle leveller on the voice track before
+Opt-in: ``audio.level_voice`` puts a gentle leveller on the voice track before
 the sum (:class:`LevelledTrack`); an audio-only render's loudness preset passes
 :class:`MixTargets` (a file loudness or RMS, a mono mix, a limiter setting, a room tone added
-after the gain). ``audio.music_width`` / ``ambience_width`` (§111.4) scale the side signal of the
+after the gain). ``audio.music_width`` / ``ambience_width`` scale the side signal of the
 music and of the beds. Without them a video's mix is what it was.
 
-Opt-in (DESIGN.md §112.2): the scenes' themes and the beats' motifs of ``score:``
+Opt-in: the scenes' themes and the beats' motifs of ``score:``
 (:func:`plan_score`, :mod:`vidgen.scoring`) are music placements beside the cues; a duck's
 ``swell`` lifts the music in the pauses (:func:`duck_gain_db`); ``score.check`` measures the music
 under dense dialogue after the mix.
@@ -66,14 +66,14 @@ FRAME = RATE // 100
 SCENE_RAMP = 0.75
 #: Look-ahead / smoothing of the true-peak limiter (samples).
 LIMITER_WINDOW = RATE // 100
-#: How a beat's music sting (DESIGN.md §69.19) ducks under the narration: by the music's
+#: How a beat's music sting ducks under the narration: by the music's
 #: ducking curve (:func:`duck_curve` over :func:`speech_spans`), lighter and quicker, and with no
 #: hold (a sting lasts 1-2.5 s; the music's 1.5 s hold would keep it down through every pause).
 STING_DUCK = DuckConfig(depth=6.0, attack=0.15, release=0.3, hold=0.0, clips=False)
 #: The limiter aims this far (dB) under ``audio.true_peak``: room for the interpolation and for
 #: the AAC encode, which moved the gallery's true peak up by 0.2 dB (Step 48).
 LIMITER_MARGIN_DB = 0.4
-#: The voice leveller (``audio.level_voice``, DESIGN.md §111.2): 3:1 with a 6 dB soft knee
+#: The voice leveller (``audio.level_voice``): 3:1 with a 6 dB soft knee
 #: above the voices' usual peak (the median 10 ms peak of the frames within 45 dB of the
 #: loudest, plus 8 dB), its gain ramped over 50 ms on the louder side (look-ahead: the mix is
 #: offline). Chosen on Step 283's samples: the limiter's gain reduction at -16 LUFS fell from
@@ -270,7 +270,7 @@ class Placement:
     source: Source
     gain: np.ndarray
     fit: dict[str, Any] | None = None  # composed music fitted to the video (musicfit summary)
-    theme: str | None = None  # a scene's theme or a beat's motif (DESIGN.md §112.2): its name
+    theme: str | None = None  # a scene's theme or a beat's motif: its name
     motif: bool = False
 
     def summary(self) -> dict[str, Any]:
@@ -300,7 +300,7 @@ class Placement:
 
 @dataclass
 class AmbiencePlacement:
-    """An ambience bed (DESIGN.md §69.39) placed in the video: samples ``start`` to ``end``, its
+    """An ambience bed placed in the video: samples ``start`` to ``end``, its
     loop and its gain per 10 ms frame of the whole video (linear)."""
 
     bed: str
@@ -309,7 +309,7 @@ class AmbiencePlacement:
     source: LoopSource
     gain: np.ndarray
     duck: float
-    width: float | None = None  # its own stereo width (a scene's ambience, DESIGN.md §112); None: audio.ambience_width
+    width: float | None = None  # its own stereo width (a scene's ambience); None: audio.ambience_width
 
     def summary(self) -> dict[str, Any]:
         """``{bed, start, end, duck}`` (times in seconds), and ``width`` when it has its own."""
@@ -322,7 +322,7 @@ class AmbiencePlacement:
 class MusicTrack:
     """The music of the whole video: every cue's source times its gain curve (and the ambience
     beds, mixed the same way); ``widths``: the stereo width of the music and of the beds
-    (``audio.music_width`` / ``ambience_width``, DESIGN.md §111.4; 1: as they are)."""
+    (``audio.music_width`` / ``ambience_width``; 1: as they are)."""
 
     def __init__(self, placements: Sequence[Placement | AmbiencePlacement], widths: tuple[float, float] = (1.0, 1.0)) -> None:
         self.placements = list(placements)
@@ -423,7 +423,7 @@ def _scene_curve(project: Project, scenes: Sequence[dict[str, Any]], frames: int
 def duck_gain_db(spans: Sequence[tuple[float, float]], frames: int, duck: DuckConfig) -> np.ndarray:
     """The music's gain in dB per frame under ``spans`` (:func:`duck_curve`) plus its ``swell``:
     up to ``swell`` dB where it is not ducked, rising with the release and falling with the
-    attack (DESIGN.md §112.2)."""
+    attack."""
     gain = duck_curve(spans, frames, duck)
     if duck.swell > 0:
         released = 1.0 + duck_curve(spans, frames, duck.model_copy(update={"depth": 1.0}))
@@ -473,7 +473,7 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
 
 
 def plan_score(project: Project, timings: dict[str, Any], total: int) -> list[Placement]:
-    """Place the scenes' themes and the beats' motifs (``score:``, DESIGN.md §112.2;
+    """Place the scenes' themes and the beats' motifs (``score:``;
     :mod:`vidgen.scoring`) in the audio of ``total`` samples: each piece's source, its fades in
     ``score.curve``, its level, the scenes' levels, ``score.duck`` (with its swell) and, on the
     scene themes, the dips under motifs and stings."""
@@ -516,7 +516,7 @@ def plan_score(project: Project, timings: dict[str, Any], total: int) -> list[Pl
 
 
 def plan_ambience(project: Project, timings: dict[str, Any], total: int) -> list[AmbiencePlacement]:
-    """Place the ambience beds (DESIGN.md §69.39, §69.55) in the video of ``total`` samples
+    """Place the ambience beds in the video of ``total`` samples
     wherever a scene's timings name one (``ambience``, joined across scenes): the rain bed while it
     rains, the fire's crackle while a fireplace burns; each fades in from its span's start and out
     ending at its end (:data:`~vidgen.ambience.BEDS`: the rain over
@@ -540,7 +540,7 @@ def plan_ambience(project: Project, timings: dict[str, Any], total: int) -> list
                 gain = _fade_curve(times, a, b, bed.fade_in, bed.fade_out) * ducking
                 placements.append(AmbiencePlacement(name, start, end, source, gain, bed.duck.depth))
     designed = designed_entries(timings)
-    if designed:  # a scene's / beat's ambience (DESIGN.md §112): each piece with its own fades, level and width
+    if designed:  # a scene's / beat's ambience: each piece with its own fades, level and width
         speech = speech_spans(project, timings) if speech is None else speech
         ducks: dict[str, np.ndarray] = {}
         for entry in designed:
@@ -578,13 +578,13 @@ class MixReport:
     levelled_db: float | None = None  # the voice leveller's largest gain reduction (None: off)
     target_rms: float | None = None  # normalised to this RMS (dBFS) instead of target_lufs
     mono: bool = False  # the left and right mixed to one before the limiter
-    music_check: dict[str, Any] | None = None  # the music under dense dialogue (score.check, DESIGN.md §112.2)
-    parts: list[dict[str, Any]] = field(default_factory=list)  # the files of a split mix (audio_output.split, §112.3)
+    music_check: dict[str, Any] | None = None  # the music under dense dialogue (score.check)
+    parts: list[dict[str, Any]] = field(default_factory=list)  # the files of a split mix (audio_output.split)
 
     def to_json(self) -> dict[str, Any]:
-        """The report; ``ambience`` only when a bed played (DESIGN.md §69.39); ``levelled_db``,
-        ``target_rms`` and ``mono`` only when set (DESIGN.md §111.2); ``music_check`` when
-        measured (§112.2)."""
+        """The report; ``ambience`` only when a bed played; ``levelled_db``,
+        ``target_rms`` and ``mono`` only when set; ``music_check`` when
+        measured."""
 
         def num(value: float | None) -> float | None:
             return None if value is None or not math.isfinite(value) else round(value, 2)
@@ -621,12 +621,12 @@ DUAL_MONO_LU = 10 * math.log10(2)
 
 @dataclass(frozen=True)
 class MixTargets:
-    """What an audio-only render's loudness preset asks of the mix (DESIGN.md §111.2), in place
+    """What an audio-only render's loudness preset asks of the mix, in place
     of ``audio:``: the file's integrated loudness ``lufs`` (a mono file's, when ``mono``: the mix
     is the channels' average in both, so it measures :data:`DUAL_MONO_LU` more) or its RMS
     ``rms`` (dBFS), the limiter's ``true_peak``, the voice leveller, a ``room_tone`` (dBFS RMS)
     under everything, and whether the music is measured under the voices (``music_check``: the
-    drama preset, §112.3, unless ``score.check: false``)."""
+    drama preset, unless ``score.check: false``)."""
 
     lufs: float | None = None
     rms: float | None = None
@@ -683,7 +683,7 @@ def write_mix(
 
 @dataclass(frozen=True)
 class MixPart:
-    """One file of a split mix (``audio_output.split``, DESIGN.md §112.3): samples ``start`` to
+    """One file of a split mix (``audio_output.split``): samples ``start`` to
     ``end`` of the whole, faded in and out over ``fade_in`` / ``fade_out`` seconds at its edges
     (raised cosine), written to ``path`` normalised on its own."""
 
@@ -758,11 +758,11 @@ def mix_audio(
     With music or normalisation (``audio.normalize``: true, or ``auto`` with music) the mix is
     written to ``out`` and the report says ``mixed``; otherwise nothing is written (the final
     mux sums narration and effects as before) and the report only measures that sum, unless
-    ``always_write`` (an audio-only render, DESIGN.md §111: the sum goes through the limiter into
+    ``always_write`` (an audio-only render: the sum goes through the limiter into
     ``out``). A video whose narrated beats have no MP3 yet is not normalised. The voices go
     through the leveller with ``audio.level_voice: true``. ``targets`` (an audio-only render's
     loudness preset) replace ``audio:``'s normalisation, limit and leveller setting and always
-    normalise. ``parts`` (``audio_output.split``, DESIGN.md §112.3): after the whole, each part
+    normalise. ``parts`` (``audio_output.split``): after the whole, each part
     is written to its own file, normalised on its own when the whole is (:attr:`MixReport.parts`).
     """
     audio = project.config.audio
@@ -839,9 +839,9 @@ def mix_audio(
 
 def _check_music(project: Project, timings: dict[str, Any], voice: WavTrack | LevelledTrack, placements: Sequence[Placement],
                  total: int, forced: bool = False) -> dict[str, Any] | None:
-    """``score.check`` (DESIGN.md §112.2): the music (no ambience) measured under the voices
+    """``score.check``: the music (no ambience) measured under the voices
     (:func:`vidgen.scoring.dense_dialogue_check`), a warning where it fights dense dialogue;
-    ``forced`` (the drama preset, §112.3) measures any music unless ``score.check: false``."""
+    ``forced`` (the drama preset) measures any music unless ``score.check: false``."""
     from vidgen import scoring
 
     cfg = project.config

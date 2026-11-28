@@ -1,6 +1,6 @@
 """``number_line``: one axis across the frame with points, intervals (open or closed ends,
 shaded, to infinity) and jumps (arcs from a to b with a label such as ``+3``); the ``trace``
-action moves a point along the line (DESIGN §87.7)."""
+action moves a point along the line."""
 
 import re
 from typing import Any, Literal

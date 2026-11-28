@@ -1,9 +1,9 @@
-"""``web``: a page written in HTML, CSS and JavaScript (DESIGN.md §118), screenshotted in headless
+"""``web``: a page written in HTML, CSS and JavaScript, screenshotted in headless
 Chromium at the render's frame rate and shown full-bleed (``region: bleed``) or in the body region
 under a title drawn by vidgen (``region: body``), under the overlays and captions.
 
 Before the scene plays, its frames are drawn into a lossless clip with alpha (compact with
-``render.intermediate: compact``, DESIGN.md §120.9)
+``render.intermediate: compact``)
 (``<render_dir>/web/<scene_id>.mkv``, with what it was drawn from beside it as ``.json``) at the
 size of the box the page fills, and reused while nothing that draws them changed; the clip is
 then a ``ClipMobject`` covering that box, so what the page leaves transparent shows the video's
@@ -77,13 +77,13 @@ class Web(NarratedScene):
         not resolved (the page looks them up in ``ctx.theme.colors``)."""
 
         music_data: bool | WebMusicData = False
-        """The video's music for the page as ``ctx.music`` (DESIGN.md §120.8): ``true``, or ``{bands: 16, tracks: [kick, hook], t0: 41.6}``. Per video frame: spectrum bands, level, low end and onsets of the music the video plays; from a score file also every track's hits and notes in song time (``ctx.music.t0`` is the song time at the scene's start)."""
+        """The video's music for the page as ``ctx.music``: ``true``, or ``{bands: 16, tracks: [kick, hook], t0: 41.6}``. Per video frame: spectrum bands, level, low end and onsets of the music the video plays; from a score file also every track's hits and notes in song time (``ctx.music.t0`` is the song time at the scene's start)."""
 
         orbit_data: OrbitData | None = None
-        """Bodies on their orbits for the page as ``ctx.orbits`` (DESIGN.md §122.3), in the orbit scene's words: ``{bodies: [{preset: earth}, {preset: mars}], span: '1 yr', date: '2026-11-17'}``, or a transfer, a flyby, a system. Per frame of the scene: each body's position and velocity (m, m/s; the ecliptic and equinox of J2000, origin the central body), its rotation (quaternion, prime meridian) for the Sun, the planets, the Moon and the Galilean moons, its path and orbit as polylines, a ship's burns."""
+        """Bodies on their orbits for the page as ``ctx.orbits``, in the orbit scene's words: ``{bodies: [{preset: earth}, {preset: mars}], span: '1 yr', date: '2026-11-17'}``, or a transfer, a flyby, a system. Per frame of the scene: each body's position and velocity (m, m/s; the ecliptic and equinox of J2000, origin the central body), its rotation (quaternion, prime meridian) for the Sun, the planets, the Moon and the Galilean moons, its path and orbit as polylines, a ship's burns."""
 
         flight_data: FlightData | None = None
-        """Flights through the air for the page as ``ctx.flight`` (DESIGN.md §123.7): ``{ground: {land: alpine}, flights: [{name: Plane, start: {x: -20000, z: 0, above_ground: 800, heading: 90, speed: 120}, legs: [{straight: 20}, {turn: {to: 180, bank: 30}}, {follow: {clearance: 300}, for: 60}]}]}``. Per frame of the scene: each flight's position, velocity and attitude (the scene's local frame: m, x east, y up, z south), speed, Mach number, heights over sea level and over the ground, load factor, bank, pitch, heading, angle of attack, a heating indicator; never under the ground (an error naming the time and place, or ``lift: true``); a start from ``orbit_data`` and a re-entry. See CONFIG "Flight data"."""
+        """Flights through the air for the page as ``ctx.flight``: ``{ground: {land: alpine}, flights: [{name: Plane, start: {x: -20000, z: 0, above_ground: 800, heading: 90, speed: 120}, legs: [{straight: 20}, {turn: {to: 180, bank: 30}}, {follow: {clearance: 300}, for: 60}]}]}``. Per frame of the scene: each flight's position, velocity and attitude (the scene's local frame: m, x east, y up, z south), speed, Mach number, heights over sea level and over the ground, load factor, bank, pitch, heading, angle of attack, a heating indicator; never under the ground (an error naming the time and place, or ``lift: true``); a start from ``orbit_data`` and a re-entry. See CONFIG "Flight data"."""
 
         design_width: int | None = None
         """For a page built in fixed pixels: the window width it was designed for, in CSS pixels (1280). The page is laid out in a window that wide (as high as its region's shape gives) and drawn at the video's size at every quality, so nothing in it needs rewriting; ``window.devicePixelRatio`` is output pixels per CSS pixel."""
@@ -179,8 +179,8 @@ class Web(NarratedScene):
         """What the page's frames are drawn from, as the arguments of ``make_web_clip``: the
         project folder, the clip's folder, the size of ``box`` in pixels (default: the box the
         scene gives its page, :meth:`_page_box`), the frame rate, how many frames, the theme,
-        the beats, the video's shape and, with ``music_data:``, ``music`` (§120.8), with ``orbit_data:``, ``orbits`` (§122.3; with ``flight_data:`` it carries ``flights``, §123.7). ``vidgen still`` draws single frames from the same
-        arguments (DESIGN.md §120.3)."""
+        the beats, the video's shape and, with ``music_data:``, ``music``, with ``orbit_data:``, ``orbits`` (with ``flight_data:`` it carries ``flights``). ``vidgen still`` draws single frames from the same
+        arguments."""
         if box is None:
             box = self._page_box(self._title())
         spans, frames = clip_plan(self, SPARE_FRAMES)
@@ -209,7 +209,7 @@ class Web(NarratedScene):
         """The clip of the page's frames at the size of ``box`` (drawn now, or reused while its
         inputs are unchanged); drawing it also reads the page's text at the stills' frames. With
         ``depth`` among the guide passes asked for (``vidgen render --guide-passes``, a shot's
-        ``guide: depth``), the page's depth pass too, beside it (DESIGN.md §113.19)."""
+        ``guide: depth``), the page's depth pass too, beside it."""
         self._clip_args: dict[str, Any] = self.page_clip_args(box)
         self._still_frames = planned_still_frames(self)
         self._layouts: dict[int, dict[str, Any]] = {}
@@ -222,7 +222,7 @@ class Web(NarratedScene):
 
     def page_layout(self, frame: int) -> tuple[dict[str, Any], Mobject] | None:
         """What text the page shows at output frame ``frame`` (the clip's frame of that index) and
-        the mobject showing it, for the layout dump and lint (DESIGN.md §118.12): read when the
+        the mobject showing it, for the layout dump and lint: read when the
         clip was drawn, else from the page now (frames still to come read in the same go)."""
         args, view = getattr(self, "_clip_args", None), getattr(self, "_view", None)
         if args is None or view is None:

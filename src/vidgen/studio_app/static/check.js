@@ -1,4 +1,4 @@
-// The check panel (DESIGN.md §94.15): `vidgen music check` of the current version, made by the
+// The check panel: `vidgen music check` of the current version, made by the
 // server in the background after each render (from the stems it keeps; a newer version's check
 // replaces an older one under way), shown as a verdict and headline numbers, the spectrogram
 // with the section marks and the playhead, plain-language advice with [Apply] where the fix is

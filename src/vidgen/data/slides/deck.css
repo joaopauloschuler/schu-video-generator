@@ -1,4 +1,4 @@
-/* vidgen slides (DESIGN.md §55): one self-contained deck page, dark backdrop, letterboxed slides. */
+/* vidgen slides: one self-contained deck page, dark backdrop, letterboxed slides. */
 :root {
   --bg: #0e1013;
   --stage: #000;

@@ -1,6 +1,6 @@
 # From gene to secreted protein: a university-level cell-biology explainer (about 3.5 min) of the
 # secretory pathway, followed through one real protein, alpha-1 antitrypsin (gene SERPINA1), which
-# liver cells secrete constitutively (docs/CONFIG.md `cell`, `molecule`, `pathway`; DESIGN §95;
+# liver cells secrete constitutively (docs/CONFIG.md `cell`, `molecule`, `pathway`;
 # the craft: docs/COOKBOOK-CELL-BIOLOGY.md):
 #   - a `cell` scene zooming from the tissue to the cell and into the nucleus (zoom_to on words)
 #   - two `molecule` close-ups of a short model gene (schematic, labelled so): transcription,

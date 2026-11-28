@@ -1,4 +1,4 @@
-"""A drawbar organ for score files (DESIGN.md §120.4): nine ranks at the organ footages, each
+"""A drawbar organ for score files: nine ranks at the organ footages, each
 drawn 0 (off) to 8 (full, 3 dB a step), their pipes a sine (an electric drawbar organ), a
 principal, a stopped flute or a reed. A rank's pipe for a note stands a little to the left or to
 the right (neighbouring semitones and neighbouring ranks on opposite sides, as in an organ

@@ -1,4 +1,4 @@
-"""Named poses and expressions of characters (DESIGN.md §69.3). No manim.
+"""Named poses and expressions of characters. No manim.
 
 A *pose* sets the body parts (:data:`POSE_PARTS`), an *expression* the face
 (:data:`EXPRESSION_PARTS`), so one of each can be combined. Each is a table part ->
@@ -57,7 +57,7 @@ POSES: dict[str, dict[str, PartPoseEntry]] = {
 }
 
 #: Built-in expressions. The rest mouth is a smile (``smile``), so a negative y scale makes a frown.
-#: Since Step 125 (DESIGN.md §69.59): ``laughing`` (eyes closed in arcs, a laughing mouth),
+#: Since Step 125: ``laughing`` (eyes closed in arcs, a laughing mouth),
 #: ``blushing`` (``cheeks`` ``blush``), ``tongue_out``, ``crying`` (eyes squeezed, ``cheeks``
 #: ``tears``: streams), ``dizzy`` (``swirl`` eyes; the idle motion sways) and ``frightened``
 #: (``wide`` eyes, ``bristles`` ``up``; the idle motion shivers). Each lists fallback shapes, so

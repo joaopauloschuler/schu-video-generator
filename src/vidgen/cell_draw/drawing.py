@@ -1,4 +1,4 @@
-"""Drawing a cell world with Manim (DESIGN.md §95.6, §95.9): the renderer of the three-layer
+"""Drawing a cell world with Manim: the renderer of the three-layer
 design (the world and its rules are in :mod:`vidgen.cellworld`, without manim). Shapes become
 exact cubic Bézier paths in scene units (``unit`` scene units per µm), so the camera can zoom
 from a tissue down to the lipids of one membrane and every outline stays true. Each drawn piece

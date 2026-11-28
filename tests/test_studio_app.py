@@ -1,4 +1,4 @@
-"""``vidgen studio`` (Step 193, DESIGN.md §94): the app's logic without HTTP (presets, sessions,
+"""``vidgen studio`` (Step 193): the app's logic without HTTP (presets, sessions,
 checking score text, rendering and the render cache) and the HTTP server (static files, JSON
 API, range requests, the Host / Origin / content-type guards). Browser tests are in
 ``test_studio_ui.py``."""

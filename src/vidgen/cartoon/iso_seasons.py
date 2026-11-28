@@ -1,4 +1,4 @@
-"""Seasons, harbour and travel iso objects (DESIGN.md §104, Phase AC Step 267): a Christmas tree,
+"""Seasons, harbour and travel iso objects (Phase AC Step 267): a Christmas tree,
 a snowman, a pumpkin, a pile of gifts, a bunch of balloons, a birthday cake, a sailing boat on
 water, a dock, a lighthouse, a train car and a rocket on its launch pad. No manim.
 
@@ -359,7 +359,7 @@ def _boat_parts(f: _Frame, look: ObjectLook, on: bool, lift: float, pitch: float
     """A small sailing boat afloat (rising ``lift``, pitching and rolling by those shares): its
     hull (``color``) and deck, a white stripe, a mast with a mainsail and a jib (``detail``), a
     pennant, a lantern at the stern (lit when ``on``), then the foam where it meets the water.
-    ``reverse``: its bow to the viewer's left (sailing up the picture, DESIGN.md §105)."""
+    ``reverse``: its bow to the viewer's left (sailing up the picture)."""
     wl = -WATER_DEPTH
 
     def q(a: float, b: float, z: float) -> Point3:
@@ -411,7 +411,7 @@ def _boat(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     (``color``), a deck, a mast and two sails (``detail``), a lantern at its stern; on, the lantern
     is lit (light on the water) and the boat bobs (the stage rocks it)."""
     on = state.on
-    if look.driven:   # the stage sails it (DESIGN.md §105)
+    if look.driven:   # the stage sails it
         return []
     shapes: list[Shape] = light_pool(f.p(0.25, 0.5, -WATER_DEPTH + 0.01), 0.8, 0.6) if on else []
     if not (on and look.moving):   # the stage rocks it while on
@@ -506,7 +506,7 @@ def _beam(f: _Frame, look: ObjectLook, now: float) -> list[Motion]:
 def _train_car(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     """A passenger carriage (``color``) side-on on a stretch of track: a row of windows with a
     trim line (``detail``), doors at its ends, a rounded roof, two bogies with wheels. Driven, the
-    stage draws its track along the way it rolls and the carriage itself (DESIGN.md §105)."""
+    stage draws its track along the way it rolls and the carriage itself."""
     if look.driven:
         return []
     return train_track(f) + train_body(f, look)
@@ -589,7 +589,7 @@ def _rocket(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     x, y, z = _rocket_centre(f)
     shapes: list[Shape] = light_pool((x, y, z + 0.17), 1.7) if on else []
     shapes += _launch_pad(f, on)
-    if look.driven:   # the stage draws the rocket and lifts it off (DESIGN.md §105)
+    if look.driven:   # the stage draws the rocket and lifts it off
         return shapes
     shapes += rocket_body(f, look, on)
     if on and not look.moving:   # the stage makes it roar and smoke

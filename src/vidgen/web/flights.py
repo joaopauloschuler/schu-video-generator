@@ -1,4 +1,4 @@
-"""Flight data for ``web`` scenes with ``flight_data:`` (DESIGN.md §123.7): the cache and its key, and
+"""Flight data for ``web`` scenes with ``flight_data:``: the cache and its key, and
 the page's helper. The data is made by :mod:`vidgen.scenes.flight_data` (with :mod:`vidgen.flight`)
 and travels to the page inside the orbit bridge's payload (``orbits.flights``, Step 367's plumbing);
 ``data/web/flight.js`` turns it into ``ctx.flight``."""

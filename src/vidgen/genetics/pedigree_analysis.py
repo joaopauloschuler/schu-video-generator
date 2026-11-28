@@ -1,4 +1,4 @@
-"""The analysis of a pedigree (DESIGN.md §96.8): for each mode of inheritance (AD, AR, XD, XR,
+"""The analysis of a pedigree: for each mode of inheritance (AD, AR, XD, XR,
 Y-linked, mitochondrial) whether some assignment of genotypes fits every phenotype on the chart —
 exact, by summing over all assignments with variable elimination — with the reason when none does;
 the genotypes the chart forces (obligate carriers); each person's posterior genotype

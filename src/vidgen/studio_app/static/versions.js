@@ -1,4 +1,4 @@
-// Versions, undo / redo and A/B (DESIGN.md §94.4, §94.15). Every committed edit is a version on
+// Versions, undo / redo and A/B. Every committed edit is a version on
 // the server; undo goes to the current version's parent, redo back down the branch last undone,
 // picking a version from the list makes it the current one (a new edit then starts a branch:
 // nothing is deleted). A/B plays another version (the original preset by default, or any one
@@ -217,7 +217,7 @@ function megabytes(bytes) {
   return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`;
 }
 
-// Old renders and exports out (never a version, note or check): the server's rule (§94.18).
+// Old renders and exports out (never a version, note or check): the server's rule.
 async function cleanUp() {
   ctx.status("cleaning up old renders and exports…", "busy");
   try {

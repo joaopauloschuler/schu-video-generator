@@ -1,4 +1,4 @@
-"""Water to the horizon, ``vidgen/space-sea`` (Step 382, DESIGN.md §123.4): the module is served by its
+"""Water to the horizon, ``vidgen/space-sea`` (Step 382): the module is served by its
 import name and imports only ``three``, ``vidgen/baked`` and ``vidgen/space-air``; its parts are registered
 under the kind ``sea``; in Node (when it is installed): the horizon's dip and distance against the
 formula, Fresnel's limits, the wind's statistics, sea states and waters with a did-you-mean, the waves

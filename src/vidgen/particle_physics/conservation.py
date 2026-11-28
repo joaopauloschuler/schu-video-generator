@@ -1,4 +1,4 @@
-"""Which reactions and decays can happen, and why (Phase Y, Step 237; DESIGN §99.3). No manim.
+"""Which reactions and decays can happen, and why (Phase Y, Step 237). No manim.
 
 :func:`check` takes a process (``"n -> p e- anti-nu_e"``) and checks, with teaching-style
 explanations ("lepton number L_e not conserved: 0 → +1"):

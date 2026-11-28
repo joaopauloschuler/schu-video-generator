@@ -58,7 +58,7 @@ def test_each_set_validates_with_two_characters(name: str, make_project) -> None
 def test_light_and_ambience_match_the_set() -> None:
     sets = builtin_sets()
     assert sets["city_street"]["ambience"] == "city"
-    assert sets["park"]["ambience"] == sets["forest"]["ambience"] == "auto"   # birdsong by day (§69.62)
+    assert sets["park"]["ambience"] == sets["forest"]["ambience"] == "auto"   # birdsong by day
     assert sets["park"]["light"] == "day" and sets["forest"]["light"] == "morning"
     assert sets["beach"]["water"] == {"left": 0.0, "right": 0.3}
     (snow,) = sets["snowy_hills"]["particles"]
@@ -108,7 +108,7 @@ def test_new_props_build_seat_and_lie_flat() -> None:
         assert prop.height == pytest.approx(1.0) and prop.kind == kind
     assert {"road", "path"} <= FLAT_PROPS
     for kind in ("bench", "log"):
-        assert PROP_HEIGHTS[kind] * PROP_SEATS[kind][1] == pytest.approx(0.14)   # a seat line at 0.14 of a character (§69.36)
+        assert PROP_HEIGHTS[kind] * PROP_SEATS[kind][1] == pytest.approx(0.14)   # a seat line at 0.14 of a character
         assert len(SEAT_PLACES[kind]) == 2
         bench = draw_prop(kind, height=2.0, theme=Theme())
         left, right = (bench.seat_point(k) for k in range(2))
@@ -133,7 +133,7 @@ def test_new_indoor_props_build_with_seats_leans_and_hangs() -> None:
         prop = draw_prop(kind, height=1.0, theme=Theme())
         assert prop.height == pytest.approx(1.0) and prop.kind == kind
         assert abs(prop.get_left()[0] + prop.get_right()[0]) < 0.05   # its box centred on its feet
-    assert PROP_HEIGHTS["school_desk"] * PROP_SEATS["school_desk"][1] == pytest.approx(0.14)   # §69.36
+    assert PROP_HEIGHTS["school_desk"] * PROP_SEATS["school_desk"][1] == pytest.approx(0.14)
     assert "school_desk" in SEAT_BACKS   # a pupil faces the desk
     desk = draw_prop("school_desk", height=2.0, theme=Theme(), facing="left")
     assert desk.seat_point()[0] > desk.feet()[0]   # facing left, the chair is on the right
@@ -200,7 +200,7 @@ def test_scene_params_override_a_room(make_project) -> None:
     assert lamp["prop"] == "lamp" and lamp["on"] is False and lamp["scale"] == 0.6 and params["props"][-1]["prop"] == "clock"
     assert check_project(project) == []
     backdrop = expand_sets({"scenes": [{"id": "s", "type": "stage", "set": "kitchen", "params": {"background": "primary"}}]}, {})[0]
-    assert "room" not in backdrop["scenes"][0]["params"]   # a backdrop replaces the set's room (§69.42)
+    assert "room" not in backdrop["scenes"][0]["params"]   # a backdrop replaces the set's room
 
 
 # ----- overriding (no render) --------------------------------------------------------------------

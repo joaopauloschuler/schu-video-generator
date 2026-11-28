@@ -1,8 +1,8 @@
-"""Ambience (DESIGN.md §69.39, §69.55, §69.62): a generated sound bed under the scenes while
+"""Ambience: a generated sound bed under the scenes while
 something on screen lasts: ``rain`` under a stage's rain field and ``fire`` (a crackle) while a
 fireplace burns; and the beds of the set itself (:data:`SET_BEDS`): ``birdsong`` outdoors by day,
 ``room_tone`` in a room (chosen by :func:`set_ambience`), ``crickets`` in the evening and at night outdoors on an iso
-place (§89.11) and ``city`` when a stage names it; all while foley is on (:data:`BEDS`).
+place and ``city`` when a stage names it; all while foley is on (:data:`BEDS`).
 
 The rain bed is a seamless 8 s stereo loop made with numpy only (no recordings, deterministic):
 a soft hiss (noise band-passed around 2.5 kHz), many small drop ticks (sparse impulses
@@ -30,7 +30,7 @@ from vidgen.sfx import RATE, SIREN_HALF, _band, _highpass, _lowpass, _tone, sire
 
 #: The ambience beds a scene's timings may name (``ambience: [{bed, start, end}]``).
 AMBIENCE_BEDS = ("rain", "fire", "birdsong", "city", "room_tone", "crickets", "hum", "alarm")
-#: The beds of a set (DESIGN.md §69.62, §89.11, §100.8): what a stage's ``ambience`` may name.
+#: The beds of a set: what a stage's ``ambience`` may name.
 SET_BEDS = ("birdsong", "city", "room_tone", "crickets", "hum")
 #: Integrated loudness (LUFS) of the rain bed before ducking: 4 dB under the music's
 #: (:data:`vidgen.music.MUSIC_LEVEL` -28), so about 11 dB under narration in its pauses.
@@ -73,8 +73,8 @@ def ambience_spans(timings: Mapping[str, Any], bed: str) -> list[tuple[float, fl
 
 
 def designed_entries(timings: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    """The ``ambience`` entries of a scene's or a beat's ``ambience:`` (DESIGN.md §112,
-    :func:`vidgen.sound_design.ambience_entries`): each with its own ``fade_in``, ``fade_out``,
+    """The ``ambience`` entries of a scene's or a beat's ``ambience:``
+    (:func:`vidgen.sound_design.ambience_entries`): each with its own ``fade_in``, ``fade_out``,
     ``gain`` (dB) and maybe ``width``, placed as it is (not merged)."""
     return [entry for scene in timings["scenes"] for entry in scene.get("ambience", []) if "fade_in" in entry]
 
@@ -158,7 +158,7 @@ def fire_loop() -> np.ndarray:
     return _leveled(np.stack(channels, axis=1), FIRE_LEVEL)
 
 
-# ----- the beds of a set (DESIGN.md §69.62) -----------------------------------------------------------
+# ----- the beds of a set -----------------------------------------------------------
 
 #: Integrated loudness (LUFS) of each set bed before ducking: birdsong and the city a little under
 #: the rain (a background, not an event), the room tone far under everything (felt as air more
@@ -312,7 +312,7 @@ def _cricket_chirp(rng: np.random.Generator, pitch: float) -> np.ndarray:
 
 @lru_cache(maxsize=1)
 def crickets_loop() -> np.ndarray:
-    """The crickets bed's seamless loop (a night outdoors on an iso place, DESIGN.md §89.11):
+    """The crickets bed's seamless loop (a night outdoors on an iso place):
     float32 ``(n, 2)`` at :data:`RATE`, :data:`CRICKETS_LEVEL` integrated loudness, read-only.
     Four crickets, each at its own pitch (3.8-5.2 kHz), place (left to right) and loudness, chirping
     at its own steady rate (1.3-2.6 chirps a second, a little uneven), over a faint low night air
@@ -336,7 +336,7 @@ def crickets_loop() -> np.ndarray:
     return _leveled(out, CRICKETS_LEVEL)
 
 
-#: The alarm bed (DESIGN.md §100.8): its level (a siren is loud in the room, but it must not
+#: The alarm bed: its level (a siren is loud in the room, but it must not
 #: mask the lines), its ducking under the narration, its fades and its loop (whole siren periods).
 ALARM_LEVEL = -31.0
 ALARM_DUCK = DuckConfig(depth=7.0, attack=0.3, release=0.8, hold=1.0, clips=False)
@@ -347,7 +347,7 @@ ALARM_LOOP_SECONDS = 10 * 2 * SIREN_HALF
 
 @lru_cache(maxsize=1)
 def alarm_loop() -> np.ndarray:
-    """The alarm bed's seamless loop (a stage's ``alarm`` action, DESIGN.md §100.8): float32
+    """The alarm bed's seamless loop (a stage's ``alarm`` action): float32
     ``(n, 2)`` at :data:`RATE`, :data:`ALARM_LEVEL` integrated loudness, read-only: the built-in
     ``alarm`` siren (:func:`~vidgen.sfx.siren`, whole cycles of both tones per half, so it loops
     without a seam), the right channel 11 ms behind the left (a room's width)."""
@@ -408,13 +408,12 @@ def set_ambience(
     end: float,
     crickets: bool = False,
 ) -> list[tuple[str, float, float]]:
-    """The set beds of a stage scene of ``end`` seconds (DESIGN.md §69.62) as ``(bed, start,
+    """The set beds of a stage scene of ``end`` seconds as ``(bed, start,
     end)``: ``setting`` ``False`` none; a list of :data:`SET_BEDS` names those beds for the whole
     scene; ``True`` chooses: a ``room`` its ``room_tone`` all along; outdoors ``birdsong`` while the
     light is a :data:`DAYLIGHT` preset (``lights``: ``(scene time, preset or None for a tint)``
     from the first, sorted), not while it rains (``rain`` spans) nor :data:`BIRDS_AFTER_RAIN` after,
-    each span at least :data:`MIN_BIRDSONG_SECONDS`; with ``crickets`` (an iso place outdoors,
-    §89.11) also ``crickets`` while the light is ``sunset`` or ``night`` (:data:`NIGHT`), under the
+    each span at least :data:`MIN_BIRDSONG_SECONDS`; with ``crickets`` (an iso place outdoors) also ``crickets`` while the light is ``sunset`` or ``night`` (:data:`NIGHT`), under the
     same rules."""
     if setting is False or end <= 0:
         return []

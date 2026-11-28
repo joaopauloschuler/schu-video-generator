@@ -677,7 +677,6 @@ my_video/
   in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`), from a score to a music video (`vidgen music plan`), checking a music video's motion (`vidgen motion check`), opening titles and end cards for films (`vidgen/title-cards`).
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
-- [DESIGN.md](DESIGN.md) — architecture and internal contracts.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release (0.3.0: cartoons, Kokoro and
   OpenRouter narration, `output/`, `--jobs auto`), behaviour changes first.
 - [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md) — a short checklist to try a release on Windows

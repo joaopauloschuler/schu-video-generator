@@ -1,4 +1,4 @@
-"""Cartoon title cards (the ``card`` scene, DESIGN.md §69.46) without manim: where the text and
+"""Cartoon title cards (the ``card`` scene) without manim: where the text and
 the frame go, the burst's rays, and the colours of the bold outlined text.
 
 Sizes are in Manim units (the frame's shorter side is 8); angles in radians.

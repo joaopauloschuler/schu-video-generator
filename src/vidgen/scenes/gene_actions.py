@@ -1,4 +1,4 @@
-"""The steps of gene expression as beat actions (DESIGN.md §95.11): ``transcribe``, ``cap``,
+"""The steps of gene expression as beat actions: ``transcribe``, ``cap``,
 ``splice``, ``polyadenylate``, ``export``, ``translate``, ``target_er``, ``glycosylate``,
 ``fold`` act on the gene of a ``molecule`` scene (a molecular close-up); ``transcribe``,
 ``export``, ``translate``, ``to_golgi`` and ``secrete`` on the gene of a ``cell`` scene (the

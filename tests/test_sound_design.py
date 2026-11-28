@@ -1,4 +1,4 @@
-"""Step 288: sound design in audio-only renders (DESIGN.md §112): ambience beds per scene or
+"""Step 288: sound design in audio-only renders: ambience beds per scene or
 section with cross-fades, beds that start or stop on a word, repeated cues, cues in a room, and
 the sounds of stage and video_clip scenes worked out without pictures (``audio.scene_sounds``).
 Narration is mocked: each beat's "MP3" is a WAV tone (PyAV reads it by its content)."""

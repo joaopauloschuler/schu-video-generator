@@ -1,6 +1,6 @@
 """Theme: colors, sizes, fonts, background and code style resolved from config, preset and defaults.
 
-Lookup precedence (highest first, DESIGN.md §19):
+Lookup precedence (highest first):
 
 1. values written in ``video.yaml`` (``theme.*``, after merging a variant),
 2. the preset named by ``theme.preset`` (its ``base`` preset below it),
@@ -10,7 +10,7 @@ Lookup precedence (highest first, DESIGN.md §19):
 Without ``theme.preset`` level 2 is empty. A type scale (``theme.scale``, or the preset's) is
 shorthand for the six built-in sizes at the level where it is chosen, below that level's
 ``sizes``; with none chosen the built-in sizes are the ``auto`` scale for the theme's
-orientation (``large`` in portrait, DESIGN.md §20). Presets are looked up when a value is read, so an
+orientation (``large`` in portrait). Presets are looked up when a value is read, so an
 extension may register a project preset (:meth:`Theme.add_preset`) after the theme was built.
 This module does not import manim.
 """

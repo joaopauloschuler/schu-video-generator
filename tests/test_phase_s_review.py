@@ -1,4 +1,4 @@
-"""Step 191, the review of Phase S (DESIGN.md §93.13): a beat ends on its planned frame (the
+"""Step 191, the review of Phase S: a beat ends on its planned frame (the
 caption offset of Step 189), holds across a section's end, ducking that follows the hit's
 level, the threaded filter sweep (equal to the bit), the check's per-chord fit, lifts and risers,
 a cue starting at a section, the lint check on the part a video plays, and pieces and beds by

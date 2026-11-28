@@ -1,4 +1,4 @@
-"""The particle-physics model (Phase Y, Step 237; DESIGN §99): PDG 2024 data and its sanity
+"""The particle-physics model (Phase Y, Step 237): PDG 2024 data and its sanity
 (charges and baryon numbers from the quark content, antiparticles), names in ASCII and Unicode,
 reaction parsing, and the conservation checker on textbook allowed and forbidden processes. No
 manim."""

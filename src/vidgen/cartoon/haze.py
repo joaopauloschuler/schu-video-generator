@@ -1,4 +1,4 @@
-"""Shimmering air over a spot (DESIGN.md §102.12): the maths of a heat-haze ripple, no manim;
+"""Shimmering air over a spot: the maths of a heat-haze ripple, no manim;
 :class:`~vidgen.cartoon.iso_overlays.IsoHaze` draws it over an iso place.
 
 A haze is a column of faint, wavering ribbons of light rising from its foot, swaying more the

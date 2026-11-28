@@ -1,4 +1,4 @@
-"""Applying an emotion's prosody to synthesised speech (DESIGN.md §72): pauses at punctuation
+"""Applying an emotion's prosody to synthesised speech: pauses at punctuation
 lengthened or shortened by the word timings, a soft-limited gain (numpy) and a pitch shift that
 keeps the length (an ffmpeg filter). No PyTorch.
 
@@ -115,7 +115,7 @@ def apply_gain(samples: np.ndarray, gain_db: float) -> np.ndarray:
 def tempo_filter(factor: float) -> str | None:
     """An ffmpeg audio filter making speech ``factor`` times faster with its pitch kept
     (``atempo``, 0.5-2); ``None`` for 1. Kokoro speeds itself up instead; OpenRouter's audio
-    uses this (DESIGN.md §73)."""
+    uses this."""
     if factor == 1.0:
         return None
     return f"atempo={min(2.0, max(0.5, factor)):.6f}"

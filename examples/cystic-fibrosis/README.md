@@ -3,7 +3,7 @@
 A university-level medical-genetics explainer (nine scenes, about 4 min 12 s with Kokoro
 narration) that follows one inherited disease, **cystic fibrosis**, from a family's pedigree to the
 variant on the sequence, a carrier test and the population. It uses six of the genetics scene
-types (DESIGN §96) the way the [genetics cookbook](../../docs/COOKBOOK-GENETICS.md) recommends;
+types the way the [genetics cookbook](../../docs/COOKBOOK-GENETICS.md) recommends;
 every number on screen is computed by the scenes, and the narration says the same numbers
 (`vidgen lint`'s `genetics_*` rules check it).
 

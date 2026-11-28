@@ -1,10 +1,10 @@
-"""Cartoon characters as named vector parts with pivots (DESIGN.md §69).
+"""Cartoon characters as named vector parts with pivots.
 
 A :class:`Character` is a ``VGroup`` of parts (``head``, ``eyes``, ``brows``, ``mouth``, ``body``,
-``arm_left``, ``arm_right``, optional ``legs``, ``accessory``, ``tail`` (an animal's, §69.48),
-``antenna``, ``cape``, ``cheeks`` and ``bristles`` (§69.58, §69.59);
+``arm_left``, ``arm_right``, optional ``legs``, ``accessory``, ``tail`` (an animal's),
+``antenna``, ``cape``, ``cheeks`` and ``bristles``;
 arms and legs may come in two segments, ``arm_left`` + ``arm_left_lower``, ``leg_left`` +
-``leg_left_lower``, ...: §69.26).
+``leg_left_lower``, ...).
 Each part has one or more named shapes, a pivot, a parent and a draw order. Parts are drawn in
 *character units*: the origin is the point between the feet, ``y`` points up and 1 is the top
 of the character.
@@ -66,7 +66,7 @@ PART_NAMES: tuple[str, ...] = (
     "antenna", "cape", "cheeks", "bristles",
 )
 #: Parts every character has; the legs, the lower segments, ``accessory``, ``tail``, ``antenna``,
-#: ``cape``, ``cheeks`` and ``bristles`` (a generated character's, DESIGN.md §69.59) are optional.
+#: ``cape``, ``cheeks`` and ``bristles`` (a generated character's) are optional.
 REQUIRED_PARTS: tuple[str, ...] = ("body", "arm_left", "arm_right", "head", "eyes", "brows", "mouth")
 #: The legs drawn one leg each; a character draws its legs either so or as one ``legs`` part.
 SINGLE_LEG_PARTS: tuple[str, ...] = ("leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
@@ -89,7 +89,7 @@ DEFAULT_DRAW_ORDER: dict[str, int] = {
     "leg_left": 22, "leg_left_lower": 23, "body": 30, "arm_left": 40, "arm_left_lower": 41, "head": 50,
     "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80, "tail": 5, "antenna": 49, "cape": 3, "cheeks": 55, "bristles": 48,
 }
-#: Draw order of the front view (DESIGN.md §69.44): both arms hang beside the body, in front of it.
+#: Draw order of the front view: both arms hang beside the body, in front of it.
 FRONT_DRAW_ORDER: dict[str, int] = {**DEFAULT_DRAW_ORDER, "arm_right": 42, "arm_right_lower": 43}
 #: The ways a character can face: to the right or left of the screen (its side view; left is the
 #: mirror image), or the viewer (``front``: its front view, when it has one).
@@ -101,12 +101,12 @@ OUTLINE_WIDTH = 4.0
 REFERENCE_HEIGHT = 3.0
 #: Side of the anchor triangle in character units (small, so it stays inside the figure's box).
 _ANCHOR_SIDE = 0.05
-#: The attribute marking a shape's member as a piece that trails in the wind (DESIGN.md §69.32):
+#: The attribute marking a shape's member as a piece that trails in the wind:
 #: ``(pivot x, pivot y, weight)`` in the part's character units (the generator sets it on a
 #: scarf's end, long hair, a bun, pointy or floppy ears, a hat and an animal's tail).
 TRAIL_ATTRIBUTE = "wind_trail"
 #: The attribute marking a member of the ``head`` part as something beyond the head (an afro, a
-#: ponytail, braids, a beard, DESIGN.md §69.47; an animal's ears, snout or beak, §69.48): the
+#: ponytail, braids, a beard; an animal's ears, snout or beak): the
 #: effect symbols size and place themselves by the head without it and go above its top
 #: (:func:`~vidgen.cartoon.effect_symbols.head_box`).
 OUTER_HAIR_ATTRIBUTE = "outer_hair"
@@ -180,7 +180,7 @@ class _Limb:
 
 @dataclass
 class _View:
-    """One way the figure is drawn, its side or its front (DESIGN.md §69.44): per part its shapes
+    """One way the figure is drawn, its side or its front: per part its shapes
     (the templates of the live copies), their drawings, the drawn members of each shape's live
     copy, the pivots, the limbs' rest geometry, the draw order and the trailing pieces."""
 
@@ -248,7 +248,7 @@ def _check_parts(specs: Mapping[str, CharacterPart], who: str, required: Iterabl
 
 
 #: How many times closer than the whole frame the scene being built is seen at its widest (a
-#: fixed wide view's magnification, DESIGN.md §108); :func:`pixel_zoom` sets it.
+#: fixed wide view's magnification); :func:`pixel_zoom` sets it.
 _PIXEL_ZOOM: list[float] = [1.0]
 
 
@@ -257,7 +257,7 @@ def pixel_zoom(zoom: float) -> Iterator[None]:
     """Within it, :func:`one_pixel_stroke` is one pixel of a view ``zoom`` times closer than the
     frame (a stage on an iso place with the fixed wide view, which is never seen wider): thin
     outlines are kept one pixel wide there, not one pixel of the whole place, which the zoom
-    would thicken many times (DESIGN.md §108)."""
+    would thicken many times."""
     before = _PIXEL_ZOOM[0]
     _PIXEL_ZOOM[0] = max(float(zoom), 1.0)
     try:
@@ -344,18 +344,18 @@ class Character(VGroup):
     height in Manim units (1 character unit); the feet start at the origin. Stroke widths scale
     with ``height`` (as drawn at :data:`REFERENCE_HEIGHT`), at least one pixel wide.
     ``required`` names the parts it must have (default :data:`REQUIRED_PARTS`; an imported SVG
-    needs only ``body``, §69.2). ``poses`` / ``expressions`` are the character's own entries
-    (name -> part -> :class:`~vidgen.config.PartPoseEntry`), added to the built-in tables (§69.3).
-    ``motion`` is its ``cartoon_motion`` setting (``lively``, ``calm``, ``none``; §69.13), read by
+    needs only ``body``). ``poses`` / ``expressions`` are the character's own entries
+    (name -> part -> :class:`~vidgen.config.PartPoseEntry`), added to the built-in tables.
+    ``motion`` is its ``cartoon_motion`` setting (``lively``, ``calm``, ``none``), read by
     the animations of :mod:`vidgen.cartoon.transition`. ``front``: the same parts with the same
-    shapes drawn from the front (§69.44), shown while it faces ``front`` (without them it keeps
+    shapes drawn from the front, shown while it faces ``front`` (without them it keeps
     its side view then).
 
     ``parts`` maps each part name to its live ``VGroup``: one child per shape, in
     :meth:`shape_names` order (then the front view's), all kept for the character's life; the
     shapes not shown have no points (so Manim draws only the shown one). Its family never changes,
     so an animation that lists the character's family when it begins draws every frame what is
-    shown, where it is (a swapped-out mouth is never left behind, DESIGN.md §69.22); only the
+    shown, where it is (a swapped-out mouth is never left behind); only the
     parts' order changes when it turns between its side and its front (:attr:`order_changes`).
     """
 
@@ -400,18 +400,18 @@ class Character(VGroup):
         self.facing = "right"   # the side view is built first; :meth:`_set_facing` below
         self._side = "right"    # the side it faces, or faced before turning to the front
         #: How many times its parts' draw order has changed (a turn between its side and its front
-        #: redraws the arms in another order, DESIGN.md §69.44); a stage watches it.
+        #: redraws the arms in another order); a stage watches it.
         self.order_changes = 0
         #: The ``cartoon_motion`` setting its animations use (anticipation, squash and stretch,
-        #: overshoot, follow-through; DESIGN.md §69.13).
+        #: overshoot, follow-through).
         self.motion = motion
-        #: How its species walks, runs and jumps (DESIGN.md §69.57; :func:`build_character` sets an
+        #: How its species walks, runs and jumps (:func:`build_character` sets an
         #: animal's): a person's unless set.
         self.species_motion: SpeciesMotion = PERSON_MOTION
         self._squash = (1.0, 1.0)  # the whole figure's scale about its feet (squash and stretch)
         self._own_entries: dict[str, PoseTable] = {"pose": dict(poses or {}), "expression": dict(expressions or {})}
         stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, one_pixel_stroke()
-        #: the side view and, when it has one, the front view (DESIGN.md §69.44)
+        #: the side view and, when it has one, the front view
         self._views = {view: self._made_view(view_specs, view, stroke_factor, stroke_floor) for view, view_specs in views.items()}
         self._view = "side"
         self._activate(self._views["side"])
@@ -434,21 +434,20 @@ class Character(VGroup):
         #: ``enter`` or ``exit`` while a :class:`~vidgen.cartoon.transition.Walk` brings it in
         #: from off stage or takes it off (lint ``off_stage`` skips it then), else ``None``.
         self.passage: str | None = None
-        #: How much of it shows (1; less while it fades in or out through a door, DESIGN.md
-        #: §69.42): its shadow fades with it.
+        #: How much of it shows (1; less while it fades in or out through a door): its shadow fades with it.
         self.shown = 1.0
         #: The props in its hands (hand -> prop name; set by the prop actions, recorded in the
-        #: layout dump as ``holding``), empty while it holds nothing (DESIGN.md §69.27).
+        #: layout dump as ``holding``), empty while it holds nothing.
         self.holding: dict[str, str] = {}
         #: The prop it sits on / leans on (set by ``sit_on`` / ``lean_on``, cleared by ``stand_up``;
-        #: recorded in the layout dump), ``None`` while it stands (DESIGN.md §69.28).
+        #: recorded in the layout dump), ``None`` while it stands.
         self.sitting_on: str | None = None
         self.leaning_on: str | None = None
         #: The vehicle it rides (set by ``get_in``, cleared by ``get_out``; recorded in the layout
-        #: dump), ``None`` while it is on foot (DESIGN.md §69.52).
+        #: dump), ``None`` while it is on foot.
         self.riding: str | None = None
         #: How far back it stands on a stage (0 front .. 1 back; set by the stage and by walks in
-        #: depth, DESIGN.md §69.44), and the y of the ground line there (``None``: not on a stage).
+        #: depth), and the y of the ground line there (``None``: not on a stage).
         self.stage_depth = 0.0
         self.ground_y: float | None = None
         self._anchor = anchor_mobject(height)
@@ -465,7 +464,7 @@ class Character(VGroup):
             self.parts[part_name] = VGroup(*copies)
         for view in self._views.values():
             #: part -> shape -> per drawn member, its trailing pivot and signed weight (``None``:
-            #: not a trailing piece); only parts and shapes with one (DESIGN.md §69.32)
+            #: not a trailing piece); only parts and shapes with one
             view.trails = self._trailing_members(view)
         self._activate(self._views["side"])   # with its trailing pieces now
         self.add(self._anchor, *(self.parts[n] for n in self._order))
@@ -547,7 +546,7 @@ class Character(VGroup):
         return motion_strength(self.motion)
 
     def set_squash(self, x: float = 1.0, y: float = 1.0) -> Character:
-        """Scale the whole figure by ``x``, ``y`` about its feet (squash and stretch, §69.13), on
+        """Scale the whole figure by ``x``, ``y`` about its feet (squash and stretch), on
         top of the poses: not part of :meth:`state`; ``set_squash()`` puts it back."""
         squash = (float(x), float(y))
         if squash == self._squash:
@@ -567,7 +566,7 @@ class Character(VGroup):
     def hand_point(self, hand: str) -> np.ndarray:
         """Where the ``left`` or ``right`` hand is on screen now (the end of that arm: the hand's
         middle on a generated character; on an SVG the point of the arm farthest from the
-        shoulder), with the arm's pose, its parents and the facing (§69.26)."""
+        shoulder), with the arm's pose, its parents and the facing."""
         return self._limb_end(self._limb_of(HANDS, hand, "hand"))
 
     def shoulder_point(self, hand: str) -> np.ndarray:
@@ -632,7 +631,7 @@ class Character(VGroup):
     def face(self, direction: str) -> Character:
         """Face ``right``, ``left`` or ``front``: facing left is the mirror image of the whole
         character about the vertical line through its feet; ``front`` shows its front view (a
-        character without one keeps facing its side, DESIGN.md §69.44)."""
+        character without one keeps facing its side)."""
         self._set_facing(direction)
         return self.refresh()
 
@@ -764,7 +763,7 @@ class Character(VGroup):
         (:func:`~vidgen.cartoon.seating.seated_sole`); a one-piece ``legs`` part turned forward
         until its feet rest on the ground, or on a seat higher than the legs are long held out
         (:data:`~vidgen.cartoon.seating.SEATED_LEGS_DEGREES`); the body's ``seated`` shape when it
-        has one (:data:`~vidgen.config.SEATED_BODY_SHAPE`, DESIGN.md §69.47). Not drawn."""
+        has one (:data:`~vidgen.config.SEATED_BODY_SHAPE`). Not drawn."""
         parts = dict(state.parts)
         body = parts["body"]
         hips = self._hips_y(self._world({**self._poses, **parts}), parts)
@@ -813,7 +812,7 @@ class Character(VGroup):
         """Show expression ``name`` at once (``neutral``, ``happy``, ...; :meth:`names`)."""
         return self.set_state(self.posed_state(expression=name))
 
-    # ----- lip sync (DESIGN.md §69.4) -------------------------------------------------------
+    # ----- lip sync -------------------------------------------------------
 
     def viseme_shape(self, viseme: str) -> str | None:
         """The mouth shape that shows ``viseme``: the first of :data:`VISEME_SHAPES` the
@@ -893,7 +892,7 @@ class Character(VGroup):
         self._spoken = shape
         self._show_shape("mouth", before)
 
-    # ----- idle motion (DESIGN.md §69.5) ----------------------------------------------------
+    # ----- idle motion ----------------------------------------------------
 
     @property
     def is_idle(self) -> bool:
@@ -905,8 +904,7 @@ class Character(VGroup):
         robot's ``antenna`` and blink its light (:func:`~vidgen.cartoon.idle.antenna_light_on`) and blink
         (eyes ``closed``) at seeded random intervals of 2 to 6 s (``seed`` default: from the name;
         :func:`~vidgen.cartoon.idle.blink_times`; not over eyes closed already), and add the
-        motion of the face's mood (sway, shiver, bounce; :func:`~vidgen.cartoon.idle.shape_mood`,
-        DESIGN.md §69.59), from now, through an updater. The motion is a
+        motion of the face's mood (sway, shiver, bounce; :func:`~vidgen.cartoon.idle.shape_mood`), from now, through an updater. The motion is a
         layer on top of the poses: :meth:`state`, :meth:`set_state`, :class:`PoseChange` and
         :meth:`lip_sync` never see it. Its clock stops while Manim suspends the updaters (an
         animation playing on the character); :class:`PoseChange` ends a running blink."""
@@ -968,7 +966,7 @@ class Character(VGroup):
             self._set_overlay("cheeks", PartPose(shape=running) if running in self._shapes["cheeks"] else None)
         return self.refresh()
 
-    # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------
+    # ----- wind ----------------------------------------------------------
 
     @property
     def has_trails(self) -> bool:
@@ -1022,7 +1020,7 @@ class Character(VGroup):
         defaults = FRONT_DRAW_ORDER if view == "front" else DEFAULT_DRAW_ORDER
         made = _View(
             shapes=shapes,
-            # each shape's drawing as point arrays, so a redraw only transforms them (DESIGN.md §69.20)
+            # each shape's drawing as point arrays, so a redraw only transforms them
             drawings={n: {k: shape_drawing(v) for k, v in s.items()} for n, s in shapes.items()},
             pivots={n: np.array(s.pivot, dtype=float) for n, s in specs.items()},
             order=sorted(specs, key=lambda n: (specs[n].order if specs[n].order is not None else defaults[n], PART_NAMES.index(n))),
@@ -1220,7 +1218,7 @@ class Character(VGroup):
 
     def _show_shape(self, part: str, before: str) -> None:
         """Hide the shape ``before`` when ``part`` now shows another; the next :meth:`refresh`
-        draws the new one (only points change: the family stays as it is, §69.22)."""
+        draws the new one (only points change: the family stays as it is)."""
         if self._shape_name(part) != before:
             self._hide(part, before)
 
@@ -1302,7 +1300,7 @@ def build_character(
     ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts.
     Its idle motion runs unless the entry says ``idle: false``. Its ``cartoon_motion`` is the
     entry's, else ``motion`` (the scene's or the video's), else ``lively``. Its arms hang the
-    look's ``arms`` way, else ``arms`` (the video's ``cartoon_arms``), else ``front`` (§110). An
+    look's ``arms`` way, else ``arms`` (the video's ``cartoon_arms``), else ``front``. An
     animal or a robot walks, runs and jumps its species' way, a robot on wheels rolls
     (:attr:`Character.species_motion`)."""
     motion = resolve_motion(entry.cartoon_motion, motion)
@@ -1328,12 +1326,12 @@ def build_character(
         wheels = entry.look.species == "robot" and entry.look.robot_look().moves_on == "wheels"
         built.species_motion = species_motion(entry.look.species, wheels=wheels)
     hologram = entry.hologram_look()
-    if hologram is not None:   # a translucent figure in one glowing colour (DESIGN.md §100.3)
+    if hologram is not None:   # a translucent figure in one glowing colour
         from vidgen.cartoon.hologram import apply_hologram
 
         apply_hologram(built, resolve_color(hologram.color, theme), hologram.opacity)
     echo = entry.echo_look()
-    if echo is not None:   # a translucent other self in its own colours (DESIGN.md §102.6)
+    if echo is not None:   # a translucent other self in its own colours
         from vidgen.cartoon.echo import apply_echo
 
         apply_echo(built, resolve_color(echo.color, theme), echo.opacity)
@@ -1347,7 +1345,7 @@ def character(
     tall, feet at the origin. Unknown names raise :class:`VidgenError` with suggestions. Its
     ``cartoon_motion`` is its own, else ``motion`` (a scene's), else the video's, else ``lively``.
     Its arms hang its look's way, else the video's ``cartoon_arms``, else ``arms`` (a caller's
-    default), else ``front`` (§110)."""
+    default), else ``front``."""
     from vidgen.cartoon.cast import find_character
     from vidgen.runtime import current_project, current_theme
 

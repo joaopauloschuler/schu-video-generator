@@ -1,4 +1,4 @@
-"""Chapters in the outputs, Step 49 (DESIGN.md §52): the published list (an intro chapter at
+"""Chapters in the outputs, Step 49: the published list (an intro chapter at
 0:00), MP4 chapter entries and tags (FFMETADATA, read back with ffprobe), the YouTube list
 ``<output>_chapters.txt`` and its rules, ``chapters:`` / ``metadata:`` config, validate warnings."""
 

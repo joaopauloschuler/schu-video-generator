@@ -24,7 +24,7 @@ class Problem:
     ``location`` is a config path such as ``scenes[2].params.title`` (``""`` when the problem
     is not about one config value, e.g. an extension that fails to import); ``variant`` names
     the variant whose (merged) config has the problem, ``None`` for the base config; ``file`` is
-    the ``include:`` file the value is written in (relative to the project, DESIGN.md §69.35),
+    the ``include:`` file the value is written in (relative to the project),
     ``None`` for the project's own config file. ``str(problem)`` is the line ``vidgen validate``
     prints.
     """

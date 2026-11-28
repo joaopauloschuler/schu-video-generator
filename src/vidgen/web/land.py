@@ -1,4 +1,4 @@
-"""``vidgen/space-land``'s heights for Python (Step 385, DESIGN.md §123.7): the ground's
+"""``vidgen/space-land``'s heights for Python (Step 385): the ground's
 ``definition()`` — ``{radius, recipe, macro: {n, spacing, scale, heights}}`` — fetched by opening a
 small page once in headless Chromium (the macro lattice is made on the GPU) and kept in vidgen's
 cache folder (``ground/``, cleared by ``vidgen cache clear``) under a key of the ground's options,

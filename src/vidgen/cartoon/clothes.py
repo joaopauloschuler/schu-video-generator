@@ -1,4 +1,4 @@
-"""What generated characters wear on the body (DESIGN.md §69.1, §69.47): the outfit
+"""What generated characters wear on the body: the outfit
 (``plain``, ``dress``, ``overalls``, ``coat``, ``shorts``, ``apron``), its pattern (stripes or
 dots in a tone of the cloth), shoes, and the accessories worn on the body (scarf, bag, backpack,
 necklace). Character units before the figure is scaled to height 1, as in
@@ -221,7 +221,7 @@ def _outfit_details(look: CharacterLook, f: Frame, body: Sequence[Point], c: Map
     return []
 
 
-#: The outfits of a retro look (DESIGN.md §107): a suit, a lab coat, a jumpsuit.
+#: The outfits of a retro look: a suit, a lab coat, a jumpsuit.
 RETRO_OUTFITS = ("suit", "lab_coat", "jumpsuit")
 
 
@@ -298,12 +298,12 @@ def _necklace(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
     return pieces
 
 
-#: A medal (DESIGN.md §102.14): its disc's gold and the darker rim and star on it.
+#: A medal: its disc's gold and the darker rim and star on it.
 MEDAL_GOLD = "#F2C14E"
 MEDAL_RIM = "#B8862B"
 #: The medal's disc radius (character units).
 MEDAL_RADIUS = 0.048
-#: A glowing pendant (§102.14): the attribute marking its glowing members (``core``: the stone
+#: A glowing pendant: the attribute marking its glowing members (``core``: the stone
 #: and its light; ``halo``: the soft light round it), which the stage leaves unlit and pulses.
 PENDANT_GLOW = "pendant_glow"
 #: Its cord's colour (dark, so the stone's light stands out), how far below the neck the stone
@@ -333,7 +333,7 @@ def _medal(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
 def _pendant(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
     """A glowing pendant: a thin dark cord round the neck and a round stone in the accessory
     colour with a bright core and a soft halo (marked :data:`PENDANT_GLOW`: never graded by the
-    stage's light, pulsing; DESIGN.md §102.14)."""
+    stage's light, pulsing)."""
     x0, y0 = (0.0, f.body_top) if f.front else (0.04, f.body_top)
     width = 0.09 if f.front else 0.06
     cord = [(x0 + width * math.cos(t), y0 + 0.085 * math.sin(t)) for t in (math.radians(200 + 140 * k / 10) for k in range(11))]
@@ -371,7 +371,7 @@ def _backpack(f: Frame, body: Sequence[Point], c: Mapping[str, str], w: float, *
 
 
 def _bag_and_scarf(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
-    """A bag on a strap and a scarf with a trailing end (DESIGN.md §69.1, §69.32)."""
+    """A bag on a strap and a scarf with a trailing end."""
     p = f.p
     pieces: list[VMobject] = []
     if "bag" in look.accessories:

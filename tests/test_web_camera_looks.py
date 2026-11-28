@@ -1,4 +1,4 @@
-"""Camera looks, ``vidgen/camera-looks`` (Steps 400–401, DESIGN.md §124.4–124.5): the module is served by its import name and
+"""Camera looks, ``vidgen/camera-looks`` (Steps 400–401): the module is served by its import name and
 imports nothing; Python reads the same table (``camera_looks``) and merges a scene's own options over a look the
 same way as the module's ``lookMerge``; in Node (when it is installed): every look's finish passes
 vidgen/three-finish's checks and turns on the sensor and the lens, every look's operator passes

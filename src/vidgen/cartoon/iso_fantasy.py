@@ -1,4 +1,4 @@
-"""Fantasy iso objects (DESIGN.md §104, Phase AC Step 266): a treasure chest, a cauldron, a giant
+"""Fantasy iso objects (Phase AC Step 266): a treasure chest, a cauldron, a giant
 crystal, a throne, a torch sconce on a wall, a signpost, a stone archway and a statue. No manim.
 
 Drawn like :mod:`vidgen.cartoon.iso_objects`' objects (its frame, shading and helpers), which

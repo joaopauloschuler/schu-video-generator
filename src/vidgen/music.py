@@ -1,4 +1,4 @@
-"""Background music (DESIGN.md §48, §69.63, §82, §83, §91, §93.12, §93.14): seventeen procedurally
+"""Background music: seventeen procedurally
 generated beds (three of them, ``tidewater``, ``skyline`` and ``time_of_flight``, written as score
 files and rendered by :mod:`vidgen.studio`), the project's own music files, composed music (:mod:`vidgen.composer`,
 played by :mod:`vidgen.synth`), and the sources the mix reads from.
@@ -619,7 +619,7 @@ def _lullaby(rng: np.random.Generator) -> np.ndarray:
     return _finish(out)
 
 
-# The documentary beds (Step 179, DESIGN.md §91): a soft kick and synth bass under pads and
+# The documentary beds (Step 179): a soft kick and synth bass under pads and
 # arpeggios, side-chained, the whole loop through :func:`_tone_filter`. Bass-heavy on purpose.
 
 
@@ -878,7 +878,7 @@ def _lab(rng: np.random.Generator) -> np.ndarray:
     return _finish(_tone_filter(out, lowpass))
 
 
-# The energetic beds (Step 181, DESIGN.md §91): uplifting trance, a pulsar beacon and a night
+# The energetic beds (Step 181): uplifting trance, a pulsar beacon and a night
 # drive, built on ``momentum``'s 3+3+2 accent, a steady low pulse and an off-beat or rolling bass.
 
 #: Harmonic amplitudes of the supersaw-like chords: a saw, and a softer saw for warm pads.
@@ -1620,7 +1620,7 @@ class Source:
             self.seamless = True
             self.data = data
             start = cue.start
-            if cue.section is not None and kind == "bed":  # a score bed's section (DESIGN.md §93.13)
+            if cue.section is not None and kind == "bed":  # a score bed's section
                 from vidgen.music_pieces import section_start
 
                 start += section_start(cue, root)
@@ -1682,7 +1682,7 @@ class Source:
         self.length = len(self.data)
 
     def _piece(self, cue: MusicCue, root: Path, cache_dir: Path | None) -> None:
-        """A project piece (a score file, DESIGN.md §93.10), rendered (cached in ``cache_dir``):
+        """A project piece (a score file), rendered (cached in ``cache_dir``):
         a ``loop: true`` piece under a looping cue repeats seamlessly from ``start`` (wrapping
         round, as a bed); otherwise it plays once from ``start`` (a loop piece's ``start`` wraps,
         a one-shot's may not pass its end) and the cue's fade-out applies at its end."""
@@ -1786,7 +1786,7 @@ def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, s
 
 
 def music_warnings(config: VideoConfig) -> list[str]:
-    """``vidgen validate`` warnings about composed music (DESIGN.md §83, §85): without the
+    """``vidgen validate`` warnings about composed music: without the
     ``music`` extra the moods' beds play instead (named, with the install command); with it, the
     default SoundFont not downloaded yet (the first render downloads it)."""
     from vidgen import soundfont

@@ -1,4 +1,4 @@
-"""The inputs vidgen cuts for generated shots (DESIGN.md §113.3, §113.8), into ``build/videogen/<shot>/``:
+"""The inputs vidgen cuts for generated shots, into ``build/videogen/<shot>/``:
 
 - ``audio.mp3``: the beat's own voice (its narration MP3, no music or effects), from the part's
   start for exactly its length, padded with silence (the pad after the line is in the beat's
@@ -7,12 +7,12 @@
   effects), cut from the rendered film (``vidgen render`` first) at the beat's start in the film;
 - ``guide.mp4``: the part of the beat from a draft render of its scene (the draft format: low
   resolution, the video's shape, few frames a second), without sound;
-- ``guide.final.mp4`` (``guide: final``, DESIGN.md §113.18): the part of the beat from the
+- ``guide.final.mp4`` (``guide: final``): the part of the beat from the
   scene's finished render, at the video's own size and frame rate, without overlays or placed
   takes (the film's own scene render when nothing is drawn over the scene, else
   :meth:`~vidgen.project.Project.without_takes` into ``build/final_source``; either is rendered
   when not current), without sound; its first frame is ``first_frame.png`` with ``first_frame: render``;
-- ``guide.canny.mp4`` (``guide: canny``, DESIGN.md §113.21): white edges on black of the same
+- ``guide.canny.mp4`` (``guide: canny``): white edges on black of the same
   part of the finished render (:mod:`vidgen.videogen.canny`, the shot's ``canny:`` settings),
   at :func:`guide_size` and the render's frame rate; its ``first_frame.png`` from the colour part;
 - ``first_frame.restyled.png`` (``first_frame: restyled``): ``first_frame.png`` made photoreal
@@ -21,7 +21,7 @@
 - ``guide.<pass>.mp4`` (``guide: depth | outline | mask`` on a ``3d`` scene): the same part of
   that guide pass of the draft render (the lossless ``.mkv`` beside the 3D clip, drawn when
   missing), as H.264 / yuv420p at the draft's size and frame rate;
-- ``guide.depth.mp4`` on a web scene (``space``, ``web``; DESIGN.md §113.19): the same part of the
+- ``guide.depth.mp4`` on a web scene (``space``, ``web``): the same part of the
   depth pass drawn with the finished render (``<render_dir>/web/<scene>.depth.mkv``, packed
   distances), grey with one range for the shot (:func:`vidgen.web.depth.cut_depth`), at the
   video's size and frame rate; its ``first_frame.png`` from the finished render;
@@ -29,7 +29,7 @@
   when the scene fades in from black); always the normal render, also with a guide pass;
 - ``guide[.<pass>].opening.mp4`` (``first_frame_in: guide``): that guide with the shot's starting
   picture as its first frame, dissolving into it over ``videogen.first_frame_dissolve`` seconds,
-  same length, size and frame rate (DESIGN.md §113.13). This one is sent, not the plain guide;
+  same length, size and frame rate. This one is sent, not the plain guide;
 - ``last_of.<source>.<take>.png`` (``first_frame: last_of:``): the last decoded frame of the take
   the source shot shows; for a later part of a split beat, the previous part's frame the film shows
   last (its take is trimmed to the part) (no ``--guide`` needed);
@@ -274,7 +274,7 @@ class SceneRender:
 def render_kind(project: Project, scene_id: str, guide: str | None) -> str:
     """The render an input of ``scene_id`` for a shot with ``guide`` (``None``: the first frame alone) is
     cut from: ``final`` for ``guide: final`` and for a web scene's guide pass (its depth is drawn with
-    the finished render, at the video's size and frame rate, DESIGN.md §113.19), else ``render`` (the draft)."""
+    the finished render, at the video's size and frame rate), else ``render`` (the draft)."""
     from vidgen.config import GUIDES_OF_WEB_SCENES, is_web_scene_type
 
     if guide in ("final", "canny") or (guide in GUIDES_OF_WEB_SCENES and is_web_scene_type(project.scene(scene_id).type)):
@@ -299,7 +299,7 @@ def render_project(project: Project, kind: str, scene_id: str) -> Project:
 def _render_scene(project: Project, scene_id: str, passes: tuple[str, ...], kind: str = "render") -> SceneRender:
     """A render of ``scene_id`` for a guide of ``kind`` (:func:`render_project`) with guide
     ``passes`` (reused while current; a render without the passes is made again, reusing the 3D
-    frames, DESIGN.md §114.14)."""
+    frames)."""
     return scene_render(render_project(project, kind, scene_id), scene_id, passes)
 
 

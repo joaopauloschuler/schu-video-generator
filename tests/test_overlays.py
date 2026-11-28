@@ -1,4 +1,4 @@
-"""Overlays, Step 38 (DESIGN.md §41): config and validation, the planned timeline, the overlay
+"""Overlays, Step 38: config and validation, the planned timeline, the overlay
 registry and schema, drawing fixed to the screen (zoom, fades, cuts, frozen waits), reserved
 space, the built-in ``lower_third`` and ``watermark``, and lint."""
 

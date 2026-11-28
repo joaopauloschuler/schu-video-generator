@@ -1,4 +1,4 @@
-"""``guide: canny`` and ``first_frame: restyled`` (DESIGN.md §113.21): the edges, the config, the
+"""``guide: canny`` and ``first_frame: restyled``: the edges, the config, the
 restyle job over a fake ComfyUI, and the inputs with their freshness."""
 
 from __future__ import annotations

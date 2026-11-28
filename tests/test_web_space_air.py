@@ -1,4 +1,4 @@
-"""The sky from inside an atmosphere, ``vidgen/space-air`` (Step 381, DESIGN.md §123.3): the module is
+"""The sky from inside an atmosphere, ``vidgen/space-air`` (Step 381): the module is
 served by its import name and imports only ``three``, ``vidgen/baked`` and ``vidgen/space-bodies``; its
 parts are registered under the kind ``air``; in Node (when it is installed): the airs as numbers (the
 same as ``vidgen/space-bodies`` draws from outside), errors with a did-you-mean, the air along a ray

@@ -1,5 +1,5 @@
-"""The clip a ``web`` or ``3d`` scene's drawn frames are kept in until the scene plays them
-(DESIGN.md §120.9): lossless FFV1 by default, or with ``render.intermediate: compact`` a small
+"""The clip a ``web`` or ``3d`` scene's drawn frames are kept in until the scene plays them:
+lossless FFV1 by default, or with ``render.intermediate: compact`` a small
 H.264 picture (4:4:4, CRF :data:`COMPACT_CRF`) and, for frames with alpha, a lossless FFV1
 alpha stream beside it in the same Matroska file (stream title :data:`ALPHA_TITLE`, read back
 by :class:`vidgen.clips.ClipReader`).
@@ -30,7 +30,7 @@ Intermediate = Literal["lossless", "compact"]
 INTERMEDIATES: tuple[str, ...] = ("lossless", "compact")
 #: The compact picture: libx264 at this CRF and preset, in 4:4:4 (no chroma subsampling, so
 #: coloured edges stay sharp; the final encode subsamples once). Measured on Escapement's
-#: frames (§120.9): 4.6 times smaller than FFV1, 39-41 dB PSNR, SSIM 0.96-0.97 against the
+#: frames: 4.6 times smaller than FFV1, 39-41 dB PSNR, SSIM 0.96-0.97 against the
 #: lossless frames, and the final H.264 made from it within 0.25 dB of the one made from them.
 COMPACT_CRF = "12"
 COMPACT_PRESET = "veryfast"
@@ -39,7 +39,7 @@ ALPHA_TITLE = "alpha"
 
 
 def clip_serves(stored: str | None, wanted: str) -> bool:
-    """Whether a kept clip stored as ``stored`` (``None``: written before §120.9, lossless)
+    """Whether a kept clip stored as ``stored`` (``None``: written before compact clips existed, lossless)
     serves a render asking for ``wanted``: a lossless clip serves both, a compact one only
     ``compact`` (asking for ``lossless`` draws the frames again)."""
     return (stored or "lossless") == "lossless" or wanted == "compact"
@@ -93,7 +93,7 @@ def write_frames_clip(path: Path, fps: int, size: tuple[int, int], frames: Itera
         partial.unlink(missing_ok=True)
 
 
-#: Progress while a clip's frames are drawn (DESIGN.md §120.10); the render worker prints it as
+#: Progress while a clip's frames are drawn; the render worker prints it as
 #: ``progress: ...`` lines, which ``vidgen render`` shows under the scene's name.
 progress_log = logging.getLogger("vidgen.progress")
 #: Seconds between two progress lines (at most one line in this time; the last frame always has one).
@@ -184,8 +184,8 @@ _END, _STOP = object(), object()
 class FramesClipWriter:
     """``with FramesClipWriter(path, fps, size, prepare, alpha=..., intermediate=...) as clip:
     clip.put(item)``: :func:`write_frames_clip` in a thread of its own, so a frame is decoded
-    (``prepare(item)`` -> its pixels, e.g. a PNG decoded) and encoded while the next one is drawn
-    (DESIGN.md §120.10). The frames are written in the order put; at most :attr:`DEPTH` wait. An
+    (``prepare(item)`` -> its pixels, e.g. a PNG decoded) and encoded while the next one is drawn.
+    The frames are written in the order put; at most :attr:`DEPTH` wait. An
     error of the writer is raised by the next :meth:`put` or on leaving the block; an error inside
     the block stops the writer and leaves no clip (nor a ``.partial`` file)."""
 

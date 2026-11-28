@@ -1,4 +1,4 @@
-"""Many bodies (Phase X, Step 232, DESIGN §98.6): the figure-eight three-body orbit, binary
+"""Many bodies (Phase X, Step 232): the figure-eight three-body orbit, binary
 stars about their barycentre, mean-motion resonances and conjunctions, whether a path bends
 towards a body (the Moon's path around the Sun), and the tidal schematic's numbers. No manim.
 

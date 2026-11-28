@@ -1,4 +1,4 @@
-"""Step 341 (DESIGN.md §120.1, §120.2): a scene of an extension type that subclasses ``Web`` is
+"""Step 341: a scene of an extension type that subclasses ``Web`` is
 rendered again when its script, a file the script imports or a file it fetches changes; a
 ``script:`` whose module waits for several fetches becomes ready.
 
@@ -147,7 +147,7 @@ def test_edits_render_the_film_layout_again(make_project: Any) -> None:
 @pytest.mark.slow
 @pytest.mark.render
 def test_a_module_waiting_for_several_fetches_becomes_ready(tmp_path: Path) -> None:
-    """The module is still waiting when vidgen first looks: it must be looked at again (§120.2)."""
+    """The module is still waiting when vidgen first looks: it must be looked at again."""
     _chromium_or_skip()
     (tmp_path / "d.json").write_text('{"n": 1}', encoding="utf-8")
     (tmp_path / "s.js").write_text(

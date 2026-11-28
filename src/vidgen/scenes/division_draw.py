@@ -1,4 +1,4 @@
-"""Mitosis and meiosis drawn (DESIGN.md §95.13): the keyframes of
+"""Mitosis and meiosis drawn: the keyframes of
 ``vidgen.cellworld.division`` as mobjects — chromatids as round-capped strokes in segments
 coloured by origin (maternal and paternal hues, a shade per pair; exchanged segments in the
 partner's colour), kinetochores, spindle microtubules, cell outlines with the contractile ring

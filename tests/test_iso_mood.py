@@ -96,7 +96,7 @@ def test_rain_lands_anywhere_on_the_place_and_not_beside_it_or_on_a_face() -> No
 @pytest.mark.slow
 @pytest.mark.parametrize("particles", [[{"kind": "rain", "puddles": True}], [{"kind": "snow", "settle": True}]])
 def test_an_iso_place_takes_puddles_and_settling_snow(particles: list[dict[str, Any]]) -> None:
-    # refused in Steps 169-171; drawn since Step 172 (DESIGN.md §90)
+    # refused in Steps 169-171; drawn since Step 172
     assert stage_params(iso=ISO, characters=[{"name": "pip", "at": "start"}], particles=particles).particles
 
 
@@ -105,7 +105,7 @@ def test_no_rain_indoors_on_an_iso_place(make_project) -> None:
     with pytest.raises(ValidationError, match="an indoor place has none inside"):
         stage_params(iso=room, characters=[{"name": "pip", "at": "middle"}], particles=["rain"])
     beats = [{"text": "Rain.", "actions": [{"particles": "rain", "puddles": True}]}]
-    assert problems(iso_project(make_project, beats)) == []   # outdoors: puddles grow (§90.2)
+    assert problems(iso_project(make_project, beats)) == []   # outdoors: puddles grow
     assert stage_params(iso=ISO, characters=[{"name": "pip", "at": "start"}], particles=["rain"]).particles[0].kind == "rain"
 
 

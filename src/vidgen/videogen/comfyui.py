@@ -1,4 +1,4 @@
-"""The ``comfyui`` video provider: vidgen's own ComfyUI workflows (DESIGN.md §113.20).
+"""The ``comfyui`` video provider: vidgen's own ComfyUI workflows.
 
 A workflow (:class:`Workflow`, :data:`WORKFLOWS`) is a model id kept with vidgen: its inputs
 (a control video from the shot's ``guide``, an optional first frame, the prompt), its shape rules
@@ -25,7 +25,7 @@ A request with a ``sheet`` (a shot's ``sheet:``) is the base video + stylesheet 
 :mod:`.ltx_graph`; it runs only on a ComfyUI started with ``--disable-comfy-compiler``
 (:meth:`ComfyUIVideoProvider.check_compiler`, never a restart from here).
 
-:func:`restyle_picture` (``first_frame: restyled``, DESIGN.md §113.21) sends a picture job the
+:func:`restyle_picture` (``first_frame: restyled``) sends a picture job the
 same way: Qwen-Image-Edit-2511 (:mod:`.qwen_graph`) makes a photoreal version of the render's
 first frame at the workflow's size, then the models are unloaded for the video job.
 """

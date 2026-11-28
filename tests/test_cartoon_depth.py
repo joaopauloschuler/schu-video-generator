@@ -1,4 +1,4 @@
-"""Step 111: moving in depth and the front view (DESIGN.md §69.44): depth paths, the draw-order
+"""Step 111: moving in depth and the front view: depth paths, the draw-order
 switch time and place, the front view's part layout and turning to it (without rendering); a
 walk in depth and a front-facing character on a tiny rendered stage."""
 

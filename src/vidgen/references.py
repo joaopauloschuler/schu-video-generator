@@ -1,4 +1,4 @@
-"""References and figure credits of a video (DESIGN.md §95.14): the formats of a reference's
+"""References and figure credits of a video: the formats of a reference's
 identifiers (DOI, PubMed ID, ISBN, URL) checked offline, one number per distinct reference across
 the whole video (in order of first appearance), the on-screen citation texts and the numbered
 reference list of the video's description. No network, no manim."""

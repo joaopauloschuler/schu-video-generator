@@ -1,4 +1,4 @@
-"""Painted starting pictures of generated shots (DESIGN.md §113.15): ``vidgen generate frames``.
+"""Painted starting pictures of generated shots: ``vidgen generate frames``.
 
 ``paint_first_frame:`` on a shot says what its starting picture shows. The first input picture
 sent to the image model (OpenRouter ``input_references``) is the **layout**: the first frame of

@@ -1,4 +1,4 @@
-"""Chapters and the overlays reading them, Step 39 (DESIGN.md §42): the scene-level ``chapter:``
+"""Chapters and the overlays reading them, Step 39: the scene-level ``chapter:``
 field and its checks, the chapter list of the planned timeline (``video_chapters``), the
 ``progress_bar`` and ``chapter_indicator`` overlays, overlays hidden on whole scenes
 (``shown_in``) and drawing overlays with cropped cameras."""

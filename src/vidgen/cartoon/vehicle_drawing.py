@@ -1,4 +1,4 @@
-"""The vehicles' drawings (DESIGN.md §69.52, §69.53): a bicycle, a car, a bus, a boat, a hot-air
+"""The vehicles' drawings: a bicycle, a car, a bus, a boat, a hot-air
 balloon and a toy rocket from primitives, in the two colours of a prop (``main``: the frame, the
 body, the hull or the envelope; ``detail``: the saddle and grips, a stripe, the basket or the nose
 and fins) plus shades, the characters' ink, dark tyres and see-through glass. Original simple

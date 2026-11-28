@@ -412,7 +412,7 @@ off unless given: `operator: {hand: handheld, horizon: true}` (a person's drift,
 horizon a degree off at each cut; `hand: mounted` only vibrates), and in a surface scene `exposure: true`
 (an automatic exposure that lags and hunts).
 
-**Camera looks** (`camera_look:`, Steps 400–401, DESIGN §124.4–124.5): one word for a matched
+**Camera looks** (`camera_look:`, Steps 400–401): one word for a matched
 finish and operator, the scene's own `finish:` and `operator:` over it key by key (a number sets a
 group's main value: `finish: {noise: 0.006}`; `false` turns a group off). Without `camera_look:` a scene
 gets `camera`; `camera_look: none` is the clean render (as before Step 401).
@@ -580,7 +580,7 @@ warm. A page may take 90 s to open before vidgen gives up.
   the Galilean moons): the IAU WGCCRE models, **written from memory** of the reports (no network
   in the step that wrote them), checked against the published periods and tilts. Neptune's
   rotation uses the 2009 report's **16.11 h**; the 2015 report may give about 15.97 h. To be
-  checked against the reports by a person (DESIGN.md §122.2 has the table).
+  checked against the reports by a person.
 - **Light**: the stops between a sunlit ground and the sky's look (20), city lights (10), the
   Earth's light on the Moon and the stars' colours by temperature are **from memory and
   arithmetic**, not from a cited source; the worlds' tilts and flattenings too.

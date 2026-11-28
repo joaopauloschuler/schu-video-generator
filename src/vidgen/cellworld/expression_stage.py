@@ -1,4 +1,4 @@
-"""The gene-expression close-up as data (DESIGN.md §95.11): what a ``molecule`` scene with a
+"""The gene-expression close-up as data: what a ``molecule`` scene with a
 ``gene`` draws at each moment of each step, without manim. A schematic in *slots* (one slot is
 one nucleotide along the DNA, about a ribosome's 1/12): letters must be legible, so DNA and RNA
 are stretched about six times against the proteins; the scene says "not to scale".

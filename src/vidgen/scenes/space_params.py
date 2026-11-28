@@ -1,4 +1,4 @@
-"""The words of a ``space`` scene (DESIGN.md §122.12): sky, sun, bodies, orbits and scale, light,
+"""The words of a ``space`` scene: sky, sun, bodies, orbits and scale, light,
 craft, phenomena, camera moves, finishing, music, title and end card, and the hook to code.
 
 Every key is checked here, at ``vidgen validate``, in Python: the vocabulary's own keys by these
@@ -866,7 +866,7 @@ class FinishSpec(SceneParams):
 
 
 class OperatorSpec(SceneParams):
-    """``operator:``: the person holding the camera (vidgen/space-camera-air's ``operate``, DESIGN.md §124.3), off
+    """``operator:``: the person holding the camera (vidgen/space-camera-air's ``operate``), off
     unless given: a hand, the camera's automatic exposure and a horizon set level late, over all the camera's moves."""
 
     model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
@@ -920,7 +920,7 @@ def _snake_keys(value: Any) -> Any:
 
 def look_merge(base: dict[str, Any], own: dict[str, Any] | None, main: dict[str, str] | None = None) -> dict[str, Any]:
     """``own`` over ``base`` (a section of a camera look: its finish or its operator), as vidgen/camera-looks'
-    ``lookMerge`` (DESIGN.md §124.4): a mapping merges into the look's mapping key by key, at every depth; ``true``
+    ``lookMerge``: a mapping merges into the look's mapping key by key, at every depth; ``true``
     keeps the look's group; a number (not 0) sets the group's main value (``main``); the hand's style named again
     keeps the look's hand, another style replaces it; anything else (false, 0, null, text, a list) replaces it."""
     main = main or {}
@@ -942,7 +942,7 @@ def look_merge(base: dict[str, Any], own: dict[str, Any] | None, main: dict[str,
     return out
 
 
-#: The camera look a ``space`` scene gets when it gives no ``camera_look:`` (Step 401, DESIGN.md §124.5): the sensor
+#: The camera look a ``space`` scene gets when it gives no ``camera_look:`` (Step 401): the sensor
 #: and the lens, nobody holding the camera.
 DEFAULT_CAMERA_LOOK = "camera"
 #: ``camera_look: none``: no look, the clean render (as every ``space`` scene was drawn before Step 401).
@@ -950,7 +950,7 @@ NO_CAMERA_LOOK = "none"
 
 
 def camera_look(name: str, finish: Any, operator: Any, surface: bool) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """The ``finish:`` and ``operator:`` a scene with ``camera_look: name`` gets (DESIGN.md §124.4): the look's
+    """The ``finish:`` and ``operator:`` a scene with ``camera_look: name`` gets: the look's
     options (vidgen/camera-looks' ``CAMERA_LOOKS``) with the scene's own ``finish`` and ``operator`` over them
     (:func:`look_merge`: the scene's win, key by key; the space finish's defaults fill in what neither gives).
     ``surface``: a surface scene (``world:``); an orbital scene has no meter, so the look's automatic exposure is

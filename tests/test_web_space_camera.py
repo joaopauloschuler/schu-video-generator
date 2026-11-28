@@ -1,4 +1,4 @@
-"""Camera moves for space scenes, ``vidgen/space-camera`` (Step 375, DESIGN.md §122.11): the module is
+"""Camera moves for space scenes, ``vidgen/space-camera`` (Step 375): the module is
 served by its import name and imports only ``vidgen/music-time``; its framings are registered as
 parts; in Node (when it is installed): a shot puts its subject where ``place`` says with a level
 horizon; lenses and the long-lens arithmetic; every move is a function of its time (the same time,

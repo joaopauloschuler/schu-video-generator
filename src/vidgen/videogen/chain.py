@@ -1,4 +1,4 @@
-"""The frame arithmetic of chained parts (DESIGN.md §113.22).
+"""The frame arithmetic of chained parts.
 
 A later part of a split beat starts from a picture of the part before it. LTX gives that picture
 back as its own frame 0, so the film would show the same picture twice at the join. The later

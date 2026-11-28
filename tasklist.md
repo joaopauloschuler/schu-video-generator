@@ -792,7 +792,7 @@ the hero), designed so that simple computer games could reuse the world and its 
 (games are not in scope). Three layers kept apart: the world model (levels, characters, items as
 plain data), the rules (movement, jumps, collisions, pickups: deterministic, driven by scripted
 inputs) and the renderers (schu-video-generator / Manim now); the world and the rules never import Manim. Built
-on the cartoon `stage` (a `level:` param, not a new scene type; DESIGN §86), in schu-video-generator's flat
+on the cartoon `stage` (a `level:` param, not a new scene type), in schu-video-generator's flat
 cartoon style; the hero and the story are original. Same rules as Phases H–N.
 
 ### Step 150 — Phase plan, world model, ASCII levels and static rendering
@@ -833,7 +833,7 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 Goal: help AI authors make clearer, more beautiful presentation videos (coding Shorts, science and
 maths explainers). Every feature is easy to write correctly in YAML, validated with clear
 `VidgenError` messages, covered by lint where useful, documented in docs/CONFIG.md and the author
-guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as Phases H–O.
+guide (+ `AGENTS.md`), and works in 16:9 and 9:16. Same rules as Phases H–O.
 
 ### Step 156 — Actions timed to a spoken word
 - [x] Phase P plan here and DESIGN §87 (the whole phase; §87.2 word anchors)
@@ -908,7 +908,7 @@ drawn once into pictures in schu-video-generator's flat cartoon style with theme
 the 2D cut-outs they are (side and front views, expressions, actions, lip sync), standing upright
 in it, hidden by what is in front of them. No platforming in iso (no jumps, no gravity); a side
 walk cycle sliding along a diagonal is accepted. An `iso:` param on the cartoon `stage`, like
-Phase O's `level:` (DESIGN §89); the world model and rules extend `src/vidgen/world/` (no manim),
+Phase O's `level:`; the world model and rules extend `src/vidgen/world/` (no manim),
 renderers in `cartoon/`; the projection and block drawing stay reusable for a later presentation
 `iso_diagram` (not built in this phase). Purely additive: every existing project renders exactly
 as before (baseline frames from Step 166 compared in Step 171); mixtures that make no sense are
@@ -958,7 +958,7 @@ Same rules as Phases H–P.
 Goal: close the weather gaps Phase Q left on an iso place, then reuse the iso projection and
 block drawing for presentations: a new scene type `iso_diagram` (blocks, slabs, cylinders and
 tiles on a grid, flat readable labels, connectors, stacks) whose actions are timed to beats and
-spoken words, with an example tech explainer. DESIGN §90. Purely additive: existing projects
+spoken words, with an example tech explainer. Purely additive: existing projects
 render as before (Phase Q's 31 baseline frames; iso-story's 84 baseline stills from Step 172
 change only where intended), mixtures that make no sense are refused with a `VidgenError`
 naming the conflict and the alternative. Same rules as Phases H–Q.
@@ -1032,7 +1032,7 @@ can become its own package. Additive and opt-in: the 14 beds and every existing 
 stay byte-identical. Steps 184–191 (Step 190, two score pieces as built-in beds, was added after
 the owner listened to them; the review moved to 191); Step 192, a follow-up, makes Step 189's
 piece the 17th bed. Quality without ears: templates, measurements, spectrograms, plain-language
-advice; a human makes the final choice (DESIGN §93).
+advice; a human makes the final choice.
 
 ### Step 184 — Score format and rendering
 - [x] Phase S plan here and DESIGN §93 (the phase, the format, the decisions; "score file" vs the composer's `vidgen.score.Score`)
@@ -1084,7 +1084,7 @@ Goal: `vidgen studio [PROJECT] [--port N] [--no-browser]` starts a small local w
 editable score file, change it, listen, check it and export YAML / MP3 / WAV or save it into a
 project's `assets/music/`. The sound is always schu-video-generator's own renderer; the browser only plays the
 rendered audio. A compact "mini DAW" in schu-video-generator's look (dark theme, light option). Additive: the
-beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN §94).
+beds, templates, mixes, the Listen page and every command stay unchanged.
 
 ### Step 193 — Architecture and skeleton
 - [x] Phase T plan here and DESIGN §94 for the whole phase: modules, server and its guards, sessions and versions on disk, the JSON API (including the calls of Steps 194–199), the render cache and the Step 196 stem plan, the page, how MCP reaches an open session (Step 198), variations (Step 199)
@@ -1145,7 +1145,7 @@ errors and did-you-mean, linted where useful), in 16:9 and 9:16. Built in the th
 of Phases O–R: a cell world (plain data and rules in real units, no manim; `vidgen/cellworld/`),
 renderers apart (`vidgen/cell_vector.py`, `scenes/cell.py`). Additive and opt-in: existing
 projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31 baseline frames
-when shared code changes). DESIGN §95. Steps 202–211.
+when shared code changes). Steps 202–211.
 
 ### Step 202 — Cell world model and scale system
 - [x] Phase U plan here and DESIGN §95 for the whole phase: the data model (compartments, membranes, structures and complexes with real sizes and topology), units, the camera's levels and level of detail, the location rules, how the structure library (203), molecules (204) and process actions (205–208) plug in, how the `pathway` scene (207) relates, how the accuracy lint (209) reads the model; decided: a new scene type `cell` (not a mode of `stage` or `iso_diagram`)
@@ -1223,7 +1223,7 @@ manim (`vidgen/genetics/`), renderers and scene types apart; reuses Phase U (DNA
 drawing, chromosomes and meiosis with crossing over, the genetic code, gene naming per species,
 `function_plot` axes, references, the science lint, narration–picture rules). Additive and
 opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31
-baseline frames when shared code changes). DESIGN §96. Steps 213–221.
+baseline frames when shared code changes). Steps 213–221.
 
 ### Step 213 — Genetics model and plan
 - [x] Phase V plan here and DESIGN §96 for the whole phase: the data model; scene types decided (`cross`, `pedigree`, `karyotype`, `linkage_map`, `mutation`, `crispr`, `dna_lab`, `population`, `gwas`; non-disjunction as a `cell_cycle` option) and how they relate to Phase U's; how crosses (214), pedigrees (215), chromosomes (216), molecular genetics (217), population genetics (218) and the lint (219) plug in, with their planned YAML
@@ -1287,7 +1287,7 @@ schu-video-generator's style, readable on phones in 16:9 and 9:16, easy for AI a
 (validated with did-you-mean, linted, documented). Additive and opt-in: existing projects, chart
 and domain scenes, gallery frames, audio and the studio unchanged unless a step deliberately moves
 a scene onto the core (with before / after; Phase Q's 31 baseline frames when shared code
-changes). DESIGN §97. Steps 222–228.
+changes). Steps 222–228.
 
 ### Step 222 — Plan and chart core
 - [x] Phase W plan here and DESIGN §97 for the whole phase: a survey of how charts are drawn today (the chart scenes, `math_axes`, and every Phase U / V domain plot with its file and the axes features it needs) and what orbital mechanics and particle physics will need; the data model; the new scene type `plot` (name checked: a target name in `cell_cycle` / `population` and a `gwas` param, other namespaces); the compatibility rule (chart scenes keep `vidgen.charts`; domain plots move onto the core only in Step 227, where clearly better and visually compatible, with before / after)
@@ -1344,7 +1344,7 @@ IAU / CODATA constants; `calculation` scenes; the lint framework), re-implementi
 Additive and opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged
 (Phase Q's 31 baseline frames when shared code changes). Physics from standard references,
 computed rather than hard-coded, approximations stated (two-body, patched conics, coplanar
-circular orbits for Hohmann). DESIGN §98. Steps 229–236.
+circular orbits for Hohmann). Steps 229–236.
 
 ### Step 229 — Plan and orbital model
 - [x] Phase X plan here and DESIGN §98 for the whole phase (data model, how 230–235 plug in, the reuse of Phase W); the matching "Ideas" items marked as moved
@@ -1413,7 +1413,7 @@ framework) and re-implementing none of it. Values from the Particle Data Group (
 computed rather than hard-coded (thresholds, Q values, p*, decay lengths, significances); data in
 examples is simulated and labelled so; no real experiment's logo or geometry. Additive and
 opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31
-baseline frames when shared code changes). DESIGN §99. Steps 237–244.
+baseline frames when shared code changes). Steps 237–244.
 
 ### Step 237 — Plan and particle model
 - [x] Phase Y plan here and DESIGN §99 for the whole phase (data model, scene types and names, how 238–243 plug in, the reuse of Phases W and X); the matching "Ideas" items marked as moved
@@ -1471,8 +1471,7 @@ voices), and the generic features it needs, in schu-video-generator for every au
 effects, holograms, portals / rifts, alarm lighting, iridescent characters, multi-voice dialogue
 polish, story sounds. The story project stays in the scratchpad: nothing of it is committed
 (features use neutral samples). Additive and opt-in: existing projects, scenes, gallery frames,
-audio and the studio unchanged (Phase Q's 31 baseline frames when shared code changes). DESIGN
-§100. Steps 245–248.
+audio and the studio unchanged (Phase Q's 31 baseline frames when shared code changes). Steps 245–248.
 
 ### Step 245 — Adaptation, gap analysis, first features
 - [x] The adapted script (private, scratchpad): shot list with narration and dialogue per speaker, Kokoro voice per character, camera, staging, light, sounds and music; a test render of an iso lab; the gap list per shot (DESIGN §100.1)
@@ -1505,8 +1504,7 @@ audio and the studio unchanged (Phase Q's 31 baseline frames when shared code ch
 
 Goal: seven YouTube Shorts (9:16, under 60 s, a hook in the first second, burned-in word-synced
 captions, an end card) cut from the private story video, and the generic features for cutting
-Shorts out of any longer video. The story project and its Shorts stay in the scratchpad. DESIGN
-§101. Steps 249–250.
+Shorts out of any longer video. The story project and its Shorts stay in the scratchpad. Steps 249–250.
 
 ### Step 249 — Generic Shorts support; Shorts 1–3
 - [x] `cut:` (scenes whole or some beats, `{from, to}`, a scene twice under another id; changes per scene and per beat; beat ids and audio kept), the `hook` overlay, a cut's `end_card` (DESIGN §101.1, §101.2)
@@ -1529,7 +1527,7 @@ readouts, a heart monitor, a scanner), characters' other selves overlapping the 
 kiss, floating holographic formulas and many timelines on a display, a handheld scanner, a
 haze over a spot, small props and a medal. The story project stays in the scratchpad: nothing of
 it is committed (features use neutral samples). Additive and opt-in; Phase Q's 31 baseline
-frames when shared code changes. DESIGN §102. Steps 251–254.
+frames when shared code changes. Steps 251–254.
 
 ### Step 251 — Adaptation, gap analysis, first features
 - [x] The adapted script (private, scratchpad): shot list with lines per speaker, Kokoro voices (narrator = hero, a heroine, a synthetic voice in the head with `[robot, radio]`), camera, staging, light, sounds, music cues (`enigma`, `neon`, `beacon`, `calm`); test renders of a neon city and a lab; the gap list per shot (DESIGN §102.1)
@@ -1569,7 +1567,7 @@ Phase AA done.
 ### Step 257 — The studio screenshot with the new name
 - [x] `docs/images/studio.png` taken again with Step 200's recipe (1440 × 900, 160 colours, 73 KB; same state), the top bar reads "schu-video-generator studio"; the README's alt text says so
 
-## Phase AB — More iso lab and sci-fi objects (DESIGN §103)
+## Phase AB — More iso lab and sci-fi objects
 
 26 new iso objects in the flat cartoon style, `on` states with gentle motion; docs: one short
 "Other objects" list in CONFIG and the guide.
@@ -1585,7 +1583,7 @@ Phase AA done.
 
 Phase AB done.
 
-## Phase AC — 63 more iso objects (DESIGN §104)
+## Phase AC — 63 more iso objects
 
 Home, café, town, nature, school / office, fantasy, seasons and harbour objects in the same flat
 cartoon style, `on` states with gentle motion where listed; docs: the one "Other objects" list.
@@ -1613,7 +1611,7 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 
 Phase AC done.
 
-## Phase AD — Seven features without AI APIs (DESIGN §105)
+## Phase AD — Seven features without AI APIs
 
 Deterministic only: no AI API calls in code, tests or the work (rules, heuristics, local data);
 where judgement helps, building blocks (CLI + MCP tools) for an agent driving vidgen. Docs lean:
@@ -1649,7 +1647,7 @@ a few lines per feature in CONFIG and the guide.
 ### Step 277 — A fixed-scale wide view for iso places
 - [x] `iso: {wide: fixed}` (scale from `character_size`, allowed on iso places with it; or `wide: {tiles: N}`): the same scale on any map, centred on the characters and moved onto the ground (characters by an edge kept in view), a small place centred; `zoom` scale, shots, `follow` and `pan` relative to it (shot / follow caps scaled, follow and pan settle on the ground, `MAX_DETAIL` 5); lint `iso_ground` (map size that fills the frame; info hint for outdoor `auto` / `fill`); measured map sizes (16:9 34 / 24 / 17, 9:16 23 / 16 / 12) in CONFIG, the guide and the iso cookbook; `fill` wording corrected; tests `test_iso_fixed_view.py`
 
-## Phase AE — A retro-futuristic, bright story cartoon (DESIGN §107)
+## Phase AE — A retro-futuristic, bright story cartoon
 
 A second, more beautiful attempt at a private story cartoon: isometric and retro-futuristic (a
 1950s-60s "world of tomorrow": pastels and chrome), full-frame ground (`wide: fixed`, big maps),
@@ -1671,7 +1669,7 @@ private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
 ### Step 282 — Arms at the sides by default
 - [x] (tested in Step 286: suites, `test_mcp.py` and the frame baseline as expected) The owner's decision: `arms: front` is the default everywhere (`generator.DEFAULT_ARMS`; `stage_arms` removed); `cartoon_arms: classic` / `look.arms: classic` opt out; the scene host follows `cartoon_arms`; gallery character entries (`stage`, nine showcases) re-rendered; docs (DESIGN §110.1, CONFIG, guide, CHANGELOG). **Committed untested at the owner's request (no time):** the test suites, `tests/test_mcp.py` and the frame baseline (expect 25 of 33 stills to change, arms only; then remake the references) still have to be run in a later step
 
-## Phase AF — Audio-only output (DESIGN §111)
+## Phase AF — Audio-only output
 
 Audio files only (audiobooks of stories, podcast-style episodes, the sound of an existing video):
 fast, no Manim, reusing the narration, voices, music, sfx, ducking and loudness pipeline. No paid
@@ -1692,7 +1690,7 @@ or AI API calls; Kokoro (local) only.
 ### Step 287 — Cookbook: voices in iso cartoons
 - [x] `docs/COOKBOOK-ISO-CARTOONS.md`: a section on stereo staging and rooms for cartoon videos (docs only)
 
-## Phase AG — Dramatized audiobooks / audio drama (DESIGN §112)
+## Phase AG — Dramatized audiobooks / audio drama
 
 Radio-play style productions made audio-only and fast (narrator centred and dry, characters
 panned in rooms) with music and sound design. Opt-in; existing mixes byte-identical. No paid or
@@ -1712,7 +1710,7 @@ AI API calls; Kokoro (local) only.
 
 **Phase AG done** (Steps 288–291).
 
-## Phase AH — Generated video shots through OpenRouter (DESIGN §113)
+## Phase AH — Generated video shots through OpenRouter
 
 Generative video models (OpenRouter's video API) make selected shots — talking close-ups
 lip-synced to vidgen's own voice lines, acting shots guided by character / style sheets (and
@@ -1740,7 +1738,7 @@ with the owner's go-ahead.
 ### Step 297 — The paid experiment (LATER, gated on the owner's go-ahead)
 - [ ] With the owner's key, ≤ US$2.00 total, vertical 9:16 Shorts, lowest sensible resolution, 4–5 s clips
 
-## Phase AI — 3D scenes with three.js (DESIGN §114)
+## Phase AI — 3D scenes with three.js
 
 Video presentations with simple 3D: three.js in headless Chromium driven by Playwright (an
 optional extra), deterministic frames (time set by vidgen, never a wall clock), a clean simple
@@ -1771,7 +1769,7 @@ molecules, planets, glTF models, realistic materials and shadows, rigs, any AI o
 - [x] The owner's request: every form of `--guide-passes` also works in a `3d` scene's `guide_passes` — one name (`depth`), a comma list (`depth,mask`, `depth, mask`), `all`; `true`, `false` and lists unchanged; unknown names refused with did-you-mean — done by moving `parse_passes` (with `GUIDE_PASSES`, `ALL_PASSES`) into `three_d/spec.py`, used by the CLI, the worker and `Scene3DParams._guide_passes` alike (re-exported from `three_d/passes.py`); type `bool | str (pattern) | list[str]`, so the JSON schema accepts the strings; docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
 
 
-## Phase AJ — Hosted inputs via a Cloudflare Quick Tunnel (DESIGN §115)
+## Phase AJ — Hosted inputs via a Cloudflare Quick Tunnel
 
 OpenRouter takes audio and video references only as https URLs, so talking shots and shots with
 `guide:` need a host. The owner's choice: a Cloudflare Quick Tunnel (no account), sharing only
@@ -2000,7 +1998,7 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 
 Each step is done by one agent, in order. Three music films were made with vidgen as plain
 projects outside this repository ("Parallel Space" twice, "Escapement"); their authors reported
-these limits and the owner asked for all of them to be built (DESIGN §120). Rules of the phase:
+these limits and the owner asked for all of them to be built. Rules of the phase:
 the films' scores synthesize to the same audio as before each step; stored cache keys are not
 invalidated without a written reason; instruments are judged by measurement and spectrograms,
 with demo files for the owner to listen to.
@@ -2093,7 +2091,7 @@ with demo files for the owner to listen to.
 - [x] Review with fixes (DESIGN §120.12): `tests/test_guide.py::test_the_web_topics_code_runs_in_chromium` passes again (the guide's music block had no file name, its YAML block was a mapping, the page needed `ctx.music`); the flaky CSS-transition test made robust; named settings in `vidgen studio` are lists of names; `3d` scenes write their frames clip in the writer thread with a `3d frames` progress line (same pixels, tested)
 - [x] Docs: the guide (pointers to the table and the example), CONFIG (studio named settings, `3d` progress), `docs/COOKBOOK-MUSIC.md` section 13 (every instrument: family, range, settings, use) and its contents, `docs/COOKBOOK-3D.md` ↔ cookbook section 12 cross-links, the README's feature list and example list, CHANGELOG (Phase AL summary)
 - [x] `examples/signal-fire`: an original 24 s orchestral cue (strings, brass, choir, percussion; dynamics, hairpins, slurs, a glide, per-note strokes, a roll into a hit) and a three.js page reading ten tracks through `ctx.music`, finished with `vidgen/three-finish`; source only; `tests/test_signal_fire_example.py` (validate only). Final render: about 8 min on 2 cores
-- [ ] Left from the review (DESIGN §120.12): `vidgen still` keeps every drawn frame (and the sheet's tiles) in memory at full size (`--count 100` at 1080p holds about 1.4 GB); `load_music_score` refuses a `str` path with an `AttributeError` (public in `vidgen.studio`; not changed because it is in the score loader, which this step left untouched); `ctx.music.sounding` looks at every earlier event of its track on each call, and the event functions without a track sort every track's events on each call (fine for the films' 5,000 events; slow for far more); the choir's range warning ignores `voices`; `drawbars` in the studio is a number slider; `3d` guide passes still draw without the writer thread; Windows and macOS not tried for any Phase AL step
+- [ ] Left from the review: `vidgen still` keeps every drawn frame (and the sheet's tiles) in memory at full size (`--count 100` at 1080p holds about 1.4 GB); `load_music_score` refuses a `str` path with an `AttributeError` (public in `vidgen.studio`; not changed because it is in the score loader, which this step left untouched); `ctx.music.sounding` looks at every earlier event of its track on each call, and the event functions without a track sort every track's events on each call (fine for the films' 5,000 events; slow for far more); the choir's range warning ignores `voices`; `drawbars` in the studio is a number slider; `3d` guide passes still draw without the writer thread; Windows and macOS not tried for any Phase AL step
 
 ### Step 352 — Escapement as an example (owner's request, 2026-11-16)
 - [x] Copy the source of `/home/claude/work/escapement` (video.yaml, score, extensions, scripts, README, PLAN, .gitignore; no generated audio, video, stills, build or output) into `examples/escapement/`, adapted to Step 347's built-in music data and Step 350's finishing helper where that simplifies it without changing the picture beyond trivial differences (proved with `vidgen still` comparisons); README with the render time and a `--draft` hint; an entry in the gallery / README example list; a validate-only test (no render in tests). After Step 351's review, or before it if 351 wants to review it — done: `examples/escapement` (video.yaml, the score unchanged, `escapement.js`, `webcut.py`, README, `.gitignore`); `music_data` replaced `scripts/make_audio.py` and `escapement_audio.json` (48 stills of all 12 scenes pixel-identical to the film's; the exporter's rounding of event times kept in the page); the film's own finishing kept (`vidgen/three-finish` was 28–34 dB off; named in the README); `webcut.py` kept (no built-in); PLAN folded into the README; score render SHA-256 `271de0c6…4dc8` as before, no range warnings; README list and gallery note; `tests/test_escapement_example.py` (DESIGN §120.13)
@@ -2118,7 +2116,7 @@ with demo files for the owner to listen to.
 ## Phase AM — Music-video tools (owner's request, 2026-11-16)
 
 Three music films became examples (`examples/parallel-space`, `escapement`, `signal-fire`, with
-`three-finish`); each rebuilt the same things by hand. Four features and a review (DESIGN §121).
+`three-finish`); each rebuilt the same things by hand. Four features and a review.
 
 ### Step 358 — A library of three.js building blocks for music videos
 - [x] `vidgen/music-time` (song time, bars, the score's events as arrays, reactions, seeded numbers, easing, keyframes) and `vidgen/three-kit` (glowing strokes, crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, glints, ribbons, spectrum rays, tunnels, corridor, rings, swarms, dust, camera aim) on the import map; CONFIG, guide, COOKBOOK-3D section 9, DESIGN §121.1; Node and Chromium tests
@@ -2178,8 +2176,7 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 
 Agents make space scenes easily: three.js `web` scenes from ready-made parts, on the orbit model
 of Phase X (no orbit mathematics in JavaScript). Positions and timing true by default (enlarged
-bodies or compressed distances stated); an algorithmic sky by default, a real one as an option
-(DESIGN §122).
+bodies or compressed distances stated); an algorithmic sky by default, a real one as an option.
 
 ### Step 367 — The orbit bridge
 - [x] The third dimension audited module by module (DESIGN §122.1): elements, burns, n-body and the ephemeris carry it; flyby, the restricted three-body problem, the figure-eight, resonances, tides and the cannonball are planar (written down). Fixed: a transfer between orbits in a common inclined plane measured its launch window on the x–y projection (221 km off at 30°, 10,125 km at 89°; now under 1 m); the n-body angular-momentum check covers the whole vector. Presets name their reference plane (`ecliptic` / `equator`); the flat `orbit` scene's models of the examples are identical before and after
@@ -2271,7 +2268,7 @@ bodies or compressed distances stated); an algorithmic sky by default, a real on
 
 Flight inside atmospheres (the sky from inside, ocean, cloud decks and gas giants, terrain; no
 forests), parametrized space plane parts, giant ships kilometres long, a separate gallery for web
-scenes, a cache for baked maps and the owner's seven orchestral Shorts as examples (DESIGN §123).
+scenes, a cache for baked maps and the owner's seven orchestral Shorts as examples.
 
 - [x] Step 379 — A separate gallery for web scenes: `docs/gallery/web/` (20 MB) for the types drawn in headless Chromium (`NarratedScene.drawn_in_browser`: `3d`, `web`, `space`), linked both ways; the main gallery back to 16.5 MB; the YouTube section stays in the main one (DESIGN §123.1)
 - [x] Step 380 — A cache for baked maps (planet surface maps, sky cube maps): keyed by every input, deterministic, bounded, cleared by the cache commands, pixel-identical with and without it (`vidgen/baked` + `web/baked.py`: sync requests on the page's own origin, Blobs read back over CDP, compressed entries in `<cache folder>/baked/`, 2000 MB LRU, `VIDGEN_BAKED_CACHE_MB`, `vidgen cache [info|clear]`; a 2048 world 30 s → 7 s, Outbound `02_depart` 13.7 s → 7.6 s; DESIGN §123.2)
@@ -2464,7 +2461,7 @@ Not done in the roadmap; each is one line, with where it came from. Bugs first, 
 then nice-to-have.
 
 Bugs / correctness
-- [ ] `scenes/video_clip.py` imports `vidgen.clip_join` (`MatchPrevious`, `match_previous_problem`, `opening_treatment`), `vidgen.clips` (`FrameTreatment`, `clip_timing`) and `vidgen.videoplan` (`VideoPlan`) directly (Steps 325–326), so a built-in uses what an extension cannot import from `vidgen.api`. Fix: export those names from `vidgen.api` (as Step 157 did for the level layers) and document them in DESIGN.md, or move the join into a helper `vidgen.api` already exports; then remove `PRIVATE_IMPORTS` in `tests/test_builtin_scenes.py` (`test_builtins_use_only_the_public_api[video_clip.py]` is `xfail(strict=True)` until then; found in Step 327, left to the owner in Step 335 because it changes the public interface)
+- [ ] `scenes/video_clip.py` imports `vidgen.clip_join` (`MatchPrevious`, `match_previous_problem`, `opening_treatment`), `vidgen.clips` (`FrameTreatment`, `clip_timing`) and `vidgen.videoplan` (`VideoPlan`) directly (Steps 325–326), so a built-in uses what an extension cannot import from `vidgen.api`. Fix: export those names from `vidgen.api` (as Step 157 did for the level layers), or move the join into a helper `vidgen.api` already exports; then remove `PRIVATE_IMPORTS` in `tests/test_builtin_scenes.py` (`test_builtins_use_only_the_public_api[video_clip.py]` is `xfail(strict=True)` until then; found in Step 327, left to the owner in Step 335 because it changes the public interface)
 - [x] (Fixed in Step 157: `vidgen.api` exports the level layers, DESIGN §86.11) `tests/test_builtin_scenes.py::test_builtins_use_only_the_public_api` fails: `scenes/stage.py` imports `vidgen.cartoon.level_*`, `vidgen.camera`, `vidgen.world`, `vidgen.config` directly (Phase O, Steps 150–154; found in Step 156) — export what a stage needs through `vidgen.api` or exempt the stage in the test with a reason
 - [ ] Word anchors (Step 156): with `overlap` / `interrupt` the runner scales `at` by the beat's shorter body, so a word-timed action lands a little early; an offset like `@mid-20s` reads as the word `mid` minus 20 s (write `"@mid-20s+0s"`)
 - [ ] MCP: large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed and can exceed a client's tool-output limit (Step 59) — page or summarise them
@@ -2514,7 +2511,7 @@ Quality (what an agent's video looks like)
 - [ ] Cards and irises: `wipe_star` (optional) not done, only a circle, no iris on a prop; the screenplay's `iris_out` closes on the centre, not on the last speaker; an `iris_in` opening on a stage shows the set's own 1 s fade-in inside the circle; a wide card wraps "Later that day…" before shrinking (Steps 112, 116)
 - [ ] Clothes and animals: patterns only on the body and skirt (not sleeves or trouser legs); one seated skirt wedge for every seat height; a kid's stage size is set by hand (`scale`); a bird's wings ignore sleeves and its toes are not drawn under shoes; mouse and rabbit tails do not swing with front-facing steps; the cat's tail is cut in `animals.png`'s first cell (`write_looks_png` keeps figures in their cells since Step 123, the still was not redrawn); the screenplay plans a turtle's or penguin's walk at a person's speed; a backpack's pack is drawn over a turtle's shell, and the shell hides most of a small chair it sits on; an owl's beak is short, so its lip-sync openings are small (Steps 113, 114, 123)
 - [ ] Random casts: the contrast score compares look parameters, not drawn pixels; `vidgen cast` has no `--theme`; a screenplay's random looks ignore `--seed` until the 11 built-in looks are used; `look_alike` skips SVG characters (Step 115)
-- [ ] Stage fades and props: a stage whose next scene carries a target out still fades each thing on its own in its outro (`clear_all(keep=)`; otherwise the fade in and out are one picture since §69.51 and Step 127); `prop_overlap` sees only beat-end stills (a prop put down on another mid-beat is not checked) and compares boxes, not drawn pixels (a tall thin prop beside a wide low one may be reported) (after Step 116)
+- [ ] Stage fades and props: a stage whose next scene carries a target out still fades each thing on its own in its outro (`clear_all(keep=)`; otherwise the fade in and out are one picture since Step 127); `prop_overlap` sees only beat-end stills (a prop put down on another mid-beat is not checked) and compares boxes, not drawn pixels (a tall thin prop beside a wide low one may be reported) (after Step 116)
 - [ ] Voice sounds: one face per beat (the first sound's); a `[gasp]`'s surprised face also plays the foley `pop`; a beat of sounds only is impossible; the face of a sound at a line's start waits for the speaker's earlier actions (a `[laugh]` while entering shows after the walk) (Steps 99, 102)
 - [ ] Overlaps: no per-beat dip / fade settings; an interrupted line's caption shows its whole text until the cut; no overlap across scenes; never tried with ElevenLabs audio (Step 100); Kokoro's stored times stretch a line's last word over its quiet tail ("normal?" 3.01–4.78 s, heard 3.0–3.62 s), so an interrupt without `overlap` starts ~0.6 s after the word is heard (Step 102 follow-up)
 - [ ] Voice kinds: only Kokoro voices are chosen by kind (OpenRouter models list no gender; ElevenLabs has no list here, the `# TODO:` names the kinds); declared characters' looks are not read for a kind (Step 102 follow-up)
@@ -2555,8 +2552,8 @@ Quality (what an agent's video looks like)
 - [ ] Platform camera: a `level.follow` hero waiting off stage for its `enter` puts the camera at the level's edge until it enters; the follow does not look ahead; `vidgen direct` and the reframe replay plan the camera's x only (Step 154)
 - [ ] `small_speaker` measures a `head` part: an SVG character without one is not checked (Step 154)
 - [ ] `vidgen screenplay` on a level: the directions' `at` times are estimated as on a plain stage (a wide level's walks take longer), no `climbs` verb, a level only through a front-matter or `--cast` set (Step 155)
-- [ ] `web` scenes (Phase AK, Steps 328–333): no hard cut (`fade: false`) on `web`; `vidgen storyboard` and `vidgen lint` render the whole scene at preview size (no still-only path, Steps 331–332; `vidgen still` draws single frames of the page since Step 342, but lint and the storyboard do not use it); text inside pictures, WebGL or a canvas is not read unless declared with `layout()`, nor `text-shadow` / strokes, text covered by a later page element, or contrast over a gradient or picture (Step 332); only a chosen set of three.js add-ons is served (Step 334: no 3D text, Draco / KTX2 / Meshopt, HDR loaders, other controls; a page copies others into the project), and a page with its own import map (two maps) was not tried (Step 330); a file a page stopped loading stays in the fingerprint while the other quality's record lists it (Step 330); `<audio>`, GIF / WebP animation, workers, iframes, XHR / dynamic `import()` and observers are not on vidgen's clock (Step 329); of the shipped libraries (anime.js, Motion, D3, Chart.js, lottie-web) and GSAP only the calls in DESIGN §118.15's table were run under the clock; Motion's `controls.time = t` in `frame` shows one frame late; a Motion, lottie-web or GSAP (without `lagSmoothing(0)`) animation playing by itself depends on the frames drawn before it (Step 336); build clips with alpha are about 1.5x larger at 1080p (Step 331; since Step 348 `render.intermediate: compact` keeps them about 4.6x smaller and `keep_intermediates: false` deletes them once used); a `region: bleed` page is not told where a Short's covered parts are (Step 331); nothing tried on Windows (renderer kill by `TerminateProcess`, content types, paths)
-- [ ] `web` render speed (Step 349 measured it, DESIGN §120.10; the quick PNG, the frames clip written in a thread and a progress line are done): what is left of a WebGL page's frame is its own GL work in SwiftShader (about 1.1 of 1.24 s for the film page at 720p); a worker imports every scene type (`vidgen.scenes`, about 2.6 s a scene: lazy imports not done); `3d` scenes have no progress line and still use Playwright's screenshot path; canvas read-back, WebP / JPEG, screencast, `beginFrame`, two pages and split scenes were measured and rejected; on a machine with more cores `--jobs N` is the way to draw in parallel (10 % on 2 cores)
+- [ ] `web` scenes (Phase AK, Steps 328–333): no hard cut (`fade: false`) on `web`; `vidgen storyboard` and `vidgen lint` render the whole scene at preview size (no still-only path, Steps 331–332; `vidgen still` draws single frames of the page since Step 342, but lint and the storyboard do not use it); text inside pictures, WebGL or a canvas is not read unless declared with `layout()`, nor `text-shadow` / strokes, text covered by a later page element, or contrast over a gradient or picture (Step 332); only a chosen set of three.js add-ons is served (Step 334: no 3D text, Draco / KTX2 / Meshopt, HDR loaders, other controls; a page copies others into the project), and a page with its own import map (two maps) was not tried (Step 330); a file a page stopped loading stays in the fingerprint while the other quality's record lists it (Step 330); `<audio>`, GIF / WebP animation, workers, iframes, XHR / dynamic `import()` and observers are not on vidgen's clock (Step 329); of the shipped libraries (anime.js, Motion, D3, Chart.js, lottie-web) and GSAP only the calls in a measured table were run under the clock; Motion's `controls.time = t` in `frame` shows one frame late; a Motion, lottie-web or GSAP (without `lagSmoothing(0)`) animation playing by itself depends on the frames drawn before it (Step 336); build clips with alpha are about 1.5x larger at 1080p (Step 331; since Step 348 `render.intermediate: compact` keeps them about 4.6x smaller and `keep_intermediates: false` deletes them once used); a `region: bleed` page is not told where a Short's covered parts are (Step 331); nothing tried on Windows (renderer kill by `TerminateProcess`, content types, paths)
+- [ ] `web` render speed (Step 349 measured it; the quick PNG, the frames clip written in a thread and a progress line are done): what is left of a WebGL page's frame is its own GL work in SwiftShader (about 1.1 of 1.24 s for the film page at 720p); a worker imports every scene type (`vidgen.scenes`, about 2.6 s a scene: lazy imports not done); `3d` scenes have no progress line and still use Playwright's screenshot path; canvas read-back, WebP / JPEG, screencast, `beginFrame`, two pages and split scenes were measured and rejected; on a machine with more cores `--jobs N` is the way to draw in parallel (10 % on 2 cores)
 - [ ] `web` pages that are not repeatable (found in Step 349): a page with CSS transitions or animations that run on the compositor (`examples/web`'s `cycle`) gives 4 to 9 of 92 frames that differ between two screenshots of the same page state (by up to 25 alpha levels: the compositor moves them in real time between screenshots; `tests/test_scene_web.py::test_the_page_is_given_theme_data_beats_and_three` is flaky for this reason, 8 of 15 runs failed on Step 348's code and 4 of 15 after Step 349); a page drawn at a device scale other than 1 (`design_width`) differed in a few pixels (at most 6 levels) in 1 to 3 of 92–302 frames between two renders of the same code
 
 Nice-to-have / performance
@@ -2609,3 +2606,4 @@ Nice-to-have / performance
 - [x] **Step 440 (Opus 5.5) — the LTX HOWTO renamed.** `docs/HOWTO-restyle-with-ltx-on-colab.md` is now `docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md` (`git mv`, content unchanged); every live link and mention follows (CONFIG, guide + `AGENTS.md`, `tools/colab/README.md`, `tools/colab/setup_session.py`); past entries in HANDOFF, CHANGELOG and ticked tasklist lines keep the old name.
 - [x] **Step 441 (Fable 5.2) — HANDOFF.md removed.** The per-step log is deleted at the owner's request (too much overhead); `CLAUDE.md` no longer asks for a handoff section; a step ends with its `tasklist.md` line and one commit. The log up to Step 440 is in the git history.
 - [x] **Step 442 (Opus 5.5) — DESIGN.md shortened.** From 31,345 lines / 2.66 MB to 12,094 lines / 0.91 MB: step history, review reports, measurements, test lists, HANDOFF mentions and superseded text removed, refinements folded into what the code does (checked in `src/vidgen/` where passages disagreed), user-facing key lists replaced by links to CONFIG, EXTENDING and the cookbooks. Every `##`/`###` section number and heading line is unchanged, so all `§` citations still resolve; §63 keeps the 0.2.0 release notes.
+- [x] **Step 443 (Opus 5.5) — DESIGN.md removed.** The design document is deleted at the owner's request (too much overhead); the code, its docstrings, `docs/` and the guide describe the project. About 3,150 citations of it (`DESIGN.md §N`, `(§N)`) are gone from comments, docstrings, messages, docs, examples and the open lines of this list; `CLAUDE.md`, the coding guide, `README.md` and the top of `CHANGELOG.md` no longer point to it. Only comment and string tokens changed in Python; the space pages' pinned hashes in `tests/test_space_air_scene.py` follow their header line. The document is in the git history.

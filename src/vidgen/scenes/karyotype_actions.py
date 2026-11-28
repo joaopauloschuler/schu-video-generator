@@ -1,4 +1,4 @@
-"""The beat action of ``karyotype`` scenes (DESIGN.md §96.10): ``rearrange`` plays a change the
+"""The beat action of ``karyotype`` scenes: ``rearrange`` plays a change the
 notation names — in an ideogram view a structural change as an edit of the normal chromosomes
 (deletion, duplication, inversion, translocation, Robertsonian fusion), otherwise its highlight
 (an extra copy boxed, a lost one as a dashed ghost, a derivative's changed stretch marked).

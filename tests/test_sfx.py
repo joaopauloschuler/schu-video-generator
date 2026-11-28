@@ -1,4 +1,4 @@
-"""Sound effects (Step 44, DESIGN.md §47): synthesis, levels, project sounds, the SFX track,
+"""Sound effects (Step 44): synthesis, levels, project sounds, the SFX track,
 the ``sfx`` beat action, scene ``sfx:`` lists, ``NarratedScene.sfx``, ``vidgen list-sfx`` and
 the mix in a rendered video."""
 

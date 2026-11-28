@@ -1,4 +1,4 @@
-"""World map data and projection (DESIGN.md §39; no manim).
+"""World map data and projection (no manim).
 
 The bundled map ``data/geo/world-110m.json`` holds the Natural Earth 1:110m admin-0 countries
 (public domain; built by ``tools/make_world_map.py`` from the ``world-atlas`` and

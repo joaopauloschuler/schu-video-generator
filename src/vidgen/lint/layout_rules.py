@@ -1,4 +1,4 @@
-"""Layout rules: checks of one still's layout dump (DESIGN.md §16).
+"""Layout rules: checks of one still's layout dump.
 
 Sizes are measured against the frame's shorter side (:attr:`StillContext.short_side`), so the
 same thresholds hold for a 480p preview and the 1080p video, and for 16:9 and 9:16.
@@ -51,7 +51,7 @@ _GLYPH_EM: dict[str, float] = {
 
 
 def is_overlay(obj: dict[str, Any]) -> bool:
-    """True for objects of an overlay (lower third, watermark...; DESIGN.md §41)."""
+    """True for objects of an overlay (lower third, watermark...)."""
     return obj.get("overlay") is not None
 
 
@@ -67,7 +67,7 @@ def cap_height(obj: dict[str, Any]) -> float:
     glyph heights for the object's characters (in em) gives the correction. Math (LaTeX source,
     not the drawn glyphs) is taken as measured.
     """
-    if obj.get("cap_px") is not None:   # a web page's text: measured from its font (DESIGN.md §118.12)
+    if obj.get("cap_px") is not None:   # a web page's text: measured from its font
         return float(obj["cap_px"])
     font_px = float(obj.get("font_px") or 0.0)
     if obj["kind"] == "math":
@@ -145,7 +145,7 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
         if obj["kind"] == "character":
             continue  # off_stage's finding (it knows entrances and exits)
         if obj.get("scenery"):
-            continue  # a piece of the set the camera crops (a platform level's tiles, DESIGN.md §86.10)
+            continue  # a piece of the set the camera crops (a platform level's tiles)
         if obj.get("cut") or obj.get("clipped"):
             continue  # a web page's text cut by a box on the page before the frame's edge: web_clipped's
         x0, y0, x1, y1 = object_box(obj)
@@ -548,7 +548,7 @@ def _contains(outer: Bbox, inner: Bbox) -> bool:
 
 @rule("host_overlap")
 def host_overlap(ctx: StillContext, settings: HostOverlapRule) -> Iterator[Issue]:
-    """The cartoon host (``host:``, DESIGN.md §71) overlaps the scene's content (text, shapes,
+    """The cartoon host (``host:``) overlaps the scene's content (text, shapes,
     pictures, characters), a caption or another overlay (a scene object whose box holds the
     host's whole box is a backdrop behind it: a full-frame picture, a band)."""
     for host in (obj for obj in ctx.objects if obj["kind"] == "host"):

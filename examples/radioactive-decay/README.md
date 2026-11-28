@@ -1,7 +1,7 @@
 # Half-life: how radioactive decay keeps time
 
 A short physics explainer (six scenes, about 2 min 53 s with Kokoro narration) that uses the two
-science scene types together (DESIGN §97): `plot` for a simulation and for measured counts with a
+science scene types together: `plot` for a simulation and for measured counts with a
 fit, `calculation` for the numbers taken from them. Every number on screen is computed by the
 scenes, and the narration says the same numbers (`vidgen lint`'s `calc_*` and `plot_*` rules check
 it). The craft: [the science-charts cookbook](../../docs/COOKBOOK-SCIENCE-CHARTS.md).

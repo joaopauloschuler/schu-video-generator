@@ -1,5 +1,4 @@
-"""Loudness presets of audio files and the check that measures a file against them (DESIGN.md
-§111.2): ``vidgen audio check`` and the end of an audio-only render with
+"""Loudness presets of audio files and the check that measures a file against them: ``vidgen audio check`` and the end of an audio-only render with
 ``audio_output.loudness``.
 
 :func:`measure_file` decodes the file once with the ``ffmpeg`` executable: its ``ebur128``
@@ -8,7 +7,7 @@ measure podcast hosts and broadcasters use), and the decoded samples (48 kHz, th
 channels) give the RMS over the whole file, the noise floor (the quietest 0.5 s), and the
 silence before the first and after the last sound (room tone head and tail; a sound is a 10 ms
 frame above :data:`SOUND_DB`); for a stereo file also the channels' correlation and how much the
-mono fold loses (:func:`mono_check`, DESIGN.md §111.4). Nothing is held in memory but a few
+mono fold loses (:func:`mono_check`). Nothing is held in memory but a few
 values per 10 ms.
 
 :data:`PRESETS` are the targets: ``podcast`` (-16 LUFS stereo, -19 mono, ±1 LU; true peak at
@@ -17,7 +16,7 @@ most -60 dB, 0.5-1 s of room tone at the head and 1-5 s at the tail; the file fo
 length per file only as notes), ``broadcast`` (EBU R128: -23 LUFS ±0.5 LU, -1 dBTP), ``drama``
 (the podcast loudness, a loudness range for earbuds, and dialogue checks — each line's loudness
 from the momentary loudness ffmpeg logs (:func:`line_loudness`), the voices against each other,
-the music under them: DESIGN.md §112.3) and ``custom`` (``audio.target_lufs`` ±1 LU,
+the music under them) and ``custom`` (``audio.target_lufs`` ±1 LU,
 ``audio.true_peak``); :func:`files_check` compares the files of a split render. :func:`mix_targets` turns a
 project's preset into what its mix aims for, a little inside the limits (lossy encoders move
 the peaks).
@@ -74,7 +73,7 @@ class LoudnessPreset:
     level_voice: bool = False  # the voice leveller's default
     acx_notes: bool = False  # notes on ACX's file format and length
     max_lra: float | None = None  # loudness range (LU) at most
-    dialogue: bool = False  # the dialogue checks (DESIGN.md §112.3): lines, voices, music under them
+    dialogue: bool = False  # the dialogue checks: lines, voices, music under them
 
 
 PRESETS: dict[str, LoudnessPreset] = {
@@ -186,7 +185,7 @@ class AudioMeasurement:
     noise_floor: float
     head: float  # seconds before the first sound
     tail: float  # seconds after the last sound
-    correlation: float | None = None  # stereo only (DESIGN.md §111.4): of the two channels, whole file
+    correlation: float | None = None  # stereo only: of the two channels, whole file
     worst_correlation: float | None = None  # ... its lowest over 1 s windows with sound
     mono_fold_db: float | None = None  # ... how much quieter the mono fold (L + R) / 2 is
     momentary: np.ndarray | None = field(default=None, repr=False)  # (n, 2): time, momentary LUFS every 100 ms (measure_file(momentary=True))
@@ -561,7 +560,7 @@ def check(m: AudioMeasurement, preset: LoudnessPreset, dialogue: Dialogue | None
     return result
 
 
-#: Mono compatibility (DESIGN.md §111.4): the channels' correlation over the file at least
+#: Mono compatibility: the channels' correlation over the file at least
 #: :data:`MIN_CORRELATION`, over every second with sound at least :data:`MIN_WORST_CORRELATION`
 #: (a moment that cancels), the mono fold at most :data:`MAX_MONO_FOLD_DB` quieter (a voice panned
 #: hard to one side, or a wholly decorrelated bed, loses 3 dB).
@@ -590,7 +589,7 @@ def check_all(m: AudioMeasurement, presets: list[LoudnessPreset], dialogue: Dial
 
 
 def files_check(files: list[tuple[AudioMeasurement, Dialogue | None]]) -> PresetResult:
-    """Several files of one production (``audio_output.split``, DESIGN.md §112.3) against each
+    """Several files of one production (``audio_output.split``) against each
     other: their loudness within :data:`FILE_SPREAD_LU`, their dialogue (the median line) within
     :data:`FILE_DIALOGUE_SPREAD_LU`."""
     result = PresetResult("files", f"{len(files)} files alike: loudness within {FILE_SPREAD_LU:g} LU, dialogue within {FILE_DIALOGUE_SPREAD_LU:g} LU")

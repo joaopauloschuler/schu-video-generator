@@ -1,4 +1,4 @@
-"""The drawing helpers of the ``plot`` scene type (Phase W, DESIGN §97.4-97.6): what each panel's
+"""The drawing helpers of the ``plot`` scene type (Phase W): what each panel's
 axes must show, legend entries, the data points text must keep clear of, fitted curves, their
 parameter boxes and residual panels, the side column (or row) for what finds no free spot, and
 annotations. A mixin of :class:`Plot` (``plot.py``), written against ``vidgen.api``."""

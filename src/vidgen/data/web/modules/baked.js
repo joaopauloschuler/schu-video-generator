@@ -1,4 +1,4 @@
-// vidgen/baked: pictures a page bakes once, kept between pages (DESIGN.md §123.2). Part of
+// vidgen/baked: pictures a page bakes once, kept between pages. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/baked".
 //
 //   import {baked} from "vidgen/baked";

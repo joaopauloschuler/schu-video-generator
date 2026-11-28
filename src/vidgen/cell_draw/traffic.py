@@ -1,4 +1,4 @@
-"""Drawing membrane traffic in a cell (DESIGN.md §95.10): the renderer of the plans of
+"""Drawing membrane traffic in a cell: the renderer of the plans of
 :mod:`vidgen.cellworld.traffic`. A membrane event (endocytosis, exocytosis) is an overlay at its
 site of the plasma membrane: a cover hides the still drawing there and the membrane is drawn
 anew each frame from the planned shape — its bilayer at its true 5 nm (head groups up close),

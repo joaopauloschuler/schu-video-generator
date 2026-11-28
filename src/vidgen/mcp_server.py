@@ -1,4 +1,4 @@
-"""The MCP server: vidgen's commands as tools for AI agents (``vidgen mcp``, DESIGN.md §62).
+"""The MCP server: vidgen's commands as tools for AI agents (``vidgen mcp``).
 
 Every tool call runs ``python -m vidgen <command> ... --json`` in a **fresh subprocess** in the
 root folder and returns its JSON document (Step 8 envelope), plus pictures where the command makes
@@ -49,7 +49,7 @@ from vidgen.mcp_tools import (
 WORK_DIR = Path("build") / "mcp"
 #: STT providers that bill per use (``readback`` asks for ``confirm_cost``).
 PAID_STT = ("elevenlabs",)
-#: TTS providers that cost nothing (``tts`` runs without ``confirm_cost``; DESIGN.md §68).
+#: TTS providers that cost nothing (``tts`` runs without ``confirm_cost``).
 FREE_TTS = ("kokoro",)
 #: Seconds between progress notifications (at most).
 PROGRESS_INTERVAL = 0.5
@@ -1095,7 +1095,7 @@ def build_server(root: Path) -> Any:
         options = {"variant": variant, "language": language, "output": str(where(output, "output")) if output else None}
         return answer(await call(ctx, args_of(["translate-template"], [str(where(project))], options)))
 
-    # ----- the studio's hand-offs (Step 198, DESIGN.md §94.16) -------------------------------------
+    # ----- the studio's hand-offs (Step 198) -------------------------------------
     # Through files on disk, in this process (small reads and one atomic write; no Manim).
 
     async def studio(command: str, work: Callable[[], dict[str, Any]]) -> Any:
@@ -1224,7 +1224,7 @@ def _add_resources(server: Any, policy: RootPolicy) -> None:
     )
     gallery = policy.root / "docs" / "gallery"
     if gallery.is_dir():
-        # the web gallery's pages (docs/gallery/web, DESIGN.md §123.1) under their own names, its index as web-index
+        # the web gallery's pages (docs/gallery/web) under their own names, its index as web-index
         pages = [(p, "index" if p.name == "README.md" else p.stem) for p in sorted(gallery.glob("*.md"))]
         pages += [(p, "web-index" if p.name == "README.md" else p.stem) for p in sorted((gallery / "web").glob("*.md"))]
         for page, name in pages:

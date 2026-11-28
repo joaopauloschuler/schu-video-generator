@@ -1,4 +1,4 @@
-"""Drawing the gene-expression close-up (DESIGN.md §95.11): one mobject per :class:`Look` of an
+"""Drawing the gene-expression close-up: one mobject per :class:`Look` of an
 :class:`~vidgen.cellworld.expression_stage.ExpressionStage` — nucleotide tiles with their
 letters, proteins and complexes with their names, tRNAs with their anticodons, amino acids with
 their codes, the cap, N-glycans in SNFG symbols, membranes with their lipids, a nuclear pore —

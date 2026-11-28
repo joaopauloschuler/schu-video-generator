@@ -1,5 +1,4 @@
-"""vidgen's finishing module for three.js ``web`` scenes, ``vidgen/three-finish`` (Step 350, DESIGN.md
-§120.11): served by its import name, only through the import map, in the loaded-files record (so in
+"""vidgen's finishing module for three.js ``web`` scenes, ``vidgen/three-finish`` (Step 350): served by its import name, only through the import map, in the loaded-files record (so in
 the cache keys) of a page that imports it and of no other; its options checked with a did-you-mean
 (run in Node when it is installed); in Chromium (``slow``): two fresh pages draw the same frames, a
 shutter of 0 is exactly no motion blur, the chain with every effect off equals ``renderer.render``

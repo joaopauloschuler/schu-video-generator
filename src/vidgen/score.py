@@ -1,4 +1,4 @@
-"""Composed music as notes (DESIGN.md §82): a :class:`Score` of parts played by General MIDI
+"""Composed music as notes: a :class:`Score` of parts played by General MIDI
 instruments, timed in beats. Pure data and arithmetic; :mod:`vidgen.synth` plays it, and
 :func:`write_midi` exports it as a Standard MIDI File (both need the ``music`` extra).
 

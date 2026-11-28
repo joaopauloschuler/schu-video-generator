@@ -1,4 +1,4 @@
-"""The drawings of the Step 125 expressions (DESIGN.md §69.59), called by
+"""The drawings of the Step 125 expressions, called by
 :mod:`vidgen.cartoon.generator` for every generated look (people, animals, robots; side and front):
 
 - eye shapes ``laughing`` (closed in arcs; flipped, the squeezed eyes of ``crying``), ``wide`` (a

@@ -1,4 +1,4 @@
-"""Generated video shots of a project (DESIGN.md §113.3): each beat's ``generated_shot:``
+"""Generated video shots of a project: each beat's ``generated_shot:``
 resolved into one or more :class:`~vidgen.videogen.VideoRequest` s with their inputs, and the
 dry-run plan of ``vidgen generate plan``.
 
@@ -13,15 +13,15 @@ dry-run plan of ``vidgen generate plan``.
 - **Inputs** (made by :mod:`vidgen.videogen.inputs` into ``build/videogen/<shot>/``): the
   beat's voice cut to the part (``audio.mp3``; ``audio: mix``: the film's sound over the part), a
   silent low-resolution render of the part (``guide.mp4``; ``guide: final``: the finished render,
-  ``guide.final.mp4``, DESIGN.md §113.18) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
-  of the part (``guide.<pass>.mp4``, DESIGN.md §113.8), the render's first frame
+  ``guide.final.mp4``) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
+  of the part (``guide.<pass>.mp4``), the render's first frame
   (``first_frame.png``); pictures of approved reference sheets
   (:mod:`vidgen.videogen.sheets`) and your own pictures. The first frame goes in as a frame image
   where the model lists ``first_frame``, else as a picture reference.
 - **Prompt**: the kind's framing and the shot's ``prompt``, the setting, the characters' sheet
   words, the line said, what a guide pass is (:data:`GUIDE_PROMPTS`; a mask also lists the
   stand-ins' colours), the style sheet's words and "no on-screen text". A shot with a guide video
-  (DESIGN.md §113.12) leaves the framing to the guide: a talking shot says
+  leaves the framing to the guide: a talking shot says
   :data:`GUIDED_TALKING_FRAMING`, and the framing instructions of the characters' sheet words are
   left out (:func:`without_framing`; the plan notes what was left out).
 - **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet or no longer
@@ -29,22 +29,22 @@ dry-run plan of ``vidgen generate plan``.
   an earlier job is reused free and only gets a note), or whose audio / video needs a hosted URL
   (``videogen.host: none``) is planned and priced but not ready to pay for. With ``inline_media: all`` (and no host) the audio / video would go inline, which
   OpenRouter refuses: that is a problem (``run --pay`` refuses it before sending).
-- **Shared** (``videogen.host: quick_tunnel``, DESIGN.md §115): a paid run shares the shot's audio
+- **Shared** (``videogen.host: quick_tunnel``): a paid run shares the shot's audio
   / video inputs (:attr:`Shot.shared`) through a Cloudflare quick tunnel while its job runs; the
   plan lists exactly those files and the tunnel's maximum lifetime; without ``cloudflared`` the
   shot is blocked with the install hints.
 - **Earlier wording**: a guided shot paid for under the earlier prompt wording is blocked, not
   paid again by itself (:data:`EARLIER_WORDING_BLOCKED`).
-- **Sound** (:attr:`Shot.sound`, DESIGN.md §113.11): ``mix`` (no sound asked of the model) or
+- **Sound** (:attr:`Shot.sound`): ``mix`` (no sound asked of the model) or
   ``model`` (``generate_audio: true``): ``generated_shot.sound``, else
   ``videogen.models.<model>.sound``, else ``videogen.sound``. A model the list says cannot make
   sound is blocked, one it says nothing about gets a note.
-- **Where the starting picture goes** (:attr:`Shot.first_frame_in`, DESIGN.md §113.13): ``frame``
+- **Where the starting picture goes** (:attr:`Shot.first_frame_in`): ``frame``
   (a first frame image) or ``guide`` (spliced into the guide video, ``guide_name(kind,
   opening=True)``; no frame image is sent and the prompt starts with a role sentence where the
   model has a template). A shot that would send a true first frame and references to a model
   known to separate the modes is a problem (or a note when already paid for).
-- **The last frame of another shot** (``first_frame: last_of:<shot id>``, DESIGN.md §113.14): the
+- **The last frame of another shot** (``first_frame: last_of:<shot id>``): the
   picture is cut from the take that shot shows (:func:`~vidgen.videogen.takes.chosen_take`) into
   ``build/videogen/<shot>/last_of.<source>.<take>.png``. An unknown shot, the shot itself or a
   cycle is a problem; a source with no take blocks the shot, so a run never pays for it in the
@@ -52,10 +52,10 @@ dry-run plan of ``vidgen generate plan``.
 - **Chained parts**: in a split beat with a starting picture (any ``first_frame`` but ``none``),
   part 1 uses ``first_frame`` and every later part starts from the last frame of the part before
   it, as with ``last_of:`` (:func:`_link_last_of`).
-- **A restyled first frame** (``first_frame: restyled``, DESIGN.md §113.21): the render's first
+- **A restyled first frame** (``first_frame: restyled``): the render's first
   frame made photoreal on the ComfyUI server (``first_frame.restyled.png``, made by
   ``vidgen generate inputs --guide``); it needs ``videogen.provider: comfyui``.
-- **A painted starting picture** (``first_frame: painted``, DESIGN.md §113.15): the picture
+- **A painted starting picture** (``first_frame: painted``): the picture
   ``vidgen generate frames`` made from ``paint_first_frame:``; until it exists the shot is blocked.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
@@ -119,7 +119,7 @@ _SHEET_ONLY_CLAUSE = re.compile(
     r"|^(?:alone|solo)[,;.]?$|^(?:not|no|never)\s",
     re.IGNORECASE,
 )
-#: What a guide pass is, said in the prompt when one is sent as the guide (DESIGN.md §113.8).
+#: What a guide pass is, said in the prompt when one is sent as the guide.
 GUIDE_PROMPTS: dict[str, str] = {
     "depth": "The guide video is a depth map (near is white, far is dark): follow its layout and camera motion",
     "outline": "The guide video is an outline drawing (white edges on black): follow its shapes, layout and camera motion",
@@ -130,7 +130,7 @@ GUIDE_PROMPTS: dict[str, str] = {
         "and remake it as real camera footage, with real light, surfaces and detail instead of a computer-graphics look"
     ),
 }
-#: What the prompt says of the film's sound sent with ``audio: mix`` (DESIGN.md §113.18).
+#: What the prompt says of the film's sound sent with ``audio: mix``.
 MIX_PROMPT = "The reference audio is the shot's soundtrack (narration and music): time the movement to it"
 #: A mask guide's prompt lists the stand-ins' colours when the scene has at most this many.
 MASK_NAMES_MAX = 4
@@ -162,7 +162,7 @@ EARLIER_WORDING_BLOCKED = (
     "To pay for a new take with the new wording: set or change seed: on the shot, or change its prompt:"
 )
 #: The problem of a shot that sends a true first frame and references to a model that separates
-#: the two modes (DESIGN.md §113.13).
+#: the two modes.
 FIRST_FRAME_WITH_REFERENCES_PROBLEM = (
     "{model} takes a first frame or references, never both: with this shot's first frame the job would be accepted and the voice, "
     "the guide and the pictures ignored (no error, the no-reference price). Set first_frame_in: guide to put the starting picture "

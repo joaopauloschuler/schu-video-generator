@@ -1,4 +1,4 @@
-"""Cut inputs that no longer match what they were cut from (DESIGN.md §113.9): the record beside
+"""Cut inputs that no longer match what they were cut from: the record beside
 them, the plan's block, the refusal of ``run --pay``, free reuse of a cached clip. Nothing is sent
 or paid, nothing renders: the scene render is a stub, the provider the mock."""
 

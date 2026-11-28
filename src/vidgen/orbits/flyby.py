@@ -1,4 +1,4 @@
-"""Gravity assists by patched conics (Phase X, Step 231, DESIGN §98.5). In the planet's frame a
+"""Gravity assists by patched conics (Phase X, Step 231). In the planet's frame a
 probe passing by follows a hyperbola: it arrives and leaves at the same speed v∞ (the hyperbolic
 excess speed), its direction turned by δ, with sin(δ/2) = 1/e and e = 1 + r_p v∞²/μ (r_p the
 periapsis distance). In the Sun's frame its velocity is the planet's plus v∞ before and after;

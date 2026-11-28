@@ -1,5 +1,4 @@
-"""One generated clip end to end: cache, checks, estimate, budget, then a dry run or a paid job
-(DESIGN.md §113).
+"""One generated clip end to end: cache, checks, estimate, budget, then a dry run or a paid job.
 
 :func:`generate_clip` never pays unless ``pay=True`` and a budget is set (``videogen.budget_usd``
 or ``budget_usd=``; with both, the lower). In order:
@@ -26,7 +25,7 @@ reaches a final state (completed, failed, ...), before the download, or at the m
 (a provider may fetch again after queueing, so a finished fetch does not close it); also on an
 error or Ctrl+C. A job resumed from the ledger is only polled: no tunnel is opened again.
 After a job, a hosted file the provider never fetched with a ``GET`` becomes a warning
-(:attr:`ClipResult.warnings`; vidgen's own ``HEAD`` checks do not count, DESIGN.md §113.13).
+(:attr:`ClipResult.warnings`; vidgen's own ``HEAD`` checks do not count).
 Without a host such inputs stop the submit with a clear error. Whatever the provider says with
 the shared address in it is redacted before it leaves this module (:mod:`vidgen.videogen.redaction`).
 

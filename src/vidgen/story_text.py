@@ -1,4 +1,4 @@
-"""``vidgen story draft``, part 1: reading a story in prose (DESIGN.md §105.5). Pure text rules, no
+"""``vidgen story draft``, part 1: reading a story in prose. Pure text rules, no
 AI, no manim.
 
 :func:`read_story` splits a story (Markdown or plain text) into scenes (headings, scene-break
@@ -466,7 +466,7 @@ def find_characters(text: str) -> dict[str, Character]:
         surname = next((b for (a, b) in pairs if a == word and b in surnames), None)
         name = (titled.get(word) or word) + (f" {surname}" if surname else "")
         found[slug(word)] = Character(slug(word), name, n)
-    for phrase, _, _, _ in _described_tags(text):   # a speaker named by a description: "said the old man" (§105.8)
+    for phrase, _, _, _ in _described_tags(text):   # a speaker named by a description: "said the old man"
         cid = slug(phrase)
         if cid not in found:
             noun = phrase.split()[-1]
@@ -742,7 +742,7 @@ def _read_paragraph(scene: StoryScene, number: int, paragraph: str, state: _Stat
             else:
                 speaker_of[k] = (None, 0.1, "unknown: no tag, no character near", emotion)
     # a line calling a character by name ("Grandpa! The lamp is out!") is not that one's, nor the
-    # narrator's: the other one of the exchange says it (§105.8)
+    # narrator's: the other one of the exchange says it
     for k in quotes:
         who, confidence, how, emotion = speaker_of[k]
         addressed = _addressed(pieces[k][1], state)

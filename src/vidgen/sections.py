@@ -1,4 +1,4 @@
-"""``sections:``: an audio-only project written without scenes (DESIGN.md §111).
+"""``sections:``: an audio-only project written without scenes.
 
 An audiobook or a podcast episode has no pictures to choose, so its config may list
 ``sections`` instead of ``scenes``. :func:`expand_sections` turns them into scenes before the
@@ -8,7 +8,7 @@ render of the project is a plain slideshow), the title also starting a chapter; 
 the usual beats (``text``, ``voice``, ``emotion``, ``sting``, ``pause``, ``overlap``,
 ``ambience``, ``actions: [{sfx: ...}]``), a plain string being a beat of that text; a ``{pause:
 S}`` section becomes a silent scene of S seconds (with its own ``sfx``, ``music``, ``ambience``
-and ``room``, DESIGN.md §112).
+and ``room``).
 """
 
 from __future__ import annotations

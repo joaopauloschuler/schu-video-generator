@@ -1,5 +1,4 @@
-"""OpenRouter's public video model list: fetch (no key), cache, checks and cost estimates
-(DESIGN.md §113).
+"""OpenRouter's public video model list: fetch (no key), cache, checks and cost estimates.
 
 ``GET https://openrouter.ai/api/v1/videos/models`` lists each model's supported durations,
 resolutions, aspect ratios, sizes, frame types, ``generate_audio`` / ``seed`` capability,
@@ -12,7 +11,7 @@ resolution tier, ``with_audio`` / ``without_audio``, ``text_to_video`` / ``image
 ``reference_`` and ``video_continuation`` say when they apply); ``video_tokens`` SKUs are per
 token, estimated as ``width x height x 24 fps x seconds / 1024`` (ByteDance's Seedance token
 formula), with each video reference counted for as many seconds as the clip under a
-``with_video_input`` SKU (the real charges of Step 312, DESIGN.md §113.11); ``image_input`` / ``reference_images`` SKUs are per input picture; ``minimum_...`` is
+``with_video_input`` SKU (the real charges of Step 312); ``image_input`` / ``reference_images`` SKUs are per input picture; ``minimum_...`` is
 a floor per generation. Where several SKUs could apply, the estimate takes the highest (a
 conservative budget).
 """
@@ -201,7 +200,7 @@ def _read_cache(path: Path) -> tuple[float, Any] | None:
 
 
 #: Model id prefixes known to run a first-frame job or a reference job, never both: with a
-#: first frame the job is accepted and the references are silently left out (DESIGN.md §113.13).
+#: first frame the job is accepted and the references are silently left out.
 #: Only models with evidence are listed.
 FIRST_FRAME_OR_REFERENCES: tuple[str, ...] = ("bytedance/seedance-",)
 

@@ -1,7 +1,7 @@
-"""An iso place's pictures on the stage (DESIGN.md §89.10): each picture of an
+"""An iso place's pictures on the stage: each picture of an
 :class:`~vidgen.cartoon.iso_stage.IsoScenery` (its base, a character's front picture, a layer of
 an object that changes) is an :class:`IsoTiles` group showing the tiles the camera sees, at the
-level of detail its zoom needs. Weather on the place (DESIGN.md §90): :class:`IsoPuddles` (puddles
+level of detail its zoom needs. Weather on the place: :class:`IsoPuddles` (puddles
 growing in the rain, with ripples) and :class:`IsoSnow` (settling snow, shown by the pictures'
 snow tiles).
 """
@@ -26,7 +26,7 @@ from vidgen.cartoon.snow import BLANKET_OPACITY, blanket_cover, settle_amount, s
 
 
 class GlowTile(ImageMobject):
-    """A tile of the lights of a picture (DESIGN.md §89.11): never graded by the stage's light,
+    """A tile of the lights of a picture: never graded by the stage's light,
     even when the group holding it is marked lit (:func:`~vidgen.cartoon.shading.mark_lit`), so
     a lit lamp or window glows at night."""
 
@@ -45,14 +45,14 @@ POOL_STRENGTH = "pool_strength"
 
 
 class PoolTile(GlowTile):
-    """A tile of the pools of light of a picture (under lit lamps, DESIGN.md §104): never graded
+    """A tile of the pools of light of a picture (under lit lamps): never graded
     either, but drawn (:func:`draw_tile`) as strong as the stage's light is dark (the camera's
     :data:`POOL_STRENGTH`): full at night, faint by day. Its overlap with the next tiles is left
     out and tiles meet on whole pixels (seen through, a pixel drawn twice shows as a stripe)."""
 
 
 #: A picture keeps at most this many times the tiles it shows (and :data:`TILES_SPARE` more):
-#: the oldest of the others go (made again when the camera comes back, DESIGN.md §109).
+#: the oldest of the others go (made again when the camera comes back).
 TILES_KEPT = 3
 TILES_SPARE = 16
 
@@ -63,12 +63,11 @@ class IsoTiles(Group):
     zoom; ``density``: level 0's pixels per frame pixel. A tile is made once (kept for the
     scene), lit like the group (:func:`~vidgen.cartoon.shading.mark_lit`), and marked
     ``scenery`` (the camera crops it on purpose: lint ``off_frame``). While snow settles on the
-    place (:meth:`set_snow_opacity`, DESIGN.md §90.3) each tile shows the snow lying on it at
+    place (:meth:`set_snow_opacity`) each tile shows the snow lying on it at
     that opacity, laid over its pixels in place (the same mobject: a picture of the snow on its
     own, half seen through, showed the tiles' overlaps as lines). A picture with lights in it (a
-    lit lamp or window) has their tiles too, after the others, never graded (:class:`GlowTile`,
-    DESIGN.md §89.11); one with pools of light under lit lamps their own tiles before those
-    (:class:`PoolTile`, §104)."""
+    lit lamp or window) has their tiles too, after the others, never graded (:class:`GlowTile`); one with pools of light under lit lamps their own tiles before those
+    (:class:`PoolTile`)."""
 
     def __init__(self, scenery: IsoScenery, picture: Picture, view: IsoView, *, name: str, density: float, frame_width: float) -> None:
         super().__init__()
@@ -78,16 +77,16 @@ class IsoTiles(Group):
         self.frame_width = frame_width
         self.shown_key: tuple[int, tuple[tuple[int, int], ...]] | None = None
         self._tiles: dict[tuple[int, tuple[int, int], str], ImageMobject | None] = {}
-        #: the tiles' opacity (a place change fades a layer in or out, DESIGN.md §89.10)
+        #: the tiles' opacity (a place change fades a layer in or out)
         self.tile_opacity = 1.0
-        #: how much of the settling snow shows (0..1, DESIGN.md §90.3)
+        #: how much of the settling snow shows (0..1)
         self.snow_opacity = 0.0
         #: each picture tile's own pixels and its snow's, while snow settles; the snow shown on it
         self._snow_sources: dict[int, tuple[np.ndarray, np.ndarray | None]] = {}
         self._snow_shown: dict[int, float] = {}
         #: where on screen its tiles are drawn now (``None``: all of them; a callable giving
         #: left, bottom, right, top in Manim units, or ``None`` for nothing): a creature's front
-        #: picture only where the creature is (DESIGN.md §105.7)
+        #: picture only where the creature is
         self.clip_to: Callable[[], tuple[float, float, float, float] | None] | None = None
 
     def clip(self, rect: Callable[[], tuple[float, float, float, float] | None]) -> None:
@@ -111,7 +110,7 @@ class IsoTiles(Group):
         key = (level, tuple(tile for tile, _ in tiles))
         if key == self.shown_key:
             return False
-        if self.shown_key is not None and self.shown_key[0] != level:   # another level: let the old one's tiles go (§109)
+        if self.shown_key is not None and self.shown_key[0] != level:   # another level: let the old one's tiles go
             self._forget_levels(level)
         self.shown_key = key
         members = []
@@ -131,7 +130,7 @@ class IsoTiles(Group):
 
     def _forget_old(self, shown: set[int]) -> None:
         """Let go of the oldest tiles not shown now once it keeps more than :data:`TILES_KEPT`
-        times those shown (a long pan over a big map made and kept every tile it passed, §109)."""
+        times those shown (a long pan over a big map made and kept every tile it passed)."""
         limit = TILES_KEPT * max(len(shown), 1) + TILES_SPARE
         if len(self._tiles) <= limit:
             return
@@ -146,7 +145,7 @@ class IsoTiles(Group):
     def _forget_levels(self, level: int) -> None:
         """Let go of the tiles of every level but ``level`` (made again if the camera goes back
         to theirs): a zoomed view of a big map at full size otherwise holds two levels' tiles,
-        which outgrew the memory of a small machine (DESIGN.md §109)."""
+        which outgrew the memory of a small machine."""
         for key in [k for k in self._tiles if k[0] != level]:
             made = self._tiles.pop(key)
             if made is not None:
@@ -170,7 +169,7 @@ class IsoTiles(Group):
         made.scale_to_fit_width(canvas.width / canvas.scale * self.iso_view.unit)
         made.move_to([*canvas_center(canvas, self.iso_view), 0.0])
         made.name = self.name
-        made.iso_pieces = tuple(self._piece_box(k) for k, _ in self.picture[1])   # what it shows, and where (lint, §89.11)
+        made.iso_pieces = tuple(self._piece_box(k) for k, _ in self.picture[1])   # what it shows, and where (lint)
         made.scenery = True
         made.iso_tile = True   # drawn by :func:`draw_tile`
         made.iso_canvas = (level, tile, canvas)
@@ -252,7 +251,7 @@ def _ellipse(cx: float, cy: float, a: float, b: float, reverse: bool = False) ->
 
 
 class IsoPuddles(VGroup):
-    """Puddles on an iso place (DESIGN.md §90.2): each :class:`~vidgen.cartoon.iso_weather.IsoPuddle`
+    """Puddles on an iso place: each :class:`~vidgen.cartoon.iso_weather.IsoPuddle`
     a flat ellipse as the ``view`` sees a circle on the ground, growing with the seconds of rain
     (:func:`~vidgen.cartoon.rain.puddle_growth`) from scene time ``start`` until ``ended()`` (``None``
     while it rains) and staying when it stops, with ripples spreading on it while it rains
@@ -326,7 +325,7 @@ class IsoPuddles(VGroup):
 
 
 class IsoSnow:
-    """Snow settling on an iso place (DESIGN.md §90.3): the snow lying on the place's pictures
+    """Snow settling on an iso place: the snow lying on the place's pictures
     (:meth:`IsoTiles.set_snow_opacity`) grows with the seconds of snowfall of each of its
     ``falls`` (``(start, ended, density, settled)``: scene time it began, ``ended()`` its end or
     ``None``, its density, seconds of snowfall already lying) in steps
@@ -381,14 +380,14 @@ class IsoSnow:
 
 #: The camera's attribute holding its :class:`TileParts`.
 TILE_PARTS = "iso_tile_parts"
-#: The most bytes of tiles (their pixels and their resized parts) a camera keeps (DESIGN.md §109).
+#: The most bytes of tiles (their pixels and their resized parts) a camera keeps.
 TILE_PARTS_BYTES = 128 * 1024 * 1024
 
 
 class TileParts:
     """The parts on screen of tiles drawn before (:func:`draw_tile`): a tile drawn again at the
-    same place and size from the same pixels in the same light is neither graded nor resized again
-    (DESIGN.md §109): while the camera holds still, most tiles are. The same pixels: of the same
+    same place and size from the same pixels in the same light is neither graded nor resized again:
+    while the camera holds still, most tiles are. The same pixels: of the same
     fingerprint (:func:`~vidgen.cartoon.shading.pixels_digest`; tiles change in place: pools,
     snow). Keeps at most ``budget`` bytes of parts of live tiles
     (:class:`~vidgen.cartoon.shading.OwnedCache`; default :data:`TILE_PARTS_BYTES`; 0 keeps none):
@@ -423,7 +422,7 @@ def draw_tile(camera: Any, mob: ImageMobject, pixel_array: np.ndarray) -> None:
     """Draw the tile ``mob`` (upright, not turned) onto the camera's ``pixel_array``: only the
     part in the frame, resized (smoothly, also when it shrinks) onto just that part. Manim's own
     way warps the whole picture and blends it over a picture of the whole frame, for each picture
-    on each frame: a few times slower with the dozen tiles a view shows (DESIGN.md §89.10)."""
+    on each frame: a few times slower with the dozen tiles a view shows."""
     corners = camera.points_to_subpixel_coords(mob, mob.points)   # top left, top right, bottom left, bottom right
     (left, top), (right, bottom) = corners[0], corners[3]
     if right - left < 0.5 or bottom - top < 0.5:
@@ -433,7 +432,7 @@ def draw_tile(camera: Any, mob: ImageMobject, pixel_array: np.ndarray) -> None:
     low, high = (round, round) if pool else (math.floor, math.ceil)
     x0, y0 = max(low(left), 0), max(low(top), 0)
     x1, y1 = min(high(right), width), min(high(bottom), height)
-    clip = getattr(mob, "iso_clip", None)   # only where a small thing is (a creature's front picture, §105.7)
+    clip = getattr(mob, "iso_clip", None)   # only where a small thing is (a creature's front picture)
     if clip is not None:
         box = clip()
         if box is None:

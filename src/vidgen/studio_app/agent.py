@@ -1,4 +1,4 @@
-"""'Ask an agent' (DESIGN.md §94.16): a person's listening notes handed to an AI agent, whose
+"""'Ask an agent': a person's listening notes handed to an AI agent, whose
 answer — a whole new score and one line per note on what it changed and why — comes back as a
 **proposal**: a new version (``origin: agent``, never the current one until the person keeps
 it) to A/B against the version it was made from.

@@ -1,5 +1,4 @@
-"""Object actions and character stand-ins of the ``3d`` scene type (Step 300, DESIGN.md §114.11–
-114.12): the planned motion of the objects, the world, arrows and camera following it, the
+"""Object actions and character stand-ins of the ``3d`` scene type (Step 300): the planned motion of the objects, the world, arrows and camera following it, the
 description's tracks, the actions as `vidgen validate` checks them, the framing lint; a tiny
 render through Playwright's Chromium (skipped when it is missing)."""
 

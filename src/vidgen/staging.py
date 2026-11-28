@@ -1,4 +1,4 @@
-"""Stereo staging and room acoustics of the voices (DESIGN.md §111.4).
+"""Stereo staging and room acoustics of the voices.
 
 Opt-in, applied in the mix to each beat's voice after its overlap shape, never to the MP3s (the
 TTS hashes do not change): ``pan:`` on a voice of ``voice:`` / ``voices:`` or on a beat (a
@@ -137,7 +137,7 @@ def pan_value(setting: Any) -> float:
 
 
 def repeat_pans(setting: Any, repeat: int) -> list[float]:
-    """The pan of each of a cue's ``repeat`` plays (DESIGN.md §112): a ``pan:`` number or
+    """The pan of each of a cue's ``repeat`` plays: a ``pan:`` number or
     position for all, or a move ``{from, to}`` (a :class:`~vidgen.config.PanMove` or a mapping)
     in even steps from the first play to the last (footsteps crossing the stage)."""
     if isinstance(setting, Mapping) or hasattr(setting, "from_"):
@@ -215,7 +215,7 @@ def beat_staging(config: VideoConfig, scene: SceneConfig, beat: BeatConfig, stag
 
 
 def cue_room(config: VideoConfig, scene: SceneConfig, setting: bool | str | None) -> str | None:
-    """The room a sound effect of ``scene`` sounds in (DESIGN.md §112), ``None`` dry:
+    """The room a sound effect of ``scene`` sounds in, ``None`` dry:
     ``setting`` ``True`` the scene's room (else ``audio.room``; with any ``narrator`` and
     ``amount``), a room name that room, ``False`` / ``"none"`` dry, ``None`` the scene's room
     with ``audio.sfx_room``, else dry."""

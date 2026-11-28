@@ -1,4 +1,4 @@
-"""The words of a ``space`` scene in the air and beside giant ships (DESIGN.md §123.14): the world of a
+"""The words of a ``space`` scene in the air and beside giant ships: the world of a
 surface scene (``world:``: the planet, the place, the sun, the air, the sea, the ground, the clouds),
 its flights (``flights:``, the ``flight_data`` vocabulary of Step 385), what a craft may be besides a
 craft of the kit (a plane, a giant hull, a craft of the kit's own parts), the effects on a craft,
@@ -21,7 +21,7 @@ from vidgen.api import *
 from .space_params import Open, camel, length, module_options, one_of, scene_time, snake, uses_bars
 
 #: Metres a ship move's stand-off (or a hull camera's distance) may not go under: the view's near plane is
-#: 4 m beside a hull (set by the page, DESIGN.md §123.12), and nearer than this the plates read as a model.
+#: 4 m beside a hull (set by the page), and nearer than this the plates read as a model.
 MIN_STANDOFF = 10.0
 #: The near plane of a SpaceView with a giant hull in it (Step 390: the default 0.01 m slices a hull the
 #: camera is inside the bounding sphere of, and draws the world behind it over the hull).
@@ -80,7 +80,7 @@ MOVE_LENGTHS = {
 #: What each new move needs in the scene: a flight, ground or water, cloud decks, land, a hull.
 NEEDS = {"skim": "surface", "chase": "flight", "wing": "flight", "fly-past": "flight", "climb-through": "decks", "descend-through": "decks",
          "orbit-peak": "peak", "hull-pass": "hull", "hull-reveal": "hull", "into-bay": "hull", "stern-burn": "hull", "scale-zoom": "hull"}
-#: Names of places on every hull (DESIGN.md §123.10), and the numbered kinds (hangar-1, dock-2, bell-3).
+#: Names of places on every hull, and the numbered kinds (hangar-1, dock-2, bell-3).
 HULL_POINTS = ("bow", "stern", "top", "bottom", "port", "starboard", "bridge")
 HULL_NUMBERED = re.compile(r"^(hangar|dock|bell)-[1-9][0-9]*$")
 
@@ -480,7 +480,7 @@ class FlightsSpec(SceneParams):
         for f in self.flights:
             if f.start.orbit is not None:
                 raise ValueError(f"flights {f.name}: a start from orbit needs the orbit data; a surface scene has none: "
-                                 "write the scene out with `vidgen space-page` and give the web scene orbit_data (DESIGN.md §123.7)")
+                                 "write the scene out with `vidgen space-page` and give the web scene orbit_data")
         return self
 
     @property

@@ -1,4 +1,4 @@
-"""Step 392: the `space` scene reaches the pictures of Phase AO (DESIGN.md §123.14): a surface scene
+"""Step 392: the `space` scene reaches the pictures of Phase AO: a surface scene
 (``world:``: the joined world of vidgen/space-descent, flights, planes, effects, the air moves) and an
 orbital scene with giant hulls, planes, kit-built craft, the moves beside a ship, flashes, match cuts and
 a warp across a cut. Its words checked in Python with did-you-mean, the cross-checks, the pages written
@@ -257,19 +257,19 @@ def test_shadows_in_the_air_are_on_unless_the_world_says_so(space: Any) -> None:
 
 def test_existing_space_scenes_write_the_same_pages_with_camera_look_none(space: Any) -> None:
     """Outbound's five scenes and Step 376's demos with camera_look: none: the generated page text is byte-identical
-    to Step 391's (hashes taken at commit 1d1f7fb) but for the scene's own camera_look in PARAMS, so `none` is the
+    to Step 391's (hashes taken at commit 1d1f7fb, retaken in Step 443 when the header's citation went) but for the scene's own camera_look in PARAMS, so `none` is the
     clean render of before; without it (Step 401)
     the same scenes get the camera look's lines and nothing else changes."""
     from test_space_scene import HOLE, RINGS, TRANSFER
 
-    before = {"01_dawn": "4ed80c6ff2621a06627dc640e5bbcb882f18009d125605247ab383933e7530a5",
-              "02_depart": "27e79b87f4b0e9a5a3283092258993cb0f1794f3eccc850391dab999cd9d88a8",
-              "03_rings": "b2982b3bb00792f38c71520bcc6c5043252167224189750961362b304b375e16",
-              "04_jump": "bf1a81b60ee367be16140dd3816a00b30eb6d036650c7cb86e7bf3be5087b1b5",
-              "05_horizon": "45430b9b2bd9b31bfbbbf18604c49616f59ad89176cc7e139a3dc6fcb9832e84",
-              "RINGS": "6ecf4574031693dc7d1cfeecd07b28d1bd44f2a91cafe15587542c8a4f512d6f",
-              "TRANSFER": "4264d7035b4d9e646bb8815f4fd1f3e71d0bea7c998acfd32e1d515f6913ce58",
-              "HOLE": "27c741d74b9c08737f5622135bff1a04077e74efd3034adecfd3640852433a5d"}
+    before = {"01_dawn": "2c3bee787d5c1440b45ac5ce644b6a6757b6f9b076ec40e56a1cdde585eb8678",
+              "02_depart": "59322de6b29b460cc9ec190e7095cb5843a13b96f2dba0e8333309f1deb0defb",
+              "03_rings": "9939df45db4afc5c6d38e320d6706fb05b881d9c2ee1bd125d869ecdd98fed44",
+              "04_jump": "ce7d4c4360a6a5622a20724bb1d9a42825adf27b41334a70e65bca53c9340d63",
+              "05_horizon": "1a6275716eab8ae8d003b6c9fca83d65d41fcd39edcfe82042a978212445be02",
+              "RINGS": "821061f6e057d1048c68057be80e2e0bcc4e9a7c6547e5d6c5f828685c756f1c",
+              "TRANSFER": "d43cb5d3ba0a17275d8e86f27418c7a27468a8503fad7a93f9c20d0f80e944c7",
+              "HOLE": "2faffce9b7d9cccda94e1e729fcd2af3f09f7d9b92f434fb315037b6d1375e94"}
     project = Project.load(ROOT / "examples" / "outbound")
     raws = {s.id: (s.params, s.id) for s in project.config.scenes if s.type == "space"}
     raws.update({"RINGS": (RINGS, "s"), "TRANSFER": (TRANSFER, "s"), "HOLE": (HOLE, "s")})

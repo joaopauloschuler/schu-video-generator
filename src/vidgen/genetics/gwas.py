@@ -1,4 +1,4 @@
-"""Genome-wide association studies (DESIGN.md §96.17): the data of a Manhattan plot, a QQ plot and
+"""Genome-wide association studies: the data of a Manhattan plot, a QQ plot and
 a regional plot for the ``gwas`` scene. No manim.
 
 - **Data**: author-given variants (a CSV in the project or inline ``variants``) or a seeded

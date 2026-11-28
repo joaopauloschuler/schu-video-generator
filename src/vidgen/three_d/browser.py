@@ -1,4 +1,4 @@
-"""Draw a scene description's frames with three.js in headless Chromium (DESIGN.md §114.4).
+"""Draw a scene description's frames with three.js in headless Chromium.
 
 One browser per scene render: :class:`PageRenderer` starts Chromium (:class:`~vidgen.browser.chromium.Chromium`,
 shared with the ``web`` scene), serves the page and the vendored three.js from ``vidgen/data/three``
@@ -142,7 +142,7 @@ class PageRenderer:
 
 def write_clip(description: dict[str, Any], path: Path, intermediate: str = "lossless") -> None:
     """Draw every frame of ``description`` in order and write them to ``path`` (FFV1 in
-    Matroska, lossless RGB; ``compact``: H.264 4:4:4, DESIGN.md §120.9); written to a
+    Matroska, lossless RGB; ``compact``: H.264 4:4:4); written to a
     ``.partial`` file first, so a failure leaves none. Each PNG is decoded and encoded in a
     thread while the next frame is drawn, with progress lines (``3d frames 30/90, ...``) as a
     ``web`` scene's (Step 351, the same :class:`FramesClipWriter` and :class:`FrameProgress`)."""

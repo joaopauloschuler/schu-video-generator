@@ -1,4 +1,4 @@
-"""The gene-expression close-up in the cytoplasm (DESIGN.md §95.11), without manim: translation
+"""The gene-expression close-up in the cytoplasm, without manim: translation
 (initiation by scanning from the cap to the AUG — in bacteria at the Shine–Dalgarno sequence —,
 the 80S ribosome with its E, P and A sites, elongation cycle by cycle: the aminoacyl-tRNA whose
 anticodon pairs with the codon, the peptide bond made at the peptidyl transferase centre so the

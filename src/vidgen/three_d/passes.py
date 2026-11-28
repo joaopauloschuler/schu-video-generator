@@ -1,4 +1,4 @@
-"""Guide passes of a ``3d`` scene (DESIGN.md §114.14): the same frames drawn three more ways, for
+"""Guide passes of a ``3d`` scene: the same frames drawn three more ways, for
 tools that read a scene's shape and layout rather than its look (later: video-to-video).
 
 - ``depth``: grey by distance from the camera, near white and far dark, over one range for the

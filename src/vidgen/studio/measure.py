@@ -1,4 +1,4 @@
-"""Measurements of a piece of music, for agents who cannot listen (DESIGN.md §93.8): the tempo
+"""Measurements of a piece of music, for agents who cannot listen: the tempo
 heard in its onsets, its pitch-class (chroma) profile and key, its loudness bar by bar and the
 balance of its frequency bands. Used to check that a bed's template sounds close to the bed;
 Step 187's ``vidgen music check`` builds on them.

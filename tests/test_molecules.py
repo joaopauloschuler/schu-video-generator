@@ -1,4 +1,4 @@
-"""Molecules and notation, Step 204 (DESIGN.md §95.9): chemical notation, gene and protein
+"""Molecules and notation, Step 204: chemical notation, gene and protein
 nomenclature, modification markers and histone marks, sequences and the genetic code, the
 molecule catalog's placement and orientation rules, the glyphs' facts (antiparallel DNA, a
 GPCR's N-terminus outside, F₁ on the N side), molecules in a cell world, and the ``molecule``

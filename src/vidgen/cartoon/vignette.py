@@ -1,4 +1,4 @@
-"""A flashback's look on a stage (DESIGN.md §100.12): faded, warm colours and a soft dark frame.
+"""A flashback's look on a stage: faded, warm colours and a soft dark frame.
 
 ``flashback: true`` on a stage grades the set and the characters like an old photograph
 (:func:`flashback_grade`: :data:`FLASHBACK_SATURATION` of their saturation kept, multiplied

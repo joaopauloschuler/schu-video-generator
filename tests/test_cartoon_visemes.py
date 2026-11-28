@@ -1,4 +1,4 @@
-"""Step 71: lip sync (viseme tracks, DESIGN.md §69.4).
+"""Step 71: lip sync (viseme tracks).
 
 No TTS call: tracks are built from stored alignments, estimates, and fake providers; misaki and
 espeak-ng are mocked (the tests pass without them: the letter-based fallback)."""

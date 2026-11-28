@@ -1,4 +1,4 @@
-"""Characters drawn as holograms (DESIGN.md §100.3): a translucent figure in one glowing colour.
+"""Characters drawn as holograms: a translucent figure in one glowing colour.
 
 Every part keeps its shape; its colours are mapped through the hologram's colour by their
 lightness (:func:`hologram_fill`): light cloth and skin glow in it, dark ink (eyes, brows, mouth)

@@ -1,8 +1,8 @@
-"""``3d``: a 3D scene drawn by three.js in headless Chromium (DESIGN.md §114), shown full-bleed under
+"""``3d``: a 3D scene drawn by three.js in headless Chromium, shown full-bleed under
 the scene's title, the overlays and the captions.
 
 Before the scene plays, its frames are drawn into a lossless clip (compact with
-``render.intermediate: compact``, DESIGN.md §120.9)
+``render.intermediate: compact``)
 (``<render_dir>/three_d/<scene_id>.mkv``, with the scene description beside it as ``.json``) and
 reused while the description and the page are unchanged (so are the guide passes asked for,
 ``<scene_id>.<pass>.mkv``); the clip is then a ``ClipMobject``
@@ -131,7 +131,7 @@ class Scene3D(NarratedScene):
                 for name in OBJECT_ACTIONS for act, due, beat_end in self.action_times(name, 0.0)]
 
     def description(self) -> dict[str, Any]:
-        """The scene description this render draws (DESIGN.md §114.3)."""
+        """The scene description this render draws."""
         spans, frames = self._plan()
         changes = self.object_changes()
         fps = int(config.frame_rate)
@@ -146,7 +146,7 @@ class Scene3D(NarratedScene):
         self._description = described
         return described
 
-    # ----- lint (DESIGN.md §114.12) -------------------------------------------------------------
+    # ----- lint -------------------------------------------------------------
 
     def spoken_objects(self, beat_id: str | None) -> list[str]:
         """The objects a beat is about: those its object and camera actions name, and the
@@ -176,7 +176,7 @@ class Scene3D(NarratedScene):
     def _draw_view(self) -> Path:
         """The clip of the 3D frames (drawn now, or reused while its description and the page
         are unchanged), and the guide passes asked for (``guide_passes``, ``--guide-passes``)
-        beside it (DESIGN.md §114.14)."""
+        beside it."""
         folder = self.project.render_dir(self.is_preview) / "three_d"
         description = self.description()
         clip = make_3d_clip(folder, self.spec.id, description, self.project.config.render.intermediate)

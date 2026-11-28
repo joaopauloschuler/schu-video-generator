@@ -1,7 +1,7 @@
-"""How cartoons are drawn (DESIGN.md §79): the ``drawing:`` setting's outline weight, shading and
+"""How cartoons are drawn: the ``drawing:`` setting's outline weight, shading and
 texture.
 
-Like the stage's light (§69.31), the style is applied when Manim draws, never to the mobjects:
+Like the stage's light, the style is applied when Manim draws, never to the mobjects:
 :func:`style_camera` wraps a scene camera's ``apply_stroke`` (stroke widths times the outline
 factor) and ``apply_fill`` (a soft top-to-bottom gradient on what :func:`mark_shaded` marked),
 and :func:`attach_texture` wraps the renderer's ``add_frame`` (a still grain multiplied into each
@@ -70,7 +70,7 @@ class DrawingStyle:
         return self.outline == "normal" and self.shading == "flat" and self.texture == "none"
 
     def for_draft(self) -> DrawingStyle:
-        """The style of a draft (DESIGN.md §74): the outline kept, no shading, no texture."""
+        """The style of a draft: the outline kept, no shading, no texture."""
         return replace(self, shading="flat", texture="none")
 
 

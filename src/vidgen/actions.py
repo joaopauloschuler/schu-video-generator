@@ -1,4 +1,4 @@
-"""Per-beat actions (DESIGN.md §26): named targets, the ``Action`` base class, validation and the
+"""Per-beat actions: named targets, the ``Action`` base class, validation and the
 runner that plays actions inside their beat.
 
 A beat's ``actions`` (``vidgen.config.ActionConfig``) name an action type (``@action``, see
@@ -69,7 +69,7 @@ class Target:
     #: The scene's own dimming of the target (a factor of its full opacity), recorded by
     #: ``dim_to``; undoing a ``dim`` action (``until``) keeps it.
     scene_dim: float | None = None
-    #: A solid drawing (an iso diagram's blocks, DESIGN.md §90.9): ``recolor(paint)`` gives the
+    #: A solid drawing (an iso diagram's blocks): ``recolor(paint)`` gives the
     #: ``(fill, stroke)`` RGB (0-1) its members show when each of its colours is turned into
     #: ``paint(colour)`` with the drawing's shading kept, by member id. ``dim`` then mixes those
     #: colours towards the background instead of fading the members (a see-through block would
@@ -215,7 +215,7 @@ class Action:
     def opens_scene(self) -> bool:
         """Whether this use, due at the very start of its scene's first beat (``at: 0``), is
         applied before anything is shown, so the scene opens on its result (a ``zoom`` with
-        ``cut``: the first frame already framed, DESIGN.md §101.4). It is applied instantly
+        ``cut``: the first frame already framed). It is applied instantly
         (:meth:`apply` should change the scene directly). Default: ``False``."""
         return False
 
@@ -336,7 +336,7 @@ class ActionUse:
 
 def beat_action_list(spec: SceneConfig, known: Collection[str]) -> list[tuple[str, str, ActionConfig]]:
     """Every action of ``spec``'s beats in order, resolved, with its beat's id and its location: each beat's
-    ``shot:`` (as a ``shot`` action, DESIGN.md §69.29) first, then its written actions. A beat
+    ``shot:`` (as a ``shot`` action) first, then its written actions. A beat
     after one with a shot gets, unless it starts with a shot of its own, a ``shot`` without a
     kind first: back to the view before the shots (easing back when the last shot eased in)."""
     found: list[tuple[str, str, ActionConfig]] = []
@@ -523,7 +523,7 @@ class ActionRunner:
         self._end = now + round((d + pad) * fps)
         due = [_Due(now, u, True) for u in self.uses if u.until == beat_id and u.applied and not u.kind.cls.temporary]
         own = {id(u): now + round(u.config.at * d * fps) for u in self.uses if u.beat == beat_id}
-        if self.scene.beats and beat_id == self.scene.beats[0].id:   # the scene opens on these (§101.4)
+        if self.scene.beats and beat_id == self.scene.beats[0].id:   # the scene opens on these
             for u in self.uses:
                 if own.get(id(u)) == now and u.config.at == 0 and u.action.opens_scene():
                     del own[id(u)]
@@ -673,7 +673,7 @@ class ActionRunner:
                 continue
             if mid is not None and self.scene.capture is not None:
                 self.scene.capture.add_mid_still(self._beat, self._now(), frames, mid)
-            for d, made in self._built:  # sounds and motion effects, timed as the actions play (§69.19, §69.41)
+            for d, made in self._built:  # sounds and motion effects, timed as the actions play
                 self.scene.action_foley(d.use.kind.name, d.use.action.options, made, self._now() / fps, frames / fps)
                 self.scene.action_motion_effects(d.use.kind.name, d.use.action.options, made, self._now() / fps, frames / fps)
             self.scene._requested = natural if factor < 1 - 1e-9 else None

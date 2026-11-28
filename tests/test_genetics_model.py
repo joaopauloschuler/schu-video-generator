@@ -1,4 +1,4 @@
-"""The genetics model and the exact cross engine (Step 213, DESIGN §96): textbook ratios computed
+"""The genetics model and the exact cross engine (Step 213): textbook ratios computed
 exactly, notation, validation with reasons, modes of inheritance. No rendering."""
 
 from __future__ import annotations

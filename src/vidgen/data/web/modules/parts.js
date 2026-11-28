@@ -1,4 +1,4 @@
-// vidgen/parts: the registry of ready-made three.js parts (DESIGN.md §122.5). Part of
+// vidgen/parts: the registry of ready-made three.js parts. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/parts".
 //
 // A part is one ready-made thing a page can put into a scene: a sky, a body, a craft, a phenomenon,

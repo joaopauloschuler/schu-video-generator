@@ -1,4 +1,4 @@
-"""OpenAI Images provider (``POST /v1/images/generations``), standard library only (DESIGN.md §58).
+"""OpenAI Images provider (``POST /v1/images/generations``), standard library only.
 
 The API key is read from the environment variable ``OPENAI_API_KEY`` when a request is made. It
 is never stored, logged, written to a file or included in an error message: it is only sent as

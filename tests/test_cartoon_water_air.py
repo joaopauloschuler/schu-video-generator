@@ -1,4 +1,4 @@
-"""Step 119: vehicles on the water and in the air (DESIGN.md §69.53): the boat on the stage's
+"""Step 119: vehicles on the water and in the air: the boat on the stage's
 water, the hot-air balloon and the toy rocket; their pure paths, waves, bobbing and smoke, the
 wind's drift, riders following, the checks of ``vidgen validate``, foley and motion effects, and
 one tiny render."""

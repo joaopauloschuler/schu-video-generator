@@ -1,4 +1,4 @@
-"""Shots within a stage scene: the camera framings of the ``shot:`` beat key (DESIGN.md §69.29).
+"""Shots within a stage scene: the camera framings of the ``shot:`` beat key.
 No manim.
 
 A *shot* frames characters where they stand when it starts: ``wide`` (everyone on stage, no
@@ -43,7 +43,7 @@ SUBJECT_AT = 0.66
 TWO_SHOT_PADDING = 0.1
 #: Share of the view kept free at each side of a close-up or medium shot of several characters.
 GROUP_PADDING = 0.08
-#: Half a generated figure's width in its heights (also the planner's predicted stills, DESIGN.md §69.24).
+#: Half a generated figure's width in its heights (also the planner's predicted stills).
 FIGURE_HALF_WIDTH = 0.21
 #: The tightest framing (the layers are sized for zooms up to :data:`MAX_ZOOM`).
 MAX_SHOT_SCALE = MAX_ZOOM
@@ -131,7 +131,7 @@ def frame_shot(
 ) -> ShotView:
     """The camera view of a ``kind`` shot (:data:`SHOT_KINDS`) of ``subjects`` (and the ``near``
     character of an over-the-shoulder shot), kept inside ``bounds`` (``view_center_within``), at
-    most ``max_scale`` (an iso place's fixed wide view raises it, DESIGN.md §106):
+    most ``max_scale`` (an iso place's fixed wide view raises it):
 
     - ``wide``: no zoom, centred on the middle of the subjects (the stage's middle without any);
     - ``two_shot``: the subjects' figures, whole, with :data:`TWO_SHOT_PADDING` around them;
@@ -178,8 +178,8 @@ def frame_shot(
 
 def _group(subjects: Sequence[ShotFigure], kind: str, frame_width: float, frame_height: float,
            max_scale: float = MAX_SHOT_SCALE) -> tuple[float, float, float]:
-    """``(centre x, centre y, scale)`` of a ``closeup`` or ``medium`` of several characters
-    (DESIGN.md §100.6): each one's :data:`SHOT_SPANS` (its head and shoulders, or hips up) and
+    """``(centre x, centre y, scale)`` of a ``closeup`` or ``medium`` of several characters:
+    each one's :data:`SHOT_SPANS` (its head and shoulders, or hips up) and
     its figure's width, all in the view with :data:`GROUP_PADDING` at the sides, no tighter
     than :data:`SHOT_MIN_WIDTHS` of the tallest; the highest head keeps its room above it (the
     view's top is there), centred across."""
@@ -232,7 +232,7 @@ def shot_figures(
             looked = looked_at.get(subject.name)
             near = looked if looked in present and looked != subject.name else nearest
         return Shot("over_shoulder", (subject.name,), near)
-    if kind in ("closeup", "medium") and len(chosen) > 1:   # several framed together (§100.6)
+    if kind in ("closeup", "medium") and len(chosen) > 1:   # several framed together
         return Shot(kind, tuple(chosen[:3]))
     return Shot(kind, (subject.name,))
 

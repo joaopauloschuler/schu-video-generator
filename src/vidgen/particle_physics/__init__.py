@@ -1,4 +1,4 @@
-"""Particle physics without manim (Phase Y, DESIGN §99): the Standard Model's particles and the
+"""Particle physics without manim (Phase Y): the Standard Model's particles and the
 common hadrons with PDG 2024 values (:mod:`.data`), names in ASCII and Unicode with did-you-mean
 (:mod:`.names`), reactions and decays as text (:mod:`.process`), the conservation checker
 (:mod:`.conservation`), the Standard Model chart's cells and couplings (:mod:`.chart`) and

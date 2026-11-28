@@ -1,6 +1,6 @@
 # Cookbook: simple 3D scenes
 
-Craft notes for videos with schu-video-generator's [`3d`](CONFIG.md#3d) scene type (DESIGN §114):
+Craft notes for videos with schu-video-generator's [`3d`](CONFIG.md#3d) scene type:
 plain shapes, labels and character stand-ins, seen by a camera that stands still or moves on the
 words the narration says, drawn by three.js in headless Chromium. The look is deliberately simple
 (plain colours, one light, no shadows or textures): it is for **explaining** — where things are,
@@ -158,7 +158,7 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   copy of the scene with `data:` that switches one effect off shows what each one does.
 - **Porting a hand-written chain.** Map its passes to options (its tone curve: `"aces-narkowicz"`;
   its `pow(1/2.2)`: `encoding: "gamma2.2"`; its scene scale: `renderScale`), then compare stills:
-  a copy of "Escapement" ported this way came within 28–34 dB PSNR of the film (DESIGN §120.11).
+  a copy of "Escapement" ported this way came within 28–34 dB PSNR of the film.
 - **Let the music drive it.** With `music_data` in the scene's params the page reads the score's
   hits and notes and the measured mix as `ctx.music` (`vidgen guide web`, "Pictures that follow
   the music"; [COOKBOOK-MUSIC.md, section 12](COOKBOOK-MUSIC.md#12-pictures-that-follow-the-score)).
@@ -312,7 +312,7 @@ scenes (12, cut on bar lines; durations at 30 fps):
 For the three film scores the plan is close to what their authors cut: `escapement` and
 `signal-fire` exactly (12 and 3 scenes on the same bars), `parallel-space` with two more cuts (it
 splits the 16-bar `pulse` and keeps `heart` and `heart2` apart, where the film shows 16-bar
-scenes); DESIGN §121.2 has the tables.
+scenes).
 
 
 ## 11. Checking a music video

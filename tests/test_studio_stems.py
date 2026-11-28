@@ -1,4 +1,4 @@
-"""Step 196 (DESIGN.md §94.14): the studio's stems — what a track's stem depends on, remixes equal
+"""Step 196: the studio's stems — what a track's stem depends on, remixes equal
 to ``render_music_score`` (within the stated rounding, the same 16-bit audio), volumes applied to
 kept stems, listening mixes at the whole piece's gain and length, the late facts, meters and the
 "under narration" file. Fast scores of a few seconds; the 17 templates are checked by a slow test."""

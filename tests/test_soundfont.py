@@ -1,5 +1,5 @@
 """symusic (a dependency; the ``music`` extra is empty) and the SoundFont: download checks, the cache, ``soundfont:``
-overrides and ``vidgen soundfont`` (DESIGN.md §81). Nothing here downloads: fetches read
+overrides and ``vidgen soundfont``. Nothing here downloads: fetches read
 ``file://`` URLs of small fake files."""
 
 from __future__ import annotations

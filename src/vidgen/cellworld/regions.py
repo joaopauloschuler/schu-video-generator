@@ -1,4 +1,4 @@
-"""Regions made of shapes by union and difference (DESIGN.md §95.9): a membrane whose outline
+"""Regions made of shapes by union and difference: a membrane whose outline
 is not one simple shape — a mitochondrion's inner membrane folded into cristae, the ER's sheets
 joined to the nuclear envelope, a smooth-ER network, a nuclear envelope opened by its pores.
 Backed by Skia's path operations (``skia-pathops``, which Manim needs too) in local

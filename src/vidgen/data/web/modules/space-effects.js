@@ -1,4 +1,4 @@
-// vidgen/space-effects: what the air does to a craft and a craft to the air (DESIGN.md §123.9): the glow of a
+// vidgen/space-effects: what the air does to a craft and a craft to the air: the glow of a
 // re-entry (a shock layer on the windward side, hot surfaces, a wake, sparks, a far head with a luminous train),
 // vapour trails laid in the WORLD, engine exhaust shaped by the air's pressure, the vapour of a transonic
 // pass and of a hard turn. One call: `effects(craft, {flight: ctx.flight, name, sky, reentry, contrails, exhaust,
@@ -11,7 +11,7 @@
 // Object3D): the effects take a bounding ellipsoid and named places (`anchors`), never a plane's internals.
 // Axes of a craft as in vidgen/space-craft: +z the nose, +y up, +x the left wing. Units metres, seconds.
 //
-// What is physical and what is a look is said in DESIGN §123.9. In short: where things are and when (the
+// What is physical and what is a look: where things are and when (the
 // windward side from the velocity, strength from the flight's heating, Mach number, load and height, the trail
 // along the path flown, the plume widening as the air thins) follow the flight; shapes, colours, brightness
 // and lifetimes are looks.

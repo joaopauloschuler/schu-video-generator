@@ -1,4 +1,4 @@
-// The bright stars of vidgen/space-sky's real sky (DESIGN.md §122.6). Written by
+// The bright stars of vidgen/space-sky's real sky. Written by
 // tools/make_star_catalogue.py; do not edit by hand. Right ascension and declination in
 // degrees (J2000), V magnitude, B-V colour index, a name where the star has one.
 export default {"catalog": "fixture: well-known bright stars written down from memory (approximate, not checked against a catalogue)", "approximate": true, "epoch": "J2000.0", "complete_to": 2.5, "columns": ["ra_deg", "dec_deg", "v_mag", "b_minus_v", "name"], "stars": [

@@ -1,4 +1,4 @@
-# Built-in outdoor sets (DESIGN.md §76). A stage scene uses one with set: NAME when the project's
+# Built-in outdoor sets. A stage scene uses one with set: NAME when the project's
 # own sets: has no set of that name; its params override the set's as for any set (CONFIG
 # "Ready-made sets"). Every set leaves two marks clear for two characters at depth 0:
 # stand_left and stand_right.

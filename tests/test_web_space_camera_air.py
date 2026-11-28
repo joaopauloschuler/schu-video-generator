@@ -1,5 +1,4 @@
-"""Camera moves in the air and beside giant ships, ``vidgen/space-camera-air`` (Step 390, DESIGN.md
-§123.12): the module is served by its import name and imports no three.js; its moves are registered
+"""Camera moves in the air and beside giant ships, ``vidgen/space-camera-air`` (Step 390): the module is served by its import name and imports no three.js; its moves are registered
 as parts; in Node (when it is installed): every move is a function of its time (the same time, the
 same shot, in any order); bar-locked times; eased ends that start or end moving; the camera never
 under its margin over a ground given as a function, with a note when it had to be lifted; "up" is

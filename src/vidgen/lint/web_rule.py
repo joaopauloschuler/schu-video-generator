@@ -1,4 +1,4 @@
-"""The ``web`` scene's own lint rule (DESIGN.md §118.12): ``web_clipped``, page text cut by a box
+"""The ``web`` scene's own lint rule: ``web_clipped``, page text cut by a box
 on the page. The page's texts are layout objects like vidgen's own (``source: web``), so the
 layout rules (``off_frame``, ``text_overlap``, ``min_font``, ``contrast``, ``overlay_overlap``,
 ``shorts_safe_area``...) check them too; this rule reads what only a page has: ``clipped`` (the

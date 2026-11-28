@@ -1,4 +1,4 @@
-"""Takes of generated shots (DESIGN.md §113.4): every clip a shot got is kept as
+"""Takes of generated shots: every clip a shot got is kept as
 ``takes/<shot>/<n>.mp4`` (n = 1, 2, ...) with ``<n>.json`` (where it came from, its cost, its QA
 report) and ``<n>.contact.png`` (its contact sheet); ``takes/picks.json`` records the take picked
 per shot.

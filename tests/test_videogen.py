@@ -1,4 +1,4 @@
-"""Generated video, the provider layer (DESIGN.md §113): requests and cache keys, the public
+"""Generated video, the provider layer: requests and cache keys, the public
 model list (a real copy of 2026-11-07), checks and estimates, the mock API, submit / poll /
 download, the cache, the ledger and budget cap, errors, key and proxy modes, the CLI. No
 network: every paid endpoint is the mock."""

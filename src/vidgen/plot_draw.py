@@ -1,4 +1,4 @@
-"""The drawing layer of the chart core (Phase W, DESIGN §97): manim objects for a laid-out
+"""The drawing layer of the chart core (Phase W): manim objects for a laid-out
 :class:`~vidgen.plotcore.PanelLayout` — axis lines with break marks, tick marks, gridlines
 (dashed at labelled ticks, faint solid at a log axis' minor ticks), tick labels, axis titles —
 and for data (lines clipped to the plot, point markers, error bars, shaded bands, histogram

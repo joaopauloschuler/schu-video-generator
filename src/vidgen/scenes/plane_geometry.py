@@ -1,4 +1,4 @@
-"""Geometry on a ``function_plot``'s plane (DESIGN §87.7): ``points``, ``vectors`` (sums drawn
+"""Geometry on a ``function_plot``'s plane: ``points``, ``vectors`` (sums drawn
 tip to tail) and ``marks`` (segments, braces, angle arcs, dimension lines), all in data
 coordinates. :class:`PlaneFigure` (no manim) resolves the references between them and moves
 them for the ``trace`` action; :class:`PlaneGeometry` draws them on :class:`MathAxes` and keeps

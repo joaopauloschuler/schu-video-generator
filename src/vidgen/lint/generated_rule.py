@@ -1,4 +1,4 @@
-"""``generated_footage`` (DESIGN.md §113.4): a reminder, on each scene that shows generated video
+"""``generated_footage``: a reminder, on each scene that shows generated video
 takes, that platforms ask for AI-generated realistic footage to be disclosed when publishing
 (YouTube's "altered or synthetic content" setting, TikTok's AI-generated label). The film's
 description file already carries "Includes AI-generated footage (models)."."""

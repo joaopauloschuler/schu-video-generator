@@ -24,10 +24,10 @@ dependencies = [
     # The MCP server for AI agents (vidgen mcp).
     "mcp>=1.19",
     # Kokoro narration on this computer. kokoro 0.9.4 (and misaki) declare Python < 3.13; on 3.13
-    # the marker leaves it out and `vidgen tts` explains (DESIGN.md §68).
+    # the marker leaves it out and `vidgen tts` explains.
     "kokoro>=0.9.4; python_version < '3.13'",
     # Kokoro's Mandarin voices (pure Python). Japanese (misaki[ja]) is left out: its pyopenjtalk
-    # has no wheels, so it would make every install need a C++ compiler (DESIGN.md §68).
+    # has no wheels, so it would make every install need a C++ compiler.
     "misaki[zh]>=0.9.4; python_version < '3.13'",
     # composed music (Phase N): 0.6.0's SoundFont render is broken, so the pin is exact.
     "symusic==0.5.9",

@@ -1,4 +1,4 @@
-"""Step 281: many crossfaded scenes are blended a batch at a time with the same frames (DESIGN.md §110)."""
+"""Step 281: many crossfaded scenes are blended a batch at a time with the same frames."""
 
 from __future__ import annotations
 

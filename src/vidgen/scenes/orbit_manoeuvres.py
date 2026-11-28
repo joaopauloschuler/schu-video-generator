@@ -1,4 +1,4 @@
-"""Manoeuvres and gravity assists on the ``orbit`` scene (Phase X, Step 231, DESIGN §98.5): a
+"""Manoeuvres and gravity assists on the ``orbit`` scene (Phase X, Step 231): a
 body's burns (Δv arrows at the burn points, the orbits before faint and after drawn, a mission
 line in the panel), a transfer (Hohmann, bi-elliptic, phasing: the planned path, the phase angle
 live until departure, Δv₁, Δv₂, total, transfer time, synodic period), a flyby in the planet's

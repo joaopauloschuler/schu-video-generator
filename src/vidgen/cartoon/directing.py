@@ -1,4 +1,4 @@
-"""Automatic directing of stage scenes (``auto_direct:``; DESIGN.md §69.23). No manim.
+"""Automatic directing of stage scenes (``auto_direct:``). No manim.
 
 :func:`plan_directions` is a pure function from a scene's beats (who speaks, the line, the
 actions written in the beat, the kinds of directing on) and its cast to the actions it adds, per
@@ -15,7 +15,7 @@ one more pass. Written actions always win: a character that a beat's own actions
 With the stage's geometry (:class:`StageFrame`, from :func:`~vidgen.cartoon.stage.stage_layout`,
 no rendering) the planner checks each look, arm gesture and close-up it adds: it predicts the
 beat's still with and without the action and runs the lint rules of :data:`CHECKED_RULES` on
-both; an action that would add a finding is not added (DESIGN.md §69.24).
+both; an action that would add a finding is not added.
 """
 
 from __future__ import annotations
@@ -87,8 +87,7 @@ LOOK_SECONDS = 0.5
 #: A close-up: a line of at most :data:`SHORT_LINE_WORDS` words right after a beat of at least
 #: :data:`LONG_LINE_WORDS`; a ``zoom`` on the speaker by :data:`CLOSEUP_SCALE`, moving in and
 #: back in :data:`CLOSEUP_SECONDS` each when both fit in 80 % of the narration (after the
-#: speaker's look), else a ``shot: closeup`` of the speaker (a cut held for the line, DESIGN.md
-#: §69.29).
+#: speaker's look), else a ``shot: closeup`` of the speaker (a cut held for the line).
 SHORT_LINE_WORDS = 5
 LONG_LINE_WORDS = 8
 CLOSEUP_SCALE: float = 2
@@ -107,9 +106,9 @@ MOVING_ACTIONS = frozenset({
 FACE_BOTTOM = 0.5
 GESTURE_REACH: dict[str, float] = {"point": 0.4, "wave": 0.35, "shrug": 0.34}
 #: The hands each arm gesture moves (``near``: the character's near hand, :attr:`CastMember.near_hand`):
-#: none is added while one of them holds a prop (DESIGN.md §69.27).
+#: none is added while one of them holds a prop.
 GESTURE_HANDS: dict[str, tuple[str, ...]] = {"point": ("near",), "wave": ("near",), "shrug": ("left", "right")}
-#: The lint rules (DESIGN.md §69.17) the planner runs on its predicted stills. ``bubble_overlap``
+#: The lint rules the planner runs on its predicted stills. ``bubble_overlap``
 #: needs no check: automatic actions draw no bubble and move no face, and no close-up is added
 #: to a beat with a speech bubble (the bubble is placed for the view at its start).
 CHECKED_RULES: tuple[str, ...] = ("off_stage", "facing_away")
@@ -136,7 +135,7 @@ class BeatInput:
     """One beat for the planner: its id, its line, who says it (characters on the stage), the
     actions written in it (resolved), the kinds of directing on for it, and its narration's
     length (``seconds``) and word times (from its start; none: no gestures). ``next_joins``:
-    the next beat overlaps or interrupts it (DESIGN.md §69.34), so ``seconds`` and ``words``
+    the next beat overlaps or interrupts it, so ``seconds`` and ``words``
     are what is heard before that beat starts and no pause follows (no reactions)."""
 
     id: str
@@ -165,12 +164,12 @@ class StageFrame:
     """A stage's geometry as the planner's lint check sees it (Manim units, no rendering): the
     frame's size, the stage's width, the x the camera's view is centred on at the start, each
     character's :class:`StagePlace`, each prop's x, the stage's own marks and the facing of each
-    prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), how
-    many sit side by side on each prop that seats more than one (§69.43), the depth each
-    character and prop starts at (§69.44), each vehicle's kind, height and facing (§69.52), and
-    the x from and to which the stage's water goes (§69.53; ``None``: no water), and on a
-    platform level how many columns its map has (§86; ``None``: no level) and the hero the
-    camera follows from the start (``follows``, §86.10; ``None``: none)."""
+    prop with a seat back (a character sitting on it faces that way), how
+    many sit side by side on each prop that seats more than one, the depth each
+    character and prop starts at, each vehicle's kind, height and facing, and
+    the x from and to which the stage's water goes (``None``: no water), and on a
+    platform level how many columns its map has (``None``: no level) and the hero the
+    camera follows from the start (``follows``; ``None``: none)."""
 
     frame_width: float
     frame_height: float
@@ -642,7 +641,7 @@ def _closeup_shot(state: _SceneState, beat: _Beat, name: str) -> tuple[ShotView,
 
 
 def _jumps_somewhere(act: ActionConfig) -> bool:
-    """Whether ``act`` is a jump to a place on a level (it moves and turns the character, §86.7)."""
+    """Whether ``act`` is a jump to a place on a level (it moves and turns the character)."""
     return act.action == "jump" and act.options.get("to") is not None
 
 
@@ -744,7 +743,7 @@ def _pose(state: _SceneState, action: str, targets: set[str], options: Mapping[s
                 # an iso place's object (not a prop of the frame): its seats are its own (vidgen validate counts them)
                 places = 1 if state.frame is None else state.frame.seat_places.get(prop, 1) if prop in state.frame.props else 8
                 state.postures.sit(name, prop, places)
-            elif action == "lie_on":   # a bed of an iso place (DESIGN.md §105.2): it keeps its facing
+            elif action == "lie_on":   # a bed of an iso place: it keeps its facing
                 state.postures.lie(name, prop)
                 continue
             else:
@@ -761,7 +760,7 @@ def _pose(state: _SceneState, action: str, targets: set[str], options: Mapping[s
 
 
 def _riding(state: _SceneState, act: ActionConfig, names: Sequence[str]) -> None:
-    """A written ``get_in`` / ``ride_to`` / ``get_out`` (DESIGN.md §69.52): who rides which
+    """A written ``get_in`` / ``ride_to`` / ``get_out``: who rides which
     vehicle, where the vehicles and their riders are and which way they face (a change
     :class:`Postures` refuses is ignored: ``vidgen validate`` reports it)."""
     frame = state.frame
@@ -783,7 +782,7 @@ def _riding(state: _SceneState, act: ActionConfig, names: Sequence[str]) -> None
             to_x = here if place is None else frame.place_x(place) if frame is not None else None
             if here is not None and to_x is not None and abs(to_x - here) > 1e-6:
                 state.facing[vehicle] = "right" if to_x > here else "left"
-            away = options.get("land") is False   # a balloon or a toy rocket flies off: gone (DESIGN.md §69.53)
+            away = options.get("land") is False   # a balloon or a toy rocket flies off: gone
             state.prop_x[vehicle] = None if away else to_x
             for rider in state.postures.riders(vehicle):
                 _walk(state, rider, None if away else to_x)
@@ -863,7 +862,7 @@ def _start_state(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: 
     entering = {n for b in beats for act in b.actions if act.action == "enter" for n in _named(act.targets(), names)}
     state = _SceneState(cast={m.name: m for m in cast}, present=set(names) - entering, frame=stage)
     if stage is not None:
-        state.camera_x = None if stage.follows is not None else stage.view_x(stage.camera_x)   # following the hero (§86.10)
+        state.camera_x = None if stage.follows is not None else stage.view_x(stage.camera_x)   # following the hero
         for name in names:
             place = stage.places.get(name)
             state.x[name] = None if place is None or name in entering else place.x
@@ -875,8 +874,7 @@ def _start_state(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: 
 def plan_directions(
     scene_id: str, cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: StageFrame | None = None,
 ) -> list[DirectedBeat]:
-    """The actions automatic directing adds to each beat of a stage scene (DESIGN.md §69.23,
-    §69.24): for each beat with kinds on, the passes of those kinds in :data:`DIRECTING_KINDS`
+    """The actions automatic directing adds to each beat of a stage scene: for each beat with kinds on, the passes of those kinds in :data:`DIRECTING_KINDS`
     order. Pure: the same input gives the same actions. Characters an ``enter`` of the scene
     brings in are off stage until their first ``enter`` beat; an ``exit`` takes them off. With
     the ``stage``'s geometry each look, arm gesture and close-up is checked against the lint
@@ -914,7 +912,7 @@ def plan_directions(
     return directed
 
 
-#: Written actions that move the camera: reframing leaves their beat alone (DESIGN.md §69.30).
+#: Written actions that move the camera: reframing leaves their beat alone.
 CAMERA_ACTIONS = frozenset({"pan", "follow", "zoom", "shot"})
 
 
@@ -942,8 +940,7 @@ def _reframe_beat(state: _SceneState, beat: BeatInput, names: Sequence[str]) -> 
 
 
 def plan_reframe(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: StageFrame) -> list[DirectedBeat]:
-    """The ``pan`` actions that keep each speaker of a stage scene in view (``reframe: speaker``;
-    DESIGN.md §69.30): the beats with the characters' places replayed from their written actions
+    """The ``pan`` actions that keep each speaker of a stage scene in view (``reframe: speaker``): the beats with the characters' places replayed from their written actions
     (as :func:`plan_directions` does), then :func:`~vidgen.cartoon.reframe.reframe_path`, each move
     a ``pan`` to an x of the stage from the beat's start (``cut: true`` for a cut). Pure."""
     names = [m.name for m in cast]
@@ -988,7 +985,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
     level = params.level_frame(frame_width, frame_height)
-    if level is not None:   # a platform level is as wide as its map (DESIGN.md §86)
+    if level is not None:   # a platform level is as wide as its map
         stage_width = level.stage_width
     else:
         stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
@@ -1017,7 +1014,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     level_params = getattr(params, "level", None)
     columns = level_params.parsed().columns if level_params is not None else None
     follows = level_params.follow if level_params is not None else None
-    if follows is not None and follows in places:   # the camera starts on the hero (§86.10)
+    if follows is not None and follows in places:   # the camera starts on the hero
         camera_x = places[follows].x
     return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths,
                       vehicles, water, columns, follows)
@@ -1025,7 +1022,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
 
 def stage_reframes(project: Project, params: Any) -> bool:
     """Whether the camera keeps the speaker in view on a ``stage`` scene with validated
-    ``params`` (DESIGN.md §69.30): its ``reframe``, else the video's, else ``speaker`` when its
+    ``params``: its ``reframe``, else the video's, else ``speaker`` when its
     characters, where they start on the stage as wide as :func:`stage_base_width` lays it out
     while reframing, are wider together than the frame."""
     from vidgen.render.worker import frame_size
@@ -1035,7 +1032,7 @@ def stage_reframes(project: Project, params: Any) -> bool:
         return setting == "speaker"
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
-    level = params.level_frame(frame_width, frame_height)   # a level is laid out as wide as its map (§86)
+    level = params.level_frame(frame_width, frame_height)   # a level is laid out as wide as its map
     stage_width = level.stage_width if level is not None else params.width * stage_base_width(frame_width, frame_height, True)
     placements = params.layout(frame_width=frame_width, frame_height=frame_height, stage_width=stage_width)
     boxes = [(p.feet[0] - FIGURE_HALF_WIDTH * p.height, p.feet[0] + FIGURE_HALF_WIDTH * p.height) for p in placements if p.kind == "character"]
@@ -1057,7 +1054,7 @@ def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTi
     from vidgen.speech import WordTime, beat_word_times
 
     seconds = _beat_seconds(project, beat)
-    spoken = project.spoken(beat) if beat.voice_sounds else None   # the audio also says the sounds (§69.33)
+    spoken = project.spoken(beat) if beat.voice_sounds else None   # the audio also says the sounds
     times = beat_word_times(project.audio_dir, beat.id, beat.text, 0.0, seconds, spoken, project.config.language)
     marked = beat.marked_text.split()   # the words as written, *word* marks included (same count)
     if len(marked) == len(times):
@@ -1067,7 +1064,7 @@ def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTi
 
 def _joined_windows(project: Project, spec: SceneConfig) -> dict[str, BeatWindow]:
     """The beats of ``spec`` that the next beat overlaps or interrupts, with their
-    :class:`~vidgen.overlap.BeatWindow` (DESIGN.md §69.34); empty when none is."""
+    :class:`~vidgen.overlap.BeatWindow`; empty when none is."""
     from vidgen.overlap import beat_lines, beat_windows, has_joins
 
     if not has_joins(spec.beats):
@@ -1115,8 +1112,8 @@ FACE_ACTIONS = frozenset({"emote", "react"})
 
 
 def sound_reactions(project: Project, spec: SceneConfig, characters: Sequence[str]) -> list[DirectedBeat]:
-    """The faces of a stage's speakers for the voice sounds of their lines (DESIGN.md §69.33,
-    whatever ``auto_direct`` says): a ``react`` with the expression of the beat's first sound
+    """The faces of a stage's speakers for the voice sounds of their lines
+    (whatever ``auto_direct`` says): a ``react`` with the expression of the beat's first sound
     (:data:`~vidgen.voicesounds.VOICE_SOUNDS`: laugh -> happy, gasp -> surprised...) as it is
     heard, for each speaker that can emote and that no ``emote`` / ``react`` of the beat acts on.
     Needs the project's registry (a project session)."""
@@ -1139,7 +1136,7 @@ def sound_reactions(project: Project, spec: SceneConfig, characters: Sequence[st
             continue
         seconds, _ = _beat_words(project, beat)
         span = beat_sound_spans(project, beat, seconds)[0]
-        if beat.id in joined:   # the next beat starts before this one ends (§69.34)
+        if beat.id in joined:   # the next beat starts before this one ends
             seconds = joined[beat.id].body
             if span.start >= seconds:
                 continue   # heard only under the next line, or cut by it
@@ -1193,7 +1190,7 @@ def stage_directions(
         speakers = _beat_speakers(project, spec, beat, written, characters)
         seconds, words = _beat_words(project, beat) if ({"gestures", "closeups"} & on or reframe) and speakers else (0.0, ())
         window = joined.get(beat.id)
-        if window is not None and seconds:   # only what is heard before the next beat starts (§69.34)
+        if window is not None and seconds:   # only what is heard before the next beat starts
             seconds, words = window.body, tuple(w for w in words if w.end <= window.body + 1e-6)
         beats.append(BeatInput(beat.id, beat.marked_text, tuple(speakers), written, on, seconds, words, window is not None))
     if not reframe or stage is None:
@@ -1233,11 +1230,11 @@ def directing_used(project: Project) -> bool:
         return True
     hosts = [config.host, *(spec.host for spec in config.scenes)]
     if any(getattr(host, "auto_direct", None) for host in hosts):
-        return True   # a host's own auto_direct (DESIGN.md §71.2)
+        return True   # a host's own auto_direct
     if any(spec.type == "stage" and (spec.params.get("reframe") or config.reframe) != "none" for spec in config.scenes):
         return True
     if any(spec.type == "stage" and any(b.voice_sounds for b in spec.beats) for spec in config.scenes):
-        return True   # a speaker's face for a voice sound (§69.33)
+        return True   # a speaker's face for a voice sound
     return any(spec.params.get("auto_direct") or any(b.auto_direct for b in spec.beats) for spec in config.scenes)
 
 

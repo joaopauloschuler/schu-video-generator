@@ -1,4 +1,4 @@
-"""The particle-physics accuracy lint's knowledge (Phase Y, Step 242; DESIGN §99.13) — no manim.
+"""The particle-physics accuracy lint's knowledge (Phase Y, Step 242) — no manim.
 
 What narration and screen text say about particles, read narrowly and compared with the model:
 masses, charges, spins, lifetimes and widths (:mod:`.data`, PDG 2024), branching ratios

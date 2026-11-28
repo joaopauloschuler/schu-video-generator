@@ -1,11 +1,11 @@
-"""Built-in overlay (DESIGN.md §43): ``captions`` — the narration burned into the video.
+"""Built-in overlay: ``captions`` — the narration burned into the video.
 
 Two styles: ``subtitles`` (one or two lines on a plate, cut at phrase boundaries like the SRT)
 and ``karaoke`` (a few big words at a time, the word being spoken highlighted with a small
 scale pop: vertical / social videos). Word times come from the TTS provider's alignment when
 it stored one next to the MP3, else they are estimated within the MP3's speech
 (``beat_word_times``). The overlay reads the scene's planned beats, so a caption changes
-exactly where the narration does. Where a beat overlaps the one before (DESIGN.md §69.34),
+exactly where the narration does. Where a beat overlaps the one before,
 both lines show while both sound: one line each, the earlier above (``stack_cues``).
 """
 
@@ -38,7 +38,7 @@ STYLE_DEFAULTS: dict[str, dict[str, Any]] = {
     "subtitles": {"size": "body", "bold": False, "max_lines": 2, "max_words": None, "max_width": 0.8},
     "karaoke": {"size": "title", "bold": True, "max_lines": 2, "max_words": 3, "max_width": 0.9},
 }
-#: Karaoke in a Short (``shorts:``, DESIGN.md §101.4): a short phrase on one line (about three to
+#: Karaoke in a Short (``shorts:``): a short phrase on one line (about three to
 #: five words; title-size text fits only one or two words in the narrow Shorts area).
 SHORTS_KARAOKE: dict[str, Any] = {"size": "body", "max_lines": 1, "max_words": 5}
 #: In a Short, bottom captions sit this share of the Shorts area's height above its bottom edge
@@ -118,7 +118,7 @@ def _glyph_map(mob: Mobject, line: str) -> list[list[int]] | None:
 def _mark_reach(placed: Sequence[tuple[set[int], Mobject]]) -> None:
     """Give each caption (its beats, its mobject) ``overlay_reach``: the box ``(x0, y0, x1, y1)``
     (units) of every caption of its beats, i.e. where the captions go while that line is spoken
-    (a still sees one caption; lint checks faces against the whole line, DESIGN.md §101.4)."""
+    (a still sees one caption; lint checks faces against the whole line)."""
     boxes: dict[int, tuple[float, float, float, float]] = {}
     for beats, mob in placed:
         (x0, y0), (x1, y1) = mob.get_corner(DL)[:2], mob.get_corner(UR)[:2]
@@ -139,7 +139,7 @@ class Captions(Overlay):
     cue. ``karaoke`` (alias ``words``) shows a few big words at a time and highlights the word
     being spoken. Captions sit at the bottom (default), the top or the centre of the safe area;
     at the top or bottom the scenes keep clear of them unless ``reserve: false``. ``speakers``
-    tags or colours the speakers of a dialogue (``voices:``, DESIGN.md §46).
+    tags or colours the speakers of a dialogue (``voices:``).
     """
 
     timed = True
@@ -311,14 +311,14 @@ class Captions(Overlay):
         audio = project.audio_dir
         voices = project.voice_names()
         tags = project.speaker_tags("name") if self.speakers in ("name", "both") else {}
-        language = project.config.language  # where cues break, how words are timed (§54)
+        language = project.config.language  # where cues break, how words are timed
         out = []
         beats = scene.beats
         crowded = overlapping_beats([(beat.start, beat.end) for beat in beats])
         for k, beat in enumerate(beats):
             until = max(beats[k + 1].start, beat.end) if k + 1 < len(beats) else scene.duration
-            # The written words, timed by the audio of their spoken form (pronunciation, §45;
-            # voice sounds, §69.33).
+            # The written words, timed by the audio of their spoken form (pronunciation;
+            # voice sounds).
             spoken = project.spoken(project.beat(beat.id))
             words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, spoken, language)
             prefix = speaker_prefix(tags[beat.id]) if beat.id in tags else ""
@@ -336,7 +336,7 @@ class Captions(Overlay):
     def _area(self) -> Region:
         o = self.options
         project = self.context.project
-        if project.config.shorts_zones is not None:   # a Short: out of the app's buttons (§101)
+        if project.config.shorts_zones is not None:   # a Short: out of the app's buttons
             safe = shorts_area(project)
             lift = o.lift if o.lift is not None else SHORTS_LIFT
         else:
@@ -399,7 +399,7 @@ class Captions(Overlay):
             texts: list[str] = []
             colors: list[str] = []
             firsts: list[int] = []
-            for _, cue in stack.parts:   # the earlier line on top (§69.34)
+            for _, cue in stack.parts:   # the earlier line on top
                 firsts.append(len(texts))
                 texts += cue.lines
                 colors += [self._speaker_color.get(speakers[id(cue)], color) if colored else color] * len(cue.lines)

@@ -1,4 +1,4 @@
-"""A voice's ``effect:`` applied to every beat it says, whatever the provider (DESIGN.md §100.2).
+"""A voice's ``effect:`` applied to every beat it says, whatever the provider.
 
 :class:`EffectProvider` wraps a provider: it synthesises with it, then runs the audio through the
 effect's ffmpeg filter chain (:func:`vidgen.voice_effects.effect_filter`) and encodes it as MP3

@@ -1,4 +1,4 @@
-"""The active Project and Theme (DESIGN.md §6.3).
+"""The active Project and Theme.
 
 The context is set *before* extensions are imported, so module-level code in an extension may
 read theme values (``C_BASE = current_theme().color("primary")``). Helpers such as ``api.T`` use
@@ -30,7 +30,7 @@ def set_context(project: Project, theme: Theme | None = None) -> Theme:
     global _project, _theme
     _project = project
     _theme = theme if theme is not None else Theme.for_format(project.config.theme, project.config.format)
-    set_active_terms(())  # a scene of the project sets its own (DESIGN.md §87.3)
+    set_active_terms(())  # a scene of the project sets its own
     return _theme
 
 

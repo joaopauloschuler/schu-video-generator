@@ -1,4 +1,4 @@
-"""The chart core's data features (Phase W Step 223, DESIGN §97.5): distribution functions,
+"""The chart core's data features (Phase W Step 223): distribution functions,
 curve fits with standard errors and bands (against closed forms and, when scipy is installed,
 scipy.optimize.curve_fit), histogram binning rules (against numpy), distributions fitted to
 histograms, value ± error formatting, tight axis ends, lines broken at axis breaks, model

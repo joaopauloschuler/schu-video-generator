@@ -1,4 +1,4 @@
-"""The calculation and plot lint's knowledge (DESIGN.md §97.11): numbers with units as narration
+"""The calculation and plot lint's knowledge: numbers with units as narration
 and screen text write them — digits (``29.8 km/s``, ``3.7 × 10⁻¹⁹ J``, ``1/150``, ``25 %``) and
 words (``thirty kilometres per second``, ``eleven point two``, ``three point seven times ten to
 the minus nineteen joules``, ``one in a hundred and fifty``, ``three halves``) — and how they

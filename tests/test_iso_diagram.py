@@ -1,4 +1,4 @@
-"""The ``iso_diagram`` scene (DESIGN.md §90.6): the layout on the grid (arrangements, stacks,
+"""The ``iso_diagram`` scene: the layout on the grid (arrangements, stacks,
 group plates, the floor), connectors along the grid, the shapes, the params' checks, and a
 tiny render in 16:9 and 9:16."""
 

@@ -1,4 +1,4 @@
-"""The author guide for AI agents (AGENTS.md / ``vidgen guide``, DESIGN.md §59): its topics
+"""The author guide for AI agents (AGENTS.md / ``vidgen guide``): its topics
 resolve, the command prints them, and everything it names exists: commands and their options,
 scene types and their params, actions, presets, lint rules, sounds; every YAML snippet is a
 valid project once wrapped into a config."""

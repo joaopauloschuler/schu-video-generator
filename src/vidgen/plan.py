@@ -1,4 +1,4 @@
-"""``vidgen plan``: a draft video from an outline or script, with no AI involved (DESIGN.md §61).
+"""``vidgen plan``: a draft video from an outline or script, with no AI involved.
 
 :func:`make_plan` turns the blocks of :func:`vidgen.outline.parse_outline` into scenes:
 

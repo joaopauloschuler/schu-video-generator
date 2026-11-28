@@ -1,4 +1,4 @@
-"""Per-beat actions (DESIGN.md §26): config forms, registry, validation, schema, listing and
+"""Per-beat actions: config forms, registry, validation, schema, listing and
 tiny renders of reveal / dim / highlight on bullets and bar_chart."""
 
 from __future__ import annotations

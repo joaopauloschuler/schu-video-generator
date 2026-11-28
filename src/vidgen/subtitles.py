@@ -1,4 +1,4 @@
-"""SRT subtitles from beat timings (DESIGN.md §5.2, §43).
+"""SRT subtitles from beat timings.
 
 Each beat becomes one or more cues, cut at natural phrase boundaries into at most ``max_lines``
 lines of ``width`` characters by :func:`vidgen.cues.segment_cues` — the same cutting the burned-in
@@ -6,7 +6,7 @@ lines of ``width`` characters by :func:`vidgen.cues.segment_cues` — the same c
 spoken (the beat's first cue at the beat's start) and lasts until the next one; word times come
 from :func:`vidgen.speech.beat_word_times` (the TTS alignment, else an estimate within the
 MP3's speech, else over the beat). Cue ends are beat ends (the narration), not including the
-silence pad after a beat. Where a beat overlaps the one before (DESIGN.md §69.34) both beats'
+silence pad after a beat. Where a beat overlaps the one before both beats'
 cues have one line each and overlap in time: players show them together, one above the other.
 """
 
@@ -36,7 +36,7 @@ class Cue(NamedTuple):
 
 def split_text(text: str, width: int = LINE_WIDTH, max_lines: int = MAX_LINES, language: str | None = None) -> list[str]:
     """Split ``text`` into cue texts of at most ``max_lines`` lines of ``width`` characters
-    (breaking by the rules of ``language``, DESIGN.md §54)."""
+    (breaking by the rules of ``language``)."""
     return ["\n".join(lines) for lines in split_cues(text, width, max_lines, language=language)]
 
 
@@ -88,7 +88,7 @@ def cues_from_timings(
                 if said is None and pronunciation is not None:
                     said = pronunciation.apply(beat["text"])
                 words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], said, language)
-            lines = 1 if k in crowded else MAX_LINES   # two overlapping lines show one line each (§69.34)
+            lines = 1 if k in crowded else MAX_LINES   # two overlapping lines show one line each
             cues.extend(
                 beat_cues(
                     beat["start"], beat["end"], beat["text"], max_lines=lines, words=words, speaker=speakers.get(beat["id"]),

@@ -1,4 +1,4 @@
-"""Transitions between scenes (DESIGN.md §49, §50): which transition leads into a scene, how many
+"""Transitions between scenes: which transition leads into a scene, how many
 frames it takes, how much of the scenes it may overlap, and the narration track of a video
 whose scenes overlap. No manim: used by the planned timeline, the render pipeline, validation.
 
@@ -128,7 +128,7 @@ def xfade_name(transition: TransitionConfig, portrait: bool) -> str:
 def moves_pictures(transition: TransitionConfig) -> bool:
     """Whether the transition moves the pictures or an edge across them (push, wipe): unlike a
     fade it is not linear per pixel, so overlays are drawn once on top of it at the join instead
-    of in both scenes (DESIGN.md §50)."""
+    of in both scenes."""
     return transition.type in DIRECTED_TRANSITIONS
 
 
@@ -279,14 +279,14 @@ class IrisPoint:
 
 class ColorFade:
     """A scene's first ``frames_in`` frames faded in from ``color_in`` and its last
-    ``frames_out`` frames (of ``total``) faded out to ``color_out`` (DESIGN.md §49).
+    ``frames_out`` frames (of ``total``) faded out to ``color_out``.
 
     Wraps the renderer's ``add_frame`` outermost, so the fade applies to the scene's picture and
     the overlays (drawn by the next wrapper in) stay on top, as they do in a crossfade. The
     colour's weight is 1 on the scene's very first and last frame and falls linearly over the
     fade (``1 - k / frames_in`` in, ``(j + 1) / frames_out`` out).
 
-    ``iris_in`` / ``iris_out`` (DESIGN.md §69.45): the colour covers the frame outside a circle
+    ``iris_in`` / ``iris_out``: the colour covers the frame outside a circle
     instead of blending into it: the circle opens over the first frames from the point the
     callable returns (asked on each of those frames, so it follows a moving character) and
     closes over the last ones; its radius is :func:`iris_radius` of the same weight.

@@ -1,4 +1,4 @@
-"""Prompts of shots with a guide video (DESIGN.md §113.12): no close-up wording, the sheet's framing
+"""Prompts of shots with a guide video: no close-up wording, the sheet's framing
 instructions left out of the prompt (and noted in the plan), unguided shots unchanged, a shot paid
 for under the earlier wording not paid again by itself. Nothing is sent, paid or rendered."""
 

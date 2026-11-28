@@ -67,7 +67,7 @@ def drawing_digest(look: CharacterLook, *, front: bool = False, arms: str = "cla
     parent, order and shapes, each drawn member's points, fill, stroke and trailing mark; the
     Step 125 parts and shapes (``EXPRESSION_ONLY``, added after every earlier shape) left out,
     so the pins taken before it still hold for everything drawn before it. ``arms``: ``classic``
-    (the arms of the pins; the default is ``front`` since Step 282, DESIGN.md §110)."""
+    (the arms of the pins; the default is ``front`` since Step 282)."""
     digest = hashlib.sha256()
     for part in generate_parts(look, PIN_COLORS, front=front, arms=arms):
         new_shapes = EXPRESSION_ONLY.get(part.name, frozenset())

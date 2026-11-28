@@ -1,4 +1,4 @@
-"""Where the picked takes go in the film (DESIGN.md §113.4).
+"""Where the picked takes go in the film.
 
 :func:`scene_placements` lists, for one scene, every generated shot whose beat shows a take
 (``generated_shot.place`` true and a take chosen, :func:`vidgen.videogen.takes.chosen_take`): the
@@ -121,7 +121,7 @@ def _parts(root: Path, beat_shot: str) -> list[str]:
 
 def clip_takes(project: Project, scene_id: str | None = None) -> list[tuple[str, int, str]]:
     """``(shot, take number, model)`` of the takes that ``video_clip`` scenes (of ``scene_id``, or
-    every one) play from ``takes/<shot>/<n>.mp4``: the film of ``film.yaml`` (DESIGN.md §113.16),
+    every one) play from ``takes/<shot>/<n>.mp4``: the film of ``film.yaml``,
     which lays no generated shot over a beat. The model is ``?`` without a sidecar."""
     from vidgen.videogen.takes import takes_of
 

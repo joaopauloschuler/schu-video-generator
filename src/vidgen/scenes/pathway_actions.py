@@ -1,4 +1,4 @@
-"""The beat actions of ``pathway`` scenes (DESIGN.md §95.12): ``signal`` (the signal runs from a
+"""The beat actions of ``pathway`` scenes: ``signal`` (the signal runs from a
 node along the arcs, wave by wave: nodes light up, GDP is swapped for GTP, phosphorylation marks
 appear; an inhibitor of an inhibitor turns its target on), ``inhibit`` (an inhibitor engages: its
 targets are held and what depends on them dims), ``knockout`` and ``drug`` (a node is removed or

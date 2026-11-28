@@ -1,4 +1,4 @@
-"""Step 348 (DESIGN.md §120.9): how a render keeps the frames ``web`` and ``3d`` scenes draw:
+"""Step 348: how a render keeps the frames ``web`` and ``3d`` scenes draw:
 lossless (default) or compact (H.264 4:4:4 + a lossless alpha stream, read back by
 ``ClipReader``), deleted once no longer needed (``render.keep_intermediates: false``), and the
 disk estimate, warning and report of ``vidgen render``."""
@@ -37,7 +37,7 @@ def _frames(n: int = 3, size: tuple[int, int] = (9, 7)) -> list[np.ndarray]:
 
 
 def test_a_lossless_clip_serves_both_a_compact_one_only_compact() -> None:
-    assert clip_serves(None, "lossless") and clip_serves(None, "compact")   # clips written before §120.9
+    assert clip_serves(None, "lossless") and clip_serves(None, "compact")   # clips written before compact clips existed
     assert clip_serves("lossless", "compact") and clip_serves("compact", "compact")
     assert not clip_serves("compact", "lossless")
 
@@ -56,7 +56,7 @@ def test_a_compact_clip_keeps_alpha_exactly_beside_a_close_picture(tmp_path: Pat
             got = reader.frame(k / 5)
             assert np.array_equal(got[..., 3], frame[..., 3])
             error = np.abs(got[..., :3].astype(int) - frame[..., :3])
-            assert error.mean() < 3 and error.max() <= 12   # a lossy picture, close (measured on films: §120.9)
+            assert error.mean() < 3 and error.max() <= 12   # a lossy picture, close (measured on films)
     finally:
         reader.close()
 
@@ -93,7 +93,7 @@ def test_a_web_clip_is_reused_across_intermediates_as_far_as_it_serves(tmp_path:
         return json.loads((out / "p.json").read_text(encoding="utf-8"))
 
     lossless = make("lossless")
-    assert "intermediate" not in lossless   # the record of a lossless clip is as before §120.9
+    assert "intermediate" not in lossless   # the record of a lossless clip is as before compact clips existed
     assert make("compact")["key"] == lossless["key"] and len(drawn) == 1   # a lossless clip serves compact
     web_clip.forget_web_clips(out, ["p"])
     assert make("compact")["intermediate"] == "compact" and len(drawn) == 2

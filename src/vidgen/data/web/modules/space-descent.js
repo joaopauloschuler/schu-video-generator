@@ -1,4 +1,4 @@
-// vidgen/space-descent: one world from orbit to the ground (DESIGN.md §123.13). Part of
+// vidgen/space-descent: one world from orbit to the ground. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-descent".
 //
 //   import {world} from "vidgen/space-descent";

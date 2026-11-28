@@ -1,4 +1,4 @@
-"""The ``iso_labels`` rule (DESIGN.md §90.10): the labels of an ``iso_diagram`` checked against
+"""The ``iso_labels`` rule: the labels of an ``iso_diagram`` checked against
 what they name, from the geometry the scene adds to each still of its layout dump (the
 ``iso_diagram`` key: labels with their boxes, block and plate outlines, connector paths, in
 output pixels). Text size and contrast are ``min_font``'s and ``contrast``'s, as for any text."""

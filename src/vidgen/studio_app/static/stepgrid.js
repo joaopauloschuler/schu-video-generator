@@ -1,11 +1,11 @@
-// The step grid (DESIGN.md §94.13): a track's steps text read into bars of cells and edited cell
+// The step grid: a track's steps text read into bars of cells and edited cell
 // by cell. The text stays the source: a cell's edit replaces only that cell's characters, so the
 // spaces, `|` and everything else stay as written. Bars may have different step counts.
 
 import { escapeHtml } from "./yaml_view.js";
 
 // The step symbols of vidgen.studio.patterns (one regex, tried at each position). Marks `[...]`
-// and slur parentheses (DESIGN.md §120.7) are passed over like spaces: the grid shows the steps
+// and slur parentheses are passed over like spaces: the grid shows the steps
 // without them, and a cell's edit leaves them in the text.
 const TOKEN = /(\|)|([A-G][#b]?\d[!?]?)|([1-9][',]*[!?]?)|(v[1-9][',]*[!?]?)|([xXo*.\-][',]*[!?]?)|(\+)|(\s+|\[[^\[\]]*\]|[()])/y;
 

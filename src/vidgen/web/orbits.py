@@ -1,4 +1,4 @@
-"""Orbit data for ``web`` scenes with ``orbit_data:`` (DESIGN.md §122.3): the cache and its key,
+"""Orbit data for ``web`` scenes with ``orbit_data:``: the cache and its key,
 and the page's helper. The data itself is made by :mod:`vidgen.scenes.orbit_data` (with the
 ``orbit`` scene's model); ``data/web/orbits.js`` turns it into ``ctx.orbits``."""
 

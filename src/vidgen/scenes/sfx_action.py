@@ -1,4 +1,4 @@
-"""The ``sfx`` beat action (DESIGN.md §47): a sound effect at ``at`` of the beat, written against
+"""The ``sfx`` beat action: a sound effect at ``at`` of the beat, written against
 ``vidgen.api`` only, like project actions. It draws nothing (``animates = False``): the runner
 cues it when its beat starts, at the frame it is due, so the sound lands exactly there whatever
 the scene animates then; the render pipeline mixes it."""

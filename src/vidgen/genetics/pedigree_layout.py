@@ -1,4 +1,4 @@
-"""A deterministic layout for a pedigree (DESIGN.md §96.8): generations are rows; a sibship sits in
+"""A deterministic layout for a pedigree: generations are rows; a sibship sits in
 birth order (YAML order, or the NSGC numbers) under its parents' mating line; a partner from
 outside the family stands beside the relative (male left of female when nothing else decides);
 each family is a block as wide as its widest generation, so lines never cross inside a tree. A

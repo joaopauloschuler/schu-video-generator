@@ -1,4 +1,4 @@
-"""The Solar System on a date (Phase X, Step 233, DESIGN §98.7): the ``orbit`` scene's ``date``
+"""The Solar System on a date (Phase X, Step 233): the ``orbit`` scene's ``date``
 (the Table 1 planets placed by JPL's approximate elements and rates on that day, the readout a
 calendar), ``event`` (the next opposition / conjunction found by root finding, its alignment
 drawn), ``radial: log`` (distances compressed, labelled rings instead of axes), ``inset`` (the

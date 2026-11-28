@@ -1,4 +1,4 @@
-"""The join between two clips where the second continues the first (DESIGN.md §117): two takes
+"""The join between two clips where the second continues the first: two takes
 of a video model, the second generated from the last frame of the first, shown by consecutive
 ``video_clip`` scenes with a plain cut.
 

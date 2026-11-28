@@ -1,4 +1,4 @@
-"""The retro-future kit (DESIGN.md §107): its iso objects, a car's rocket kind, a place's style and
+"""The retro-future kit: its iso objects, a car's rocket kind, a place's style and
 textures, the blue-hour light, saucer and monorail traffic and the retro looks; logic without
 rendering, and one small render."""
 
@@ -124,7 +124,7 @@ def test_blue_hour_is_a_bright_clean_night() -> None:
     assert blue.saturation > 1.0 and blue.stars > 0 and blue.multiply[2] > blue.multiply[0]
     rows = np.array([[0.0, 0.0, 0.0, 1.0], [1.0, 0.5, 0.4, 1.0]])
     graded = grade_rgbas(rows, blue)
-    assert np.all((graded >= 0.0) & (graded <= 1.0)) and graded[1, 0] > graded[1, 2]   # coral stays warm (§108: crisp, not a haze)
+    assert np.all((graded >= 0.0) & (graded <= 1.0)) and graded[1, 0] > graded[1, 2]   # coral stays warm (crisp, not a haze)
     assert window_sky("blue_hour").stars > 0
 
 

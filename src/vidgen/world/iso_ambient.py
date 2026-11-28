@@ -1,4 +1,4 @@
-"""Ambient life on an iso place (DESIGN.md §105.7): the rules of where the background creatures
+"""Ambient life on an iso place: the rules of where the background creatures
 go and what they do, without manim. Walkers wander between spots and along paths, birds peck,
 hop and fly off, a cat strolls and sits down to groom, ducks glide on the water, butterflies
 flutter from flower to flower, fireflies hover and blink, a fly buzzes about a room.

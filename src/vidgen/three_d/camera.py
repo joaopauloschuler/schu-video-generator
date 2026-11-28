@@ -1,4 +1,4 @@
-"""Camera moves of a ``3d`` scene (DESIGN.md §114.8): the beat actions ``camera_orbit``,
+"""Camera moves of a ``3d`` scene: the beat actions ``camera_orbit``,
 ``camera_dolly``, ``camera_fly_to``, ``camera_look_at`` and ``camera_move`` become
 :class:`CameraMove` s with a start and an end on the scene's clock; :func:`camera_tracks` turns
 them into the description's ``position`` and ``look_at`` tracks of ``camera``, one key per frame

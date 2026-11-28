@@ -28,7 +28,7 @@ Scripts: [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.m
   97 frames, the cost of a 4 s clip at 24 fps; each tick or sudden step is spread over 2 frames.
   `setup.sh` downloads the weights (`Comfy-Org/Frame-Interpolation`, ungated, 23 MB).
 - **Which control video** (`guide: canny | final | depth` on the shot, each with or without a sheet, at
-  12 or 24 fps; DESIGN.md §113.26). Measured once on the escapement's 8 s shot with a sheet (one seed,
+  12 or 24 fps). Measured once on the escapement's 8 s shot with a sheet (one seed,
   GUIDE-TEST.md in the escapement-remake project): `final`, the scene's own colour render, kept the parts
   and the lighting best and followed the camera from frame 0, but kept some of the render's look; `depth`
   invented surfaces where the render had texture and brightened; `canny` invented the most and lagged the

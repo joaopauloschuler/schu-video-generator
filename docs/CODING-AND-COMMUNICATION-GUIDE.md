@@ -103,7 +103,7 @@ can never change.
 - Behaviour shared by scene types goes on the base class (`NarratedScene`) only if every scene
   type can use it correctly.
 - Only what extension authors need goes in `vidgen.api`. Adding to it is a change to the public
-  interface: document it in `DESIGN.md`.
+  interface.
 
 **Why.** The right home makes the next user of the code a one-line import. The wrong one either
 duplicates it or freezes it.

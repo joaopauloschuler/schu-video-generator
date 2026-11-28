@@ -1,4 +1,4 @@
-"""Step 136: voices with feeling, part 2 (``emotion:`` for ElevenLabs and OpenRouter, DESIGN.md §73).
+"""Step 136: voices with feeling, part 2 (``emotion:`` for ElevenLabs and OpenRouter).
 
 Every request is mocked (``urllib.request.urlopen`` replaced by the fakes of ``test_tts`` and
 ``test_tts_openrouter``); the request bodies are checked. One OpenRouter test re-encodes a 1 s

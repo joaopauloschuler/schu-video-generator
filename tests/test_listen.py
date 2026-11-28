@@ -1,4 +1,4 @@
-"""The Listen page (``vidgen music page``, DESIGN.md §92): the clips cover every bed and every
+"""The Listen page (``vidgen music page``): the clips cover every bed and every
 built-in sound, the committed ``docs/music`` is current, links only files that exist, stays within
 its size budget, and the command writes the same files twice."""
 

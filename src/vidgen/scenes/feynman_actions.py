@@ -1,4 +1,4 @@
-"""The beat actions of the ``feynman`` scene type (Phase Y, Step 238; DESIGN §99.6): ``travel``
+"""The beat actions of the ``feynman`` scene type (Phase Y, Step 238): ``travel``
 (a particle dot runs along lines in time order), ``vertex_rule`` (ring a vertex and state its
 rule: the vertex type, the coupling, the conservation checks) and ``swap_channel`` (morph into
 another diagram of the same reaction: s ↔ t, γ ↔ Z, top ↔ W loop). ``highlight`` and ``dim``

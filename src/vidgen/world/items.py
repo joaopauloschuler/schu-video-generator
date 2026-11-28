@@ -1,4 +1,4 @@
-"""Story props in a platform world (DESIGN.md §86.8), as plain data: keys, doors, coins, stars and
+"""Story props in a platform world, as plain data: keys, doors, coins, stars and
 friendly blockers. No manim.
 
 A coin or a star is written on the map (:data:`ITEM_SYMBOLS`) and floats in the middle of its

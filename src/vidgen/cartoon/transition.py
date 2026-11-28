@@ -1,5 +1,5 @@
-"""Animations of characters: eased part-by-part changes between two states (DESIGN.md §69.3),
-walking, gestures and jumps (§69.12).
+"""Animations of characters: eased part-by-part changes between two states,
+walking, gestures and jumps.
 
 :class:`PoseChange` animates a :class:`~vidgen.cartoon.character.Character` from its state when the
 animation starts to a target state (a pose, an expression, or any :class:`CharacterState`). Each
@@ -11,17 +11,17 @@ move its points along straight lines), and parts start one after another from th
 state when they begin plus the motion of :mod:`vidgen.cartoon.acting` at that moment, and end in
 that state. Like :class:`PoseChange`, they end a running blink and keep lip sync in step.
 
-All four apply the animation principles of :mod:`vidgen.cartoon.motion` (§69.13) with the
+All four apply the animation principles of :mod:`vidgen.cartoon.motion` with the
 strength of the character's ``cartoon_motion`` setting (or their own ``motion=``): anticipation
 and overshoot on pose changes and gestures; a wind-up, a settle and follow-through on walks;
 a crouch, squash and stretch and follow-through on jumps. ``none`` plays the plain motion.
 
 :class:`KeyedMotion` moves a character, a prop or a character's part through the channel values
-of the ``keyframes`` and ``move_along`` actions (:mod:`vidgen.cartoon.keyframes`, §69.14).
+of the ``keyframes`` and ``move_along`` actions (:mod:`vidgen.cartoon.keyframes`).
 :class:`ArmMove` and :class:`PropMove` play the prop actions (a hand reaching, carrying,
-throwing; a prop going into a hand, onto the ground or flying, §69.27); :class:`BodyMove` sits a
-character down, stands it up, leans it and crouches it (§69.28); :class:`PropReshape` opens or
-closes an umbrella (§69.37).
+throwing; a prop going into a hand, onto the ground or flying); :class:`BodyMove` sits a
+character down, stands it up, leans it and crouches it; :class:`PropReshape` opens or
+closes an umbrella.
 """
 
 from __future__ import annotations
@@ -107,14 +107,13 @@ class PoseChange(Animation):
     """Animate ``character`` to pose ``pose`` and / or expression ``expression`` (names of
     :meth:`Character.names`), or to ``state``; ``facing`` turns it too (the mirror, or the view
     between its side and its front, switches halfway; turning to or from the front it narrows
-    towards the switch and widens again, :func:`~vidgen.cartoon.acting.turn_squash`, DESIGN.md
-    §69.44). Every changing part eases with ``part_rate_func`` in its own window; parts start
+    towards the switch and widens again, :func:`~vidgen.cartoon.acting.turn_squash`). Every changing part eases with ``part_rate_func`` in its own window; parts start
     ``lag_ratio`` apart, body first, then legs, arms, head and face (:data:`PART_NAMES` order).
     With the character's ``cartoon_motion`` (or ``motion``) each part first moves a little the
     other way and passes its end and settles (:func:`~vidgen.cartoon.motion.motion_ease`).
     The target is resolved when the animation is created; the start when it begins, which also
-    ends a running blink (the idle clock stops while it plays, §69.5). A running lip sync keeps
-    following its clock on every frame (§69.4).
+    ends a running blink (the idle clock stops while it plays). A running lip sync keeps
+    following its clock on every frame.
 
     ``self.play(PoseChange(pip, pose="waving", expression="happy"), run_time=0.8)``
     """
@@ -180,7 +179,7 @@ class PoseChange(Animation):
 GROUND_TOLERANCE = 0.02
 #: An animal's tail swings with the steps of a walk: this share of the near arm's swing.
 WALK_TAIL_SWING = 0.5
-#: A cape flutters back with each step: this share of the size of the near arm's swing (DESIGN.md §69.58).
+#: A cape flutters back with each step: this share of the size of the near arm's swing.
 WALK_CAPE_FLUTTER = 0.4
 
 
@@ -191,7 +190,7 @@ def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> Charac
     the near arm (:data:`WALK_TAIL_SWING`), a cape fluttering back (:data:`WALK_CAPE_FLUTTER`), a waddling body rocking (``cycle.rock``, legs kept
     upright; :data:`SIDE_ROCK` of it from the side); parts the character
     lacks are skipped (a folded forearm is in ``base``, :meth:`Character.state`). Facing
-    ``front`` (DESIGN.md §69.44) the steps come towards the camera: the legs do not swing, a leg
+    ``front`` the steps come towards the camera: the legs do not swing, a leg
     drawn one each looks shorter as its knee bends (its foot lifts), the arms sway a little out
     and in."""
     parts = dict(base.parts)
@@ -279,18 +278,18 @@ class Walk(Animation):
     stands there (an entrance from off stage); ``park_x``: when the walk is over it is moved there
     (off stage, after an exit). With the character's ``cartoon_motion`` (or ``motion``) it first
     crouches and leans back, its arms, head and accessory trail as it sets off and carry on when
-    it stops, and it leans on past the stop and settles (§69.13). The run time defaults to
+    it stops, and it leans on past the stop and settles. The run time defaults to
     :func:`~vidgen.cartoon.acting.walk_seconds` plus that wind-up and settle
     (:func:`~vidgen.cartoon.motion.walk_motion_seconds`); a given one changes the speed.
     ``gait``: :data:`~vidgen.cartoon.acting.RUNNING` runs (longer strides, bigger swings, leaning
     forward as it speeds up; ``run_to``); an animal walks its own way
     (:attr:`Character.species_motion`: a turtle's short steps, a penguin's waddle). ``fade_in`` / ``fade_out``: seconds it takes to appear at
-    the start / disappear at the end (through a door, DESIGN.md §69.42; at most half the walk
+    the start / disappear at the end (through a door; at most half the walk
     each), the props in ``carried`` with it; its colours are as before once it is over.
     ``opens_door``: the door was closed and opened as it set off (read by foley).
 
     ``depth``: it also walks towards or away from the camera, from its :attr:`Character.stage_depth`
-    to this one (DESIGN.md §69.44), x and depth in a straight line on the ground
+    to this one, x and depth in a straight line on the ground
     (:func:`~vidgen.cartoon.stage.depth_walk_distance`): its feet go to ``feet_y(depth)`` (the
     stage's ground line at that depth) and it grows or shrinks by the depth scale, its outlines
     and the props in ``carried`` (held in its hands) with it; it keeps its facing when it does
@@ -320,7 +319,7 @@ class Walk(Animation):
         if depth is not None and feet_y is None:
             raise TypeError("Walk: a walk in depth needs feet_y (the ground line's y at a depth)")
         self.to_x, self.start_x, self.park_x = float(x), start_x, park_x
-        #: Whether it opened a closed door as it set off (foley plays a creak, DESIGN.md §69.62).
+        #: Whether it opened a closed door as it set off (foley plays a creak).
         self.opens_door = opens_door
         self.fade_in, self.fade_out = max(float(fade_in), 0.0), max(float(fade_out), 0.0)
         #: The depth it walks to (``None``: it keeps its depth), the ground's y at a depth, and
@@ -330,7 +329,7 @@ class Walk(Animation):
         self.carried = list(carried)
         self._alphas: list[tuple[Mobject, np.ndarray, np.ndarray]] = []
         self.strength = motion_strength(motion or character.motion)
-        #: How it moves its feet: ``gait`` as the character's species walks it (DESIGN.md §69.57).
+        #: How it moves its feet: ``gait`` as the character's species walks it.
         self.gait = character.species_motion.walking(gait)
         #: The length of one step, in the character's heights.
         self.step_length = STEP_LENGTH * self.gait.stride
@@ -453,7 +452,7 @@ class Gesture(Animation):
     ``shake_head``; :func:`~vidgen.cartoon.acting.gesture_moves`) and comes back to its pose.
     ``point`` and ``wave`` use the near arm (``arm_left``; ``arm_right`` when it has no left arm);
     parts it lacks are skipped. With the character's ``cartoon_motion`` (or ``motion``) the arms
-    wind up and overshoot as they move in and out (§69.13). The run time defaults to the
+    wind up and overshoot as they move in and out. The run time defaults to the
     gesture's (:data:`~vidgen.cartoon.acting.GESTURE_SECONDS`)."""
 
     def __init__(self, character: Character, kind: str, *, motion: str | None = None, **kwargs) -> None:
@@ -486,7 +485,7 @@ class Jump(Animation):
     """``character`` jumps ``height`` character heights up and lands where it stood
     (:func:`~vidgen.cartoon.acting.jump_lift`). With the character's ``cartoon_motion`` (or
     ``motion``) it crouches first, stretches as it rises and falls, squashes on landing and
-    settles, its arms lifting as it falls (§69.13). Run time
+    settles, its arms lifting as it falls. Run time
     :data:`~vidgen.cartoon.acting.JUMP_SECONDS` plus the crouch and landing
     (:func:`~vidgen.cartoon.motion.jump_motion_seconds`) unless given."""
 
@@ -530,7 +529,7 @@ class ArmMove(Animation):
     time order (shares 0..1 of the animation); each part eases (``smooth``) from where it was at
     the key before (at the start: as it is when the animation begins) to the key's pose, and holds
     after its last key. Parts no key names keep their pose. For the prop actions' reaches,
-    carries and throws (DESIGN.md §69.27); like :class:`PoseChange` it ends a running blink and
+    carries and throws; like :class:`PoseChange` it ends a running blink and
     keeps lip sync in step."""
 
     def __init__(self, character: Character, keys: Sequence[tuple[float, Mapping[str, PartPose]]], **kwargs) -> None:
@@ -570,9 +569,9 @@ class BodyMove(ArmMove):
     ``facing`` from the start, and single legs kept on the ground: each frame their soles are
     planted (:meth:`Character.planted`) on the way from where they were when it began to ``soles``
     (``left`` / ``right`` -> (x, y), character units as drawn facing right; ``None``: the legs move
-    as the keys say). For sitting down, standing up, leaning and crouching (DESIGN.md §69.28).
+    as the keys say). For sitting down, standing up, leaning and crouching.
     ``y``: the feet's y eased there too (getting in or out of a vehicle, whose floor is above the
-    ground, §69.52; ``None``: it stays)."""
+    ground; ``None``: it stays)."""
 
     def __init__(
         self,
@@ -700,7 +699,7 @@ class PropMove(Animation):
 
 class PropReshape(Animation):
     """Switch ``prop`` (a :class:`~vidgen.cartoon.props.Prop` with shapes) to ``shape`` at ``at``
-    (a share of the animation; an umbrella opening or closing, DESIGN.md §69.37), then make it
+    (a share of the animation; an umbrella opening or closing), then make it
     ``height`` units tall about its grip (``None``: its size kept). With ``follow`` (a hand's
     point, read every frame) its grip stays there all along: a prop's own follow updater is paused
     while an animation plays on it."""

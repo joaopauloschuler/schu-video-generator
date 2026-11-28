@@ -1,4 +1,4 @@
-"""``NarratedScene``: the base class of every scene type (DESIGN.md §5.1).
+"""``NarratedScene``: the base class of every scene type.
 
 A scene is constructed with its config and the active project/theme injected::
 
@@ -73,7 +73,7 @@ class SceneParams(BaseModel):
     #: other (:data:`HEADER_SYNONYMS`). Off for types whose ``title`` is their main text
     #: (``title``, ``chapter``, ``end_card``).
     header_synonyms: ClassVar[bool] = True
-    #: Where a shorthand written for this model holds text to translate (DESIGN.md §54), by the
+    #: Where a shorthand written for this model holds text to translate, by the
     #: raw value's type: ``"text"`` (the string is the text), ``("field", NAME)`` (the value
     #: stands for ``{NAME: value}``), ``("after", SEP)`` (the text follows the first SEP of the
     #: string), ``("fields", (NAME, ...))`` (a list holds those fields by position), and for a
@@ -170,7 +170,7 @@ ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), Them
 #: against the available icons by ``vidgen validate`` and when the scene is built.
 IconName = Annotated[str, AfterValidator(_check_icon_name), ThemeToken("icon")]
 #: A ``Params`` / ``Options`` field naming a character of ``characters:``; checked against the
-#: project's characters by ``vidgen validate`` and when the scene is built (DESIGN.md §69).
+#: project's characters by ``vidgen validate`` and when the scene is built.
 CharacterName = Annotated[str, Field(pattern=ID_PATTERN), AfterValidator(_check_character_name)]
 
 
@@ -225,11 +225,11 @@ def add_narration(
     scene: MovingCameraScene, path: Path, shape: VoiceShape | None = None, staging: VoiceStaging | None = None, limit: float | None = None
 ) -> None:
     """Add a narration file to ``scene``'s sound at the current time, at the file's own level
-    (``shape``: dipped under an overlapping line or cut by an interruption, DESIGN.md §69.34;
-    ``staging``: panned and in a room, §111.4, its tail faded out by ``limit`` seconds).
+    (``shape``: dipped under an overlapping line or cut by an interruption;
+    ``staging``: panned and in a room, its tail faded out by ``limit`` seconds).
 
     The file is decoded here and handed to Manim as a 48 kHz stereo WAV: a mono MP3 (what TTS
-    providers return) plays on both channels unchanged, like the sound effects (DESIGN.md §47).
+    providers return) plays on both channels unchanged, like the sound effects.
     Given the MP3 itself, Manim's conversion upmixes it with libswresample's mono → stereo
     matrix, 3 dB quieter per channel than the file.
     """
@@ -285,12 +285,12 @@ class NarratedScene(MovingCameraScene):
             active = runtime.has_context() and runtime.current_project() is self.project
             theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
-        # one colour per concept (DESIGN.md §87.3): text built from here on draws the terms
+        # one colour per concept: text built from here on draws the terms
         set_active_terms(scene_terms(self.project.config, spec, theme))
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
         self.outro = type(self).outro_seconds(spec.params)
         spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
-        self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
+        self.spec = spec  # with the actions automatic directing adds
         problem = type(self).check_beat_count(len(spec.beats))
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}': {problem}")
@@ -311,7 +311,7 @@ class NarratedScene(MovingCameraScene):
         self._durations: dict[str, float] = {}
         self._windows: dict[str, BeatWindow] | None = None
         #: Scene time until which the voice of the last beat narrated is heard (it may sound on
-        #: under the next beat, DESIGN.md §69.34), and the lip syncs left running meanwhile.
+        #: under the next beat), and the lip syncs left running meanwhile.
         self._voice_until = 0.0
         self._lingering: list[tuple[Any, Any]] = []
         self._current_beat: str | None = None
@@ -323,7 +323,7 @@ class NarratedScene(MovingCameraScene):
         self._sounds: SoundLibrary | None = None
         self._camera_follow: Callable[[], float] | None = None  # the x the camera follows (follow_with_camera)
         self._camera_listeners: list[Callable[[], None]] = []
-        #: The shot on screen (``shot:``, DESIGN.md §69.29) as the layout dump records it
+        #: The shot on screen (``shot:``) as the layout dump records it
         #: (``{kind, subjects, near}``), ``None`` outside shots; set by the ``shot`` action.
         self.camera_shot: dict[str, Any] | None = None
         #: The camera's view before the shots and what it followed then (``(width, centre),
@@ -332,12 +332,12 @@ class NarratedScene(MovingCameraScene):
         #: Whether the scene renders at preview quality (set by the render worker); scenes may
         #: draw less then, e.g. fewer particles.
         self.is_preview = False
-        #: Whether the scene renders as a draft (its project's ``draft``, DESIGN.md §74): scenes
+        #: Whether the scene renders as a draft (its project's ``draft``): scenes
         #: leave out what only decorates (idle motion, wind, shadows, motion effects, particles,
         #: the light's grade...), never a timing, a position, an action or the lip sync.
         self.is_draft = bool(getattr(self.project, "draft", False))
         #: Guide passes asked for by ``vidgen render --guide-passes`` (set by the render worker;
-        #: a ``3d`` scene draws them, DESIGN.md §114.14) and those the scene drew (recorded in
+        #: a ``3d`` scene draws them) and those the scene drew (recorded in
         #: its timings, so a later run knows whether its render has them).
         self.guide_passes: tuple[str, ...] = ()
         self.guide_passes_made: tuple[str, ...] = ()
@@ -348,7 +348,7 @@ class NarratedScene(MovingCameraScene):
             if spec.silent:
                 length = max((spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
                 capture.begin_segment(None, round(length * config.frame_rate), include_end=True)
-        #: The planned transitions into and out of this scene (DESIGN.md §49), ``None`` when the
+        #: The planned transitions into and out of this scene, ``None`` when the
         #: video has none (the out one also for the last scene).
         self.transition_in: TransitionSlot | None = None
         self.transition_out: TransitionSlot | None = None
@@ -359,7 +359,7 @@ class NarratedScene(MovingCameraScene):
             self.transition_in = self._video_plan.transition(i)
             if i + 1 < len(self.project.config.scenes):
                 self.transition_out = self._video_plan.transition(i + 1)
-        #: Continuity (DESIGN.md §50): what the next scene carries out of this one (kept on
+        #: Continuity: what the next scene carries out of this one (kept on
         #: screen in the fade-out, recorded at the end into :attr:`carry_state`), and the
         #: record of the scene before for this scene's own ``carry`` (:attr:`carried_in`, set
         #: by the worker before rendering).
@@ -367,7 +367,7 @@ class NarratedScene(MovingCameraScene):
         self.carry_state: dict[str, list[dict[str, Any]]] | None = None
         self.carried_in: dict[str, list[dict[str, Any]]] | None = None
         self._carried: dict[str, Mobject] = {}  # destination name -> copy waiting to move there
-        #: The video's overlays drawn on this scene (DESIGN.md §41), or ``None`` without any.
+        #: The video's overlays drawn on this scene, or ``None`` without any.
         self.overlay_layer: OverlayLayer | None = None
         self._reserved: list[regions.Region] = []
         self.overlay_head = 0
@@ -380,17 +380,17 @@ class NarratedScene(MovingCameraScene):
                 self.overlay_layer = OverlayLayer(self, overlays, following, start=slot.start, cut=slot.cut)
             self.overlay_layer.attach()  # after the capture: stills and the layout dump see overlays
             #: frames at the start that a push / wipe moves: drawn without overlays when the
-            #: worker asks for them as a separate clip (DESIGN.md §50)
+            #: worker asks for them as a separate clip
             self.overlay_head = self.transition_in.overlap if self._moving_in() else 0
             for overlay, mob in zip(self.overlay_layer.overlays, self.overlay_layer.mobjects):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
-        #: Generated video takes laid over their beats, under the overlays (DESIGN.md §113.4),
+        #: Generated video takes laid over their beats, under the overlays,
         #: or ``None`` without any.
         self.generated_layer: GeneratedLayer | None = None
         self._attach_generated()
-        #: The cartoon host beside the content (``host:``, DESIGN.md §71), or ``None``.
+        #: The cartoon host beside the content (``host:``), or ``None``.
         self.host: Any = None
         self._host_stays = False  # it stands on in the next scene, so it stays in the fade-out
         self._build_host()
@@ -410,7 +410,7 @@ class NarratedScene(MovingCameraScene):
         when a crossfade overlaps its end with the next scene, the next scene's (drawn from that
         scene's start on, so both scenes show the same overlays while they blend). A push or
         wipe overlapping its end gets none there: the next scene's render draws them once over
-        the moving pictures (DESIGN.md §50)."""
+        the moving pictures."""
         cfg = self.project.config
         if not draws_overlays(cfg):
             return [], []
@@ -423,13 +423,13 @@ class NarratedScene(MovingCameraScene):
             following = scene_overlays(self.project, after, self.theme, plan)
         return own, following
 
-    #: Whether the video's ``host:`` is drawn on scenes of this type (DESIGN.md §71); ``stage`` and
+    #: Whether the video's ``host:`` is drawn on scenes of this type; ``stage`` and
     #: ``card`` draw characters or a full-frame design themselves and set it to ``False``.
     takes_host: ClassVar[bool] = True
-    #: Whether the video's ``drawing:`` style (DESIGN.md §79) draws every stroke of scenes of this
+    #: Whether the video's ``drawing:`` style draws every stroke of scenes of this
     #: type and lays its texture over them; ``stage`` sets it. On other scenes it draws the host only.
     uses_drawing_style: ClassVar[bool] = False
-    #: Whether scenes of this type are drawn by a web page in headless Chromium (DESIGN.md §123.1):
+    #: Whether scenes of this type are drawn by a web page in headless Chromium:
     #: ``web`` and ``3d`` set it, so do their subclasses (``space``); ``vidgen gallery`` puts such
     #: types in its web gallery (``docs/gallery/web``).
     drawn_in_browser: ClassVar[bool] = False
@@ -455,7 +455,7 @@ class NarratedScene(MovingCameraScene):
         from vidgen.cartoon.drawing_style import attach_texture, mark_outlined, mark_shaded, resolve_drawing, style_camera
 
         style = resolve_drawing(*self.drawing_settings())
-        #: How the scene's cartoon is drawn (DESIGN.md §79).
+        #: How the scene's cartoon is drawn.
         self.drawing = style.for_draft() if self.is_draft else style
         if self.drawing.is_plain:
             return
@@ -490,7 +490,7 @@ class NarratedScene(MovingCameraScene):
             frame_width=self.frame_width, frame_height=self.frame_height, root=self.project.root, motion=cfg.cartoon_motion,
             arms=cfg.cartoon_arms,
         )
-        if self.is_draft:   # no breathing, swaying or blinking (DESIGN.md §74)
+        if self.is_draft:   # no breathing, swaying or blinking
             self.host.character.stop_idle()
         self._reserved.append(regions.Region(*self.host.layout.reserve))
 
@@ -510,7 +510,7 @@ class NarratedScene(MovingCameraScene):
         return self.host.character.lip_sync_track
 
     def _park_host(self) -> None:
-        """Start the host off screen (a ``host_enter`` brings it in, DESIGN.md §71.1): beyond the
+        """Start the host off screen (a ``host_enter`` brings it in): beyond the
         frame's edge on its side, its floor line hidden. Its room stays reserved."""
         from vidgen.cartoon.acting import offstage_x
 
@@ -528,8 +528,8 @@ class NarratedScene(MovingCameraScene):
         return t is not None and t.type in DIRECTED_TRANSITIONS and t.overlap > 0
 
     def _attach_color_fade(self) -> None:
-        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49),
-        or open / close them with an iris (§69.45)."""
+        """Fade the first / last frames from / to a colour for ``fade_color`` transitions,
+        or open / close them with an iris."""
         t_in, t_out = self.transition_in, self.transition_out
         frames_in = t_in.fade_in if t_in is not None else 0
         frames_out = t_out.fade_out if t_out is not None else 0
@@ -629,16 +629,16 @@ class NarratedScene(MovingCameraScene):
     @classmethod
     def auto_actions(cls, project: Project, spec: SceneConfig, params: Any) -> list[DirectedBeat]:
         """The actions automatic directing adds to the beats of ``spec`` (validated ``params``),
-        appended after each beat's own before the scene plans its actions (DESIGN.md §69.23).
+        appended after each beat's own before the scene plans its actions.
         Default: the host's (looks, points and reactions with ``auto_direct`` when the scene has
-        a host, §71.2; ``stage``: its characters' looks, reactions, gestures...). Pure for a
+        a host; ``stage``: its characters' looks, reactions, gestures...). Pure for a
         given project: ``vidgen direct`` and the storyboard call it without rendering."""
         return host_directions(project, spec, cls, params)
 
     @classmethod
     def reveal_steps(cls, params: Any) -> list[RevealStep]:
         """What each step of the scene's own reveal (the steps it passes to :meth:`reveal`) shows,
-        for host directing (DESIGN.md §71.2): the target it shows or marks and whether it shows a
+        for host directing: the target it shows or marks and whether it shows a
         rise, a fall or an error. ``params`` are validated. Default: none (the host then only
         looks at written highlights)."""
         return []
@@ -715,7 +715,7 @@ class NarratedScene(MovingCameraScene):
         return self._durations[b.id]
 
     def beat_window(self, beat: str | int | BeatConfig) -> BeatWindow:
-        """How long the beat lasts on the scene's clock (DESIGN.md §69.34): the seconds its
+        """How long the beat lasts on the scene's clock: the seconds its
         own animations get (``body``, what :meth:`narrate` yields), until the next beat starts
         (``window``), how long its voice is heard (``heard``) and how it is mixed (``shape``).
         Without ``overlap`` / ``interrupt`` on the next beat: ``d``, ``d + pad``, ``d``, as is."""
@@ -728,7 +728,7 @@ class NarratedScene(MovingCameraScene):
     def beat_visemes(self, beat: str | int | BeatConfig) -> VisemeTrack:
         """The beat's viseme track over its :meth:`beat_duration`, for
         :meth:`~vidgen.cartoon.character.Character.lip_sync` (stored by ``vidgen tts``, else
-        built from the spoken text; DESIGN.md §69.4); cut where the next beat interrupts it."""
+        built from the spoken text); cut where the next beat interrupts it."""
         b = self.beat(beat)
         track = beat_visemes(self.project, b.id, self.beat_duration(b))
         cut = self.beat_window(b).shape.cut
@@ -749,8 +749,8 @@ class NarratedScene(MovingCameraScene):
 
     def speak(self, character: Any) -> None:
         """Make ``character``'s mouth follow the current beat's viseme track (:meth:`beat_visemes`),
-        timed from the beat's start (:meth:`beat_clock`); ``character.stop_lip_sync()`` ends it
-        (DESIGN.md §69.11). Call it inside :meth:`narrate`."""
+        timed from the beat's start (:meth:`beat_clock`); ``character.stop_lip_sync()`` ends it.
+        Call it inside :meth:`narrate`."""
         beat = self.current_beat
         if beat is None:
             raise VidgenError(f"scene '{self.spec.id}': speak() is called outside a beat")
@@ -759,7 +759,7 @@ class NarratedScene(MovingCameraScene):
     def end_lip_sync(self, character: Any, track: Any) -> None:
         """End ``character``'s lip sync of ``track`` (the one a beat started; a later one is
         left alone): now, or, while that beat's voice still sounds under the next beat (an
-        ``overlap``, DESIGN.md §69.34), when the beat narrated now ends."""
+        ``overlap``), when the beat narrated now ends."""
         if character.lip_sync_track is not track:
             return
         if float(self.renderer.time) < self._voice_until - 1e-6:
@@ -775,7 +775,7 @@ class NarratedScene(MovingCameraScene):
 
     def speaker_pan(self, beat: BeatConfig) -> float | None:
         """Where ``beat``'s speaker is as its line starts, as a pan (-1 left to 1 right of the
-        frame), for ``audio.follow_stage`` (DESIGN.md §111.4); ``None``: this scene does not know
+        frame), for ``audio.follow_stage``; ``None``: this scene does not know
         (a stage scene does: its speaking characters)."""
         return None
 
@@ -803,7 +803,7 @@ class NarratedScene(MovingCameraScene):
         from scene time ``start`` (default: now, before the first beat): ``(action, due time,
         end of its beat)`` in seconds of the scene's clock, counted in whole frames as
         :meth:`narrate` and the action runner count them (an ``orbit`` scene times its clock to
-        its ``burn`` words, DESIGN.md §98.5)."""
+        its ``burn`` words)."""
         if self._actions is None or not self.beats:
             return []
         fps = config.frame_rate
@@ -827,7 +827,7 @@ class NarratedScene(MovingCameraScene):
         Starts the beat's audio now (unless ``audio=False``), yields its duration ``d`` and on
         exit waits until ``d + pad`` seconds have passed since entering. Records a
         :class:`BeatTiming` in ``self.beat_log``. When the next beat overlaps or interrupts this
-        one (DESIGN.md §69.34) it yields and waits the time until the next beat starts instead
+        one it yields and waits the time until the next beat starts instead
         (:meth:`beat_window`), and the voice is dipped or cut there.
         """
         b = self.beat(beat)
@@ -851,13 +851,13 @@ class NarratedScene(MovingCameraScene):
             at = b.sting.placed_at
             if at in ("start", "end"):
                 self.sting(b.sting, start + (window.heard if at == "end" else 0.0))
-            else:   # on a word the line says (DESIGN.md §112.2)
+            else:   # on a word the line says
                 from vidgen.sound_design import word_offset
 
                 self.sting(b.sting, start + word_offset(self.project, b, at))
         for span in beat_sound_spans(self.project, b, d):
             cut = window.shape.cut
-            if span.generated and (cut is None or span.start < cut):   # a breath the TTS cannot say, in the silence before / after the line (§69.33)
+            if span.generated and (cut is None or span.start < cut):   # a breath the TTS cannot say, in the silence before / after the line
                 sound = VOICE_SOUNDS[span.kind].sfx or ""
                 self._add_sfx(sound, max(start + span.start, 0.0), SOUND_GAIN_DB, 0.0, "start", {}, "voice sound")
         if self._actions is not None:
@@ -912,7 +912,7 @@ class NarratedScene(MovingCameraScene):
         d = max((self.spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
         yield 0, d
         # whole frames, rounded as the plan rounds them (rounding the remainder instead can lose
-        # a frame when d is a half frame: DESIGN.md §63)
+        # a frame when d is a half frame)
         fps = config.frame_rate
         self.wait_seconds((round(d * fps) - round((self.renderer.time - start) * fps)) / fps)
 
@@ -935,10 +935,10 @@ class NarratedScene(MovingCameraScene):
 
     def finish(self) -> None:
         """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0). When a
-        transition other than a cut leads to the next scene (DESIGN.md §49), the picture is held
+        transition other than a cut leads to the next scene, the picture is held
         for those frames instead: the transition takes it away. Targets the next scene carries
-        (:attr:`carry_out`, DESIGN.md §50) stay on screen, and so does a host the next scene
-        shows unchanged (§71)."""
+        (:attr:`carry_out`) stay on screen, and so does a host the next scene
+        shows unchanged."""
         if self.outro <= 0:
             return
         if self.transition_out is not None and not self.transition_out.cut:
@@ -1064,7 +1064,7 @@ class NarratedScene(MovingCameraScene):
 
     def tear_down(self) -> None:
         """Hold silent scenes to ``spec.duration`` and every scene for the planned ``hold`` of the
-        transition out of it (§49); warn about beats that were never narrated."""
+        transition out of it; warn about beats that were never narrated."""
         if self.spec.silent:
             self.silent_busy = float(self.renderer.time)
             self.hold()
@@ -1102,19 +1102,19 @@ class NarratedScene(MovingCameraScene):
             data["generated"] = self.generated_layer.to_json()
         return data
 
-    # ----- sound effects (DESIGN.md §47) -------------------------------------------------------
+    # ----- sound effects -------------------------------------------------------
 
     #: ``(sound, gain in dB)`` played at the scene's start when the video sets ``sfx: {auto:
     #: true}`` (``chapter``: a whoosh); ``None``: nothing.
     entrance_sfx: ClassVar[tuple[str, float] | None] = None
 
-    # ----- stills (DESIGN.md §14, §69.16) ----------------------------------------------------------
+    # ----- stills ----------------------------------------------------------
 
     #: Action types whose uses also get a still half-way through them when stills are captured
     #: (``vidgen storyboard``, ``render --frames``; ``stage``: walks, gestures, jumps, keyframes...).
     mid_still_actions: ClassVar[frozenset[str]] = frozenset()
 
-    # ----- generated pictures (DESIGN.md §58, §69.10) ------------------------------------------
+    # ----- generated pictures ------------------------------------------
 
     #: Whether the video's ``cartoon_style`` is added to this type's ``generate:`` prompts
     #: (``stage``: yes). ``vidgen imagegen`` reads it too, so both ask for the same picture.
@@ -1142,7 +1142,7 @@ class NarratedScene(MovingCameraScene):
         ``params`` (``duration``, ``pitch``, ``intensity``) shape a built-in sound; ``repeat``
         times ``every`` seconds (footsteps alternate feet; a ``pan`` move ``{from, to}`` steps
         across the plays); ``room``: ``True`` the scene's room,
-        a room name, ``False`` dry, ``None`` as ``audio.sfx_room`` says (DESIGN.md §112).
+        a room name, ``False`` dry, ``None`` as ``audio.sfx_room`` says.
         Unknown sounds and bad values raise :class:`VidgenError`. Returns the (first) event.
 
         Nothing is drawn and no time passes: the sound is recorded (:attr:`sfx_log`) and mixed
@@ -1157,7 +1157,7 @@ class NarratedScene(MovingCameraScene):
         return events[0]
 
     def sting(self, sting: StingCue | str, time: float) -> SfxEvent:
-        """Play a music sting (a beat's ``sting:``, DESIGN.md §69.19; a ``card``'s) at scene time
+        """Play a music sting (a beat's ``sting:``; a ``card``'s) at scene time
         ``time``: its built-in sound (or the project's file of that name), ducked under the
         narration when mixed. ``sting``: a :class:`StingCue` or its kind (``reveal``...)."""
         cue = StingCue(kind=sting) if isinstance(sting, str) else sting  # type: ignore[arg-type]
@@ -1192,17 +1192,17 @@ class NarratedScene(MovingCameraScene):
         """Called by the action runner when the built-in beat action ``action`` (its ``options``)
         starts playing ``animations`` at scene time ``start`` for ``seconds`` (as played, after
         any shortening): the place for sounds tied to actions. Does nothing here; ``stage`` plays
-        its foley (DESIGN.md §69.19)."""
+        its foley."""
 
     def action_motion_effects(self, action: str, options: Any, animations: Sequence[Animation], start: float, seconds: float) -> None:
         """Called by the action runner right after :meth:`action_foley`, with the same
         arguments: the place for drawings tied to how actions move. Does nothing here; ``stage``
-        adds its motion effects (dust, speed lines, impact stars, whoosh arcs, DESIGN.md §69.41)."""
+        adds its motion effects (dust, speed lines, impact stars, whoosh arcs)."""
 
     def particles_started(self, field: Any, settings: Any) -> None:
         """Called by :func:`vidgen.particle_field.particle_field` with each new particle field
         (not yet added) and its settings. Does nothing here; ``stage`` grows puddles under rain
-        and plays the rain sound bed (DESIGN.md §69.39)."""
+        and plays the rain sound bed."""
 
     # ----- frame -----------------------------------------------------------------------------
 
@@ -1294,7 +1294,7 @@ class NarratedScene(MovingCameraScene):
         while the camera follows something, since :meth:`_camera_step` may then move it on any
         frame. Otherwise the camera stays still for the whole animation, so Manim draws the
         mobjects before the first moving one once into a static image (a stage's backdrop and
-        parallax layers, DESIGN.md §69.20); the camera listeners run first, so that image shows
+        parallax layers); the camera listeners run first, so that image shows
         them where the camera is now."""
         for callback in self._camera_listeners:
             callback()
@@ -1309,8 +1309,8 @@ class NarratedScene(MovingCameraScene):
     @property
     def safe_area(self) -> regions.Region:
         """The frame minus this scene's margins, as a :class:`~vidgen.regions.Region`, shrunk to
-        stay clear of overlays drawn with ``reserve: true`` (DESIGN.md §41) and, in a Short, of
-        the parts of the frame the app covers (§101)."""
+        stay clear of overlays drawn with ``reserve: true`` and, in a Short, of
+        the parts of the frame the app covers."""
         area = regions.safe_area(self.margin_x, self.margin_y)
         if self.project.config.shorts_zones is not None:
             area = shorts_area(self.project, area)
@@ -1333,7 +1333,7 @@ class NarratedScene(MovingCameraScene):
         :func:`vidgen.regions.region`."""
         return regions.region(name, self.safe_area, gap)
 
-    # ----- targets (per-beat actions, DESIGN.md §26) -----------------------------------------
+    # ----- targets (per-beat actions) -----------------------------------------
 
     #: The target names this type registers, as documentation patterns (``item<N>``,
     #: ``bar:<label>``); shown by ``vidgen list-scenes``. Empty: the type has no targets.
@@ -1414,7 +1414,7 @@ class NarratedScene(MovingCameraScene):
         anims: list[Animation] = []
         for t in found:
             if not self.is_shown(t):
-                moved = self._claim_carried(t) if self._carried else None  # a carried copy moves in (§50)
+                moved = self._claim_carried(t) if self._carried else None  # a carried copy moves in
                 if moved is not None:
                     anims.append(moved)
                 else:
@@ -1470,7 +1470,7 @@ class NarratedScene(MovingCameraScene):
         if parts:
             self.play(*[helpers.fade_out(m) for m in parts], run_time=run_time)
 
-    # ----- continuity: carried objects (DESIGN.md §50) ----------------------------------------
+    # ----- continuity: carried objects ----------------------------------------
 
     def _carried_parts(self) -> list[Mobject]:
         """The on-screen parts of the targets the next scene carries out of this one."""
@@ -1495,9 +1495,9 @@ class NarratedScene(MovingCameraScene):
         self.carry_state = state
 
     def setup(self) -> None:
-        """Manim's setup, then the host (on screen from the first frame, DESIGN.md §71) and the
+        """Manim's setup, then the host (on screen from the first frame) and the
         objects carried from the scene before (:attr:`carried_in`), drawn where they ended there
-        from the first frame on (§50)."""
+        from the first frame on."""
         super().setup()
         if self.host is not None:
             # a foreground mobject stays last in the draw order, so while it idles or speaks Manim

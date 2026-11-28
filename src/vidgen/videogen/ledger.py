@@ -1,8 +1,8 @@
-"""The spending ledger and the budget cap of generated video (DESIGN.md §113).
+"""The spending ledger and the budget cap of generated video.
 
 ``videogen-ledger.jsonl`` in the project: append-only JSON lines, one per event —
 ``submit_intent`` (``intent_id, provider, model, request_hash, estimate_usd``) just before a
-paid job is sent (written to disk first: DESIGN.md §113.10), ``submit`` (``job_id, provider,
+paid job is sent (written to disk first), ``submit`` (``job_id, provider,
 model, request_hash, estimate_usd``, and ``intent_id`` when one was recorded) when it is
 accepted, then one terminal event (``completed | failed | cancelled | expired``, with the
 reported ``cost_usd`` from ``usage.cost`` or ``null``, ``is_byok``). ``intent_resolved``

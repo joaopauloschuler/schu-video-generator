@@ -52,8 +52,8 @@ daylight sees.
 water at 90 m/s towards the sun, turning 14 degrees to the right through the move: the horizon rolls
 into the turn and back (`horizon: level` keeps it level). The glitter path is narrow on a calm sea
 and under a low sun; a `rough` sea shows whitecaps along its crests, a `storm` high waves with dark
-troughs and foam streaks; at dusk the near water keeps the sky's colours (looks, stated in DESIGN
-§123.4). `quality: fast` draws a smoother sea (other waves than `standard`) for a quarter less.
+troughs and foam streaks; at dusk the near water keeps the sky's colours (looks).
+`quality: fast` draws a smoother sea (other waves than `standard`) for a quarter less.
 
 ```yaml
 - id: skim
@@ -64,8 +64,7 @@ troughs and foam streaks; at dusk the near water keeps the sky's colours (looks,
     camera: {move: skim, heading: 284, speed: 90, clearance: 14, turn: 14, lens: wide}
 ```
 
-**The same skim as drone footage.** `camera_look: drone` turns on a small camera on a gimbal (DESIGN
-§124.4): its noise, a short dynamic range, sharpening, the wide lens's bend and soft fringed corners,
+**The same skim as drone footage.** `camera_look: drone` turns on a small camera on a gimbal: its noise, a short dynamic range, sharpening, the wide lens's bend and soft fringed corners,
 vibration and an automatic exposure. Into a low sun its 2.4 stops blow the glitter path flat and
 yellow-white, as a small camera does; the scene's own `finish:` goes over the look, and `range: 3`
 keeps a little more of it. The other
@@ -222,7 +221,7 @@ down (from 45 % throttle).
 
 ## 4. The descent from orbit
 
-**From orbit to a skim over the sea, in one shot** (DESIGN §123.13). `descend` comes down by equal
+**From orbit to a skim over the sea, in one shot**. `descend` comes down by equal
 factors of height in equal times and ends moving, level; the `skim` with `continues: true` takes
 over there with no cut. Keep ten seconds or more for 400 km.
 
@@ -256,8 +255,7 @@ seen; a thin cirrus deck is a white line on the horizon while the camera passes 
 
 True by default: the air's colours (one scattering model with ozone; Mars-like dust as a stated
 season), the horizon's place and dip, the sea's wave speeds, the ground's relief and colours from the
-same world's globe, a flight's path and bank, the sun's place on a date. Stated looks, each said in
-DESIGN §123 where it is made:
+same world's globe, a flight's path and bank, the sun's place on a date. Stated looks:
 
 - the film exposure (`exposure: film`, the default): the dusk is lifted up to 16 stops, the twilight
   arch kept under white; high over the day side the stars and the Milky Way are dimmed to a third;
@@ -308,7 +306,7 @@ export function frame(t) {
 ```
 
 *A re-entry from orbit*: a `web` scene with `orbit_data` and `flight_data` whose flight starts
-`{orbit: Ship}` with a first leg `{reentry: {to: {height: 12000, speed: 250}}}` (DESIGN §123.7), the
+`{orbit: Ship}` with a first leg `{reentry: {to: {height: 12000, speed: 250}}}`, the
 plane flown by `ship.fly(ctx.flight)` and its glow from `vidgen/space-effects`:
 
 ```js
@@ -319,6 +317,6 @@ scene.add(fx.object);              // trails and the train stay where they were 
 fx.update(t);                      // or by hand: fx.update(t, {heating: 0.8, velocity: [6600, 0, 0], height: 75000})
 ```
 
-`reentry: {full: 0.65}` is the heating shown as the white-pink peak (the 400 km re-entry of DESIGN
-§123.7 reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5. A flight far
+`reentry: {full: 0.65}` is the heating shown as the white-pink peak (a 400 km
+re-entry reaches 0.66); `persist: 14` makes the train glow 14 flight seconds instead of 5. A flight far
 from its anchor is lit by the anchor's sun (the scene's +y is not up there).

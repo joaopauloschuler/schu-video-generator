@@ -1,4 +1,4 @@
-"""OpenRouter video provider: submit, poll, download (DESIGN.md §113), standard library only.
+"""OpenRouter video provider: submit, poll, download, standard library only.
 
 ``POST /api/v1/videos`` (202 ``{id, polling_url, status: pending}``), ``GET
 /api/v1/videos/{id}`` until ``completed`` (or ``failed | cancelled | expired``), then ``GET

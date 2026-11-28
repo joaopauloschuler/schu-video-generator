@@ -1,4 +1,4 @@
-"""Key frames of a video as a slide deck (DESIGN.md §55): shared by ``vidgen slides`` (HTML,
+"""Key frames of a video as a slide deck: shared by ``vidgen slides`` (HTML,
 Step 52) and the PDF deck (Step 53).
 
 :func:`deck_frames` makes sure every scene has current frame stills (Step 10 capture, reused

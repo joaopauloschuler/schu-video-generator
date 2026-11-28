@@ -1,4 +1,4 @@
-"""The animation and chart libraries shipped for ``web`` scenes (DESIGN.md §118.15): each is one
+"""The animation and chart libraries shipped for ``web`` scenes: each is one
 build file of an npm package, copied unmodified into ``data/web/libs/<package>/`` with the
 package's licence, and imported by the package's name through the page's import map. A package
 whose only one-file build is UMD also has ``index.js``, written by vidgen: an ES module that runs

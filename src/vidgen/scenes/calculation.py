@@ -1,4 +1,4 @@
-"""``calculation``: worked calculations with units (Phase W, DESIGN §97.9). A symbol table
+"""``calculation``: worked calculations with units (Phase W). A symbol table
 (symbol, value with unit, meaning, source) and a chain of calculations, each shown step by
 step: the formula, the values substituted with their units, an intermediate value, the result
 with its significant figures (an exact fraction and its decimal when every input is exact), and

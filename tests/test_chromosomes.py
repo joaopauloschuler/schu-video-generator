@@ -1,4 +1,4 @@
-"""Step 216 (DESIGN.md §96.9–96.11): genetic maps (map functions, two- and three-point test crosses
+"""Step 216: genetic maps (map functions, two- and three-point test crosses
 worked out from counts), human karyotypes (ISCN parsing and checks, derivatives, schematic
 bands) and non-disjunction in ``cell_cycle`` meiosis; the ``linkage_map`` and ``karyotype``
 scenes validated and rendered in 16:9 and 9:16."""

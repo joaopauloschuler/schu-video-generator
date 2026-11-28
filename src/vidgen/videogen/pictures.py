@@ -1,4 +1,4 @@
-"""Smaller copies of the pictures a video job sends inline (DESIGN.md §113.7).
+"""Smaller copies of the pictures a video job sends inline.
 
 Reference sheet pictures are large (seedream-4.5: 2048x3642 PNGs of 5-7 MB), and six of them
 plus a style frame made a 48 MB request. Before a local picture goes into a request as a data

@@ -1,4 +1,4 @@
-"""The Solar System on a date (Phase X, Step 233; DESIGN §98.7): JPL's approximate elements
+"""The Solar System on a date (Phase X, Step 233): JPL's approximate elements
 (Table 1) on dates, Julian dates, positions against values derived independently (the Earth at the
 equinoxes, the distances within perihelion and aphelion), periods and synodic periods, oppositions
 and conjunctions against their published dates, validity — and the ``orbit`` scene's ``date``,

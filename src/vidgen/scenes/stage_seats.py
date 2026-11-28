@@ -1,4 +1,4 @@
-"""Sitting on, lying on and using the objects of an iso place (DESIGN.md §105.2): the part of a
+"""Sitting on, lying on and using the objects of an iso place: the part of a
 ``stage`` that places a character on a seat or in a bed of the place, draws the parts of the
 object in front of it over it, stands it up again and moves its hands to use an object. Written
 against ``vidgen.api`` only; :class:`IsoSeating` is a part of :class:`~vidgen.scenes.stage.Stage`.
@@ -39,7 +39,7 @@ class SeatPlace:
 
 
 class IsoSeating:
-    """Sitting, lying and using on an iso place: a part of the ``stage`` (DESIGN.md §105.2)."""
+    """Sitting, lying and using on an iso place: a part of the ``stage``."""
 
     def _iso_part(self, item: Any, base: float, regions: Any, key: str) -> None:
         """Make the part of ``item`` (standing on ``base``) inside ``regions`` (drawn over who

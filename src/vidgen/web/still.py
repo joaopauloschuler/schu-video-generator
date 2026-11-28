@@ -1,4 +1,4 @@
-"""``vidgen still``: single frames of a ``web`` scene's page without rendering its clip (DESIGN.md §120.3).
+"""``vidgen still``: single frames of a ``web`` scene's page without rendering its clip.
 
 :func:`make_web_stills` builds the scene as the render worker does (the same project, format,
 theme and scene class), asks it what its page's frames are drawn from

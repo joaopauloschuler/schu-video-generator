@@ -1,4 +1,4 @@
-"""OpenRouter text-to-speech provider (Step 62, DESIGN.md §66). Every request is mocked:
+"""OpenRouter text-to-speech provider (Step 62). Every request is mocked:
 ``urllib.request.urlopen`` is replaced by :class:`FakeOpenRouter`, which answers the speech
 endpoint with a tiny MP3 (or raw PCM) made by ffmpeg and the public lookups with fixtures
 saved from OpenRouter on 2026-10-08 (``tests/data/openrouter_tts.json``)."""

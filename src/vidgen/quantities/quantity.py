@@ -1,4 +1,4 @@
-"""Quantities with units, exactness and significant figures (DESIGN §97.9). No manim.
+"""Quantities with units, exactness and significant figures. No manim.
 
 A :class:`Quantity` is an SI value (a :class:`~fractions.Fraction` while it is exact and
 rational, else a float), a dimension and its significant figures (``sig``; ``None``: exact —

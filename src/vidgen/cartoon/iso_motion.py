@@ -1,4 +1,4 @@
-"""Walks on an isometric place, drawn (DESIGN.md §89.9): the routes of the rules
+"""Walks on an isometric place, drawn: the routes of the rules
 (:mod:`vidgen.world.iso_moves`, tile units) played with the cartoon motion of :class:`Walk`.
 
 The side walk cycle slides along the route's diagonals (accepted for iso: no new walk views).
@@ -6,7 +6,7 @@ The character faces left or right by the way the leg goes on the picture; a leg 
 the camera shows its front view (a character without one keeps its side), a leg straight away
 keeps the side it last showed (there is no back view). Its feet follow the route's heights, up
 and down steps, and its ``ground_y`` follows them, so its shadow lies on the cell top under it.
-``iso_feet`` holds where its feet are in the world, for the stage's draw order (§89.9).
+``iso_feet`` holds where its feet are in the world, for the stage's draw order.
 """
 
 from __future__ import annotations
@@ -108,8 +108,8 @@ class IsoWalk(Walk):
 
 
 class IsoSeatMove(BodyMove):
-    """``character`` sits down on an object of an iso place, lies down on it or stands up from it
-    (DESIGN.md §105.2): a :class:`BodyMove` through ``keys`` whose feet go in the world from
+    """``character`` sits down on an object of an iso place, lies down on it or stands up from it:
+    a :class:`BodyMove` through ``keys`` whose feet go in the world from
     where they are to ``end`` (tile units, placed by ``view``; ``iso_feet`` and the shadow's
     ``ground_y`` follow, for the draw order), the figure scaled to ``scale`` about its feet (a
     character lying in bed is drawn smaller) and ``seat`` on the figure (``iso_seat``: (object,

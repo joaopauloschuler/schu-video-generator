@@ -1,4 +1,4 @@
-"""Drawings of a plant cell (DESIGN.md §95.9): its wall (with the middle lamella where it meets
+"""Drawings of a plant cell: its wall (with the middle lamella where it meets
 the next cell's) crossed by plasmodesmata — the plasma membrane lining each channel round a
 desmotubule of appressed ER —, the central vacuole and its tonoplast, chloroplasts with their
 envelope, grana of stacked thylakoids joined by stroma lamellae, starch and plastoglobuli; and

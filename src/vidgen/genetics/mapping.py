@@ -1,4 +1,4 @@
-"""Genetic maps (DESIGN.md §96.9): recombination frequency (RF) and map distance in centimorgans
+"""Genetic maps: recombination frequency (RF) and map distance in centimorgans
 with the map functions, and the analysis of two- and three-point test crosses from offspring
 counts — parental and recombinant classes, the phase of the heterozygote (coupling or
 repulsion), the gene order from the double crossovers, the interval distances, the expected and

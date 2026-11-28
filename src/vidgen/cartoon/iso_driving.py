@@ -1,4 +1,4 @@
-"""Vehicles moving on an isometric place, drawn (DESIGN.md §105): a car driving, a boat sailing, a
+"""Vehicles moving on an isometric place, drawn: a car driving, a boat sailing, a
 train car rolling and a rocket lifting off, along the routes of the rules
 (:mod:`vidgen.world.iso_vehicles`).
 
@@ -51,7 +51,7 @@ Span = tuple[float, float]
 def frame_item(kind: str, heading: Cell, features: tuple[str, ...] = ()) -> IsoObject:
     """The vehicle ``kind`` standing with its middle at the world's origin, heading ``heading``
     (along the map's rows: facing left; along its columns: facing right); ``features``: its
-    placing's (a car's ``rocket`` kind, DESIGN.md §107)."""
+    placing's (a car's ``rocket`` kind)."""
     spec = OBJECT_KINDS[kind]
     length, width = max(spec.width, spec.depth), min(spec.width, spec.depth)
     if kind == "rocket":
@@ -103,7 +103,7 @@ def turning_shapes(kind: str, look: ObjectLook, turn: tuple[Cell, Cell], **setti
     """A car or a boat half-way round a corner (``turn``: the ways it heads before and after):
     the one heading along the map's row turned 45 degrees to the diagonal between them. Seen
     turned so, one of its faces drawn shows whole and the other edge-on (a box's faces drawn are
-    those to the viewer), so the picture has no gaps (DESIGN.md §105.8)."""
+    those to the viewer), so the picture has no gaps."""
     along_x = next(h for h in turn if h[1] == 0)
     along_y = next(h for h in turn if h[0] == 0)
     sign = along_x[0] * along_y[1]
@@ -119,7 +119,7 @@ def vehicle_shapes(kind: str, look: ObjectLook, *, heading: Cell, on: bool, spin
     its spokes), a boat (its bow the way it sails; ``wake``: its wake behind it), a train car's
     carriage (no track), a rocket without its pad (its flame at ``now``, ``boost`` times as long,
     while ``on``); ``turn``: a car or a boat half-way round a corner (:func:`turning_shapes`);
-    ``features``: its placing's (a ``rocket`` car, DESIGN.md §107)."""
+    ``features``: its placing's (a ``rocket`` car)."""
     if turn is not None:
         return turning_shapes(kind, look, turn, on=on, spin=spin, now=now, boost=boost, wake=wake, features=features)
     f = _Frame(frame_item(kind, heading, features), 0.0)
@@ -182,7 +182,7 @@ def draw_sprite(shapes: Sequence[Shape], scale: float, *, outline: float) -> Spr
 
 
 class IsoVehicle(Group):
-    """A vehicle of an iso place the scene moves (DESIGN.md §105), named after its object: its
+    """A vehicle of an iso place the scene moves, named after its object: its
     sprite (:class:`Sprite`) where it is now. ``point``: its middle on its base (tile units),
     ``heading``: the way it heads (a rocket: ``(0, 0)``); :meth:`set_pose` moves it,
     :meth:`refresh` shows it as it is at a scene time (lit or not, its flame, a boat's bob) at the
@@ -197,7 +197,7 @@ class IsoVehicle(Group):
                  frame_width: float, outline: float = 1.0, on: bool = False, features: tuple[str, ...] = ()) -> None:
         super().__init__()
         self.name, self.kind, self.look, self.view = name, kind, look, view
-        #: its placing's extras (a car's ``rocket`` kind, DESIGN.md §107)
+        #: its placing's extras (a car's ``rocket`` kind)
         self.features = tuple(features)
         self.point, self.heading = point, heading
         #: half-way round a corner: the ways it heads before and after (drawn turned)
@@ -321,7 +321,7 @@ class IsoVehicle(Group):
             slot.pixel_array = pixels if shown else _NOTHING
             slot.orig_alpha_pixel_array = slot.pixel_array[:, :, 3].copy() if shown else _NOTHING[:, :, 3].copy()
             slot.points = np.array([[left, bottom + height, 0.0], [left + width, bottom + height, 0.0], [left, bottom, 0.0], [left + width, bottom, 0.0]])
-            slot.iso_pieces = ((self.name, (left, bottom, left + width, bottom + height)),)   # what it shows, where (lint hidden_speaker, §89.11)
+            slot.iso_pieces = ((self.name, (left, bottom, left + width, bottom + height)),)   # what it shows, where (lint hidden_speaker)
         if getattr(self, LIT, False):
             setattr(self.slots[0], LIT, True)
 

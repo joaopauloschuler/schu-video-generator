@@ -1,4 +1,4 @@
-"""Drawings of a bacterium (DESIGN.md §95.9): its envelope — Gram-negative: the inner
+"""Drawings of a bacterium: its envelope — Gram-negative: the inner
 (plasma) membrane, the periplasm with a thin peptidoglycan layer, the outer membrane (LPS on its
 outer leaflet); Gram-positive: the plasma membrane under a thick peptidoglycan wall — and an
 optional capsule; the nucleoid (the chromosome's region, no membrane) with its looped DNA,

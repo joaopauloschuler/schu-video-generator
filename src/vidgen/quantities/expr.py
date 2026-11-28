@@ -1,4 +1,4 @@
-"""Calculation expressions with units (DESIGN §97.9). No manim, no ``eval``.
+"""Calculation expressions with units. No manim, no ``eval``.
 
 The grammar of :mod:`vidgen.mathexpr` (numbers, names, ``+ - * / ^`` / ``**``, brackets,
 implicit products ``2pq``, function calls), parsed into a small tree so that one expression can

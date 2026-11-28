@@ -1,4 +1,4 @@
-"""The beat actions of the ``plot`` scene type (DESIGN §97.6, §97.8): ``fit`` draws a fitted curve
+"""The beat actions of the ``plot`` scene type: ``fit`` draws a fitted curve
 (its band, the curve, its parameters and residual panel), ``annotate`` an annotation and
 ``grow`` grows live series, each on a word (``at: "@word"``); ``reveal`` also works for a series
 or its error bars, and ``zoom`` with ``x`` / ``y`` zooms a plot's axes to a region. Written

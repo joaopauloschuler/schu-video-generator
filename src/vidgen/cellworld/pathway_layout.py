@@ -1,4 +1,4 @@
-"""Automatic layout of a signalling pathway in compartment bands (DESIGN.md §95.12). No manim.
+"""Automatic layout of a signalling pathway in compartment bands. No manim.
 
 The signal runs along the main axis (``LR``: left to right, the bands side by side as columns,
 for landscape frames; ``TB``: top to bottom, the bands stacked as rows, for portrait frames):

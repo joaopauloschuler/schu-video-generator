@@ -1,5 +1,4 @@
-"""Things drawn over an iso place's pictures that move by themselves (DESIGN.md §100.7, §100.11,
-§102.2, §102.3): the steel shutters over a room's windows, the blinking lights of its lab objects
+"""Things drawn over an iso place's pictures that move by themselves: the steel shutters over a room's windows, the blinking lights of its lab objects
 and towers, a city's crawling info screens and its hover pods on their lanes. Each is a
 *living thing* of the stage (``update_to``, ``changing``, ``done``, ``movers``, ``region``), drawn
 right after the place's pictures (behind the characters).
@@ -121,8 +120,7 @@ def blink_on(index: int, now: float, seed: int = 0) -> bool:
 class IsoBlinkers(VGroup):
     """Small lights at ``points`` (on screen) of ``radius``, in ``colors`` (one per light), each
     blinking by :func:`blink_on` with a soft halo; never graded by the stage's light. ``hidden``:
-    whether light ``k`` is behind something now (a character standing in front of its object,
-    DESIGN.md §102.19): it is not drawn then."""
+    whether light ``k`` is behind something now (a character standing in front of its object): it is not drawn then."""
 
     def __init__(self, points: Sequence[Point], colors: Sequence[str], radius: float, *, seed: int = 0,
                  hidden: Callable[[int], bool] | None = None) -> None:
@@ -166,7 +164,7 @@ class IsoBlinkers(VGroup):
         return min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad
 
 
-#: A tower's screen (DESIGN.md §102.2): its lines' thickness (a share of the screen's height).
+#: A tower's screen: its lines' thickness (a share of the screen's height).
 SCREEN_LINE_THICKNESS = 0.07
 
 
@@ -180,7 +178,7 @@ def _quad_point(quad: Sequence[np.ndarray], across: float, up: float) -> np.ndar
 
 
 class IsoScreens(VGroup):
-    """The info screens of a city's towers (DESIGN.md §102.2): over each screen (four points on
+    """The info screens of a city's towers: over each screen (four points on
     screen: bottom left, bottom right, top right, top left) its glowing plate in ``colors`` and
     lines of text crawling up it (:func:`~vidgen.cartoon.iso_city.screen_lines`); never graded by
     the stage's light."""
@@ -228,7 +226,7 @@ class IsoScreens(VGroup):
 
 @dataclass(frozen=True)
 class PodLane:
-    """A traffic lane over an iso place on screen (DESIGN.md §102.3): its ``start`` and ``end``
+    """A traffic lane over an iso place on screen: its ``start`` and ``end``
     (Manim units), how long a pod takes along it (``seconds``), how many pods (``count``), their
     ``color``, crossing once from scene time ``at`` (``None``: looping) and the pods' ``length``
     (Manim units)."""
@@ -242,19 +240,19 @@ class PodLane:
     at: float | None = None
     #: the lane's ends in the world (tile units), for what hides its pods (``None``: nothing does)
     world: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
-    #: what glides along it (:data:`POD_SHAPES`, DESIGN.md §107) and its hull's colour
+    #: what glides along it (:data:`POD_SHAPES`) and its hull's colour
     shape: str = "capsule"
     hull: str = "#262C44"
 
 
-#: A pod's parts (DESIGN.md §102.3): its height as a share of its length, its trail's length (a
+#: A pod's parts: its height as a share of its length, its trail's length (a
 #: share of its length), the glow under it, the canopy's and the hull's colours.
 POD_HEIGHT = 0.36
 POD_TRAIL = 2.4
 POD_GLOW_OPACITY = 0.28
 POD_CANOPY = "#CFF6FF"
 POD_HULL = "#262C44"
-#: What a lane's pods look like (DESIGN.md §107): a hover capsule, a flying saucer, a monorail
+#: What a lane's pods look like: a hover capsule, a flying saucer, a monorail
 #: train; the cream hull of a saucer or a train (and of every pod in a ``retro`` place).
 POD_SHAPES = ("capsule", "saucer", "monorail")
 POD_RETRO_HULL = "#FFF1D6"
@@ -268,7 +266,7 @@ def _ellipse(cx: float, cy: float, rx: float, ry: float, steps: int = 20) -> lis
 
 
 class IsoTraffic(VGroup):
-    """Hover pods gliding along traffic lanes over an iso place (DESIGN.md §102.3): each pod a
+    """Hover pods gliding along traffic lanes over an iso place: each pod a
     small capsule (a dark hull with a glowing rim in its lane's colour, a light canopy with a
     rider's head, a headlight), a soft glow under it and a fading light trail behind it, facing
     the way it goes; :func:`~vidgen.cartoon.iso_city.lane_pods` says where they are. A pod behind
@@ -345,7 +343,7 @@ class IsoTraffic(VGroup):
 
     @staticmethod
     def _draw_saucer(parts: tuple[VMobject, ...], x: float, y: float, ux: float, uy: float, facing: float, length: float, shown: float) -> None:
-        """A flying saucer (DESIGN.md §107): a wide flat hull with a glowing rim in the lane's
+        """A flying saucer: a wide flat hull with a glowing rim in the lane's
         colour, a glass dome with its rider, a ring of light under it and a soft beam of glow
         below; a short faint trail."""
         trail, glow, hull, canopy, head, light = parts
@@ -369,7 +367,7 @@ class IsoTraffic(VGroup):
 
     @staticmethod
     def _draw_train(parts: tuple[VMobject, ...], x: float, y: float, ux: float, uy: float, facing: float, length: float, shown: float) -> None:
-        """A monorail train (DESIGN.md §107) along the lane: a long round-ended hull with a stripe
+        """A monorail train along the lane: a long round-ended hull with a stripe
         of the lane's colour, a band of lit windows, a dark nose and a headlight, a faint glow
         under it; no trail."""
         trail, glow, hull, canopy, head, light = parts
@@ -420,11 +418,11 @@ CAIRO_LINE_UNIT = 0.01
 
 @dataclass(frozen=True)
 class Gadget:
-    """A working object of an iso place for :class:`IsoGadgets` (DESIGN.md §103): its moving
+    """A working object of an iso place for :class:`IsoGadgets`: its moving
     ``parts`` at a scene time (:func:`~vidgen.cartoon.iso_objects.object_motion`; the same number
     at any time), whether it works at a scene time (``working``) and whether it works at any time
     between two (``busy``); ``level``: how much of it shows at a scene time, 0..1 (a light coming
-    on or going out by itself at dusk or dawn fades, DESIGN.md §105.3; else 1)."""
+    on or going out by itself at dusk or dawn fades; else 1)."""
 
     parts: Callable[[float], Sequence[Any]]
     working: Callable[[float], bool]
@@ -433,7 +431,7 @@ class Gadget:
 
 
 class IsoGadgets(VGroup):
-    """The moving parts of an iso place's working objects (DESIGN.md §103), drawn over the
+    """The moving parts of an iso place's working objects, drawn over the
     place's pictures while each works: a robot arm swinging, a centrifuge's rotor spinning, a
     quantum core pulsing, steam over a coffee mug. ``project`` puts a world point on screen;
     ``unit``: a tile's width on screen (Manim units), for the outline as the place's
@@ -443,7 +441,7 @@ class IsoGadgets(VGroup):
     def __init__(self, gadgets: Sequence[Gadget], project: Callable[[Any], Point], *, unit: float, region: Box, outline: float = 1.0,
                  pool_strength: Callable[[], float] = lambda: 1.0) -> None:
         super().__init__()
-        #: how strong the parts that are light thrown on things (``pool``) show now (§104)
+        #: how strong the parts that are light thrown on things (``pool``) show now
         self.pool_strength = pool_strength
         ink = CHARACTER_INK
         stroke = ISO_OUTLINE * unit * outline / CAIRO_LINE_UNIT
@@ -475,7 +473,7 @@ class IsoGadgets(VGroup):
             for k, piece in enumerate(pieces):
                 part = parts[k] if k < len(parts) else None
                 opacity = 0.0 if part is None else part.opacity * level
-                if part is not None and getattr(part, "pool", False):   # light on things: faint by day (§104)
+                if part is not None and getattr(part, "pool", False):   # light on things: faint by day
                     strength = self.pool_strength() if strength is None else strength
                     opacity *= strength
                 if part is None or opacity <= 0.0:
@@ -500,7 +498,7 @@ class IsoGadgets(VGroup):
 
 @dataclass(frozen=True)
 class HazeSpot:
-    """A haze on screen (DESIGN.md §102.12): its ``foot`` and ``top`` (Manim units), its
+    """A haze on screen: its ``foot`` and ``top`` (Manim units), its
     ``width`` (Manim units), ``color``, ``strength`` (0..1) and the scene time it fades in
     from (``start``)."""
 
@@ -519,7 +517,7 @@ HAZE_SPARK_OPACITY = 0.85
 
 
 class IsoHaze(VGroup):
-    """Shimmering air over spots of an iso place (DESIGN.md §102.12): for each :class:`HazeSpot`
+    """Shimmering air over spots of an iso place: for each :class:`HazeSpot`
     a soft glow on the floor, faint ribbons of light wavering up
     (:func:`~vidgen.cartoon.haze.haze_ribbons`) and small sparkles rising through them
     (:func:`~vidgen.cartoon.haze.haze_sparks`); never graded by the stage's light."""

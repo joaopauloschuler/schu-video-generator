@@ -1,4 +1,4 @@
-"""The brass and organ instruments of score files (Step 343, DESIGN.md §120.4): what makes them
+"""The brass and organ instruments of score files (Step 343): what makes them
 brass and organ is measured on single notes (cheap: no score is rendered except in one test)."""
 
 from __future__ import annotations

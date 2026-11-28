@@ -1,4 +1,4 @@
-"""Languages of a video (DESIGN.md §54): BCP-47 tags and the per-language rules that depend on them.
+"""Languages of a video: BCP-47 tags and the per-language rules that depend on them.
 
 A video's ``language:`` (``en``, ``pt-BR``...; top level or per variant) chooses:
 

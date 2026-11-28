@@ -1,4 +1,4 @@
-"""Whether a shot's cut inputs still match what they were cut from (DESIGN.md §113.9).
+"""Whether a shot's cut inputs still match what they were cut from.
 
 :func:`vidgen.videogen.inputs.make_inputs` writes ``build/videogen/<shot>/inputs.json`` next to
 the cut inputs: per file its SHA-256 and what it was made from. The plan

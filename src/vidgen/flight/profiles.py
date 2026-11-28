@@ -1,4 +1,4 @@
-"""Smooth functions of time a flight is made of (Step 385, DESIGN.md §123.7).
+"""Smooth functions of time a flight is made of (Step 385).
 
 Every change of a flight's speed, vertical rate, bank or turn rate goes through :func:`step`, the
 septic smoothstep S(u) = 35u⁴ − 84u⁵ + 70u⁶ − 20u⁷, whose first three derivatives are zero at

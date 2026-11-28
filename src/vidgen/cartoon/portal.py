@@ -1,4 +1,4 @@
-"""A portal (a rift in space) that opens, crackles, pulses and seals (DESIGN.md §100.4): the
+"""A portal (a rift in space) that opens, crackles, pulses and seals: the
 maths, without manim. :mod:`vidgen.cartoon.living_drawing` draws it.
 
 The ``portal`` prop is switched like a lamp: ``on: true`` starts it open, ``switch_on`` opens it
@@ -156,7 +156,7 @@ def portal_shape(level: float, now: float, seed: int = 0) -> PortalShape | None:
     return PortalShape(_oval(rx, ry, RIM_POINTS), _oval(rx, ry, RIM_POINTS, jag), rings, tuple(swirls), tuple(sparks), max(glow, 0.0))
 
 
-# ----- a view through the portal (DESIGN.md §100.13) ---------------------------------------------------
+# ----- a view through the portal ---------------------------------------------------
 
 #: The places a portal can show inside it.
 PORTAL_VIEWS: tuple[str, ...] = ("coast", "stars", "meadow")

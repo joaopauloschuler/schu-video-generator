@@ -1,8 +1,8 @@
-"""Generated video shots (DESIGN.md §113): requests, their canonical form and cache key, jobs.
+"""Generated video shots: requests, their canonical form and cache key, jobs.
 
 A :class:`VideoRequest` is one clip asked of a video model (OpenRouter's asynchronous video API:
 submit, poll, download). A request asks for the model's own sound only when its
-``generate_audio`` is true (a shot's resolved ``sound: model``, DESIGN.md §113.11); by default it
+``generate_audio`` is true (a shot's resolved ``sound: model``); by default it
 is sent with ``generate_audio: false`` and vidgen's mix is the film's sound. Requests are cached
 by :func:`request_hash`, the SHA-256 of :func:`canonical_request` (input files by their contents'
 hashes, ``generate_audio`` as sent), so the same request is never paid for twice and a request
@@ -30,7 +30,7 @@ from vidgen.errors import VidgenError
 CACHE_VERSION = 1
 #: Where generated clips are stored in a project, ``<hash>.mp4`` with a ``<hash>.json`` sidecar.
 CLIPS_DIR = Path("assets") / "generated_video"
-#: The project's spending ledger (append-only JSON lines, DESIGN.md §113).
+#: The project's spending ledger (append-only JSON lines).
 LEDGER_NAME = "videogen-ledger.jsonl"
 #: Job statuses OpenRouter reports while a job runs, and the terminal ones.
 RUNNING_STATUSES = frozenset({"pending", "in_progress"})

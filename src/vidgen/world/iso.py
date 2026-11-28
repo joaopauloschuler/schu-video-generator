@@ -1,4 +1,4 @@
-"""Isometric places written as a small ASCII map with heights (DESIGN.md §89). Plain data, no manim.
+"""Isometric places written as a small ASCII map with heights. Plain data, no manim.
 
 An *iso place* is a grid of *cells* seen from above at an angle: the map is written as the place
 is seen, one text line per row, the top line furthest back. A cell spans ``column .. column + 1``
@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 from vidgen.errors import VidgenError
 
 #: A place's two kinds: outdoors (grass, paths, water, garden walls) and indoors (a room whose
-#: back walls stand and whose front walls are cut away, DESIGN.md §89.4).
+#: back walls stand and whose front walls are cut away).
 OUTDOOR = "outdoor"
 INDOOR = "indoor"
 PLACES: tuple[str, ...] = (OUTDOOR, INDOOR)
@@ -68,9 +68,8 @@ class ObjectKind:
     """A ready-made object: its footprint (``width`` columns by ``depth`` rows when facing left),
     its height (tile units), whether one can walk on it (a rug, a bridge; ``deck``: how high
     over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it;
-    ``floats``: only water, a boat, §104); ``top``: how high over its base a
-    small thing put on it stands (a table's top, a bench's seat; ``None``: nothing goes on it,
-    DESIGN.md §89.10)."""
+    ``floats``: only water, a boat); ``top``: how high over its base a
+    small thing put on it stands (a table's top, a bench's seat; ``None``: nothing goes on it)."""
 
     width: int
     depth: int
@@ -82,7 +81,7 @@ class ObjectKind:
     top: float | None = None
 
 
-#: The ready-made objects (DESIGN.md §89.5).
+#: The ready-made objects.
 OBJECT_KINDS: dict[str, ObjectKind] = {
     "house": ObjectKind(3, 3, 4.6),
     "tree": ObjectKind(1, 1, 4.0),
@@ -103,16 +102,16 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "sofa": ObjectKind(2, 1, 1.15, top=0.55),
     "plant": ObjectKind(1, 1, 1.5),
     "rug": ObjectKind(2, 2, 0.03, walkable=True, deck=0.02),
-    # a lab and a memory's props (DESIGN.md §100.11)
+    # a lab and a memory's props
     "console": ObjectKind(2, 1, 1.8, top=0.86),
     "server_rack": ObjectKind(1, 1, 2.6),
     "projector_pad": ObjectKind(1, 1, 0.13, walkable=True, deck=0.12),
     "whiteboard": ObjectKind(2, 1, 2.1),
     "flower_arch": ObjectKind(2, 1, 3.2),
     "chess_table": ObjectKind(1, 1, 0.96, top=0.86),
-    # a city's tall buildings (DESIGN.md §102.2): its height is the placing's own
+    # a city's tall buildings: its height is the placing's own
     "tower": ObjectKind(2, 2, 9.0),
-    # more lab and sci-fi objects (DESIGN.md §103): a wall_clock hangs on a room's back wall (its cell is the wall's)
+    # more lab and sci-fi objects: a wall_clock hangs on a room's back wall (its cell is the wall's)
     "laptop": ObjectKind(1, 1, 1.25),
     "terminal_kiosk": ObjectKind(1, 1, 2.0),
     "quantum_core": ObjectKind(1, 1, 2.0),
@@ -137,7 +136,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "printer_3d": ObjectKind(1, 1, 1.8),
     "hazard_sign": ObjectKind(1, 1, 1.65),
     "fire_extinguisher": ObjectKind(1, 1, 0.85),
-    # home objects (DESIGN.md §104)
+    # home objects
     "fireplace": ObjectKind(2, 1, 2.4),
     "kitchen_counter": ObjectKind(2, 1, 1.2, top=0.96),
     "stove": ObjectKind(1, 1, 1.25),
@@ -147,7 +146,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "floor_lamp": ObjectKind(1, 1, 2.05),
     "tv": ObjectKind(1, 1, 1.48),
     "piano": ObjectKind(2, 1, 1.66, top=1.66),
-    # home II, café and shop objects (§104)
+    # home II, café and shop objects
     "bathtub": ObjectKind(2, 1, 1.15),
     "wardrobe": ObjectKind(2, 1, 2.42, top=2.42),
     "crib": ObjectKind(1, 1, 1.85),
@@ -157,7 +156,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "display_case": ObjectKind(2, 1, 1.4, top=1.4),
     "market_stall": ObjectKind(2, 1, 2.66),
     "vending_machine": ObjectKind(1, 1, 2.15),
-    # town objects (§104)
+    # town objects
     "street_lamp": ObjectKind(1, 1, 4.0),
     "traffic_light": ObjectKind(1, 1, 3.15),
     "bus_stop": ObjectKind(2, 1, 2.9),
@@ -167,7 +166,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "car": ObjectKind(2, 1, 1.32),
     "bicycle": ObjectKind(1, 1, 1.0),
     "newsstand": ObjectKind(2, 1, 2.45),
-    # nature objects (§104)
+    # nature objects
     "campfire": ObjectKind(1, 1, 1.0),
     "tent": ObjectKind(2, 2, 2.0),
     "log": ObjectKind(2, 1, 0.6, top=0.5),
@@ -176,7 +175,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "pond": ObjectKind(2, 2, 0.8),
     "scarecrow": ObjectKind(1, 1, 2.4),
     "beehive": ObjectKind(1, 1, 1.45),
-    # farm, school and office objects (§104)
+    # farm, school and office objects
     "vegetable_patch": ObjectKind(2, 1, 1.05),
     "wheelbarrow": ObjectKind(1, 1, 0.9),
     "hay_bale": ObjectKind(2, 1, 0.78, top=0.72),
@@ -186,7 +185,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "printer": ObjectKind(1, 1, 1.15),
     "globe": ObjectKind(1, 1, 1.6),
     "trophy_shelf": ObjectKind(2, 1, 2.08, top=2.08),
-    # fantasy objects (§104): a torch_sconce hangs on a room's back wall like a wall_clock
+    # fantasy objects: a torch_sconce hangs on a room's back wall like a wall_clock
     "treasure_chest": ObjectKind(1, 1, 1.15),
     "cauldron": ObjectKind(1, 1, 1.35),
     "giant_crystal": ObjectKind(1, 1, 2.75),
@@ -195,7 +194,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "signpost": ObjectKind(1, 1, 2.25),
     "archway": ObjectKind(2, 1, 3.25),
     "statue": ObjectKind(1, 1, 2.9),
-    # seasons, a harbour and travel (§104): a boat floats on water (~), a dock reaches over it
+    # seasons, a harbour and travel: a boat floats on water (~), a dock reaches over it
     "christmas_tree": ObjectKind(1, 1, 3.1),
     "snowman": ObjectKind(1, 1, 1.95),
     "pumpkin": ObjectKind(1, 1, 0.85),
@@ -207,7 +206,7 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "lighthouse": ObjectKind(1, 1, 5.6),
     "train_car": ObjectKind(3, 1, 2.05),
     "rocket": ObjectKind(2, 2, 4.7),
-    # a retro-future kit (DESIGN.md §107): a sunburst_clock hangs on a room's back wall like a wall_clock
+    # a retro-future kit: a sunburst_clock hangs on a room's back wall like a wall_clock
     "googie_building": ObjectKind(3, 3, 4.9),
     "retro_tower": ObjectKind(2, 2, 9.0),
     "starburst_sign": ObjectKind(1, 1, 3.4),
@@ -220,24 +219,24 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "retro_desk": ObjectKind(2, 1, 1.35, top=0.8),
     "hedge": ObjectKind(1, 1, 0.95),
     "planter": ObjectKind(1, 1, 1.15),
-    # a room's walls dressed (DESIGN.md §108): they hang on a standing back wall like a clock
+    # a room's walls dressed: they hang on a standing back wall like a clock
     "poster": ObjectKind(1, 1, 2.75),
     "wall_shelf": ObjectKind(1, 1, 2.75),
 }
-#: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
+#: The objects whose ``height`` a placing may give (tile units, from .. to).
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0), "retro_tower": (4.0, 30.0)}
-#: Extras an object of a kind may have (``features`` of a placing), DESIGN.md §102.2: a tower's
+#: Extras an object of a kind may have (``features`` of a placing): a tower's
 #: big info ``screen`` on its front and its glowing algae-farm bands (``garden``); a hazard sign's
-#: kind (one of them, §103; default ``biohazard``).
+#: kind (one of them; default ``biohazard``).
 HAZARD_SIGNS: tuple[str, ...] = ("biohazard", "radiation", "authorised")
-#: A display case's kinds (§104; default ``cakes``).
+#: A display case's kinds (default ``cakes``).
 DISPLAY_CASES: tuple[str, ...] = ("cakes", "jewels")
-#: A car's kinds (§107; default ``sedan``): a ``rocket`` car has tail fins and a bubble canopy.
+#: A car's kinds (default ``sedan``): a ``rocket`` car has tail fins and a bubble canopy.
 CAR_STYLES: tuple[str, ...] = ("sedan", "rocket")
-#: What a TV console's screen shows when on (§107; default ``wave``): an oscilloscope's wave, or
+#: What a TV console's screen shows when on (default ``wave``): an oscilloscope's wave, or
 #: a retro robot's ``face`` (two round eyes over a wave of a mouth).
 CONSOLE_PICTURES: tuple[str, ...] = ("wave", "face")
-#: What a wall poster shows (§108; default ``rocket``): a rocket over a planet, an atom, a ringed
+#: What a wall poster shows (default ``rocket``): a rocket over a planet, an atom, a ringed
 #: planet with a saucer.
 POSTER_PICTURES: tuple[str, ...] = ("rocket", "atom", "planet")
 #: The objects with a ``kind`` (one of these, the first the default): a hazard sign, a display
@@ -247,7 +246,7 @@ OBJECT_STYLES: dict[str, tuple[str, ...]] = {"hazard_sign": HAZARD_SIGNS, "displ
 OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), **OBJECT_STYLES}
 
 
-#: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
+#: The kinds of things that open: a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
 OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock", "wardrobe", "treasure_chest"})
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
@@ -259,21 +258,21 @@ SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", 
                                             "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket",
                                             "googie_building", "retro_tower", "starburst_sign", "ray_lamp", "atomic_sculpture",
                                             "tube_computer", "tv_console", "retro_desk"})
-#: The lights that a day passing (``time_of_day``, DESIGN.md §105.3) switches on at dusk and off at
+#: The lights that a day passing (``time_of_day``) switches on at dusk and off at
 #: dawn by themselves: lamps, a house's windows, a phone booth, a vending machine, a lighthouse, a
 #: christmas tree's lights, a pumpkin's face and a car's headlights (not fires, machines or towers,
 #: whose windows are lit from the start).
 AUTO_LIGHT_KINDS: frozenset[str] = frozenset({"house", "lamp", "floor_lamp", "street_lamp", "phone_booth", "vending_machine", "lighthouse",
                                               "christmas_tree", "pumpkin", "car", "googie_building", "starburst_sign", "ray_lamp"})
-#: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
+#: The objects that hang on a room's standing wall: placed at the wall's cell.
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce", "sunburst_clock", "poster", "wall_shelf"})
-#: The clocks, whose placing may give a ``time`` (DESIGN.md §103, §107).
+#: The clocks, whose placing may give a ``time``.
 CLOCK_KINDS: frozenset[str] = frozenset({"wall_clock", "sunburst_clock"})
 
 
 @dataclass(frozen=True)
 class ObjectState:
-    """What an object of the place shows now (DESIGN.md §89.10): whether it is there
+    """What an object of the place shows now: whether it is there
     (``shown``), open (a house's or a room's door; flowers in bloom, else in bud) and on (a lamp
     lit; a house's windows lit)."""
 
@@ -284,7 +283,7 @@ class ObjectState:
 
 def default_state(kind: str) -> ObjectState:
     """The state of an object of ``kind`` unless the scene says otherwise: there, closed and off;
-    flowers in bloom; a laptop open; a tower's windows lit (§102.2, a retro tower's too, §107)."""
+    flowers in bloom; a laptop open; a tower's windows lit (a retro tower's too)."""
     return ObjectState(open=kind in ("flowers", "laptop"), on=kind in ("tower", "retro_tower"))
 
 
@@ -402,7 +401,7 @@ class IsoPlace:
 
     def without(self, names: Collection[str]) -> "IsoPlace":
         """The place without the objects ``names`` (not there now: they appear later, or have
-        gone; DESIGN.md §89.10): one walks where they would stand, and not over a bridge that is
+        gone): one walks where they would stand, and not over a bridge that is
         not there."""
         if not names:
             return self
@@ -456,7 +455,7 @@ class IsoPlace:
     def is_cut(self, column: int, row: int) -> bool:
         """Indoors, whether the wall in the cell is cut away: it would hide the room behind it
         (a cell of the place that is not a wall is right behind it, to its left, top or top
-        left on the map). Only the walls along the room's back stand (DESIGN.md §89.4)."""
+        left on the map). Only the walls along the room's back stand."""
         if not self.indoor or self.ground(column, row) not in WALLS:
             return False
         behind = ((column - 1, row), (column, row - 1), (column - 1, row - 1))

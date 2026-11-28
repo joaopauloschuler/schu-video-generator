@@ -1,4 +1,4 @@
-"""Icons as Manim objects: :func:`icon` and the :class:`Icon` group (DESIGN.md §22).
+"""Icons as Manim objects: :func:`icon` and the :class:`Icon` group.
 
 An icon is built from its SVG (:mod:`vidgen.icons` finds it) with Manim's ``SVGMobject`` and
 then normalised:

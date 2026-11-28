@@ -1,4 +1,4 @@
-"""The ``orbit`` scene type (Phase X, Step 229; DESIGN §98): params and their errors, the
+"""The ``orbit`` scene type (Phase X, Step 229): params and their errors, the
 resolved model, targets, Kepler's second law from the scene's own timing, and tiny renders in
 16:9 and 9:16."""
 

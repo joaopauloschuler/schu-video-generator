@@ -1,4 +1,4 @@
-"""The frame arithmetic of chained parts (DESIGN.md §113.22): no rendering, nothing sent."""
+"""The frame arithmetic of chained parts: no rendering, nothing sent."""
 
 from __future__ import annotations
 

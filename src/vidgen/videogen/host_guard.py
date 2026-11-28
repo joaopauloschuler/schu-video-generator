@@ -1,4 +1,4 @@
-"""What cleans up a quick tunnel when vidgen itself does not get to (DESIGN.md §115.5).
+"""What cleans up a quick tunnel when vidgen itself does not get to.
 
 - Termination signals (SIGTERM, SIGHUP, Windows SIGBREAK) close the open hosts properly, then end
   vidgen. :func:`track_host` installs the handlers only from the main thread and only over the

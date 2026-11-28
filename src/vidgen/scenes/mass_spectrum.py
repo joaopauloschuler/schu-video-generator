@@ -1,5 +1,5 @@
 """``mass_spectrum``: a simulated invariant-mass spectrum filling event by event, its fit and the
-local significance of the bump (Phase Y, Step 241; DESIGN §99.12).
+local significance of the bump (Phase Y, Step 241).
 
 **Decision: a ``plot`` underneath.** The scene is a :class:`Plot` whose params are made from the
 physics (``channel``, ``events``, ``seed`` …): a live histogram of the plot model

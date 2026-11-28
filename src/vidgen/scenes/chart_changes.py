@@ -1,5 +1,4 @@
-"""Charts that change between beats (``changes:`` on ``bar_chart`` and ``line_chart``; DESIGN
-§87.9): the ``change<N>`` targets and steps, the rule for when a y axis rescales, and the
+"""Charts that change between beats (``changes:`` on ``bar_chart`` and ``line_chart``): the ``change<N>`` targets and steps, the rule for when a y axis rescales, and the
 animation that swaps parts of a group (an axis' ticks) when a change ends."""
 
 from collections.abc import Callable, Sequence

@@ -1,4 +1,4 @@
-"""Automatic directing of a cartoon host (``auto_direct`` with ``host:``; DESIGN.md §71.2). No manim.
+"""Automatic directing of a cartoon host (``auto_direct`` with ``host:``). No manim.
 
 :func:`plan_host_directions` is a pure function from a scene's beats (the actions written in each,
 the kinds of directing on, what the scene's own reveal shows in it) to the host actions it adds,

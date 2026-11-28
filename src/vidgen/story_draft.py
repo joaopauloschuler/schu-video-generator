@@ -1,4 +1,4 @@
-"""``vidgen story draft``: a story cartoon project drafted from a story in prose (DESIGN.md §105.5).
+"""``vidgen story draft``: a story cartoon project drafted from a story in prose.
 Deterministic, no AI: the tool never calls a model; an author or an agent refines the draft.
 
 :func:`draft_story` reads the story (:mod:`vidgen.story_text`) and builds the ``video.yaml``
@@ -54,7 +54,7 @@ EMOTION_EXPRESSIONS: dict[str, str | None] = {
 }
 #: Latest ``at`` of an action the draft adds.
 LATEST_AT = 0.8
-#: The title card's look by the story's mood (DESIGN.md §105.8): dark with neon letters for a
+#: The title card's look by the story's mood: dark with neon letters for a
 #: night story or a mystery, deep and soft for a bedtime story, warm for a cosy one, quiet for a
 #: sad one; otherwise the card's own (the theme's colour behind a burst of rays).
 CARD_LOOKS: dict[str, dict[str, str]] = {
@@ -63,7 +63,7 @@ CARD_LOOKS: dict[str, dict[str, str]] = {
     "cosy": {"style": "burst", "color": "#E3924B"},
     "quiet": {"style": "plain", "color": "#5B7083"},
 }
-#: A modest ambient life for the outdoor places, by day and at night (DESIGN.md §105.7, §105.8):
+#: A modest ambient life for the outdoor places, by day and at night:
 #: a few passers-by and birds by day, fireflies on a green place at night.
 DRAFT_AMBIENT: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
     "village": ({"walkers": 2, "birds": 2, "cat": True}, {"cat": True, "fireflies": 6}),
@@ -99,7 +99,7 @@ class DraftOptions:
     """How to draft: ``style`` (``iso`` / ``flat``), ``fmt`` (``16:9`` / ``9:16``), the
     narrator's Kokoro voice (``None``: :data:`NARRATOR_VOICE`, or the protagonist's in the first
     person), the title when the story has none, the seed of the random looks, and ``audio``: an
-    audio-only project (sections of lines, no pictures; DESIGN.md §111)."""
+    audio-only project (sections of lines, no pictures)."""
 
     style: str = "iso"
     fmt: str = "16:9"
@@ -400,7 +400,7 @@ def _scene(draft: StoryDraft, index: int, scene: StoryScene, previous: tuple[str
         params["fill_light"] = FILL_NIGHT_INDOOR if place.indoor else FILL_NIGHT
     params.update(weather)
     life = DRAFT_AMBIENT.get(place.name, ({}, {}))[1 if light == "night" else 0] if not flat and not place.indoor else {}
-    if life:   # a little life in the background (§105.8)
+    if life:   # a little life in the background
         params["ambient"] = {**life, "seed": draft.options.seed + index}
     params["characters"] =[{"name": who, "at": stage.stands[who]} for who in on_stage]
     beats: list[dict[str, Any]] = []
@@ -502,7 +502,7 @@ def draft_story(story: Story, options: DraftOptions | None = None) -> StoryDraft
         scenes.append(entry)
         places.setdefault(entry["set"], place)
     mood = card_mood(lights, music, " ".join(line.text for s in story.scenes for line in s.lines))
-    if mood is not None:   # the card's look by the story's mood (§105.8)
+    if mood is not None:   # the card's look by the story's mood
         scenes[0]["params"].update(CARD_LOOKS[mood])
         draft.notes.append(f"title card: {mood} look ({', '.join(f'{k} {v}' for k, v in CARD_LOOKS[mood].items())})")
     sets = {} if options.style != "iso" else {
@@ -524,7 +524,7 @@ AUDIO_BEAT_KEYS: tuple[str, ...] = ("text", "voice", "emotion")
 
 
 def _to_audio(draft: StoryDraft, story_scenes: Sequence[StoryScene]) -> None:
-    """Turn the drafted cartoon into an audio-only project (DESIGN.md §111): the same voices,
+    """Turn the drafted cartoon into an audio-only project: the same voices,
     lines, speakers and emotions as ``sections`` (one per story scene, titled by its heading),
     the music bed, and no pictures (no title / end card, cast looks, sets, shots or actions)."""
     config = draft.config

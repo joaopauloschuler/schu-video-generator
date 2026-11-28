@@ -2028,7 +2028,7 @@ has the shapes its file names (`vidgen character NAME` lists them; no `cheeks` o
 the new expressions fall back: `laughing` closes its eyes, `frightened` widens them). `vidgen validate` reports a
 `shape` the character does not have (none of the choices), and warns about a part it lacks.
 
-The six expressions added in Step 125 (DESIGN.md §69.59):
+The six expressions added in Step 125:
 
 | expression | face | while idling (`idle: true`) |
 |---|---|---|
@@ -2777,7 +2777,7 @@ prompt.
 ## Generated video (`videogen`, `vidgen generate`)
 
 Selected shots can be made by generative video models through OpenRouter's video API (Phase
-AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; by
+AH). vidgen keeps the story, timing, text, captions, music and assembly; by
 default the model's own sound is not used (the job is sent with `generate_audio: false`; see
 `sound` below for the model's own sound). Generation costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
 The workflow, cost control and privacy: [COOKBOOK-3D-SCENE-TO-SEEDANCE.md](COOKBOOK-3D-SCENE-TO-SEEDANCE.md).
@@ -2807,10 +2807,10 @@ videogen:
   first_frame_dissolve: 0.4 # seconds the starting picture dissolves into the guide with first_frame_in: guide
 ```
 
-- **ComfyUI** (`provider: comfyui`, DESIGN.md §113.20): shots use workflows kept with vidgen as their
+- **ComfyUI** (`provider: comfyui`): shots use workflows kept with vidgen as their
   `model:`, listed by `vidgen generate models`. `ltx-2.3-union-control` (LTX-2.3 distilled-1.1 GGUF
   Q5_K_M + IC-LoRA union control ref0.5, 8 steps, cfg 1, seed 42 or the shot's `seed:`) takes the shot's
-  `guide: canny`, `guide: final` or `guide: depth` as its control video (required; DESIGN.md §113.26), its `first_frame:` (optional, strength 1.0) and the
+  `guide: canny`, `guide: final` or `guide: depth` as its control video (required), its `first_frame:` (optional, strength 1.0) and the
   prompt; no references (they are left out, with a note) and no last frame. Its shape rules: 512p,
   the long side rounded up to a multiple of 64 (16:9: 960x512), 1-5 s (longer beats are split into
   parts), 8k+1 frames at 24 fps. vidgen scales the guide and the first frame to cover that size
@@ -2846,7 +2846,7 @@ videogen:
   https URLs: OpenRouter refuses them inline (HTTP 400 "Only HTTPS URLs are allowed"), so with
   `inline_media: all` a shot with `audio:` or `guide:` has a problem in the plan and `run --pay`
   refuses it, unless `host: quick_tunnel` shares them (below).
-- **Quick tunnel** (`host: quick_tunnel`, off by default; DESIGN.md §115): audio and video
+- **Quick tunnel** (`host: quick_tunnel`, off by default): audio and video
   inputs are shared through a Cloudflare quick tunnel (free, no account; needs `cloudflared`:
   Windows `winget install Cloudflare.cloudflared`, macOS `brew install cloudflared`; or
   `cloudflared: <path>`). `vidgen generate run --pay` opens one tunnel per shot that has a voice
@@ -3003,7 +3003,7 @@ scenes:
   ..."); a mask guide also lists the stand-ins' colours by name (up to four stand-ins). The pass
   is part of the request, so changing it is a new clip (never the cached one). Walkthrough:
   [COOKBOOK-3D-SCENE-TO-SEEDANCE.md, From a 3D scene to a generated clip](COOKBOOK-3D-SCENE-TO-SEEDANCE.md#6-from-a-3d-scene-to-a-generated-clip).
-- **The finished render and the film's sound** (DESIGN.md §113.18): `guide: final` (any scene
+- **The finished render and the film's sound**: `guide: final` (any scene
   type) sends the part of the beat from the scene's **finished** render instead of the draft:
   `guide.final.mp4`, the video's own size and frame rate, the scene's full look (a `space` scene's
   camera look too), silent, with no overlays and no placed take. When nothing is drawn over the scene
@@ -3016,7 +3016,7 @@ scenes:
   start in it (`vidgen render` first; a talking shot keeps `audio: beat`); the prompt calls it the
   shot's soundtrack. A film rendered again (also only to show a new take) marks it as changed: cut it
   again (free). Both are video / audio inputs, so they need the quick tunnel.
-- **A web scene's depth** (DESIGN.md §113.19): `guide: depth` also works on a `space` scene and on
+- **A web scene's depth**: `guide: depth` also works on a `space` scene and on
   a `web` scene whose page draws through `vidgen/three-finish` (`Finish.render(t)`; another page is
   refused when it is drawn). A page that draws its picture another way draws only its depth frames
   through one: `if (ctx.draw_mode === "depth") { (depth ??= new Finish(renderer, scene, camera, ctx)).render(t); return; }`
@@ -3031,7 +3031,7 @@ scenes:
   captions or overlays. `first_frame: render` is the finished render's first frame. `vidgen render
   --guide-passes depth` draws it in every web scene too. Not drawn right yet: an orbital scene that
   draws in depth slices (`vidgen/space-scale`'s default `depth: split`) leaves only the nearest slice's depth.
-- **The canny guide** (`guide: canny`, DESIGN.md §113.21): the same part of the **finished** render as
+- **The canny guide** (`guide: canny`): the same part of the **finished** render as
   `guide: final` (same frames and timing; `first_frame: render` is its first frame), turned into white
   Canny edges on black (`guide.canny.mp4`, silent H.264). `canny: {low, high, glint}`: the edge
   thresholds (OpenCV's, on the L1 gradient, no blur first; default 92 / 200) and `glint` (default
@@ -4138,7 +4138,7 @@ pedal:   {instrument: organ, octave: 1, settings: {drawbars: "86 8400 000"}, ste
   works too.
 - Since Step 346 notes can be slurred (`(A4 - C5 -)`: no new attack) and dynamic marks change
   the brightness as well as the level (**Expressive notes** below). Nobody has listened to
-  these instruments: they are judged by measurement (DESIGN §120.4).
+  these instruments: they are judged by measurement.
 
 **Bowed strings** (Step 344; no samples: additive synthesis with the instrument's body in it).
 Four instruments, each a section by default, each with four strokes:
@@ -4176,7 +4176,7 @@ bass:    {instrument: double_basses, settings: {stroke: pizzicato}, steps: "x . 
 - Since Step 346 sustained and tremolo notes can be slurred with a glide, strokes can change
   note by note (`[spiccato]`), and dynamic marks change the bite and brightness (**Expressive
   notes** below). Every stroke of a pitch at one dynamic is the same, and nobody has listened
-  to these instruments: they are judged by measurement (DESIGN §120.5).
+  to these instruments: they are judged by measurement.
 
 **Orchestral percussion** (Step 345; no samples: every drum is the sum of the modes its head or
 its metal has). The `kick` is a sine that glides from at most 160 Hz to at most 70 Hz; these
@@ -4228,7 +4228,7 @@ gong:   {instrument: tam_tam, steps: "x | . | . | ."}
   The first cymbal or tam-tam of a render takes about a second to make.
 - Limits: a real player's blows differ a little, these do not; a roll is the same blow
   repeated; no rim shots, no brushes, no choked cymbal; nobody has listened to these
-  instruments: they are judged by measurement (DESIGN §120.6).
+  instruments: they are judged by measurement.
 
 **Choir** (Step 345; formant synthesis). `choir` holds a vowel: it is a choir *pad* (ooh, aah,
 a hum), and it sings no words. Expect the sound of a synthesised choir stop, not of a recorded
@@ -4261,9 +4261,9 @@ open:  {instrument: choir, settings: {vowel: mm, morph: aah, attack: 3}, steps: 
 - Limits: no words (since Step 346 notes can be slurred: `(A3 - C4 -)`; since Step 361 they
   can sing syllables, below), the singers of one kind share one table of formants (only their
   throat lengths differ), nothing but breath above 5 kHz; nobody has listened to it: it is
-  judged by measurement (DESIGN §120.6).
+  judged by measurement.
 
-**Syllables, a soloist, a whisper** (Step 361; DESIGN §121.4). Still synthesis, still no words.
+**Syllables, a soloist, a whisper** (Step 361). Still synthesis, still no words.
 A choir that sets none of these four settings sounds exactly as before.
 
 ```yaml
@@ -4292,7 +4292,7 @@ hush:  {instrument: choir, settings: {syllable: mm-ah, whisper: 1}, steps: "* - 
 - Cost: a syllable or a whisper costs 5–25 % more than a held vowel (8 singers: 80–95 ms of CPU
   per second of a note); a soloist 14 ms.
 
-**Expressive notes** (Step 346; DESIGN §120.7). Marks in square brackets stand before a step
+**Expressive notes** (Step 346). Marks in square brackets stand before a step
 in a track's `steps` and stay in force until another mark changes them (when the pattern
 repeats it starts again as written). A score without marks sounds exactly as before.
 
@@ -4477,7 +4477,7 @@ vidgen music plan my_song --style space-air --out my_film # the same in the air 
 ```
 
 `vidgen music plan SCORE [--out DIR] [--force] [--max-scene SECONDS] [--min-scene SECONDS]
-[--style web|space] [--seed N] [--json]` (Step 359, DESIGN §121.2) reads a score file (a path, a project piece's name or a score
+[--style web|space] [--seed N] [--json]` (Step 359) reads a score file (a path, a project piece's name or a score
 bed's: `tidewater`, `skyline`, `time_of_flight`; another bed: write its template first) without
 playing it, and proposes the scenes of a music video, each starting on a bar line:
 
@@ -4545,7 +4545,7 @@ the name's role. Edit the draft as any project: change the pages, join or move s
 duration a whole number of frames between bar lines), then `vidgen still DIR --scene ID --at 2
 --size 640x360` and `vidgen render DIR --draft`.
 
-**A draft space film: `--style space`** (Step 376, DESIGN §122.12). The same plan (sections, cuts,
+**A draft space film: `--style space`** (Step 376). The same plan (sections, cuts,
 colours, reactions), with a [`space`](#space) scene per cut instead of a `web_cut` scene and a
 starter page: no code at all. Each choice is a rule, deterministic from the score and `--seed`
 (default 1): the scene's **role** picks the camera move (quiet: a slow arc round a world to its
@@ -4561,7 +4561,7 @@ scene has `fade: false`, the first an opening title and the last an end card. Th
 validated as it is written; `vidgen still DIR --scene ID --at 2 --size 640x360` before rendering.
 Without `--style`, the draft is the `web_cut` one, unchanged.
 
-**`--style space-air`** (Step 392, DESIGN §123.14): the same plan as scenes in the air and beside
+**`--style space-air`** (Step 392): the same plan as scenes in the air and beside
 giant ships, by role, deterministic from the score and `--seed`: quiet, a skim over the sea at
 sunset; build, a descent from orbit to the sea (from 400 km, or 40 km in a scene under 10 s); verse,
 a plane (glider, skiff, needle or scout by the seed) chased over the alpine range with contrails, its
@@ -5850,7 +5850,7 @@ multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` 
 
 ### `plot`
 
-A scientific plot on the chart core (DESIGN §97): line, point and histogram series from inline
+A scientific plot on the chart core: line, point and histogram series from inline
 numbers or a CSV in the project, on linear, `log`, `symlog`, reversed or broken axes with units,
 scientific notation or SI prefixes, gridlines and a legend; error bars, fitted curves with their
 parameters ± standard errors, confidence and prediction bands, residual panels, distributions
@@ -6748,7 +6748,7 @@ a warning.
 
 ### `3d`
 
-**Simple 3D** (Phase AI, DESIGN §114): objects — boxes, spheres, cylinders, cones, tori, planes,
+**Simple 3D** (Phase AI): objects — boxes, spheres, cylinders, cones, tori, planes,
 arrows and text labels, in named groups — seen by a camera under one default light (an even
 ambient part plus a sun) over a background colour, drawn by **three.js** in headless Chromium.
 The picture fills the frame from the first frame; `spin` keeps an object (or a group) turning
@@ -6943,7 +6943,7 @@ ending on an object) it keeps looking at it — until the next camera action.
 
 ### `web`
 
-**A page you write** in HTML, CSS and JavaScript (Phase AK, DESIGN §118), screenshotted in
+**A page you write** in HTML, CSS and JavaScript (Phase AK), screenshotted in
 headless Chromium at the render's frame rate and shown full-frame (`region: bleed`) or in the
 body region under a title vidgen draws (`region: body`); overlays and captions are drawn over it.
 The page is on screen from the first frame (no fade in, as on `3d`), beat 1 fades the title in,
@@ -6965,7 +6965,7 @@ command, same `vidgen validate` warning).
 
 Give exactly one of `page` and `script`.
 
-**`design_width`: a page built in fixed pixels** (Step 339, DESIGN §118.17). With `design_width:
+**`design_width`: a page built in fixed pixels** (Step 339). With `design_width:
 1280` the page's window is 1280 CSS pixels wide whatever the render's size, and Chromium draws it
 at the scale `output width / design_width` (its device scale factor), so the frames have the
 output's pixels and HTML text, SVG and CSS shapes are drawn at that resolution.
@@ -7043,7 +7043,7 @@ folder and remove the link to Google Fonts (see "Using another font" in `vidgen 
 When vidgen already declares that family to the page (a bundled font of the theme, or a file in
 `fonts/`), the warning only says to remove the link.
 
-**Time belongs to vidgen** (DESIGN §118.8). Write the page the ordinary way: CSS animations and
+**Time belongs to vidgen**. Write the page the ordinary way: CSS animations and
 transitions, `requestAnimationFrame` loops, `setTimeout`, `Date.now()`, `performance.now()`, SVG
 `<animate>`, a `<video>` and `Math.random` all follow the video's time, and the same scene gives the
 same frames on every render. Before any script of the page runs, vidgen replaces the page's clock:
@@ -7086,7 +7086,7 @@ workers and their timers, iframes, SVG animation in an `<img>` or `<object>`, `e
 changes to `paused` after the animation started (pause it with `getAnimations()[i].pause()`, which
 vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets it every frame).
 
-**What the page is given** (DESIGN §118.9), `ctx`:
+**What the page is given**, `ctx`:
 
 | field | value |
 |---|---|
@@ -7157,7 +7157,7 @@ body[data-beat="b2"] .step2, body[data-beat="b3"] .step2 { opacity: 1; }
 is also served at `/__vidgen__/three/three.module.js`. Draw into `ctx.canvas` with
 `new THREE.WebGLRenderer({canvas: ctx.canvas})` and call `renderer.render` in `frame`.
 
-**three.js add-ons** (DESIGN §118.14). A chosen set of add-ons from the same three.js (0.186.1)
+**three.js add-ons**. A chosen set of add-ons from the same three.js (0.186.1)
 ships too and is imported the usual way, `three/addons/<folder>/<Name>.js` (or the older
 `three/examples/jsm/…`), sharing the one `THREE`: `loaders/GLTFLoader.js`,
 `utils/BufferGeometryUtils.js`, `environments/RoomEnvironment.js`,
@@ -7187,7 +7187,7 @@ node materials. Importing one stops the render with `scene '<id>': the page impo
 add-on '<path>' (three/addons/<path>), which is not shipped with vidgen …` and says how to copy
 the file from three.js 0.186.1 into the project and import it by a relative path.
 
-**Animation and chart libraries** (DESIGN §118.15). Five libraries ship with vidgen and are
+**Animation and chart libraries**. Five libraries ship with vidgen and are
 imported by name through the same import map; each is one build file of its npm package,
 unmodified, served from `/__vidgen__/libs/<package>/` and recorded with the page's loaded files:
 
@@ -7211,7 +7211,7 @@ which is not shipped with vidgen. …`. A copy in the project works (GSAP 3.15.1
 `dist/gsap.min.js` from a `<script src>`, with `gsap.ticker.lagSmoothing(0)` (without it a step
 over 0.5 s counts as 33 ms), or a paused timeline and `tl.time(t)` in `frame(t)`.
 
-**Finishing three.js scenes: `vidgen/three-finish`** (Step 350, DESIGN §120.11). vidgen's own ES
+**Finishing three.js scenes: `vidgen/three-finish`** (Step 350). vidgen's own ES
 module (MIT, vidgen's code; `data/web/modules/three-finish.js`, served as
 `/__vidgen__/modules/three-finish.js`) is imported by name through the same import map:
 `import {Finish} from "vidgen/three-finish"`. It imports only `three` and the shipped add-ons
@@ -7225,8 +7225,8 @@ from `frame`; `finish.dispose()`. The chain: the scene into a linear half-float 
 texture (at `renderScale`; motion blur averages `samples` drawings) → depth of field → bloom (in
 place) → fringe, exposure × filter × white balance, flash, vignette (linear) → tone mapping →
 saturation → encoding (sRGB, once) → contrast, lift, gamma, gain → fade → FXAA → grain → the
-canvas. A camera's sensor (Step 397, DESIGN §124.1), off unless given: `range` right after tone
-mapping, `sharpen` after FXAA, `noise` in place of the grain. A camera's lens (Step 398, DESIGN §124.2), off unless
+canvas. A camera's sensor (Step 397), off unless given: `range` right after tone
+mapping, `sharpen` after FXAA, `noise` in place of the grain. A camera's lens (Step 398), off unless
 given, in place of the fringe step in linear light before tone mapping: `distort`, `edges`, and `halation` (picked and
 blurred at a quarter size before the grade, added after exposure). three.js applies no tone mapping or colour-space conversion inside render targets, so the
 page's `renderer.toneMapping` and `outputColorSpace` play no part; with every effect off the chain
@@ -7274,11 +7274,10 @@ curves in JavaScript (what the shaders compute): `rangeWhite(stops)`, `rangeCurv
 {shoulder, black})`, `noiseSpread(amount, floor, encoding)` → `{scale, read}`, `noiseSigma(v,
 amount, floor, encoding)`. three.js 0.186
 has no `PCFSoftShadowMap` (it falls back to `PCFShadowMap` with a warning); `"pcf"` with `radius`
-2–4 is the recommendation, `"vsm"` cost +0.75 s a frame at a 2048 map on 2 cores. Costs per effect:
-DESIGN §120.11. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
+2–4 is the recommendation, `"vsm"` cost +0.75 s a frame at a 2048 map on 2 cores. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
 polling timer never fires while the clock stands still in `load`.
 
-**Camera looks: `vidgen/camera-looks`** (Step 400, DESIGN §124.4). Plain JavaScript (no imports;
+**Camera looks: `vidgen/camera-looks`** (Step 400). Plain JavaScript (no imports;
 `data/web/modules/camera-looks.js`), imported by name: `import {cameraLook} from "vidgen/camera-looks"`.
 `cameraLook(name, {finish, operator}, {metered: true})` → `{finish, operator}`: the look's options of
 `vidgen/three-finish` and of `vidgen/space-camera-air`'s operator with your own over them (`lookMerge`:
@@ -7289,8 +7288,7 @@ the table (the looks of `camera_look:` of [`space`](#space) scenes, which reads 
 `camera` is their default); an unknown name is an `Error` with a did-you-mean. A page of your own gets
 no look unless it asks (three-finish's own defaults keep the sensor and lens off). No config key.
 
-**Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit`** (Step 358,
-DESIGN §121.1). Two more of vidgen's own ES modules (MIT; `data/web/modules/music-time.js` and
+**Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit`** (Step 358). Two more of vidgen's own ES modules (MIT; `data/web/modules/music-time.js` and
 `three-kit.js`, served as `/__vidgen__/modules/<file>`), imported by name like
 `vidgen/three-finish`. `vidgen/music-time` is plain JavaScript (no three.js, no DOM);
 `vidgen/three-kit` imports `three` and `vidgen/music-time`. A page that imports neither is
@@ -7349,7 +7347,7 @@ Errors: a builder before `setStage` throws `vidgen/three-kit: call setStage({sce
 first`; an unknown polyhedron `vidgen/three-kit: no polyhedron "sphere" (octa, tetra, ico, dodeca,
 cube)`. Both stop the render with the scene, file and line.
 
-**Opening titles and end cards: `vidgen/title-cards`** (Step 364, DESIGN §121.7; craft notes:
+**Opening titles and end cards: `vidgen/title-cards`** (Step 364; craft notes:
 [COOKBOOK-3D section 12](COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films)). A film's
 opening title and a matching end card as HTML text over any `web` page (no three.js needed), laid
 out and timed as `examples/escapement`'s: the title block in the left or right third, a small
@@ -7396,7 +7394,7 @@ within 10 s (the page's first frame: 90 s), stops the render with `scene '<id>':
 
 **Warnings from the page** (Step 376). A page may leave sentences for vidgen's log in the array `globalThis.__vidgenNotes` during `load`; vidgen prints each as a warning (`scene 'x': ...`) once the page has loaded, in `vidgen still` and when the clip is drawn (not when a stored clip is reused). The [`space`](#space) scene's page reports its camera's and bodies' checks this way; `pageNote(text)` of `vidgen/space-scene` adds one. Nothing about the clip or its key changes.
 
-**Cache** (DESIGN §118.10). The screenshots, with their transparency, are written to a lossless clip
+**Cache**. The screenshots, with their transparency, are written to a lossless clip
 `build/<quality>/web/<scene>.mkv` with `<scene>.json` beside it: what it was drawn from (the size,
 frame rate, length, theme, `data`, beats, the video's shape and the region, vidgen's clock) and every file the page loaded while it
 was drawn (the page or script, styles, pictures, fonts, modules, fetched data, videos; also one
@@ -7404,7 +7402,7 @@ first asked for on a later frame, and one asked for but missing). The clip is re
 scene not rendered again, while all of that is unchanged; an edit to any of those files, to the
 scene's `data:`, the theme or the narration renders that scene again (and only it). `vidgen render
 --force` draws the frames again too. The same holds for a scene of your own type that subclasses
-the `web` scene (`class WebCut(Web)` in `extensions/`; since Step 341, DESIGN §120.1: before it,
+the `web` scene (`class WebCut(Web)` in `extensions/`; since Step 341: before it,
 an edit to such a scene's script was not noticed). `vidgen storyboard` renders a `web` scene like every scene
 (all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
 `vidgen animatic`). The clip is large (a detailed WebGL page: about 26 MB per second of video at
@@ -7412,7 +7410,7 @@ an edit to such a scene's script was not noticed). `vidgen storyboard` renders a
 `keep_intermediates: false` deletes it once the scene is rendered; see
 [intermediate files and disk](#intermediate-files-and-disk-render).
 
-**Music data: `music_data`** (Step 347, DESIGN §120.8). A page that follows the music needs no
+**Music data: `music_data`** (Step 347). A page that follows the music needs no
 script of its own to measure it: with `music_data: true` (or the mapping above) the page's `ctx`
 has `music`.
 
@@ -7473,7 +7471,7 @@ the scenes with `music_data` again; scenes without it are not affected. A video 
 cannot use it (`vidgen validate`: `music_data: the video plays no music`). Music files other than
 score files (`.wav`, `.mp3`...) give the measurements only.
 
-**Orbit data: `orbit_data`** (Step 367, DESIGN §122.3). A three.js page that shows planets,
+**Orbit data: `orbit_data`** (Step 367). A three.js page that shows planets,
 moons or a spacecraft gets their motion from vidgen's orbit model instead of writing it in
 JavaScript: with `orbit_data:` the page's `ctx` has `orbits`, the numbers Python computed for
 every frame of the scene.
@@ -7517,7 +7515,7 @@ the settings, the frame rate and frames, vidgen's version and its orbit code); t
 holds its SHA-256, so a change of the bodies draws the frames again. A 60 s scene of the eight
 planets and the Moon at 30 fps sends about 2.3 MB.
 
-**Flight data: `flight_data`** (Step 385, DESIGN §123.7). A page that shows a plane, a space plane
+**Flight data: `flight_data`** (Step 385). A page that shows a plane, a space plane
 or a capsule in the air gets its path from vidgen instead of writing it in JavaScript: with
 `flight_data:` the page's `ctx` has `flight`, the numbers Python computed for every frame — where
 each flight is, how fast it goes and how it is turned — checked never to come under the ground.
@@ -7589,7 +7587,7 @@ the vertical rate, the speed).
 (`lift_to_drag` 1.2, `loading` m / (C_L S) 450 kg/m²: the glide's height for a speed), with
 S-turns of `bank` (60°) and `reversals` (3); at the end it turns into the level state `to`.
 Position and velocity meet the orbit's where it takes over and the next leg's where it ends.
-What is physical and what is a look is in DESIGN §123.7 and the data's `approximations`; the
+What is physical and what is a look is in the data's `approximations`; the
 heating indicator (√ρ v³, 1 about a returning orbiter's peak) is for a glow.
 
 *Never under the ground.* Every path is checked against the ground's heights (a land's
@@ -7616,7 +7614,7 @@ data is kept in `build/flights/flight-data-<key>.json` and its SHA-256 is in the
 `orbit_data` too, `ctx.orbits` is there as before; Python: `vidgen.api.flight`,
 `vidgen.api.web_scene_flights`.
 
-**Astronomical scales: `vidgen/space-scale`** (Step 368, DESIGN §122.4). Draws `ctx.orbits` in
+**Astronomical scales: `vidgen/space-scale`** (Step 368). Draws `ctx.orbits` in
 three.js without jitter or z-fighting: a 100 m ship, the planet 400 km under it and the Moon behind
 both in one frame. `import {SpaceView, scaleNote} from "vidgen/space-scale"`.
 
@@ -7665,7 +7663,7 @@ false` keeps one in the world). A depth slice draws only the things whose depth 
 world's shell that keeps its depth off the far plane is never drawn over nearer things. Mistakes stop the render with a did-you-mean: `vidgen/space-scale: no body
 "Mon" (did you mean "Moon"?)`.
 
-**Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
+**Lint reads the page**. At each still lint looks at (the beat ends; more with
 `vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every
 element that holds visible text (with its inline children: `<p>Hello <b>you</b></p>` is one text)
 and every SVG `<text>`, with its box (mapped from the page to the frame), its size as drawn (CSS
@@ -7708,7 +7706,7 @@ export function layout(t, ctx) {
 }
 ```
 
-**The sky of a space scene: `vidgen/space-sky`** (Step 370, DESIGN §122.6). A sky that looks like
+**The sky of a space scene: `vidgen/space-sky`** (Step 370). A sky that looks like
 a photograph taken from space: stars with the real sky's numbers per magnitude and pale colours by
 temperature, the Milky Way with its bulge and dust, and on request nebulae and galaxies; from a
 seed (the default) or with the real bright stars. `import {spaceSky, spiralGalaxy} from
@@ -7773,7 +7771,7 @@ const finish = new Finish(renderer, scene, camera, ctx, {antialias: "none"});   
   than 12 nebulae or galaxies. An orthographic camera is not supported (the sky needs a perspective).
 - On the contact sheet: `vidgen parts 'space-sky*' spiral-galaxy`.
 
-**Suns and light: `vidgen/space-light`** (Step 372, DESIGN §122.8). A star to look at, the far
+**Suns and light: `vidgen/space-light`** (Step 372). A star to look at, the far
 sun's glare, and one object that lights a whole space scene.
 `import {star, spaceLight} from "vidgen/space-light"`.
 
@@ -7837,7 +7835,7 @@ const update = (t) => { space.update(t, view(t)); earth.update(t); moon.update(t
   planet-shine is one light per body; a star's surface is a film's look (in an honest exposure a
   sun in the frame is white).
 
-**Phenomena: `vidgen/space-phenomena`** (Step 373, DESIGN §122.9). A black hole that bends the
+**Phenomena: `vidgen/space-phenomena`** (Step 373). A black hole that bends the
 sky, a wormhole, a jump to warp, asteroid fields and belts, comets, an aurora: each one call and
 one `update(t)`, each a pure function of t and its seed.
 `import {blackHole, wormhole, warp, asteroids, asteroid, comet, aurora} from "vidgen/space-phenomena"`.
@@ -7952,7 +7950,7 @@ const update = (t) => {
 - Limits: hole and wormhole bend only the sky; no rotating hole; a comet's tail pointing
   straight at the camera thins away; a field's rocks do not hide the sun's glare.
 
-**Spacecraft: `vidgen/space-craft`** (Step 374, DESIGN §122.10). Ready-made craft from a seed,
+**Spacecraft: `vidgen/space-craft`** (Step 374). Ready-made craft from a seed,
 the parts they are made of, and the motion of a craft that follows `ctx.orbits`: invented
 designs, every surface computed (foil that crinkles, plating with panel lines and rivets, solar
 cells, lit windows).
@@ -8049,7 +8047,7 @@ function frame(t) { space.update(t, view); earth.update(t); ship.update(t); sun.
   shimmer a little at middle distances without motion blur.
 - Look first: `vidgen parts --kind craft` and `vidgen parts --kind craft-part`.
 
-**Space planes: `vidgen/space-plane`** (Step 386, DESIGN §123.8). Winged craft from parametrized
+**Space planes: `vidgen/space-plane`** (Step 386). Winged craft from parametrized
 parts on the spacecraft kit: six ready-made planes that differ by seed, or a plane of your own from
 a body, one wing function with presets, tails, engines and gear. Invented designs; a look, not
 aerodynamics. `import {plane, planeKit, planeFrom, planeFleet} from "vidgen/space-plane"`.
@@ -8114,7 +8112,7 @@ ship.update(t, {gear: 0, bay: 0});                       // on a flight the elev
   ones so that the grid reads. Unknown names stop the page with a did-you-mean.
 - Look first: `vidgen parts 'plane-*'`.
 
-**Giant ship hulls: `vidgen/space-hull`** (Step 388, DESIGN §123.10). Hulls of ships 0.5 to
+**Giant ship hulls: `vidgen/space-hull`** (Step 388). Hulls of ships 0.5 to
 10 km long, built on the craft kit: large forms with named regions, anchors and an atlas for
 later fine detail. `import {hull, hullSpec, hullFrom, hullFleet, hullKit} from "vidgen/space-hull"`.
 
@@ -8133,7 +8131,7 @@ later fine detail. `import {hull, hullSpec, hullFrom, hullFleet, hullKit} from "
 | `detail` | `near` | `far`: no plates, fewer sides, no small works (a fleet, the distance) |
 | `wear` | 1 | how deep the plate lines are drawn (0 to 2) |
 | `tile`, `plate` | 240, 70 | metres one repeat of the plate map covers; the size of the big plates of their own tone |
-| the family's numbers | by the seed | DESIGN §123.10's table (`beam`, `taper`, `hangars`, `towers`, `ring`, `cells`, `bells`, ...) |
+| the family's numbers | by the seed | the family's table (`beam`, `taper`, `hangars`, `towers`, `ring`, `cells`, `bells`, ...) |
 | `name`, `camera`, `height`, `sun`, `lights`, `marker`, `occlusion` | the craft's (occlusion 0) | as `craft(...)` of `vidgen/space-craft` |
 
 - On a hull: `regions` / `region(name)`, `anchors` / `anchor(name)`, `charts` / `texel(chart,
@@ -8152,7 +8150,7 @@ later fine detail. `import {hull, hullSpec, hullFrom, hullFleet, hullKit} from "
   small in it); a bank of eight bells firing and filling a third of the frame 0.5 s more.
 
 
-**Giant ship detail: `vidgen/space-hull-detail`** (Step 389, DESIGN §123.11). The fine detail of
+**Giant ship detail: `vidgen/space-hull-detail`** (Step 389). The fine detail of
 a hull of `vidgen/space-hull` and what makes it read as kilometres long: tiling maps at two
 scales, windows by the thousand, lit hangar bays with parked craft, deck clutter, marks, lamps,
 dressed engine banks with one long plume a bank. `import {dress, dressFleet} from
@@ -8182,7 +8180,7 @@ are baked once and kept by `vidgen cache` (4 MB for the first hull, 1 to 3 MB fo
 Cost at 1280x720 in software GL: a dressed hull filling the frame 1.0 s a frame (0.72 s bare), a
 close view where it covers every pixel 2.0 s (1.3 s bare). Look first: `vidgen parts 'hull-*'`.
 
-**Re-entry and flight effects: `vidgen/space-effects`** (Step 387, DESIGN §123.9). The glow of a
+**Re-entry and flight effects: `vidgen/space-effects`** (Step 387). The glow of a
 re-entry, vapour trails, engine exhaust in air and condensation, for a plane, a craft of
 `vidgen/space-craft` or any object. `import {effects} from "vidgen/space-effects"`.
 
@@ -8222,7 +8220,7 @@ re-entry, vapour trails, engine exhaust in air and condensation, for a plane, a 
   +0.30), about +0.7 s filling the frame; exhaust, vapour and trails under 0.05 s together.
 - Look first: `vidgen parts --kind effect`.
 
-**Camera moves for space scenes: `vidgen/space-camera`** (Step 375, DESIGN §122.11). The moves a
+**Camera moves for space scenes: `vidgen/space-camera`** (Step 375). The moves a
 cinematographer names, each a function of time: nothing is kept between frames, so scenes render
 in any order, a cut on a bar line shows one move, and `vidgen/three-finish`'s motion blur works.
 `import {spaceCamera} from "vidgen/space-camera"`.
@@ -8293,8 +8291,7 @@ const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); 
   straight (follow a body of the data for a true hyperbola); a subject given as a three.js
   object is read by its `position`. Look first: `vidgen parts --kind camera`.
 
-**Camera moves in the air and beside giant ships: `vidgen/space-camera-air`** (Step 390, DESIGN
-§123.12). The same rig with more moves: `airCamera(options)` is a `spaceCamera` (every option and
+**Camera moves in the air and beside giant ships: `vidgen/space-camera-air`** (Step 390). The same rig with more moves: `airCamera(options)` is a `spaceCamera` (every option and
 move above works on it) that also knows the air's scene and the ships. `import {airCamera} from
 "vidgen/space-camera-air"`.
 
@@ -8368,7 +8365,7 @@ cam2.apply(t, cam2.hullPass(t, {ship: "Ship", over: [{bar: 5}, {bar: 13}], side:
   ground between the camera and its subject; a reveal from behind a nearer ship is not built.
   Look first: `vidgen parts 'camera-*'`.
 
-**One world from orbit to the ground: `vidgen/space-descent`** (Step 391, DESIGN §123.13). For a
+**One world from orbit to the ground: `vidgen/space-descent`** (Step 391). For a
 page of a `web` scene: `import {world} from "vidgen/space-descent"`.
 
 - `const w = world(renderer, {planet, at, sun, air, sea, land, clouds, globe, handover, match,
@@ -8404,7 +8401,7 @@ page of a `web` scene: `import {world} from "vidgen/space-descent"`.
   surface is soft; no plane version and no re-anchoring along a long flight; not inside a
   `SpaceView`. Look first: `vidgen parts 'joined-*' camera-descend`.
 
-**The sky from inside an atmosphere: `vidgen/space-air`** (Step 381, DESIGN §123.3). The view
+**The sky from inside an atmosphere: `vidgen/space-air`** (Step 381). The view
 from within a world's air, at any height from the ground to space: the sky dome for any sun (day,
 golden hour, sunset, twilight with the stars coming out, night), the sun's disc, aerial perspective
 for anything in the scene, and the sun's and the sky's light for things in the air. The air is the
@@ -8449,7 +8446,7 @@ holds `height` (m), `elevation` (the sun's, degrees), `ev`, `gain`, `stars`, `su
 `ambient`, `inside`. A `ShaderMaterial` of your own includes `AIR_GLSL`, takes `sky.uniforms` and
 calls `airThrough(colour, toPoint)` (and `sky.shadowsInto(material)` so the shadows in the air reach it;
 `sky.haze` does that itself); `sky.addCaster({name, glsl, uniforms, top, diffuse})` lets something of your own
-cast shadows into the air (DESIGN §123.17). Straight to the canvas the dome applies ACES and sRGB
+cast shadows into the air. Straight to the canvas the dome applies ACES and sRGB
 itself; meshes then need `renderer.toneMapping = THREE.ACESFilmicToneMapping` (through
 `vidgen/three-finish` everything is linear and the finish applies the curve). The numbers without a
 renderer are pure functions (`airOf`, `transmittance`, `skyLight`, `sunlightAt`, `skyAmbient`,
@@ -8464,7 +8461,7 @@ stated choice). Costs (2 cores, software GL): 0.19 s a frame at 1280x720 for the
 0.03 s more while the sun or the height moves, up to 0.2 s more when hazed things fill the frame;
 0.3 s to make. Look first: `vidgen parts --kind air`.
 
-**Water to the horizon: `vidgen/space-sea`** (Step 382, DESIGN §123.4). A sea on the world's
+**Water to the horizon: `vidgen/space-sea`** (Step 382). A sea on the world's
 sphere under a `vidgen/space-air` sky: waves at several scales from a seed, moving on vidgen's
 clock; the sky's own picture mirrored with Fresnel's share; the sun's glitter path, as wide as
 the sea state makes it and golden at sunset; the water's own colour; whitecaps when it blows;
@@ -8515,7 +8512,7 @@ the scene; `rough` and `storm` are steeper than their winds would raise given da
 `methane` is a look. Costs (2 cores, software GL, with the dome): 1.1 s a frame at 1280x720 near
 the water, 0.65 s from 20 km, 0.07 s at 320x180; `fast` 0.8 s. Look first: `vidgen parts --kind sea`.
 
-**Ground with relief: `vidgen/space-land`** (Step 384, DESIGN §123.6).
+**Ground with relief: `vidgen/space-land`** (Step 384).
 Mountains, canyon land, dunes, deserts, crater fields, snow and basalt plains under a
 `vidgen/space-air` sky, on the world's own sphere: the large forms and colours are those the same
 world of `vidgen/space-bodies` shows from orbit (the same world and seed, a place on it), the
@@ -8564,10 +8561,10 @@ heights' definition (what the finest map draws); `ground.horizon` holds the last
 heights as plain data. Costs: 1.35 s a frame at 1280x720 (0.12 s at 320x180), and the first
 frame 7 to 19 s more at 1280x720 for the maps (`fast` 2.3 s; 2.4 s at 320x180); a page that
 starts where another did takes its maps from vidgen's cache of baked maps (the first still 8 s
-instead of 12 s at 1280x720; 37 MB a place on disk); see DESIGN §123.6. From under about 400 m over the ground the range looks soft; deserts and crater fields
+instead of 12 s at 1280x720; 37 MB a place on disk). From under about 400 m over the ground the range looks soft; deserts and crater fields
 hold up from 200 m.
 
-**Cloud decks, towers, lightning, a giant's decks: `vidgen/space-clouds`** (Step 383, DESIGN §123.5).
+**Cloud decks, towers, lightning, a giant's decks: `vidgen/space-clouds`** (Step 383).
 Clouds in a `vidgen/space-air` sky, on the world's own sphere: decks to fly under, through,
 between and over, cloud towers with anvils, lightning inside them at seeded or stated times, and
 the decks of a giant of gas in its band's colours with no ground under them. Lit by the air's sun
@@ -8597,7 +8594,7 @@ clouds' own picture is drawn in `update`). Add the clouds' object after the dome
 | a deck's `size`, `stretch` | the type's | a cloud's width in metres; how much longer than wide along the wind |
 | a deck's `density`, `color` | the type's | the share of light a metre of cloud takes (thinner than real cloud: a look); what the cloud throws back (linear) |
 | a deck's `fronts` | 0.8 | a broad weather over the deck's own (three octaves of noise that never repeats, 40, 15 and 5 deck sizes): clear lanes and closed fields tens of km apart, seen from high up it has up to three times the say (from 3 clouds' widths over the deck's top on; not for a closed or empty deck), so decks read as bands and clear patches from orbit; drawn to nothing round the place, where the cover is the one asked for; `0` an even cover (a giant's decks). The clouds themselves never repeat either (Step 395) |
-| a deck's `weather`, `rise`, `floor`, `soft`, `fray`, `ragged`, `puff`, `beyond` | the type's | the shape in numbers (DESIGN §123.5); `beyond: {color, at, width}` gives the deck another colour from `at` metres north of the origin on |
+| a deck's `weather`, `rise`, `floor`, `soft`, `fray`, `ragged`, `puff`, `beyond` | the type's | the shape in numbers; `beyond: {color, at, width}` gives the deck another colour from `at` metres north of the origin on |
 | `towers` | none | a number, or `{count, seed, spread, radius, base, top, anvil, density, color, at}`: up to 6 towers scattered within `spread` (60 km) of the origin, or at the places `at: [[x, z], ...]` |
 | `lightning` | none | `{rate, times, power, color, radius, seed, from, to}`: `rate` flashes a minute from the seed; `times` in seconds (numbers, `ctx.music`'s events, or a track of `vidgen/music-time`'s `trackArrays`); flashes sit inside the towers, or in the lowest deck when there are none |
 | `seed` | 1 | where the clouds, the towers and the flashes are |
@@ -8625,14 +8622,14 @@ Honest notes: a cloud is a height field over a flat base (no overhangs), soft-ed
 its mean far away; its fine lumps are pushed into its face as seen, not modelled inside it;
 towers are a leaning column of lumps, some with an anvil drawn out downwind; everything in the scene
 stands in front of every cloud (a plane is not hidden inside one); the sea mirrors no cloud; a
-giant's heights, depths, air and band width are a look (stated in DESIGN §123.5), its rings are not drawn in
+giant's heights, depths, air and band width are a look, its rings are not drawn in
 the sky, and from orbit the same world's single clouds are elsewhere (colours and cover agree).
 Costs (2 cores, software GL, 1280x720, with the dome): `fair` from below 1.9 s a frame (`fast`
 0.8 s, `fine` 8 s), a cloud sea from above 1.1 s (`fast` 0.5 s), towers 1.6 s, between three decks
 2.7 s, a giant 2.4 s, over a sea 3.0 s; 0.07 to 0.13 s at 320x180. Look first:
 `vidgen parts --kind cloud`.
 
-**Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
+**Planets, moons and rings: `vidgen/space-bodies`** (Step 371). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
 `import {planet} from "vidgen/space-bodies"`.
 
@@ -8708,12 +8705,12 @@ const update = (t) => { space.update(t, view(t)); saturn.update(t); };
   orbit data, a body name the orbit data does not have.
 - On the contact sheet: `vidgen parts --kind body` (33 tiles), or `vidgen parts 'world-*'`.
 
-**Ready-made parts: `vidgen/parts` and `vidgen parts`** (Step 369, DESIGN §122.5). The
+**Ready-made parts: `vidgen/parts` and `vidgen parts`** (Step 369). The
 registry of ready-made three.js parts (skies, structures, effects, environments; space bodies,
 lights, craft and phenomena as Phase AN adds them), each with the one line that uses it;
 `vidgen parts` draws them on a labelled contact sheet. See [Ready-made parts](#ready-made-parts-vidgen-parts).
 
-**Single frames: `vidgen still`** (Step 342, DESIGN §120.3). `vidgen still [PROJECT] --scene ID
+**Single frames: `vidgen still`** (Step 342). `vidgen still [PROJECT] --scene ID
 (--at SECONDS | --frame N | --count N)... [--size final|preview|draft|WxH] [--variant NAME]
 [--out FILE|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` writes frames of
 a `web` scene's page as PNG files without rendering the scene. vidgen builds the scene as a render
@@ -8741,7 +8738,7 @@ frame (compared pixel for pixel in `tests/test_web_still.py` and with eight fram
   the frame's time: every timer due by then runs, then one round of animation-frame callbacks,
   then `frame(t, ctx)`. A page that draws from the time alone gives the render's picture. A page
   that keeps state from frame to frame (a `requestAnimationFrame` loop adding up, a canvas drawn
-  over itself; Motion, lottie-web or GSAP without `lagSmoothing(0)` playing by themselves, §118.15)
+  over itself; Motion, lottie-web or GSAP without `lagSmoothing(0)` playing by themselves)
   gives the picture it would show had the frames between not been drawn, and a later still on the
   same page depends on the stills before it. `--exact` runs every frame from the page's time to
   the still (no screenshots in between), as a render does. Not covered by `--exact`: a WebGL
@@ -8781,7 +8778,7 @@ Drawing the frames alone at 1920x1080, 30 fps, measured for `examples/web` in St
 machine on a faster day: an HTML + CSS page 453 ms per frame, a canvas script 325 ms, a three.js
 scene 550 ms. Keep `web` scenes short.
 
-**Speed, progress and warm-up** (Step 349; DESIGN §120.10). Each frame's screenshot is the PNG
+**Speed, progress and warm-up** (Step 349). Each frame's screenshot is the PNG
 Playwright's `page.screenshot` gives, compressed quickly (`Page.captureScreenshot` with
 `optimizeForSpeed`: the same pixels, no change to any cache key), and the frames clip is decoded
 and encoded in a thread while the next frame is drawn. On 2 cores this made a detailed
@@ -8809,9 +8806,9 @@ about 2–3 s to start Chromium plus 15–25 ms per frame stepped, against 70–
 
 ### `space`
 
-**A space scene written in YAML alone** (Step 376, DESIGN §122.12): a sky, a sun, worlds, craft,
+**A space scene written in YAML alone** (Step 376): a sky, a sun, worlds, craft,
 phenomena and camera moves, from the ready-made parts of Phase AN, with no JavaScript; since Step 392
-(DESIGN §123.14) also giant ships, planes and kit-built craft, and with `world:` a surface scene: the
+also giant ships, planes and kit-built craft, and with `world:` a surface scene: the
 air, sea, ground and clouds of one world from orbit to the ground, flights and planes on them. vidgen writes
 the page from the params (`build/space/<id>.js`) and draws it exactly as a [`web`](#web) scene: the
 same clip and cache (the page's bytes are in the clip's key, so any change of a param draws the
@@ -8860,11 +8857,11 @@ timed in bars, a burn and a fly-by from `orbits:`, a warp, a black hole, title a
 | `script` | path | — | your code: a JavaScript module of the project; `setup(S)` runs once after the scene is built, `frame(t, S)` every frame after the scene stands at `t` (`S`: `renderer`, `scene`, `camera`, `space`, `sky`, `sun`, `light`, `bodies`, `craft`, `phenomena`, `subjects`, `cam`, `moves`, `view`, `step`, `finish`, `ctx` by name; replace `S.view` to change the camera) |
 | `data` | mapping | `{}` | values for your script, as `ctx.data` |
 | `fade` | bool | `true` | `false`: no 0.5 s fade-out (scenes on bar lines cut straight into each other) |
-| `world` | mapping | — | a **surface scene** (Step 392, DESIGN §123.14): one world from orbit to the ground in the place's own frame ([`vidgen/space-descent`](#web)); its keys below. Without it the scene is an orbital one |
+| `world` | mapping | — | a **surface scene** (Step 392): one world from orbit to the ground in the place's own frame ([`vidgen/space-descent`](#web)); its keys below. Without it the scene is an orbital one |
 | `flights` | list \| mapping | — | a surface scene's flights: the [flight data](#web) of a `web` scene (`[{name, start, legs}]`, or `{flights, start, speedup, margin, path_samples}`); the ground is the world's land, else its sea (its crests added to the margin), else its sphere; the frame is `world.at` |
 | `flash` | list \| mapping \| time | `[]` | flashes on cuts ([`flashCut`](#web) through the finish): `[{at, amount: 3, rise: 0.25, fall: 0.6}]`; `at` in seconds or bars, the same in the scenes on both sides of the cut; needs a finish |
 
-**Camera looks** (`camera_look:`, Steps 400–401, DESIGN §124.4–124.5). What each sets (the finish's options of
+**Camera looks** (`camera_look:`, Steps 400–401). What each sets (the finish's options of
 [`vidgen/three-finish`](#web), the operator's of [`operate`](#web)); give your own over it. **Space scenes look
 different since Step 401**: without `camera_look:` a scene gets `camera`; `camera_look: none` restores the clean
 render of before, pixel for pixel.
@@ -8960,8 +8957,8 @@ A `flyby` is in the planet's own frame (x along its motion round the Sun on the 
 orbit's north): the planet's pole (its rings) and the default sun are turned into that frame, so
 they stand as they really are on the date. A camera may name any body of the data, also one
 nothing draws (a comet's body). Where the numbers come from (rotation data and the light's
-constants written from memory; Neptune's rotation 16.11 h, the 2009 report's): DESIGN.md §122.2
-and [COOKBOOK-SPACE.md](COOKBOOK-SPACE.md), section 7.
+constants written from memory; Neptune's rotation 16.11 h, the 2009 report's):
+[COOKBOOK-SPACE.md](COOKBOOK-SPACE.md), section 7.
 
 **Going on in code: `vidgen space-page [PROJECT] --scene ID [--out FILE] [--force] [--json]`**
 writes the page this scene draws as a `web` scene's script (default `extensions/<id>.js`) and
@@ -12601,7 +12598,7 @@ stylised (Alberts *Molecular Biology of the Cell* ch. 17, Morgan *The Cell Cycle
   chromosome still two — now non-identical — chromatids), prophase II (no replication; new spindles
   at right angles), metaphase II, anaphase II (sisters separate: equational), telophase II and
   cytokinesis II: **four haploid cells**, one chromatid per chromosome, recombinant chromatids visible.
-- **Non-disjunction** (`nondisjunction: {division: I | II, pair: 1}`, meiosis; DESIGN §96.11): in
+- **Non-disjunction** (`nondisjunction: {division: I | II, pair: 1}`, meiosis): in
   meiosis I both homologues of that pair go to one pole at anaphase I (one cell n + 1, the other
   n − 1; **every gamete aneuploid**: 2 of 4 n + 1, 2 n − 1); in meiosis II its sister chromatids
   stay together at anaphase II in the first cell (**2 of 4 gametes normal**, 1 n + 1, 1 n − 1).
@@ -12776,7 +12773,7 @@ synthase before any protons were pumped; a pathway advanced backwards.
 ### `cross`
 
 A genetic cross at university level (Griffiths *Introduction to Genetic Analysis*, Hartwell
-*Genetics: From Genes to Genomes*), worked out exactly by schu-video-generator's cross engine (DESIGN §96: exact
+*Genetics: From Genes to Genomes*), worked out exactly by schu-video-generator's cross engine (exact
 fractions, segregation, independent assortment, crossing over at the recombination frequency,
 X and Y segregating in males, lethal classes removed) and drawn from it, so no ratio on screen can
 disagree with the cross:
@@ -12924,7 +12921,7 @@ square (or a row on a tree); gametes formed twice, a cell filled twice, a table 
 ### `pedigree`
 
 A family chart in standard human pedigree nomenclature (NSGC recommendations, Bennett et al.
-2008) with its genetic analysis worked out exactly (DESIGN §96.8), for medical genetics and
+2008) with its genetic analysis worked out exactly, for medical genetics and
 counselling lessons:
 
 - **Symbols**: male square, female circle, sex unknown a diamond; affected filled; a carrier a
@@ -13078,7 +13075,7 @@ say which with mode:*); `risk` without a proposed child.
 
 ### `linkage_map`
 
-Linked loci, crossing over and genetic maps (DESIGN §96.9), computed by
+Linked loci, crossing over and genetic maps, computed by
 `vidgen.genetics.mapping`:
 
 - **The chromosomes**: the heterozygous parent's homologue pair — two sister chromatids each,
@@ -13179,7 +13176,7 @@ are not neighbours; `measure` without one interval.
 
 ### `karyotype`
 
-A human karyotype from its ISCN notation (DESIGN §96.10), parsed and checked by
+A human karyotype from its ISCN notation, parsed and checked by
 `vidgen.genetics.karyotype`:
 
 - **The chromosomes**: GRCh38 lengths and centromere positions (so 21 is shorter than 22 and every
@@ -13268,8 +13265,8 @@ with `show: karyogram`; `rearrange` on a karyotype without changes or a change i
 
 ### `mutation`
 
-A sequence variant worked out on a real coding sequence with the genetic code (DESIGN §96.13;
-`vidgen.genetics.hgvs` and `genetics.mutation`): the reference codons with their amino acids, the
+A sequence variant worked out on a real coding sequence with the genetic code
+(`vidgen.genetics.hgvs` and `genetics.mutation`): the reference codons with their amino acids, the
 variant row made from them, and the HGVS notation checked against the sequence.
 
 - **The sequence**: a reference window (`gene: HBB`, `CFTR`, `GJB2` — real coding sequence with its
@@ -13355,7 +13352,7 @@ Ter*), `ΔF508` (*the legacy name; HGVS writes p.(Phe508del)*).
 
 ### `crispr`
 
-CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genetics.crispr`):
+CRISPR–Cas9 genome editing on a target sequence (`vidgen.genetics.crispr`):
 
 - **The target**: both strands with every base, drawn from the strand that carries the PAM, so the
   protospacer always reads 5′→3′ along the top row (with a guide on the bottom strand the card says
@@ -13421,7 +13418,7 @@ that would work), the wrong spacer length for the enzyme, a spacer with its PAM 
 
 ### `dna_lab`
 
-The laboratory methods of molecular genetics (DESIGN §96.15; `vidgen.genetics.dna_lab`), one per
+The laboratory methods of molecular genetics (`vidgen.genetics.dna_lab`), one per
 `method:`.
 
 - **`pcr`**: the template with its primers (the forward primer repeats the top strand, the reverse
@@ -13501,7 +13498,7 @@ method (*agarose: is a param of method: gel, not pcr*).
 
 ### `population`
 
-Population genetics (DESIGN §96.16; `vidgen.genetics.population`), one `model:` per scene.
+Population genetics (`vidgen.genetics.population`), one `model:` per scene.
 
 - **`hardy_weinberg`** (the default): the population as 100 dots coloured by genotype (a
   heterozygote half and half; with more than 100 people a dot stands for several and the legend
@@ -13596,7 +13593,7 @@ param of another model (*s: not a param of model: drift (a param of model: selec
 
 ### `gwas`
 
-A genome-wide association study (DESIGN §96.17; `vidgen.genetics.gwas`). `plot: manhattan`: −log₁₀ p
+A genome-wide association study (`vidgen.genetics.gwas`). `plot: manhattan`: −log₁₀ p
 of every variant along the genome, chromosomes 1–22 (and X with `x_chromosome: true` or when your
 data has it) in alternating colours, the genome-wide significance line at **5 × 10⁻⁸** (−log₁₀ =
 7.3) and the suggestive line at 1 × 10⁻⁵, each peak ringed and labelled with its gene (italic) or
@@ -13951,7 +13948,7 @@ params:
 ##### Walking and jumping on a level
 
 On a level the moving actions follow the tiles. The author says where a character goes; schu-video-generator
-plans the way (DESIGN.md §86.7) and `vidgen validate` refuses a move that cannot be made, naming
+plans the way and `vidgen validate` refuses a move that cannot be made, naming
 the beat and why.
 
 ```yaml
@@ -14013,7 +14010,7 @@ beats:
 
 ##### Story props on a level (keys, doors, coins, stars, blockers)
 
-A level's story props have parts in its rules (DESIGN.md §86.8): coins and stars to pick up, doors
+A level's story props have parts in its rules: coins and stars to pick up, doors
 that are in the way until they open (a locked one only with its key), and friendly blockers that
 are in the way until they step aside. `vidgen validate` replays them with the walks and jumps, in
 beat order, and names the beat and what to write when one does not work.
@@ -14181,7 +14178,7 @@ they hide what is behind them.
   `cauldron` (`color` its potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a
   back wall), `signpost`, `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`,
   `gift_pile`, `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock`
-  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); the retro kit (DESIGN §107):
+  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); the retro kit:
   `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long), on a back wall's cell `poster` (`kind: rocket | atom | planet`) and `wall_shelf` (books, a plant); a `car` takes `kind: rocket` (tail fins, a bubble canopy);
   `on: true` / `switch_on` makes the
   laptop, kiosk, core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood,
@@ -17585,7 +17582,7 @@ are the same bit for bit, only faster. Nothing to configure; nothing in `video.y
   THREE.WebGLCubeRenderTarget(size, {type: THREE.HalfFloatType})], draw: ([map]) => { ... }})`.
   `targets()` makes RGBA render targets (2D or cube; 8-bit, half float or float), `draw` fills
   them (mipmaps included); the inputs must name everything the pixels depend on, a version of
-  your bake code among them (DESIGN §123.2).
+  your bake code among them.
 
 ## Parallel renders (`--jobs`)
 
@@ -18302,8 +18299,8 @@ vidgen motion check . --draft --source scenes --threshold flash=0.12 --fail-on w
 
 `vidgen motion check [FILE|PROJECT] [--source auto|video|scenes] [--variant NAME] [--preview |
 --draft] [--output-dir DIR] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--subject
-SCENE ...] [--fail-on error|warning|info|never] [--json]` (Step 360, DESIGN §121.3; dark
-pictures: Step 369, DESIGN §122.5) watches a rendered video for what a still cannot show: frames
+SCENE ...] [--fail-on error|warning|info|never] [--json]` (Step 360; dark
+pictures: Step 369) watches a rendered video for what a still cannot show: frames
 that fail to draw, one-frame flashes, flicker, things popping in and out, strobing, frozen
 stretches and jumps at cuts; and, in dark (space) pictures, over-exposed discs, shimmering stars,
 banding and nearly empty frames. It renders nothing.
@@ -18422,7 +18419,7 @@ vidgen parts 'star-*' 'crystal*' --size 480x270 --columns 3 --json
 ```
 
 `vidgen parts [NAME ...] [--kind KIND] [--list] [--out FILE] [--size WxH] [--columns N]
-[--time-limit SECONDS] [--json]` (Step 369, DESIGN §122.5) draws the ready-made three.js parts
+[--time-limit SECONDS] [--json]` (Step 369) draws the ready-made three.js parts
 for `web` scenes on one labelled contact sheet so you can choose by looking: a tile per part with
 its name, its kind, what it is and the one line that uses it (blue, in the module it names).
 
@@ -18544,7 +18541,7 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
   over 150 KB is made again at 5, then 4 fps. The index shows each GIF in a `<picture>` whose
   still replaces it for viewers who ask for reduced motion. Nothing in the files depends on the
   time or the machine: the same schu-video-generator writes the same files.
-- **The web gallery** (DESIGN.md §123.1): the types drawn by a web page in headless Chromium
+- **The web gallery**: the types drawn by a web page in headless Chromium
   (`web`, `3d`, `space`, and any type whose class sets `drawn_in_browser = True`) and the
   showcases using one have a gallery of their own, `web/` in the gallery folder (`web/README.md`,
   `web/<type>.md`, `web/media/`), with the same pages and previews; the two indexes link to each
@@ -18680,11 +18677,11 @@ hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`s
 score you mean to propose, in `build/mcp/studio/`), `studio_variations` (`session`, `version`,
 `shuffle`: four variations as whole scores with labels, Step 199) and `studio_propose` (`score`,
 `explanations` `{n1: ...}`, `summary`, `agent`, `session`, `base`) — these five work on files
-in the studio's session folders, in the server's process. Generated video (§113): `generate_plan`
+in the studio's session folders, in the server's process. Generated video: `generate_plan`
 (`shot`, `budget`, `variant`; free), `generate_run` (`dry_run` default true, `confirm_cost`,
 `shot`, `budget`, `variant`), `generate_status`, `generate_takes` (`shot`, `images`: returns the
 takes' contact sheets as pictures), `generate_pick` (`shot`, `take`: a number, `none` or
-`auto`) and `generate_host_test` (`keep`; §115: the free quick tunnel check, never shows the
+`auto`) and `generate_host_test` (`keep`: the free quick tunnel check, never shows the
 secret address). Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
@@ -19367,7 +19364,7 @@ message says how many beats were done (their MP3s are kept: run again to continu
 
 ### `vidgen imagegen --json`
 
-The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58, §64).
+The same document for a dry run (`--dry-run`, no key needed) and a run.
 
 | key | type | |
 |---|---|---|
@@ -19385,7 +19382,7 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 
 ### `vidgen generate --json`
 
-Generated video (DESIGN.md §113). `vidgen generate models --json`:
+Generated video. `vidgen generate models --json`:
 
 | key | type | |
 |---|---|---|

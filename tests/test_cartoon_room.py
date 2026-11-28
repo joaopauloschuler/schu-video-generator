@@ -1,4 +1,4 @@
-"""Step 109: rooms (indoor sets) on a stage: the wall, floor, windows and doors (DESIGN.md §69.42)."""
+"""Step 109: rooms (indoor sets) on a stage: the wall, floor, windows and doors."""
 
 from __future__ import annotations
 
@@ -299,7 +299,7 @@ def test_a_room_at_night_with_a_character_coming_in_through_the_door(make_projec
 def test_the_set_fades_in_as_one_picture(make_project, tmp_path: Path, monkeypatch) -> None:
     """While the room fades in, nothing shows through what stands in front of it (pip over the
     armchair, the armchair over the sofa): each frame is the finished picture blended with the
-    background by one amount, not each thing faded on its own (§69.51)."""
+    background by one amount, not each thing faded on its own."""
     import numpy as np
     from manim.scene.scene_file_writer import SceneFileWriter
 

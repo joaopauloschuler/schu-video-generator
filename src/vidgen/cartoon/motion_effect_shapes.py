@@ -1,8 +1,8 @@
-"""Motion effects drawn and moved with manim (DESIGN.md §69.41); when they fire and their shapes
+"""Motion effects drawn and moved with manim; when they fire and their shapes
 are in :mod:`vidgen.cartoon.motion_effects`.
 
 A :class:`MotionEffect` is a mobject of its own, never a part of the character or prop it goes
-with (a character's parts never change, §69.22): an updater counts its seconds from the frame its
+with (a character's parts never change): an updater counts its seconds from the frame its
 cue was made on, waits for the cue's start, then on every frame redraws its shapes where the mover
 is (speed lines behind it as it goes, a whoosh behind the hand) or where the mover was when it
 started (dust and stars stay on the ground), and draws nothing once its cue is over (:attr:`done`).
@@ -39,7 +39,7 @@ from vidgen.particles import KINDS as PARTICLE_SPECS
 #: The dust's colour (the ``dust`` particles'), and the opacity of its ink outline.
 DUST_COLOR = PARTICLE_SPECS["dust"].colors[0]
 DUST_OUTLINE_OPACITY = 0.5
-#: A toy rocket's smoke: the ``smoke`` particles' colour (DESIGN.md §69.53).
+#: A toy rocket's smoke: the ``smoke`` particles' colour.
 SMOKE_COLOR = PARTICLE_SPECS["smoke"].colors[0]
 #: Speed lines and whoosh arcs: ink at this opacity, this wide (mover heights).
 LINE_OPACITY = 0.55
@@ -55,7 +55,7 @@ OUTLINE_SHARE = 0.6
 #: A prop moving less than this from one frame to the next (units) keeps the direction its speed
 #: lines had.
 STILL_MOVE = 1e-3
-#: The same for a character's feet on an iso place (tile widths on the picture, DESIGN.md §90.4).
+#: The same for a character's feet on an iso place (tile widths on the picture).
 ISO_STILL_MOVE = 1e-4
 
 
@@ -194,7 +194,7 @@ class MotionEffect(VGroup):
         return len(puffs)
 
     def _iso_way(self, mover: Character) -> np.ndarray | None:
-        """On an iso place (DESIGN.md §90.4), the way ``mover`` walks on screen now (unit vector):
+        """On an iso place, the way ``mover`` walks on screen now (unit vector):
         along its feet's move since the last frame (a diagonal of the picture), else the way it
         went last; ``None`` before it has moved."""
         feet = np.array(mover.iso_feet, dtype=float)
@@ -208,7 +208,7 @@ class MotionEffect(VGroup):
 
     def _way(self) -> tuple[np.ndarray, np.ndarray] | None:
         """The way the mover goes now (unit vector) and the middle of its back edge; a character
-        walking on an iso place goes along the walk's diagonal on screen (DESIGN.md §90.4)."""
+        walking on an iso place goes along the walk's diagonal on screen."""
         mover = self.mover
         if isinstance(mover, Character) and getattr(mover, "iso_feet", None) is not None:
             ahead = self._iso_way(mover)

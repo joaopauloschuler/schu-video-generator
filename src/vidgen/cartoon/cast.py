@@ -1,10 +1,10 @@
-"""The characters a video declares under ``characters:`` (DESIGN.md §69). No manim.
+"""The characters a video declares under ``characters:``. No manim.
 
 Looking a character up by name, the unknown-character message shared by ``vidgen validate`` and
 the build, the theme check of each character's colours, the checks of ``look: {svg: FILE}``
-(§69.2: problems, and warnings naming the actions its parts do not allow), the checks of the
-characters' own poses and expressions (§69.3), the lines ``vidgen character`` prints, and who
-speaks a beat and what the acting actions need (§69.11).
+(problems, and warnings naming the actions its parts do not allow), the checks of the
+characters' own poses and expressions, the lines ``vidgen character`` prints, and who
+speaks a beat and what the acting actions need.
 """
 
 from __future__ import annotations
@@ -197,7 +197,7 @@ GENERATED_SHAPES: dict[str, list[str]] = {
     "arm_right_lower": ["default"], "head": ["default"],
     "eyes": ["open", "closed", "laughing", "wide", "swirl", "swirl_turned"], "brows": ["default", "angry", "sad"],
     "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W", "laugh", "tongue", "wavy"],
-    # Step 125 (DESIGN.md §69.59): the rest shape ``none`` draws nothing
+    # Step 125: the rest shape ``none`` draws nothing
     "cheeks": ["none", "blush", "tears", "tears_running"], "bristles": ["none", "up"],
 }
 
@@ -256,7 +256,7 @@ def character_pose_problems(config: VideoConfig, root: Path) -> list[Problem]:
 def character_pose_warnings(config: VideoConfig, root: Path) -> list[str]:
     """Parts named by the characters' own poses and expressions that the character does not have
     (those settings do nothing; a lower arm or leg segment of a limb in one piece is shown folded,
-    DESIGN.md §69.26, so it is not reported)."""
+    so it is not reported)."""
     return [
         f"{where}: character '{entry.name}' has no {part}; this setting does nothing"
         for where, _, entry, part, _, shapes in _own_pose_parts(config, root)
@@ -291,7 +291,7 @@ TARGET_PART_ORDER: tuple[str, ...] = POSE_PARTS + EXPRESSION_PARTS
 
 def part_target_names(names: Iterable[str]) -> list[str]:
     """``<character>.<part>`` for each part of each of the active project's characters among
-    ``names`` (DESIGN.md §69.14); none without an active project, nor for a character that is
+    ``names``; none without an active project, nor for a character that is
     not declared or whose svg cannot be read (validate reports those)."""
     from vidgen import runtime
 
@@ -323,7 +323,7 @@ def check_character_name(name: str) -> str:
     return name
 
 
-# ----- who speaks (DESIGN.md §69.11) ----------------------------------------------------------------
+# ----- who speaks ----------------------------------------------------------------
 
 
 def beat_voice(scene: SceneConfig, beat: BeatConfig) -> str:
@@ -364,7 +364,7 @@ def shared_voice_warnings(config: VideoConfig) -> list[str]:
 
 def front_view_warnings(config: VideoConfig) -> list[str]:
     """A stage character with ``facing: front`` or a ``turn`` ``to: front`` of a character drawn
-    from an SVG file: it has no front view and keeps its side (DESIGN.md §69.44)."""
+    from an SVG file: it has no front view and keeps its side."""
     from fnmatch import fnmatchcase
 
     svg = {entry.name for entry in config.characters if entry.look.svg is not None}

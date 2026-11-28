@@ -1,4 +1,4 @@
-"""Transcripts of an audio-only render from its timings (DESIGN.md §111.3): plain text with the
+"""Transcripts of an audio-only render from its timings: plain text with the
 speakers' names and the chapter titles, SRT and WebVTT cues timed by the words
 (:func:`vidgen.render.pipeline.video_cues`, the cues a video's SRT holds), and the chapter list
 ``<output>_chapters.txt`` (the same file a video render writes).

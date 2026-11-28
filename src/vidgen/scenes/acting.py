@@ -1,6 +1,6 @@
-"""Acting beat actions (DESIGN.md §69.11): ``say``, ``look_at``, ``turn``, ``emote``, ``pose`` and
+"""Acting beat actions: ``say``, ``look_at``, ``turn``, ``emote``, ``pose`` and
 ``react`` on the characters of a scene (a ``stage``'s, or any scene's targets that are
-:class:`Character` s); the moving ones are in ``moving.py`` (§69.12). Written against
+:class:`Character` s); the moving ones are in ``moving.py``. Written against
 ``vidgen.api`` only, like project actions.
 
 Each changes a character's state with :class:`PoseChange` (``say``: starts lip sync, and draws
@@ -41,11 +41,11 @@ def _declared() -> dict[str, Any]:
 
 
 def is_part_target(name: str) -> bool:
-    """Whether a target name names a character's part (``kit.arm_left``, DESIGN.md §69.14)."""
+    """Whether a target name names a character's part (``kit.arm_left``)."""
     return "." in name
 
 
-#: The parts sitting, leaning and crouching set (the arms and the head keep their poses; §69.28).
+#: The parts sitting, leaning and crouching set (the arms and the head keep their poses).
 POSTURE_PARTS: tuple[str, ...] = ("body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
 
 
@@ -55,7 +55,7 @@ def posture_parts(state: CharacterState) -> dict[str, PartPose]:
 
 
 def is_posed(character: Character) -> bool:
-    """Whether ``character`` sits, leans (DESIGN.md §69.28) or rides a vehicle (§69.52): it keeps
+    """Whether ``character`` sits, leans or rides a vehicle: it keeps
     its facing, body and legs then (a look turns only its head, a pose moves only its arms and
     head)."""
     return character.sitting_on is not None or character.leaning_on is not None or character.riding is not None
@@ -193,7 +193,7 @@ class Say(_Acting):
             self.bubbles.append(bubble)
             anims += bubble.draw()
             if getattr(scene, "on_iso", False):
-                scene.iso_untag(character.name)   # the bubble shows who speaks (DESIGN.md §89.11)
+                scene.iso_untag(character.name)   # the bubble shows who speaks
         return anims
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
@@ -209,7 +209,7 @@ class Say(_Acting):
         anchor = callout_area(head)
         avoid = label_avoid(scene, view, scale, targets, anchor)
         avoid += [b.extent() for b in self.bubbles]
-        avoid += [callout_area(m) for m in scene.mobjects if isinstance(m, EffectSymbol) and m.family_members_with_points()]   # §69.40
+        avoid += [callout_area(m) for m in scene.mobjects if isinstance(m, EffectSymbol) and m.family_members_with_points()]
         made = speech_bubble(
             text, anchor, color=self.options.color, size=self.options.size, bounds=label_bounds(scene, view, scale),
             avoid=avoid, scale=scale, theme=scene.theme,

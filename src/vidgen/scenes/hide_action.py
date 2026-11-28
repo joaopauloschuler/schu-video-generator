@@ -1,4 +1,4 @@
-"""The ``hide`` beat action (DESIGN.md §89.10): an object of a ``stage``'s iso place goes away at
+"""The ``hide`` beat action: an object of a ``stage``'s iso place goes away at
 ``at`` of the beat (it fades out; ``reveal`` brings it back). Written against ``vidgen.api`` only,
 like project actions. Like ``switch_on`` it draws nothing itself (``animates = False``): the
 stage fades the object's picture by its clock."""

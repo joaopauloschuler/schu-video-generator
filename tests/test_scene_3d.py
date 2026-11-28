@@ -1,4 +1,4 @@
-"""The ``3d`` scene type (Steps 298–299, DESIGN.md §114): params, the scene description, the page's
+"""The ``3d`` scene type (Steps 298–299): params, the scene description, the page's
 file serving and the missing-dependency errors without a browser; a few tiny renders through
 Playwright's Chromium (skipped when it is missing). Shapes, groups and camera moves: test_scene_3d_camera.py."""
 

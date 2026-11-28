@@ -1,4 +1,4 @@
-"""Shorts suggestions (DESIGN.md §105.6): windows of a longer video that would make good Shorts,
+"""Shorts suggestions: windows of a longer video that would make good Shorts,
 scored by rules, with a hook line each, written as ``cut:`` variants on request. No model is
 called: an agent driving vidgen can take the report and refine the cuts.
 
@@ -458,7 +458,7 @@ RESTATE_SECONDS = 0.1
 def _left_out_light(project: Project, scene: str, first_index: int) -> dict[str, Any] | None:
     """The light the beats of ``scene`` before ``first_index`` left (their last ``time_of_day``
     or ``light`` to a preset), as an action restating it at once at a cut's start; ``None``:
-    none changed it (DESIGN.md §105.8)."""
+    none changed it."""
     found = None
     for raw in (_raw_scene(project, scene).get("beats") or [])[:first_index]:
         for action in (raw.get("actions") or []) if isinstance(raw, Mapping) else []:
@@ -514,7 +514,7 @@ def _entries(project: Project, beats: Sequence[TimedBeat]) -> tuple[list[Any], d
         if not group[0].first:
             notes.extend(_left_out_notes(project, group[0].scene, group[0].index))
             light = _left_out_light(project, group[0].scene, group[0].index) if group[0].scene_type == "stage" else None
-            if light is not None:   # the light the left-out beats left, at once (§105.8)
+            if light is not None:   # the light the left-out beats left, at once
                 opening.append(light)
         targets = _framing(project, group) if group[0].scene_type == "stage" else []
         if targets:

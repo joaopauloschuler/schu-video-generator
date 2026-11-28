@@ -1,4 +1,4 @@
-"""Drawing primitives of the character generator (DESIGN.md §69.1, §69.47): styled shapes from
+"""Drawing primitives of the character generator: styled shapes from
 points, pieces marked to trail in the wind or as hair beyond the head, and the outline maths
 the clothes need (a shape's outline as a polygon, a polygon cut to a box, its width at a
 height, dots that fit inside it). Character units throughout (``y`` up)."""
@@ -14,7 +14,7 @@ from manim import Polygon, VMobject
 from vidgen.cartoon.character import OUTER_HAIR_ATTRIBUTE, TRAIL_ATTRIBUTE
 
 #: How far each trailing piece turns in the wind, as a share of
-#: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES` (DESIGN.md §69.32): the scarf's end, long hair, a
+#: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES`: the scarf's end, long hair, a
 #: bun, pointy and floppy ears, the hat; since Step 113 a ponytail, braids, a cap and a
 #: necklace's pendant; since Step 114 an animal's tail (a bird's fan of feathers less) and its
 #: long ears; since Step 124 a robot's antenna, a cape, a wizard hat and a party hat (a crown does
@@ -89,7 +89,7 @@ def tapered_band(
 def trailing(mob: VMobject, pivot: Sequence[float], piece: str) -> VMobject:
     """Mark ``mob`` as a piece that trails in the wind, turning about ``pivot`` by the weight of
     ``piece`` in :data:`TRAIL_WEIGHTS` (the :class:`~vidgen.cartoon.character.Character` reads
-    the mark; DESIGN.md §69.32)."""
+    the mark)."""
     for member in mob.get_family():
         setattr(member, TRAIL_ATTRIBUTE, (float(pivot[0]), float(pivot[1]), TRAIL_WEIGHTS[piece]))
     return mob

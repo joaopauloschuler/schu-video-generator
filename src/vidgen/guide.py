@@ -1,4 +1,4 @@
-"""The author guide for AI agents (``vidgen guide``, DESIGN.md §59).
+"""The author guide for AI agents (``vidgen guide``).
 
 The guide is one Markdown file shipped as package data (``data/guide/AGENTS.md``; the
 repository's ``AGENTS.md`` is a copy of it). Topics are its ``##`` sections, each introduced by a

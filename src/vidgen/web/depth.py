@@ -1,4 +1,4 @@
-"""The depth pass of a three.js ``web`` scene (DESIGN.md §113.19): ``guide: depth`` of a ``space`` scene,
+"""The depth pass of a three.js ``web`` scene: ``guide: depth`` of a ``space`` scene,
 or of a ``web`` scene whose page draws through ``vidgen/three-finish``.
 
 The page draws the scene as for its picture (the scene's own shaders: a sea displaced in its vertex
@@ -12,7 +12,7 @@ range per frame, so nothing flickers as things move): grey ``= near / z`` (near 
 and the background black: ``z`` infinite), ``near`` the distance only :data:`NEAR_SHARE` of the shot's
 drawn pixels are nearer than (they are white). Proportional to ``1 / z`` (disparity), as depth
 estimators and the depth-control video models trained on them give it; a ``3d`` scene's pass is linear
-in ``z`` between a fitted near and far (§114.14), which suits a bounded set, not a sea to the horizon.
+in ``z`` between a fitted near and far, which suits a bounded set, not a sea to the horizon.
 """
 
 from __future__ import annotations

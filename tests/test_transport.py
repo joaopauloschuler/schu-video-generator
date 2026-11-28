@@ -1,4 +1,4 @@
-"""Transport and membrane processes as actions, Step 205 (DESIGN.md §95.10): the rules and plans of
+"""Transport and membrane processes as actions, Step 205: the rules and plans of
 ``vidgen.cellworld.transport`` and ``traffic`` (no manim), the validation of the actions with the
 molecules' states replayed in beat order, the lipids that give way to membrane proteins, the
 membrane rows of a tall frame, and tiny renders of every process."""

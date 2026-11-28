@@ -1,4 +1,4 @@
-"""The beat actions of the ``calculation`` scene type (DESIGN §97.10): ``substitute`` shows a
+"""The beat actions of the ``calculation`` scene type: ``substitute`` shows a
 calculation's values substituted into its formula, ``compute`` its result (with an
 intermediate value first, if it has one), ``convert`` the result in other units — each on a
 word (``at: "@word"``), with the steps before it that are not on screen yet. ``reveal`` shows

@@ -1,4 +1,4 @@
-// The score file shown with highlighting and line numbers (DESIGN.md §94.5). Step 195 makes it
+// The score file shown with highlighting and line numbers. Step 195 makes it
 // editable both ways; here it shows the version's text as written, problems marked by line.
 
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };

@@ -1,4 +1,4 @@
-"""The Listen page (DESIGN.md §92): ``docs/music/README.md``, written by ``vidgen music page``.
+"""The Listen page: ``docs/music/README.md``, written by ``vidgen music page``.
 
 Every clip on it is made by schu-video-generator itself: a 15 s MP3 and a spectrogram of each built-in music bed
 (:data:`vidgen.music.BUILTIN_BEDS`), the pieces made with the score format that became beds
@@ -70,7 +70,7 @@ COMPOSED_MOODS = ("curious", "playful")
 
 @dataclass(frozen=True)
 class ScorePiece:
-    """A piece an author wrote in the score format (§93) that became a built-in bed (a score bed,
+    """A piece an author wrote in the score format that became a built-in bed (a score bed,
     ``studio/beds/<name>.yaml``; Step 192): ``made`` says how it was made and ``example`` names
     the example project that plays it and keeps the log of how it was made. Its clip and
     spectrogram are the bed's (no second copy)."""

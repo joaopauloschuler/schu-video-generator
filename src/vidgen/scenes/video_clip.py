@@ -5,7 +5,7 @@ looped or held on its last frame, its sound mixed under the narration, and callo
 step by step like the ``screenshot`` scene's. With ``match_previous`` a clip that continues the
 clip of the scene before (a generated take made from that take's last frame) starts in its
 brightness and colour and, on request, dissolves out of its last frame over a few frames
-(``vidgen.clip_join``, DESIGN.md §117).
+(``vidgen.clip_join``).
 
 The clip is a ``ClipMobject`` (``vidgen.api``): its frames are decoded as the render reaches
 them, so stills, the layout dump, ``vidgen lint`` and beat actions see it like any picture.

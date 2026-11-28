@@ -1,5 +1,5 @@
-"""Body rotation data (Step 367, DESIGN.md §122.2) and the third dimension of the orbit model
-(§122.1): periods and tilts against the published values, frames and quaternions, 3D state
+"""Body rotation data (Step 367) and the third dimension of the orbit model:
+periods and tilts against the published values, frames and quaternions, 3D state
 round trips, burns out of the plane, transfers in an inclined plane, the n-body angular momentum."""
 
 from __future__ import annotations

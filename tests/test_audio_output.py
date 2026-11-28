@@ -1,6 +1,5 @@
 """Step 284: the file of an audio-only render (formats, channels, rates), loudness presets and
-their check (``vidgen audio check``), the voice leveller, room tone and transcripts (DESIGN.md
-§111.6-111.8). Narration is mocked: each beat's "MP3" is a WAV of speech-like bursts."""
+their check (``vidgen audio check``), the voice leveller, room tone and transcripts. Narration is mocked: each beat's "MP3" is a WAV of speech-like bursts."""
 
 from __future__ import annotations
 

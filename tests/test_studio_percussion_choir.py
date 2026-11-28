@@ -1,4 +1,4 @@
-"""Orchestral percussion and the choir of score files (Step 345, DESIGN.md §120.6): what makes
+"""Orchestral percussion and the choir of score files (Step 345): what makes
 a drum a drum and a vowel a vowel is measured on single sounds (cheap: a score is rendered in
 one test only)."""
 

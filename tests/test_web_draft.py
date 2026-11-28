@@ -1,4 +1,4 @@
-"""A draft of a video with `web` scenes (`vidgen render --draft`, DESIGN.md §74 and §118.18): the
+"""A draft of a video with `web` scenes (`vidgen render --draft`): the
 page is drawn at the draft's size and frame rate into the draft's own folder, with `design_width`
 too; lint and the storyboard never use a draft."""
 

@@ -1,4 +1,4 @@
-"""Drawings of filaments and motors (DESIGN.md §95.9): microtubules (25 nm, their − end at the
+"""Drawings of filaments and motors: microtubules (25 nm, their − end at the
 centrosome and + end out, marked when large enough), actin (7 nm: the cortex under the plasma
 membrane, stress fibers between focal adhesions with myosin II along them, single filaments),
 intermediate filaments (10 nm), a bacterium's flagella (with the basal body and hook in its

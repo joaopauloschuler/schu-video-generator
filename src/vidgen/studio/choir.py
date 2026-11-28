@@ -1,4 +1,4 @@
-"""A choir for score files (DESIGN.md §120.6): sections of singers holding a vowel, by formant
+"""A choir for score files: sections of singers holding a vowel, by formant
 synthesis. Here the held vowels: ooh, aah, eeh, a hum (syllables, a soloist and a whisper are
 :mod:`vidgen.studio.singing`'s). It sings no words.
 

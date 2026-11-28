@@ -1,4 +1,4 @@
-"""Genetics (DESIGN.md §96): loci, alleles and their notation, genotypes, phenotypes with
+"""Genetics: loci, alleles and their notation, genotypes, phenotypes with
 dominance, penetrance and epistasis, modes of inheritance, and an exact cross engine (fractions,
 independent assortment, linkage with recombination, sex chromosomes, mtDNA). Plain data and
 rules, no manim imports (a test checks): ``vidgen validate`` and lint use it without rendering;

@@ -1,4 +1,4 @@
-"""Continuity between scenes (DESIGN.md §50): a scene starts with objects of the scene before it,
+"""Continuity between scenes: a scene starts with objects of the scene before it,
 exactly where and how they were (a match cut), then moves them into its own layout.
 
 ``carry: [title]`` on scene B (``"title -> heading"`` to move A's ``title`` into B's

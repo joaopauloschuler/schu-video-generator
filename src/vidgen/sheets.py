@@ -59,7 +59,7 @@ class SheetStill:
     """One still on a sheet. ``time`` is in the video (``None`` if unknown), ``scene_time``
     from the scene start; ``text`` is the beat's narration (``None`` for a silent scene);
     ``mid`` the actions a mid-action still shows half-way (``walk_to pip``; ``k`` is then 0);
-    ``auto`` the actions automatic directing added to its beat (DESIGN.md §69.23)."""
+    ``auto`` the actions automatic directing added to its beat."""
 
     scene_id: str
     beat_id: str | None

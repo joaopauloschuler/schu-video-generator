@@ -1,4 +1,4 @@
-"""Real human coding sequences for the ``mutation`` scene (DESIGN.md §96.13), with the textbook
+"""Real human coding sequences for the ``mutation`` scene, with the textbook
 variants that lie in them. Each is a window of the reference coding sequence (c. numbering of the
 RefSeq transcript named), its coding exons as c. ranges (around the window), the CDS length, and
 known variants in HGVS form with their legacy names. A test translates every window and checks it

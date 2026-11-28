@@ -1,7 +1,7 @@
 """Theme presets: named sets of theme values selected with ``theme: {preset: NAME}``.
 
 A preset sits between the built-in defaults (plus extension defaults) and the values written in
-``video.yaml`` (DESIGN.md §19). Built-in presets live here; projects register their own with
+``video.yaml``. Built-in presets live here; projects register their own with
 ``vidgen.api.register_theme_preset``. This module does not import manim.
 """
 
@@ -44,7 +44,7 @@ class ThemePreset:
     Values not set fall through to ``base`` (another preset, if given), then to the defaults.
     ``scale`` names a type scale (``vidgen.scales``) applied below ``sizes``; ``fonts`` maps font
     roles (``heading``, ``quote``, ``code``...) to a family token (``sans``, ``serif``, ``mono``)
-    or a family name, read with ``Theme.font_for`` (DESIGN.md §20, §21).
+    or a family name, read with ``Theme.font_for``.
     Build one with :func:`make_preset`, which validates the values.
     """
 

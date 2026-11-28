@@ -1,4 +1,4 @@
-"""Music cues for dramas (DESIGN.md §112.2): named themes that scenes and sections play and beats
+"""Music cues for dramas: named themes that scenes and sections play and beats
 hear briefly, cross-fading at the scene changes, and a check that the music does not fight dense
 dialogue.
 

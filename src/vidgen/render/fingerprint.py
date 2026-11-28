@@ -4,8 +4,7 @@ The worker records :func:`scene_fingerprint` in the scene's timings (``render.fi
 ``vidgen storyboard`` reuses a scene's stills only while the fingerprint still matches.
 
 What counts: the scene's config (type, params, beats; not ``lint_ignore``), every other config
-section except ``scenes``, ``variants``, ``lint`` and a ``cut`` (already applied to the scenes;
-DESIGN.md §101) (theme, narration, format...) but including
+section except ``scenes``, ``variants``, ``lint`` and a ``cut`` (already applied to the scenes) (theme, narration, format...) but including
 ``lint.rules.min_font.min_size`` (``vidgen.regions.readable_size`` lays text out by it), the narration MP3s of the scene's
 beats (size and modification time), the source of vidgen itself (with its bundled fonts and
 icons) and of
@@ -13,15 +12,15 @@ the project's extension folders (file contents), and the files under ``<project>
 The ``include:`` files are part of the config (merged into it), and so are the sets a scene uses
 (in its params); the SVGs and pictures an included file names outside ``assets/`` count like assets.
 With overlays, also what the planned timeline reads from every scene (``vidgen.videoplan``).
-With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
-With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
+With transitions, the one into the next scene (it changes how the scene ends).
+With ``carry``: what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
-With a ``web`` scene (DESIGN.md §118.10; also a scene of an extension type that subclasses
-``Web``, §120.1): its page or script file and every file its page loaded
+With a ``web`` scene (also a scene of an extension type that subclasses
+``Web``): its page or script file and every file its page loaded
 in the last render that drew its clip (contents; the record beside the clip lists them; the
 worker records the files as the page loaded them, :func:`drawn_fingerprint`), and the beats'
 stored alignments (``ctx.beats`` has word times).
-With ``match_previous`` (a ``video_clip`` continuing the clip before it, DESIGN.md §117): the
+With ``match_previous`` (a ``video_clip`` continuing the clip before it): the
 fingerprint of the scene before and its clip file.
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``, a beat's
 ``music_pause``): they are applied when
@@ -124,7 +123,7 @@ def _joins(spec: SceneConfig) -> dict[str, list[Any]]:
 
 
 def _staging(project: Project, spec: Any) -> Any:
-    """The scene's voice staging (DESIGN.md §111.4): each beat's pan and room, and whether its
+    """The scene's voice staging: each beat's pan and room, and whether its
     speakers' places pan them; ``None`` when every voice plays centred and dry."""
     from vidgen.staging import beat_staging
 
@@ -138,14 +137,14 @@ def _staging(project: Project, spec: Any) -> Any:
 
 def _overlay_inputs(project: Project) -> Any:
     """What overlays read from the other scenes (their planned timeline: types, durations, beat
-    texts and MP3s, chapters; DESIGN.md §41-42), the beats' stored alignments (captions, §43),
-    their voices, the named voices and the subtitles settings (captions' speakers, §46);
+    texts and MP3s, chapters), the beats' stored alignments (captions),
+    their voices, the named voices and the subtitles settings (captions' speakers);
     ``None`` without overlays."""
     cfg = project.config
     if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
         return None
-    said = {b.id: project.pronounced(b).spoken for _, b in project.beats()}  # captions time words by their spoken form (§45, §88)
-    speakers = project.voice_names()  # captions name / colour speakers (§46)
+    said = {b.id: project.pronounced(b).spoken for _, b in project.beats()}  # captions time words by their spoken form
+    speakers = project.voice_names()  # captions name / colour speakers
     scenes = [
         {
             "id": s.id,
@@ -155,8 +154,8 @@ def _overlay_inputs(project: Project) -> Any:
             "number": s.params.get("number") if s.type == "chapter" else None,
             "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
-            "transition": s.model_dump(mode="json")["transition"],  # crossfades move later scenes (§49)
-            **({"joins": _joins(s)} if _joins(s) else {}),  # overlapping lines move later beats (§69.34)
+            "transition": s.model_dump(mode="json")["transition"],  # crossfades move later scenes
+            **({"joins": _joins(s)} if _joins(s) else {}),  # overlapping lines move later beats
             "beats": [
                 [
                     b.id, b.text, said[b.id], speakers[b.id],
@@ -235,8 +234,7 @@ def _web_inputs(project: Project, spec: SceneConfig) -> dict[str, Any]:
 
 
 def _web_music(project: Project, spec: SceneConfig) -> str | None:
-    """The key of the music data a ``web`` scene with ``music_data:`` is given (DESIGN.md
-    §120.8; the music's settings and files and the planned timeline, at the video's frame
+    """The key of the music data a ``web`` scene with ``music_data:`` is given (the music's settings and files and the planned timeline, at the video's frame
     rate, made without rendering any music), ``None`` without it or when the video plays none."""
     from vidgen.web.music import has_music, music_data_key, scene_music_settings
 
@@ -273,36 +271,36 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
     # editing them must not make renders stale.
     # The pronunciation changes only the audio (tracked below) and, with overlays, the captions'
     # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
-    # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
-    # Music and the final mix (§48) are added when the video is joined: no pixels, no timing
-    # (so is the SoundFont composed music is played with, §81).
-    # So are the MP4's chapters and tags and the YouTube chapter list (§52), and the thumbnail (§53).
-    # A translation file's texts are already in the config (§54); its path changes nothing.
-    # Speech to text (`vidgen readback`, §57) only reads the audio.
-    # `imagegen` stays in: it decides which generated picture (or placeholder) a scene shows (§58);
+    # Named voices and subtitle settings change only audio and, with overlays, captions.
+    # Music and the final mix are added when the video is joined: no pixels, no timing
+    # (so is the SoundFont composed music is played with).
+    # So are the MP4's chapters and tags and the YouTube chapter list, and the thumbnail.
+    # A translation file's texts are already in the config; its path changes nothing.
+    # Speech to text (`vidgen readback`) only reads the audio.
+    # `imagegen` stays in: it decides which generated picture (or placeholder) a scene shows;
     # the pictures themselves are files under assets/.
-    # `include` files are already merged into the config, and each scene's set into its params
-    # (§69.35): the file names and the unused sets change nothing.
+    # `include` files are already merged into the config, and each scene's set into its params:
+    # the file names and the unused sets change nothing.
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "pronunciation_defaults", "voices", "subtitles", "music", "audio", "score",
         "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets", "soundfont",
         # citations change pixels only on scenes with references ("citations" below)
         "citations",
-        # a draft's size and frame rate: only drafts use them, checked like any format (§74)
+        # a draft's size and frame rate: only drafts use them, checked like any format
         "draft",
-        # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
+        # spoken credits and a cold open are already scenes; audio_output is the audio-only file
         "credits", "cold_open", "audio_output",
-        # generated video (§113): the provider, budget and key settings, the style sheet, the subjects' sheet panels; the clips are files
+        # generated video: the provider, budget and key settings, the style sheet, the subjects' sheet panels; the clips are files
         "videogen", "style_sheet", "subjects",
-        # where web pages are served from (§123.16): the page's files are in "web" (_web_inputs)
+        # where web pages are served from: the page's files are in "web" (_web_inputs)
         "web_root",
     }
     if project.config.cut is not None:
-        # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end
+        # a cut is already applied to the scenes (and its hook to the overlays, its end
         # card to the scenes): a change for one scene must not re-render the others. Left in
         # (null) without a cut, so other projects' renders stay current.
         excluded.add("cut")
-    # characters' reference sheets (§113.3) are inputs of generated shots, not of renders
+    # characters' reference sheets are inputs of generated shots, not of renders
     config = project.config.model_dump(mode="json", exclude={**dict.fromkeys(excluded, True), "characters": {"__all__": {"reference_sheet"}}})
     assets = project.root / "assets"
     data: dict[str, Any] = {
@@ -312,62 +310,62 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        # a scene's and a beat's ambience and a beat's motif (§112) are mixed when the video is joined: no pixels, no timing
+        # a scene's and a beat's ambience and a beat's motif are mixed when the video is joined: no pixels, no timing
         "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True,
                                                        "references": True, "figure_credit": True, "ambience": True,
                                                        "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif", "generated_shot"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
-        # generated clips (assets/generated_video, §113) reach renders only as takes ("generated" below)
+        # generated clips (assets/generated_video) reach renders only as takes ("generated" below)
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets) if not path.is_relative_to(assets / "generated_video")},
         "overlays": _overlay_inputs(project),
         # the transition out of the scene changes its end: held instead of faded, faded to a
-        # colour, or held longer (DESIGN.md §49)
+        # colour, or held longer
         "next_transition": _next_transition(project, scene_id),
     }
     after = _next_scene(project, scene_id)
     if has_citations([spec] + ([after] if after is not None else [])):
         # this scene's citations (or the next scene's, drawn in a crossfade) are numbered across
-        # the video (§95.14); scenes without citations on either side keep their fingerprints
+        # the video; scenes without citations on either side keep their fingerprints
         data["citations"] = {
             "settings": project.config.citations.model_dump(mode="json"),
             "scenes": [s.model_dump(mode="json", include={"id": True, "references": True, "figure_credit": True, "beats": {"__all__": {"id", "cite"}}})
                        for s in project.config.scenes if s.references or s.figure_credit is not None or s.id == scene_id],
         }
     if after is not None and (project.config.host is not None or spec.host is not None or after.host is not None):
-        # a host the next scene shows unchanged stays in this scene's fade-out (DESIGN.md §71)
+        # a host the next scene shows unchanged stays in this scene's fade-out
         data["next_host"] = [after.type, after.model_dump(mode="json", include={"host"})]
     named = [path for path in project.files_named_by_includes if not path.resolve().is_relative_to(assets.resolve())]
     if named:
-        # SVGs and pictures an include: file names outside assets/, e.g. a shared folder's (§69.35)
+        # SVGs and pictures an include: file names outside assets/, e.g. a shared folder's
         data["included_files"] = {project_relative(path, project.root): _stat(path) for path in named}
     marked = {beat.id: beat.marked_text for beat in spec.beats if beat.marked_text != beat.text}
     if marked:
-        # *word* marks are taken out of the beat's text but steer automatic gestures (§69.24)
+        # *word* marks are taken out of the beat's text but steer automatic gestures
         data["emphasis"] = marked
     joins = _joins(spec)
     if joins:
-        # overlapping and interrupting lines change the beats' times and their voices (§69.34)
+        # overlapping and interrupting lines change the beats' times and their voices
         data["joins"] = joins
     staged = _staging(project, spec)
     if staged:
-        # pans and rooms are in the scene's sound (§111.4); the voices' and audio's settings are
+        # pans and rooms are in the scene's sound; the voices' and audio's settings are
         # left out of "config" above
         data["staging"] = staged
     sounds = {beat.id: [list(s) for s in beat.voice_sounds] for beat in spec.beats if beat.voice_sounds}
     if sounds:
-        # [laugh] marks are taken out of the text but make sounds, faces and mouths (§69.33)
+        # [laugh] marks are taken out of the text but make sounds, faces and mouths
         data["voice_sounds"] = sounds
     fonts = {path.relative_to(project.root).as_posix(): _stat(path) for path in project_font_files(project.root)}
     if fonts:
         data["fonts"] = fonts  # the project's own fonts: any scene's text may be drawn in one
     if project.config.characters:
-        # a character's mouth follows the beat's viseme track, stored or built from its alignment (§69.4)
+        # a character's mouth follows the beat's viseme track, stored or built from its alignment
         data["visemes"] = {
             beat.id: [_stat(project.audio_dir / f"{beat.id}.visemes.json"), _stat(project.audio_dir / f"{beat.id}.align.json")]
             for beat in spec.beats
         }
-    # continuity (DESIGN.md §50): what the next scene carries changes how this one fades out;
+    # continuity: what the next scene carries changes how this one fades out;
     # what this scene carries in is the end of the scene before (its render's inputs)
     carried_out = carry.carried_out(project.config, scene_id)
     if carried_out:
@@ -378,7 +376,7 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
         data["carry_from"] = scene_fingerprint(project, before)
     index = [s.id for s in project.config.scenes].index(scene_id)
     if index > 0 and spec.params.get("match_previous"):
-        # a clip matched to the clip of the scene before (DESIGN.md §117) reads that clip's last
+        # a clip matched to the clip of the scene before reads that clip's last
         # shown frame: that scene's render inputs and its clip file, wherever it is
         previous = project.config.scenes[index - 1]
         clip = previous.params.get("path")
@@ -386,13 +384,13 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
     from vidgen.web.entry import is_web_type
 
     if is_web_type(spec.type):
-        # the page or script file a web scene names and the files its page loaded (DESIGN.md §118.10);
-        # also for an extension's scene type that subclasses Web (Step 341, §120.1)
+        # the page or script file a web scene names and the files its page loaded;
+        # also for an extension's scene type that subclasses Web (Step 341)
         data["web"] = _web_inputs(project, spec)
     from vidgen.videogen.compose import scene_placements
 
     placed = scene_placements(project, scene_id)
     if placed:
-        # generated takes laid over beats (§113.4): the take files, where and how they go
+        # generated takes laid over beats: the take files, where and how they go
         data["generated"] = [p.fingerprint(project.root) for p in placed]
     return data

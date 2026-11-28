@@ -1,4 +1,4 @@
-"""Step 118: vehicles on the ground (DESIGN.md §69.52): the bicycle, the car and the bus, their
+"""Step 118: vehicles on the ground: the bicycle, the car and the bus, their
 seats, wheels and pedals, riding paths, riders attached and detached, the checks of ``vidgen
 validate``, foley and motion effects of a ride, the planner, lint, and one tiny render."""
 
@@ -45,7 +45,7 @@ from vidgen.config import ActionConfig
 from vidgen.project import Project
 from vidgen.theme import Theme
 
-#: Every generated look's hips are this high at most (character heights, DESIGN.md §69.36), and a
+#: Every generated look's hips are this high at most (character heights), and a
 #: seated head reaches about 0.8 above them.
 HIPS = 0.24
 HEAD_ABOVE_HIPS = 0.8

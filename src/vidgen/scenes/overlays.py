@@ -1,4 +1,4 @@
-"""Built-in overlays (DESIGN.md §41): ``lower_third`` and ``watermark``.
+"""Built-in overlays: ``lower_third`` and ``watermark``.
 
 Overlays are drawn on top of the scenes, fixed to the screen (the scene's camera moves and fades
 do not touch them); they are listed in the video's ``overlays:`` (docs/CONFIG.md "Overlays").
@@ -142,7 +142,7 @@ class LowerThird(Overlay):
         safe = safe_area()
         portrait = orientation() == "portrait"
         area = Region(safe.x0, safe.y0 + PORTRAIT_LIFT * safe.height, safe.x1, safe.y1) if portrait else safe
-        if self.context.project.config.shorts_zones is not None:   # a Short: out of the app's buttons (§101)
+        if self.context.project.config.shorts_zones is not None:   # a Short: out of the app's buttons
             area = shorts_area(self.context.project)
         pad_x, pad_y, bar_w, gap = 0.3, 0.2, 0.09, 0.25
         width = area.width * (1.0 if portrait else o.max_width) - 2 * pad_x - bar_w
@@ -202,7 +202,7 @@ HOOK_PAD = (0.34, 0.24)
 
 @overlay("hook")
 class Hook(Overlay):
-    """A big caption over the first seconds of a video (a Short's hook, DESIGN.md §101): bold
+    """A big caption over the first seconds of a video (a Short's hook): bold
     text on a plate near the top of the safe area (of a Short: out of the app's buttons),
     popping in at ``at`` and gone ``seconds`` later. A cut's ``hook:`` adds one."""
 

@@ -1,4 +1,4 @@
-/* vidgen slides (DESIGN.md §55): navigation, notes, overview, fullscreen and the narrated play mode. */
+/* vidgen slides: navigation, notes, overview, fullscreen and the narrated play mode. */
 (function () {
   "use strict";
   var data = JSON.parse(document.getElementById("deck-data").textContent);

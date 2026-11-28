@@ -1,4 +1,4 @@
-"""The video's thumbnail (DESIGN.md §53): ``<output>[_<variant>][_preview]_thumbnail.png``.
+"""The video's thumbnail: ``<output>[_<variant>][_preview]_thumbnail.png``.
 
 Two kinds, chosen by the ``thumbnail:`` config (:class:`vidgen.config.ThumbnailConfig`):
 
@@ -253,7 +253,7 @@ def _frame_thumbnail(project: Project, preview: bool, spec: ThumbnailConfig, job
 
 def render_current(project: Project, preview: bool, scene_id: str) -> bool:
     """True if the scene has a render at the current format made from its current inputs (its
-    fingerprint, DESIGN.md §14)."""
+    fingerprint)."""
     from vidgen.render.fingerprint import scene_fingerprint
     from vidgen.render.worker import scene_timings_path, scene_video_path
 
@@ -273,8 +273,8 @@ def frame_number(project: Project, spec: ThumbnailConfig, timings: dict[str, Any
     """The frame of the scene's render that ``spec`` names, and its beat id (``None`` when
     ``at`` counts from the scene's start).
 
-    A beat without ``at``: its last frame (narration + ``narration.pad``, like the beat-end still
-    of DESIGN.md §13); ``at``: the frame shown that many seconds into the beat (or the scene).
+    A beat without ``at``: its last frame (narration + ``narration.pad``, like the beat-end
+    still); ``at``: the frame shown that many seconds into the beat (or the scene).
     Neither: the end of the scene's last beat, or for a silent scene the frame before its
     fade-out (``outro``). A time past the scene's end is a :class:`VidgenError`.
     """

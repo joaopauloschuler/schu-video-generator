@@ -1,4 +1,4 @@
-// vidgen/three-finish: ready-made finishing for three.js `web` scenes (DESIGN.md §120.11; the sensor: §124.1; the lens: §124.2).
+// vidgen/three-finish: ready-made finishing for three.js `web` scenes (with a camera's sensor and lens).
 // Part of schu-video-generator (MIT licence); imported by a page as "vidgen/three-finish".
 //
 //   const finish = new Finish(renderer, scene, camera, ctx, {update: (t) => {...}, dof: {...}, ...});
@@ -257,7 +257,7 @@ const VERT = "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(posit
 const quad = (fragmentShader, uniforms, defines = {}) => new THREE.ShaderMaterial({
   vertexShader: VERT, fragmentShader, uniforms, defines, depthTest: false, depthWrite: false, toneMapped: false});
 
-// The depth pass (ctx.draw_mode "depth", DESIGN.md §113.19): the scene's depth buffer as the distance along the view z
+// The depth pass (ctx.draw_mode "depth"): the scene's depth buffer as the distance along the view z
 // (metres), packed into red, green and blue as one 24-bit number n = 1 + round(u (2^24 - 2)), u = (log2 z - MIN) / SPAN
 // (DEPTH_LOG); n = 0 where nothing was drawn (the sky, the background). Read through the lens's barrel distortion
 // (the grade's), nearest texel, so it lies on the colour frame. vidgen (src/vidgen/web/depth.py) unpacks it and

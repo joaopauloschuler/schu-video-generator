@@ -1,6 +1,6 @@
 """A central body with bodies orbiting it (or one another: the Moon around the Earth around the
 Sun), moved by Kepler's laws or by n-body integration, and the mapping of video time to
-simulated time (Phase X, DESIGN §98). No manim."""
+simulated time (Phase X). No manim."""
 
 from __future__ import annotations
 

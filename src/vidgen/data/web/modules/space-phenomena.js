@@ -1,5 +1,5 @@
 // vidgen/space-phenomena: black holes, wormholes, a jump to warp, asteroids, comets and auroras for a
-// space scene (DESIGN.md §122.9). Part of schu-video-generator (MIT licence); imported by a page as
+// space scene. Part of schu-video-generator (MIT licence); imported by a page as
 // "vidgen/space-phenomena".
 //
 //   import {blackHole, wormhole, warp, asteroids, asteroid, comet, aurora} from "vidgen/space-phenomena";
@@ -587,7 +587,7 @@ export class BlackHole {
   }
 }
 /** A black hole: `blackHole(renderer, {sky, disc, inner, outer, temperature, tint, brightness, doppler, opacity,
- * speed, ring, tilt, lens, stars, seed, quality, skyGain})`; DESIGN.md §122.9. */
+ * speed, ring, tilt, lens, stars, seed, quality, skyGain})`. */
 export const blackHole = (renderer, options = {}) => new BlackHole(renderer, options);
 
 // ====================================================================================================
@@ -721,7 +721,7 @@ export class Wormhole {
     for (const s of [this._sky, this._other]) if (s.own) s.texture.dispose();
   }
 }
-/** A wormhole: `wormhole(renderer, {sky, other, length, rim, rimColor, glow, lens, quality, skyGain, otherGain})`; DESIGN.md §122.9. */
+/** A wormhole: `wormhole(renderer, {sky, other, length, rim, rimColor, glow, lens, quality, skyGain, otherGain})`. */
 export const wormhole = (renderer, options = {}) => new Wormhole(renderer, options);
 
 // ====================================================================================================
@@ -914,7 +914,7 @@ export class Warp {
     for (const m of [this.stars, this.tunnel, this.glow, this.flash]) { m.material.dispose(); if (m.geometry !== this.geometry) m.geometry.dispose(); }
   }
 }
-/** A jump to warp: `warp(renderer, {seed, count, depth, radius, speed, seconds, fps, shutter, tunnel, flash, color, ahead, behind, quality})`; DESIGN.md §122.9. */
+/** A jump to warp: `warp(renderer, {seed, count, depth, radius, speed, seconds, fps, shutter, tunnel, flash, color, ahead, behind, quality})`. */
 export const warp = (renderer, options = {}) => new Warp(renderer, options);
 
 // ====================================================================================================
@@ -1210,7 +1210,7 @@ export class Asteroids {
   }
 }
 /** Rocks by the thousand: `asteroids(renderer, {layout: "field" | "belt", seed, count, size, least, most, power, shapes,
- * rocks, follow, tumble, glint, color, variety, albedo, brightness, dust, inner, outer, thickness, rate, gaps, eccentricity, light, sun, quality})`; DESIGN.md §122.9. */
+ * rocks, follow, tumble, glint, color, variety, albedo, brightness, dust, inner, outer, thickness, rate, gaps, eccentricity, light, sun, quality})`. */
 export const asteroids = (renderer, options = {}) => new Asteroids(renderer, options);
 
 // ====================================================================================================
@@ -1413,7 +1413,7 @@ export class Comet {
   }
 }
 /** A comet: `comet(renderer, {seed, nucleus, coma, dust, ion, jets, length, ionLength, curve, activity, dustColor,
- * ionColor, comaColor, spin, space, body, orbits, unit, reference, quality})`; DESIGN.md §122.9. */
+ * ionColor, comaColor, spin, space, body, orbits, unit, reference, quality})`. */
 export const comet = (renderer, options = {}) => new Comet(renderer, options);
 
 // ====================================================================================================
@@ -1492,5 +1492,5 @@ export class Aurora {
   }
   dispose() { this.object.removeFromParent(); this._noise.dispose(); for (const m of this.object.children) { m.geometry.dispose(); m.material.dispose(); } }
 }
-/** An aurora on a world: `aurora(body, {seed, latitude, width, offset, height, brightness, speed, color, top, poles, day})`; DESIGN.md §122.9. */
+/** An aurora on a world: `aurora(body, {seed, latitude, width, offset, height, brightness, speed, color, top, poles, day})`. */
 export const aurora = (body, options = {}) => new Aurora(body, options);

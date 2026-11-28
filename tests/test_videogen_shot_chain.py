@@ -1,4 +1,4 @@
-"""One shot after another (DESIGN.md §113.14): ``first_frame: last_of:``, the opening match in QA
+"""One shot after another: ``first_frame: last_of:``, the opening match in QA
 and the overlay of ``vidgen generate inputs``. Nothing is sent or paid."""
 
 from __future__ import annotations

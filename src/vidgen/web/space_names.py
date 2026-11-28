@@ -1,4 +1,4 @@
-"""The names the space modules know, read from their own source (DESIGN.md §122.12).
+"""The names the space modules know, read from their own source.
 
 A declarative ``space`` scene is checked by ``vidgen validate`` in Python, with no browser and no
 Node: its ready-made worlds, craft kinds, camera moves, phases, lenses, sky looks, star kinds and
@@ -306,7 +306,7 @@ def _kebab(name: str) -> str:
 
 @lru_cache(maxsize=1)
 def air_names() -> dict[str, Any]:
-    """The names and options of the Phase AO modules a ``space`` scene reaches (DESIGN.md §123.14), read
+    """The names and options of the Phase AO modules a ``space`` scene reaches, read
     from their shipped source as :func:`space_names` reads Phase AN's:
 
     ``air_presets``, ``air_options``, ``air_shadows`` (vidgen/space-air); ``sea_states``, ``waters``, ``sea_options``,
@@ -406,7 +406,7 @@ PART_PREFIXES = {"planes": "plane-", "hulls": "hull-", "sea_states": "sea-", "la
 
 def yaml_names() -> dict[str, list[str]]:
     """Every name a ``space`` scene's YAML accepts for the new pictures, spelled as the YAML writes it (the
-    one registry the validation, the guide and the parts sheet agree on; DESIGN.md §123.14): air presets,
+    one registry the validation, the guide and the parts sheet agree on): air presets,
     sea states, waters, cloud skies, deck types, land presets, planes, hull families, palettes, camera
     moves (kebab-case, as the parts sheet names them: ``climb-through``), sides, wing views, the effects'
     groups and the craft kit's parts."""
@@ -420,7 +420,7 @@ def yaml_names() -> dict[str, list[str]]:
 
 @lru_cache(maxsize=1)
 def camera_looks() -> dict[str, Any]:
-    """The camera looks of ``vidgen/camera-looks`` (DESIGN.md §124.4), read from its JSON-written constants:
+    """The camera looks of ``vidgen/camera-looks``, read from its JSON-written constants:
     ``looks`` (name -> {finish, operator}: the options each sets) and ``main`` (section -> group -> the key a
     number sets: ``noise: 0.006`` is the look's noise at amount 0.006)."""
     where, source = "vidgen/camera-looks", module_source("vidgen/camera-looks")

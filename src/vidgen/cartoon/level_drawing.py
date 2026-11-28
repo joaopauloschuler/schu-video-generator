@@ -1,4 +1,4 @@
-"""The tiles of a platform level drawn once into pictures (DESIGN.md §86), in schu-video-generator's flat
+"""The tiles of a platform level drawn once into pictures, in schu-video-generator's flat
 cartoon look: filled shapes with the characters' outline ink. No manim.
 
 :func:`level_shapes` lists the shapes in world (tile) units, back to front; :func:`draw_columns`
@@ -77,7 +77,7 @@ def _outlined(shapes: Sequence[Shape], ink: str, width: float) -> list[Shape]:
 def _ground(level: Level, colors: LevelColors, width: float, below: int = 0) -> list[Shape]:
     """The ground as one mass: ink cells, fills inset on their open sides (and ink in the inner
     corners), grass with a scalloped edge on top, and a few pebbles; the ground of the map's
-    bottom row runs on ``below`` rows under it (a raised level, DESIGN.md §86.10)."""
+    bottom row runs on ``below`` rows under it (a raised level)."""
     def solid(column: int, row: int) -> bool:
         return row >= -below and level.tile(column, max(row, 0)) == GROUND
 

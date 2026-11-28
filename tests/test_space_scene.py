@@ -1,4 +1,4 @@
-"""Step 376: the declarative ``space`` scene (DESIGN.md §122.12): its words checked in Python, the
+"""Step 376: the declarative ``space`` scene: its words checked in Python, the
 page it writes (stable bytes, every param in them), the runtime helpers ``vidgen/space-scene`` in Node,
 ``vidgen space-page``, ``vidgen music plan --style space`` and the ``space_scene`` / ``orbit_scale`` lint."""
 

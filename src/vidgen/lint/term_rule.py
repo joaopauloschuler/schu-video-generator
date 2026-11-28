@@ -1,4 +1,4 @@
-"""The lint rule on the video's concept colours (``terms:``, DESIGN.md §87.3).
+"""The lint rule on the video's concept colours (``terms:``).
 
 ``concept_colors`` reads the config, not a still: more different colours than ``max_colors``,
 a colour below ``min_contrast`` on the theme background (both reported on the first scene that

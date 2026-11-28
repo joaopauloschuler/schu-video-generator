@@ -1,5 +1,5 @@
 """One world from orbit to the ground, ``vidgen/space-descent`` and the moves ``descend`` / ``ascend`` of
-``vidgen/space-camera-air`` (Step 391, DESIGN.md §123.13): the module is served by its import name; its
+``vidgen/space-camera-air`` (Step 391): the module is served by its import name; its
 parts are registered; in Node (when it is installed): the handover's weights are smooth, monotonic and
 share a pixel with what is left, what is drawn at which height, the distance to the sphere, the globe's
 turn, options with a did-you-mean, the descent's height profile, its end joined to a ``skim`` and its

@@ -1,4 +1,4 @@
-// vidgen/space-land: ground with relief under a vidgen/space-air sky (DESIGN.md §123.6). Part of
+// vidgen/space-land: ground with relief under a vidgen/space-air sky. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-land".
 //
 //   import {air, sunDirection} from "vidgen/space-air";
@@ -881,7 +881,7 @@ export class Land {
    * name of PRESETS) or `world` (a name of vidgen/space-bodies' PRESETS or its options) with `at` ([latitude,
    * longitude] of the place under the scene's origin, degrees; +x is east, -z north), `seed` (the relief's own;
    * default the world's), the recipe's parts (`mountains`, `rough`, `strata`, `dunes`, `craters`, `materials`: see
-   * recipeOf and DESIGN §123.6), `quality` (a name of QUALITIES), `water` (true: a sea lies at height 0, the ground
+   * recipeOf), `quality` (a name of QUALITIES), `water` (true: a sea lies at height 0, the ground
    * under it is drawn behind it; default: the world's type has seas), `shade` ({glsl, uniforms}: what shades the
    * sun's light, such as `clouds(...).shade` of vidgen/space-clouds), `macro` (a macro of your own in place of
    * the world's: flatMacro(...), with `type` for the recipe's defaults). */

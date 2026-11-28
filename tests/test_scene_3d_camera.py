@@ -1,4 +1,4 @@
-"""Shapes, groups and camera moves of the ``3d`` scene type (Step 299, DESIGN.md §114.7–114.9):
+"""Shapes, groups and camera moves of the ``3d`` scene type (Step 299):
 params and their messages, the world transforms, the camera paths and tracks, the camera
 actions as `vidgen validate` checks them, the validate warning for a missing Chromium; a few
 tiny renders through Playwright's Chromium (skipped when it is missing)."""

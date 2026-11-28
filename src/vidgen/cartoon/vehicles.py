@@ -1,4 +1,4 @@
-"""Vehicles (DESIGN.md §69.52, §69.53): a bicycle, a car and a bus on the ground, a boat on the
+"""Vehicles: a bicycle, a car and a bus on the ground, a boat on the
 water, a hot-air balloon and a toy rocket in the air. No manim.
 
 A vehicle is a built-in prop (:mod:`vidgen.cartoon.props` draws it) with seats, wheels that turn
@@ -58,7 +58,7 @@ class VehicleSpec:
     ``hides_legs``: riders sit behind its side (a car, a bus: drawn before it), else on it (a
     bicycle: drawn after it); ``speed``: units per second (the frame's shorter side is 8);
     ``bell``: it rings a bell when it sets off (else its engine starts); ``medium``: where it goes
-    (``ground``, ``water`` or ``air``, DESIGN.md §69.53); ``stands``: its riders stand on the floor
+    (``ground``, ``water`` or ``air``); ``stands``: its riders stand on the floor
     (a balloon's basket) instead of sitting on the seat line."""
 
     height: float

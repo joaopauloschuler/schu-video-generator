@@ -1,4 +1,4 @@
-"""Push and wipe transitions and carried objects (Step 47, DESIGN.md §50): config, the xfade
+"""Push and wipe transitions and carried objects (Step 47): config, the xfade
 graph and its frame math, overlays drawn once over the moving pictures, the carry record's round
 trip, render order with ``--jobs``, and a rendered video checked frame by frame."""
 

@@ -175,7 +175,7 @@ shape=...)` (degrees counterclockwise as drawn facing right; its child parts fol
 head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
 with `face("left")` / `turn()`, show a generated character's front view with `face("front")`
 (`has_front_view`; an SVG character keeps its side; `PoseChange(hero, facing="front")` turns to
-it, DESIGN.md §69.44), and snapshot or restore a pose with `state()` / `set_state()`.
+it), and snapshot or restore a pose with `state()` / `set_state()`.
 Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
 land where it is. Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`,
 `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`,
@@ -189,17 +189,17 @@ its hand is on a point with `hero.reach("left", point)` (the elbow bends natural
 other way) and a leg with `hero.plant("right", point)` (knee forward; needs `leg_left` /
 `leg_right`); `hand_point("left")` / `foot_point("right")` say where the hand or sole is now. An arm
 drawn in one piece (an older SVG) shows its elbow folded, so `reach` and the poses work on it
-too (DESIGN.md §69.26). Lip sync:
+too. Lip sync:
 inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow the beat's
 `VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
 clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it
 (the mouth shows its pose's shape again; after the beat, `self.end_lip_sync(hero, track)` ends
-it now or, when the next beat `overlap`s this line, once that beat ends, DESIGN.md §69.34); `show_viseme("O")` shows one of `VISEMES` at once; a
+it now or, when the next beat `overlap`s this line, once that beat ends); `show_viseme("O")` shows one of `VISEMES` at once; a
 character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
 (`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit; `fade_in=` /
 `fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`; `depth=`
 with `feet_y=` (the ground line's y at a depth) walks towards or away from the camera too,
-growing or shrinking, from `hero.stage_depth`, DESIGN.md §69.44; `carried=` the props it holds,
+growing or shrinking, from `hero.stage_depth`; `carried=` the props it holds,
 which grow and fade with it; `opens_door=True` tells foley it opened a closed door: a creak), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
@@ -243,12 +243,12 @@ umbrella's shaft; else its middle), and `PropMove` moves a prop by that point. A
 shapes (`prop.shapes`, a door's or an umbrella's `closed` / `open`) switches with `prop.show_shape(name)` or
 the animation `PropReshape(prop, shape, at=, height=, follow=)` (the `open` / `close` actions);
 `overhead_point(feet, height, facing)` is where a hand holds an open umbrella overhead.
-A room of your own (DESIGN.md §69.42): `room_geometry(...)`, `window_parts(...)` and
+A room of your own: `room_geometry(...)`, `window_parts(...)` and
 `window_sky(light)` give the shapes and the sky outside (no manim), and `draw_room(geometry,
 room_colors(wall, floor), wallpaper=, flooring=, windows=[WindowLook(parts, frame, curtains)],
 sky=, short_side=, frame_area=)` draws them (its `views.show(sky)` recolours the windows'
 sky); mark the room lit (`mark_lit`) but not its `WindowViews`. On a `stage`, `Stage.door(name)`
-is a room's door prop. Furniture (§69.43) is `draw_prop` with a `FURNITURE` kind; a sofa's or a
+is a room's door prop. Furniture is `draw_prop` with a `FURNITURE` kind; a sofa's or a
 bed's places are `prop.seat_places` (`prop.seat_point(k)` on screen), and `PROP_HANGS` says how
 high a picture or a clock hangs (`StageItem(..., hang=)` places it with `stage_layout`).
 The `effect` action (`src/vidgen/scenes/effect_action.py`) works on every `Character` target. Its
@@ -275,7 +275,7 @@ screen. A boat, a hot-air balloon and a toy rocket (`medium(kind)`: `water` / `a
 `Course` instead (`Ride(..., rise=, drift=, away_y=, seed=)`; its pure points are
 `balloon_point` and `rocket_point`); `Prop.pose_at(x, y, degrees)` sets a vehicle's place and
 turn afresh, and `StageWater` draws a stage's water and bobs the boats on it (`boat_bob`).
-Props that move by themselves (DESIGN.md §69.54): `draw_prop("clock" | "tv" | "lamp", ...,
+Props that move by themselves: `draw_prop("clock" | "tv" | "lamp", ...,
 living=True)` adds their moving parts, and `LivingProp(prop, start=, speed=, on=, seed=)` sets
 them for a scene time (`update(t)`, from a scene updater; `switch(on, time)`); its `glow` (a
 `PropGlow`, or `None`) is a mobject of its own to add right before the prop. The maths is pure:
@@ -287,11 +287,11 @@ takes it).
 A `fireplace` and a `kettle` drawn `living` burn and steam the same way (`flame_shapes(t, seed,
 lean)`, `steam_puffs(t, seed, lean)`; `LivingProp(..., wind=)` takes the felt wind force at a
 time, its `steam` is a `PropSteam` to add right after the prop); `on_spans` gives when one is on.
-Nature (DESIGN.md §69.55): `draw_prop("tree", ..., fruit=True)` tags each fruit's members with
+Nature: `draw_prop("tree", ..., fruit=True)` tags each fruit's members with
 `FRUIT_INDEX`; `Stage.drop_fruit(tree, onto)` returns a `FruitDrop` (a `PropMove` of a
 `FallenFruit` along `drop_point`, its `lands_at` the thud); `Stage.add_flock(settings, start)`
 puts a `Flock` (`flock_plan`, `bird_place`) in the sky.
-Small props (DESIGN.md §69.56): `SMALL_PROPS`; a `phone` drawn `living` rings while on
+Small props: `SMALL_PROPS`; a `phone` drawn `living` rings while on
 (`LivingProp` redraws its whole drawing turned by `ring_shake(t, on_since(...))`; `ring_bursts`
 gives the times of the `phone` sounds). Balloons float with `PropMove(..., path=lambda u, a, b:
 float_point(u, a, b, seed=s))` to `float_end(start, top, force)`; a watering can pours with
@@ -317,7 +317,7 @@ Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a 
 for your scene (fewer at preview quality, `self.is_preview`; none, not moving, in a draft) that moves on its own once added
 (`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
 count, seed), t)` gives the seeded positions without drawing anything.
-Drafts (`vidgen render --draft`, DESIGN.md §74): `self.is_draft` is true; leave out what only
+Drafts (`vidgen render --draft`): `self.is_draft` is true; leave out what only
 decorates (idle motion: `figure.stop_idle()`, shadows, effects that loop), never a timing, a
 position or a sound.
 Light: `StageLight(self.camera, light_grade("night"))` grades, as the camera draws, whatever you
@@ -328,7 +328,7 @@ fades: return every mobject from `get_moving_mobjects`, as `stage` does). The ma
 `light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;
 `StageShadows([ShadowCaster(mob, ground_y, width, size)])` draws soft shadows (`follow()` in an
 updater for things that move), `StarField(night_stars(area_share), box, short_side)` stars.
-Drawing style (`drawing:`, DESIGN.md §79): a scene type with the class attribute
+Drawing style (`drawing:`): a scene type with the class attribute
 `uses_drawing_style = True` (like `stage`) draws every stroke with the video's outline weight
 and gets its texture; `self.drawing` is the resolved `DrawingStyle` (override
 `drawing_settings()` to add a param of your own, as `stage` does), and with `self.drawing.shading
@@ -343,8 +343,6 @@ a `ParticleField(..., wind=)` drifts with it. `felt_force(force)` is the force t
 trailing use (strong wind more than in proportion); `blown_point(share, start, end, rise=, seed=)`
 is a blown prop's seeded, gusty, tumbling path (`gusty_progress`, `blow_seconds(distance,
 level)`, `LIGHT_PROPS`), and `Holdings.drop(prop)` takes a prop out of whoever holds it.
-DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
-stage, §69.7 layers and the camera, §69.8 props, §69.9 particles, §69.31 light and shadows, §69.32 wind.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
@@ -831,7 +829,7 @@ def reveal_steps(cls, params):
   animation lasts `min(cap, fraction * slot)`, so a beat is never stretched by its animations.
 - `self.timeline()` is `narrate_all()` that also works for silent scenes (yields `(index, d)`;
   a silent scene yields one step of its `duration`).
-- When the next beat has `overlap` or `interrupt` (DESIGN.md §69.34), `narrate` yields the time
+- When the next beat has `overlap` or `interrupt`, `narrate` yields the time
   until that beat starts instead of `d`, and nothing is waited after it: call the next
   `narrate` right after the block. `self.beat_window(i)` gives `body` (what is yielded),
   `window` (until the next beat), `heard` (seconds of the voice) and the voice's `shape`.
@@ -1022,7 +1020,7 @@ Hooks run in registration order (each project's hooks only for that project). If
 the command stops with an error naming the hook and its file. Paths in `ctx.data` are
 `pathlib.Path` objects; `ctx.project.variant` tells which variant is being rendered.
 
-Event data (see DESIGN.md §6.2):
+Event data:
 
 | event         | `ctx.data` keys |
 |---------------|-----------------|
@@ -1231,12 +1229,12 @@ stage moves its parallax layers so); both run as one scene updater after every a
 listener must place things from the camera alone: it also runs before each animation, and while
 the camera neither follows nor animates, Manim draws what comes before the first moving mobject
 once into a static image for that animation.
-`zoom` comes back to the view it started from. A beat's `shot:` (DESIGN.md §69.29) works on a
+`zoom` comes back to the view it started from. A beat's `shot:` works on a
 scene type with a `shot_framing(kind, names)` method returning `(ShotView, Shot)` (the built-in
 `stage`; the framing maths is `frame_shot` / `shot_figures` / `shot_view`); while a shot is on,
 `scene.camera_shot` holds what the layout dump records and `scene.shot_home` the view the next
 beat goes back to. On a stage wider than the frame the stage adds automatic `pan`s that keep
-the speaker in view (`reframe`, §69.30; `reframe_path` is the pure path). Animate the parts that are in the
+the speaker in view (`reframe`; `reframe_path` is the pure path). Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`
@@ -1457,7 +1455,7 @@ drawn on a canvas, `layout(t, ctx)`; a page puts them on `window.vidgen`, a scri
 **Promoting.** A page that proved useful in many videos is a candidate for a real scene type
 (section 7): a Python built-in can call `make_web_clip` (in `vidgen.api`, the code the `web` type
 uses) with its own params as `data`, as the `web` type does; `web_scene_music(project, scene_id,
-fps, WebMusicData(...))` gives its `music=` (Step 347, DESIGN §120.8).
+fps, WebMusicData(...))` gives its `music=` (Step 347).
 
 **A variant of the `web` type.** A scene type of your own may subclass the built-in class, for
 example to cut instead of fading out:
@@ -1473,7 +1471,7 @@ class WebCut(Web):
 ```
 
 Its scenes take the same params and are cached like `web` scenes: an edit to the script, or to a
-file the page imports or fetches, renders them again (since Step 341; DESIGN §120.1).
+file the page imports or fetches, renders them again (since Step 341).
 `vidgen.scenes.web` is not part of `vidgen.api`, so check such a class after an update of vidgen.
 
 Projects side by side can share one such type and one script instead of a copy each: put them in

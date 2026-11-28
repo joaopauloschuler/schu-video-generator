@@ -1,5 +1,5 @@
 """Kepler's laws and orbital speed as numbers for the ``orbit`` scene's overlays (Phase X, Step
-230, DESIGN §98.4): the ellipse's geometry (foci, centre, a, b, apsides and their names), the
+230): the ellipse's geometry (foci, centre, a, b, apsides and their names), the
 areas swept in equal times (Kepler II, the area integrated from the geometry, not from Kepler's
 equation), Newton's cannonball (shots from one point at increasing speeds, classified by their
 energy, with the time a falling shot reaches the ground) and the planets' periods against their

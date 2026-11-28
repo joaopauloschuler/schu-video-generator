@@ -1,4 +1,4 @@
-"""The logic of live plots (Phase W, DESIGN §97.7), without manim: how much of a series is
+"""The logic of live plots (Phase W), without manim: how much of a series is
 drawn at a moment of its growth, where its head is, how an axis rescales smoothly while the
 data grow past it, the domain of a zoom in between, and the text of a live readout. Deterministic
 pure functions of the progress, so a frame never depends on the frames before it."""

@@ -1,4 +1,4 @@
-"""Ready-made three.js parts (Step 369, DESIGN.md §122.5): the registry ``vidgen/parts``, the parts
+"""Ready-made three.js parts (Step 369): the registry ``vidgen/parts``, the parts
 files under ``data/web/parts/`` (their JSON descriptions read without a browser), ``vidgen parts``
 (``--list``, choosing by name, pattern and kind, the tile size) and, in Chromium (``slow``), the
 contact sheet: every part drawn, none left black."""

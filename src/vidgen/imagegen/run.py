@@ -1,7 +1,7 @@
-"""``vidgen imagegen``: generate the pictures of ``generate:`` params that are missing (DESIGN.md §58).
+"""``vidgen imagegen``: generate the pictures of ``generate:`` params that are missing.
 
 Each distinct request (same prompt, style, size, model...) is generated once and stored as
-``assets/generated/<key>.png`` (``.svg`` for ``format: svg``, §65) + ``<key>.json``; pictures that
+``assets/generated/<key>.png`` (``.svg`` for ``format: svg``) + ``<key>.json``; pictures that
 exist are skipped unless ``force``.
 """
 

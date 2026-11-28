@@ -1,4 +1,4 @@
-"""Audio-only renders (DESIGN.md §111): ``vidgen render --audio-only``, or ``audio_only: true``,
+"""Audio-only renders: ``vidgen render --audio-only``, or ``audio_only: true``,
 writes the project's sound to ``<output>.wav`` (:meth:`Project.audio_path`) and renders no scene.
 
 :func:`plan_audio` times every beat without pictures. With ``pacing.timing: speech`` (the
@@ -7,7 +7,7 @@ default) a line lasts as long as its MP3 (else the word-count estimate) and is f
 voice changes, ``scene`` between scenes, ``chapter`` before a scene that starts a chapter; a
 beat's own ``pause`` replaces the gap after it. A sting at a line's start sounds
 ``sting_before`` ahead of the speech, one at its end gets its own length plus ``sting_after``
-before the next line; lines that overlap or interrupt (§69.34) join as in a video. No gap is
+before the next line; lines that overlap or interrupt join as in a video. No gap is
 added next to a silent scene, which lasts ``pacing.silent`` or its ``duration``; ``lead_in`` and
 ``tail`` of silence frame the whole. With ``timing: video`` every beat sits where
 :class:`~vidgen.videoplan.VideoPlan` puts it: the MP4's soundtrack without the pictures. Both are
@@ -24,11 +24,11 @@ track (:func:`vidgen.sfx.write_track`) and the mix (:func:`vidgen.mix.mix_audio`
 ducked under the voices, loudness normalisation, the true-peak limiter), then copies the mix to
 the deliverable and writes ``build/<render>/audio/timings.json``.
 
-``audio_output`` (§111.1-111.3) chooses the deliverable: the mix is encoded
+``audio_output`` chooses the deliverable: the mix is encoded
 (:mod:`vidgen.audio_encode`) unless it is wanted as it is; a loudness preset sets the mix's
 targets (:func:`vidgen.audio_check.mix_targets`) and the file is measured against it after the
 encode (:func:`vidgen.audio_check.check`); the transcripts are written from the timings
-(:mod:`vidgen.transcripts`). With ``split: chapters`` (§112.3) the mix also writes one part per
+(:mod:`vidgen.transcripts`). With ``split: chapters`` the mix also writes one part per
 chapter and :mod:`vidgen.delivery` makes the files, the playlist and their transcripts.
 """
 
@@ -68,7 +68,7 @@ BLOCK = RATE * 10
 class PlacedBeat:
     """A beat in the audio: its voice starts at ``start`` and is heard until ``end`` (seconds
     from the audio's start), shaped by ``shape`` where a later line joins it, placed in stereo
-    and in a room by ``staging`` (DESIGN.md §111.4)."""
+    and in a room by ``staging``."""
 
     id: str
     start: float
@@ -91,7 +91,7 @@ class AudioScene:
     beats: list[PlacedBeat] = field(default_factory=list)
     events: list[SfxEvent] = field(default_factory=list)
     overlap: float = 0.0
-    ambience: list[dict[str, Any]] = field(default_factory=list)  # its beds (timings entries, audio times; DESIGN.md §112)
+    ambience: list[dict[str, Any]] = field(default_factory=list)  # its beds (timings entries, audio times)
 
 
 @dataclass
@@ -156,7 +156,7 @@ def _scene_events(project: Project, spec: SceneConfig, start: float) -> list[Sfx
 def _action_events(project: Project, spec: SceneConfig, beat: BeatConfig, start: float, body: float, fps: int | None) -> list[SfxEvent]:
     """The beat's ``sfx`` actions at audio times: ``at`` of its narration (``body`` seconds), in
     whole frames at ``fps`` as the action runner cues them (``None``: exact), repeated and in a
-    room as they ask (DESIGN.md §112)."""
+    room as they ask."""
     events = []
     for act in beat.actions:
         if act.action != "sfx":
@@ -194,7 +194,7 @@ def _beat_events(project: Project, spec: SceneConfig, beat: BeatConfig, start: f
 
 def _left_out(project: Project) -> list[str]:
     """What an audio-only render of ``project`` cannot play (made by scene code while it renders;
-    with ``audio.scene_sounds`` what that cannot work out, DESIGN.md §112)."""
+    with ``audio.scene_sounds`` what that cannot work out)."""
     types = {s.type for s in project.config.scenes}
     out = []
     worked_out = project.config.audio.scene_sounds
@@ -246,7 +246,7 @@ def _ends_with_sting(beat: BeatConfig) -> bool:
 
 def _sting_time(project: Project, beat: BeatConfig, start: float, heard: float, before: float) -> float:
     """When a beat's sting sounds: ``before`` seconds ahead of its line starting at ``start``, as
-    it ends (``heard`` seconds later) or on a word it says (DESIGN.md §112.2)."""
+    it ends (``heard`` seconds later) or on a word it says."""
     at = beat.sting.placed_at if beat.sting is not None else "start"
     if at == "end":
         return start + heard
@@ -378,7 +378,7 @@ def scene_slots(project: Project, scenes: Sequence[AudioScene]) -> list[SceneSlo
 
 def _design_sound(project: Project, scenes: Sequence[AudioScene], duration: float) -> None:
     """Add the scenes' and beats' ambience beds and, with ``audio.scene_sounds``, the sounds the
-    stage scenes would make (DESIGN.md §112) to ``scenes``."""
+    stage scenes would make to ``scenes``."""
     sounds = project.config.audio.scene_sounds
     designed = designs_ambience(project.config.scenes)
     if not sounds and not designed:
@@ -409,7 +409,7 @@ def _voice_samples(project: Project, beat: PlacedBeat, limit: int) -> np.ndarray
 def write_voice_track(path: Path, project: Project, beats: Sequence[PlacedBeat], samples: int, clips: Sequence[tuple[float, Path]] = ()) -> None:
     """Write ``path``: a 48 kHz stereo 16-bit WAV of ``samples`` samples with each beat's MP3 (a
     beat without one is silent) from its start, summed, and each of ``clips`` (a scene's own
-    sound: ``(start seconds, WAV)``, DESIGN.md §112); written in :data:`BLOCK` blocks, each beat
+    sound: ``(start seconds, WAV)``); written in :data:`BLOCK` blocks, each beat
     decoded when the first block it sounds in is written."""
     pending: list[tuple[int, int, PlacedBeat | Path]] = sorted(
         [(round(b.start * RATE), k, b) for k, b in enumerate(beats) if (project.audio_dir / f"{b.id}.mp3").is_file()]
@@ -494,7 +494,7 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
         total = round(plan.duration * RATE)
         voice = folder / "voice.wav"
         clips: list[tuple[float, Path]] = []
-        if project.config.audio.scene_sounds:  # a video_clip's own sound (DESIGN.md §112)
+        if project.config.audio.scene_sounds:  # a video_clip's own sound
             for slot in scene_slots(project, plan.scenes):
                 wav = clip_sound(project, slot, folder / "clips")
                 if wav is not None:
@@ -517,7 +517,7 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
         timings["mix"] = report.to_json()
         preset = project_preset(project)
         staged = uses_staging(project.config) and project.config.audio_output.channels == "stereo"
-        if parts:   # one file per chapter (DESIGN.md §112.3)
+        if parts:   # one file per chapter
             written = delivery.write_parts(project, preview, timings, parts, part_mixes)
             checked = _check_parts(project, timings, written, preset, staged)
             timings_file = folder / "timings.json"
@@ -554,7 +554,7 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
 
 def _check_parts(project: Project, timings: dict[str, Any], written: delivery.WrittenParts, preset: LoudnessPreset | None,
                  staged: bool) -> PresetResult | None:
-    """Measure each file of a split render (DESIGN.md §112.3) against ``preset`` and for mono
+    """Measure each file of a split render against ``preset`` and for mono
     compatibility (``staged``), and the files against each other; records ``audio_output``
     ``{split, playlist, files: [{file, title, start, end, check, stereo}], files_check, check}``
     (and ``stereo``: the first file that folds badly, else the first) in ``timings``; returns

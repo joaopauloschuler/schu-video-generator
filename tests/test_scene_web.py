@@ -1,7 +1,7 @@
-"""The ``web`` scene type (Steps 328-330, DESIGN.md §118): params, the page or script file's checks,
+"""The ``web`` scene type (Steps 328-330): params, the page or script file's checks,
 the served paths, error messages, the clip cache, the random seed and the time limit without a
 browser; a few tiny pages in Playwright's Chromium (``slow``, skipped when it is missing), among
-them the virtual clock (§118.8) and what the page is given (§118.9, §118.10)."""
+them the virtual clock and what the page is given."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def test_the_fingerprint_follows_the_named_file(tmp_path: Path) -> None:
     assert entry_digest(tmp_path, {"page": "gone.html"})["sha256"] is None
 
 
-# ----- web_root: projects side by side share a page (DESIGN.md §123.16) --------------------------
+# ----- web_root: projects side by side share a page --------------------------
 
 
 def shared_project(make_project: Any, web_root: str | None, script: str) -> Project:
@@ -616,7 +616,7 @@ def test_the_page_is_given_theme_data_beats_and_three(tmp_path: Path) -> None:
     assert state[3:6] == ["b2", "1", '"Source Serif 4", serif'] and state[6] is True
     # the background is #F8F7F3 (red 248) until b2 starts at 0.4 s; the box fades to #1D4ED8 (red 29) in 0.4 s. Frame 4
     # (t = 0.4) is where the CSS transition starts: Chromium's compositor runs it and is sometimes one step ahead there
-    # (red 238 instead of 248 in about one run in three, on every step's code since Step 340; DESIGN §120.10, §120.12),
+    # (red 238 instead of 248 in about one run in three, on every step's code since Step 340),
     # so that frame may have begun to fade, but not by more than a step
     assert reds[:4] == [248] * 4 and 225 <= reds[4] <= 248 and reds[8] == 29 and 29 < reds[6] < 248
     assert {"g.html", "g.css", "late.json", "__vidgen__/three/three.module.js", "__vidgen__/three/three.core.js",

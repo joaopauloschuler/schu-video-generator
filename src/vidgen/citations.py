@@ -1,4 +1,4 @@
-"""On-screen citations (DESIGN.md §95.14): a scene's ``references:`` and ``figure_credit:`` drawn
+"""On-screen citations: a scene's ``references:`` and ``figure_credit:`` drawn
 on top of it like an overlay, the way the video's ``citations:`` says — a footer line
 (``[1] Label · [2] Label``), the numbers alone in a corner (``[1, 2]``), or the numbers and then
 an end-of-scene card listing the references. Numbers are the video's (the description lists

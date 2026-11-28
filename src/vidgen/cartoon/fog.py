@@ -1,4 +1,4 @@
-"""Fog on a stage (DESIGN.md §69.60). No manim.
+"""Fog on a stage. No manim.
 
 Fog is a few translucent *bands*, one at each depth of :data:`FOG_DEPTHS` (back to front): a band
 lies on the ground line of its depth, and the stage draws it right in front of everything standing
@@ -131,7 +131,7 @@ def band_box(index: int, ground: float, left: float, right: float, frame_height:
     return (left, low, right, frame_height / 2)
 
 
-# ----- fog on an iso place (DESIGN.md §105.4) ------------------------------------------------------
+# ----- fog on an iso place ------------------------------------------------------
 
 #: On an iso place a band lies along a line of the ground across the picture (the points as far
 #: back as ``x + y`` of the map), one at each share of :data:`FOG_DEPTHS` of the way from the

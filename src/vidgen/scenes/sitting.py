@@ -1,6 +1,6 @@
-"""Sitting and leaning beat actions (DESIGN.md §69.28): ``sit_on``, ``lean_on`` and ``stand_up``
+"""Sitting and leaning beat actions: ``sit_on``, ``lean_on`` and ``stand_up``
 on the characters and props of a ``stage``; on an iso place also on its objects, with ``lie_on``
-(a bed) and ``use`` (§105.2: the stage's ``iso_seat``, ``iso_bed``, ``iso_use``). Written against
+(a bed) and ``use`` (the stage's ``iso_seat``, ``iso_bed``, ``iso_use``). Written against
 ``vidgen.api`` only, like project actions.
 
 Who sits or leans on what is a :class:`Postures` on the scene. Sitting lowers the body until it
@@ -78,7 +78,7 @@ class _Posture(_Acting):
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         problems = self._target_characters(scene_cls, params)[1]
         if self.what == "seat" and getattr(params, "iso", None) is not None and self.options.to not in params.prop_names():
-            return problems + _iso_object_problems(params, self.options.to, ISO_SEATS, "sit on")   # an object of the place (§105.2)
+            return problems + _iso_object_problems(params, self.options.to, ISO_SEATS, "sit on")   # an object of the place
         if "<prop>" not in scene_cls.target_patterns:
             return problems + [("target", f"{self.config.action} is for the characters and props of a stage")]
         props = params.prop_names()
@@ -130,7 +130,7 @@ class SitOn(_Posture):
             seat = prop.seat_point(place if prop.seat_places else None)
             before = character.state()
             seated = character.seated(before, float(seat[1] - character.feet()[1]) / character.character_height)
-            facing = prop.facing if prop.kind in SEAT_BACKS else character.side_facing   # sitting is drawn from the side (§69.44)
+            facing = prop.facing if prop.kind in SEAT_BACKS else character.side_facing   # sitting is drawn from the side
             anims.append(BodyMove(character, [(1.0, posture_parts(seated))], x=float(seat[0]), facing=facing,
                                   soles=character.sole_points(seated) or None))
             _posed(scene)[character.name] = posture_parts(before)
@@ -138,7 +138,7 @@ class SitOn(_Posture):
         return anims
 
     def _iso_sit(self, scene: NarratedScene, character: Character) -> Animation:
-        """Sit down on a seat of an object of the iso place (DESIGN.md §105.2): the free one
+        """Sit down on a seat of an object of the iso place: the free one
         nearest the feet, facing the way it faces, the feet under it."""
         world = scene.iso_place_now()  # type: ignore[attr-defined]
         item = world.object(self.options.to)
@@ -287,7 +287,7 @@ class StandUp(_Acting):
                 continue
             posture = postures(scene).stand(character.name)
             end = scene.iso_stand_point(character.name) if getattr(scene, "on_iso", False) else None  # type: ignore[attr-defined]
-            if end is not None:   # back to where it stood before it sat or lay down on an object of the place (§105.2)
+            if end is not None:   # back to where it stood before it sat or lay down on an object of the place
                 now = character.state()
                 lying = posture[0] == "lying"
                 soles = None if lying else character.sole_points(CharacterState(now.facing, {**now.parts, **before})) or None

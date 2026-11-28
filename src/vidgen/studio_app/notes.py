@@ -1,4 +1,4 @@
-"""Listening notes (DESIGN.md §94.16): short notes pinned to a moment of the piece while it plays
+"""Listening notes: short notes pinned to a moment of the piece while it plays
 ("this part drags", "goosebumps at the lift"), kept in the session's ``notes.json``.
 
 A note records the moment where it was made — seconds, bar and beat, the section and the bar

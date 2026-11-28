@@ -1,4 +1,4 @@
-"""Object actions of a ``3d`` scene (DESIGN.md §114.11): the beat actions ``object_move``,
+"""Object actions of a ``3d`` scene: the beat actions ``object_move``,
 ``object_path``, ``object_rotate``, ``object_spin``, ``object_scale``, ``object_show``,
 ``object_hide``, ``object_highlight``, ``object_walk`` and ``object_face`` become
 :class:`ObjectChange` s with a start and an end on the scene's clock; :func:`plan_motion` turns

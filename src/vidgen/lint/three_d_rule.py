@@ -1,4 +1,4 @@
-"""The ``3d`` scene's lint rules (DESIGN.md §114.12): ``three_d_off_frame`` and ``three_d_hidden``,
+"""The ``3d`` scene's lint rules: ``three_d_off_frame`` and ``three_d_hidden``,
 from the framing the scene adds to each still of its layout dump (``three_d``: every object's
 projected sphere, the share of it outside the frame and the share nearer objects cover, and
 the objects the beat is about). Only the objects the beat is about are judged: one its object or

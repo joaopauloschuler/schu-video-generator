@@ -1,4 +1,4 @@
-"""Allele and genotype notation (DESIGN.md §96.3): allele symbols as authors write them in YAML
+"""Allele and genotype notation: allele symbols as authors write them in YAML
 (``A``, ``a``, ``I^A``, ``i``, ``c^{ch}``, ``w^+``, ``+``), their canonical form, and the three
 ways they are shown: plain text with Unicode superscripts (``Iᴬ``, ``w⁺``), Pango markup for
 drawings (gene and allele symbols italic, chromosome letters X and Y roman) and the ASCII form.

@@ -1,4 +1,4 @@
-"""A ``web`` scene's frames as a clip, reused while nothing that draws them changed (DESIGN.md §118.4, §118.10)."""
+"""A ``web`` scene's frames as a clip, reused while nothing that draws them changed."""
 
 from __future__ import annotations
 
@@ -47,14 +47,14 @@ def clip_inputs(root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, 
                 orbits: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """What the clip is drawn from (stored in its record): the entry and its file's SHA-256,
     the size (the frames' pixels; the page's window too unless ``design_width`` gives its width
-    in CSS pixels, §118.17: then ``design_width`` is among the inputs, and left out otherwise so
+    in CSS pixels: then ``design_width`` is among the inputs, and left out otherwise so
     that the keys of clips without it stay as they were), frame rate and frame count, what the page is given (theme,
     data, beats, the video's shape: aspect, orientation, frame size, region), that the frames
     keep their alpha, and vidgen's page files and Playwright version. The other files the page loads are checked
-    from the record (:func:`loaded_changed`). ``music`` (§120.8, ``ctx.music``): with it the
+    from the record (:func:`loaded_changed`). ``music`` (``ctx.music``): with it the
     inputs name its SHA-256 and the music helper's; without it they leave ``music`` out, so the
-    keys of clips without music data stay as they were. ``orbits`` (§122.3, ``ctx.orbits``) the same way; when it
-    carries flights (``orbits.flights``, §123.7, ``ctx.flight``) the flight helper's SHA-256 too."""
+    keys of clips without music data stay as they were. ``orbits`` (``ctx.orbits``) the same way; when it
+    carries flights (``orbits.flights``, ``ctx.flight``) the flight helper's SHA-256 too."""
     path = entry_path(root, entry, scene_id)
     return {
         **({} if design_width is None else {"design_width": design_width}),
@@ -119,21 +119,21 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     """``folder/<scene_id>.mkv``: ``frames`` screenshots with alpha (RGBA, FFV1 ``bgra``) of the
     scene's page (``params``: its ``page`` or ``script``, a path in the project folder ``root``,
     its ``data`` and its ``design_width``) at ``fps`` and ``size`` (the frames' pixels: the page's
-    window, or with ``design_width`` a window that wide in CSS pixels drawn at ``size``, §118.17),
+    window, or with ``design_width`` a window that wide in CSS pixels drawn at ``size``),
     drawn now (one Chromium) unless the clip there was drawn from the same inputs
     (:func:`clip_inputs`) and every file the page loaded then is unchanged. ``theme`` and
-    ``beats`` are ``ctx.theme`` and ``ctx.beats`` (§118.9), ``shape`` the video's shape
-    (:func:`~vidgen.web.inputs.page_shape`; default: a page filling a frame of ``size``, §118.11). Writes ``folder/<scene_id>.json`` =
+    ``beats`` are ``ctx.theme`` and ``ctx.beats``, ``shape`` the video's shape
+    (:func:`~vidgen.web.inputs.page_shape`; default: a page filling a frame of ``size``). Writes ``folder/<scene_id>.json`` =
     ``{"key", "inputs", "loaded"}`` beside it (``loaded``: served path -> SHA-256). When it draws,
     it also reads the page's text at ``layout_frames`` (after their screenshots) into
-    ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back, §118.12). ``music``:
-    the scene's music data, ``ctx.music`` (§120.8); ``orbits`` its orbit data, ``ctx.orbits`` (§122.3). ``intermediate``: how the frames are kept
-    (§120.9; ``compact``: H.264 4:4:4 with a lossless alpha stream, the record then says
+    ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back). ``music``:
+    the scene's music data, ``ctx.music``; ``orbits`` its orbit data, ``ctx.orbits``. ``intermediate``: how the frames are kept
+    (``compact``: H.264 4:4:4 with a lossless alpha stream, the record then says
     ``"intermediate": "compact"``); it is not in the key: a lossless clip is reused for either,
     a compact one only while ``compact`` is asked for. While it draws, :class:`FrameProgress`
-    logs progress lines on ``vidgen.progress`` (§120.10).
+    logs progress lines on ``vidgen.progress``.
 
-    ``draw_mode`` ``"depth"`` (§113.19): the scene's depth pass instead, ``folder/<scene_id>.depth.mkv``
+    ``draw_mode`` ``"depth"``: the scene's depth pass instead, ``folder/<scene_id>.depth.mkv``
     (+ ``.json``), drawn with ``ctx.draw_mode`` (vidgen/three-finish packs the depth into the pixels:
     always lossless, no layout readings); a page that draws no depth frame is an error."""
     entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
@@ -174,7 +174,7 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
                 hooked = time.monotonic()
                 png = page.screenshot(n)
                 shot = time.monotonic()
-                writer.put(png)   # decoded and encoded while the next frame is drawn (DESIGN.md §120.10)
+                writer.put(png)   # decoded and encoded while the next frame is drawn
                 if n in wanted:
                     layouts[n] = page.layout(n)
                 progress.drawn(hooked - started, shot - hooked)
@@ -194,7 +194,7 @@ def web_page_layouts(root: Path, folder: Path, scene_id: str, params: Any, *, si
     """The page's text at frames ``at`` (frame -> the reading of ``data/web/layout.js``, page
     pixels), for the clip :func:`make_web_clip` makes from the same arguments: the readings kept
     beside the clip, else read now in one Chromium that steps the page frame by frame (no
-    screenshots) to the last frame missing, and kept for next time (§118.12)."""
+    screenshots) to the last frame missing, and kept for next time."""
     entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
                                          music=music, orbits=orbits)
     wanted = sorted({min(max(int(n), 0), frames - 1) for n in at})

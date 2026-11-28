@@ -1,4 +1,4 @@
-"""The rules of a platform world's story props (DESIGN.md §86.8) besides moving: opening and
+"""The rules of a platform world's story props besides moving: opening and
 closing doors (a locked one only by whoever holds its key, standing next to it), a blocker
 stepping aside, a key taken, handed over or put down. Pure functions on a
 :class:`~vidgen.world.world.World`, no manim; each refusal is a :class:`VidgenError` saying what

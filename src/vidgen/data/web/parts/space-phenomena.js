@@ -1,5 +1,5 @@
-// The ready-made phenomena of vidgen/space-phenomena (DESIGN.md §122.9) for the registry vidgen/parts
-// (§122.5): what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas (each
+// The ready-made phenomena of vidgen/space-phenomena for the registry vidgen/parts:
+// what `vidgen parts` draws on its contact sheet. Drawn straight to the canvas (each
 // phenomenon, like the sky, applies the tone curve itself); a small tile bakes small maps. The labels
 // carry each part's measured cost: seconds a frame at 1280x720 in software GL on 2 cores, on top of the
 // sky and vidgen/three-finish.

@@ -1,4 +1,4 @@
-// The track list (DESIGN.md §94.12, §94.14): per track mute / solo (a listening aid: what plays,
+// The track list: per track mute / solo (a listening aid: what plays,
 // never the score; remixed from the kept stems), a volume bar and a pan knob (they edit the
 // score), the steps text edited in place with its problems shown under it, a level meter from
 // the track's own audio while playing, delete; [+ track] with an instrument picker.

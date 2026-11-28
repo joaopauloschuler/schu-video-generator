@@ -1,4 +1,4 @@
-"""The ``switch_on`` / ``switch_off`` beat actions (DESIGN.md §69.54): a ``stage``'s television or
+"""The ``switch_on`` / ``switch_off`` beat actions: a ``stage``'s television or
 lamp goes on or off at ``at`` of the beat; written against ``vidgen.api`` only, like project
 actions. They draw nothing themselves (``animates = False``, like ``light``): the runner cues them
 when their beat starts, and the stage shows the picture or the glow from then on (with a click,
@@ -28,7 +28,7 @@ class _Switch(Action):
             return [("action", f"{action} is for the props of a stage")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         able = ", ".join(SWITCHED_PROPS)
-        objects = params.iso.object_kinds() if getattr(params, "iso", None) is not None else {}   # an iso place's (§89.10)
+        objects = params.iso.object_kinds() if getattr(params, "iso", None) is not None else {}   # an iso place's
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():
             for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:

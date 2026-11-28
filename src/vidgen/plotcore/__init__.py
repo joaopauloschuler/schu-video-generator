@@ -1,4 +1,4 @@
-"""The chart core for scientific plots (Phase W, DESIGN §97), without manim: tick values and
+"""The chart core for scientific plots (Phase W), without manim: tick values and
 number formats (:mod:`.numbers`, :mod:`.ticks`), axes with linear, log, symlog, reversed and
 broken scales (:mod:`.axis`), tables read from CSV with units in the headers (:mod:`.data`),
 the layout of multi-panel figures (:mod:`.figure`), curve fits with uncertainties and bands

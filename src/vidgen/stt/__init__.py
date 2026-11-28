@@ -1,4 +1,4 @@
-"""Speech-to-text: the provider seam of ``vidgen readback`` (DESIGN.md §57).
+"""Speech-to-text: the provider seam of ``vidgen readback``.
 
 - :func:`get_stt_provider` returns the provider for a project's ``stt:`` section:
   ``faster_whisper`` (local, free) or ``elevenlabs``

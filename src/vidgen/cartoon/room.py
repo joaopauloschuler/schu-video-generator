@@ -1,8 +1,8 @@
-"""Rooms: a stage's indoor set (DESIGN.md §69.42). No manim: the stage draws these shapes.
+"""Rooms: a stage's indoor set. No manim: the stage draws these shapes.
 
 A *room* replaces a stage's sky and ground band with a back wall, a floor in front of it, a
 skirting board where they meet and an optional ceiling band. The wall stands at a *depth* (the
-§69.6 depth of the things on the floor): the floor's top edge is where a thing at that depth
+depth of the things on the floor): the floor's top edge is where a thing at that depth
 stands, so everything on the floor stands in front of the wall. Windows hang on the wall and show
 the sky outside, whose colours follow the stage's ``light`` (:func:`window_sky`); doors are
 ``door`` props standing at the wall (their marks are the doors' names).
@@ -334,8 +334,8 @@ WINDOW_SKIES: dict[str, WindowSky] = {
 
 def window_sky(light: str | tuple[str, float]) -> WindowSky:
     """The sky outside a window under ``light``: a preset's (:data:`WINDOW_SKIES`), or for a tint
-    ``(#hex, strength)`` the day's sky multiplied towards the tint as the light grades the set
-    (§69.31). ``ValueError`` for an unknown preset."""
+    ``(#hex, strength)`` the day's sky multiplied towards the tint as the light grades the set.
+    ``ValueError`` for an unknown preset."""
     if isinstance(light, tuple):
         day = WINDOW_SKIES["day"]
         rows = np.array([[*hex_rgb(day.top), 1.0], [*hex_rgb(day.bottom), 1.0]])
@@ -357,7 +357,7 @@ def blend_skies(a: WindowSky, b: WindowSky, share: float) -> WindowSky:
 
 
 def flash_sky(sky: WindowSky, level: float) -> WindowSky:
-    """The sky outside lit by lightning at ``level`` (0..1, DESIGN.md §69.61): ``level`` ×
+    """The sky outside lit by lightning at ``level`` (0..1): ``level`` ×
     :data:`~vidgen.cartoon.storm.WINDOW_FLASH` of the way to the flash's colour (nothing indoors
     dims it); ``sky`` at 0."""
     if level <= 0:

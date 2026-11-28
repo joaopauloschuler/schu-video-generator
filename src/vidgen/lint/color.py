@@ -1,6 +1,6 @@
 """WCAG 2 colour contrast (https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio), the contrast
-check of a theme's colours (:func:`theme_contrast`, DESIGN.md §19) and how distinguishable a
-palette stays for colour-blind viewers (:func:`palette_distinctness`, DESIGN.md §20)."""
+check of a theme's colours (:func:`theme_contrast`) and how distinguishable a
+palette stays for colour-blind viewers (:func:`palette_distinctness`)."""
 
 from __future__ import annotations
 

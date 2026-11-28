@@ -1,4 +1,4 @@
-// vidgen/space-plane: parametrized space plane parts (DESIGN.md §123.8). Part of schu-video-generator (MIT
+// vidgen/space-plane: parametrized space plane parts. Part of schu-video-generator (MIT
 // licence); imported by a page as "vidgen/space-plane". It builds on the kit of vidgen/space-craft.
 //
 //   import {plane, planeKit, planeFleet} from "vidgen/space-plane";

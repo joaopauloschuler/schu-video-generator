@@ -1,4 +1,4 @@
-// The effects of vidgen/space-effects (DESIGN.md §123.9) for the registry vidgen/parts (§122.5): what
+// The effects of vidgen/space-effects for the registry vidgen/parts: what
 // `vidgen parts --kind effect` draws: a re-entry's glow on a plane and on a lander, a far head with its
 // train, a vapour trail, exhaust in dense and in thin air, a vapour cone, the vapour of a hard turn. Each
 // tile sets the numbers by hand (heating, Mach number, load, the air's density); in a film they come from

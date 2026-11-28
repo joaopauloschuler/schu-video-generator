@@ -1,4 +1,4 @@
-"""Step 65: local Kokoro-82M narration (``voice.provider: kokoro``, DESIGN.md §68).
+"""Step 65: local Kokoro-82M narration (``voice.provider: kokoro``).
 
 Everything runs with a fake ``KPipeline`` (no PyTorch, no model); the one real synthesis test
 is skipped unless the ``kokoro`` package is importable."""

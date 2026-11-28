@@ -1,5 +1,5 @@
-"""Voice effects: a voice that sounds through a hall, a robot, a radio or from another world
-(DESIGN.md §100.2). No manim, no ffmpeg run here: this module turns a voice's ``effect:`` into
+"""Voice effects: a voice that sounds through a hall, a robot, a radio or from another world.
+No manim, no ffmpeg run here: this module turns a voice's ``effect:`` into
 an ffmpeg audio filter chain; :mod:`vidgen.tts.effects` applies it to each beat's audio after
 synthesis, for every provider.
 

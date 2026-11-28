@@ -1,4 +1,4 @@
-"""Arms and legs in two segments, and the two-bone solver that bends them (DESIGN.md §69.26). No manim.
+"""Arms and legs in two segments, and the two-bone solver that bends them. No manim.
 
 A *limb* is an upper part that turns about the shoulder or the hip (``arm_left``, ``arm_right``,
 ``leg_left``, ``leg_right``) and, optionally, its lower part that turns about the elbow or the

@@ -1,4 +1,4 @@
-"""Orbital mechanics without manim (Phase X, DESIGN §98): Kepler's equation for every conic
+"""Orbital mechanics without manim (Phase X): Kepler's equation for every conic
 (:mod:`.kepler`), two-body orbits from classical elements or state vectors and their derived
 quantities — vis-viva, period, energy, angular momentum, apsides, time of flight
 (:mod:`.elements`), bodies and preset orbits with their sources (:mod:`.bodies`), values with

@@ -1,4 +1,4 @@
-"""Sitting on props, leaning against them, and crouching (DESIGN.md §69.28). No manim.
+"""Sitting on props, leaning against them, and crouching. No manim.
 
 Props carry their *seat* and *lean edges* in prop units (the origin at the middle of the prop's
 foot, ``y`` up, the top at 1, ``x`` in the same unit), as drawn facing right: built-in props by
@@ -26,22 +26,22 @@ from dataclasses import dataclass, field
 #: The seat of each built-in prop that has one: the middle of its seat line, (x, y) in prop units
 #: as drawn facing right (a chair's back is on its left: a character sitting on it faces right).
 #: Every seat line is 0.14 of a character's height above the ground (the prop's height times the
-#: seat's y), below every generated character's hips (DESIGN.md §69.36).
+#: seat's y), below every generated character's hips.
 PROP_SEATS: dict[str, tuple[float, float]] = {
     "chair": (0.1, 0.54), "rock": (0.0, 0.9), "box": (-0.1, 0.9),
     "sofa": (0.0, 0.39), "armchair": (0.0, 0.37), "bed": (0.15, 0.41), "desk": (-0.64, 0.333),
     "bench": (0.0, 0.4375), "log": (0.0, 0.875), "school_desk": (-0.63, 0.35),
 }
 #: Seats with more than one place: the x of each place on the seat line (prop units as drawn
-#: facing right); one sitter per place (DESIGN.md §69.43).
+#: facing right); one sitter per place.
 SEAT_PLACES: dict[str, tuple[float, ...]] = {"sofa": (-0.6, 0.6), "bed": (-0.45, 0.75), "bench": (-0.7, 0.7), "log": (-1.3, 1.2)}
 #: Props with a back: a character sitting on one faces the way the prop faces (a desk's chair
 #: faces the desk, a school desk's too).
 SEAT_BACKS: frozenset[str] = frozenset({"chair", "desk", "school_desk"})
 #: The edges a character leans its back on, (left x, right x) in prop units as drawn facing right:
 #: a tree's trunk, a door's frame, a sign's board, a lamp's post, a house's wall, the sides of a
-#: bookshelf, a kitchen counter and a fridge; outdoors (DESIGN.md §76) a pine's trunk, a bus
-#: stop's pole and a shop's wall; indoors (§77) the sides of a shop's shelves and a wardrobe.
+#: bookshelf, a kitchen counter and a fridge; outdoors a pine's trunk, a bus
+#: stop's pole and a shop's wall; indoors the sides of a shop's shelves and a wardrobe.
 PROP_LEANS: dict[str, tuple[float, float]] = {
     "tree": (-0.08, 0.08), "door": (-0.3, 0.3), "sign": (-0.4, 0.36), "lamp": (-0.04, 0.04), "house": (-0.5, 0.5),
     "bookshelf": (-0.34, 0.34), "counter": (-1.1, 1.1), "fridge": (-0.3, 0.3),
@@ -83,7 +83,7 @@ class PostureError(ValueError):
 class Postures:
     """Who sits or leans on which prop: character -> (``sitting`` | ``leaning``, prop), and the
     place on the seat each sitter took (character -> index); a rider of a vehicle is ``riding``
-    it, in the place it took (DESIGN.md §69.52)."""
+    it, in the place it took."""
 
     held: dict[str, tuple[str, str]] = field(default_factory=dict)
     places: dict[str, int] = field(default_factory=dict)
@@ -105,7 +105,7 @@ class Postures:
             raise PostureError(f"{character} {verb} '{now[1]}' then; stand_up first (- stand_up: {character})")
 
     def riders(self, vehicle: str) -> list[str]:
-        """The characters riding ``vehicle`` (DESIGN.md §69.52), in the order they got in."""
+        """The characters riding ``vehicle``, in the order they got in."""
         return [who for who, (posture, name) in self.held.items() if name == vehicle and posture == "riding"]
 
     def ride(self, character: str, vehicle: str, places: int = 1, prefer: Sequence[int] = ()) -> int:
@@ -150,7 +150,7 @@ class Postures:
         return free[0]
 
     def lie(self, character: str, prop: str) -> None:
-        """``character`` lies down on ``prop`` (a bed of an iso place, DESIGN.md §105.2): nobody
+        """``character`` lies down on ``prop`` (a bed of an iso place): nobody
         else may sit or lie on it then."""
         self._free(character)
         others = [who for who in self.on(prop) if self.held[who][0] in ("sitting", "lying")]

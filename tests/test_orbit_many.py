@@ -1,4 +1,4 @@
-"""Many bodies (Phase X, Step 232; DESIGN §98.6): the restricted three-body problem (Lagrange
+"""Many bodies (Phase X, Step 232): the restricted three-body problem (Lagrange
 points against published values, Routh's criterion, the Jacobi constant conserved, tadpole and
 horseshoe motion), the figure-eight's return, the Laplace resonance, barycentres, which way the
 Moon's path bends, tides — and the ``orbit`` scene's params, targets, actions and tiny renders."""

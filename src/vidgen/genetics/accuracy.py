@@ -1,4 +1,4 @@
-"""The genetics lint's knowledge (DESIGN.md §96.18): the narration and on-screen text of a genetics
+"""The genetics lint's knowledge: the narration and on-screen text of a genetics
 scene checked against what its model computes — ratios, fractions and probabilities of a cross, a
 pedigree's stated mode and its carrier and risk values, map distances and recombination
 frequencies, Hardy–Weinberg arithmetic, CRISPR facts (the PAM, where Cas9 cuts, blunt ends),

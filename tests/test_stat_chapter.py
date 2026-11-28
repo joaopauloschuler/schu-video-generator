@@ -148,7 +148,7 @@ def project(tmp_path_factory: pytest.TempPathFactory) -> Project:
         {"id": "stat_one", "type": "stat", "params": STATS["full"], "beats": TWO[:1]},
         {"id": "stat_silent", "type": "stat", "params": STATS["unit"], "duration": 2.5},
         {"id": "stat_many", "type": "stat", "params": STATS["plain"], "beats": TWO + TWO},
-        # chapters must not repeat (DESIGN.md §42): the same card, numbered on
+        # chapters must not repeat: the same card, numbered on
         {"id": "chapter_silent", "type": "chapter", "params": {**CHAPTERS["numbered"], "number": 3, "title": "Results, silent"}, "duration": 2.5},
         {"id": "chapter_one", "type": "chapter", "params": {**CHAPTERS["numbered"], "number": 4, "title": "Results, one beat"}, "beats": TWO[:1]},
     ]

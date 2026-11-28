@@ -1,4 +1,4 @@
-"""``dna_lab``: the techniques of a genetics laboratory (DESIGN.md §96.15), one per ``method``.
+"""``dna_lab``: the techniques of a genetics laboratory, one per ``method``.
 
 - ``pcr``: the template with its primers, the three temperatures of a cycle as a trace, the
   molecules doubling cycle by cycle (the product of defined length first appears in cycle 3) and
@@ -322,7 +322,7 @@ class DnaLabScene(NarratedScene):
         area = self.trace_area
         lo, hi = min(45.0, p.anneal - 5), max(100.0, p.denature + 4)
         shown = min(3, p.cycles)
-        # axes of the chart core (DESIGN §97.12): "cycle k" under the middle of each cycle; the
+        # axes of the chart core: "cycle k" under the middle of each cycle; the
         # three temperatures as the y ticks, named by their stage, with dashed gridlines (no
         # stage names inside the plot to collide with the trace); a horizontal title
         stages: dict[float, list[str]] = {}

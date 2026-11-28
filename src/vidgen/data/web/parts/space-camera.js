@@ -1,4 +1,4 @@
-// The framings of vidgen/space-camera (DESIGN.md §122.11) for the registry vidgen/parts (§122.5): each
+// The framings of vidgen/space-camera for the registry vidgen/parts: each
 // tile is one move at its key moment, in a plain three.js scene (an Earth-like world of radius 1, a far
 // sun, the sky), so `vidgen parts --kind camera` shows what a move's frame looks like before a page is
 // written. Drawn straight to the canvas; a small tile bakes small maps.

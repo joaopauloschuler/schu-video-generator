@@ -1,4 +1,4 @@
-"""The frames a flight is told in (Step 385, DESIGN.md §123.7): the scene's local frame, the
+"""The frames a flight is told in (Step 385): the scene's local frame, the
 world-fixed frame and the orbit bridge's ecliptic frame, with conversions both ways.
 
 **Planet-fixed frame** (PF): origin the world's centre, z the IAU north pole, x the prime meridian

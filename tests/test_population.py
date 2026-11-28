@@ -1,4 +1,4 @@
-"""Step 218 (DESIGN.md §96.16–96.17): population genetics — Hardy–Weinberg worked exactly (allele
+"""Step 218: population genetics — Hardy–Weinberg worked exactly (allele
 frequencies, p² + 2pq + q², carriers from an incidence, the chi-square test with df = 1, inbreeding),
 seeded Wright–Fisher simulations (deterministic per seed; fixation in proportion to p₀ and
 heterozygosity falling as H₀(1 − 1/2N)^t over many seeds; selection, migration and mutation

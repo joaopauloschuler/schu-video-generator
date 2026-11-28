@@ -1,4 +1,4 @@
-"""Step 242 (DESIGN §99.13): the particle-physics accuracy lint.
+"""Step 242: the particle-physics accuracy lint.
 
 Each rule finds its planted mistake and leaves the right statement — and tricky phrasings
 (negations, "not a photon", contrasts, other quantities in the sentence) — alone; the scene

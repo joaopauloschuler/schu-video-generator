@@ -1,4 +1,4 @@
-"""Processes in a ``cell`` scene (DESIGN.md §95.10): motors walking along their filaments with
+"""Processes in a ``cell`` scene: motors walking along their filaments with
 their cargo (``motor_walk``), clathrin-mediated ``endocytosis`` and ``exocytosis`` at the plasma
 membrane. A mixin of the :class:`~vidgen.scenes.cell.Cell` scene: the checks ``vidgen
 validate`` runs (with the motors' walks replayed in beat order), the animations, the captions.

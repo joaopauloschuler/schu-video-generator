@@ -1,5 +1,5 @@
 # What happens when you open a web page: a short tech explainer drawn as iso diagrams
-# (docs/CONFIG.md `iso_diagram`; DESIGN §90):
+# (docs/CONFIG.md `iso_diagram`):
 #   - blocks built in on the words that name them: build with at: "@word" (grow, drop)
 #   - dots and packets along the connectors: flow (back, chain: an answer passing back through)
 #   - focus on a part and back, raise / highlight / dim, relabel a value in place

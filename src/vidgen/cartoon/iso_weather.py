@@ -1,4 +1,4 @@
-"""Weather on an iso place (DESIGN.md §90): what keeps the rain off, where puddles lie and how
+"""Weather on an iso place: what keeps the rain off, where puddles lie and how
 their ripples look, and how much settling snow shows. No manim.
 
 The *top surface* of a place (:class:`TopSurface`, :func:`top_surface`) is the height of the
@@ -174,7 +174,7 @@ def lift_floors(u: np.ndarray, v: np.ndarray, surface: TopSurface) -> np.ndarray
     return lift * ISO_RISE
 
 
-# ----- puddles (DESIGN.md §90.2) --------------------------------------------------------------------
+# ----- puddles --------------------------------------------------------------------
 
 #: One puddle per this many cells where one may lie, at least :data:`MIN_PUDDLES` and at most
 #: :data:`MAX_PUDDLES`; their radius (tile units: a circle on the ground, drawn as the view sees it).
@@ -277,7 +277,7 @@ def ripples(puddle: IsoPuddle, seconds: float, size: float = 1.0) -> list[Ripple
     return found
 
 
-# ----- lights mirrored in puddles (DESIGN.md §105.4) ------------------------------------------------
+# ----- lights mirrored in puddles ------------------------------------------------
 
 #: A light mirrored in a puddle at night: its opacity at full darkness (how much shows by day and
 #: at dusk: :func:`~vidgen.cartoon.lighting.darkness`), how much whiter than the light it is.
@@ -301,9 +301,9 @@ Light = tuple[tuple[Point3, ...], str]
 
 
 def glow_outlines(shapes: Sequence[Shape]) -> list[Light]:
-    """The lights among ``shapes`` (DESIGN.md §89.11): each glowing polygon (a lit window, a
+    """The lights among ``shapes``: each glowing polygon (a lit window, a
     lantern's face, a tower's neon trim) and each glowing disc (a lamp's bulb) as a ring of world
-    points, with its colour; not the pools of light on the ground (§104)."""
+    points, with its colour; not the pools of light on the ground."""
     found: list[Light] = []
     for shape in shapes:
         if isinstance(shape, Poly) and shape.glow:
@@ -411,7 +411,7 @@ def reflection(puddle: IsoPuddle, light: Light, *, size: float, seconds: float, 
     return shimmered(still_reflection(puddle, light, size=size, widen=widen), seconds, rain, phase=puddle.seed % 628 / 100.0)
 
 
-# ----- wind on the place's plants and balloons (DESIGN.md §105.4) -----------------------------------
+# ----- wind on the place's plants and balloons -----------------------------------
 
 #: The objects of an iso place that sway in the wind (outdoors), and how (a flat stage's prop's
 #: :class:`~vidgen.cartoon.wind.Sway` where there is one): trees, pines, bushes, flowers and
@@ -426,13 +426,13 @@ ISO_SWAYS: dict[str, Sway] = {
     "balloon_bunch": Sway(14.0, 0.6, 0.05),
 }
 #: The swaying things that swing as a whole about their foot (a bunch of balloons on its string
-#: turns; bent, a gale stretched it), DESIGN.md §105.8.
+#: turns; bent, a gale stretched it).
 ISO_SWINGS = frozenset({"balloon_bunch"})
 #: How a swaying thing on an iso place leans for a felt force (a flat stage's prop leans with
 #: it): ``ISO_SWAY_SHARE`` × its degrees × the felt force to the power ``ISO_SWAY_POWER``, so
 #: a breeze or a windy day bends trees as far as reads at a preview's size (Step 271's lean,
 #: 0.55 × the felt force, hardly showed) while a gale, seen from above at a slant, does not
-#: look like a fall (DESIGN.md §105.8).
+#: look like a fall.
 ISO_SWAY_SHARE = 1.0
 ISO_SWAY_POWER = 0.65
 

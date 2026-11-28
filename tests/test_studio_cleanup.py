@@ -1,4 +1,4 @@
-"""Step 200 (DESIGN.md §94.18): the studio's disk rule for old renders and exports, ``vidgen studio
+"""Step 200: the studio's disk rule for old renders and exports, ``vidgen studio
 --clean``, the batch list and the last hand-off a reloaded page shows again. No rendering: render
 files are stand-ins named as the studio names them."""
 

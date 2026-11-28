@@ -1,4 +1,4 @@
-"""Pydantic v2 models for ``video.yaml`` (see DESIGN.md §4).
+"""Pydantic v2 models for ``video.yaml``.
 
 These models validate *structure* only. Whether a scene ``type`` is registered and whether its
 ``params`` match the scene's ``Params`` model is checked later, once extensions are loaded.
@@ -42,7 +42,7 @@ from vidgen.word_anchors import ACTION_ANCHOR_PATTERN, is_word_anchor, parse_wor
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
 
-#: An action target name: ``name``, ``name3``, ``name1.part2`` or ``kind:label`` (DESIGN.md §26).
+#: An action target name: ``name``, ``name3``, ``name1.part2`` or ``kind:label``.
 TARGET_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*(?::.+)?$"
 
 Identifier = Annotated[str, Field(pattern=ID_PATTERN)]
@@ -55,7 +55,7 @@ Size = Annotated[int | float, Field(gt=0), WithJsonSchema({"type": "number", "ex
 FontChoice = Annotated[str, Field(min_length=1)]
 #: JSON Schema hint for even pixel sizes (the check itself is ``FormatConfig._even``).
 _EVEN = {"multipleOf": 2}
-#: A BCP-47 language tag (``en``, ``pt-BR``), normalised to the usual case (DESIGN.md §54).
+#: A BCP-47 language tag (``en``, ``pt-BR``), normalised to the usual case.
 LanguageTag = Annotated[str, Field(pattern=LANGUAGE_TAG_PATTERN), AfterValidator(normalize_language)]
 #: An ElevenLabs ``language_code`` (ISO 639-1, e.g. ``pt``), or ``false``: never send one.
 LanguageCode = Annotated[str, Field(pattern=r"^[A-Za-z]{2,3}$")] | Literal[False]
@@ -94,7 +94,7 @@ def _preview_format() -> FormatConfig:
     return FormatConfig(width=854, height=480, fps=15)
 
 
-#: A draft's shorter side in pixels and its frame rate when ``draft:`` does not set them (DESIGN.md §74).
+#: A draft's shorter side in pixels and its frame rate when ``draft:`` does not set them.
 DRAFT_SHORT_SIDE = 240
 DRAFT_FPS = 8
 
@@ -136,7 +136,7 @@ def draft_format(video: FormatConfig, draft: DraftConfig | None = None) -> Forma
 
 
 class DrawingConfig(_Strict):
-    """How cartoons are drawn (DESIGN.md §79): outline weight, shading, a paper texture; unset keys
+    """How cartoons are drawn: outline weight, shading, a paper texture; unset keys
     follow the video's ``drawing:`` (on a stage scene), else the defaults."""
 
     outline: Literal["thin", "normal", "bold"] | None = None
@@ -209,7 +209,7 @@ EmotionName = Literal[
 
 
 class EmotionConfig(_Strict):
-    """``emotion:`` as a mapping: a built-in emotion with some of its numbers changed (DESIGN.md §72)."""
+    """``emotion:`` as a mapping: a built-in emotion with some of its numbers changed."""
 
     like: EmotionName = "neutral"
     """The built-in emotion to start from."""
@@ -231,7 +231,7 @@ VoiceEffectName = Literal["deep", "high", "robot", "radio", "chorus", "echo", "h
 
 
 class VoiceEffectConfig(_Strict):
-    """``effect:`` as a mapping: presets with their strength and a pitch of your own (DESIGN.md §100.2)."""
+    """``effect:`` as a mapping: presets with their strength and a pitch of your own."""
 
     use: Union[VoiceEffectName, list[VoiceEffectName]] = Field(default_factory=list)
     """The preset or presets (deep, high, robot, radio, chorus, echo, hall, otherworldly); none: only the pitch."""
@@ -246,12 +246,12 @@ VoiceEffectSetting = Union[VoiceEffectName, list[VoiceEffectName], VoiceEffectCo
 
 #: Named stereo positions of ``pan:`` (:data:`vidgen.staging.POSITIONS`; a test keeps the two equal).
 PanPosition = Literal["far_left", "left", "centre", "center", "right", "far_right"]
-#: ``pan:``: -1 (left) to 1 (right), or a named position (DESIGN.md §111.4).
+#: ``pan:``: -1 (left) to 1 (right), or a named position.
 PanSetting = Union[Annotated[float, Field(ge=-1, le=1)], PanPosition]
 
 
 class PanMove(_Strict):
-    """A beat's ``pan:`` as a move across its line (a speaker walking, DESIGN.md §111.4)."""
+    """A beat's ``pan:`` as a move across its line (a speaker walking)."""
 
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
@@ -264,12 +264,12 @@ class PanMove(_Strict):
 #: Room presets of ``room:`` (:data:`vidgen.staging.ROOMS`; a test keeps the two equal).
 RoomName = Literal["none", "small_office", "corridor", "hall", "outdoors", "car", "phone"]
 #: The ambience beds a scene, a section or a beat may name (:data:`vidgen.ambience.AMBIENCE_BEDS`;
-#: a test keeps the two equal; DESIGN.md §112).
+#: a test keeps the two equal).
 AmbienceBedName = Literal["rain", "fire", "birdsong", "city", "room_tone", "crickets", "hum", "alarm"]
 
 
 class AmbienceConfig(_Strict):
-    """A scene's ``ambience:`` as a mapping (DESIGN.md §112)."""
+    """A scene's ``ambience:`` as a mapping."""
 
     beds: list[AmbienceBedName] | dict[AmbienceBedName, Annotated[float, Field(ge=-30, le=12)]] = Field(min_length=1)
     """The beds: rain, fire, birdsong, city, room_tone, crickets, hum (a lab, a ship), alarm; or bed -> level change in dB ({hum: 0, rain: -10}: rain heard through the walls)."""
@@ -290,7 +290,7 @@ AmbienceSetting = Union[Literal[False], AmbienceBedName, list[AmbienceBedName], 
 
 class AmbienceChange(_Strict):
     """A beat's ``ambience:``: beds starting or stopping during the beat (rain that starts on a
-    word, a hum that stops; DESIGN.md §112)."""
+    word, a hum that stops)."""
 
     start: AmbienceBedName | list[AmbienceBedName] | None = None
     """Beds that start here (they fade in and play to the end of the scene unless a later beat stops them)."""
@@ -332,7 +332,7 @@ class AmbienceChange(_Strict):
         return [n for n in names if n in wanted]
 
 
-#: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
+#: Text-to-speech providers ``voice.provider`` accepts (one per video).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
 ELEVENLABS_VOICE_KEYS: tuple[str, ...] = ("voice_id", "model_id", "output_format", "settings", "context", "language_code")
@@ -362,7 +362,7 @@ class VoiceSettingsOverride(_Strict):
 
 
 class DubVoice(_Strict):
-    """A voice in one language of ``dub:`` (DESIGN.md §80) as a mapping: the keys given replace
+    """A voice in one language of ``dub:`` as a mapping: the keys given replace
     the voice's own in videos of that language."""
 
     voice: str | None = Field(default=None, min_length=1)
@@ -389,7 +389,7 @@ DubSetting = Union[Annotated[str, Field(min_length=1)], DubVoice]
 
 
 class VoiceConfig(_Strict):
-    """Text-to-speech voice: ElevenLabs (default), OpenRouter (DESIGN.md §66) or local Kokoro (§68)."""
+    """Text-to-speech voice: ElevenLabs (default), OpenRouter or local Kokoro."""
 
     provider: Literal["elevenlabs", "openrouter", "kokoro"] = "elevenlabs"
     """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY), openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model) or kokoro (Kokoro-82M on this computer, free; Python 3.10-3.12)."""
@@ -453,7 +453,7 @@ class VoiceConfig(_Strict):
 
 
 class VoiceEntry(_Strict):
-    """A named voice of ``voices:`` (DESIGN.md §46): the base ``voice:`` with what is given here
+    """A named voice of ``voices:``: the base ``voice:`` with what is given here
     changed. ``label`` and ``color`` are not inherited (they name this speaker)."""
 
     provider: Literal["elevenlabs", "openrouter", "kokoro"] | None = None
@@ -508,7 +508,7 @@ CHARACTER_INK = "#1F2430"
 
 
 class CharacterColors(_Strict):
-    """``colors`` of a character (DESIGN.md §69): theme tokens or hex colours of its parts."""
+    """``colors`` of a character: theme tokens or hex colours of its parts."""
 
     skin: ColorRef = "secondary"
     """Head, ears, nose and hands (skin; an animal's fur or feathers, its muzzle and tail tints of it)."""
@@ -542,19 +542,19 @@ ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
 Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "snail", "robot"]
 #: Look keys an animal or a robot (``species`` other than ``human``) draws its own way, so they
-#: are not given with it (DESIGN.md §69.48); a robot has no hair either (§69.58).
+#: are not given with it; a robot has no hair either.
 SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
 ROBOT_OWN_KEYS: tuple[str, ...] = (*SPECIES_OWN_KEYS, "hair")
-#: Species drawn without a ``tail`` part (DESIGN.md §69.57, §69.58).
+#: Species drawn without a ``tail`` part.
 SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "snail", "robot"})
 #: Species with a shell on the back in ``colors.hair`` (a turtle's domed one, a snail's spiral).
 SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
-#: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
-#: the costume pieces §69.58).
+#: Accessories worn on the head: they make the optional ``accessory`` part
+#: (the costume pieces).
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat", "fedora", "pillbox"})
 #: Accessories worn on top of the head: a look wears at most one of them.
 TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat", "fedora", "pillbox")
-#: Accessories hanging round the neck: a look wears at most one of them (DESIGN.md §102.14).
+#: Accessories hanging round the neck: a look wears at most one of them.
 NECK_ACCESSORIES: tuple[str, ...] = ("necklace", "medal", "pendant")
 RobotHead = Literal["box", "round"]
 RobotFace = Literal["eyes", "screen"]
@@ -562,7 +562,7 @@ RobotMoves = Literal["legs", "wheels"]
 
 
 class RobotLook(_Strict):
-    """``look.robot``: how a ``species: robot`` is built (DESIGN.md §69.58)."""
+    """``look.robot``: how a ``species: robot`` is built."""
 
     head: RobotHead = "box"
     """box (a rounded box) or round."""
@@ -573,19 +573,19 @@ class RobotLook(_Strict):
     moves_on: RobotMoves = "legs"
     """legs (it walks), or wheels (it rolls: no steps, no footsteps)."""
 #: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
-#: shape, ``seated``, the cloth over the lap (DESIGN.md §69.47).
+#: shape, ``seated``, the cloth over the lap.
 SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat", "lab_coat"})
 #: The name of that shape: a seated character shows it (``Character.seated``, the ``sitting`` pose).
 SEATED_BODY_SHAPE = "seated"
-#: How a generated character's arms hang (DESIGN.md §110): ``look.arms`` / ``cartoon_arms:``.
+#: How a generated character's arms hang: ``look.arms`` / ``cartoon_arms:``.
 ArmStyle = Literal["classic", "front"]
 
 
 class CharacterLook(_Strict):
-    """``look`` of a character: the parameters of the character generator (DESIGN.md §69.1).
+    """``look`` of a character: the parameters of the character generator.
     Every value builds an original figure from primitives (circles, ellipses, rounded
     rectangles, polygons); ``seed`` varies its proportions a little. ``svg`` draws the character
-    from an SVG file split into parts by element ids instead (§69.2)."""
+    from an SVG file split into parts by element ids instead."""
 
     body: BodyShape = "round"
     """Body shape: round, tall, square, bean, pear (narrow shoulders, wide hips) or triangle (broad shoulders)."""
@@ -664,11 +664,11 @@ class CharacterLook(_Strict):
 
 
 #: How strongly characters move with the animation principles (anticipation, squash and
-#: stretch, overshoot and settle, follow-through; DESIGN.md §69.13): ``cartoon_motion:``.
+#: stretch, overshoot and settle, follow-through): ``cartoon_motion:``.
 MotionSetting = Literal["lively", "calm", "none"]
 
-#: Parts a pose sets (DESIGN.md §69.3, the two-segment limbs §69.26, an animal's tail §69.48); the parts of an expression
-#: are :data:`ExpressionPart` (``cheeks``: a blush or tears; ``bristles``: hair or fur standing up, §69.59).
+#: Parts a pose sets (the two-segment limbs, an animal's tail); the parts of an expression
+#: are :data:`ExpressionPart` (``cheeks``: a blush or tears; ``bristles``: hair or fur standing up).
 PosePart = Literal[
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory", "tail", "antenna", "cape",
@@ -677,7 +677,7 @@ ExpressionPart = Literal["eyes", "brows", "mouth", "cheeks", "bristles"]
 
 
 class PartPoseEntry(_Strict):
-    """How a pose or an expression sets one part of a character (DESIGN.md §69.3), relative to
+    """How a pose or an expression sets one part of a character, relative to
     its rest drawing."""
 
     angle: float = 0.0
@@ -706,7 +706,7 @@ class PartPoseEntry(_Strict):
 
 
 class HologramConfig(_Strict):
-    """``hologram:`` of a character as a mapping (DESIGN.md §100.3)."""
+    """``hologram:`` of a character as a mapping."""
 
     color: ColorRef = "#5FD8FF"
     """The hologram's colour (a theme token or hex): light parts glow in it, dark parts (eyes, mouth, outline ink) are a deep shade of it."""
@@ -717,7 +717,7 @@ class HologramConfig(_Strict):
 
 
 class EchoConfig(_Strict):
-    """``echo:`` of a character as a mapping (DESIGN.md §102.6)."""
+    """``echo:`` of a character as a mapping."""
 
     color: ColorRef = "#B48CFF"
     """The echo's colour (a theme token or hex): its outlines glow in a light tint of it and its colours lean a little towards it."""
@@ -728,7 +728,7 @@ class EchoConfig(_Strict):
 
 
 class IridescentConfig(_Strict):
-    """``iridescent:`` of a character as a mapping (DESIGN.md §100.9)."""
+    """``iridescent:`` of a character as a mapping."""
 
     seconds: float = Field(default=12.0, ge=2.0, le=120.0)
     """Seconds for its colours to go once round the rainbow (slow: 8-20)."""
@@ -740,7 +740,7 @@ class IridescentConfig(_Strict):
 
 
 class AfterimageConfig(_Strict):
-    """``afterimages:`` of a character as a mapping (DESIGN.md §100.9)."""
+    """``afterimages:`` of a character as a mapping."""
 
     spacing: float = Field(default=0.12, ge=0.05, le=1.0)
     """Seconds between the copies it leaves while it moves."""
@@ -750,12 +750,12 @@ class AfterimageConfig(_Strict):
     """How strong a new copy is (a share of the figure's opacity)."""
 
 
-#: Views a reference sheet can show (DESIGN.md §113.3).
+#: Views a reference sheet can show.
 SheetView = Literal["front", "three_quarter", "side", "back"]
 
 
 class ReferenceSheet(_Strict):
-    """``characters[].reference_sheet`` (DESIGN.md §113.3): pictures of the character made by the
+    """``characters[].reference_sheet``: pictures of the character made by the
     image provider (``vidgen generate sheets``) that generated video shots take as references.
     Not the drawn ``vidgen character-sheet``."""
 
@@ -781,7 +781,7 @@ class ReferenceSheet(_Strict):
 
 
 class CharacterEntry(_Strict):
-    """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
+    """One entry of ``characters:``: a cartoon character declared once and used
     by any scene."""
 
     name: Identifier
@@ -842,12 +842,12 @@ class CharacterEntry(_Strict):
         return EchoConfig() if self.echo is True else self.echo
 
 
-#: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).
+#: A host's height as a fraction of the frame's shorter side.
 HostSize = Annotated[float, Field(gt=0, le=0.9)]
 
 
 class HostConfig(_Strict):
-    """``host:`` (DESIGN.md §71): a character of ``characters:`` drawn beside the content of any
+    """``host:``: a character of ``characters:`` drawn beside the content of any
     scene type (bullets, charts, code...), whose region shrinks to make room."""
 
     character: Identifier
@@ -908,7 +908,7 @@ SceneHost = bool | Identifier | HostOverride
 
 
 class PronunciationEntry(_Strict):
-    """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
+    """The long form of a ``pronunciation:`` entry: how the narrator says a
     term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
 
     say: str
@@ -944,7 +944,7 @@ class NarrationConfig(_Strict):
 
 
 class SttConfig(_Strict):
-    """The optional ``stt:`` section: the speech-to-text provider of ``vidgen readback`` (DESIGN.md §57)."""
+    """The optional ``stt:`` section: the speech-to-text provider of ``vidgen readback``."""
 
     provider: Literal["faster_whisper", "elevenlabs"] = "faster_whisper"
     """faster_whisper (local and free) or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
@@ -962,7 +962,7 @@ ImageSize = Annotated[str, Field(pattern=r"^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$")]
 
 class ImagegenConfig(_Strict):
     """The optional ``imagegen:`` section: the image-generation provider of ``vidgen imagegen``
-    and of ``generate:`` params (DESIGN.md §58)."""
+    and of ``generate:`` params."""
 
     provider: Literal["openai", "openrouter"] = "openai"
     """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY) or openrouter (many models through OpenRouter, paid; OPENROUTER_API_KEY; needs model)."""
@@ -1002,7 +1002,7 @@ class ImagegenConfig(_Strict):
         return self
 
 
-#: ``quality`` values OpenRouter's image API accepts (a model may take fewer; DESIGN.md §64).
+#: ``quality`` values OpenRouter's image API accepts (a model may take fewer).
 OPENROUTER_QUALITIES: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh", "max")
 
 
@@ -1026,7 +1026,7 @@ class VideogenModelSettings(_Strict):
 
 
 class ComfyuiSettings(_Strict):
-    """``videogen.comfyui``: the ComfyUI server that runs ``provider: comfyui`` shots (DESIGN.md §113.20)."""
+    """``videogen.comfyui``: the ComfyUI server that runs ``provider: comfyui`` shots."""
 
     colab: str | None = Field(default=None, min_length=1)
     """A Colab session with ComfyUI set up (tools/colab/setup_session.py): vidgen sends the inputs with the colab CLI, runs the job on the VM and downloads the clip; vidgen itself on that VM (vidgen remote) uses its ComfyUI at 127.0.0.1:8188."""
@@ -1063,7 +1063,7 @@ def _known_model_id(model: str) -> bool:
 
 class VideogenConfig(_Strict):
     """The optional ``videogen:`` section: generated video shots through OpenRouter's video API or
-    a ComfyUI server (DESIGN.md §113). Nothing is paid without ``--pay`` and a budget."""
+    a ComfyUI server. Nothing is paid without ``--pay`` and a budget."""
 
     provider: Literal["openrouter", "mock", "comfyui"] = "openrouter"
     """openrouter (OpenRouter's video API, paid; OPENROUTER_API_KEY or key_via_proxy), mock (a fake API: no key, nothing sent or charged; for trying the flow) or comfyui (vidgen's own workflows on a ComfyUI server, videogen.comfyui; no money is paid)."""
@@ -1128,7 +1128,7 @@ class VideogenConfig(_Strict):
 
 
 class StyleSheet(_Strict):
-    """``style_sheet:`` (DESIGN.md §113.3): the look of the generated video shots, in words for
+    """``style_sheet:``: the look of the generated video shots, in words for
     every shot prompt and in style frames made by the image provider (``vidgen generate sheets``)
     that shots take as references."""
 
@@ -1158,7 +1158,7 @@ class StyleSheet(_Strict):
         return "; ".join(" ".join(p.split()).rstrip(".") for p in parts if p)
 
 
-#: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
+#: ``vidgen lint`` rule names. :class:`LintRules` has one field per name and
 #: :mod:`vidgen.lint` one rule per name (a test keeps the three in sync).
 LINT_RULES: tuple[str, ...] = (
     "off_frame",
@@ -1501,7 +1501,7 @@ class OffscreenActionRule(RuleConfig):
 
 
 class IsoGroundRule(RuleConfig):
-    """``iso_ground``: an iso place with the fixed wide view (``wide: fixed``) on a map too small to fill the frame for its format and character size, so the background shows around it; the hint names the map size that fills it (DESIGN.md §106). For an outdoor place in the whole-place wide view (``auto`` / ``fill``) an info-level hint names the fixed view and that size."""
+    """``iso_ground``: an iso place with the fixed wide view (``wide: fixed``) on a map too small to fill the frame for its format and character size, so the background shows around it; the hint names the map size that fills it. For an outdoor place in the whole-place wide view (``auto`` / ``fill``) an info-level hint names the fixed view and that size."""
 
     hint: bool = True
     """The info-level hint for outdoor places in the whole-place wide view; false: only the fixed view's warning."""
@@ -1512,14 +1512,14 @@ class MouthWithoutVoiceRule(RuleConfig):
 
 
 class LookAlikeRule(RuleConfig):
-    """``look_alike``: two generated characters of the video too alike to tell apart at a glance (DESIGN.md §69.49)."""
+    """``look_alike``: two generated characters of the video too alike to tell apart at a glance."""
 
     min_contrast: float = Field(default=0.35, ge=0, le=1)
     """Lowest acceptable contrast score of two characters (0 the same look, 1 fully different: silhouette, colours, accessories)."""
 
 
 class ConceptColorsRule(RuleConfig):
-    """``concept_colors``: the video's ``terms:`` colours (one colour per concept, DESIGN.md §87.3): too many, too faint on the background, or a scene colouring a term otherwise."""
+    """``concept_colors``: the video's ``terms:`` colours (one colour per concept): too many, too faint on the background, or a scene colouring a term otherwise."""
 
     max_colors: PositiveInt = 5
     """Most different concept colours a video should use (more and none stands out)."""
@@ -1528,7 +1528,7 @@ class ConceptColorsRule(RuleConfig):
 
 
 class SaidBeforeShownRule(RuleConfig):
-    """``said_before_shown``: the narration names an on-screen label clearly before the label shows (DESIGN.md §87.10)."""
+    """``said_before_shown``: the narration names an on-screen label clearly before the label shows."""
 
     min_lead: PositiveFloat = 1.5
     """Seconds the word may come before its label shows unflagged (the label's arrival is known to the beat-end still before it, or to the action that shows it)."""
@@ -1537,7 +1537,7 @@ class SaidBeforeShownRule(RuleConfig):
 
 
 class UnsaidRevealRule(RuleConfig):
-    """``unsaid_reveal``: a beat brings new labels the scene's narration never names (DESIGN.md §87.10)."""
+    """``unsaid_reveal``: a beat brings new labels the scene's narration never names."""
 
     severity: Severity | None = "off"
     """Severity of its findings (default: off; set info or warning to turn it on)."""
@@ -1546,7 +1546,7 @@ class UnsaidRevealRule(RuleConfig):
 
 
 class IsoLabelsRule(RuleConfig):
-    """``iso_labels``: an ``iso_diagram`` label covering a block it does not name, overlapping another label, hiding a connector, or far from what it names without a leader line (DESIGN.md §90.10)."""
+    """``iso_labels``: an ``iso_diagram`` label covering a block it does not name, overlapping another label, hiding a connector, or far from what it names without a leader line."""
 
     min_cover: Fraction = 0.1
     """Share of a label's box over another block from which it is reported."""
@@ -1556,132 +1556,132 @@ class IsoLabelsRule(RuleConfig):
     """Farthest a label without a leader line may stand from what it names (fraction of the frame's shorter side: 0.06 is 29 px at 480p)."""
 
 
-#: Topics of ``vidgen music check`` (DESIGN.md §93.9) the ``music_check`` lint rule can report.
+#: Topics of ``vidgen music check`` the ``music_check`` lint rule can report.
 MusicCheckTopic = Literal["voice range", "highs", "bass", "steadiness", "peaks", "loop seam", "key", "sections", "tempo"]
 
 
 class MusicCheckRule(RuleConfig):
-    """``music_check``: a project piece (a score file under assets/music) the video plays that `vidgen music check` finds too loud in the voice's range, too bright, boomy, unsteady, peaky or clicking at its loop (DESIGN.md §93.10); checked once per version of the file (cached in build/music)."""
+    """``music_check``: a project piece (a score file under assets/music) the video plays that `vidgen music check` finds too loud in the voice's range, too bright, boomy, unsteady, peaky or clicking at its loop; checked once per version of the file (cached in build/music)."""
 
     topics: list[MusicCheckTopic] = Field(default_factory=lambda: ["voice range", "highs", "bass", "steadiness", "peaks", "loop seam"])
     """The check's topics reported (what matters under a voice; add key, sections or tempo for the musical ones)."""
 
 
 class ScienceScaleRule(RuleConfig):
-    """``science_scale``: on a cell scene with a scale bar and without not_to_scale, an object or the cell sized far outside its textbook range; counts of one-per-cell structures far off (DESIGN.md §95.14)."""
+    """``science_scale``: on a cell scene with a scale bar and without not_to_scale, an object or the cell sized far outside its textbook range; counts of one-per-cell structures far off."""
 
     factor: float = Field(default=1.5, ge=1.0, le=20.0)
     """How far outside the textbook range a size must be to be reported (1.5: above 1.5 × its largest or below its smallest / 1.5)."""
 
 
 class ScienceLocationRule(RuleConfig):
-    """``science_location``: narration placing a process or a thing where it never is (glycolysis in the mitochondria, translation in the nucleus) or where the cell scene does not show it (DESIGN.md §95.14)."""
+    """``science_location``: narration placing a process or a thing where it never is (glycolysis in the mitochondria, translation in the nucleus) or where the cell scene does not show it."""
 
 
 class ScienceDirectionRule(RuleConfig):
-    """``science_direction``: narration giving a wrong direction: RNA or DNA made 3′ to 5′, a ribosome reading mRNA 3′ to 5′, a protein made C to N, kinesin to the minus end, dynein to the plus end, protons pumped into the matrix or stroma, Na⁺ pumped in or K⁺ out (DESIGN.md §95.14)."""
+    """``science_direction``: narration giving a wrong direction: RNA or DNA made 3′ to 5′, a ribosome reading mRNA 3′ to 5′, a protein made C to N, kinesin to the minus end, dynein to the plus end, protons pumped into the matrix or stroma, Na⁺ pumped in or K⁺ out."""
 
 
 class ScienceEnergyRule(RuleConfig):
-    """``science_energy``: narration calling transport active (or uphill) where the picture shows passive transport, or active transport in a scene that shows no energy source (DESIGN.md §95.14)."""
+    """``science_energy``: narration calling transport active (or uphill) where the picture shows passive transport, or active transport in a scene that shows no energy source."""
 
 
 class ScienceNamingRule(RuleConfig):
-    """``science_naming``: a scene's gene written as its protein or the other way round, in the wrong case for the species, or a gene in a label without italics (DESIGN.md §95.14)."""
+    """``science_naming``: a scene's gene written as its protein or the other way round, in the wrong case for the species, or a gene in a label without italics."""
 
 
 class SciencePathwayRule(RuleConfig):
-    """``science_pathway``: narration saying a pathway node activates another where the scene's arc inhibits it, or the other way round; phosphorylates where it dephosphorylates (DESIGN.md §95.14)."""
+    """``science_pathway``: narration saying a pathway node activates another where the scene's arc inhibits it, or the other way round; phosphorylates where it dephosphorylates."""
 
 
 class ScienceCountsRule(RuleConfig):
-    """``science_counts``: a number in the narration that contradicts the textbook (net 4 ATP from glycolysis, 2 NADH per turn of the citric acid cycle, 2 Na⁺ out per pump cycle…) (DESIGN.md §95.14)."""
+    """``science_counts``: a number in the narration that contradicts the textbook (net 4 ATP from glycolysis, 2 NADH per turn of the citric acid cycle, 2 Na⁺ out per pump cycle…)."""
 
 
 class GeneticsRatioRule(RuleConfig):
-    """``genetics_ratio``: in a cross scene, a ratio (3 : 1 for a dihybrid) or a share of a phenotype among the offspring, sons or daughters (half the sons affected) said in the narration that does not follow from the cross (DESIGN.md §96.18)."""
+    """``genetics_ratio``: in a cross scene, a ratio (3 : 1 for a dihybrid) or a share of a phenotype among the offspring, sons or daughters (half the sons affected) said in the narration that does not follow from the cross."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """How far (relative) a share said as an approximation ("about 40 %") may differ from the cross's."""
 
 
 class GeneticsPedigreeRule(RuleConfig):
-    """``genetics_pedigree``: a pedigree chart that does not fit its stated mode (error); narration with a dominant trait skipping a generation without reduced penetrance, father-to-son transmission of an X-linked trait, or a carrier or risk probability that differs from the chart's (DESIGN.md §96.18)."""
+    """``genetics_pedigree``: a pedigree chart that does not fit its stated mode (error); narration with a dominant trait skipping a generation without reduced penetrance, father-to-son transmission of an X-linked trait, or a carrier or risk probability that differs from the chart's."""
 
 
 class GeneticsLinkageRule(RuleConfig):
-    """``genetics_linkage``: a recombination frequency said to be over 50 %, a distance in cM or an RF that differs from the scene's map or cross, close loci called unlinked or unlinked loci called linked (DESIGN.md §96.18)."""
+    """``genetics_linkage``: a recombination frequency said to be over 50 %, a distance in cM or an RF that differs from the scene's map or cross, close loci called unlinked or unlinked loci called linked."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """How far (relative) a distance or RF said as an approximation ("about 18 cM") may differ from the scene's."""
 
 
 class GeneticsHweRule(RuleConfig):
-    """``genetics_hwe``: Hardy–Weinberg arithmetic in the narration: q against the incidence (q² = incidence), the carrier frequency against 2pq (≈ 2q), carriers called q², a population scene's numbers (DESIGN.md §96.18)."""
+    """``genetics_hwe``: Hardy–Weinberg arithmetic in the narration: q against the incidence (q² = incidence), the carrier frequency against 2pq (≈ 2q), carriers called q², a population scene's numbers."""
 
     tolerance: float = Field(default=0.1, ge=0, le=0.5)
     """How far (relative) two numbers said may disagree (1 in 25 for 2pq = 1 in 25.5 is fine)."""
 
 
 class GeneticsCrisprRule(RuleConfig):
-    """``genetics_crispr``: narration naming a wrong PAM for the Cas (TTTV for SpCas9), a cut other than 3 bp upstream of the PAM (downstream, inside it), sticky ends for Cas9, the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use (DESIGN.md §96.18)."""
+    """``genetics_crispr``: narration naming a wrong PAM for the Cas (TTTV for SpCas9), a cut other than 3 bp upstream of the PAM (downstream, inside it), sticky ends for Cas9, the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use."""
 
 
 class GeneticsKaryotypeRule(RuleConfig):
-    """``genetics_karyotype``: ISCN notation in narration or on screen that does not parse or lists its changes out of order, a karyotype or a sex-chromosome syndrome given the wrong sex (45,X male), a condition the karyotype scene does not show (trisomy 21 for 47,XY,+18) (DESIGN.md §96.18)."""
+    """``genetics_karyotype``: ISCN notation in narration or on screen that does not parse or lists its changes out of order, a karyotype or a sex-chromosome syndrome given the wrong sex (45,X male), a condition the karyotype scene does not show (trisomy 21 for 47,XY,+18)."""
 
 
 class GeneticsHgvsRule(RuleConfig):
-    """``genetics_hgvs``: HGVS in narration or on screen that is invalid or not the mutation scene's variant, legacy numbering (Glu6Val for HBB) without saying it is legacy; legacy shorthand (ΔF508, R553X) as info (DESIGN.md §96.18)."""
+    """``genetics_hgvs``: HGVS in narration or on screen that is invalid or not the mutation scene's variant, legacy numbering (Glu6Val for HBB) without saying it is legacy; legacy shorthand (ΔF508, R553X) as info."""
 
 
 class CalcNumbersRule(RuleConfig):
-    """``calc_numbers``: a number in the narration or on screen (title, caption, labels, notes) that refers to a calculation's value — by its unit, its meaning or its name — and differs from what the calculation computes by more than the way it was written ("thirty kilometres per second" fits 29.8 km/s; "about" also allows rounding to one or two significant figures) (DESIGN.md §97.11)."""
+    """``calc_numbers``: a number in the narration or on screen (title, caption, labels, notes) that refers to a calculation's value — by its unit, its meaning or its name — and differs from what the calculation computes by more than the way it was written ("thirty kilometres per second" fits 29.8 km/s; "about" also allows rounding to one or two significant figures)."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """How far (relative) a value said with "about" may differ from the computed one, beyond rounding it to one or two significant figures."""
 
 
 class CalcUnitsRule(RuleConfig):
-    """``calc_units``: a value said in a unit of another dimension than its quantity ("a speed of 30 kilometres"; a result named by its meaning with a unit of another kind), or in the right kind of unit but off by a power of 1000 (30 m/s for 29.8 km/s, mg for µg) (DESIGN.md §97.11)."""
+    """``calc_units``: a value said in a unit of another dimension than its quantity ("a speed of 30 kilometres"; a result named by its meaning with a unit of another kind), or in the right kind of unit but off by a power of 1000 (30 m/s for 29.8 km/s, mg for µg)."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """As calc_numbers: how far a value said with "about" may be off once the factor of 1000 is taken out."""
 
 
 class CalcSigfigsRule(RuleConfig):
-    """``calc_sigfigs``: a calculation whose sig claims more significant figures than its inputs give, or a number said for a result with more figures than it has (29.78 km/s for a result known to 3) (DESIGN.md §97.11)."""
+    """``calc_sigfigs``: a calculation whose sig claims more significant figures than its inputs give, or a number said for a result with more figures than it has (29.78 km/s for a result known to 3)."""
 
 
 class PlotUnitsRule(RuleConfig):
-    """``plot_units``: a plot axis without a unit where its quantity has one: a physical quantity named in its title without a unit (time, energy, distance, temperature...), or fit parameters given units while the axis has none (DESIGN.md §97.11)."""
+    """``plot_units``: a plot axis without a unit where its quantity has one: a physical quantity named in its title without a unit (time, energy, distance, temperature...), or fit parameters given units while the axis has none."""
 
 
 class PlotLogRule(RuleConfig):
-    """``plot_log``: a log axis with something it cannot show: error bars, a fitted curve or its band reaching zero or below (drawn to the axis edge), a reference line or range at or below zero, or data refused when the plot is resolved (a CSV or a model) (DESIGN.md §97.11)."""
+    """``plot_log``: a log axis with something it cannot show: error bars, a fitted curve or its band reaching zero or below (drawn to the axis edge), a reference line or range at or below zero, or data refused when the plot is resolved (a CSV or a model)."""
 
 
 class PlotErrorsRule(RuleConfig):
-    """``plot_errors``: error bars without a stated meaning (error: sd, sem, ci95, range, poisson or other), or narration calling them something they are not declared to be ("standard deviation" for error: sem) (DESIGN.md §97.11)."""
+    """``plot_errors``: error bars without a stated meaning (error: sd, sem, ci95, range, poisson or other), or narration calling them something they are not declared to be ("standard deviation" for error: sem)."""
 
 
 class PlotSeriesRule(RuleConfig):
-    """``plot_series``: series a viewer cannot tell apart: several series in one panel with the legend turned off and no annotation naming them, or a placeholder name (series 1, data) (DESIGN.md §97.11)."""
+    """``plot_series``: series a viewer cannot tell apart: several series in one panel with the legend turned off and no annotation naming them, or a placeholder name (series 1, data)."""
 
 
 class PlotTruncatedRule(RuleConfig):
-    """``plot_truncated``: bars that do not start at zero, which exaggerates differences: a histogram on a y axis with a break, a bar_chart with a baseline other than 0 and every bar on one side of it (DESIGN.md §97.11)."""
+    """``plot_truncated``: bars that do not start at zero, which exaggerates differences: a histogram on a y axis with a break, a bar_chart with a baseline other than 0 and every bar on one side of it."""
 
 
 class PlotConservedRule(RuleConfig):
-    """``plot_conserved``: a quantity a plot's model declares conserved that drifts by more than tolerance over the run: use method: leapfrog (symplectic, the energy error stays bounded) or a smaller step (DESIGN.md §97.11)."""
+    """``plot_conserved``: a quantity a plot's model declares conserved that drifts by more than tolerance over the run: use method: leapfrog (symplectic, the energy error stays bounded) or a smaller step."""
 
     tolerance: float = Field(default=0.01, gt=0, le=0.5)
     """The largest relative drift max |q − q₀| / max |q| accepted."""
 
 
 class PlotFitClaimsRule(RuleConfig):
-    """``plot_fit_claims``: narration or a note on a plot with fits stating a fitted value ("a half-life of eight days", "exponent three halves", "the peak at 126 GeV") that the fit does not give, its uncertainty considered (DESIGN.md §97.11)."""
+    """``plot_fit_claims``: narration or a note on a plot with fits stating a fitted value ("a half-life of eight days", "exponent three halves", "the peak at 126 GeV") that the fit does not give, its uncertainty considered."""
 
     sigmas: float = Field(default=2.0, gt=0, le=10)
     """How many standard errors of the fitted value a said value may differ by (besides its own rounding)."""
@@ -1697,38 +1697,38 @@ class _OrbitNumbersRule(RuleConfig):
 
 
 class OrbitPeriodRule(_OrbitNumbersRule):
-    """``orbit_period``: a period said or shown for a body of an orbit scene ("Mars takes three years") that its orbit does not have — Kepler's third law with the scene's masses; "Mars takes about two years" fits 1.88 yr (DESIGN.md §98.8)."""
+    """``orbit_period``: a period said or shown for a body of an orbit scene ("Mars takes three years") that its orbit does not have — Kepler's third law with the scene's masses; "Mars takes about two years" fits 1.88 yr."""
 
 
 class OrbitSpeedRule(_OrbitNumbersRule):
-    """``orbit_speed``: a speed against the scene's model: vis-viva at the point named (perihelion, aphelion, periapsis...), anywhere along the orbit otherwise, escape and circular speeds, a flyby's v∞ and Sun-frame speeds, the cannon's shots (DESIGN.md §98.8)."""
+    """``orbit_speed``: a speed against the scene's model: vis-viva at the point named (perihelion, aphelion, periapsis...), anywhere along the orbit otherwise, escape and circular speeds, a flyby's v∞ and Sun-frame speeds, the cannon's shots."""
 
 
 class OrbitDvRule(_OrbitNumbersRule):
-    """``orbit_dv``: a Δv said for a burn or a transfer (the first, the second, the total) that the scene does not compute, or a gravity assist's gain or turning angle (DESIGN.md §98.8)."""
+    """``orbit_dv``: a Δv said for a burn or a transfer (the first, the second, the total) that the scene does not compute, or a gravity assist's gain or turning angle."""
 
 
 class OrbitTransferRule(_OrbitNumbersRule):
-    """``orbit_transfer``: a transfer time, a phase angle (the lead at departure), a synodic period or the time between launch windows, or the wait, against the scene's transfer and bodies (DESIGN.md §98.8)."""
+    """``orbit_transfer``: a transfer time, a phase angle (the lead at departure), a synodic period or the time between launch windows, or the wait, against the scene's transfer and bodies."""
 
 
 class OrbitDistanceRule(_OrbitNumbersRule):
-    """``orbit_distance``: a distance ("the Moon is 384,000 km away" fits; "L2 is 15 million km away" does not), an altitude, a radius or diameter, a Lagrange point's distance, or a ratio of sizes ("eleven times as wide") against the scene (DESIGN.md §98.8)."""
+    """``orbit_distance``: a distance ("the Moon is 384,000 km away" fits; "L2 is 15 million km away" does not), an altitude, a radius or diameter, a Lagrange point's distance, or a ratio of sizes ("eleven times as wide") against the scene."""
 
 
 class OrbitDateRule(RuleConfig):
-    """``orbit_date``: the date of an opposition or a conjunction of a planet seen from the Earth (a day, a month, a year; a month alone against an orbit scene's event) that JPL's approximate elements do not give (1800–2050) (DESIGN.md §98.8)."""
+    """``orbit_date``: the date of an opposition or a conjunction of a planet seen from the Earth (a day, a month, a year; a month alone against an orbit scene's event) that JPL's approximate elements do not give (1800–2050)."""
 
     days: float = Field(default=3.0, ge=0, le=60)
     """How many days a said day may differ from the computed event (the elements are good to a day or so)."""
 
 
 class OrbitScaleRule(RuleConfig):
-    """``orbit_scale``: a picture called "to scale" (true scale, real sizes) that is not: bodies drawn enlarged, a log view, the sizes picture's distances, the tides schematic (DESIGN.md §98.8)."""
+    """``orbit_scale``: a picture called "to scale" (true scale, real sizes) that is not: bodies drawn enlarged, a log view, the sizes picture's distances, the tides schematic."""
 
 
 class SpaceSceneRule(RuleConfig):
-    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other (DESIGN.md §122.12); a scene whose parts cost more than ``seconds`` a frame at 1280x720 by the cookbook's cost table (DESIGN.md §123.14)."""
+    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other; a scene whose parts cost more than ``seconds`` a frame at 1280x720 by the cookbook's cost table."""
 
     degrees: float = Field(default=12.0, gt=0, le=180)
     """The largest turn of a globe in one frame before it is reported (12: five days a second at 30 fps, as vidgen/space-bodies' own check)."""
@@ -1737,77 +1737,77 @@ class SpaceSceneRule(RuleConfig):
 
 
 class OrbitConservedRule(RuleConfig):
-    """``orbit_conserved``: an n-body orbit run whose energy, angular momentum or Jacobi constant drifts (or a figure-eight that does not close) by more than tolerance: the motion shows the integrator's error; a smaller step, or leapfrog (DESIGN.md §98.8)."""
+    """``orbit_conserved``: an n-body orbit run whose energy, angular momentum or Jacobi constant drifts (or a figure-eight that does not close) by more than tolerance: the motion shows the integrator's error; a smaller step, or leapfrog."""
 
     tolerance: float = Field(default=0.01, gt=0, le=0.5)
     """The largest relative drift accepted (the run's largest |ΔE/E|, |ΔL/L|, |ΔC/C|)."""
 
 
 class OrbitCrashRule(RuleConfig):
-    """``orbit_crash``: a periapsis inside an atmosphere (below the Earth's Kármán line, 100 km; Mars's entry interface) that validation lets through, a flyby through the air, or bodies of an n-body run passing through each other (DESIGN.md §98.8)."""
+    """``orbit_crash``: a periapsis inside an atmosphere (below the Earth's Kármán line, 100 km; Mars's entry interface) that validation lets through, a flyby through the air, or bodies of an n-body run passing through each other."""
 
 
 class ParticleMassRule(RuleConfig):
-    """``particle_mass``: a particle's mass said or shown differently from PDG 2024 ("the Z weighs about 91 GeV" fits; "the W weighs 91 GeV" does not — that is the Z's), with a did-you-mean and a MeV / GeV mix-up hint; quark masses within 30 % (the scheme) (DESIGN.md §99.13)."""
+    """``particle_mass``: a particle's mass said or shown differently from PDG 2024 ("the Z weighs about 91 GeV" fits; "the W weighs 91 GeV" does not — that is the Z's), with a did-you-mean and a MeV / GeV mix-up hint; quark masses within 30 % (the scheme)."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """How far (relative) a mass said with "about" may differ, beyond rounding it to one or two significant figures."""
 
 
 class ParticleChargeRule(RuleConfig):
-    """``particle_charge``: a particle's electric charge said wrong ("the down quark has charge +2/3": −1/3; "the neutron is positively charged"); a charge said without a sign is compared by size (DESIGN.md §99.13)."""
+    """``particle_charge``: a particle's electric charge said wrong ("the down quark has charge +2/3": −1/3; "the neutron is positively charged"); a charge said without a sign is compared by size."""
 
 
 class ParticleSpinRule(RuleConfig):
-    """``particle_spin``: a particle's spin said wrong ("the photon has spin 1/2", "the Higgs boson is a fermion") (DESIGN.md §99.13)."""
+    """``particle_spin``: a particle's spin said wrong ("the photon has spin 1/2", "the Higgs boson is a fermion")."""
 
 
 class ParticleLifetimeRule(RuleConfig):
-    """``particle_lifetime``: a mean life, half-life (τ ln 2) or width said for a particle differently from PDG 2024 ("the muon lives 2.2 microseconds" fits 2.197 µs); a moving particle's dilated life is kinematics_number's (DESIGN.md §99.13)."""
+    """``particle_lifetime``: a mean life, half-life (τ ln 2) or width said for a particle differently from PDG 2024 ("the muon lives 2.2 microseconds" fits 2.197 µs); a moving particle's dilated life is kinematics_number's."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """How far (relative) a value said with "about" may differ, beyond rounding it to one or two significant figures."""
 
 
 class BranchingRatioRule(RuleConfig):
-    """``branching_ratio``: a branching ratio said wrong ("most Higgs bosons decay to two photons": bb̄ 58 %, γγ 0.23 %; "the Z decays to hadrons 70 % of the time" fits 69.9 %), "most", "rarely", "the most common" and percentages against the tables (DESIGN.md §99.13)."""
+    """``branching_ratio``: a branching ratio said wrong ("most Higgs bosons decay to two photons": bb̄ 58 %, γγ 0.23 %; "the Z decays to hadrons 70 % of the time" fits 69.9 %), "most", "rarely", "the most common" and percentages against the tables."""
 
     tolerance: float = Field(default=0.1, ge=0, le=0.5)
     """How far (relative) a share said with "about" may differ."""
 
 
 class ConservationClaimRule(RuleConfig):
-    """``conservation_claim``: a reaction or decay called allowed that the conservation checker forbids (or forbidden that it allows), "forbidden by baryon number" for one that conserves it, "conserves charge" for one that does not; the process written with an arrow, said in words, or the scene's own ("this decay") (DESIGN.md §99.13)."""
+    """``conservation_claim``: a reaction or decay called allowed that the conservation checker forbids (or forbidden that it allows), "forbidden by baryon number" for one that conserves it, "conserves charge" for one that does not; the process written with an arrow, said in words, or the scene's own ("this decay")."""
 
 
 class FeynmanBosonRule(RuleConfig):
-    """``feynman_boson``: the wrong boson for an interaction: a coupling the Standard Model does not have ("gluons couple to electrons", "the Higgs boson couples to photons": only through a loop), a force a particle does not feel, flavour changed by a boson other than the W ("a photon changes the quark's flavour"), a boson named as exchanged that the feynman scene's diagram does not have (DESIGN.md §99.13)."""
+    """``feynman_boson``: the wrong boson for an interaction: a coupling the Standard Model does not have ("gluons couple to electrons", "the Higgs boson couples to photons": only through a loop), a force a particle does not feel, flavour changed by a boson other than the W ("a photon changes the quark's flavour"), a boson named as exchanged that the feynman scene's diagram does not have."""
 
 
 class KinematicsNumberRule(RuleConfig):
-    """``kinematics_number``: a momentum, energy, invariant mass, Q value, decay length, opening angle or γ said in a kinematics scene that it does not compute; a decay length βγcτ or dilated life γτ said with a momentum or γ ("a 5 GeV muon travels about 30 km"); a threshold said with a reaction written out (DESIGN.md §99.13)."""
+    """``kinematics_number``: a momentum, energy, invariant mass, Q value, decay length, opening angle or γ said in a kinematics scene that it does not compute; a decay length βγcτ or dilated life γτ said with a momentum or γ ("a 5 GeV muon travels about 30 km"); a threshold said with a reaction written out."""
 
     tolerance: float = Field(default=0.05, ge=0, le=0.5)
     """How far (relative) a value said with "about" may differ (decay lengths: at least 10 %)."""
 
 
 class DetectorSignatureRule(RuleConfig):
-    """``detector_signature``: a detector signature said wrong ("photons leave tracks", "neutrinos are seen in the calorimeter", "muons stop in the ECAL", "neutrons curve in the field") against the signatures of the detector scene (DESIGN.md §99.13)."""
+    """``detector_signature``: a detector signature said wrong ("photons leave tracks", "neutrinos are seen in the calorimeter", "muons stop in the ECAL", "neutrons curve in the field") against the signatures of the detector scene."""
 
 
 class SignificanceClaimRule(RuleConfig):
-    """``significance_claim``: a p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists"), a "one in N" or percentage that does not match the σ said, a σ said for a mass_spectrum that it does not compute (DESIGN.md §99.13)."""
+    """``significance_claim``: a p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists"), a "one in N" or percentage that does not match the σ said, a σ said for a mass_spectrum that it does not compute."""
 
     sigmas: float = Field(default=0.5, ge=0, le=5)
     """How far a σ said for a spectrum may be from what it computes (plus 0.5 with "about", plus the rounding)."""
 
 
 class SimulatedLabelRule(RuleConfig):
-    """``simulated_label``: simulated data called real ("real collision data", "data from the LHC") in a scene that simulates them, or a plot of simulated particle data or an event display whose screen does not say "simulated" (DESIGN.md §99.13)."""
+    """``simulated_label``: simulated data called real ("real collision data", "data from the LHC") in a scene that simulates them, or a plot of simulated particle data or an event display whose screen does not say "simulated"."""
 
 
 class ParticleUnitsRule(RuleConfig):
-    """``particle_units``: masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video (info) (DESIGN.md §99.13)."""
+    """``particle_units``: masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video (info)."""
 
 
 class NarrationSpeedRule(RuleConfig):
@@ -1830,7 +1830,7 @@ class NarrationSpeedRule(RuleConfig):
 
     def limits(self, language: str | None) -> tuple[str, float, float]:
         """``(unit, min_rate, max_rate)`` for a video in ``language``: the configured values, the
-        missing ones from the language's range (DESIGN.md §54)."""
+        missing ones from the language's range."""
         from vidgen.languages import CHARACTER_RATE, language_rules
 
         words = language_rules(language).words_per_second
@@ -1896,7 +1896,7 @@ class UnclearSpeechRule(RuleConfig):
 
 
 class ShortsSafeAreaRule(RuleConfig):
-    """``shorts_safe_area``: in a Short (``shorts:``), text or a character's face where the phone app covers the frame (its buttons and texts), or an overlay (a caption, the hook) over a face (DESIGN.md §101)."""
+    """``shorts_safe_area``: in a Short (``shorts:``), text or a character's face where the phone app covers the frame (its buttons and texts), or an overlay (a caption, the hook) over a face."""
 
     tolerance: Fraction = 0.01
     """How far (fraction of the frame's shorter side) text may reach into the covered parts unflagged."""
@@ -1907,36 +1907,36 @@ class ShortsSafeAreaRule(RuleConfig):
 
 
 class OverlayFaceRule(RuleConfig):
-    """``overlay_face``: an overlay that keeps off faces (a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8)."""
+    """``overlay_face``: an overlay that keeps off faces (a ``hud``) whose text or plate covers a character's face anyway."""
 
     min_cover: Fraction = 0.15
     """Share of a face's box under the overlay's texts and plates from which it is reported."""
 
 
 class ShortsLengthRule(RuleConfig):
-    """``shorts_length``: a Short (``shorts:``) longer than its ``max_seconds`` (DESIGN.md §101)."""
+    """``shorts_length``: a Short (``shorts:``) longer than its ``max_seconds``."""
 
 
 class GeneratedFootageRule(RuleConfig):
-    """``generated_footage``: a scene shows generated video takes (DESIGN.md §113.4): disclose AI-generated footage where the platform asks."""
+    """``generated_footage``: a scene shows generated video takes: disclose AI-generated footage where the platform asks."""
 
 
 class ThreeDOffFrameRule(RuleConfig):
-    """``three_d_off_frame``: in a ``3d`` scene, an object the beat is about (an object or camera action names it, or a stand-in says the line) mostly outside the frame or behind the camera (DESIGN.md §114.12)."""
+    """``three_d_off_frame``: in a ``3d`` scene, an object the beat is about (an object or camera action names it, or a stand-in says the line) mostly outside the frame or behind the camera."""
 
     max_off: Fraction = 0.5
     """Share of the object's sphere outside the frame from which it is reported."""
 
 
 class ThreeDHiddenRule(RuleConfig):
-    """``three_d_hidden``: in a ``3d`` scene, an object the beat is about mostly hidden behind nearer objects (DESIGN.md §114.12; estimated from the objects' spheres)."""
+    """``three_d_hidden``: in a ``3d`` scene, an object the beat is about mostly hidden behind nearer objects (estimated from the objects' spheres)."""
 
     max_hidden: Fraction = 0.7
     """Share of the object's sphere (the part in the frame) nearer objects cover from which it is reported."""
 
 
 class WebClippedRule(RuleConfig):
-    """``web_clipped``: in a ``web`` scene, page text cut by its own box or an ancestor's (``overflow`` other than visible), or by the page's box where the page does not reach the frame's edge (DESIGN.md §118.12)."""
+    """``web_clipped``: in a ``web`` scene, page text cut by its own box or an ancestor's (``overflow`` other than visible), or by the page's box where the page does not reach the frame's edge."""
 
     tolerance: Fraction = 0.004
     """How much of the text (fraction of the frame's shorter side) may be cut unflagged."""
@@ -2154,7 +2154,7 @@ def _unshorten(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 class ActionConfig(BaseModel):
-    """A per-beat action (DESIGN.md §26): ``{action: NAME, target: TARGET, at, until, run_time,
+    """A per-beat action: ``{action: NAME, target: TARGET, at, until, run_time,
     ...options}`` or the shorthand ``{NAME: TARGET, ...options}`` (the action name first).
 
     Which actions exist, their options and the scene's targets depend on the registered action
@@ -2199,7 +2199,7 @@ class ActionConfig(BaseModel):
     @property
     def anchor(self) -> str | None:
         """The word anchor ``at`` was written as (``"@gradient#2"``), else ``None``; ``at``
-        itself is its fraction of the beat once resolved (DESIGN.md §87.2)."""
+        itself is its fraction of the beat once resolved."""
         return self._anchor
 
     @property
@@ -2217,7 +2217,7 @@ class ActionConfig(BaseModel):
 
     @classmethod
     def automatic(cls, data: dict[str, Any]) -> ActionConfig:
-        """An action that automatic directing adds (``auto_direct``, DESIGN.md §69.23), not the
+        """An action that automatic directing adds (``auto_direct``), not the
         config: :attr:`auto` is true."""
         made = cls.model_validate(data)
         made._auto = True
@@ -2306,7 +2306,7 @@ OverlayTime = Annotated[float, Field(ge=0)] | Identifier
 
 
 class OverlayConfig(BaseModel):
-    """An entry of the video-level ``overlays:`` list (DESIGN.md §41): ``{type, id, scenes,
+    """An entry of the video-level ``overlays:`` list: ``{type, id, scenes,
     exclude, from, to, reserve, ...options}``.
 
     Which overlay types exist and their options depend on the registered overlay types, so they
@@ -2341,7 +2341,7 @@ class OverlayConfig(BaseModel):
 SceneOverlays = bool | dict[Identifier, bool | dict[str, Any]]
 
 
-#: A sound effect's name: a built-in sound or a file assets/sfx/<name>.wav (DESIGN.md §47).
+#: A sound effect's name: a built-in sound or a file assets/sfx/<name>.wav.
 SOUND_NAME_PATTERN = r"^[A-Za-z0-9_][A-Za-z0-9_-]*$"
 SoundName = Annotated[str, Field(pattern=SOUND_NAME_PATTERN)]
 
@@ -2408,7 +2408,7 @@ def _cue(value: str | SfxCue) -> SfxCue:
 SfxEntry = Annotated[Union[SoundName, SfxCue], AfterValidator(_cue)]
 
 
-#: The kinds of a beat's music sting (``sting:``; DESIGN.md §69.19).
+#: The kinds of a beat's music sting (``sting:``).
 StingKind = Literal["reveal", "comic", "sad"]
 
 
@@ -2445,7 +2445,7 @@ def _sting(value: str | StingCue) -> StingCue:
 StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
 
 
-#: The framings of a beat's ``shot:`` (DESIGN.md §69.29; :data:`vidgen.cartoon.shots.SHOT_KINDS`).
+#: The framings of a beat's ``shot:`` (:data:`vidgen.cartoon.shots.SHOT_KINDS`).
 ShotKind = Literal["wide", "two_shot", "medium", "over_shoulder", "closeup"]
 #: How many characters each framing names: (fewest, most); fewer than the most are filled in
 #: when the shot is framed (:func:`vidgen.cartoon.shots.shot_figures`).
@@ -2519,7 +2519,7 @@ def _shot_words_schema(schema: dict[str, Any]) -> None:
     schema.setdefault("anyOf", []).insert(0, words)
 
 
-#: The kinds of automatic directing (``auto_direct:``; DESIGN.md §69.23), in planning order.
+#: The kinds of automatic directing (``auto_direct:``), in planning order.
 DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups", "effects")
 
 
@@ -2544,11 +2544,11 @@ class AutoDirect(_Strict):
 AutoDirectSetting = Union[bool, AutoDirect]
 
 
-#: ``reframe:`` on the video or a stage scene (DESIGN.md §69.30): ``speaker`` (the camera keeps
+#: ``reframe:`` on the video or a stage scene: ``speaker`` (the camera keeps
 #: whoever speaks in view on a stage wider than the frame) or ``none``; not given: ``speaker``
 #: when the stage's characters do not fit in one view.
 ReframeSetting = Literal["speaker", "none"]
-#: ``character_size:`` on the video or a stage scene (DESIGN.md §86.10): the base size of the
+#: ``character_size:`` on the video or a stage scene: the base size of the
 #: characters and of the world they stand in (``small``: a wide landscape, for cinema; ``medium``:
 #: TV / YouTube, the default; ``large``: big characters, for phones and Shorts).
 CharacterSize = Literal["small", "medium", "large"]
@@ -2567,7 +2567,7 @@ def directing_kinds(*settings: AutoDirectSetting | None) -> frozenset[str]:
 
 
 class SfxConfig(_Strict):
-    """Video-wide sound effect settings (DESIGN.md §47)."""
+    """Video-wide sound effect settings."""
 
     auto: bool = False
     """Add soft sounds to built-in animations: reveal (pop), highlight (tick), callout (click), zoom (whoosh), transform (swoosh) actions and chapter cards (whoosh)."""
@@ -2575,7 +2575,7 @@ class SfxConfig(_Strict):
     """Level change in dB of every sound effect of the video."""
 
 
-#: Ducking presets (``duck: drama``; DESIGN.md §112.2): what each sets of :class:`DuckConfig`.
+#: Ducking presets (``duck: drama``): what each sets of :class:`DuckConfig`.
 DUCK_PRESETS: dict[str, dict[str, float]] = {
     "light": {"depth": 8.0},
     "standard": {},
@@ -2587,7 +2587,7 @@ DuckPreset = Literal["light", "standard", "drama", "deep"]
 
 
 class DuckConfig(_Strict):
-    """How music ducks under the narration (DESIGN.md §48), and swells into the pauses (§112.2)."""
+    """How music ducks under the narration, and swells into the pauses."""
 
     @model_validator(mode="before")
     @classmethod
@@ -2656,7 +2656,7 @@ def _mood_name_schema(schema: dict[str, Any]) -> None:
 
 
 class ComposeConfig(_Strict):
-    """Music composed for the video from a mood (``compose:``; DESIGN.md §83), played with real
+    """Music composed for the video from a mood (``compose:``), played with real
     instruments (needs the ``music`` extra; without it a built-in bed plays)."""
 
     mood: str
@@ -2744,7 +2744,7 @@ MusicSetting = Annotated[Union[MusicEntry, list[MusicEntry], Literal[False], Non
 
 
 class ThemeVariation(_Strict):
-    """How a theme plays this time (DESIGN.md §112.2): another section, start, key or tempo, or
+    """How a theme plays this time: another section, start, key or tempo, or
     only some of its tracks. All but ``section`` / ``start`` re-render the theme's score (a
     project piece, a score bed, or a built-in bed's score template)."""
 
@@ -2766,7 +2766,7 @@ class ThemeVariation(_Strict):
 
 
 class MusicTheme(ThemeVariation):
-    """A named theme of ``score.themes`` in its long form: what plays and how (DESIGN.md §112.2)."""
+    """A named theme of ``score.themes`` in its long form: what plays and how."""
 
     source: str = Field(min_length=1)
     """A built-in bed (calm, enigma, lullaby...), a project piece (a score file: love for assets/music/love.yaml) or an audio file under the project."""
@@ -2784,9 +2784,8 @@ MusicThemeSetting = Annotated[Union[Annotated[str, Field(min_length=1)], MusicTh
 
 class SceneMusic(_Strict):
     """A scene's ``music:`` override in its long form: its level and, under composed music that
-    follows the video (a ``compose:`` cue without ``bars``, DESIGN.md §84), other compose
-    settings from this scene's first bar to its end; or the theme it plays (``score:``,
-    DESIGN.md §112.2)."""
+    follows the video (a ``compose:`` cue without ``bars``), other compose
+    settings from this scene's first bar to its end; or the theme it plays (``score:``)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -2822,7 +2821,7 @@ class SceneMusic(_Strict):
 
 
 class MotifCue(_Strict):
-    """A theme heard briefly on a beat (``motif:``; DESIGN.md §112.2): it fades in at ``at``,
+    """A theme heard briefly on a beat (``motif:``): it fades in at ``at``,
     plays ``length`` seconds from its start (or section) over the scene's theme, which dips under
     it, and fades out."""
 
@@ -2861,7 +2860,7 @@ MotifSetting = Annotated[Union[Identifier, MotifCue], AfterValidator(_motif)]
 
 
 class ScoreConfig(_Strict):
-    """``score:`` (DESIGN.md §112.2): the named themes scenes, sections and beats play, and how
+    """``score:``: the named themes scenes, sections and beats play, and how
     they change, duck, swell and dip."""
 
     themes: dict[Identifier, MusicThemeSetting] = Field(default_factory=dict)
@@ -2887,7 +2886,7 @@ class ScoreConfig(_Strict):
 
 
 class RoomConfig(_Strict):
-    """``room:`` as a mapping (DESIGN.md §111.4)."""
+    """``room:`` as a mapping."""
 
     use: RoomName
     """The room: small_office, corridor, hall, outdoors, car, phone or none."""
@@ -2902,7 +2901,7 @@ RoomSetting = Union[RoomName, RoomConfig]
 
 
 class AudioConfig(_Strict):
-    """The final mix: loudness normalisation (DESIGN.md §48), stereo staging and rooms (§111.4)."""
+    """The final mix: loudness normalisation, stereo staging and rooms."""
 
     normalize: bool | Literal["auto"] = "auto"
     """Normalise the final mix to target_lufs: true, false, or auto (only when the video has music; narration-only videos keep their level)."""
@@ -2927,10 +2926,10 @@ class AudioConfig(_Strict):
     sfx_room: bool = False
     """true: sound effects (a scene's sfx, sfx actions, the sounds of an audio-only render's scenes) sound in their scene's room like its voices; a cue's own room wins; default false (dry)."""
     scene_sounds: bool = False
-    """Audio-only renders: also play what scenes would sound like, worked out without pictures: a stage's set ambience and rain, footsteps of walks, doors, knocks, switches, jumps and surprised faces, a video_clip's own sound (DESIGN.md §112); default false (left out with a warning)."""
+    """Audio-only renders: also play what scenes would sound like, worked out without pictures: a stage's set ambience and rain, footsteps of walks, doors, knocks, switches, jumps and surprised faces, a video_clip's own sound; default false (left out with a warning)."""
 
 
-#: Audio file formats of an audio-only render and their default bitrates (DESIGN.md §111.1).
+#: Audio file formats of an audio-only render and their default bitrates.
 AUDIO_FORMATS: dict[str, str | None] = {"wav": None, "mp3": "192k", "m4a": "192k", "ogg": "96k"}
 #: Loudness presets of an audio-only render (:mod:`vidgen.audio_check`).
 LOUDNESS_PRESETS = ("podcast", "audiobook", "broadcast", "custom")
@@ -2941,7 +2940,7 @@ OPUS_RATES = (16000, 24000, 48000)
 
 
 class AudioOutputConfig(_Strict):
-    """The file an audio-only render writes (DESIGN.md §111.1): its format, loudness preset and
+    """The file an audio-only render writes: its format, loudness preset and
     transcripts."""
 
     format: Literal["wav", "mp3", "m4a", "ogg"] = "wav"
@@ -2992,7 +2991,7 @@ class AudioOutputConfig(_Strict):
 
 
 class PacingConfig(_Strict):
-    """How an audio-only render times the beats (DESIGN.md §111): from the speech and these gaps
+    """How an audio-only render times the beats: from the speech and these gaps
     (seconds), or as the video's timeline."""
 
     timing: Literal["speech", "video"] = "speech"
@@ -3018,7 +3017,7 @@ class PacingConfig(_Strict):
 
 
 class CreditsConfig(_Strict):
-    """Spoken credits made from the cast (DESIGN.md §112.3): a closing scene (section) with the
+    """Spoken credits made from the cast: a closing scene (section) with the
     title, "Starring <actor> as <character>, ...", "Narrated by <actor>." and more lines."""
 
     speak: bool = False
@@ -3042,7 +3041,7 @@ class CreditsConfig(_Strict):
 
 
 class ChaptersConfig(_Strict):
-    """What the render writes about the video's chapters (DESIGN.md §52)."""
+    """What the render writes about the video's chapters."""
 
     metadata: bool = True
     """Write the chapters into the MP4 (players list them and jump to them)."""
@@ -3053,7 +3052,7 @@ class ChaptersConfig(_Strict):
 
 
 class MetadataConfig(_Strict):
-    """Tags of the final MP4 (DESIGN.md §52); unset tags are not written."""
+    """Tags of the final MP4; unset tags are not written."""
 
     title: str | None = Field(default=None, min_length=1)
     """The video's title in players and file browsers (default: the top-level title)."""
@@ -3073,13 +3072,13 @@ class MetadataConfig(_Strict):
     """Genre, e.g. Education."""
 
 
-#: Keys of a thumbnail grabbed from a scene's frame, and of a designed one (DESIGN.md §53).
+#: Keys of a thumbnail grabbed from a scene's frame, and of a designed one.
 THUMBNAIL_FRAME_KEYS = ("scene", "beat", "at", "overlays")
 THUMBNAIL_DESIGN_KEYS = ("title", "subtitle", "icon", "image", "preset", "background")
 
 
 class ThumbnailConfig(_Strict):
-    """The video's thumbnail (DESIGN.md §53): a frame of a scene (``scene``, ``beat``, ``at``,
+    """The video's thumbnail: a frame of a scene (``scene``, ``beat``, ``at``,
     ``overlays``) or a designed title card (``title``, ``subtitle``, ``icon`` / ``image``,
     ``preset`` / ``background``); without either, a designed card of the video's title."""
 
@@ -3128,13 +3127,13 @@ class ThumbnailConfig(_Strict):
         return "frame" if self.scene is not None else "design"
 
 
-#: Transition types (DESIGN.md §49, §50, §69.45).
+#: Transition types.
 TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe", "iris_out", "iris_in")
 #: Transitions that overlap the two scenes (both pictures are on screen at once).
 OVERLAPPING_TRANSITIONS = ("crossfade", "push", "wipe")
-#: Transitions that move a picture or an edge in a ``direction`` (DESIGN.md §50).
+#: Transitions that move a picture or an edge in a ``direction``.
 DIRECTED_TRANSITIONS = ("push", "wipe")
-#: Cartoon irises (DESIGN.md §69.45): a circle closes on the scene before, then opens on the next.
+#: Cartoon irises: a circle closes on the scene before, then opens on the next.
 IRIS_TRANSITIONS = ("iris_out", "iris_in")
 #: Transitions through a colour, inside the renders: the scene before ends in it, the next
 #: scene starts from it (no overlap; fade_color and the irises).
@@ -3148,7 +3147,7 @@ TransitionType = Literal["cut", "crossfade", "fade_color", "push", "wipe", "iris
 
 
 class TransitionConfig(_Strict):
-    """How the video passes into a scene from the one before it (DESIGN.md §49, §50, §69.45)."""
+    """How the video passes into a scene from the one before it."""
 
     type: TransitionType = "cut"
     """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene; iris_out: a circle closes on a character or point of the scene before, then opens on the next scene; iris_in: a circle closes on the scene before, then opens on a character or point of the next scene."""
@@ -3212,7 +3211,7 @@ CARRY_ARROW = "->"
 
 
 class CarryEntry(BaseModel):
-    """One object a scene carries over from the scene before it (DESIGN.md §50): the target
+    """One object a scene carries over from the scene before it: the target
     ``source`` of that scene, shown where it ended, then moved into this scene's target ``dest``."""
 
     model_config = ConfigDict(frozen=True)
@@ -3296,7 +3295,7 @@ class _SourceIds(_Strict):
 
 
 class ReferenceConfig(_SourceIds):
-    """A scene's reference (DESIGN.md §95.14): ``{label, doi | pmid | isbn | url, id}``; never
+    """A scene's reference: ``{label, doi | pmid | isbn | url, id}``; never
     invent one: copy the identifier from the source."""
 
     label: str = Field(min_length=1, max_length=120)
@@ -3327,7 +3326,7 @@ class FigureCreditConfig(_SourceIds):
 
 
 class CitationsConfig(_Strict):
-    """How scenes' references and figure credits show on screen (DESIGN.md §95.14)."""
+    """How scenes' references and figure credits show on screen."""
 
     show: Literal["footer", "marker", "card", "none"] = "footer"
     """footer: a line at the bottom of the scene ([1] Label · [2] Label); marker: only the numbers ([1, 2]) in a corner; card: the numbers, then a card listing the references for the scene's last card_seconds; none: only in the description."""
@@ -3337,7 +3336,7 @@ class CitationsConfig(_Strict):
     """Write the numbered reference list (and the figure credits) into the description file <output>_chapters.txt."""
 
 
-#: ``*word*`` (or ``*a few words*``) in a beat's text: stressed by its speaker (DESIGN.md §69.24).
+#: ``*word*`` (or ``*a few words*``) in a beat's text: stressed by its speaker.
 EMPHASIS = re.compile(r"(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])")
 
 
@@ -3346,16 +3345,16 @@ def strip_emphasis(text: str) -> str:
     return EMPHASIS.sub(r"\1", text)
 
 
-#: Kinds of generated video shots (DESIGN.md §113.3).
+#: Kinds of generated video shots.
 ShotKind = Literal["talking", "action", "establishing"]
-#: What a generated shot's ``guide:`` sends (DESIGN.md §113.8): the beat's draft render, its
-#: finished render (``final``, §113.18), the edges of the finished render (``canny``, §113.21),
+#: What a generated shot's ``guide:`` sends: the beat's draft render, its
+#: finished render (``final``), the edges of the finished render (``canny``),
 #: or one of the guide passes of its ``3d`` scene.
 GuideChoice = Literal["render", "final", "canny", "depth", "outline", "mask"]
 GUIDE_CHOICES: tuple[str, ...] = ("render", "final", "canny", "depth", "outline", "mask")
 #: The guides any scene type can send (the others are guide passes of a ``3d`` scene).
 GUIDES_OF_ANY_SCENE: tuple[str | None, ...] = (None, "render", "final", "canny")
-#: The guide passes a three.js web scene draws too (``space``, ``web``; DESIGN.md §113.19).
+#: The guide passes a three.js web scene draws too (``space``, ``web``).
 GUIDES_OF_WEB_SCENES: tuple[str, ...] = ("depth",)
 
 
@@ -3380,7 +3379,7 @@ _BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "t
 LAST_OF_PREFIX = "last_of:"
 #: ``generated_shot.first_frame: painted``: the picture ``vidgen generate frames`` painted for the shot.
 PAINTED_FIRST_FRAME = "painted"
-#: ``generated_shot.first_frame: restyled``: the render's first frame made photoreal on the ComfyUI server (§113.21).
+#: ``generated_shot.first_frame: restyled``: the render's first frame made photoreal on the ComfyUI server.
 RESTYLED_FIRST_FRAME = "restyled"
 #: The image model ``vidgen generate frames`` uses when a shot does not name one.
 DEFAULT_PAINT_MODEL = "bytedance-seed/seedream-4.5"
@@ -3478,7 +3477,7 @@ class Subject(_Strict):
 
 
 class PaintFirstFrame(_Strict):
-    """A shot's ``paint_first_frame:`` (DESIGN.md §113.15): how ``vidgen generate frames`` paints
+    """A shot's ``paint_first_frame:``: how ``vidgen generate frames`` paints
     its starting picture from the first frame of the beat's 3D render and reference pictures."""
 
     prompt: str = Field(min_length=1)
@@ -3494,7 +3493,7 @@ class PaintFirstFrame(_Strict):
 
 
 class CannyGuide(_Strict):
-    """A shot's ``canny:`` (with ``guide: canny``, DESIGN.md §113.21): how its edge video is made from the finished render."""
+    """A shot's ``canny:`` (with ``guide: canny``): how its edge video is made from the finished render."""
 
     low: int = Field(default=92, ge=0, le=1020)
     """Edges weaker than this are dropped (OpenCV Canny's low threshold, on the L1 gradient)."""
@@ -3518,7 +3517,7 @@ class CannyGuide(_Strict):
 
 
 class GeneratedShot(_Strict):
-    """A beat's ``generated_shot:`` (DESIGN.md §113.3): the beat is shown by a clip a video model
+    """A beat's ``generated_shot:``: the beat is shown by a clip a video model
     makes (``vidgen generate plan`` lists it with its inputs and estimated cost). Not the
     ``generate:`` param of scenes, which makes a still picture."""
 
@@ -3780,7 +3779,7 @@ class BeatConfig(_Strict):
     def _time_word_anchors(self) -> BeatConfig:
         """Actions at a spoken word (``at: "@gradient"``): the beat must say it; ``at`` becomes
         its estimated fraction (the video's language and speech rate, then the beat's audio,
-        refine it: DESIGN.md §87.2)."""
+        refine it)."""
         if any(act.anchor is not None for act in self.actions):
             time_beat_anchors(self, None, self.estimated_duration(DEFAULT_WORDS_PER_SECOND))
         return self
@@ -3791,7 +3790,7 @@ class BeatConfig(_Strict):
 
 
 class TermConfig(_Strict):
-    """A concept of ``terms:`` with more than a colour (DESIGN.md §87.3)."""
+    """A concept of ``terms:`` with more than a colour."""
 
     color: ColorRef
     """The concept's colour: a theme colour token (accent, primary...) or hex."""
@@ -3828,7 +3827,7 @@ def _is_pause_item(item: Any) -> bool:
 
 def merge_pause_items(beats: list[Any]) -> list[Any]:
     """A raw beats list with every ``{pause: S}`` item added to the ``pause`` of the beat before
-    it (DESIGN.md §111). ``ValueError`` for a pause before the first beat."""
+    it. ``ValueError`` for a pause before the first beat."""
     if not any(_is_pause_item(b) for b in beats):
         return beats
     merged: list[Any] = []
@@ -3974,7 +3973,7 @@ class SceneConfig(_Strict):
 
 
 class CutBeatRange(_Strict):
-    """A run of a scene's beats in a cut (``{from, to}``, both included; DESIGN.md §101)."""
+    """A run of a scene's beats in a cut (``{from, to}``, both included)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -3985,7 +3984,7 @@ class CutBeatRange(_Strict):
 
 
 class CutScene(BaseModel):
-    """A scene of a cut (DESIGN.md §101): ``{scene, beats, ...}``; any other key (``params``,
+    """A scene of a cut: ``{scene, beats, ...}``; any other key (``params``,
     ``set``, ``id``, ``transition``, ``music``, ``overlays``...) changes the scene in this cut."""
 
     model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
@@ -3997,7 +3996,7 @@ class CutScene(BaseModel):
 
 
 class CutEndCard(_Strict):
-    """The card a cut ends on (DESIGN.md §101)."""
+    """The card a cut ends on."""
 
     text: str = Field(min_length=1)
     """The line under the title, e.g. "Full story on the channel"."""
@@ -4016,7 +4015,7 @@ class CutEndCard(_Strict):
 
 
 class CutConfig(_Strict):
-    """``cut:`` (DESIGN.md §101): a shorter video made of chosen scenes and beats of this one —
+    """``cut:``: a shorter video made of chosen scenes and beats of this one —
     usually set in a variant, one variant per cut (Shorts, teasers)."""
 
     scenes: list[Identifier | CutScene] = Field(min_length=1)
@@ -4030,7 +4029,7 @@ class CutConfig(_Strict):
 
 
 class ShortsConfig(_Strict):
-    """``shorts:`` (DESIGN.md §101): the video is a vertical Short: the parts of the frame the
+    """``shorts:``: the video is a vertical Short: the parts of the frame the
     phone app covers with its own buttons and text, and the longest it may be."""
 
     max_seconds: float = Field(60.0, gt=0)
@@ -4046,7 +4045,7 @@ class ShortsConfig(_Strict):
 
 
 class RenderConfig(_Strict):
-    """How `vidgen render` keeps what it makes on the way to the video (DESIGN.md §120.9)."""
+    """How `vidgen render` keeps what it makes on the way to the video."""
 
     intermediate: Literal["lossless", "compact"] = "lossless"
     """How the frames a web or 3d scene draws are kept until the scene plays them (build/.../web/, three_d/): lossless (FFV1, about 1 byte per pixel and frame for a detailed WebGL page: 26 MB per second at 720p30) or compact (H.264 4:4:4 at CRF 12 with a lossless alpha stream, about 4.6 times smaller; one more lossy step before the scene's own H.264, which loses far more); a lossless clip serves a compact render, not the other way round; `vidgen render --intermediate`."""
@@ -4070,7 +4069,7 @@ class VideoConfig(_Strict):
     draft: DraftConfig | None = None
     """Resolution and frame rate of `vidgen render --draft` (fast drafts without decoration); default: 240 pixels on the shorter side at the format's shape, 8 fps."""
     render: RenderConfig = Field(default_factory=RenderConfig)
-    """How a render keeps its intermediate files {intermediate: lossless | compact, keep_intermediates} (DESIGN.md §120.9)."""
+    """How a render keeps its intermediate files {intermediate: lossless | compact, keep_intermediates}."""
     include: Annotated[str, Field(min_length=1)] | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     """YAML / JSON files (relative to this file, e.g. cast.yaml or ../shared/sets.yaml) whose characters, voices and sets this config starts from; this config's own entries win (a character of the same name: its keys win)."""
     sets: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
@@ -4116,7 +4115,7 @@ class VideoConfig(_Strict):
     music: MusicSetting = None
     """Background music: a bed name or file, {source | compose, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids; compose: {mood, ...} composes music."""
     score: ScoreConfig = Field(default_factory=ScoreConfig)
-    """Music for dramas (DESIGN.md §112.2): named themes {themes, crossfade, curve, duck, fade_in, fade_out, motif_dip, sting_dip, check, dense_lu} that scenes and sections play with music: NAME (cross-fading at the changes) and beats briefly with motif: NAME."""
+    """Music for dramas: named themes {themes, crossfade, curve, duck, fade_in, fade_out, motif_dip, sting_dip, check, dense_lu} that scenes and sections play with music: NAME (cross-fading at the changes) and beats briefly with motif: NAME."""
     soundfont: str | None = Field(default=None, min_length=1)
     """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)
@@ -4128,7 +4127,7 @@ class VideoConfig(_Strict):
     pacing: PacingConfig = Field(default_factory=PacingConfig)
     """Timing of an audio-only render: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail} (seconds)."""
     credits: CreditsConfig = Field(default_factory=CreditsConfig)
-    """Spoken credits from the cast {speak: true, title, voice, music, cast, voiced_by, lines, chapter}: a closing scene with the title, "Starring ... as ...", "Narrated by ...", music under (DESIGN.md §112.3)."""
+    """Spoken credits from the cast {speak: true, title, voice, music, cast, voiced_by, lines, chapter}: a closing scene with the title, "Starring ... as ...", "Narrated by ...", music under."""
     cold_open: Identifier | list[Identifier] | None = None
     """A cold open: a scene (section) id, moved to the very start (before the title and theme; its chapter title dropped), or beat ids, copied in that order into a scene cold_open at the start (beats cold_open_<beat id>, their audio copied from the lines' own; the lines are heard again in their place)."""
     transition: TransitionSetting | None = None
@@ -4446,7 +4445,7 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
     from vidgen.sections import expand_sections, section_error
 
-    if "sections" in data:   # problems named by the sections they come from (§111)
+    if "sections" in data:   # problems named by the sections they come from
         try:
             return parse_config(expand_sections(data, source), source)
         except VidgenError as exc:

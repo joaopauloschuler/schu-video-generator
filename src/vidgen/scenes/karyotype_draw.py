@@ -1,4 +1,4 @@
-"""Chromosome ideograms drawn (DESIGN.md §96.10): a chromosome is a column of G-bands from pter
+"""Chromosome ideograms drawn: a chromosome is a column of G-bands from pter
 (top) to qter, each arm a capsule (the centromere a constriction between them), dark bands in
 four shades, heterochromatin grey, the stalks of the acrocentrics' short arms as two thin lines
 and their satellites as small knobs. Derivative chromosomes are drawn from their segments, each

@@ -1,4 +1,4 @@
-# Built-in indoor sets (DESIGN.md §77): rooms with a door, windows, furniture, daylight (classroom, kitchen, shop) or the indoor light, and a
+# Built-in indoor sets: rooms with a door, windows, furniture, daylight (classroom, kitchen, shop) or the indoor light, and a
 # room tone. A stage scene uses one with set: NAME when the project's own sets: has no set of that
 # name; its params override the set's as for any set (CONFIG "Ready-made sets"). Every set leaves
 # two marks clear for two characters at depth 0: stand_left and stand_right. The furniture against

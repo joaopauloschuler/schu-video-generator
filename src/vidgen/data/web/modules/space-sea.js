@@ -1,4 +1,4 @@
-// vidgen/space-sea: water to the horizon under a vidgen/space-air sky (DESIGN.md §123.4). Part of
+// vidgen/space-sea: water to the horizon under a vidgen/space-air sky. Part of
 // schu-video-generator (MIT licence); imported by a page as "vidgen/space-sea".
 //
 //   import {air, sunDirection} from "vidgen/space-air";
@@ -606,7 +606,7 @@ export class Sea {
    * `waves` (how many, in place of the quality's), `anchor` (the unit vector from the world's middle to where
    * the waves' plane touches the sphere: default the scene's +y; state the place a far flight ends at),
    * `filter` (how early a wave finer than a pixel fades, in pixels), `depth` ({glsl, uniforms}: the water's
-   * depth, see DESIGN §123.4) with `shoal` (metres of water over which the bottom's colour fades), `shade` ({glsl, uniforms}: what shades the sun's
+   * depth) with `shoal` (metres of water over which the bottom's colour fades), `shade` ({glsl, uniforms}: what shades the sun's
    * light on the water, such as `clouds(...).shade` of vidgen/space-clouds: `float seaShade(vec2 p)`, the share of the sun's
    * light that reaches the water p metres from the camera along the sea's +x and +z). */
   constructor(renderer, sky, options = {}) {

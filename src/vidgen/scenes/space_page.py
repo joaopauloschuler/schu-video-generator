@@ -1,4 +1,4 @@
-"""The page a ``space`` scene draws (DESIGN.md §122.12): JavaScript written from the scene's params,
+"""The page a ``space`` scene draws: JavaScript written from the scene's params,
 built from the shipped modules (``vidgen/space-sky``, ``-bodies``, ``-light``, ``-craft``,
 ``-phenomena``, ``-camera``, ``-scale``, ``-scene``, ``three-finish``, ``title-cards``).
 
@@ -403,7 +403,7 @@ class _Page:
         self.operator(metered=False)
 
     def operator(self, metered: bool) -> None:
-        """The person holding the camera (``operator:``, DESIGN.md §124.3) over the moves' view: written only when
+        """The person holding the camera (``operator:``) over the moves' view: written only when
         given, so a page without it is the same. Every cut starts a shot with its own horizon and a settled exposure;
         ``metered``: the rig's own meter (a surface scene's airCamera) for the exposure."""
         o = self.p.operator
@@ -604,7 +604,7 @@ class _Page:
             from .space_air_params import HULL_NEAR
 
             view["near"] = HULL_NEAR
-            self.out(f"// near: {HULL_NEAR:g} m, set by vidgen because a giant hull is in the scene (the default near plane slices a hull and draws the world behind it over it: DESIGN.md §123.12)")
+            self.out(f"// near: {HULL_NEAR:g} m, set by vidgen because a giant hull is in the scene (the default near plane slices a hull and draws the world behind it over it)")
         self.out(f"const space = new SpaceView(ctx, {{{pairs(view)}renderer, scene, camera{', dofFocus: () => S.focus()' if dof else ''}}});")
         stores = [k for k, used in (("detail", any(c.maker == "hull" and c.dress is not False for c in p.craft)), ("refs", any(c.scale_ref for c in p.craft)),
                                     ("fx", any(c.effects for c in p.craft)), ("matched", any(m.match for m in p.camera))) if used]
@@ -647,7 +647,7 @@ class _Page:
         self.out("for (const b of Object.values(S.bodies)) for (const p of [].concat(b.problems ? b.problems(0) ?? [] : [])) pageNote(`bodies: ${p}`);")
         self.out("for (const p of [].concat(space.problems() ?? [])) pageNote(`scale: ${p}`);")
         head = [
-            f"// The page of the space scene \"{self.id}\" (DESIGN.md §122.12), written by vidgen from video.yaml (generator {PAGE_VERSION}).",
+            f"// The page of the space scene \"{self.id}\", written by vidgen from video.yaml (generator {PAGE_VERSION}).",
             "// Change the scene in video.yaml; to go on in code, `vidgen space-page` writes this page out as a web scene's script.",
             'import * as THREE from "three";',
         ]

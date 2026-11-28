@@ -1,4 +1,4 @@
-"""The calculation lint rules (DESIGN.md §97.11): numbers in the narration and on screen against
+"""The calculation lint rules: numbers in the narration and on screen against
 what the video's ``calculation`` scenes compute.
 
 ``calc_numbers`` (a number said or shown for a calculation's value that differs from it beyond

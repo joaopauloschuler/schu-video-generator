@@ -346,7 +346,7 @@ def test_staging_renders(make_project, tmp_path: Path) -> None:
     scene, _ = render_with_layout(project, "pond", tmp_path / "media", recorder)
     last = {frame["beat"]: frame for frame in recorder.frames}   # each beat's last still
     named = {beat: {o["name"]: o for o in frame["objects"] if o["name"]} for beat, frame in last.items()}
-    wide = last["pond_b1"]["camera"]["zoom"]   # the establishing view: the wide view (§89.13)
+    wide = last["pond_b1"]["camera"]["zoom"]   # the establishing view: the wide view
     assert 1.0 <= wide <= ISO_WIDE_MAX
     assert last["pond_b2"]["camera"]["zoom"] > 2 and last["pond_b2"]["shot"]["kind"] == "two_shot"
     assert last["pond_b3"]["camera"]["zoom"] == pytest.approx(wide)   # back after the shot's beat

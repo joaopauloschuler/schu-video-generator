@@ -1,4 +1,4 @@
-"""A flight in words (Step 385, DESIGN.md §123.7): where it starts and the legs it flies, in the
+"""A flight in words (Step 385): where it starts and the legs it flies, in the
 spirit of the ``orbit`` scene's vocabulary. Units: metres, metres per second, seconds, degrees
 (headings from north towards east; a bank or a turn ``by`` positive to the right). Times are
 flight seconds (``for``) or times of the scene (``until``, ``at``: seconds or 'bar 9 beat 3',

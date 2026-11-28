@@ -1,4 +1,4 @@
-"""Generated video takes laid into a scene's frames (DESIGN.md §113.4).
+"""Generated video takes laid into a scene's frames.
 
 :class:`GeneratedLayer` wraps the scene renderer's ``add_frame`` inside the overlay layer
 (:mod:`vidgen.overlay_layer`), so the overlays, captions and the frame capture see the take: for

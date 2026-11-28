@@ -1,4 +1,4 @@
-"""Human pedigrees in standard nomenclature (DESIGN.md §96.8; NSGC recommendations, Bennett et al.
+"""Human pedigrees in standard nomenclature (NSGC recommendations, Bennett et al.
 2008): the individuals and their relations as an author writes them in YAML (a mapping per person,
 or a compact line such as ``"II-3: female affected of I-1 + I-2"``), checked with clear errors
 (two fathers, a cycle, twins who are not siblings, generations that do not fit…), the couples

@@ -1,4 +1,4 @@
-"""Genotypes and gametes (DESIGN.md §96.3): parsing what authors write (``AaBb``, ``A/a B/b``,
+"""Genotypes and gametes: parsing what authors write (``AaBb``, ``A/a B/b``,
 ``I^A i``, ``AB/ab`` for linked loci in coupling, ``X^H X^h``, ``X^h Y``, ``X^{H,b} Y``) into
 canonical genotypes of a :class:`~vidgen.genetics.model.GeneticSystem`, and writing them back as
 plain text, Pango markup or YAML. No manim."""

@@ -1,4 +1,4 @@
-"""The drawing style switch (``drawing:``, DESIGN.md §79): resolving the setting, the outline and
+"""The drawing style switch (``drawing:``): resolving the setting, the outline and
 shading drawn by a styled camera, the texture, and a plain style drawing as before."""
 
 from __future__ import annotations

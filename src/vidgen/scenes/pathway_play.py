@@ -1,4 +1,4 @@
-"""What the ``pathway`` actions draw (DESIGN.md §95.12): a signal running along the arcs wave by
+"""What the ``pathway`` actions draw: a signal running along the arcs wave by
 wave (each arc lit as it passes, its target lit, GDP swapped for GTP, phosphorylation marks
 appearing), an inhibitor engaging, a knockout or a drug with the effects downstream (↑ / ↓ on
 each node that changes, from ``vidgen.cellworld.pathway.effects``), amplification (one

@@ -1,4 +1,4 @@
-"""Step 214: the ``cross`` scene type (DESIGN.md §96.7): the plan worked out from the cross engine
+"""Step 214: the ``cross`` scene type: the plan worked out from the cross engine
 (gametes in textbook order with their homologue of origin, Punnett cells, genotype and phenotype
 classes with exact fractions, ratios and percentages, P → F1 → F2, test and reciprocal crosses,
 lethal classes, X / Y crosses, linkage, the branch diagram as a probability tree), the

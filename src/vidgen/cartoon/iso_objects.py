@@ -1,4 +1,4 @@
-"""The ready-made objects of an isometric place drawn as shapes (DESIGN.md §89.5): a house, trees,
+"""The ready-made objects of an isometric place drawn as shapes: a house, trees,
 a bush, a rock, flowers, a fence, a bench, a lamp, a well, a sign, a bridge, and indoors a table,
 a chair, a bed, a shelf, a sofa, a plant and a rug. No manim.
 
@@ -88,7 +88,7 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "retro_desk": ("#F2E6CF", "#3FC1B5"), "hedge": ("#4E9F5A", "#4E9F5A"), "planter": ("#F1E6D2", "#FF7F6B"),
     "poster": ("#3A3F4B", "#FF7F6B"), "wall_shelf": ("#C9925E", "#3FC1B5"),
 }
-#: The default colours a place's ``style`` gives objects instead (DESIGN.md §107; a placing's
+#: The default colours a place's ``style`` gives objects instead (a placing's
 #: ``color`` / ``detail`` win): ``retro``, pastels and chrome — turquoise, coral, mustard, mint, cream.
 STYLE_OBJECT_COLORS: dict[str, dict[str, tuple[str, str]]] = {
     "retro": {
@@ -117,10 +117,10 @@ FRAME = "#F4F6FA"
 WOOD = "#9C6B47"
 WATER_DEEP = "#4D8FC0"
 LAMP_GLOW = "#FFF1B8"
-#: A lamp's lantern and a house's windows when lit, and the dark of an open doorway (DESIGN.md §89.10).
+#: A lamp's lantern and a house's windows when lit, and the dark of an open doorway.
 LIT_GLASS = "#FFD75E"
 LIT_CORE = "#FFF6D0"
-#: The pool of light under a lit lamp (:func:`light_pool`, DESIGN.md §104): rings of a saturated
+#: The pool of light under a lit lamp (:func:`light_pool`): rings of a saturated
 #: warm amber (its middle lighter), each a tint of the ground: (share of the radius, opacity). A
 #: pale yellow, half seen through over the night's blue-graded ground, read olive; this stays warm.
 #: Drawn only in the picture of the pools, shown as strong as the light is dark (faint by day).
@@ -130,7 +130,7 @@ POOL_RINGS = ((1.0, 0.34), (0.68, 0.34), (0.4, 0.38))
 LIGHT_POOL_RADIUS = 1.1
 #: Settling snow covers this share of each of a pine's tiers from its tip down (the tier above
 #: hides most of it, so the white shows as shoulders over a green fringe), and of a well's roof
-#: (a cut-out facing the viewer), DESIGN.md §90.3.
+#: (a cut-out facing the viewer).
 PINE_SNOW_CAP = 0.72
 ROOF_SNOW_CAP = 0.6
 DOORWAY = "#2E2A38"
@@ -141,8 +141,8 @@ BOOK_COLORS: tuple[str, ...] = ("#E2574C", "#F6C945", "#5BA35B", "#4C8DD6", "#B4
 class ObjectLook:
     """An object's resolved colours (``#rrggbb``); ``moving``: its moving parts are drawn over its
     picture by the stage while it works (:func:`object_motion`), so the picture of it working
-    leaves them out (a robot arm's arm, DESIGN.md §103); ``driven``: a vehicle the stage moves
-    (DESIGN.md §105): the stage draws it, so the picture leaves it out (a car, a boat, a train
+    leaves them out (a robot arm's arm); ``driven``: a vehicle the stage moves:
+    the stage draws it, so the picture leaves it out (a car, a boat, a train
     car on its track; a rocket's pad and tower stay)."""
 
     main: str
@@ -532,7 +532,7 @@ def _rug(f: _Frame, look: ObjectLook) -> list[Shape]:
             Disc(f.p((a0 + a1) / 2, (b0 + b1) / 2, z), min(a1 - a0, b1 - b0) * 0.2, look.main, False)]
 
 
-# ----- a lab and a memory's props (DESIGN.md §100.11) -------------------------------------------------
+# ----- a lab and a memory's props -------------------------------------------------
 
 #: Dark casings (a monitor's frame, a rack's front), a screen's lines and a lab light's off look.
 CASING = "#2B2F3A"
@@ -655,7 +655,7 @@ def _chess_table(f: _Frame, look: ObjectLook) -> list[Shape]:
     return shapes
 
 
-# ----- a city's towers (DESIGN.md §102.2) --------------------------------------------------------------
+# ----- a city's towers --------------------------------------------------------------
 
 #: The width (tile units) of a tower's neon trims, and the frame round its info screen.
 TOWER_TRIM = 0.05
@@ -729,7 +729,7 @@ def _tower(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     return shapes
 
 
-# ----- more lab and sci-fi objects (DESIGN.md §103) ------------------------------------------------------
+# ----- more lab and sci-fi objects ------------------------------------------------------
 
 #: A lab bench's or a small desk's colour, a dark screen's and a working display's green.
 BENCH = "#C9CED6"
@@ -749,10 +749,10 @@ ARM_POSES = ((135.0, 80.0, -20.0), (-25.0, 55.0, -62.0))
 
 @dataclass(frozen=True)
 class Motion:
-    """A moving part of a working object at one moment (DESIGN.md §103): a flat polygon in the
+    """A moving part of a working object at one moment: a flat polygon in the
     world (tile units), its fill and opacity, outlined or not, and whether it is a light (not
     dimmed by the stage's light); ``pool``: light thrown on things (a fire's glow on the floor, a
-    lighthouse's beam), shown as strong as the stage's light is dark like a pool of light (§104)."""
+    lighthouse's beam), shown as strong as the stage's light is dark like a pool of light."""
 
     points: tuple[Point3, ...]
     fill: str
@@ -1090,7 +1090,7 @@ def _wall_clock(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 def _wall_box(item: IsoObject, base: float) -> Box3:
     """The box of an object hanging on a wall: a slab on the wall's face, round its height (a
-    clock's thin, a torch sconce's as deep as its torch reaches out, §104)."""
+    clock's thin, a torch sconce's as deep as its torch reaches out)."""
     f = _Frame(item, base)
     if item.kind == "torch_sconce":
         low, high, reach = _more(item.kind).SCONCE_SPAN
@@ -1106,7 +1106,7 @@ def _wall_box(item: IsoObject, base: float) -> Box3:
     return Box3(min(x0, x1), min(y0, y1), z0, max(x0, x1), max(y0, y1), z1)
 
 
-# ----- plants, glassware and liquids (DESIGN.md §103, Step 259) ------------------------------------------
+# ----- plants, glassware and liquids (Step 259) ------------------------------------------
 
 #: Extra liquid colours of the glassware after its main (``color``) and detail ones, a dark metal,
 #: a pot's terracotta, soil, a lit glass's highlight and the pale of mist and vapour.
@@ -1481,7 +1481,7 @@ def _fume_hood(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     return shapes + [Upright(duct[0], duct[1], f.base + 2.42, f.base + 2.5, 0.09, "#8A93A3")]
 
 
-# ----- space, workshop and safety objects (DESIGN.md §103, Step 260) -------------------------------------
+# ----- space, workshop and safety objects (Step 260) -------------------------------------
 
 #: Hazard stripes' yellow and black.
 HAZARD_YELLOW = "#F6C945"
@@ -1505,7 +1505,7 @@ def _face_circle(f: _Frame, a: float, b: float, z: float, radius: float, steps: 
 
 def _reading(f: _Frame, a: float, a0: float, a1: float) -> float:
     """``a`` between ``a0`` and ``a1`` on a face to the viewer as read left to right: mirrored
-    when the object faces right, so lines of text start at the left (DESIGN.md §103)."""
+    when the object faces right, so lines of text start at the left."""
     return a0 + a1 - a if f.swap else a
 
 
@@ -1824,7 +1824,7 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
     return shapes + [_ribbon(hose[-1], _screen(hose[-1], -0.01, -0.07), 0.018, look.detail)]
 
 
-#: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
+#: The objects with moving parts the stage draws over their pictures while they work.
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
                 "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain",
                 "campfire", "pond", "beehive", "desk_with_pc", "water_cooler", "printer", "globe", "treasure_chest", "cauldron", "giant_crystal",
@@ -1969,7 +1969,7 @@ def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, st
     computer, a water cooler's bubbles, a printed sheet, a globe's turning land, an open chest's
     sparkles, a cauldron's bubbles, a crystal's pulse, a torch's flame, a tree's twinkling
     lights, a pumpkin's flicker, swaying balloons, candle flames, a bobbing boat, a lighthouse's
-    beam and a rocket's flame and smoke (§104). The same number of parts at any time (those not
+    beam and a rocket's flame and smoke. The same number of parts at any time (those not
     seen have opacity 0)."""
     f = _Frame(item, base)
     if item.kind in MORE_MODULES:
@@ -2023,7 +2023,7 @@ _DRAWINGS: dict[str, Callable[[_Frame, ObjectLook], list[Shape]]] = {
 }
 
 
-#: The kinds of objects with small lights the stage blinks (DESIGN.md §100.11, §102.2).
+#: The kinds of objects with small lights the stage blinks.
 LIT_OBJECTS = ("server_rack", "console", "tower")
 
 
@@ -2060,7 +2060,7 @@ SHADOW_OPACITY = 0.16
 #: The objects drawn as one clump per cell of their footprint (a flower bed, a hedge), with a
 #: shadow under each.
 BED_KINDS = ("flowers", "bush")
-#: The objects drawn by their state too (DESIGN.md §89.10).
+#: The objects drawn by their state too.
 _STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {
     "house": _house, "flowers": _flowers, "lamp": _lamp, "tower": _tower, "laptop": _laptop, "terminal_kiosk": _terminal_kiosk,
     "quantum_core": _quantum_core, "robot_arm": _robot_arm, "centrifuge": _centrifuge, "coffee_machine": _coffee_machine,
@@ -2068,7 +2068,7 @@ _STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] =
     "lab_fridge": _lab_fridge, "fume_hood": _fume_hood, "satellite_dish": _satellite_dish, "charging_station": _charging_station,
     "airlock": _airlock, "printer_3d": _printer_3d,
 }
-#: The kinds drawn by another module of :mod:`vidgen.cartoon` (DESIGN.md §104): its name. Each
+#: The kinds drawn by another module of :mod:`vidgen.cartoon`: its name. Each
 #: such module has ``DRAWINGS`` (by frame, look and state) and ``motion(frame, look, now)``; it
 #: is imported when first needed (it builds on this module's helpers).
 MORE_MODULES: dict[str, str] = {
@@ -2086,7 +2086,7 @@ MORE_MODULES: dict[str, str] = {
                                       "tube_computer", "sunburst_clock", "tv_console", "retro_desk", "hedge", "planter", "poster",
                                       "wall_shelf")},
 }
-#: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
+#: The objects whose light falls on the characters near them while on, like a lamp's.
 LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire", "cauldron", "torch_sconce", "ray_lamp"})
 
 
@@ -2097,7 +2097,7 @@ def _more(kind: str) -> ModuleType:
 
 def tower_screen(item: IsoObject, base: float) -> tuple[Point3, Point3, Point3, Point3] | None:
     """The corners of a tower's info screen (world points: bottom left, bottom right, top right,
-    top left as seen), or ``None`` when it has none (DESIGN.md §102.2)."""
+    top left as seen), or ``None`` when it has none."""
     if item.kind != "tower" or "screen" not in item.features:
         return None
     f = _Frame(item, base)

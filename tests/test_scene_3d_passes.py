@@ -1,4 +1,4 @@
-"""Guide passes of the ``3d`` scene type (Step 301, DESIGN.md §114.14): which passes are asked for
+"""Guide passes of the ``3d`` scene type (Step 301): which passes are asked for
 (YAML and CLI), their descriptions (same camera and timing, one depth range for the shot, a mask
 colour per object), the files beside the clip; tiny renders through Playwright's Chromium
 (skipped when it is missing): the pixels of each pass and the render pipeline asking for them."""

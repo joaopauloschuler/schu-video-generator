@@ -1,4 +1,4 @@
-// The space planes of vidgen/space-plane (DESIGN.md §123.8) for the registry vidgen/parts (§122.5): what
+// The space planes of vidgen/space-plane for the registry vidgen/parts: what
 // `vidgen parts` draws on its contact sheet: every ready-made plane (kind "craft") and the plane kit's parts
 // and surfaces (kind "craft-part"), under the same light as the craft of vidgen/space-craft: one hard sun
 // with its shadows, a faint planet-shine from below, a painted environment for the metal; a small tile

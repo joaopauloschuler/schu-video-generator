@@ -1,4 +1,4 @@
-"""3D scenes drawn by three.js in headless Chromium (DESIGN.md §114).
+"""3D scenes drawn by three.js in headless Chromium.
 
 - :mod:`vidgen.three_d.description` turns a ``3d`` scene's params into the *scene description*
   (JSON: objects with ids, camera, lights, background, timeline, draw mode) the page reads.

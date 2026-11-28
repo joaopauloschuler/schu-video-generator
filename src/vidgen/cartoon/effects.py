@@ -1,4 +1,4 @@
-"""Effect symbols over characters (DESIGN.md §69.40), worked out without manim: what each symbol
+"""Effect symbols over characters, worked out without manim: what each symbol
 is made of, where it sits on a character's head and how it moves.
 
 A symbol (:data:`EFFECT_KINDS`: a sweat drop, an anger mark, an idea bulb, a question or
@@ -405,7 +405,7 @@ def piece_center(kind: str, index: int, seconds: float, facing: str) -> Point:
     return (_side(facing) * (piece.x + pose.dx), piece.y + pose.dy)
 
 
-#: The expression changes ``auto_direct`` marks with a symbol (DESIGN.md §69.40); since Step 125
+#: The expression changes ``auto_direct`` marks with a symbol; since Step 125
 #: ``dizzy`` (stars) and ``frightened`` (sweat) too. ``crying`` gets none: its streams of tears
-#: are on the face already (the ``tear`` symbol is one drop beside the head, §69.59).
+#: are on the face already (the ``tear`` symbol is one drop beside the head).
 EXPRESSION_EFFECTS: dict[str, str] = {"surprised": "exclaim", "thinking": "question", "angry": "anger", "dizzy": "stars", "frightened": "sweat"}

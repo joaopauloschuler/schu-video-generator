@@ -1,4 +1,4 @@
-"""``vidgen readback``: does the narration say what the text says? (DESIGN.md §57)
+"""``vidgen readback``: does the narration say what the text says?
 
 Each beat's MP3 is transcribed by a speech-to-text provider (:mod:`vidgen.stt`), the transcript
 is compared with the beat's **spoken** text (its text with the pronunciation applied: what the
@@ -119,7 +119,7 @@ class Edit:
     the substitutions + deletions + insertions; ``at`` when the heard words start in the MP3
     (seconds, ``None`` without word times); ``term`` the written term a fix is about (a
     pronunciation entry's term, a name, acronym or number), ``entry`` true when it has a
-    pronunciation entry (``builtin``: of a built-in list, DESIGN.md §88; not in the JSON);
+    pronunciation entry (``builtin``: of a built-in list; not in the JSON);
     ``suggestion`` what to do. ``heard_indices`` (the heard words of the
     edit, indices into :meth:`Transcript.word_texts`) and ``written_index`` (its first written
     word) place it for the word flags; not in the JSON."""
@@ -280,7 +280,7 @@ def entries_by_word(spoken: Spoken) -> dict[int, str]:
 
 def entry_hint(spoken: Spoken, term: str, problem: str) -> str:
     """What to do when the word of the pronunciation entry ``term`` ``problem`` (``is heard as
-    "x"``): respell the entry, or, for a built-in entry (DESIGN.md §88), write the project's own."""
+    "x"``): respell the entry, or, for a built-in entry, write the project's own."""
     says = entry_says(spoken, term)
     if any(r.builtin for r in spoken.replacements if r.term == term):
         return (
@@ -681,7 +681,7 @@ def run_readback(
 
 def _compare(project: Project, scene: str, beat_id: str, transcript: Transcript) -> BeatReadback:
     """:func:`compare_beat` of a beat of ``project``: its text as pronounced, without its voice
-    sounds (a transcript's ``ha ha`` for a ``[laugh]`` is skipped, DESIGN.md §69.33)."""
+    sounds (a transcript's ``ha ha`` for a ``[laugh]`` is skipped)."""
     beat = project.beat(beat_id)
     spoken = project.pronounced(beat)
     return compare_beat(scene, beat_id, spoken, transcript, project.config.language, heard_sound_words(beat.voice_sounds))

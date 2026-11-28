@@ -1,4 +1,4 @@
-"""Score files (DESIGN.md §93): a piece of music written in YAML — key, tempo, time signature,
+"""Score files: a piece of music written in YAML — key, tempo, time signature,
 named sections, a chord progression and tracks of step patterns — read and checked into a
 :class:`MusicScore` that :func:`vidgen.studio.render.render_music_score` plays.
 
@@ -33,7 +33,7 @@ SECTION_KEYS = ("name", "bars", "key", "progression", "chord_bars")
 #: instrument's settings and its effects (:data:`vidgen.studio.effects.EFFECTS`).
 PART_KEYS = ("steps", "accent", "octave", "transpose", "settings") + tuple(EFFECTS)
 TRACK_KEYS = ("instrument", "play", "rest", "only", "sections") + PART_KEYS
-#: A section's changes may also name another instrument of the track's sort (DESIGN.md §120.7).
+#: A section's changes may also name another instrument of the track's sort.
 SECTION_PART_KEYS = ("instrument",) + PART_KEYS
 CHORD_KEYS = ("chord", "notes", "bass")
 MASTER_KEYS = ("lowpass", "highpass")
@@ -528,7 +528,7 @@ def _section_instrument(r: _Reader, changes: dict[str, Any], where: str, instrum
 #: The words a mark may hold besides an instrument's own: for the nearest known one in an error.
 _MARK_WORDS = tuple(DYNAMICS) + ("fp", "sfz", "default")
 #: The settings a mark may change inside a slur: the glide to the note, and what a choir sings
-#: on it (DESIGN.md §121.4).
+#: on it.
 FREE_IN_SLUR = ("glide", "syllable", "vowel")
 
 

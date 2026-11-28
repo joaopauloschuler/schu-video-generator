@@ -1,4 +1,4 @@
-"""Templates of the built-in beds (Step 186, DESIGN.md §93.8): the score-file features they need
+"""Templates of the built-in beds (Step 186): the score-file features they need
 (voicing notes, notes played together, the bass an octave up, the pads' swell and centred sub,
 the snap), ``vidgen music template``, and each template against its bed by measurements."""
 
@@ -162,7 +162,7 @@ def test_music_template_command(tmp_path: Path, capsys: pytest.CaptureFixture[st
 
 # ----- each template against its bed --------------------------------------------------------------------
 #
-# Tolerances (the measured values, Step 186, are in DESIGN.md §93.8; each limit leaves room for the
+# Tolerances (measured in Step 186; each limit leaves room for the
 # pads' different random phases and the noises' different seeds, and is far below what a wrong
 # chord, a missing part or a wrong level would cause):
 # - length: the bars of the bed (old beds' beats are not whole sixteenths: at most 0.01 % shorter);

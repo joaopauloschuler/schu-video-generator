@@ -1,6 +1,6 @@
-"""``vidgen plan`` output: the draft as a commented ``video.yaml`` and a project folder (DESIGN.md §61);
+"""``vidgen plan`` output: the draft as a commented ``video.yaml`` and a project folder;
 ``vidgen screenplay`` writes its project with the same functions (:func:`commented_yaml`,
-:func:`write_project`; §69.25).
+:func:`write_project`).
 
 :func:`plan_yaml` writes the config by hand rather than with a YAML dumper, so that every scene
 can carry its ``# plan:`` reason and ``# TODO:`` lines and the layout reads like the examples
@@ -175,7 +175,7 @@ def commented_yaml(
     text with comments: the ``header`` lines (``# ...`` as given) on top, ``key_comments``
     (top-level key -> comment texts) above their keys, and per scene its ``scene_comments`` above
     it and, per beat, its ``beat_comments``; a comment text is wrapped as ``# <text>``.
-    ``list_key``: the list of scenes (``sections`` for an audio-only project, DESIGN.md §111).
+    ``list_key``: the list of scenes (``sections`` for an audio-only project).
     The text is checked to load back to exactly ``config``."""
     out = list(header)
     for key, value in config.items():

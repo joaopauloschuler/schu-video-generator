@@ -1,4 +1,4 @@
-"""Vehicles on an iso place (DESIGN.md §105): ``drive_to`` (a car along path cells, a train car
+"""Vehicles on an iso place: ``drive_to`` (a car along path cells, a train car
 along its track), ``sail_to`` (a boat across water) and ``lift_off`` (a rocket from its pad, up
 and out of the view). Written against ``vidgen.api`` only, like project actions; the stage plans
 and draws them (``iso_drive``, :class:`IsoDrive`). Timed like any move: the beat's ``at`` or a

@@ -1,4 +1,4 @@
-"""The "under narration" toggle (DESIGN.md §94.14, Step 196): a render heard under the narration
+"""The "under narration" toggle (Step 196): a render heard under the narration
 sample ``vidgen music check`` ships, with schu-video-generator's default ducking (the check's
 :func:`vidgen.studio.check.duck_gain_db`), so a person hears whether the words stay clear.
 

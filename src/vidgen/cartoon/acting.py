@@ -1,6 +1,6 @@
 """The geometry and timing of the acting actions, worked out without manim: where a character
-looks (``look_at``, DESIGN.md §69.11), and how it walks, enters, leaves, gestures and jumps
-(``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``, §69.12; ``run_to``, §69.41).
+looks (``look_at``), and how it walks, enters, leaves, gestures and jumps
+(``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``; ``run_to``).
 
 Angles are in degrees counterclockwise as drawn facing right (a character facing left is the
 mirror image, so a positive angle tilts the head up towards where it looks in both facings);
@@ -60,7 +60,7 @@ def camera_look(facing: str) -> LookPose:
 
 
 #: How much narrower (a share of its width) a character is half-way through turning between a
-#: side and the front (DESIGN.md §69.44): it narrows as it turns and widens again, the shapes
+#: side and the front: it narrows as it turns and widens again, the shapes
 #: swapping at the narrowest.
 TURN_SQUASH = 0.12
 
@@ -85,7 +85,7 @@ STEP_LENGTH = 0.35
 #: Largest swing of the legs (degrees about the hips) and of the arms (about the shoulders).
 WALK_LEG_DEGREES = 10.0
 WALK_ARM_DEGREES = 16.0
-#: Legs drawn one each (§69.26): the largest swing of a thigh about its hip, and the largest bend
+#: Legs drawn one each: the largest swing of a thigh about its hip, and the largest bend
 #: of the knee of the leg swinging forward (as it passes the other).
 WALK_THIGH_DEGREES = 20.0
 WALK_KNEE_DEGREES = 40.0
@@ -96,7 +96,7 @@ WALK_ELBOW_SWING = 20.0
 WALK_LEG_SQUEEZE = 0.3
 #: How far the body rises in mid-step (character units).
 WALK_BOB = 0.02
-#: Seen from the front (``facing: front``, DESIGN.md §69.44) a leg stepping towards the camera
+#: Seen from the front (``facing: front``) a leg stepping towards the camera
 #: looks shorter: its thigh and shin are drawn this share shorter at the walk's largest knee bend
 #: (the foot lifts); the arms swing out and in by this share of their swing.
 FRONT_STEP_SHORTEN = 0.25
@@ -158,7 +158,7 @@ def depth_switch_times(
 ) -> list[tuple[float, str]]:
     """``(seconds, name)``: when a walk from ``start_depth`` to ``end_depth`` lasting
     ``run_time`` seconds passes the depth of each of ``others`` (name -> depth), so the walker
-    goes from being drawn behind it to in front of it, or the other way (DESIGN.md §69.44); in
+    goes from being drawn behind it to in front of it, or the other way; in
     walking order."""
     return [(walk_share_seconds(share, run_time, phases), name) for share, name in depth_crossings(start_depth, end_depth, others)]
 
@@ -189,8 +189,8 @@ class Gait:
     step length, :data:`STEP_LENGTH` × it), ``swing`` (legs, thighs and arms), ``knee`` and
     ``elbow`` (the bends), ``bob`` (the body's rise); ``lean``: degrees the body leans forward at
     full speed (it builds up and fades with the speed); ``waddle``: degrees the body rocks from
-    one foot to the other with each step (a penguin's waddle, DESIGN.md §69.57); ``rolls``: it
-    rolls on wheels (a robot's, §69.58): no steps are heard."""
+    one foot to the other with each step (a penguin's waddle); ``rolls``: it
+    rolls on wheels (a robot's): no steps are heard."""
 
     stride: float = 1.0
     swing: float = 1.0
@@ -202,7 +202,7 @@ class Gait:
     rolls: bool = False
 
 
-#: A walk, and a run (``run_to``, DESIGN.md §69.41): longer strides, bigger swings and bends, the
+#: A walk, and a run (``run_to``): longer strides, bigger swings and bends, the
 #: body leaning forward.
 WALKING = Gait()
 RUNNING = Gait(stride=1.6, swing=1.5, knee=1.6, elbow=2.0, bob=2.0, lean=12.0)
@@ -213,7 +213,7 @@ RUN_SPEED = 6.0
 
 @dataclass(frozen=True)
 class SpeciesMotion:
-    """How an animal moves unlike a person (DESIGN.md §69.57): its walking ``gait`` (a run keeps
+    """How an animal moves unlike a person: its walking ``gait`` (a run keeps
     :data:`RUNNING`'s with this gait's waddle), ``speed`` (a factor on the walking and running
     speed when an action gives none) and ``jump`` (a factor on the jump height when ``jump`` gives
     none)."""
@@ -244,7 +244,7 @@ SPECIES_MOTIONS: dict[str, SpeciesMotion] = {
     "frog": SpeciesMotion(jump=1.8),
     "robot": SpeciesMotion(Gait(knee=0.5, elbow=0.4)),
 }
-#: A robot on wheels (DESIGN.md §69.58): it glides, legs and arms still, a little bump with each
+#: A robot on wheels: it glides, legs and arms still, a little bump with each
 #: wheel turn.
 ROLLING_MOTION = SpeciesMotion(Gait(swing=0.0, knee=0.0, elbow=0.0, bob=0.25, rolls=True))
 #: A person's (and every species not in :data:`SPECIES_MOTIONS`).
@@ -321,7 +321,7 @@ def exit_path(side: str | None, from_x: float, view: tuple[float, float], half_w
 def passage_fade(seconds: float, run_time: float, fade_in: float = 0.0, fade_out: float = 0.0) -> float:
     """How much of a walking character shows (0..1) ``seconds`` into a walk of ``run_time``
     seconds that fades in over its first ``fade_in`` seconds and out over its last ``fade_out``
-    (each at most half the walk; smoothstep): a walk in or out through a door (DESIGN.md §69.42)."""
+    (each at most half the walk; smoothstep): a walk in or out through a door."""
     def ramp(t: float, length: float) -> float:
         if length <= 0:
             return 1.0
@@ -380,7 +380,7 @@ class PartMove:
 def gesture_weight(t: float, strength: float = 0.0) -> float:
     """How far into a gesture the parts are at ``t`` (0..1): easing in over
     :data:`GESTURE_EASE`, held, easing back out (0 at both ends, so it ends in the pose). With
-    the animation principles' ``strength`` (§69.13) each ease winds up the other way first and
+    the animation principles' ``strength`` each ease winds up the other way first and
     passes its end and settles (:func:`~vidgen.cartoon.motion.motion_ease`; the way back is the
     way in, reversed)."""
     t = min(max(t, 0.0), 1.0)

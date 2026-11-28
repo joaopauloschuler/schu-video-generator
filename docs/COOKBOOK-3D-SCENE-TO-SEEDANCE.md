@@ -420,7 +420,7 @@ kept.
    `host_fetch` (vidgen's own check, `HEAD`), `submit_intent`, `submit`, a `host_fetch` for each download by the
    provider (usually one `GET` of the whole file), `host_close` with `reason: done`, and the
    job's `completed` line with its cost. No provider download recorded means the provider did
-   not fetch the voice through the tunnel: tell the developers (DESIGN §115). If the provider refuses the job, the tunnel is closed
+   not fetch the voice through the tunnel: tell the developers. If the provider refuses the job, the tunnel is closed
    the same way and the error is shown with the secret part replaced by `<secret>`, everywhere
    vidgen shows or stores it (also when a later run polls a job that failed).
 

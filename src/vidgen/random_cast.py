@@ -1,5 +1,5 @@
 """Random, well-contrasted casts: ``vidgen cast --random N`` and the looks ``vidgen screenplay``
-gives undeclared characters (DESIGN.md §69.49). No manim.
+gives undeclared characters. No manim.
 
 :func:`pick_looks` chooses one look per voice kind, each as unlike the characters before it as it
 can: for each character it draws :data:`CANDIDATES` random looks (:func:`random_look`, every choice
@@ -80,7 +80,7 @@ SPECIES_COLORS: dict[str, tuple[str, ...]] = {
     "penguin": ("#2F3440", "#3A3A3A", "#3B4A5F", "#4A4F5A", "#5C6F8A"),
     "robot": ("#A7B4C2", "#C9CED6", "#8A9BA8", "#E9E4D8", "#F0AD4E", "#8FA35A", "#6C8EBF", "#D96B5B"),
 }
-#: A random robot's build (``look.robot``, DESIGN.md §69.58): each value as likely; the defaults
+#: A random robot's build (``look.robot``): each value as likely; the defaults
 #: are left out of the look.
 ROBOT_CHOICES: dict[str, tuple[Any, ...]] = {
     "head": ("box", "round"), "face": ("eyes", "screen"), "antenna": (True, True, False), "moves_on": ("legs", "legs", "wheels"),

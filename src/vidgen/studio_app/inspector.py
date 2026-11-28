@@ -1,4 +1,4 @@
-"""What the studio's inspector changes beyond one value (DESIGN.md §94.13): the patch catalogue with
+"""What the studio's inspector changes beyond one value: the patch catalogue with
 units and slider scales, an instrument change that keeps the settings the new instrument has and
 says what changes, the play mode of a pad (chords or steps) and whether a track plays in a section
 (``rest`` / ``only``). Each is a list of :mod:`vidgen.studio_app.edits` ops, a label for the

@@ -1,5 +1,5 @@
-"""Step 338: the font files in a project's ``fonts/`` folder are used by the whole video
-(DESIGN.md §119): read with fontTools, registered for Pango, declared to ``web`` pages, in the
+"""Step 338: the font files in a project's ``fonts/`` folder are used by the whole video:
+read with fontTools, registered for Pango, declared to ``web`` pages, in the
 render fingerprint; and the warning for a refused Google Fonts request names the family.
 """
 

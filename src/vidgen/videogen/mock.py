@@ -1,4 +1,4 @@
-"""A fake OpenRouter video API for tests and free dry demos (DESIGN.md §113).
+"""A fake OpenRouter video API for tests and free dry demos.
 
 :class:`MockOpenRouter` is a transport that answers like ``/api/v1/videos``: a submit makes a
 job (202), each poll moves it one step through ``states`` (default pending, in_progress,

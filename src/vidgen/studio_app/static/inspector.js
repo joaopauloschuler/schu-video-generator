@@ -1,4 +1,4 @@
-// The inspector (DESIGN.md §94.13): the selected track's instrument (a change keeps what it can and
+// The inspector: the selected track's instrument (a change keeps what it can and
 // says what changes), its settings as sliders generated from the patch catalogue (ranges, units,
 // defaults, reset, help), octave / transpose / accent / play mode, its effects as chips, its step
 // grid (synced both ways with the steps text) and, per section, whether it plays and what changes

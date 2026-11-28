@@ -1,9 +1,8 @@
-"""Headless Chromium through Playwright for the scenes drawn in a browser (``3d``, ``web``;
-DESIGN.md §114.4, §118).
+"""Headless Chromium through Playwright for the scenes drawn in a browser (``3d``, ``web``).
 
 :class:`Chromium` starts Playwright and one Chromium and stops both; :func:`missing_dependency`
 checks cheaply (no browser started) that Playwright and its Chromium are installed;
-:mod:`vidgen.browser.frames_clip` keeps the frames drawn (DESIGN.md §120.9). WebGL runs on
+:mod:`vidgen.browser.frames_clip` keeps the frames drawn. WebGL runs on
 SwiftShader (Chromium's software GL), so the pixels do not depend on the graphics card, unless
 ``VIDGEN_WEBGL=gpu`` (set on a Colab VM by ``tools/colab/setup_vidgen.sh``) picks the GPU through
 ANGLE's Vulkan backend (:func:`chromium_args`).

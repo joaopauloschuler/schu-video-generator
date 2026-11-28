@@ -1,4 +1,4 @@
-"""``linkage_map``: linked loci on a chromosome, crossing over and genetic maps (DESIGN.md §96.9).
+"""``linkage_map``: linked loci on a chromosome, crossing over and genetic maps.
 A homologue pair of the heterozygous parent (two sister chromatids each, in the maternal and
 paternal colours of ``cell_cycle``'s meiosis) with its alleles; crossing over between non-sister
 chromatids in an interval gives recombinant chromatids. With ``counts`` a two- or three-point test

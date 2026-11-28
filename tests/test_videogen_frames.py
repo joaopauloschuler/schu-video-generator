@@ -1,4 +1,4 @@
-"""Step 319: ``vidgen generate frames`` and ``vidgen split-sheet`` (DESIGN.md §113.15-113.16).
+"""Step 319: ``vidgen generate frames`` and ``vidgen split-sheet``.
 Nothing is sent or paid: the image model is a stand-in, the layout comes from a stub render."""
 
 from __future__ import annotations

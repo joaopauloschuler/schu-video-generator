@@ -1,4 +1,4 @@
-"""A gene's products on their way through a cell (DESIGN.md §95.11), without manim: the route
+"""A gene's products on their way through a cell, without manim: the route
 the ``cell`` scene's ``transcribe``, ``export``, ``translate``, ``to_golgi`` and ``secrete``
 actions draw — mRNAs made at the gene in the nucleoplasm, out through nuclear pores, onto
 ribosomes (on the rough ER for a protein with a signal peptide, whose chains go into the ER

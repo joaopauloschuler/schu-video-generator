@@ -1,4 +1,4 @@
-"""The ``faster_whisper`` speech-to-text provider (DESIGN.md §57): OpenAI's Whisper run locally
+"""The ``faster_whisper`` speech-to-text provider: OpenAI's Whisper run locally
 with CTranslate2, free, no API key. It comes with a plain install.
 
 The model (``stt.model``: a size such as ``small`` / ``small.en``, or a folder holding a

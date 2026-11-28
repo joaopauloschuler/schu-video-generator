@@ -1,4 +1,4 @@
-// vidgen/space-camera: camera moves for space scenes (DESIGN.md §122.11). Part of schu-video-generator
+// vidgen/space-camera: camera moves for space scenes. Part of schu-video-generator
 // (MIT licence); imported by a page as "vidgen/space-camera", beside "vidgen/space-scale" (which places
 // the camera in double precision) and "vidgen/three-finish" (motion blur, depth of field).
 //

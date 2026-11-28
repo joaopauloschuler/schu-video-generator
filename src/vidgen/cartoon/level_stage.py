@@ -1,4 +1,4 @@
-"""A platform level on a ``stage`` (DESIGN.md §86): from the world's tile units to Manim units.
+"""A platform level on a ``stage``: from the world's tile units to Manim units.
 No manim.
 
 The level's bottom edge is the frame's bottom edge (in a portrait frame a short level sits a few
@@ -41,7 +41,7 @@ from vidgen.world.moves import is_floor
 #: A character's height (fraction of the frame's shorter side) on a level when the scene gives
 #: no ``size``: about eight rows of tiles fit in a 16:9 frame.
 LEVEL_SIZE = 0.25
-#: ``character_size`` (DESIGN.md §86.10): the default ``size`` of a stage (a plain stage's
+#: ``character_size``: the default ``size`` of a stage (a plain stage's
 #: ``STAGE_SIZE``, a level's :data:`LEVEL_SIZE`) times this.
 CHARACTER_SIZE_FACTORS: dict[str, float] = {"small": 0.7, "medium": 1.0, "large": 1.4}
 #: Room (tile units) above a character standing on the level's highest tile that the camera may
@@ -115,7 +115,7 @@ def level_frame(level: Level, size: float, frame_width: float, frame_height: flo
 def level_fit_problems(level: Level, size: float, frame_width: float, frame_height: float) -> list[str]:
     """Why ``level`` does not fit the frame at ``size``: narrower than the frame (the camera would
     see past its ends). A level taller than the frame fits: the camera rises with the character
-    it follows (DESIGN.md §86.10)."""
+    it follows."""
     frame = level_frame(level, size, frame_width, frame_height)
     problems = []
     columns = frame_width / frame.tile
@@ -127,7 +127,7 @@ def level_fit_problems(level: Level, size: float, frame_width: float, frame_heig
 
 @dataclass(frozen=True)
 class LevelProps:
-    """The stage's props and characters that are story props of its level (DESIGN.md §86.8): its
+    """The stage's props and characters that are story props of its level: its
     door props (name -> whether it starts open), the level's ``locks`` (door -> the prop that is
     its key) and ``blockers`` (characters in the way until they step aside)."""
 
@@ -241,7 +241,7 @@ class LevelStep:
 #: Actions after which the replay no longer knows where a character stands on the level.
 LEVEL_UNTRACKED = frozenset({"keyframes", "move_along", "get_in", "ride_to", "get_out"})
 #: The moves the replay plans with the rules, and the actions on the level's story props it
-#: follows (who holds a key, doors, blockers; DESIGN.md §86.8).
+#: follows (who holds a key, doors, blockers).
 LEVEL_MOVES = frozenset({"walk_to", "run_to", "jump", "enter", "exit"})
 LEVEL_PROP_ACTIONS = frozenset({"pick_up", "hold", "give", "put_down", "throw", "let_go", "blow_away", "open", "close", "step_aside"})
 

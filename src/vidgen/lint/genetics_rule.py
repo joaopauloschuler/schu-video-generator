@@ -1,4 +1,4 @@
-"""The genetics accuracy lint rules (DESIGN.md §96.18): each genetics scene's model is rebuilt from
+"""The genetics accuracy lint rules: each genetics scene's model is rebuilt from
 its params (validated by its scene type, no render) and its narration and on-screen text are
 checked against it; the text checks that need no scene (a dominant trait skipping a generation,
 RF over 50 %, Hardy–Weinberg formulas, Cas9 facts, karyotype notation, HGVS) read every scene.

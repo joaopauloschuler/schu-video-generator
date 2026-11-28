@@ -1,4 +1,4 @@
-"""ElevenLabs text-to-speech provider (DESIGN.md §7). Standard library only.
+"""ElevenLabs text-to-speech provider. Standard library only.
 
 The API key is read from the environment variable ``ELEVENLABS_API_KEY`` at the moment a request
 is made. It is never stored on the provider, logged, written to a file or included in an error
@@ -57,7 +57,7 @@ def read_api_key() -> str:
 
 class ElevenLabsProvider:
     """Synthesise speech with one ElevenLabs voice configuration, speaking with ``emotion``
-    through ``voice_settings`` on models other than v3 (DESIGN.md §73).
+    through ``voice_settings`` on models other than v3.
 
     ``retries`` transient failures (HTTP 429/5xx, timeouts, dropped connections) are retried
     with exponential backoff (``backoff * 2**attempt`` seconds, or the server's ``Retry-After``,
@@ -78,7 +78,7 @@ class ElevenLabsProvider:
         sleep: Callable[[float], None] | None = None,
     ) -> None:
         self.voice = voice
-        #: The cues whose settings change ``voice_settings`` (DESIGN.md §73); ``None`` for v3
+        #: The cues whose settings change ``voice_settings``; ``None`` for v3
         #: models, which get the emotion as an audio tag in the text (:meth:`Project.spoken`).
         self.cues = None if is_tagged_voice(voice) else named_cues(emotion)
         self.timeout = timeout
@@ -108,7 +108,7 @@ class ElevenLabsProvider:
 
     def cache_key(self, text: str) -> str:
         """sha1 of ``voice_id|model_id|output_format|json(settings, sort_keys)|text``; with a
-        language code sent, ``language_code=<code>`` comes before the text (DESIGN.md §54)."""
+        language code sent, ``language_code=<code>`` comes before the text."""
         v = self.voice
         parts = [v.voice_id, v.model_id, v.output_format, json.dumps(self.settings, sort_keys=True), text]
         if self.language_code is not None:

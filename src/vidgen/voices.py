@@ -1,10 +1,10 @@
-"""Named voices: who says each beat, and how speakers are shown (DESIGN.md §46). No manim.
+"""Named voices: who says each beat, and how speakers are shown. No manim.
 
 A project's base ``voice:`` narrates every beat unless a scene or a beat names another voice
 from ``voices:``. A named voice is the base voice with the keys it gives changed (``settings``
 merge value by value); its ``label`` and ``color`` name the speaker in subtitles and captions
-and are never inherited, nor are its ``emotion`` (that speaker's default feeling, DESIGN.md §72)
-and its ``effect`` (§100.2). The name ``default`` means the base voice (e.g. a beat back to the
+and are never inherited, nor are its ``emotion`` (that speaker's default feeling)
+and its ``effect``. The name ``default`` means the base voice (e.g. a beat back to the
 narrator inside a scene of another voice).
 
 The audio of a beat is hashed with its effective voice (``provider.cache_key`` of that voice),
@@ -29,13 +29,13 @@ if TYPE_CHECKING:
 #: The name of the base voice (the ``voice:`` section) wherever a voice name is expected.
 DEFAULT_VOICE = "default"
 #: Fields of a voice that name or place the speaker and do not change its audio (``pan`` is
-#: applied in the mix, DESIGN.md §111.4).
+#: applied in the mix).
 DISPLAY_FIELDS = frozenset({"label", "color", "pan"})
 #: Fields of a voice that say where it runs, not what it sounds like (not compared for audio).
 RUNTIME_FIELDS = frozenset({"device"})
 #: Fields of a voice that belong to that speaker: a named voice does not inherit them.
 SPEAKER_FIELDS = frozenset({"emotion", "effect"})
-#: Fields of a voice that name other voices (``dub``, DESIGN.md §80): applied while resolving,
+#: Fields of a voice that name other voices (``dub``): applied while resolving,
 #: never part of the resolved voice.
 DUB_FIELDS = frozenset({"dub"})
 
@@ -87,10 +87,10 @@ def _owners(key: str, base: str) -> str:
 
 
 def voice_provider_problems(config: VideoConfig) -> list[Problem]:
-    """One TTS provider per video (DESIGN.md §66): a named voice may not set another
+    """One TTS provider per video: a named voice may not set another
     ``provider`` than the base voice's, nor keys only other providers use (``voice_id`` with
     openrouter or kokoro, ``instructions`` with elevenlabs or kokoro, ``lang`` with elevenlabs
-    or openrouter...). Kokoro videos also need a language Kokoro speaks (§68)."""
+    or openrouter...). Kokoro videos also need a language Kokoro speaks."""
     base = config.voice.provider
     own = set(PROVIDER_VOICE_KEYS[base])
     other_keys = [k for p, keys in PROVIDER_VOICE_KEYS.items() if p != base for k in keys if k not in own]
@@ -122,7 +122,7 @@ def voice_provider_problems(config: VideoConfig) -> list[Problem]:
 
 
 def _dub_problems(config: VideoConfig) -> list[Problem]:
-    """``dub:`` entries (DESIGN.md §80) with keys the video's provider does not use, or a
+    """``dub:`` entries with keys the video's provider does not use, or a
     malformed Kokoro blend."""
     from vidgen.dubbing import dub_fields
 
@@ -170,10 +170,10 @@ def _kokoro_language_problems(config: VideoConfig) -> list[Problem]:
 def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     """The effective voice called ``name`` (``None`` / ``default``: the base voice): the base
     voice's audio settings with the named voice's given values over them; ``label`` / ``color``
-    only from the named voice. Its ``language_code`` is the one actually sent (DESIGN.md §54): the
+    only from the named voice. Its ``language_code`` is the one actually sent: the
     configured code, else the video's ``language`` for a model that accepts one, else ``None``.
-    In a video whose language another voice speaks, the voice's dub replaces it (DESIGN.md §80,
-    :func:`vidgen.dubbing.voice_dubs`); the result has no ``dub``."""
+    In a video whose language another voice speaks, the voice's dub replaces it
+    (:func:`vidgen.dubbing.voice_dubs`); the result has no ``dub``."""
     from vidgen.dubbing import voice_dubs
 
     key = None if name is None or name == DEFAULT_VOICE else name
@@ -206,8 +206,8 @@ def _merge_voice(data: dict[str, Any], given: dict[str, Any]) -> None:
 
 def _with_language(voice: VoiceConfig, language: str | None) -> VoiceConfig:
     """``voice`` with ``language_code`` = the code sent to the provider (or ``None``; OpenRouter
-    and Kokoro take none: the language follows the text and voice, DESIGN.md §66); a Kokoro
-    voice also gets its effective ``voice``, ``lang`` and ``speed`` (1 when not given, §68)."""
+    and Kokoro take none: the language follows the text and voice); a Kokoro
+    voice also gets its effective ``voice``, ``lang`` and ``speed`` (1 when not given)."""
     if voice.provider == "kokoro":
         name, lang = kokoro_voices.resolve(voice.voice, voice.lang, language)
         speed = 1.0 if voice.speed is None else voice.speed
@@ -294,8 +294,8 @@ def voice_color_problems(config: VideoConfig, theme: Theme) -> list[Problem]:
 
 def voice_warnings(config: VideoConfig, origins: Mapping[str, Origin] | None = None) -> list[str]:
     """Named voices no scene or beat uses (``vidgen validate`` warns). A voice written in an
-    included file (``origins``, §69.35) is not reported: a shared cast's episode may leave some out;
-    nor is any in a cut (``cut:``, §101), which leaves out the lines of some on purpose."""
+    included file (``origins``) is not reported: a shared cast's episode may leave some out;
+    nor is any in a cut (``cut:``), which leaves out the lines of some on purpose."""
     from vidgen.includes import origin_of
 
     if config.cut is not None:

@@ -1,4 +1,4 @@
-"""Re-entry and flight effects, ``vidgen/space-effects`` (Step 387, DESIGN.md §123.9): the module is
+"""Re-entry and flight effects, ``vidgen/space-effects`` (Step 387): the module is
 served by its import name; its parts are registered under the kind ``effect``; in Node (when it is
 installed): the glow's colour and brightness rise with the heating and never fall, an exhaust
 widens as the air thins and has shock diamonds only in dense air, a vapour cone is there only close

@@ -1,4 +1,4 @@
-"""What the pictures of a ``space`` scene cost (DESIGN.md §123.14): one table of seconds a frame at
+"""What the pictures of a ``space`` scene cost: one table of seconds a frame at
 1280x720 on 2 cores with software GL, measured in Steps 370–393 (docs/COOKBOOK-SPACE.md prints exactly
 these rows; a test compares them), and an estimate for a scene's combination of parts, which the lint rule
 ``space_scene`` reports when it is costly. A guide for budgeting, not a promise: the measurements are

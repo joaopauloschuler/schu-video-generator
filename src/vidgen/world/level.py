@@ -1,4 +1,4 @@
-"""Platform levels written as a small ASCII map (DESIGN.md §86). Plain data, no manim.
+"""Platform levels written as a small ASCII map. Plain data, no manim.
 
 A *level* is a grid of *tiles* seen from the side. The map is written top row first, one text
 line per row; inside the model rows count from the bottom (row 0 is the lowest) and a tile's

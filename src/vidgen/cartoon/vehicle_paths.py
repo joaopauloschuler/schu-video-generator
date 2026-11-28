@@ -1,4 +1,4 @@
-"""Where the water and air vehicles go (DESIGN.md §69.53), worked out without manim: the water's
+"""Where the water and air vehicles go, worked out without manim: the water's
 waves and a boat bobbing on them, a hot-air balloon's flight and a toy rocket's launch, and the
 rocket's smoke.
 

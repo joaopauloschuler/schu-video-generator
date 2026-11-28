@@ -1,4 +1,4 @@
-"""What to name in a zoomed view (DESIGN.md §95.9): the parts of a structure seen at the
+"""What to name in a zoomed view: the parts of a structure seen at the
 organelle or the complex level — a mitochondrion's outer and inner membrane, cristae, matrix and
 intermembrane space; a nuclear pore with the two nuclear membranes and the perinuclear space; a
 bilayer's phospholipids, cholesterol and glycolipids — each with the point its label points at.

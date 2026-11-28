@@ -1,4 +1,4 @@
-"""The checks across a ``space`` scene's sections for the pictures of Phase AO (DESIGN.md §123.14): a
+"""The checks across a ``space`` scene's sections for the pictures of Phase AO: a
 surface scene (``world:``) as a whole, and what an orbital scene gains (giant hulls, planes, the
 moves beside a ship, effects, flashes, match cuts, a warp across a cut). Each fault is a ValueError
 naming the section, the thing and what is allowed, with did-you-mean. Imports only ``vidgen.api``
@@ -12,7 +12,7 @@ from vidgen.api import *
 from .space_air_params import MIN_STANDOFF, NEEDS, Ramp, air, air_move_names, hull_point, ship_move_names
 from .space_params import length, scene_time, uses_bars
 
-#: What the music may change in a surface scene (DESIGN.md §123.14).
+#: What the music may change in a surface scene.
 SURFACE_REACTIONS = ("lightning", "lava")
 #: Words of an orbital scene a surface scene refuses, and where each one's job is done there.
 ORBITAL_ONLY = {"orbits": "a surface scene's frame is the world's place (world.at); orbits belong to an orbital scene",

@@ -1,4 +1,4 @@
-"""What the studio's song strip, timeline and track list show and change (DESIGN.md §94.12): the
+"""What the studio's song strip, timeline and track list show and change: the
 facts of a score for the page (chords as Roman numerals with their names, each section's own
 progression, each track's steps as levels for the meters) and the edits that change more than
 one value (add or delete a track, add, remove or rename a section), as lists of

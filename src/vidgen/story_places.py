@@ -1,10 +1,10 @@
-"""``vidgen story draft``, part 2: places, light, weather and music suggested from a story's words
-(DESIGN.md §105.5). No manim import, no AI: keyword tables and ready-made iso places.
+"""``vidgen story draft``, part 2: places, light, weather and music suggested from a story's words.
+No manim import, no AI: keyword tables and ready-made iso places.
 
-Each :class:`StoryPlace` is a small iso place (map, spots, objects of DESIGN.md §89 / §103 / §104)
+Each :class:`StoryPlace` is a small iso place (map, spots, objects)
 made for placeholder staging: four spots to stand on (``stands``), spots walks go to (``goals``),
 the objects lit at night (``lights``; ``lit`` always), and the flat stage's ready-made set that
-stands in for it with ``--style flat`` (DESIGN.md §76 / §77). :func:`choose_place` scores a scene's
+stands in for it with ``--style flat``. :func:`choose_place` scores a scene's
 words against the places' ``words``; :func:`light_cues`, :func:`weather_of` and :func:`music_of`
 read time of day, weather and mood the same way.
 """
