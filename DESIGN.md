@@ -5782,1362 +5782,620 @@ bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk); gallery
   `tests/test_cartoon_depth.py`.
 ### 69.45 Iris transitions (Step 112)
 
-- **Config** (`config.py`): `TransitionConfig.type` adds `iris_out` and `iris_in` (default 1.2 s,
-  `TRANSITION_DURATIONS`), with `character` (a character name) or `at` (`[x, y]`, fractions of
-  the frame from its top-left corner, each 0..1; not both) and `color` (default black,
-  `transitions.IRIS_COLOR`; `background`, tokens and hex as for `fade_color`). `character` / `at`
-  on another type, `color` on a type other than fade_color and the irises are config errors.
-  `IRIS_TRANSITIONS`, `COLOR_TRANSITIONS = (fade_color, iris_out, iris_in)` and
-  `TransitionConfig.through_color` replace the `type == "fade_color"` tests (plan, requested and
-  head frames). The key is `character`, not `on`: PyYAML reads a bare `on:` key as `True`.
-  An `iris_out` on the first scene is an error (nothing before it); an `iris_in` there opens the
-  video (fade_in only, like `fade_color`).
-- **Semantics (decision).** Both are a close then an open through the colour, split like a
-  `fade_color` (`round(duration x fps / 2)` frames on each side, no overlap, the timing contract
-  of §49: the closing covers the silent tail of the scene before or holds it). The type says
-  which side has the target: `iris_out` closes on the scene before's `character` / `at` and opens
-  the next scene from the frame's centre; `iris_in` closes the scene before on its centre and
-  opens on the next scene's `character` / `at` (`transitions.iris_scene(i, t)`: `i - 1` for
-  iris_out, `i` for iris_in). One transition per boundary gives the classic "iris out, iris in";
-  a card between two scenes (iris_out into it, iris_in out of it) is the usual cartoon flow.
-- **Drawn in the renders, not at the join (decision).** The iris is a `fade_color` with a
-  circular mask: `ColorFade(..., iris_in=, iris_out=)` (outermost `add_frame` wrapper, §49)
-  replaces the uniform blend of those frames by `frame x inside + colour x (1 - inside)`,
-  `inside = iris_coverage(h, w, x, y, r)` (1 in the disc, a one-pixel soft edge),
-  `r = iris_radius(weight, iris_full_radius(w, h, x, y), hold)` of the same colour weight as the
-  fade (1 on the boundary frames: closed). `iris_radius` eases from the radius that clears the
-  frame's farthest corner to 0 (`smoothstep`); with `hold` (a character's head) it eases to it by
-  `IRIS_HOLD[0]` (0.55) of the way, stays until `IRIS_HOLD[1]` (0.8), then closes (an opening is
-  the same in reverse). `NarratedScene._iris_point` gives the callable `(width, height) ->
-  IrisPoint(x, y, hold)`: the `at` point, the frame's centre, or the character's head (`head_box`
-  of `self.cast[name]`, through the camera frame, so shots and zooms are followed; `hold` =
-  `IRIS_HEAD_SCALE` 1.5 x half the head box's diagonal), asked on every masked frame (the circle
-  follows a moving character; "its head as the scene ends" is where it is in those frames). A
-  name not in the scene's cast at render time is a `VidgenError`. So the join sees a cut: no
-  `xfade` filter, nothing that depends on the FFmpeg version (the render test joins with 6.1.1,
-  7.1.5 and 8.1.3; in a video with crossfades the iris boundaries are cuts inside a run, tested),
-  and stills, storyboards and the layout dump see the irises. Rejected: a custom `xfade`
-  expression at the join (an overlapping transition would hide the next scene's first frames
-  under the colour while its narration starts, needs the head position written by the worker,
-  and the expression's planes and pixel format differ per FFmpeg build).
-- **Validate**: `transitions.iris_problems(config)` (in `vidgen validate`): a `character` not on
-  the target scene's stage (`target_names` of its params, declared characters only):
-  `scenes[1].transition.character: the iris_out into 'later' closes on 'kit', who is not in
-  scene 'a' (its characters: pip)` (`transition.character` for the video's default).
-- **Not done**: `wipe_star` (optional in the step); a shape other than a circle; an iris that
-  closes on a prop.
-  Tests: `tests/test_cartoon_cards.py`.
+- **Config** (`config.py`): `TransitionConfig.type` `iris_out` / `iris_in` (default 1.2 s,
+  `TRANSITION_DURATIONS`) with `character` (a name) or `at` (`[x, y]`, frame fractions from the
+  top-left, each 0..1; not both) and `color` (default black, `transitions.IRIS_COLOR`; values as
+  for `fade_color`). `character` / `at` on another type, or `color` on a type other than
+  `fade_color` and the irises, is a config error. `IRIS_TRANSITIONS`, `COLOR_TRANSITIONS =
+  (fade_color, iris_out, iris_in)` and `TransitionConfig.through_color` are the tests used by
+  plan, requested and head frames. The key is `character`, not `on` (PyYAML reads bare `on:` as
+  `True`). `iris_out` on the first scene is an error; `iris_in` there opens the video.
+- **Semantics.** A close then an open through the colour, split like `fade_color`
+  (`round(duration x fps / 2)` frames each side, no overlap, §49 timing). `iris_out` closes on the
+  scene before's target and opens the next from the centre; `iris_in` closes on the centre and
+  opens on the next scene's target (`transitions.iris_scene(i, t)`: `i - 1` for iris_out, `i` for
+  iris_in).
+- **Drawn in the renders, not at the join.** `ColorFade(..., iris_in=, iris_out=)` (outermost
+  `add_frame` wrapper, §49) blends `frame x inside + colour x (1 - inside)` with `inside =
+  iris_coverage(h, w, x, y, r)` and `r = iris_radius(weight, iris_full_radius(w, h, x, y), hold)`
+  (weight 1 = closed on the boundary frames); with `hold` (a head) the circle eases to it, stays
+  between `IRIS_HOLD` 0.55 and 0.8, then closes. `NarratedScene._iris_point` returns `(width,
+  height) -> IrisPoint(x, y, hold)`: the `at` point, the centre, or the character's `head_box`
+  through the camera frame (`hold` = `IRIS_HEAD_SCALE` 1.5 x half its diagonal), asked on every
+  masked frame so it follows the character. A name not in the cast at render time is a
+  `VidgenError`. The join sees a cut, so nothing depends on the FFmpeg version and stills,
+  storyboards and the layout dump show irises. Rejected: an `xfade` expression at the join
+  (overlap hides the next scene's start, needs head positions from the worker, differs per build).
+- **Validate**: `transitions.iris_problems(config)`: a `character` not among the target scene's
+  declared characters. Only circles; targets are characters or points, not props. Tests:
+  `tests/test_cartoon_cards.py`.
 
 ### 69.46 Title cards: the `card` scene (Step 112)
 
-- **Scene** (`scenes/card.py`, `@scene("card")`): `text` (required), `subtitle`, `style: burst |
-  frame | plain`, `color` (default `primary`), `text_color` / `outline_color` (default the better
-  of white and the dark ink for the fill, the other for the outline), `spin` (burst: turns at
-  `BURST_SPIN` 0.12 rad/s by an updater), `sting` (`StingSetting`; `at: end` is an error: the
-  card's sting plays as the text pops in, `NarratedScene.sting(cue, 0.0)`). The card's colour is
-  a full-frame rectangle from frame 0 (an `iris_in` opens on the card, not on the theme's
-  background). Steps: burst / frame, text (and the subtitle unless there are two beats), then
-  the subtitle; silent with `duration` or narrated; `outro` 0.5. Targets `text`, `subtitle`,
-  `burst` / `frame`.
-- **Pure layout** (`cartoon/cards.py`, no manim): `card_layout(width, height, style=,
-  subtitle=)` -> `CardLayout` (text box 0.8 of the room in a wide frame, 0.9 in a tall one; 0.36
-  / 0.46 of its height with / without a subtitle; the frame's outer and inner rectangles at
-  `FRAME_INSET` 0.05 and `FRAME_GAP` 0.025 of the shorter side, the text kept clear of them; a
-  burst radius past the corners); `burst_rays(radius, turn, count=18)` (every other ray, the
-  lighter tone `burst_ray_color(color)` = 22 % towards white); `card_text_inks(*backgrounds)`
-  (white or `CHARACTER_INK`, whichever has the higher worst contrast over the card's colours:
-  lint's `contrast` passes on the fill alone); `card_outline_width(cap)` (twice
-  `OUTLINE_SHARE` 0.09 of the cap height: the stroke is centred on the letters' edge).
-- **Drawing**: the outline is a layer of plain shapes (each glyph's points) filled and stroked
-  in the outline colour behind the text, not a background stroke per glyph (each glyph's stroke
-  would cover the glyph before it: found in the first render). In the layout dump it is a
-  `group` object below the text. The text pops in with `pop_scale` (§69.40) at strength 0.5 (a
-  15 % overshoot; the text box leaves room for it); the burst grows by an `UpdateFromAlphaFunc`,
-  not Manim's `GrowFromCenter`: an introducer is added to the scene again as it starts, over the
-  text popping in with it (found by eye: the rays covered the letters).
-- **Screenplay** (§69.25): `# Card: TEXT` (any level, `Card` with `:`, `.` or a dash; not a title
-  heading) is a `ScriptScene(card=True)`; `_add_card` writes a `card` scene with that text,
-  `duration: CARD_SECONDS` (2.5) without lines, else one beat per line (voices as on a stage;
-  `[directions]` become `# TODO:` notes, a card has no stage); `set:` under a card is an error.
-  After another scene the card comes in with `iris_out`, and the scene after a card gets
-  `transition: iris_in` (written right after its `type`). `vidgen screenplay --json` counts a
-  silent card's beats and characters as 0.
-- **Gallery**: the guide's `scenes` topic has a `card` snippet (`# cartoons`) and a chooser row;
-  `docs/gallery/card.md` and its four media files (about 180 KB) come from `vidgen gallery
-  --types card`.
-  Tests: `tests/test_cartoon_cards.py`.
+- **Scene** (`scenes/card.py`): `text` (required), `subtitle`, `style: burst | frame | plain`,
+  `color` (default `primary`), `text_color` / `outline_color` (default: the better of white and
+  dark ink for the fill, the other for the outline), `spin` (burst), `sting` (`at: end` is an
+  error; plays as the text pops in). The colour is a full-frame rectangle from frame 0 (an
+  `iris_in` opens on the card). Silent with `duration` or narrated; `outro` 0.5. Targets `text`,
+  `subtitle`, `burst` / `frame`.
+- **Pure layout** (`cartoon/cards.py`, no manim): `card_layout(width, height, style=, subtitle=)`
+  -> `CardLayout`; `burst_rays`, `burst_ray_color`; `card_text_inks(*backgrounds)` (white or
+  `CHARACTER_INK`, the higher worst contrast, so lint's `contrast` passes); `card_outline_width`.
+- **Drawing**: the outline is a layer of glyph shapes behind the text (a per-glyph background
+  stroke covers the previous glyph); a `group` in the layout dump. Text pops with `pop_scale`
+  (§69.40); the burst grows by `UpdateFromAlphaFunc`, not `GrowFromCenter` (an introducer is
+  re-added over the text).
+- **Screenplay** (§69.25): `# Card: TEXT` (any level; `:`, `.` or dash) is a
+  `ScriptScene(card=True)`; `_add_card` writes a `card` scene, `duration: CARD_SECONDS` 2.5 without
+  lines, else one beat per line (`[directions]` become `# TODO:` notes); `set:` under a card is an
+  error. A card after another scene comes in with `iris_out`; the scene after it gets
+  `transition: iris_in`. `vidgen screenplay` (also `--json`) counts a silent card's beats and
+  characters as 0 and says "N scenes".
+- Gallery `docs/gallery/card.md` (`vidgen gallery --types card`). Tests:
+  `tests/test_cartoon_cards.py`.
 
 ### 69.47 More bodies and clothes (Step 113)
 
-New `look` values (`config.CharacterLook`), all drawn from primitives, each with a side and a
-front drawing (§69.44):
+`config.CharacterLook` values drawn from primitives, side and front (§69.44). User keys:
+docs/CONFIG.md "Characters". Shape constants live in `cartoon/` (`BODY_SIZES`,
+`PROPORTION_FACTORS`, ...).
 
-- **Bodies**: `body: pear` (an ellipse whose half width is × `0.78 − 0.22 sin t`: narrow at the
-  shoulders, widest low down; its shoulders at `SHOULDER_SHARES` 0.62 of half its width) and
-  `triangle` (a squarish outline, broad at the top, × `0.76 + 0.24 y` towards the hips);
-  `BODY_SIZES` 0.42 × 0.46 and 0.44 × 0.46. **`proportions`**: `adult` (unchanged), `kid`, `tall_kid`
-  multiply the adult `Proportions` by `PROPORTION_FACTORS` before the seed's variation (kid: head
-  and eye gap × 1.3, eyes × 1.12, body 0.85 wide and 0.72 tall, legs 0.72, arms 0.78; tall kid:
-  head 1.12, body 0.8 / 0.85, legs 0.95, arms 0.9). The figure is still scaled to height 1; how
-  small a kid stands is the stage character's `scale` (guide: 0.7 / 0.85), so seats, reach and
-  lint keep using one character unit. Hips stay on seats (Step 102): `Character.seated` puts the
-  hips on the seat whatever the legs; a kid at scale 0.7 meets a seat 0.2 of its height up, above
-  its hips, so its feet hang (`seated_sole`).
-- **Outfits** (`cartoon/clothes.py`, `outfit` + `colors.trim`, default token `dim`): `limb_colors`
-  colours the segments of §69.26 (upper arm, forearm, thigh, shin): `plain` and `apron` all
-  `clothes`; `dress` short sleeves (bare forearms) and bare legs; `overalls` a `trim` shirt with
-  `clothes` trouser legs, a bib clipped to the body and straps with buttons; `coat` long sleeves,
-  `trim` trousers, a closure line, three buttons and lapels; `shorts` short sleeves, `trim` thighs
-  and waistband, bare shins. `apron`: a `trim` panel from the chest to below the body (side view
-  the front half, front view the middle), neck straps, a pocket from the front. The clothes of
-  the body are cut from its outline (`primitives.outline_polygon`: each Bézier curve sampled;
-  `clip_to_box`: Sutherland–Hodgman; `span_at`: its width at a height).
-- **Skirts on the body, not on the legs**: a dress's skirt and a coat's tails (`SKIRTED_OUTFITS`)
-  are drawn in the `body` part, from just above its bottom to the knee (a curved hem, flaring
-  `SKIRT_FLARE`), so the legs walk under them. Such a body has a second shape `seated`
-  (`config.SEATED_BODY_SHAPE`): the cloth as a wedge from the hips between `LAP_UP_DEGREES` 15°
-  and `LAP_DOWN_DEGREES` −50° out to the knee plus 0.045 (from the front: shorter and wider).
-  `Character.seated` shows it when the body has it (so `sit_on` does; `stand_up` goes back to the
-  state before), and the `sitting` pose names it as its body's shape (`chosen_shape` falls back
-  to the rest shape for every other character, which keeps their drawings). `cast.character_part_shapes`
-  lists it, so validate knows it.
-- **Patterns**: `stripes` (bands `STRIPE_HEIGHT` 0.03 every 0.065) and `dots` (radius 0.017 on a
-  0.06 grid, every other row shifted, at least 0.008 inside the edge) on the body's cloth and on a
-  skirt, in `pattern_tone`: 28 % towards black on a cloth of relative luminance above 0.35, else
-  40 % towards white; the outline is drawn again over the pattern.
-- **Shoes** (`shoes: shoes | boots`, `colors.accessory`): in the shin's group (`leg_*_lower`),
-  the sole on the ground (the figure's bottom stays at 0), the toe forward (from the front a
-  dome; boots add a shaft to 0.11).
-- **Hair**: `ponytail` (tied at the back, a tapering tail, from the front swinging out on one
-  side), `braids` (four lobes and a tie; one behind the head from the side, one each side from
-  the front), `afro` (a bumpy mass 3 × 2.5 head radii about the head); all three with the hair
-  cap. **`facial_hair`**: `moustache` (two lobes under the nose) and `beard` (round the jaw,
-  growing towards the chin, a skin patch where the mouth moves, and the moustache), in
-  `colors.hair`; `hair: none` gives bald with a beard.
-- **Accessories**: `bow`, `cap` (head: the `accessory` part, `config.HEAD_ACCESSORIES`; a cap's
-  dome sits above the brows, its peak forward or, from the front, a band), `backpack` (the pack
-  behind the back from the side, the straps over the shoulders from the front), `necklace` (beads
-  and a pendant) in the body. `hat` and `cap` together are a config error.
-- **Wind** (§69.32): `TRAIL_WEIGHTS` (now in `cartoon/primitives.py`, re-exported by the
-  generator) adds ponytail 0.9, braids 0.6, cap 0.25, pendant 0.5. Afro, bow, backpack and beard
-  do not trail.
-- **Effect symbols** (§69.40): afro, ponytail, braids and beard are marked
-  `OUTER_HAIR_ATTRIBUTE`; `effect_symbols.head_box` leaves them out (the size and spots go by the
-  head) and `crown_top` is the higher of the accessory's top and theirs (symbols go above an
-  afro). Looks without those marks take the old code path.
-- **Looks made before stay the same**: a plain outfit without pattern, backpack or necklace goes
-  through the old body code; the new branches add nothing to old looks. `tests/test_cartoon_outfits.py`
-  pins a digest of every drawn member (points, styles, trailing marks) of eight earlier looks, both
-  views, taken before the change.
-- **Screenplay** (§69.25): `LOOKS` gains five looks using the new values, each with its
-  `voice_kind` (two feminine, two masculine, one neutral); casts of up to six without stated
-  kinds get the same looks as before.
-- **Sheets and docs**: `vidgen character-sheet` ends with a `view` section (`front`) for generated
-  characters; `vidgen character` prints a `wears:` line. `still.write_looks_png(theme, path,
-  entries)` draws looks side and front; `docs/gallery/media/looks.png` (the screenplay looks and a
-  kid, about 50 KB) is in CONFIG.md "Characters".
-  Tests: `tests/test_cartoon_outfits.py` (sampled combinations from a seed, not every one).
+- **Bodies** `pear`, `triangle`; **`proportions`** `adult | kid | tall_kid` multiply the adult
+  `Proportions` by `PROPORTION_FACTORS` before the seed's variation. The figure stays height 1; a
+  kid's size is the stage `scale`, so seats, reach and lint keep one character unit.
+  `Character.seated` puts the hips on the seat whatever the legs (`seated_sole`).
+- **Outfits** (`cartoon/clothes.py`; `outfit` `plain | apron | dress | overalls | coat | shorts`,
+  `colors.trim` default `dim`): `limb_colors` colours the §69.26 segments; body clothes are cut
+  from its outline (`primitives.outline_polygon`, `clip_to_box`, `span_at`).
+- **Skirts on the body**: skirt / coat tails (`SKIRTED_OUTFITS`) are in the `body` part so legs
+  walk under them; such a body has a second shape `seated` (`config.SEATED_BODY_SHAPE`), shown by
+  `Character.seated` and named by the `sitting` pose (`chosen_shape` falls back to the rest shape
+  for others); `cast.character_part_shapes` lists it.
+- **Patterns** `stripes` / `dots` in `pattern_tone`; **shoes** `shoes | boots`
+  (`colors.accessory`) in the shin group, the figure's bottom stays at 0; **hair** `ponytail`,
+  `braids`, `afro`; **`facial_hair`** `moustache`, `beard` (`colors.hair`); **accessories** `bow`,
+  `cap` (head `accessory` part, `config.HEAD_ACCESSORIES`), `backpack`, `necklace`. `hat` with
+  `cap` is a config error (§69.58's `TOP_OF_HEAD`).
+- **Wind** (§69.32): `TRAIL_WEIGHTS` lives in `cartoon/primitives.py` (re-exported by the
+  generator). **Effect symbols** (§69.40): afro, ponytail, braids, beard are marked
+  `OUTER_HAIR_ATTRIBUTE`; `effect_symbols.head_box` leaves them out, `crown_top` counts them.
+- **Invariant**: older looks draw exactly as before (pinned digests in
+  `tests/test_cartoon_outfits.py`).
+- **Tools**: the screenplay's `LOOKS` each carry a `voice_kind`; `vidgen character-sheet` has a
+  `view` (`front`) section; `vidgen character` prints `wears:`; `still.write_looks_png(theme, path,
+  entries)`. Tests: `tests/test_cartoon_outfits.py`.
 
 ### 69.48 Animal characters and the `tail` part (Step 114)
 
-`look.species` (`config.Species`): `human` (default, unchanged) or `cat`, `dog`, `bird`, `bear`,
-`rabbit`, `mouse`. Each is a plain generic animal from primitives in the look's colours, with no
-feature taken from a known character (brief: no signature ear shape paired with a signature colour,
-gloves, buttoned shorts, a bow on a mouse...). `ears`, `nose` and `facial_hair` other than `none`
-with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `species` is the usual
-"svg draws the character" error.
+`look.species` (`config.Species`): `human` (default), `cat`, `dog`, `bird`, `bear`, `rabbit`,
+`mouse` (more in §69.57, §69.58): generic animals in the look's colours, no feature from a known
+character. `ears`, `nose`, `facial_hair` other than `none` with an animal are config errors
+(`config.SPECIES_OWN_KEYS`); `svg` with `species` is the usual "svg draws the character" error.
+User keys: docs/CONFIG.md "Animal characters (`species`)".
 
-- **Drawing** (`cartoon/animals.py`, called by the generator; side and front each): the head is an
-  ellipse (`HEAD_SHAPES`; a mouse's drawn out into a snout from the side, `MOUSE_SNOUT`); ears
-  behind it (cat triangles with a lining, rabbit long ellipses, mouse big ovals set back on the
-  sides, bear rounds, a bird's crest of three feathers; a dog's long ears hang beside the head from
-  the front and over its side from the side); on the face a muzzle (`fur_tint`: 50 % towards white
-  on dark fur, 14 % towards black on light fur), a dog's snout, noses (`PINK` for cat, rabbit and
-  mouse, the features ink for dog and bear), whiskers, a bird's beak (`BEAK_COLOR`). Ears, snouts
-  and the beak are marked `OUTER_HAIR_ATTRIBUTE` (§69.47), so effect symbols size and place by the
-  head and go above tall ears. Hands are round paws with two toe lines (`paw`); a bird's arms are
-  `wing`s (feather colour whatever the sleeves, three darker feather tips at the hand point); a
-  bird's bare shins (`limb_colors` gives skin) are thin and `BEAK_COLOR` with toes unless it wears
-  shoes. Fixed natural colours (`BEAK_COLOR`, `PINK`) are like `EYE_WHITE`: not theme tokens.
-- **Mouth**: `mouth_place` moves the human mouth (same shapes and numbers, scaled by a size) onto
-  the muzzle or under the snout (`MOUTH_PLACES`, `FRONT_MOUTH_PLACES`); a human's place is the old
-  one exactly. A bird's `mouth` part is `beak_mouth`: pivot the hinge; `smile` a line at the
-  beak's corner, `M` the closed seam, `open` and the other visemes the beak opened by
-  `BEAK_OPENINGS` degrees (both halves turned apart about the hinge over a dark fan; from the
-  front a dark opening on the rhombus). Every shape is symmetric about the hinge's line, so the
-  expressions' negative y scale (a frown) keeps an open beak the right way up while speaking.
-- **`tail` part** (`PART_NAMES`, `PosePart`, `DEFAULT_PARENTS` body, `DEFAULT_DRAW_ORDER` 5 in
-  both views; optional): `tail_part` roots it low on the back of the body (from the front behind
-  the body, its end showing on one side), pivot the root; centre lines (`TAIL_LINES`, a
-  Catmull-Rom `keyframes.path_curve`) turned into `primitives.tapered_band` (a band narrowing to
-  a round tip); a bear's round stub, a rabbit's puff (`fur_tint`), a bird's fan of three
-  feathers (`TAIL_FEATHERS`). Motion: `motion.follow_angles` gives `tail` −`FOLLOW_TAIL_DEGREES`
-  45 × (forward + up) × strength, limited to ±30° (the Step 82 spring: back and down as the body
-  sets off or rises, on past it as it stops or falls); `walking_state` swings it by
-  `WALK_TAIL_SWING` 0.5 of the near arm's swing; the idle layer swishes it (`idle.tail_sway_angle`,
-  ±2 × 5° every 2.6 s, 0 at the clock's start); wind trails it (`TRAIL_WEIGHTS` `tail` 0.8,
-  `feathers` 0.4, a rabbit's `long_ears` 0.3; the bear's and rabbit's round tails do not trail).
-  An SVG `id="tail"` is that part (default pivot: the bottom corner nearer the body; a
-  `TURNING_PARTS` pivot warning), and `svg_character_parts` marks it trailing like a generated
-  tail. Characters without a tail take the old code paths (their drawings, poses and idle state
-  are unchanged; pinned in `tests/test_cartoon_animals.py` with the eight looks of
-  `test_cartoon_outfits.py` and seven Step 113 looks).
-- **Validate and tools**: `cast.character_part_shapes` adds `tail` for an animal (so part targets
-  `tib.tail`, own poses and the character sheet know it); `vidgen character` prints `species` on
-  the look line for an animal.
-- **Voice kinds** (§69.25): an animal has no kind of its own (either suits it) unless the
-  screenplay states one; the screenplay's `LOOKS` stay human (animals for undeclared characters
-  are Step 115's `--species`).
-- **Docs**: CONFIG.md "Animal characters (`species`)" and `docs/gallery/media/animals.png` (the six
-  species side and front, `still.write_looks_png`, about 30 KB).
-  Tests: `tests/test_cartoon_animals.py`.
+- **Drawing** (`cartoon/animals.py`, called by the generator): `HEAD_SHAPES`, ears, muzzle
+  (`fur_tint`), snout, nose, beak; ears, snouts and beak are `OUTER_HAIR_ATTRIBUTE`. Paws; a bird's
+  arms are `wing`s. `BEAK_COLOR`, `PINK` are fixed colours like `EYE_WHITE`, not theme tokens.
+- **Mouth**: `mouth_place` moves the human mouth onto the muzzle (`MOUTH_PLACES`,
+  `FRONT_MOUTH_PLACES`; a human's place is unchanged). A bird's `mouth` is `beak_mouth` (pivot the
+  hinge; visemes open it by `BEAK_OPENINGS`); every shape is symmetric about the hinge line so a
+  frown's negative y scale keeps it upright.
+- **`tail` part** (`PART_NAMES`, `PosePart`, `DEFAULT_PARENTS` body, `DEFAULT_DRAW_ORDER` 5;
+  optional): `tail_part`, pivot at the root. Motion: `motion.follow_angles` (spring, limit ±30°),
+  `walking_state` swing, idle `idle.tail_sway_angle` (0 at clock start), wind `TRAIL_WEIGHTS`.
+  An SVG `id="tail"` is that part (default pivot the bottom corner nearer the body;
+  `TURNING_PARTS` pivot warning; `svg_character_parts` marks it trailing). Characters without a
+  tail draw, pose and idle exactly as before (pinned in `tests/test_cartoon_animals.py`).
+- `cast.character_part_shapes` adds `tail` for an animal; `vidgen character` prints `species`. An
+  animal has no voice kind of its own unless the screenplay states one (§69.25). Tests:
+  `tests/test_cartoon_animals.py`.
 
 ### 69.49 A random, well-contrasted cast (Step 115)
 
-- **Contrast score** (`cartoon/contrast.py`, no manim): `look_features(look, colors, theme)`
-  reduces a generated look to `LookFeatures` (silhouette values; the clothes, skin, hair and
-  accessory colours with theme tokens resolved, a bald head's hair colour taken as its skin and a
-  look without accessories or shoes its accessory colour as its clothes, since nothing is drawn
-  in them; a set of small details); `None` for an `svg` look. `contrast_score(a, b)` (pure,
-  symmetric, 0 the same look .. 1) = `WEIGHTS` silhouette 0.45 + colour 0.4 + accessories 0.15 of
-  `contrast_parts`: silhouette = `SILHOUETTE_WEIGHTS` (body 0.25, hair 0.2, species 0.15,
-  headwear (hat / cap / bow) 0.1, proportions 0.1, head size 0.1 (|difference| / 0.4, capped),
-  ears 0.05, outfit (dress / coat / other) 0.05) of the features that differ; colour =
-  `COLOUR_WEIGHTS` (clothes 0.4, skin 0.3, hair 0.2, accessory 0.1) of CIEDE2000 in CIELAB
-  (`lint.color.lab` / `delta_e`) / `COLOUR_SPAN` 30, capped at 1 (an unresolved token: 0 when the
-  same name, else 1); accessories = the Jaccard distance of the detail sets (accessories other
-  than headwear, facial hair, pattern, shoes, eyes, nose; both empty: 0). The weights favour what
-  reads at stage size: outline first, then large colour areas. Calibration: the screenplay's 11
-  `LOOKS` in `soft_pastel` score 0.49 to 0.84 against each other; a look and a copy with only the
-  clothes colour changed far scores 0.16; the same silhouette in all-new colours about 0.4.
-  `MIN_CONTRAST` (0.35) is the `look_alike` default.
-- **Advice**: `compare(first, a, second, b) -> PairContrast(score, parts, shared, advice)`:
-  `shared` lists the equal silhouette features (not the unremarkable defaults: no ears, plain
-  outfit, nothing on the head, human, adult, head size 1) and the colours closer than
-  `CLOSE_COLOUR` 10, ordered by their weight in the score; `advice` names the keys of the three
-  heaviest (`give 'ben' another colors.clothes, colors.skin, look.body`).
-- **Lint `look_alike`** (scene scope, in `lint/cartoon_rules.py`; `LookAlikeRule.min_contrast`
-  0.35; default warning): `contrast.character_pairs(config, theme)` compares every two generated
-  characters on the video's stages (any scene's `params.characters`, sets expanded), in the order
-  they first appear, and ties each pair to the scene where the later one first appears. The runner
-  (`_timing_findings`) fills `SceneContext.character_pairs` with that scene's pairs (the theme:
-  `Theme.for_format` of the project) when the rule runs; the issue is at the scene's first beat,
-  without objects (the names are in the message). Video-level, so one finding per pair, not per
-  scene they share.
-- **Generator** (`random_cast.py`, no manim): `random_look(rng, kind, species)` draws every
-  generator value (bodies, head sizes 0.85..1.3, eyes, nose / ears for humans, hair (animals: none,
-  short, spiky, curly), outfit, pattern, shoes, 0-2 accessories never hat with cap, facial hair
-  for 40 % of masculine humans) and hex colours from fixed lists (`SKIN_COLORS` / `FUR_COLORS`,
-  `CLOTHES_COLORS`, ...: the same in every theme), all through `Random(seed).random()` (`_pick`,
-  `_shuffled`: the one call Python keeps stable, §69.1). `KIND_EXCLUDES` keeps a look suited to its
-  voice kind (feminine: no facial hair; masculine: no dress, bow, bun, ponytail, braids; neutral:
-  no facial hair, dress or bow). Adult proportions only (a kid needs the stage's `scale`, §69.47).
-  `pick_looks(kinds, rng, species, existing, curated, theme)`: per character, first the first
-  unused `curated` look of the kind (then neutral) whose `min_contrast` against `existing` and the
-  picks so far is at least `MIN_CONTRAST`; else `CANDIDATES` (48) random looks and the one with the
-  highest lowest contrast (greedy maximin; ties: the first drawn); a kind of `None` takes the voice
-  kind picked least so far.
-- **`vidgen cast --random N`** (`cli.cmd_cast`, MCP tool `cast`, `jsonout.cast_document`):
+- **Contrast score** (`cartoon/contrast.py`, no manim): `look_features(look, colors, theme)` ->
+  `LookFeatures` (silhouette values, resolved colours, a detail set; a bald head's hair colour is
+  its skin, no accessories/shoes -> accessory colour = clothes); `None` for an `svg` look.
+  `contrast_score(a, b)` (pure, symmetric, 0..1) = `WEIGHTS` silhouette 0.45 + colour 0.4 +
+  accessories 0.15 of `contrast_parts`: silhouette by `SILHOUETTE_WEIGHTS` over differing
+  features; colour by `COLOUR_WEIGHTS` of CIEDE2000 (`lint.color.lab` / `delta_e`) / `COLOUR_SPAN`
+  30, capped at 1 (unresolved token: 0 if same name, else 1); accessories = Jaccard distance of
+  detail sets (both empty: 0). `MIN_CONTRAST` 0.35.
+- **Advice**: `compare(first, a, second, b) -> PairContrast(score, parts, shared, advice)`: shared
+  non-default features and colours closer than `CLOSE_COLOUR` 10; `advice` names the keys of the
+  three heaviest.
+- **Lint `look_alike`** (scene scope, `lint/cartoon_rules.py`, `LookAlikeRule.min_contrast` 0.35,
+  warning): `contrast.character_pairs(config, theme)` compares every two generated characters on
+  the video's stages in first-appearance order, each pair tied to the scene where the later one
+  first appears; the runner (`_timing_findings`) fills `SceneContext.character_pairs`
+  (`Theme.for_format`). One finding per pair, at that scene's first beat, no objects.
+- **Generator** (`random_cast.py`, no manim): `random_look(rng, kind, species)` draws every value
+  and hex colours from fixed lists (`SKIN_COLORS`, `FUR_COLORS`, `CLOTHES_COLORS`, ...: same in
+  every theme) only through `Random(seed).random()` (`_pick`, `_shuffled`; §69.1); never hat with
+  cap; `KIND_EXCLUDES` keeps a look suited to its voice kind; adult proportions only.
+  `pick_looks(kinds, rng, species, existing, curated, theme)`: the first unused `curated` look of
+  the kind (then neutral) with `min_contrast` ≥ `MIN_CONTRAST` against `existing` and earlier
+  picks; else `CANDIDATES` 48 random looks, greedy maximin (ties: first drawn); kind `None` takes
+  the least-picked kind.
+- **`vidgen cast --random N`** (`cli.cmd_cast`, MCP `cast`, `jsonout.cast_document`):
   `random_cast(count, seed, species, voice, language, taken)`: kinds from `balanced_kinds` (each
-  round of three a shuffle of `VOICE_KINDS`), looks, names and voices each from their own stream
-  (`Random(3 * seed)`, `+ 1`, `+ 2`), so `--random 5` starts with `--random 4`'s cast; names from
-  `NAMES[kind]` (short common first names, none a famous character's; `_k` suffixes when a kind's
-  list runs out); voices by `screenplay.assign_voices` (Kokoro by the kinds' genders, narrator
-  `--narrator` default `bf_emma` left out; OpenRouter in turn; ElevenLabs labels and a TODO).
-  Written with `plan_yaml.commented_yaml` (now also for a mapping without `scenes`): a header, the
-  kinds and the lowest contrast above `characters:`, TODOs above `voices:`; each entry is checked
-  with `CharacterEntry`. 1-24 characters (`MAX_CAST`); `.yaml` only; an existing file needs `--force`.
-- **Screenplay** (§69.25): `_generated_looks` calls `pick_looks` with the stated kinds, the
-  declared and cast characters as `existing`, `LOOKS` as `curated` (when `human` is among
-  `--species`), the front matter's theme and `Random(--seed)`. Casts of up to 11 that do not
-  collide with a declared character get the same looks as before; a look of `LOOKS` too like a
-  declared one is skipped; after the 11 (and for a fifth stated "she", which took the first
-  feminine look again with a seed before) come unused neutral looks, then random looks instead of
-  repeats. `--species cat dog` (MCP `species`) gives only random animals. The voice kind of a
-  random look is its drawn kind.
-  Tests: `tests/test_random_cast.py`.
+  round of three a shuffle of `VOICE_KINDS`); looks, names, voices from separate streams
+  (`Random(3 * seed)`, `+ 1`, `+ 2`), so `--random 5` extends `--random 4`; names from
+  `NAMES[kind]` (`_k` suffixes when exhausted); voices by `screenplay.assign_voices` (narrator
+  `--narrator`, default `bf_emma`). Written with `plan_yaml.commented_yaml`; entries checked with
+  `CharacterEntry`. 1-24 characters (`MAX_CAST`); `.yaml` only; an existing file needs `--force`.
+  User side: docs/CONFIG.md "A random cast (`vidgen cast`)".
+- **Screenplay** (§69.25): `_generated_looks` calls `pick_looks` with stated kinds, declared and
+  cast characters as `existing`, `LOOKS` as `curated` (when `human` is in `--species`), the front
+  matter's theme and `Random(--seed)`; after the curated looks come unused neutral ones, then
+  random looks. `--species cat dog` (MCP `species`) gives only random animals. Tests:
+  `tests/test_random_cast.py`.
 
 ### 69.50 Review of Phase K (Step 116)
 
-- **The indoor example**: `examples/cartoon-muffin-mystery` (an original screenplay,
-  `muffin_mystery.md`, then hand-edited `video.yaml`): a `card` title and end card, `iris_in` /
-  `iris_out` (closing on the dog), one `sets: home` room (stripes, boards, a window, a door, sofa,
-  picture, clock, armchair at depth 0.2, rug, counter and fridge against the wall), a dog
-  character (`species: dog`) and two people, `indoor` light fading to `night`, then `morning`;
-  effect symbols (written and from `auto_direct`), `run_to`, `jump`, walks in depth behind and in
-  front of the armchair and the others, `enter` / `exit` through the door, a basket held from the
-  start, a close-up in the front view, captions and a music bed. End to end by the CLI and the
-  MCP tools `screenplay` (also with a `cast` of dogs and people), `cast`, `validate`, `direct`,
-  `lint`, `storyboard`, `character_sheet`; lint clean at preview (word-count timing) and with
-  Kokoro audio. `tests/test_phase_k_review.py` repeats the cheap part.
-- **`vidgen screenplay` without `--json` crashed on a silent card** (`KeyError: 'beats'`: a
-  `card` scene with only `duration` has no beats); the summary now counts a card's beats as 0 and
-  says "N scenes" (not "N stage scenes").
-- **A prop held before its holder's entrance flew across the set**: `hold` at `at: 0` by a
-  character that waits off stage for an `enter` moved the prop from its own spot into the hand off
-  stage, in view (and it stood there through the set's fade-in). `Stage._held_before_entering`
-  finds the props a `hold` gives to a character of `_entering()` before its first `enter` (in the
-  order the scene's actions are written); the construct puts each beside its holder off stage, so
-  the hold plays unseen.
-- **A held prop did not fade through a door**: `Walk`'s `fade_in` / `fade_out` (§69.42) now scale
-  the props in `carried` with the character; `enter` / `exit` with `door` pass the props the
-  character holds (`moving._carried`, also used by walks in depth).
-- **Turning to the front kept a look's head angle**: from the side the head angle is a nod; in the
-  front view it rolls the head sideways (seen after `look_at` a held basket, then `turn: front`).
-  `turn` `to: front` now ends with `camera_look("front")` (head straight, eyes in the middle), and
-  `look_pose` facing the front (a point straight above or below) keeps the head upright and moves
-  only the eyes up or down.
-- **Real narration**: Kokoro (narrator `bf_emma` 0.8, Mira `af_heart` 0.75, Olen `am_fenrir`
-  0.75, the dog `bm_fable` 0.8; `narration_speed` warned at 3.52 words/s for Mira at 0.8), rendered
-  at 1280x720 (`/home/claude/work/phase-k-review/muffin_mystery.mp4`, 69.9 s, −16.2 LUFS).
+- **Example** `examples/cartoon-muffin-mystery` (screenplay `muffin_mystery.md`, hand-edited
+  `video.yaml`); `tests/test_phase_k_review.py` runs its cheap checks.
+- **Held before entering**: `Stage._held_before_entering` finds props a `hold` gives to an
+  `_entering()` character before its first `enter`; the construct puts each beside its holder off
+  stage (§69.64), so the hold plays unseen.
+- **Through doors**: `Walk` `fade_in` / `fade_out` (§69.42) scale `carried` props with the
+  character; `enter` / `exit` with `door` pass held props (`moving._carried`, also for walks in
+  depth).
+- **Turning front**: `turn` `to: front` ends with `camera_look("front")`; `look_pose` facing front
+  keeps the head upright and moves only the eyes.
 
 ### 69.51 Props that vanished, overlapped or showed through (after Step 116)
 
-- **Props vanished during a walk in depth** (the example at 0:12: the door, picture, sofa,
-  counter, basket and fridge went while Mira walked from the wall to the front). Manim draws the
-  mobjects before the first moving one once into a static image when an animation begins, and the
-  rest (`moving_mobjects`) on every frame. `get_moving_mobjects` (§69.44) makes everything from
-  the first thing a walk in depth passes "moving", measured from the walker's depth *now*. The
-  draw-order updater (`_draw_order_step`) rebuilt that list mid-play when the walker crossed the
-  armchair; by then the walker had left the wall's depth, so the props there were no longer passed
-  and dropped out of the list, while they were not in the static image either: drawn by nothing
-  until the next animation. The camera did not move. Now `Stage._moving_in_order` keeps
-  everything the list had and adds what moves now, in the current draw order; a rebuild never
-  drops a thing. Test: a render where every frame's moving list plus static image holds every
-  prop on the stage (`test_props_at_the_depth_a_walker_leaves_stay_drawn`, fails before).
-- **`prop_overlap` lint rule** (warning, `min_overlap` 0.15 of the narrower prop's width): two
-  props standing on the floor at depths less than `DEPTH_APART` (0.15) apart whose boxes overlap
-  side by side, e.g. a room's door over the sofa against the wall. Props in front of others
-  (further apart in depth), lifted (`lift`) or hanging on a wall (a picture over the sofa), lying
-  flat (a rug) or held are left out. The layout dump gains on a prop: `prop` (its kind), `depth`
-  (above 0), `raised` and `flat` (only when true); `Prop.raised` is set by the stage from
-  `lift` + the hang height. A still rule, like `character_overlap`, so it sees the props where they
-  are drawn (a door's width, an open door); the runner merges a pair's findings over the beats.
-  The example's layout was fixed with it (door at 0.13, the sofa at 0.325 and scale 0.9, the
-  picture at 0.26; the counter at 0.745 and the fridge at 0.925 overlapped too).
-- **The set fades in as one picture**: the stage's entrance faded each thing in on its own, so
-  during the fade (and under an `iris_in` that opens meanwhile) what stood behind showed through
-  what stood in front (the dog over the armchair, the door over the sofa). The entrance now adds
-  the set, props, shadows and characters at once, back to front, under `Stage._cover`: a
-  rectangle of the camera's background colour, 1.5 times the view and kept on it, that fades out
-  over the same time. Every frame of the fade is the finished picture blended with the background
-  by one amount (`test_the_set_fades_in_as_one_picture`). A copy carried from the scene before
-  (`carry:`) still moves in. Since Step 127 the scene's fade out is one picture too:
-  `Stage.finish` fades the same kind of cover in over everything (its z index above all, so
-  particles, bubbles and symbols go under it as well) instead of `clear_all` fading each thing (a
-  character behind a house showed through the fading house as a faint outline). With a
-  transition other than a cut the picture is held as before; when the next scene carries a
-  target out (`carry:`) the outro stays `clear_all(keep=)`.
+- **Moving list never drops a thing**: `get_moving_mobjects` (§69.44) marks everything from the
+  first thing a walk in depth passes as moving; Manim draws the rest once as a static image.
+  `Stage._moving_in_order` keeps everything the list had and adds what moves now, in draw order, so
+  a mid-play rebuild by `_draw_order_step` cannot leave a prop drawn by neither.
+- **`prop_overlap` lint rule** (warning, `min_overlap` 0.15 of the narrower width): two floor props
+  less than `DEPTH_APART` 0.15 apart in depth whose boxes overlap sideways; lifted, hung, flat and
+  held props are skipped. Layout dump on a prop: `prop` (kind), `depth` (above 0), `raised` and
+  `flat` (only when true); `Prop.raised` set from `lift` + hang height. A still rule like
+  `character_overlap`; the runner merges a pair's findings over beats.
+- **Set fades as one picture**: the entrance adds set, props, shadows and characters at once, back
+  to front, under `Stage._cover` (a camera-background rectangle 1.5 × the view) that fades out; a
+  `carry:` copy still moves in. `Stage.finish` fades the same cover in over everything (z index
+  above all) over `outro` seconds, then removes every mobject. With no outro, a transition other
+  than a cut, or a next scene that carries something (`carry:`), it falls back to
+  `NarratedScene.finish` (§49, §50). While the light changes, a character's moving part is never
+  listed again after everything (it would draw over the cover).
 
 ### 69.52 Vehicles on the ground (Step 118)
 
-Characters get in a car or a bus, or on a bicycle, ride it somewhere and get out. A vehicle is a
-built-in prop (§69.8), so placing, `scale`, `facing`, colours, depth, shadows, the light, the
-layout dump and the prop checks work as for any prop; riding is a posture like sitting (§69.28).
+A vehicle is a built-in prop (§69.8): placing, `scale`, `facing`, colours, depth, shadows, light,
+layout dump and prop checks work as for any prop; riding is a posture like sitting (§69.28). User
+keys: docs/CONFIG.md "Vehicles (`get_in`, `ride_to`, `get_out`)".
 
-- **Geometry** (`cartoon/vehicles.py`, no manim): `VEHICLES` kind → `VehicleSpec` (prop units as
-  drawn facing right, built by `_spec` from measures in a character's heights): `height` next to
-  a character (bicycle 0.38, car 1.12, bus 1.45; `PROP_HEIGHTS` reads them), `seats` (each
-  place's hips x, front first: 1, 2, 4 places), the `seat` line and the `floor` under the riders'
-  feet (car 0.2 / 0.08, bus 0.44 / 0.3, bicycle 0.255 / 0), `wheels` (x, y, radius: every
-  wheel stands on the ground), `half_length`, `hides_legs` (car, bus), default `speed` (bicycle
-  and bus 4, car 5 units/s), a bicycle's `crank` and `grip`. The car's and bus's seat lines put a
-  seated head (about 0.8 above the hips) under the roof, the floor behind the side. Pure
-  functions: `seat_origin`, `seated_height`, `get_in_gap` (beyond the nearer end),
-  `place_order` (nearest seat first), `wheel_degrees(forward, radius)` (clockwise going forward,
-  one turn per circumference), `crank_degrees` (÷ `GEAR` 2), `pedal_points(kind, angle)` (the
-  two pedals opposite on the crank circle), `ride_facing`. A ride's time is a walk's
-  (`walk_seconds`: eased over 15 % at each end) at the vehicle's speed; in depth it goes as far
-  as a walk in depth (`depth_walk_distance`, a unit of depth = 2 heights of a character there).
-- **Drawings** (`cartoon/vehicle_drawing.py`): side on, the front on the right, primitives in
-  the prop's two colours (`PROP_COLORS`: bicycle primary / accent, car accent / highlight, bus
-  highlight / primary) plus shades, dark tyres (`TV_CASE`), fixed light hubs and headlights.
-  Original simple shapes; nothing imitates a known make or model. Windows are see-through glass
-  (`GLASS_OPACITY` 0.3) between filled pillars, so riders drawn *before* the vehicle show in them
-  while its lower side hides their legs. Drawn in character heights, then scaled to prop units;
-  wheel and crank places come from the spec (one source). `draw_prop` returns a `Prop` with an
-  anchor and `wheels` (each wheel's spokes or bolts group and its axle) and a `crank`;
-  `Prop.turn_wheels(degrees)` rotates them about their axles (mirrored when facing left) and
-  keeps `wheel_angle` / `crank_angle`; `Prop.prop_point(x, y)` and `Prop.unit` map prop units to
-  the screen. Gallery: `write_props_png(..., kinds=VEHICLE_KINDS, columns=3)` →
-  `docs/gallery/media/vehicles.png` (720×240, 10 KB) in CONFIG.md "Vehicles"; `props.png` leaves
-  the vehicles out (byte-identical).
-- **Riders** (`cartoon/riding.py`): never added to the vehicle (§69.22's fixed family; the
-  vehicle's box stays its own). A `RiderSeat` (rider, vehicle, place, `ratio` = rider height /
-  vehicle unit) and `place_rider` put the rider's feet on its seat's floor point where the
-  vehicle is now, at `ratio` × the vehicle's unit (growing and shrinking with it in depth), facing
-  its way, with its `stage_depth` / `ground_y`. An updater on the rider calls it every frame
-  while it rides; `Ride` calls it too (Manim pauses an animated character's updaters).
-  `riding_state` seats the rider (`Character.seated` on the seat above the floor); on a bicycle
-  it also leans forward `CYCLING_LEAN` 14°, plants the feet on the pedals (`Character.planted`,
-  the two-bone solver of §69.26; legs too short reach towards them) and reaches both hands to the
-  grip. `Ride(vehicle, x, seats=, speed=, depth=, feet_y=, strength=)` turns the vehicle round
-  at once to face the way it goes (riders with it), moves its feet along `walk_progress`, scales
-  it about its feet in depth (like `Walk`), turns the wheels by the way gone and re-plants a
-  cyclist's feet every frame. `BodyMove(y=)` eases the feet's y too (getting in climbs to the
-  floor, getting out steps down).
-- **Actions** (`scenes/riding.py`, against `vidgen.api`): `get_in` (characters; `to` a vehicle;
-  1.0 s): each takes the nearest free seat (`Postures.ride`), faces the vehicle, a `BodyMove` to
-  its seat with the riding posture (arms too on a bicycle), the follow updater, `Character.riding`,
-  and is drawn right before a car / bus (behind its side) or right after a bicycle (on it).
-  `ride_to` (a vehicle, or a character: the vehicle it rides; `to` a place or `{mark, depth}`,
-  `depth`, `speed`): a `Ride` per vehicle; a ride in depth registers with `Stage.ride_in_depth`.
-  `get_out` (0.9 s): the updater off, `Postures.get_out`, a `BodyMove` back to the saved body,
-  legs and arms with the feet on the ground, drawn right after the vehicle (stepping out towards
-  the camera). Riding counts as posed (`is_posed`): looks turn only the head, poses move only
-  the arms and head.
-- **Stage** (`scenes/stage.py`): vehicles are movable props when a `ride_to` is used (their
-  shadow follows; `ShadowCaster(grows=True)` with `Prop.standing_height`); a rider casts no
-  shadow (`ShadowCaster` treats `riding` like `held_by`). The draw-order keeper of §69.44 moves a
-  vehicle with its riders and their held props as one block (`_moving_block`) and redraws what a
-  ride in depth passes (`_depth_crossers` knows `Ride`). Mid-action stills cover the three actions.
-- **Validate** (`holding_problems(vehicles=)`, `StageFrame.vehicles`): `get_in` too far beyond the
-  vehicle's end (`GET_IN_REACH` 0.5 heights) or at another depth, with the `walk_to` that fixes
-  it; a full vehicle ("'car' is full: it has 2 seats and pip, kit ride it then; get_out one
-  first"); a `ride_to` of a character that rides nothing; `get_out` without `get_in`; the
-  pinned actions (§69.28) and `stand_up` / `sit_on` / `lean_on` while riding ("pip rides 'car'
-  then; get_out first (- get_out: pip)"); `pick_up` / `hold` of a vehicle; `keyframes` /
-  `move_along` of a ridden one. The replay moves riders and vehicles (and their depths) with each
-  ride. `scene_problems`: `to` / targets that are not vehicles, naming the stage's vehicles.
-- **Foley and motion effects**: `PlayedAction.vehicle`; `ride_cues`: a bicycle's `bell` as it
-  sets off, a car's / bus's `engine` (pitch −5 for the bus) for `ENGINE_SHARE` 0.8 of the ride
-  (0.8–6 s), `brakes` ending at the stop (`RIDE_SOUNDS`, `BRAKES`). Three new generated sounds in
-  `sfx.py` (`bell`, `engine`, `brakes`; nothing downloaded). `motion_effect_cues` treats a
-  `ride_to` like a walk (its `heights` in the heights of a character beside the vehicle): dust
-  at the vehicle's back end as it sets off and its front end as it stops, speed lines from its
-  back end, from `FAST_SPEED`.
-- **Planner, reframe, shots, follow**: `_follow_written` replays `get_in` / `ride_to` /
-  `get_out` (`_riding`): riders' x and facing follow their vehicle, so automatic looks, close-up
-  checks and `reframe` pans see them where they are; the three actions are `LOOK_CHANGING` and
-  `MOVING_ACTIONS`. `follow` of a vehicle (its box) or a rider (its feet) keeps the camera on
-  it during the ride. A beat's `shot` is framed where the riders are when the beat starts.
-- **Lint and layout dump**: layout key `riding` on a character; `character_overlap` and
-  `walk_overlap` skip two riders of one vehicle; `hidden_speaker` does not count a rider's own
-  vehicle as covering its face.
-- **Checked by eye** (scratch projects at preview 854×480, `vidgen storyboard`): two riders
-  getting in a car (heads in the windows, legs hidden), the car riding right then to depth 0.7
-  behind a tree (shrinking, riders with it) and both getting out in front of it; a cyclist (a
-  tall look) on the saddle, leaning to the handlebar, feet on the pedals, riding right and back
-  left (the bicycle turning round); four characters (one a cat) getting on a bus facing left, the
-  bus turning and riding right with dust and speed lines; the CONFIG.md example. `vidgen lint`:
-  only the scratch cast's own `look_alike`.
-- **Not done here**: no door opening; a shot does not follow a ride within its beat (as for
-  walks); a rider's feet show under a car's side for a moment while it climbs in; a prop a rider
-  holds follows its hand but keeps its size during a ride in depth; no vehicles in the
-  screenplay grammar; water and air vehicles are Step 119 (§69.53). Tests:
-  `tests/test_cartoon_vehicles.py`.
+- **Geometry** (`cartoon/vehicles.py`, no manim): `VEHICLES` kind → `VehicleSpec` (prop units,
+  facing right, from character heights): `height` (`PROP_HEIGHTS` reads it), `seats` (front
+  first), `seat`, `floor`, `wheels`, `half_length`, `hides_legs`, default `speed`, bicycle `crank`
+  / `grip`. Pure: `seat_origin`, `seated_height`, `get_in_gap`, `place_order` (nearest seat
+  first), `wheel_degrees` (one turn per circumference), `crank_degrees`, `pedal_points`,
+  `ride_facing`. Ride time = `walk_seconds` at the vehicle speed; in depth `depth_walk_distance`.
+- **Drawings** (`cartoon/vehicle_drawing.py`): original shapes in the prop's `PROP_COLORS`; glass
+  windows (`GLASS_OPACITY`) show riders drawn before the vehicle while its side hides their legs.
+  Wheel / crank places come from the spec. `draw_prop` returns a `Prop` with anchor, `wheels`,
+  `crank`; `Prop.turn_wheels(degrees)` (mirrored facing left; `wheel_angle` / `crank_angle`),
+  `Prop.prop_point(x, y)`, `Prop.unit`. `write_props_png(..., kinds=VEHICLE_KINDS)`; `props.png`
+  leaves vehicles out.
+- **Riders** (`cartoon/riding.py`): never added to the vehicle (§69.22). `RiderSeat` (rider,
+  vehicle, place, `ratio`) and `place_rider` put the feet on the seat's floor point at `ratio` ×
+  the vehicle unit, facing its way, with its `stage_depth` / `ground_y`; an updater calls it every
+  frame and `Ride` calls it too (Manim pauses an animated character's updaters). `riding_state`
+  seats the rider; on a bicycle it leans, plants the feet on the pedals (`Character.planted`,
+  §69.26) and reaches to the grip. `Ride(vehicle, x, seats=, speed=, depth=, feet_y=, strength=)`
+  turns the vehicle to its direction at once, moves along `walk_progress`, scales about its feet in
+  depth, turns wheels, re-plants cyclist feet. `BodyMove(y=)` eases the feet's y.
+- **Actions** (`scenes/riding.py`, against `vidgen.api`): `get_in` (`to` a vehicle; 1.0 s): nearest
+  free seat (`Postures.ride`), `BodyMove`, follow updater, `Character.riding`; drawn right before a
+  car / bus, right after a bicycle. `ride_to` (vehicle or rider; `to` a place or `{mark, depth}`,
+  `depth`, `speed`): a `Ride` per vehicle; in depth registers with `Stage.ride_in_depth`.
+  `get_out` (0.9 s): updater off, `Postures.get_out`, `BodyMove` back, drawn right after the
+  vehicle. Riding counts as posed (`is_posed`): looks turn only the head, poses move only arms and
+  head.
+- **Stage**: vehicles are movable props when a `ride_to` is used (`ShadowCaster(grows=True)`,
+  `Prop.standing_height`); riders cast no shadow. The §69.44 keeper moves a vehicle with riders and
+  their held props as one block (`_moving_block`); `_depth_crossers` knows `Ride`.
+- **Validate** (`holding_problems(vehicles=)`, `StageFrame.vehicles`): `get_in` beyond
+  `GET_IN_REACH` 0.5 heights from the vehicle's end or at another depth (suggests the `walk_to`); a
+  full vehicle; `ride_to` of a non-rider; `get_out` without `get_in`; pinned actions (§69.28) and
+  `stand_up` / `sit_on` / `lean_on` while riding; `pick_up` / `hold` of a vehicle; `keyframes` /
+  `move_along` of a ridden one. The replay moves riders and vehicles. `scene_problems`: `to` /
+  targets that are not vehicles.
+- **Sound and effects**: `ride_cues` (`RIDE_SOUNDS`, `BRAKES`, `ENGINE_SHARE`; sounds generated in
+  `sfx.py`); `motion_effect_cues` treats `ride_to` as a walk (dust, speed lines from `FAST_SPEED`).
+- **Planner, shots**: `_follow_written` replays the three actions (`_riding`); they are
+  `LOOK_CHANGING` and `MOVING_ACTIONS`. `follow` of a vehicle (its box) or rider (its feet) tracks
+  the ride; a beat's `shot` is framed where riders are at the beat's start. Layout key `riding`;
+  `character_overlap` / `walk_overlap` skip two riders of one vehicle; `hidden_speaker` ignores a
+  rider's own vehicle. Tests: `tests/test_cartoon_vehicles.py`.
 
 ### 69.53 Vehicles on the water and in the air (Step 119)
 
-A `boat` rides along a strip of water, a `hot_air_balloon` rises, drifts with the wind and lands,
-and a `toy_rocket` launches with smoke and floats down under a parachute (or flies off). They are
-vehicle props like those of §69.52 and reuse `get_in` / `ride_to` / `get_out`, seats, riders on
-updaters and the validate replay; only where they go differs.
+`boat`, `hot_air_balloon`, `toy_rocket`: vehicle props as in §69.52; only the path differs. User
+keys: docs/CONFIG.md "Water and air vehicles (`water`, `land`)".
 
-- **Geometry** (`cartoon/vehicles.py`): `VehicleSpec.medium` (`ground` / `water` / `air`;
-  `GROUND_VEHICLES`, `WATER_VEHICLES`, `AIR_VEHICLES`, `medium(kind)`) and `.stands` (riders stand
-  on the floor instead of sitting: `riding_state` returns the standing state). `boat` 0.58 of a
-  character tall, 1.9 long, 2 seats behind its side (seat line 0.2, floor 0.05), speed 2.5;
-  `hot_air_balloon` 2.1 tall, 2 riders standing in the basket (rim 0.5), speed 1.2; `toy_rocket`
-  0.55 tall, no seats (a toy: `get_in` to it is refused in `scene_problems`), speed 6.
-  `ROCKET_ASCENT_SHARE` 0.3 lives here (foley and paths share it). No wheels: `Ride` turns
-  wheels only for ground vehicles.
+- **Geometry**: `VehicleSpec.medium` (`ground` / `water` / `air`; `GROUND_VEHICLES`,
+  `WATER_VEHICLES`, `AIR_VEHICLES`, `medium(kind)`) and `.stands` (riders stand). The balloon is
+  2.1 character heights tall (riders are full size); the rocket has no seats (`get_in` refused in
+  `scene_problems`). `ROCKET_ASCENT_SHARE` is shared by foley and paths. Only ground vehicles turn
+  wheels.
 - **Paths** (`cartoon/vehicle_paths.py`, pure, seeded): `Course(kind, start, end, rise, drift,
-  land, seed).at(share)` → the feet (x, y) and a turn (degrees about the feet). Ground and water:
-  straight, eased like a walk. `balloon_point`: rises `rise` over `BALLOON_RISE_SHARE` 0.3 of the
-  time while starting across (`smoothstep` up, cruise, `smoothstep` down to land at `end`), a
-  gentle seeded float (5 % of the altitude, twice) and a `drift` bulge `drift·sin(πs)` (largest
-  half-way, 0 at both ends, so it still lands at `to`); `land=False` keeps rising to `end` above
-  the frame. `rocket_point`: up an arc `x0 + across·v`, `y0 + apex·(2v − v²)` (`across` = 0.5 of
-  the way, `v` = 1 − (1 − u)², slowing to the top) over `ROCKET_ASCENT_SHARE`, the nose along the
-  tangent (blended in from upright over the first 30 %, level at the top), then down to `end`
-  (`smoothstep`) turning upright over `CHUTE_TURN` 0.25 and swaying `CHUTE_SWAY` 9° less and
-  less; `land=False`: `x0 + dx·v²`, `y0 + dy·v`, `v = s^1.6`, nose along the tangent.
-  `balloon_seconds` (way across + up and down at its speed), `rocket_seconds` (1.8 s landing /
-  0.6 s away plus the way at its speed). Water: `wave_offset(x, t, sign)` (two drifting sines, at
-  most `WAVE_HEIGHT` 0.035 character heights), `front_outline`, `boat_bob(t, phase)` (±0.025
-  character heights every 2.4 s, ±2.5°), `bob_phase(name)`. Smoke: `smoke_puffs(age, course,
-  seconds, size, seed)`: `SMOKE_BURST` 6 puffs rolling out both ways on the ground where it set
-  off, `SMOKE_TRAIL` 12 left where its tail was while the motor burns (`Course.powered()`: the
-  ascent, or 0.7 of a flight away), each growing and fading over `SMOKE_SECONDS` 1.1 s.
-- **Drawings** (`cartoon/vehicle_drawing.py`): a small open boat with an outboard motor at the
-  stern, a stripe and a dark gunwale; a balloon with a round envelope in two bands of gores
-  narrowing to its mouth, ropes, a burner and a wicker basket; a toy rocket with fins, a pointed
-  nose, a round window and a dark nozzle, in two shapes (`PROP_SHAPES["toy_rocket"]`: `folded`,
-  `chute`, its parachute open on four lines above it; `VehicleDrawing.shapes`). Every vehicle
-  prop now has an anchor; `Prop.pose_at(x, y, degrees)` undoes its `tilt` about the feet and sets
-  place and turn afresh. Original shapes; the rocket is a toy, not any real craft. Colours:
-  boat highlight / accent, balloon accent / secondary, rocket primary / accent. Gallery:
-  `docs/gallery/media/vehicles.png` now 960×480, 4 columns, 7 cells (the rocket twice).
-- **Water** (stage param `water: true | {left, right, color}`; `cartoon/water.py`
-  `StageWater`): a band from the frame's bottom to `WATERLINE` 0.12 character heights above the
-  ground line, between `left` and `right`, in the backdrop after the ground band; a front strip
-  with a wavy top `FRONT_DROP` 0.05 under the surface and a light crest line, put first in the
-  foreground (in front of the boats, over their keels). A scene updater (`_water_step`) moves the
-  waves and bobs each boat about where it rests (`Prop.afloat`), re-placing its riders after
-  (the riders' own updaters ran before it in the frame). Waves drift right, left when the stage's
-  `wind` is negative. `get_moving_mobjects` redraws from the first boat on (front strip, boats,
-  riders). Boats cast no shadow. Params checks: a boat needs water, its `at` on it, depth 0;
-  `water`, a boat, a balloon or a rocket in a `room` is refused ("stays outdoors").
-- **Rides** (`Ride(..., rise=, drift=, away_y=, seed=)`): a boat starts from `afloat` and
-  updates it; a flying vehicle's `Course` is built in `begin` (and in `__init__` for the run
-  time) from `prop_point(0, 0)`; `interpolate` calls `pose_at` on the course; a rocket shows its
-  `chute` from the top of a landing flight and `folded` at the touchdown. `Ride` leaves
-  `(course, seconds)` on `Prop.flight`. `RideTo._flight` (`scenes/riding.py`): the rise wanted
-  (`BALLOON_ALTITUDE` 0.3 / `ROCKET_APEX` 0.45 frame heights) capped so the top (a rocket with
-  its parachute: 2.2 × its height) stays `FLIGHT_MARGIN` 0.04 under the frame's top, at least
-  `LOWEST_RISE` 0.12; the drift `BALLOON_DRIFT` 1.2 character heights × the stage's wind level
-  then (balloon only); `land: false` → `away_y` above the frame (vehicle height + 0.3); seed from
-  the scene and the vehicle's name.
-- **Validate** (`holding_problems(water=)`, `StageFrame.water`): a boat's `to` off the water;
-  `depth` for a vehicle not on the ground; `land: false` for one not in the air; anything a later
-  action does with a vehicle that flew away or its riders ("'kit' flew away out of the frame
-  (...); it is gone for the scene"). The planner (`_riding`) marks them gone too.
-- **Foley and motion effects**: `RIDE_SOUNDS` boat `engine` (pitch +6, no brakes), balloon
-  `burner`, rocket `launch`; with `PlayedAction.lands` (a landing flight) a rocket's parachute
-  `pop` at `ROCKET_ASCENT_SHARE` and a soft `thud` at the touchdown (`TOUCHDOWN`). Two new
-  generated sounds in `sfx.py` (`burner`, `launch`; 21 → 23). `motion_effect_cues`: no dust or
-  speed lines on the water or in the air; a rocket's `smoke` cue (a new `MOTION_EFFECT_KINDS`
-  kind, drawn behind it by `MotionEffect._smoke` from `Prop.flight`, the `smoke` particles'
-  colour).
-- **Checked by eye** (scratch project, preview 854×480 storyboards): two riders climbing into a
-  boat on water from 0.35, motoring right, bobbing with waves crossing its keel; a balloon at
-  `size: 0.3` in a `windy` stage taking two standing riders up, drifting and landing at 0.75,
-  then both getting out; a toy rocket launching with a smoke burst and trail, its parachute
-  opening at the top, landing upright, and a second one flying off the top of the frame.
-- **Not done**: the boat's ends are not checked against the water's edges (only its middle);
-  `get_out` of a balloon puts the riders in front of the basket like a car's; no water in depth,
-  no splash, no riding in depth on water or in the air; the balloon does not lean with the wind;
-  smoke does not drift with the wind; a balloon's riders are as tall as on the ground, so the
-  balloon is 2.1 characters tall (authors use a small `size`). Tests:
-  `tests/test_cartoon_water_air.py`.
+  land, seed).at(share)` → feet (x, y) and turn. Ground / water straight, walk-eased;
+  `balloon_point` rises, cruises with a drift `drift·sin(πs)` (0 at both ends, so it lands at
+  `to`) and lands; `rocket_point` arcs up, then parachutes down upright; `land=False` keeps going
+  out of the frame. `balloon_seconds`, `rocket_seconds`. Water: `wave_offset`, `front_outline`,
+  `boat_bob`, `bob_phase(name)`. Smoke: `smoke_puffs(age, course, seconds, size, seed)` while
+  `Course.powered()`.
+- **Drawings**: the rocket has shapes `folded` and `chute` (`PROP_SHAPES["toy_rocket"]`,
+  `VehicleDrawing.shapes`). Every vehicle has an anchor; `Prop.pose_at(x, y, degrees)` undoes its
+  `tilt` about the feet and sets place and turn.
+- **Water** (stage param `water: true | {left, right, color}`; `cartoon/water.py` `StageWater`):
+  a band in the backdrop after the ground band and a front strip first in the foreground, over the
+  keels. Scene updater `_water_step` moves waves and bobs boats about `Prop.afloat`, re-placing
+  riders after. Waves drift right (left with negative `wind`). `get_moving_mobjects` redraws from
+  the first boat on. Boats cast no shadow. A boat needs water, its `at` on it (its middle), depth
+  0; water and water / air vehicles in a `room` are refused.
+- **Rides** (`Ride(..., rise=, drift=, away_y=, seed=)`): a boat updates `afloat`; a flying
+  vehicle's `Course` is built in `begin` (and `__init__` for run time); `interpolate` calls
+  `pose_at`; a rocket shows `chute` from the top of a landing flight, `folded` at touchdown; `Ride`
+  sets `Prop.flight = (course, seconds)`. `RideTo._flight` (`scenes/riding.py`): rise
+  `BALLOON_ALTITUDE` / `ROCKET_APEX` capped so the top stays `FLIGHT_MARGIN` under the frame top, at
+  least `LOWEST_RISE`; balloon drift `BALLOON_DRIFT` × the stage's wind level; `land: false` →
+  `away_y` above the frame; seed from scene and vehicle name. No riding in depth on water or air.
+- **Validate** (`holding_problems(water=)`, `StageFrame.water`): boat `to` off the water; `depth`
+  for a non-ground vehicle; `land: false` for a non-air one; any later use of a vehicle that flew
+  away or its riders (the planner `_riding` marks them gone too).
+- **Sound and effects**: `RIDE_SOUNDS` boat `engine`, balloon `burner`, rocket `launch`; with
+  `PlayedAction.lands` a parachute `pop` and a touchdown `thud`. No dust or speed lines on water or
+  in the air; a rocket's `smoke` cue (`MOTION_EFFECT_KINDS`, `MotionEffect._smoke` from
+  `Prop.flight`). Tests: `tests/test_cartoon_water_air.py`.
 
 ### 69.54 Props that move by themselves, indoors (Step 120)
 
-A wall `clock` runs, a `tv` shows a flickering picture and a `lamp` glows. They are the props of
-§69.8 / §69.43 drawn with a few extra parts; every other prop, and these three while they never
-run or come on, are drawn exactly as before.
+A `clock` runs, a `tv` flickers, a `lamp` glows. Every other prop, and these while they never run
+or come on, draw exactly as before. User keys: docs/CONFIG.md "Clocks, televisions and lamps
+(`time`, `on`, `switch_on`)".
 
-- **Maths** (`cartoon/living.py`, no manim): `parse_clock_time` (`H:MM` / `H:MM:SS`, 0:00–23:59:59),
-  `clock_seconds(start, speed, t)`, `hand_angles(seconds)` → `HandAngles(hour, minute, second)`
-  in degrees clockwise from twelve (the hour hand twice round a day, moving between hours),
-  `hand_tip`, `shows_second_hand(speed)` (up to `SECOND_HAND_MAX_SPEED` 10), `DRAWN_CLOCK_SECONDS`
-  (10:10, the drawing), `MAX_CLOCK_SPEED` 3600. Switches: `switched_on(on_at_start, switches, t)`
-  (the last `(time, on)` at or before `t` wins), `switch_between`, `on_between`. A television's
-  picture: `tv_shot(t, seed)` (picture `k` starts near `k` × `TV_SHOT_SECONDS` 1.8 s, moved by up to
-  ± `TV_SHOT_JITTER` / 2, so they stay in order), `tv_flicker(t, seed)` (1 − `FLICKER_DEPTH` 0.22 ×
-  u², a new u every `FLICKER_STEP` 1/12 s), `tv_picture` → `TvPicture(shot, colors, brightness)`
-  from `TV_PALETTES` (six sets of sky, ground and two shapes; no programme of any kind). Glows:
-  `GLOWS` (lamp: warm `#FFD67A` about the lantern, radius 0.42 prop units, 0.55 at the middle; tv:
-  cool `#A8D8FF` about the screen, 0.8, 0.3), `glow_rings(radius, opacity)` (`GLOW_RINGS` 12 equal
-  discs whose stacked opacity is `opacity` at the middle), `glow_box`, `union_box`,
-  `boxes_overlap`, and `redrawn_members(boxes, regions, margin)` (below). Seeds are
-  `random.Random` of a text key, the same in every run.
-- **Drawing** (`cartoon/living_drawing.py`): `draw_prop(kind, ..., living=True)` (for `clock`,
-  `tv`, `lamp`: `LIVING_KINDS`) adds `living_overlays` after the drawing and an anchor
-  (`Prop(anchored=True)`): a clock's red second hand (`SECOND_HAND`), a tv's picture over its
-  screen (four members, the first outlined like the screen), a lamp's lit lantern and core. The
-  clock's hour and minute hands are tagged in its drawing (`LIVING_PART`); the overlays lie inside
-  the prop's box, so its feet, size, shadow and layout dump are unchanged. A `LivingProp(prop,
-  start, speed, on, seed, movable)` sets them for a scene time (`update`): the hands from the
-  screen position of the clock's middle (`prop_point`), so a clock facing left still runs
-  clockwise; a tv's picture colours darkened by the flicker; the overlays shown (their drawn
-  opacities) or hidden (0). A `PropGlow` (the rings) is a mobject of its own, placed by the
-  prop's anchor, drawn right before the prop, never graded by the light (§69.31); the lit
-  overlays are not graded either (`LIT` cleared), the hands are. The layout dump leaves glows out.
-- **Stage** (`scenes/stage.py`): prop keys `on` (`tv` / `lamp`), `time` and `speed` (`clock`;
-  a clock with either runs: `StageProp.runs`, `clock_start`), each a config error on other props.
-  YAML 1.1 reads a bare key `on` as `true`; `StageProp` takes that key as `on`. `_living_names`:
-  running clocks, and tvs / lamps that are `on` or named by a `switch_on` (glob patterns too);
-  only those are drawn `living`. `_start_living` makes the `LivingProp`s (after `mark_lit`; seeds
-  from `motion_seed(scene, name)`; `movable` from `_movable_props`) and a scene updater
-  (`_living_step`) that updates them on every frame; the entrance adds each glow right before its
-  prop. `switch_props(patterns, on, time)` records the switches and plays a `click`
-  (`SWITCH_CLICK_GAIN` −4 dB) with foley.
-- **Actions** (`scenes/switch_action.py`): `switch_on` / `switch_off`, non-animating like `light`
-  (cued at `at` when the beat starts, at once); `scene_problems`: not a prop, or a prop that does
-  not switch ("'sofa' cannot be switched on or off (props that can: lamp, tv)"), or not a stage.
-- **Only the moving parts leave the static image** (§69.20): `get_moving_mobjects` ends with
-  `_living_redrawn`. For each `LivingProp` that changes during the animation (`changing(start,
-  end)`: a running clock always; a tv while on; a lamp only when a switch falls in it, or while on
-  if an action may move it) its movers (the hands; the picture or lantern and the glow) are
-  redrawn on every frame, and so is every family member drawn after the first mover whose box
-  overlaps a mover's region (the prop's box with its glow, + `REDRAW_MARGIN` 0.006 frame heights
-  for outlines) or the box of a member already redrawn (`redrawn_members`: a member redrawn over
-  the static image would otherwise cover what lies on it). Everything else, before or after,
-  stays in Manim's static image; Manim's own moving list (characters with idle motion, from the
-  first of them on) is kept as it was. The result is in draw order.
-- **Measured** (scratch room at preview 854×480, 15 fps, 266 frames, no audio, one process per
-  run under the 1500 MB cap; a sofa, a picture, a clock, a tv, a lamp, an armchair, a rug, a
-  door, a window, two characters, `light: night`; Cairo draws counted around
-  `Camera.display_vectorized`, raw frames hashed):
-
-  | render | Cairo draws | drawing (s) | wall (s) | CPU (s) |
-  |---|---|---|---|---|
-  | HEAD 118b1b9 (props as drawn), 3 runs | 20 358 | 2.88–3.09 | 6.60–6.91 | 7.73–8.23 |
-  | this step, same scene | 20 358 | 3.41 | 8.82 | 10.07 |
-  | this step, clock running (`speed: 1`, second hand), tv and lamp `on` (lamp glow 0.34 then), 3 runs | 32 665 | 4.66–4.92 | 10.50–10.77 | 11.63–11.95 |
-  | the same, everything from the first moving part redrawn (for comparison) | 34 171 | 4.71 | 9.61 | 10.92 |
-  | final glow size, alternating with the plain scene (2 pairs): plain | 20 358 | 2.83–2.84 | 7.27–7.49 | 8.44–8.64 |
-  | final glow size, alternating: everything on | 32 665 | 3.90–4.38 | 8.97–9.83 | 10.21–10.88 |
-
-  The scene with nothing on gives the same raw frames as HEAD (all 266 hashes; the 8.8 s run
-  was on a busier machine: two HEAD runs with hashing took 7.6 and 8.7 s). With everything on, 46
-  more draws a frame on average: the hands (3), the tv's picture (4) and glow (12 rings) on every
-  frame; the lamp's glow (12) and lantern (2), which stand after a character sitting at the wall
-  and so are redrawn with it anyway; the rest in the fade in and out, where everything is drawn.
-  A logging run shows the overlap rule added nothing else in this room (no member after the clock
-  or the tv overlaps them before the first character). In the alternating pairs, drawing +1.1 to
-  +1.5 s (the glows are large translucent discs) and wall +1.7 to +2.3 s (+23 to +31 %) for
-  17.7 s of video; the earlier runs (+1.7 s drawing) were on a busier machine. Against redrawing everything from the clock on, the rule saved
-  1 506 draws here (the tv's body, the door...); both give the same frames. A lamp that stays on
-  and stands before every moving thing stays in the static image (render test).
-- **Checked by eye** (scratch projects, preview stills and frames): a night room with the lamp
-  switched on in beat 2 (glow on the wall and window behind it, lantern lit), the tv switched on
-  in beat 3 (picture, cool glow), the lamp off in beat 4 with the tv still on, a clock at 23:55
-  running a minute a second; a second room with a clock at 21:40 in real time (the second hand
-  sweeping), a tv and a lamp on from the start. `vidgen lint`: 0 findings.
-- **Not done**: the room's own light does not change with a lamp (no light falloff, no lit
-  characters: the glow lies behind the lamp); a carried lamp's glow follows it but keeps its
-  place in the draw order; no fade when switching (at once); a tv has no sound; the clock does
-  not strike. Tests: `tests/test_cartoon_living.py`.
+- **Maths** (`cartoon/living.py`, no manim): `parse_clock_time` (`H:MM` / `H:MM:SS`,
+  0:00–23:59:59), `clock_seconds(start, speed, t)`, `hand_angles` (clockwise from twelve),
+  `shows_second_hand(speed)` (up to `SECOND_HAND_MAX_SPEED` 10), `MAX_CLOCK_SPEED` 3600.
+  `switched_on(on_at_start, switches, t)` (last `(time, on)` at or before `t` wins),
+  `switch_between`, `on_between`. `tv_shot`, `tv_flicker`, `tv_picture` (`TV_PALETTES`); `GLOWS`,
+  `glow_rings` (`GLOW_RINGS` 12 discs stacking to the given opacity), `redrawn_members`. Seeds are
+  `random.Random` of a text key.
+- **Drawing** (`cartoon/living_drawing.py`): `draw_prop(kind, ..., living=True)` (`LIVING_KINDS`)
+  adds `living_overlays` and an anchor; overlays lie inside the prop box, so feet, size, shadow
+  and layout dump do not change. `LivingProp(prop, start, speed, on, seed, movable)` `update`s
+  them per scene time (hands from the screen position of the clock's middle, so a left-facing
+  clock still runs clockwise). `PropGlow` is its own mobject right before the prop, never graded
+  (§69.31); lit overlays are not graded (`LIT` cleared), hands are. Glows are not in the layout
+  dump.
+- **Stage**: prop keys `on` (switched props), `time` and `speed` (`clock`; either makes it run:
+  `StageProp.runs`, `clock_start`); each is a config error on other props; `StageProp` takes YAML
+  1.1's bare `on` → `true` key as `on`. `_living_names`: running clocks and switched props that are
+  `on` or named by a `switch_on` (globs too); only those draw `living`. `_start_living` (after
+  `mark_lit`; seeds `motion_seed(scene, name)`), scene updater `_living_step`. `switch_props`
+  records switches and plays `click` with foley.
+- **Actions** (`scenes/switch_action.py`): `switch_on` / `switch_off`, non-animating like `light`,
+  instant; `scene_problems`: not a prop, a prop that does not switch, not a stage.
+- **Only moving parts leave the static image** (§69.20): `get_moving_mobjects` ends with
+  `_living_redrawn`. For each `LivingProp` that `changing(start, end)` (a running clock; a tv while
+  on; a lamp when a switch falls in the span, or while on if an action may move it), its movers are
+  redrawn every frame, plus every member drawn after the first mover whose box overlaps a mover's
+  region (+ `REDRAW_MARGIN`) or an already redrawn member (`redrawn_members`). Everything else stays
+  static; Manim's own moving list is kept; the result is in draw order. A lamp does not light
+  characters. Tests: `tests/test_cartoon_living.py`.
 
 ### 69.55 Props that move by themselves, part 2: fire, steam, nature (Step 121)
 
-A `fireplace` burns, a `kettle` steams, a tree drops fruit and birds cross the sky. All of it is
-seeded and pure (the same in every render) and nothing changes for a scene that uses none of it.
+Seeded and pure; nothing changes for a scene that uses none of it. User keys: docs/CONFIG.md
+"Fireplaces and kettles", "Fruit falling from a tree", "Birds".
 
-- **Fire and steam** (`cartoon/living.py`, no manim): `flame_shapes(t, seed, lean)` → 5 outer
-  and 3 inner `FlameShape`s (closed outlines in prop units: widest a fifth of the way up, pointed,
-  the middle bending to the tip); each height × (1 + `FLAME_FLICKER` 0.28 × noise), the tip
-  wavering by `FLAME_WAVER` 0.035 × noise, where the noise is three seeded sines of 1.3–5 Hz
-  (`_noise`, terms cached). `flame_lean(force)` = `FLAME_LEAN` 0.22 × felt force, at most
-  `FLAME_LEAN_MAX` 0.3. `fire_flicker(t, seed)` ∈ [0.75, 1]: the glow's strength. `GLOWS`
-  gains the fireplace's (`#FFA94D`, radius 1.05 prop units about (0, 0.32), 0.5).
-  `steam_puffs(t, seed, lean)`: `STEAM_PUFFS` 6 puffs, each rising `STEAM_RISE` 2 prop units over
-  `STEAM_SECONDS` 2.2 s from `STEAM_SPOUT` (0.66, 0.68), one after another (seeded jitter),
-  growing from radius 0.08 to 0.3, swaying, drifting away from the spout, opacity
-  `STEAM_OPACITY` 0.85 × min(1, 8 age) × (1 − age)^1.3; the felt wind force (at most
-  `STEAM_LEAN_MAX` 1.2) pushes them aside × age². `steam_box(lean)` bounds them.
-  `on_spans(on, switches, end)`: when a prop is on. `SWITCHED_PROPS` = fireplace, kettle, lamp, tv.
-- **Drawing** (`cartoon/props.py`, `cartoon/living_drawing.py`): `fireplace` (furniture, 0.75 of a
-  character; `dim` bricks, `secondary` mantel, a sooty arched hollow `HEARTH_HOLLOW`, two
-  `LOG_WOOD` logs in front, `FIREPLACE_FRONT` 2) and `kettle` (0.15; `accent` / `dim`; spout up to
-  the right). Drawn `living`, a fireplace gets 8 flame members (`LIVING_PART` `flame`, orange
-  `#F2762E` edged `#C9472A`, yellow `#FFD25A` inner ones) inserted before its front logs.
-  `LivingProp` burns them (`_burn`: all outlines through `closed_curve`, a vectorised Catmull-Rom
-  to Manim's cubic points, 0.7 ms a frame instead of 5 ms with `set_points_smoothly`, then one
-  `Prop.prop_points` for all), flickers the glow, and for a kettle places a `PropSteam` (6 discs
-  `#F4F6FA` with a faint `#AEB9C6` edge, so steam shows on a pale sky) drawn right after the
-  kettle and graded by the light (the flames and the glow are not). `LivingProp(wind=)` is the
-  stage's felt wind force (`Stage._felt_wind`) for a fireplace or a kettle when the stage's wind
-  may blow, else `None`. `changing`: a fireplace or kettle while on; `region(start, end)` adds
-  the glow box and the steam's box (both ways with wind).
-- **Fruit** (`cartoon/nature.py`): `FRUIT_SPOTS` (4 spots on the crown, prop units),
-  `FRUIT_RADIUS` 0.034, red `#D9473B`. `draw_prop("tree", fruit=True)` (stage key `fruit`, trees
-  only) appends stalk, skin and shine per fruit, each tagged `FRUIT_INDEX`; the tree's box is
-  unchanged. A drop: `drop_timing(fall, bounce)` (frame heights; `FRUIT_GRAVITY` 3.2 frame heights
-  / s²; the fall √(2h/g), the bounce 2√(2b/g); `impact` = the fall's share), `drop_point(u,
-  start, impact, end, hit_share, bounce)` (y ∝ time² to the impact, then a parabola `bounce`
-  high to `end`, turning `BOUNCE_TURN` 100° the way it rolls), `fruit_to_drop(left, near_x,
-  xs)`. `Stage.drop_fruit(tree, onto)` (the `drop_fruit` action): hides the tree's fruit (opacity
-  0; the tree stays in the static image), adds a `FallenFruit` (copies at their drawn opacities,
-  moved by its skin's middle, `grip_point`) right after the tree (and after the character it
-  hits) and plays a `FruitDrop` (a `PropMove` with `path`, `lands_at` = the impact: the `thud`
-  of §69.27's foley; speed lines as for a thrown prop). Without `to` it falls from its spot to the
-  tree's ground line and bounces `GROUND_BOUNCE` 0.05 frame heights, `GROUND_ASIDE` 0.04 away
-  from the trunk. With `to: <character>` the fruit nearest above the head (`head_box`'s top)
-  falls on it, bounces `HEAD_BOUNCE` 0.12 and lands `HEAD_ASIDE` 0.4 of the character's height
-  beside its feet, and `hit_stars` (Step 107's `stars` symbol, hidden until `FruitDrop` sets its
-  age to 0 at the impact, `HIT_STARS_SECONDS` 1.6 s, then shrinking, `done`) circles the head; it
-  goes into `Stage.motion_effects`, so the sweep takes it off. No fruit above the head: it falls to
-  the ground. Validate: a target that is not a tree or has no fruit, `to` not a character, a
-  fifth drop of a tree (`_fruit_count_problems`, in `action_sequence_problems` before its early
-  return).
-- **Birds** (`cartoon/nature.py`, `cartoon/nature_drawing.py`): `flock_birds(count, seed)` (a
-  loose V: rank `RANK_BEHIND` 1.3 spans behind, `RANK_ASIDE` 0.55 up or down, seeded jitter, size
-  0.85–1.15, wing beat 3–4.2 Hz), `wing_lift(t, bird)` (a sine with a glide `GLIDE_SHARE` 0.3 of
-  every `GLIDE_SECONDS` 2.6 s, wings held at 0.3), `bird_outline(lift, span)` (five corners: a
-  V up, an upturned V down), `flock_plan(start, seconds, direction, left, right, y, span, count,
-  seed, frame_width)` (default seconds: `FLOCK_SPEED` 0.2 frame widths a second over the stage and
-  a margin of the flock's length each side), `bird_place(plan, k, t)` (`None` outside its time),
-  `flock_box(plan, start, end)` (24 samples). `Flock` (two `wing_curve` cubics per bird,
-  `BIRD_INK` `#2E3440`, stroke 9 × span, at least a pixel; `update_to(t)`) is graded by the light
-  and drawn right after the sky (`Stage._sky_end`: the backdrop's background and stars), behind
-  the layers, ground, props and characters (`_put_in_sky`: into the backdrop before the set comes
-  in, else into the scene). Stage param `birds` (`StageBirds`: `true`, a count, or {count,
-  direction, height (0.5–0.97 of the frame height, 0.8), start (0.5 s), seconds, seed}) and the
-  non-animating action `birds` (`FlockSettings`; a number target is the count; cued at `at`),
-  both refused in a room. Default seed `motion_seed(scene, "birds", k)`.
-- **What is redrawn** (§69.54's rule, generalised): `_living_things` = the living props and the
-  flocks; each has `changing(start, end)`, `movers()` and `region(start, end)` (a flock: the box
-  of its birds during that time). The scene updater `_living_step` updates both (installed for a
-  living prop, or by `add_flock`) and removes itself once only flocks that have flown are left.
-- **Sound** (`ambience.py`, `mix.py`): `fire_loop()` (8 s stereo, numpy, `crc32("ambience:fire")`:
-  a roar of noise around 220 Hz with a 3-cycle breath, 9 crackles a second and 1.5 pops a second,
-  impulses ringing 4 ms (`_ringing`, circular) band-passed at 3 kHz and 1.2 kHz, circular filters)
-  at `FIRE_LEVEL` −34 LUFS. `BEDS` holds each bed's loop, duck (fire: `RAIN_DUCK`) and fades (fire
-  0.6 / 0.8 s); `plan_ambience` places every bed of `AMBIENCE_BEDS` (rain, fire) the same way
-  (rain unchanged). `Stage.timings()` adds `{bed: fire}` for each burning fireplace's `on_spans`
-  when foley is on. `switch_props` plays the `click` for the other props and a 0.8 s `burner` at
-  `FIRE_LIGHT_GAIN` −10 dB when a fireplace is lit.
-- **Layout dump**: `PropSteam`, `Flock` and `FallenFruit` are left out (not placed by authors).
-- **Measured** (scratch projects at preview 854×480, 15 fps, no audio, one process each under
-  the 1500 MB cap; Cairo draws counted around `Camera.display_vectorized`, raw frames hashed):
-
-  | render | frames | Cairo draws | wall (s) |
-  |---|---|---|---|
-  | a stage without the new things (trees, ball, lamp on, wind, leaves, a throw): HEAD c8fad68 / this step | 162 | 16 910 / 16 910 | 8.3 / 7.8–8.1 |
-  | Step 120's room with clock, tv and lamp on: HEAD / this step | 266 | 32 665 / 32 665 | 9.6 / 9.7 |
-  | a night room with a fireplace and a kettle, both off (2 runs) | 260 | 16 415 | 6.6–7.1 |
-  | the same, both on all along (4 runs; the first two before `closed_curve`) | 260 | 31 846 | 10.4–11.4 |
-  | the same, everything from the first moving part redrawn (for comparison) | 260 | 35 551 | 11.4 |
-  | the first stage with `birds: 6` (2 runs) | 162 | 17 990 | 7.5–8.2 |
-
-  The scenes without the new things give the same raw frame hashes as HEAD (all 162 and 266).
-  Fire and kettle on: 59 more draws a frame (flames 8, glow 12, steam 6, and the rug, armchair and
-  character in front of the glow), wall +3.3 to +4.4 s (+50 to +63 %): the fireplace's glow is a
-  large translucent disc stack. The overlap rule saved 3 705 draws over redrawing everything from
-  the first moving part, with the same frames. Birds: +1 080 draws, wall within the noise.
-- **Checked by eye** (scratch projects, preview frames): a night room with the fireplace lit in
-  beat 1 (flames behind the logs, the glow on the wall and floor) and the kettle switched on in
-  beat 2 (steam rising from the spout); an orchard with a breeze: a fruit falling and lying
-  under the tree, one falling on a character's head with the stars, the second tree's fruit, a
-  flock of five crossing to the right and three to the left, a burning fireplace and a steaming
-  kettle outdoors.
-- **Not done**: the fire lights no character; a fallen fruit cannot be picked up (it is not a
-  prop) and lies where it bounced; nothing checks that a `to:` character stands under the tree;
-  the crackle plays while the fireplace burns in the scene, also when the camera looks away; a
-  carried kettle's steam keeps its draw-order place; no birdsong (Step 128); birds do not land or
-  perch; a tree's fruit count is fixed (4). Tests: `tests/test_cartoon_fire_nature.py`.
+- **Fire and steam** (`cartoon/living.py`): `flame_shapes(t, seed, lean)`, `flame_lean(force)`,
+  `fire_flicker` (glow strength), `steam_puffs(t, seed, lean)`, `steam_box`, `on_spans(on,
+  switches, end)`. `SWITCHED_PROPS` lists every prop that takes `on` / `switch_on`.
+- **Drawing** (`cartoon/props.py`, `living_drawing.py`): `fireplace` (furniture), `kettle`. A
+  living fireplace has `flame` members before its front logs; `LivingProp._burn` redraws them
+  (`closed_curve`, a vectorised Catmull-Rom, then one `Prop.prop_points`); a kettle gets a
+  `PropSteam` right after it, graded (flames and glow are not). `LivingProp(wind=)` =
+  `Stage._felt_wind` when the stage's wind may blow, else `None`.
+- **Fruit** (`cartoon/nature.py`): stage key `fruit` (trees only) → `draw_prop("tree",
+  fruit=True)` adds 4 fruit (`FRUIT_SPOTS`, tagged `FRUIT_INDEX`; tree box unchanged).
+  `drop_timing`, `drop_point`, `fruit_to_drop`. `Stage.drop_fruit(tree, onto)` (`drop_fruit`
+  action): hides the fruit on the tree (tree stays static), adds a `FallenFruit` after the tree,
+  plays `FruitDrop` (`PropMove` with `path`, `lands_at` = impact → `thud`). No `to`: to the ground
+  and bounces; `to: <character>`: the fruit nearest above the head hits it and `hit_stars` (the
+  `stars` symbol, in `Stage.motion_effects`) circles the head; no fruit above: to the ground.
+  Validate: not a tree / no fruit, `to` not a character, a fifth drop (`_fruit_count_problems`, in
+  `action_sequence_problems` before its early return). A fallen fruit is not a prop.
+- **Birds** (`nature.py`, `nature_drawing.py`): `flock_birds`, `wing_lift`, `flock_plan` (default
+  `FLOCK_SPEED` 0.2 frame widths/s), `bird_place` (`None` outside its time), `flock_box`. `Flock`
+  (graded) is drawn right after the sky (`Stage._sky_end`, `_put_in_sky`). Stage param `birds`
+  (`StageBirds`: `true`, a count, or {count, direction, height 0.5–0.97 default 0.8, start 0.5 s,
+  seconds, seed}) and non-animating action `birds` (`FlockSettings`; a number target is the
+  count); both refused in a room. Default seed `motion_seed(scene, "birds", k)`.
+- **Redraw** (§69.54): `_living_things` = living props and flocks (and §69.60–61's layers, fog,
+  rainbows), each with `changing(start, end)`, `movers()`, `region(start, end)`; `_living_step`
+  removes itself once only finished things are left.
+- **Sound** (`ambience.py`, `mix.py`): `fire_loop()` (seeded `crc32("ambience:fire")`) at
+  `FIRE_LEVEL` −34 LUFS; `BEDS` holds each bed's loop, duck and fades; `plan_ambience` places every
+  bed of `AMBIENCE_BEDS` the same way. `Stage.timings()` adds `{bed: fire}` per burning fireplace's
+  `on_spans` with foley. Lighting a fireplace plays `burner` instead of `click`.
+- Layout dump leaves out `PropSteam`, `Flock`, `FallenFruit`. Tests:
+  `tests/test_cartoon_fire_nature.py`.
 
 ### 69.56 Everyday small props (Step 122)
 
-Nine small props to hold, give, open and set on a table, a phone that rings, balloons that float
-away and a watering can that pours. Original simple shapes in the theme's colours (fixed hex only
-where no token fits every theme: `CANDLE_FLAME`, `LIGHT_FLAME`, `PAPER`, `PAGE_TEXT`, `STEM`,
-`FLOWER_HEART`, `BALLOON_STRING`, a phone's dark case `#2B2F3A`).
+`SMALL_PROPS` (`cartoon/props.py`, in `PROP_KINDS` after `kettle`): `cake`, `muffin`, `book`,
+`phone`, `letter`, `gift`, `balloons`, `vase`, `watering_can`. Fixed hex only where no token fits
+every theme (`CANDLE_FLAME`, `PAPER`, `BALLOON_STRING`, ...). User keys: docs/CONFIG.md "Everyday
+small props (`let_go`, `pour`)".
 
-- **Props** (`cartoon/props.py`, `SMALL_PROPS`, in `PROP_KINDS` after `kettle`): `cake` 0.22 (two
-  tiers, icing, three candles; `accent` / `highlight`), `muffin` 0.08 (`secondary` top, `accent`
-  case), `book` 0.13 (`primary` / `highlight`), `phone` 0.13, `letter` 0.08 (`PAPER` / `accent`),
-  `gift` 0.2 (`primary` / `highlight`), `balloons` 1.1 (three on strings tied to a weight;
-  `accent`, `highlight` and a lighter `accent`), `vase` 0.32 (`primary` vase, `accent` flowers),
-  `watering_can` 0.22 (`tertiary` / `highlight`). `book`, `letter` and `gift` have the shapes
-  `closed` / `open` (`PROP_SHAPES`, §69.37's live copies, both shapes one prop unit tall), so the
-  `open` / `close` actions and `open: true` work on them unchanged; each shape has its own
-  members. Grips (`PROP_GRIPS`): balloons by `BALLOON_KNOT` (0, 0.07), the strings' end above the
-  weight; a watering can by `WATERING_GRIP` (−0.05, 0.75), the top of its handle;
-  `WATERING_SPOUT` (0.7, 0.64) is the rose.
-- **Held** (`cartoon/holding.py`, `scenes/handling.py`): `OVERHEAD_PROPS` = {umbrella}: only an open
-  umbrella goes overhead (`is_overhead` checks the kind too), an open book, letter or gift stays at
-  the hold point. `FULL_SIZE_HELD` = {balloons}: `held_height(..., full_size=True)` keeps their size
-  (not `HOLD_MAX_HEIGHT`), and they are drawn right before the holder (behind the head, like an
-  overhead umbrella). `_moving_block` now also takes the props held right *before* a walker (an
-  overhead umbrella, balloons), so they keep their place when it walks in depth.
-- **A ringing phone** (`cartoon/living.py`, `living_drawing.py`): `phone` is in `SWITCHED_PROPS`;
-  on = ringing. Drawn `living`, it gets a lit screen (`LIT_SCREEN`, a caller's head and shoulders;
-  `LIVING_PART` `screen`, never graded) and four amber ring lines (`RING_LINE` `#E8A33D`, two each
-  side about `PHONE_CENTRE`, `ring`). `on_since(on, switches, t)` is when the current on span
-  began; `ring_burst(t, since)`: a burst of `RING_BURST` 1 s every `RING_PERIOD` 2 s;
-  `ring_shake(t, since)` = `RING_TILT` 10° × sin(2π × 13 Hz) eased over 0.08 s at both ends of a
-  burst, 0 between. `LivingProp` keeps the phone's whole drawing (every member with points but the
-  anchor) in prop units (`Prop.drawn_points`, the inverse of `prop_points`) and redraws it turned
-  about `PHONE_CENTRE` through the anchor on every frame while it rings (absolute, so a held phone
-  or a `PropMove` never accumulates a turn); its `movers` are the whole drawing, its `region` the
-  box grown by sin 10° of its height. `Stage._ring_sounds` (after `finish`, with foley) records a
-  `phone` sound (`PHONE_RING_GAIN` −6 dB) at each `ring_bursts(on_spans(...))`; switching a phone
-  on plays no `click` (switching it off does).
-- **Balloons let go** (`cartoon/small_props.py`, no manim): `FLOATING_PROPS` = {balloons}.
-  `float_end(start, top, force)`: up to `top` (the stage's top + the prop's height + 0.3) and
-  `FLOAT_DRIFT` 0.6 × force sideways per unit risen (force: the felt wind now, `felt_force`);
-  `float_progress(share)` speeds up from rest over `FLOAT_SPEED_UP` 0.25 then rises evenly;
-  `float_point(share, start, end, seed)` adds a seeded sway (`FLOAT_SWAY` 0.12 units, 2 swings,
-  none at the ends) and a lean of up to `FLOAT_LEAN` 8°; `float_seconds(rise)` = rise / 1.6 × 1.25,
-  1–6 s. The `let_go` action (character target, `prop`) releases the prop, brings the arm back
-  (`LET_GO_ARM_SHARE` 0.3) and plays `PropMove(path=float_point)`; the prop is detached and stays
-  above the frame.
-- **Pouring** (`small_props.py`, `small_props_drawing.py`): `POURING_PROPS` = {watering_can}.
-  `pour_tilt(share)`: 0 → 1 → 0 of `POUR_TILT` 40°, cosine ramps over `POUR_RAMP` 0.2 at each end;
-  `pour_flow(seconds)`: the water runs while the tilt is past `POUR_FLOWS` 0.7; `pour_drops(t,
-  flow, spout, ground, height, direction, seed)`: `DROP_RATE` 22 drops a second, each thrown
-  forward `DROP_AHEAD` 0.35 heights/s, falling at `DROP_GRAVITY` 4 heights/s², radius 0.012 heights
-  (± 30 % seeded), kept while above the ground. The `pour` action (character target, `prop`,
-  `POUR_SECONDS` 2 s) plays `Pouring` (the can redrawn from its starting points turned about its
-  grip, clockwise when the spout points right, the grip at the hand every frame) and `WaterFlow` on
-  a `WaterDrops` (40 discs, `#8FD3F4` edged `#3E86B5`, graded) inserted right after the can and
-  removed when the flow ends (`remover`). The layout dump leaves `WaterDrops` out.
-- **Validate**: `holding_problems(kinds=)` (prop → kind): `let_go` needs a held prop that floats
-  (else "'cake' does not float away ...; put_down it instead") and makes it gone for the scene
-  (a later pick_up, open, ... is reported); `pour` needs a held prop that pours. Each action's
-  `prop` option is checked against the kinds in `scene_problems`. `LIGHT_PROPS` gains `letter` and
+- `book`, `letter`, `gift` have shapes `closed` / `open` (`PROP_SHAPES`, §69.37; both one prop unit
+  tall), so `open` / `close` / `open: true` work. Grips in `PROP_GRIPS` (`BALLOON_KNOT`,
+  `WATERING_GRIP`); `WATERING_SPOUT`.
+- **Held** (`cartoon/holding.py`, `scenes/handling.py`): `OVERHEAD_PROPS` = {umbrella}
+  (`is_overhead` checks the kind too). `FULL_SIZE_HELD` = {balloons}: `held_height(...,
+  full_size=True)` (not `HOLD_MAX_HEIGHT`), drawn right before the holder. `_moving_block` also
+  takes props held right before a walker.
+- **Ringing phone**: on = ringing; living: lit `screen` (never graded) and `ring` lines.
+  `on_since`, `ring_burst` (`RING_BURST` 1 s every `RING_PERIOD` 2 s), `ring_shake`. `LivingProp`
+  keeps the whole drawing in prop units (`Prop.drawn_points`, inverse of `prop_points`) and redraws
+  it turned about `PHONE_CENTRE` each ringing frame (absolute, so holding or a `PropMove` never
+  accumulates a turn). `Stage._ring_sounds` (after `finish`, with foley) records `phone` per
+  `ring_bursts(on_spans(...))`; switching a phone on plays no `click` (off does, and answers it).
+- **Balloons let go** (`cartoon/small_props.py`, no manim): `FLOATING_PROPS` = {balloons};
+  `float_end` (drift by the felt wind), `float_progress`, `float_point` (seeded sway),
+  `float_seconds` (1–6 s). `let_go` (character, `prop`): releases, arm back,
+  `PropMove(path=float_point)`; the prop is detached and gone for the scene.
+- **Pouring**: `POURING_PROPS` = {watering_can}; `pour_tilt`, `pour_flow`, `pour_drops` (seeded).
+  `pour` (character, `prop`, `POUR_SECONDS` 2 s): `Pouring` (the can turned about its grip,
+  clockwise when the spout points right, grip at the hand each frame; a can whose spout points
+  behind the holder is flipped first, §69.64) and `WaterFlow` on `WaterDrops` (graded, inserted
+  after the can, removed after; not in the layout dump).
+- **Validate**: `holding_problems(kinds=)`: `let_go` needs a held floating prop (else "'cake' does
+  not float away ...; put_down it instead") and later uses are reported; `pour` needs a held
+  pouring prop; `prop` options checked in `scene_problems`. `LIGHT_PROPS` includes `letter`,
   `balloons`.
-- **Sound** (`sfx.py`): built-in `phone` (1 s, 0.4–3): a tone flipping between ~1.1 and ~1.4 kHz
-  20 times a second in two pulses (0–42 % and 50–92 %). Step 128's phone ring may refine it.
-- **Gallery**: `write_props_png` leaves `SMALL_PROPS` out by default (`props.png` byte-identical);
-  `write_props_png(..., kinds=SMALL_PROPS, columns=4)` → `docs/gallery/media/small_props.png`
-  (960×540, 21 KB), in CONFIG.md "Everyday small props".
-- **Checked by eye** (scratch `s122/yard`, storyboard and preview frames): a cake held, then put
-  down; a muffin, phone, book and vase on a table; the phone ringing (tilts, ring lines, lit
-  screen) and picked up; held balloons behind the head, floating away with a breeze; a gift
-  picked up and opened in the hand; a watering can held, tilted, drops falling; a book picked up
-  from the table and opened in front of the reader.
-- **Not done**: no splash or watering sound (Step 128); drops do not wet or grow anything; a phone
-  is answered with `switch_off` (no `answer` action, no voice in the handset); balloons let go are
-  gone for the scene; a held prop is not mirrored when its holder turns (§69.27); since Step 130
-  `pour` turns a can whose spout points behind its holder round in the hand first (§69.64). Tests:
-  `tests/test_cartoon_small_props.py`.
+- `write_props_png` leaves `SMALL_PROPS` out by default. Tests: `tests/test_cartoon_small_props.py`.
 
 ### 69.57 More animals: fox, owl, frog, turtle, penguin (Step 123)
 
-`config.Species` gains `fox`, `owl`, `frog`, `turtle`, `penguin`: generic animals from the same
-primitives in the look's colours, no feature or colour combination taken from a known character
-(no mask or bandana on a turtle, no hat or glasses on the owl by default, no signature outfit). The
-§69.48 rules hold (`SPECIES_OWN_KEYS`, svg error, clothes, hair, accessories).
+`config.Species` includes `fox`, `owl`, `frog`, `turtle`, `penguin` (generic; §69.48 rules hold).
 
-- **Drawing** (`cartoon/animals.py`): `HEAD_SHAPES` for each; `SPECIES_PROPORTIONS` multiplies
-  `Proportions` fields after `proportions` and before the seed (frog `leg_length` 1.3 and
-  `mouth_width` 2.2; owl `eye_size` 1.4 and `eye_gap` 1.2; penguin `leg_length` 0.6,
-  `arm_length` 0.85, `body_width` 1.08; turtle `leg_length` 0.85, `head_radius` 0.92). A **fox**:
-  tall pointed ears lined with `fur_tint`, from the side a snout grown out of the head (filled over
-  the head's outline, only its ridge and underside stroked) with a light jaw and a dark nose at the
-  tip, from the front cheek ruffs and a light muzzle; a bushy tail (`FOX_TAIL`, the new
-  `tapered_band(profile=...)` widest in its middle) with a `patch_tint` tip. An **owl**: two tufts
-  of two slim feathers (`fur_shade`, trailing `pointy`), light discs round its big eyes, the
-  `wing` arms and bare `bird_shin`s of a bird (`WINGED`), a short fan of tail feathers. A **frog**:
-  a wide flat head lowered onto the shoulders and the eyes `FROG_EYE_RISE` 0.6 head radii up in
-  bulges drawn behind the head (`species_frame` replaces the `Frame`'s `head_y` and `eye_y`;
-  brows on the bulges, `BROW_GAPS`), nostrils, a wide mouth, `flat_foot` with toe pads, no tail
-  (`config.SPECIES_WITHOUT_TAIL`, also in `cast.character_part_shapes`). A **turtle**: a light
-  chin, nostrils, a short pointed tail rooted behind the shell, and a `shell` (`colors.hair`)
-  added at the back of every `body` shape: from the side a dome bulging out behind the back over
-  a `fur_tint` rim with plate lines in `fur_shade`, from the front its rim round the body. A
-  **penguin**: a `patch_tint` face patch, `flipper` arms (skin colour whatever the sleeves), short
-  legs with `BEAK_COLOR` flat feet (none with shoes), one stubby tail feather.
-- **Beaks**: `BEAKS` gives each beaked species (`BEAKED`: bird, owl, penguin) its side hinge,
-  half height and length and its front seam, half height and half width; `beak_mouth(species,
-  ...)` scales the front openings by the beak's size against the bird's (the bird's numbers are
-  the old ones exactly). Mouth places for fox, frog and turtle are in `MOUTH_PLACES` /
-  `FRONT_MOUTH_PLACES`.
-- **Moving** (`cartoon/acting.py`): `SpeciesMotion(gait, speed, jump)` and `SPECIES_MOTIONS`
-  (turtle: short slow steps, speed 0.4; penguin: `Gait(stride 0.55, swing 0.45, ...,
-  waddle 9)`, speed 0.7; frog: jump 1.8); every other species and a person use `PERSON_MOTION`.
-  `build_character` sets `Character.species_motion`. `Walk` walks `species_motion.walking(gait)`
-  (a plain walk becomes the species' walk; a run keeps `RUNNING` with the waddle), so its
-  `step_length` and footsteps follow. `Gait.waddle` puts `WalkCycle.rock` (`waddle × swing ×
-  amplitude`) on the cycle; `walking_state` rocks the body by it (`SIDE_ROCK` 0.5 of it from the
-  side) and turns the legs back so they stay upright. The moving actions use the species factor
-  only when the YAML gives no `speed` (`model_fields_set`), and `jump` only when it gives no
-  `height`. The screenplay still plans walk times at a person's speed.
+- **Drawing** (`cartoon/animals.py`): `HEAD_SHAPES`; `SPECIES_PROPORTIONS` multiplies
+  `Proportions` after `proportions` and before the seed. Owl uses the bird's wings and shins
+  (`WINGED`); frog has eye bulges (`species_frame` replaces `head_y` / `eye_y`) and no tail
+  (`config.SPECIES_WITHOUT_TAIL`, also in `cast.character_part_shapes`); turtle has a `shell`
+  (`colors.hair`) on every `body` shape; penguin `flipper` arms. `tapered_band(profile=...)` for the
+  fox's tail.
+- **Beaks**: `BEAKS` per `BEAKED` species (bird, owl, penguin); `beak_mouth(species, ...)` scales
+  against the bird's (bird unchanged). Fox, frog, turtle in `MOUTH_PLACES` / `FRONT_MOUTH_PLACES`.
+- **Moving** (`cartoon/acting.py`): `SpeciesMotion(gait, speed, jump)`, `SPECIES_MOTIONS`
+  (turtle slow, penguin waddle, frog high jump); others `PERSON_MOTION`. `build_character` sets
+  `Character.species_motion`; `Walk` uses `species_motion.walking(gait)` (a run keeps `RUNNING`
+  with the waddle). `Gait.waddle` → `WalkCycle.rock`; `walking_state` rocks the body, legs kept
+  upright. The species factor applies only when the YAML gives no `speed` (`model_fields_set`),
+  and `jump` only without `height`. The screenplay plans walk times at a person's speed.
 - **Contrast** (§69.49): `species_difference` counts two species of one `SPECIES_FAMILIES` family
-  (bird / owl / penguin, cat / fox) 0.5 apart instead of 1; a turtle's hair colour is compared even
-  without hair (its shell). `random_cast` draws fur from `SPECIES_COLORS` for the new species and a
-  turtle's hair from `SHELL_COLORS` (the other species and humans get the same picks as before).
-- **Gallery**: `write_looks_png` moves a figure back inside its character's cell (a long tail is
-  no longer cut); `docs/gallery/media/more_animals.png` (720×420, 25 KB) shows the five side and
-  front, in CONFIG.md "Animal characters". `animals.png` is unchanged.
-- Step 114's six species and every human look draw exactly as before (digests pinned in
+  0.5 apart; a turtle's hair colour (shell) is compared. `random_cast` draws from `SPECIES_COLORS`
+  / `SHELL_COLORS` (other species' picks unchanged).
+- Earlier species and human looks draw exactly as before (pinned in
   `tests/test_cartoon_animals.py`). Tests: `tests/test_cartoon_more_animals.py`.
 
 ### 69.58 Robots and costumes (Step 124)
 
-`config.Species` gains `robot`, built by the new `look.robot` (`config.RobotLook`: `head` box |
-round, `face` eyes | screen, `antenna` true | false, `moves_on` legs | wheels; `CharacterLook.robot_look()`
-gives the defaults when it is not given). A robot is a friendly generic machine from primitives
-in the look's colours, no shape taken from a known film, TV or game robot (no dome head, no
-binocular eyes, no humanoid protocol figure). Rules: `ROBOT_OWN_KEYS` (`ears`, `nose`,
-`facial_hair`, `hair`) are not given with a robot; `robot` with another species and `shoes` on
-wheels are config errors. `animals.is_animal` is false for a robot; `SPECIES_WITHOUT_TAIL` holds
-`robot`.
+`species: robot` with `look.robot` (`config.RobotLook`: `head` box | round, `face` eyes | screen,
+`antenna` true | false, `moves_on` legs | wheels; `CharacterLook.robot_look()` gives defaults).
+`ROBOT_OWN_KEYS` (`ears`, `nose`, `facial_hair`, `hair`) are not given with a robot; `robot` with
+another species and `shoes` on wheels are config errors. `animals.is_animal` is false for a robot;
+`SPECIES_WITHOUT_TAIL` holds it. User keys: docs/CONFIG.md "Robots and costumes".
 
-- **Drawing** (`cartoon/robots.py`, called by the generator): the `head` part is a neck, side
-  bolts, a rounded box (`BOX_HEAD`) or a ball, and a face plate (`fur_tint` of the plating) or a
-  dark screen (`SCREEN_COLOR`, a glare line). The eyes, brows and mouth are the person's parts;
-  on a screen they are drawn with `features` = `SCREEN_GLOW` (`face_colors`) and the open eyes
-  are filled glowing ellipses (`screen_eye`; sleepy: the lower half), so visemes, blinks and
-  expressions show on the screen. Arms and legs are the person's segments in the plating (a plain
-  outfit) or the outfit's colours, with `joint` bolts at the shoulders, elbows and knees,
-  gripper `hand`s and block `foot`s (none with shoes); on wheels each shin ends at a `wheel`
-  (`WHEEL_RADIUS`, tyre `TYRE_COLOR`, the sole still at 0, so seats, planting and grounding are
-  unchanged). A `chest_panel` of three lights goes over every `body` shape.
-- **`antenna` part** (new in `PART_NAMES`, `PosePart`, `SVG_PART_NAMES`; parent `head`, draw order
-  49, behind the head): a socket, a coil (stroked zigzag) and a ball light in `colors.accessory`,
-  pivoting at the socket; shapes `default` and `dim` (`idle.ANTENNA_DIM_SHAPE`, the light 55 %
-  darker). The coil and light trail in the wind (`TRAIL_WEIGHTS["antenna"]` 0.35);
-  `follow_angles` gives it `-FOLLOW_ANTENNA_DEGREES (40) × (forward + up)`, limit 25° (it tips back
-  as the robot sets off); idle: `antenna_sway_angle` (1.7 s, 3°) and `antenna_light_on` (dim 30 %
-  of every 1.3 s, lit at the clock's start) as overlays. `crown_top` counts it, so effect symbols
-  go above it.
-- **Moving** (`acting.py`): a legged robot walks with `SPECIES_MOTIONS["robot"]` (knees 0.5,
-  elbows 0.4); on wheels `ROLLING_MOTION` (`Gait(swing 0, knee 0, elbow 0, bob 0.25, rolls=True)`;
-  a run keeps the roll and leans like a run): `species_motion(species, wheels=)`, set by
-  `build_character`. `Gait.rolls` reaches `foley.PlayedAction.rolls` (from `Walk.gait`), which
-  plays no footsteps.
-- **Costume pieces** (`cartoon/costumes.py`; `Accessory` gains `crown`, `wizard_hat`,
-  `party_hat`, `cape`): the first three are drawn in the `accessory` part (`HEADWEAR_DRAWINGS`,
-  `HEAD_ACCESSORIES`), their base `BASE_RISE` 0.72 head radii above the head's centre (the hat's
-  brim): a crown (band, points with balls, gems in `colors.clothes`; rigid), a wizard hat (brim,
-  a `tapered_band` cone along a `path_curve` bending back, band, two stars; trailing
-  `wizard_hat` 0.4), a party hat (a cone turned 12°, two stripes `clip_to_box`ed, a pompom;
-  trailing `party_hat` 0.2). `config.TOP_OF_HEAD` (hat, cap, crown, wizard_hat, party_hat): at
-  most one per look ("X and Y are both worn on top of the head", the old hat-and-cap message
+- **Drawing** (`cartoon/robots.py`): eyes, brows, mouth are the person's parts; on a screen drawn
+  with `features` = `SCREEN_GLOW` (`face_colors`, `screen_eye`), so visemes, blinks and expressions
+  show. On wheels each shin ends at a `wheel` with the sole still at 0 (seats, planting, grounding
   unchanged).
-- **`cape` part** (new; parent `body`, draw order 3, behind the tail and everything): from the
-  shoulders to `CAPE_HEM` 0.45 of the legs' length, a waving hem; from the side flaring out
-  behind the back, from the front its inside (`fur_shade` of `colors.accessory`) beside the body;
-  pivot at the neck. Its ties and clasp (`cape_clasp`) go over every `body` shape. Trailing
-  `cape` 0.9; `follow_angles` `FOLLOW_CAPE_DEGREES (50) × (forward - up)`, limit 35° (back as it
-  sets off or falls, on as it stops); `walking_state` turns it back by `WALK_CAPE_FLUTTER` 0.4 of
-  the size of the arm swing each step.
-- **Voice**: `[beep]` (`VOICE_SOUNDS`, said `Beep boop!`, face `happy`, viseme `E`) with the new
-  built-in sound `beep` (0.4 s, two soft electronic notes) at a line's start or end, like a gasp
-  (§69.33); voices work as for anyone.
-- **Cast and contrast**: `cast.character_part_shapes` adds `antenna` (`default`, `dim`) and
-  `cape`; `vidgen character` prints `species robot (box head, eyes face, antenna, legs)`.
-  `contrast.HEADWEAR` gains the three hats; two robots differ by details `robot head ...`,
-  `robot face ...`, `robot on ...`, `antenna`. `random_cast` draws a robot's plating from
-  `SPECIES_COLORS["robot"]` and its build from `ROBOT_CHOICES` (only for `robot`, so other casts
-  keep their picks); costume pieces are never drawn at random.
-- **Gallery**: `docs/gallery/media/robots.png` (four robots and four costumed characters, side and
-  front). Every earlier look draws as before: Steps 113 / 114 pins in `tests/test_cartoon_animals.py`,
-  Step 123 species pinned in `tests/test_cartoon_robots.py` (taken at 8dceb29). Tests:
-  `tests/test_cartoon_robots.py`.
+- **`antenna` part** (`PART_NAMES`, `PosePart`, `SVG_PART_NAMES`; parent `head`, draw order 49):
+  shapes `default` and `dim` (`idle.ANTENNA_DIM_SHAPE`); trails, follows (`follow_angles`), idle
+  overlays `antenna_sway_angle` / `antenna_light_on`. `crown_top` counts it.
+- **Moving**: legged `SPECIES_MOTIONS["robot"]`; wheels `ROLLING_MOTION` (`Gait(..., rolls=True)`):
+  `species_motion(species, wheels=)`. `Gait.rolls` → `foley.PlayedAction.rolls`: no footsteps.
+- **Costumes** (`cartoon/costumes.py`; `Accessory` `crown`, `wizard_hat`, `party_hat`, `cape`):
+  hats in the `accessory` part (`HEADWEAR_DRAWINGS`, `HEAD_ACCESSORIES`). `config.TOP_OF_HEAD`
+  (hat, cap, crown, wizard_hat, party_hat): at most one per look ("X and Y are both worn on top of
+  the head").
+- **`cape` part** (parent `body`, draw order 3, pivot at the neck): trails, follows, flutters in
+  `walking_state`; `cape_clasp` over every body shape.
+- **Voice**: `[beep]` (`VOICE_SOUNDS`, said `Beep boop!`, face `happy`, viseme `E`) with built-in
+  sound `beep`, like a gasp (§69.33).
+- **Cast and contrast**: `cast.character_part_shapes` adds `antenna` (`default`, `dim`) and `cape`;
+  `vidgen character` prints e.g. `species robot (box head, eyes face, antenna, legs)`.
+  `contrast.HEADWEAR` includes the three hats; robot details count in contrast. `random_cast` draws
+  robot plating / build (`SPECIES_COLORS["robot"]`, `ROBOT_CHOICES`) only for robots; costumes are
+  never random. Earlier looks draw as before. Tests: `tests/test_cartoon_robots.py`.
 
 ### 69.59 More expressions (Step 125)
 
-Six built-in expressions join `poses.EXPRESSIONS` (after the seven of §69.3, whose entries are
-unchanged): `laughing`, `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened`. They work on
-every generated look (people, animals with muzzles or beaks, robots with a plate or a screen),
-side and front, and fall back on SVG characters through their shape lists.
+`poses.EXPRESSIONS` adds `laughing`, `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened`
+after the seven of §69.3, on every generated look, side and front; SVG characters fall back
+through their shape lists.
 
-- **Parts and shapes.** `ExpressionPart` gains two optional parts, both children of `head`
-  (`PART_NAMES`, `DEFAULT_PARENTS`; not in `SVG_PART_NAMES`): `cheeks` (draw order 55, over the
-  head under the eyes and mouth; shapes `none`, `blush`, `tears`, `tears_running`) and
-  `bristles` (48, behind the head and a robot's antenna; `none`, `up`). Their rest shape `none`
-  draws nothing (`expression_shapes.nothing`: one point, no fill area, no stroke, so dimming or
-  fading never shows it), so every expression that does not name them, the seven old ones
-  included, shows nothing there. The eyes gain `laughing` (an arc, closed), `wide` (a big white,
-  a small pupil; on a screen a glowing ring), `swirl` and `swirl_turned` (a spiral, turned half
-  round); the mouth `laugh` (open, flat on top, a pink tongue), `tongue` (a lip line and a tongue
-  hanging out, forward from the side) and `wavy`. All are appended after the earlier shapes
-  (`cast.GENERATED_SHAPES`), so the rest shapes and shape order of every part stay. Drawing:
-  `cartoon/expression_shapes.py` (called by the generator; eye and mouth shapes in the face's
-  colours, so a screen's glow), a beak's `laugh` / `tongue` / `wavy` in `animals.beak_mouth`
-  (`BEAK_LAUGH_OPENING` 46°, `BEAK_TONGUE_OPENING` 18°). Blush: `BLUSH_COLOR` at 0.7 opacity under
-  each eye (a screen: three glowing strokes); tears: `TEAR_COLOR` streams from under each eye down
-  to 0.72 head radii below the head's centre, with a drop (two lower in `tears_running`).
-  `bristles` `up`: a person with hair: a zigzag crown in the hair colour reaching 0.3 head radii
-  above the head part's top (hair, ears; at least 1.35 r); a furry animal (`FURRY`): fur tufts in
-  its colour on its head's ellipse; a bird, an owl, a penguin: five feathers in `fur_shade`;
-  anything else (a bald person, a frog, a turtle, a robot): four fright lines over the head.
-- **Sizes stay.** `generator._scaled_to_unit_height` ignores the Step 125 shapes
-  (`EXPRESSION_ONLY`), so hair standing up never shrinks a figure; `drawing_digest` in the tests
-  leaves them out, so every pin taken before (Steps 113, 114, 123) still holds for everything drawn
-  before.
-- **Expressions** (`EXPRESSIONS`): `laughing` eyes `laughing` (else `closed`), mouth `laugh`
-  (else `open`, `A`); `blushing` cheeks `blush`, a small smile, eyes lowered, brows `sad` raised a
-  little; `tongue_out` eyes `laughing`, mouth `tongue`; `crying` eyes `laughing` flipped (y
-  -0.9: squeezed), mouth `open` 1.1 × 0.85, cheeks `tears`, brows `sad`; `dizzy` eyes `swirl`,
-  mouth `wavy`; `frightened` eyes `wide` scaled 1.15, brows `sad` raised 0.03, mouth `wavy`,
-  bristles `up`. A `PoseChange` swaps the shapes at each part's half like any shape.
-- **Moods** (`idle.py`, no manim; applied by `Character._idle_step` as overlays, never in
-  `state()`): `shape_mood` picks the first of `MOOD_SHAPES` the pose shapes show (`eyes swirl` →
-  `sway`, `eyes wide` → `shiver`, `mouth laugh` / `cheeks tears` → `bounce`), so own expressions
-  using these shapes get the motion. `IdleClock.set_mood` / `mood_levels`: the new mood's strength
-  follows `MOOD_SPRING` (1.4 Hz, damping 0.45: about 20 % past full) from its strength at the
-  change, the old one dies away on the same spring (never below 0, dropped after
-  `MOOD_SETTLE_SECONDS`), so nothing jumps when an expression starts or ends (the clock stops
-  during a `PoseChange`; the mood starts after it). `mood_motion`: `sway` turns the body
-  `MOOD_SWAY_DEGREES` 4° about the hips every 1.8 s and the head 6° a quarter behind, the legs
-  turned back by the same overlay so the feet stay; `shiver` shakes the body 0.005 units at 13 Hz
-  (legs held back the same way), stretches a robot's `antenna` by `ANTENNA_FRIGHT_STRETCH` 0.35 of
-  its height (springing up past it) and makes `bristles` quiver; `bounce` lifts the body 0.008
-  units 4.5 times a second (the shoulders shake: laughing, sobbing). With `idle: false` there is no
-  mood motion (nor blinks).
-- **Eyes and tears.** No blink shows over `BLINKLESS_EYES` (`closed`, `laughing`, `swirl`,
-  `swirl_turned`); `ALTERNATE_SHAPES` swaps `swirl` ↔ `swirl_turned` and `tears` ↔
-  `tears_running` every `ALTERNATE_SECONDS` 0.2 s (overlays), so swirls turn and tears run.
-- **Speech.** Lip sync shows visemes over the expression's mouth and the expression's mouth
-  between words (§69.4), so a character laughs while talking: eyes `laughing`, the shoulders
-  bouncing, the mouth moving with the words.
-- **Mappings.** Voice sounds `[laugh]` and `[giggle]` give `laughing` (was `happy`; `[gasp]` stays
-  `surprised`); screenplay manners (`MANNERS`): the six names, and `giggling` / `amused` laughing,
-  `embarrassed` / `shy` / `bashful` blushing, `cheeky` / `teasing` tongue_out, `sobbing` /
-  `weeping` / `in tears` crying (was sad), `dazed` / `woozy` dizzy, `scared` / `afraid` /
-  `terrified` frightened (was worried); `EXPRESSION_EFFECTS` adds `dizzy` → `stars` and
-  `frightened` → `sweat`. `crying` has no symbol: the `tear` symbol (§69.40) is one drop beside
-  the head, kept for directions such as `[cries]`; the streams are part of the face. `react`,
-  `emote` and stage `expression` accept the new names (they read `Character.names`), and the
-  character sheet lists them and the new mouth shapes (it reads the tables).
-- Tests: `tests/test_cartoon_expressions.py`.
+- **Parts and shapes**: optional `ExpressionPart`s, children of `head` (not in `SVG_PART_NAMES`):
+  `cheeks` (draw order 55; `none`, `blush`, `tears`, `tears_running`) and `bristles` (48; `none`,
+  `up`). Rest shape `none` draws nothing (`expression_shapes.nothing`). Eyes add `laughing`, `wide`,
+  `swirl`, `swirl_turned`; mouth `laugh`, `tongue`, `wavy`; all appended after earlier shapes
+  (`cast.GENERATED_SHAPES`), so rest shapes and shape order stay. Drawing:
+  `cartoon/expression_shapes.py`; beak versions in `animals.beak_mouth`.
+- **Sizes stay**: `generator._scaled_to_unit_height` ignores `EXPRESSION_ONLY` shapes;
+  `drawing_digest` in tests leaves them out, so earlier pins hold.
+- **Moods** (`idle.py`; overlays in `Character._idle_step`, never in `state()`): `shape_mood` picks
+  the first `MOOD_SHAPES` match (`eyes swirl` → `sway`, `eyes wide` → `shiver`, `mouth laugh` /
+  `cheeks tears` → `bounce`), so own expressions with these shapes move too. `IdleClock.set_mood` /
+  `mood_levels`: moods rise and die on `MOOD_SPRING` (never below 0, dropped after
+  `MOOD_SETTLE_SECONDS`), so nothing jumps; the clock stops during a `PoseChange`. `mood_motion`
+  keeps the feet in place. `idle: false`: no mood motion.
+- **Eyes and tears**: no blink over `BLINKLESS_EYES`; `ALTERNATE_SHAPES` swaps `swirl` ↔
+  `swirl_turned`, `tears` ↔ `tears_running` every `ALTERNATE_SECONDS` 0.2 s. Visemes show over the
+  expression's mouth during words (§69.4).
+- **Mappings**: `[laugh]`, `[giggle]` → `laughing`; `[gasp]` → `surprised`; screenplay `MANNERS`
+  map the six names and synonyms; `EXPRESSION_EFFECTS`: `dizzy` → `stars`, `frightened` → `sweat`
+  (`crying` has none; the `tear` symbol, §69.40, is for `[cries]`). `react`, `emote`, stage
+  `expression` and the character sheet read the tables. Tests: `tests/test_cartoon_expressions.py`.
 
 ### 69.60 More weather, part 1: snow that settles, fog (Step 126)
 
-Snow on a `stage` may land and settle in a growing white layer, and a stage may have fog lying
-in bands between its things by depth. Both are seeded and pure, outdoors only, and a scene
-without them renders as before.
+Seeded, pure, outdoors only; a scene without them renders as before. User keys: docs/CONFIG.md
+"Snow that settles (`settle`)", "Fog (`fog`)".
 
-- **Settling snow** (`cartoon/snow.py`, no manim; Manim units, `y` up): `ParticleSettings.settle`
-  (snow only, `settle_problem`; stage param error / validate problem like `puddles`) and
-  `settled` (seconds of snowfall already lying, 0–600, needs `settle`). `particle_field` gives a
-  snow field with `settle` the scene's `snow_ground` (rain keeps `rain_ground`). A
-  `RainGround`'s shelters may now also be a `TopLine(xs, ys, feet)`: a prop's upper edge, with
-  `top_at(x)` and `covers` like `ShelterBox`. `flake_floors` = Step 105's landing line or the
-  highest covering shelter's top there (a box's top, a line's height); `rest_flakes(bottom, floor,
-  speed)`: a flake below its floor lies on it (raised there) fading over `FLAKE_REST` 0.5 s, then
-  is hidden until it wraps (Step 76's drops keep their positions: the landing shares are Step
-  105's stream). `ParticleField` keeps its landing shares for any ground and makes splashes for
-  rain only.
-- **The layer**: `settled_seconds(now, start, ended, settled)` counts the snowfall in
-  `SETTLE_STEP` 0.5 s steps (frozen at the field's end: it never melts); `settle_amount(seconds,
-  density)` = seconds × density / `SETTLE_SECONDS` 24, at most 1 (linear, so each step adds the
-  same). Blanket: `blanket_outline(left, right, bottom, back, rise, frame_height, seed)` from the
-  frame's bottom edge to the ground area's back edge (rain's `back`) raised by amount ×
-  `BLANKET_RISE` 0.018 frame heights × `edge_lumps` (three seeded sines, 1 ± `LUMP_DEPTH` 0.6),
-  counter-clockwise; opacity `BLANKET_OPACITY` 0.97 × `blanket_cover` (amount / `COVER_SHARE` 0.4,
-  at most 1). `bare_patches(shelters)`: clockwise ellipses (`BARE_WIDTH` 0.8 of the shelter's width,
-  `BARE_FLAT` 0.22 high) on the feet line of each standing shelter (a tree, an open umbrella that
-  no action moves): holes in the blanket (Cairo fills by winding), covered by a second shape at
-  `THIN_SNOW` 0.45 of its opacity (a first try with plain holes showed the theme's dark ground as
-  black ellipses). Caps: `curve_segments` turns a member's cubic points into straight pieces
-  (6 samples a curve) and `top_line(segments, columns)` takes the highest crossing over each of
-  `CAP_COLUMNS` 28 column middles (plus segment ends inside a column; empty columns between their
-  neighbours) — sampling points per curve alone left dips where one long roof edge had no sample
-  and a window's top was the highest point (seen as thin white spikes); `cap_thickness` is the full
-  thickness × amount where the line's slope is at most `CAP_SLOPE` 1 (45°), tapered next to steeper
-  parts; `cap_outlines` makes one counter-clockwise shape per run, `CAP_SINK` 0.35 of it below
-  the line (over the outline), pointed ends; `cap_full_thickness` = `CAP_THICKNESS` 0.03 shorter
-  sides × the depth scale, at most `CAP_SHARE` 0.2 of the prop's height. `SNOW_COLOR` `#F4F7FC`
-  (or the field's first `color`).
-- **Drawing** (`cartoon/weather_drawing.py`): `SnowBlanket` (a `VGroup`: the blanket with holes,
-  the thin snow), `SnowCap(xs, ys, full, color, cap_of)`, `SettledSnow` (`amount_at`, `update`
-  redraws only when the step changes, `changing`, `done`, `movers`, `region`: the full layer's
-  box). `prop_top_line(prop)` reads the members with points that show (fill or stroke).
-- **Stage**: `snow_ground()` = rain's band, open umbrellas as boxes (`_shelter_of`, shared with
-  `rain_ground`) and the `_snow_tops()` top lines (taken once) of every prop on the ground that no
-  action moves (`_movable_props`), not lifted or hung, not `FLAT_PROPS`, water or air vehicles,
-  umbrellas or held. `particles_started` → `_settle_snow`: a `SettledSnow` for the field, its
-  blanket laid like the puddles (`_lay_on_ground(under_water=True)`: right before the water's
-  band when the stage has water), a cap right after each such prop (`_put_after_prop`: into
-  `scene.mobjects`, or kept in `_after_props` for the entrance, which adds it right after the
-  prop), none on swaying kinds (`SWAYS`) when the stage's wind may blow (the cap would not
-  sway); all lit (`mark_lit`). `Stage.snow_layers`.
-- **Fog** (`cartoon/fog.py`, no manim): `FOG_DEPTHS` (1, 0.8, 0.6, 0.4, 0.2); `band_opacities(
-  density)`: band k holds `1 − exp(−FOG_THICKNESS (1.8) × density × (d_k − d_{k+1}))` (the front
-  band down to 0), so the bands in front of a depth hide `1 − exp(−1.8 × density × d)` where d is
-  the deepest band in front of it; `fog_cover(depth, density, high=False)` multiplies them (0 at
-  depth ≤ 0.2; the sky = every band). Each band has `FOG_LAYERS` 3 layers holding
-  `FOG_LAYER_SHARES` (0.5, 0.25, 0.25) of its optical depth (`layer_opacity`; together exactly the
-  band's opacity): a haze up to the frame's top edge, banks up to 1 and 0.5 × `FOG_HEIGHT` 0.3
-  frame heights × the depth scale (the back band `FOG_HAZE_HEIGHT` 0.4) with wavy tops
-  (`FOG_WAVE` 0.3 × two seeded sines of 1.3 and 0.55 frame heights), each taller layer starting
-  `FOG_FEATHER` 0.015 frame heights lower (soft edges). `band_outlines(index, ground, left, right,
-  frame_height, shift, seed)`, `band_box` (the box whatever the drift). `fog_shift(t, blown,
-  depth, drift)` = drift × `FOG_DRIFT` 0.02 × (2 − depth) × t + `FOG_WIND_DRIFT` 0.12 × blown
-  (frame heights; nearer bands twice as fast). A first try with only short ground banks left
-  deep tree crowns crisp over fogged trunks; the haze layer fixes that.
-- **Drawing and order**: `FogBand` (a `VGroup` of the layers; `stage_depth` is its depth: Manim's
-  `Mobject.depth` is the z extent, and setting it on a first try scaled the band instead), and
-  `StageFog` (`update`, `moves` = drift > 0 or a wind may blow, `changing`, `movers`, `region`).
-  Stage param `fog` (`StageFogSetting`: `true`, a density, or {density, color, drift, seed};
-  `false` is an error like `birds: false`; refused in a room). `Stage._fog()` builds it lit
-  (`blown` from `particle_wind`), seed `motion_seed(scene, "fog")`; `_sort_fog()` puts each band
-  right before the first character or prop (draw order, held props excepted) standing at its
-  depth or nearer (before the props that one holds in front of it), else before the foreground
-  (`_in_front`) or the first particle field; it runs in the entrance and, while a walk in depth is
-  under way, on every frame in `_draw_order_step` (a changed order is then redrawn), and
-  `_depth_crossers` adds the bands a walker passes. The windows of a room show no fog.
-- **What is redrawn** (§69.54's rule): `_living_things` adds the snow layers and the fog;
-  `_living_step` updates them (installed by `_watch_living`) and removes itself once only flown
-  flocks, done layers and still fog are left. A layer redraws itself and what stands in front of
-  it only in animations where a step passes; a full layer (or after the snow) is static. Moving
-  fog redraws everything from the back band on.
-- **Measured** (scratch `s126/` in the scratchpad, preview 854×480 15 fps, no audio, one process
-  each under the 1500 MB cap, `s120/measure_room.py`):
-
-  | render | frames | Cairo draws | wall (s) |
-  |---|---|---|---|
-  | snowy meadow (house, tree, rock, table, umbrella, a walk in depth), snow without `settle`: HEAD e3e8e3d / this step | 277 | 48 224 / 48 224 | 11.9 / 11.6 |
-  | the same with rain and puddles: HEAD / this step | 277 | 62 416 / 62 416 | 14.9 / 14.6 |
-  | the meadow with `settle: true, settled: 6`, density 1.5 (the layer grows all along) | 277 | 54 427 | 12.9 |
-  | a night meadow, `settled: 30` (full from the start) / without `settle` | 162 | 22 757 / 22 547 | 6.9 / 6.8 |
-  | a forest (5 trees, 3 characters, a walk in depth) with `wind: breeze`: `fog: true` / none | 185 | 23 296 / 20 521 | 9.9 / 8.9 |
-  | the forest calm: `fog: {drift: 0}` / none | 185 | 22 092 / 19 833 | 9.4 / 8.3 |
-
-  Without the new things the raw frame hashes equal HEAD's (all 277 in both). A growing layer:
-  +13 % draws, +11 % wall; a full one: the blanket and caps once per animation. Moving fog: +12 %
-  wall; still fog still costs +13 % here: the walk in depth redraws the bands it passes, and five
-  translucent frame-high shapes are slow to draw even once per animation.
-- **Checked by eye** (preview frames): a snowy meadow by day (caps on the roof, chimney, crown,
-  table and rock, the blanket with lumps along its back edge, thin snow under the tree and the
-  umbrella, flakes lying a moment) and at night (`settled: 30`: the layer graded bluish, white
-  flakes); a foggy forest in a breeze (the trees at depths 1, 0.85, 0.55, 0.3 paler the further
-  back, characters at 0, 0.45 and 0.9, one walking from 0.9 to the front coming out of the fog);
-  a foggy night street at density 0.8 (houses fading, wavy banks over the sky).
-- **Not done**: no footprints; caps do not sway with a swaying prop (none then) and stay where a
-  prop stood when it is later moved (movable props get none); snow does not settle on characters
-  or held props; the layer does not melt; no fog action (it is there all scene) and none through
-  a room's windows; particles stay ungraded and in front of the fog. Seen while checking, not
-  from this step (also without `settle`): a character walking behind a house in depth leaves a
-  faint outline of itself over the house (fixed in Step 127, §69.61: it was the scene's outro).
-  Tests: `tests/test_cartoon_snow_fog.py`.
+- **Settling snow** (`cartoon/snow.py`, no manim): `ParticleSettings.settle` (snow only,
+  `settle_problem`, like `puddles`) and `settled` (seconds already lying, 0–600, needs `settle`).
+  A settling field gets `snow_ground`; a `RainGround` shelter may be a `TopLine(xs, ys, feet)`
+  (`top_at(x)`, `covers`) besides a `ShelterBox`. `flake_floors`, `rest_flakes` (a flake lies on
+  its floor, fades, hides until it wraps). `ParticleField` splashes only for rain.
+- **The layer**: `settled_seconds` counts snowfall in `SETTLE_STEP` 0.5 s steps (frozen at the
+  field's end; never melts); `settle_amount(seconds, density)` = seconds × density /
+  `SETTLE_SECONDS` 24, ≤ 1. `blanket_outline` (to the ground area's back edge), `blanket_cover`,
+  `bare_patches(shelters)` (holes by winding under trees and unmoved open umbrellas, covered by
+  thin snow, since bare holes show the dark ground). Caps: `curve_segments`, `top_line(segments,
+  columns)` (highest crossing per column, not point samples, which leave spikes), `cap_thickness`
+  (full only on slopes ≤ `CAP_SLOPE` 45°), `cap_outlines`, `cap_full_thickness`. `SNOW_COLOR` or
+  the field's first `color`.
+- **Drawing** (`cartoon/weather_drawing.py`): `SnowBlanket`, `SnowCap`, `SettledSnow` (`update`
+  redraws only when the step changes; `changing`, `done`, `movers`, `region`); `prop_top_line`.
+- **Stage**: `snow_ground()` = rain's band, open umbrellas (`_shelter_of`) and `_snow_tops()` of
+  ground props that no action moves, not lifted / hung / `FLAT_PROPS` / water or air vehicles /
+  umbrellas / held. `_settle_snow`: blanket laid like puddles (`_lay_on_ground(under_water=True)`),
+  a cap right after each prop (`_put_after_prop`, `_after_props` for the entrance), none on `SWAYS`
+  kinds when wind may blow; all lit. `Stage.snow_layers`. No snow on characters or held props.
+- **Fog** (`cartoon/fog.py`, no manim): bands at `FOG_DEPTHS` (1, 0.8, 0.6, 0.4, 0.2);
+  `band_opacities(density)` so the bands in front of depth d hide `1 − exp(−FOG_THICKNESS ×
+  density × d)`; `fog_cover(depth, density, high=False)` (0 at depth ≤ 0.2; the sky = every band).
+  Each band has `FOG_LAYERS` 3 layers sharing its optical depth exactly: a haze to the frame top
+  (so deep tree crowns fog too) and two wavy banks. `band_outlines`, `band_box`, `fog_shift(t,
+  blown, depth, drift)` (nearer bands drift faster).
+- **Fog on the stage**: `FogBand` (depth in `stage_depth`, not Manim's `Mobject.depth`, the z
+  extent), `StageFog`. Stage param `fog` (`StageFogSetting`: `true`, a density, or {density, color,
+  drift, seed}; `false` is an error; refused in a room). `Stage._fog()` (lit; `blown` from
+  `particle_wind`; seed `motion_seed(scene, "fog")`); `_sort_fog()` puts each band right before the
+  first character or prop (held props excepted) at its depth or nearer, else before the foreground
+  or the first particle field; it runs in the entrance and every frame of a walk in depth
+  (`_draw_order_step`); `_depth_crossers` adds bands a walker passes. Room windows show no fog;
+  particles stay in front of it.
+- **Redraw** (§69.54): a layer redraws itself and what stands in front only in animations where a
+  step passes; moving fog redraws everything from the back band on. Tests:
+  `tests/test_cartoon_snow_fog.py`.
 
 ### 69.61 More weather, part 2: lightning, rainbows, the sun and moon moving (Step 127)
 
-- **Strikes** (`cartoon/storm.py`, no manim): `Strike(time, x, distance, seed, bolt)`: its
-  `pulses` (`strike_pulses(seed)`: the first two or all three of `FLASH_PULSES` (start, length,
-  peak): (0, 0.1, 1), (0.2, 0.08, 0.7), (0.36, 0.06, 0.45), the later ones ±0.03 s and 85–100 %
-  of their peak), each held for its length, then `peak · exp(-age / 0.07)` for `FLASH_TAIL`
-  0.25 s; `level(now)` = `flash_strength(distance)` (1.1 − 0.14 · km, 0.4..1) × the brightest
-  pulse; `end`. `flash_level(strikes, now)`, `flashing(strikes, start, end)` (like
-  `lighting.changing`). `flash_grade(grade, level, share=FLASH_SHARE 0.5)`: every channel
-  `f = level · share` of the way to `FLASH_COLOR` `#EEF2FF` (`multiply · (1 − f)`, `glow · (1 − f)
-  + f · white`), stars and shadow × (1 − f).
-- **Thunder**: `thunder_delay(km) = km / 0.343` s; `thunder_cue(km)`: gain −3 − 3 · km (≥ −18 dB),
-  duration 2.2 + 0.6 · km (≤ 7 s), intensity 0.9 − 0.15 · km (0.15..0.9), pitch −km semitones (≥ −6);
-  `thunder_pan(x)` (x − 0.5) · 1.6 within ±0.8. The built-in sound `thunder` (`sfx._thunder`, 3 s,
-  1–8): a crack (noise band-passed at 1.8 kHz, 60 ms decay, × 1.6 · intensity) over a rumble (noise
-  low-passed at 120 Hz) in 3–5 seeded Gaussian swells, rising in 3 % of its length, falling as
-  (1 − u)^1.2. `Stage._thunder` cues it with those params (a project file `thunder` plays as is)
-  when the stage's foley is on.
-- **Rain storms**: `ParticleSettings.lightning: bool | float (2..120)` (`storm_problem`: rain only;
-  `storm_every`: 8 s for `true`). `storm_strikes(start, until, every, seed, stop)`: gaps
-  `every · (0.5 + r)` (the first `every · (0.3 + 0.7 r)` in), x 0.12..0.88, distance 0.6 + 3.4 r^1.5
-  km, 70 % with a bolt, a prefix of the same sequence whatever `until`. `RainStorm(start, every,
-  seed, ended)` (`ended`: the field's), `.strikes(until)`, `.over(now)`. `Stage.particles_started`
-  adds one per rain field with `lightning` (seed from the scene, the field's seed and its index)
-  to the light; `_storm_thunder` (after the scene played) cues the thunder of those whose thunder
-  starts before the scene's end.
-- **The flash** (`shading.StageLight`): `strikes` (the action's), `storms`, `flash_share`
-  (outdoors `FLASH_SHARE`, × `ROOM_FLASH` 0.5 in a room), `flash` (the level now),
-  `strikes_until(t)`; `update` grades `light_at(...)` and then `flash_grade`; `changing` also when
-  a strike's window overlaps; `settled` also needs every strike over and every storm `over`. The
-  stage installs its light from the start when the scene may flash (`Stage._lightning_used`: a
-  `lightning` action, or rain with `lightning` in the param or a `particles` action), so a stage
-  without a background gets the lit background rectangle (the theme's colour: the same pixels).
-  `_light_step` keeps running while flashes may come; `get_moving_mobjects` redraws everything in
-  an animation where one falls. `_show_light` also lights a room's window skies
-  (`room.flash_sky(sky, level)`: `WINDOW_FLASH` 0.85 × level of the way to the flash colour).
-- **The bolt** (`weather_drawing.LightningBolt`, not graded, named `lightning`): one per stage
-  outdoors when the scene may flash, put right after the sky (`_put_in_sky`), 4 paths × (a glow 4 ×
-  the width, `#9FB6FF` at 0.55, and a white core). `Stage._show_bolt(now)` (in `_sky_step`) shows
-  the brightest strike with a bolt: `bolt_paths(seed, x, top, bottom, spread)` (cached per seed)
-  from the frame's top to the horizon (`_horizon_y`: the ground area's back edge), its stage x
-  `left + strike.x · stage_width`, spread `BOLT_SPREAD` 0.12 frame heights (`BOLT_CORNERS` 11
-  corners jittering ±0.175 · spread, 1–3 branches of 3–4 corners from a middle corner, down and
-  out), core width `BOLT_WIDTH` 4 × (1.2 − 0.1 · km, 0.4..1.2), at the pulse level (without the
-  distance's strength); hidden otherwise.
-- **The `lightning` action** (`scenes/storm_action.py`, non-animating like `light`, `run_time`
-  `FLASH_SECONDS` 0.7, `number_target`): target a mark or an x (`_place`: a number written as the
-  target is an x), `distance` (0..10 km), `bolt`, `seed`; `cue` → `Stage.strike_lightning(at,
-  time, ...)` (no place: x 0.15..0.85 from the seed; seed default `motion_seed(scene,
+User keys: docs/CONFIG.md "Lightning and thunder (`lightning`)", "Rainbows (`rainbow`)", "Light
+and shadows" (`move_sun`).
+
+- **Strikes** (`cartoon/storm.py`, no manim): `Strike(time, x, distance, seed, bolt)` with seeded
+  `pulses` (`strike_pulses`, `FLASH_PULSES`, `FLASH_TAIL`); `level(now)` = `flash_strength(distance)`
+  × brightest pulse. `flash_level`, `flashing(strikes, start, end)`, `flash_grade(grade, level,
+  share=FLASH_SHARE 0.5)` (towards `FLASH_COLOR`; stars and shadow dimmed).
+- **Thunder**: `thunder_delay(km) = km / 0.343` s; `thunder_cue(km)` (quieter, longer, lower with
+  distance), `thunder_pan(x)`. Built-in `thunder` (`sfx._thunder`). `Stage._thunder` cues it with
+  foley (a project file `thunder` plays as is).
+- **Rain storms**: `ParticleSettings.lightning: bool | float (2..120)` (`storm_problem`: rain
+  only; `storm_every`: 8 s for `true`). `storm_strikes(start, until, every, seed, stop)` is a
+  prefix of the same seeded sequence whatever `until`. `RainStorm(start, every, seed, ended)`.
+  `Stage.particles_started` adds one per rain field with `lightning`; `_storm_thunder` (after the
+  scene) cues thunder that starts before the scene's end.
+- **Flash** (`shading.StageLight`): `strikes`, `storms`, `flash_share` (× `ROOM_FLASH` 0.5 in a
+  room), `strikes_until(t)`; `update` grades `light_at(...)` then `flash_grade`; `changing` and
+  `settled` count strikes and storms. The light is installed from the start when the scene may
+  flash (`Stage._lightning_used`), so a stage without a background gets the lit background
+  rectangle (same pixels). `get_moving_mobjects` redraws everything in an animation where a flash
+  falls. `room.flash_sky` lights room window skies.
+- **Bolt** (`weather_drawing.LightningBolt`, not graded, named `lightning`): one per outdoor stage
+  that may flash, right after the sky; `Stage._show_bolt(now)` (in `_sky_step`) shows the
+  brightest strike with a bolt from the frame top to the horizon (`_horizon_y`) at `left + strike.x
+  · stage_width` (`bolt_paths`, cached per seed); hidden otherwise.
+- **`lightning` action** (`scenes/storm_action.py`, non-animating, `run_time` `FLASH_SECONDS` 0.7,
+  `number_target`): target a mark or an x, `distance` (0..10 km), `bolt`, `seed`; `cue` →
+  `Stage.strike_lightning` (no place: x from the seed; seed default `motion_seed(scene,
   "lightning", time)`; no bolt in a room). Validate: a stage scene, one place, a known mark or x.
-- **Rainbows**: `RAINBOW_COLORS` (7, soft, red outside), `rainbow_bands(cx, base, radius,
-  thickness=0.16)` (half rings, the outer `radius`, each band `radius · 0.16 / 7`),
-  `RainbowChange` + `rainbow_level` (`fade_at` from 0). `Rainbow` (a `VGroup` of 7 filled bands,
-  `opacity`, `box`), `StageRainbow` (a thing that moves by itself, §69.54: `fade`, `update`,
-  `changing`, `done`, `movers`, `region`), in `Stage.rainbows` / `_living_things`. The `rainbow`
-  action (non-animating, `run_time` 3): target where its middle is (default `centre`), `width`
-  (frame widths across, default 0.75), `opacity` (0.55), `hide` (fades all rainbows out; no
-  place); refused in a room. `Stage.show_rainbow` puts it right after the sky, lit, standing on
-  the horizon; `hide_rainbows`.
-- **The sun and moon's path** (`cartoon/sun_path.py`, no manim): a path share 0 (horizon, left)
-  .. 0.5 (top) .. 1 (horizon, right), hidden beyond for `PATH_HIDDEN` 0.08 at each end, one round
-  `PATH_ROUND` 1.16 (`wrap_share`). `PATH_PLACES`: sun morning 0.1, day 0.5, sunset 0.9, night and
-  indoor 1.08; moon morning 0.9, day −0.08, sunset 0.1, night 0.5, indoor 0.3. `path_blend`
-  moves forward only (round the hidden part when the place is behind); `PathMove` +
-  `path_share_at` (`fade_at`, eased like the light). `path_point(s)` → x share `0.1 + 0.8 s` of
-  the stage, height `sin(π s)` (below 0 under the horizon), shown (smoothstep of height / 0.15).
-  `elevation(s)` = 65° · height; `shadow_cast(s)` → (stretch = cot(elevation) ≤ `MAX_SHADOW_STRETCH`
-  3, the maximum under the horizon; side +1 before noon, −1 after, 0 at 0.5);
-  `cast_shadow(ellipse, stretch, side)`: `width · 0.6 · stretch` longer on that side (its foot
-  stays), opacity / (1 + 0.25 · stretch); the ellipse itself when stretch or side is 0.
+- **Rainbows**: `rainbow_bands`, `RainbowChange`, `rainbow_level`; `Rainbow`, `StageRainbow` (a
+  §69.54 living thing, in `Stage.rainbows`). `rainbow` action (non-animating, `run_time` 3): target
+  the middle (default `centre`), `width` (frame widths, 0.75), `opacity` (0.55), `hide` (fades all
+  out; no place); refused in a room. `Stage.show_rainbow` puts it after the sky, lit, on the
+  horizon; `hide_rainbows`.
+- **Sun and moon path** (`cartoon/sun_path.py`, no manim): share 0 (left horizon) .. 0.5 (top) .. 1
+  (right horizon), hidden `PATH_HIDDEN` beyond, one round `PATH_ROUND` (`wrap_share`);
+  `PATH_PLACES` per light preset for sun and moon; `path_blend` moves forward only; `PathMove`,
+  `path_share_at`, `path_point`, `elevation`, `shadow_cast(s)` → (stretch ≤ `MAX_SHADOW_STRETCH` 3,
+  side), `cast_shadow(ellipse, stretch, side)` (foot stays).
 - **Moving them** (`light` option `move_sun`; validate: a preset, outdoors, a `sun` or `moon`
-  prop): with it anywhere in the scene, `Stage._start_sky_path` makes every sun and moon prop a
-  `SkyBody` (base: the stage light's place, a tint as `day`; `stage_depth` 1), the entrance moves
-  them right after the sky, `change_light(..., move_sun=True)` adds a `PathMove` per body with the
-  light change's start and seconds, `_sky_place(x, height)` puts a body's middle at `left + x ·
-  stage_width`, `horizon + height · (frame top − horizon − SKY_TOP_ROOM 0.14 frame heights)`, and
-  `SkyBody.update` fades its own opacities by `shown`. `_sky_step(now)` (in `_light_step` and
-  `get_moving_mobjects`, before the light's update) places the bodies, sets every shadow group's
-  `set_cast(stretch · shown, side)` from the body that shows most (the sun on a tie) and shows the
-  bolt. A sun move only comes with a light change, so the whole stage is redrawn while it moves.
-- **The outro** (the Backlog bug from Step 126): `NarratedScene.finish` → `clear_all` faded every
-  mobject on its own, so for 0.5 s a fading house (opacity 0.98, 0.9, ...) showed the character
-  standing behind it as a faint outline (a frame-by-frame check proved the drawn frames equal a
-  whole redraw: neither the depth walk's draw order, `_moving_in_order` nor the static image was
-  the cause). `Stage.finish` now fades in a cover of the background colour (`_cover`, also the
-  entrance's) with a z index above everything over `outro` seconds, then removes every mobject
-  (the scene ends empty, as after `clear_all`); with a transition other than
-  a cut, or a next scene carrying a target out, it keeps the old behaviour.
-  `test_a_character_behind_a_house_does_not_show_through_it_as_the_scene_fades_out` (54 levels
-  off before, ≤ 2 after). Also fixed: while the light changed during an animation, a moving part
-  of a character was listed again after everything (`get_moving_mobjects`), so it was drawn over
-  the entrance's cover.
-- **Measured** (scratch `s127/`, preview 854×480 15 fps, no audio, `s127/measure.py`):
-
-  | render | frames | Cairo draws | wall (s) |
-  |---|---|---|---|
-  | rainy stage (house, tree, 2 characters): HEAD 4f2dc6e / this step (no new things) | 237 | 38 178 / 38 039 | 8.7 / 9.0 |
-  | the same with 2 `lightning` actions, `lightning: 4` on the rain and a `rainbow` | 237 | 43 423 | 11.1 |
-  | dusk: `light: sunset`, then `night` (4 s fades) with `move_sun` / without | 168 | 17 495 / 17 682 | 7.0 / 6.8 |
-  | a room with one `lightning` / without | 71 | 4 001 / 2 573 | 2.5 / 2.2 |
-
-  Without the new things the raw frames equal HEAD's but for the outro (the meadow of §69.60: 270
-  of 277 frames equal, the last 7 differ; the rainy stage: 230 of 237). Every frame of the new
-  renders equals the scene drawn whole in its draw order (`s127/ghost_check.py`).
-- **Checked by eye** (preview frames): the rainy stage flashing (washed out, the bolt behind the
-  tree), the rainbow behind the house and the hills; the dusk with the sun sinking to the right
-  behind the hills, the shadows stretching left, the moon rising behind the house and standing at
-  the top at night with the stars; the room's windows flashing white.
-- **Not done**: the bolt strikes only at the horizon (never on a prop or a character); clouds
-  are not lit from inside; no rain-storm thunder after the scene's end; the sun and moon move only
-  with a light change (no `sun_path` of their own) and keep their size; shadows of a moving body
-  stretch only along the ground (no skew, no second shadow for the moon at the same time); a
-  room's light does not change with `move_sun` (refused). Tests: `tests/test_cartoon_storm.py`
-  (13 without rendering, 2 tiny renders), `tests/test_cartoon_depth.py` (the outro).
+  prop): `Stage._start_sky_path` makes every sun / moon prop a `SkyBody`;
+  `change_light(..., move_sun=True)` adds a `PathMove` per body; `_sky_place`; `_sky_step(now)`
+  (in `_light_step` and `get_moving_mobjects`, before the light update) places bodies, sets every
+  shadow group's `set_cast` from the body that shows most (the sun on a tie) and shows the bolt. A
+  sun move comes only with a light change, so the whole stage is redrawn meanwhile.
+- Outro: §69.51. Tests: `tests/test_cartoon_storm.py`, `tests/test_cartoon_depth.py`.
 
 ### 69.62 More sounds: door creaks, knocks, splashes, the set's ambience (Step 128)
 
-- **Searched first**: `bell` (a bicycle bell, Step 118), `engine` (starting and running, the
-  "engine hum", Step 118) and `phone` (a ringing trill, Step 122) existed and are kept as they
-  are; no creak, knock, splash or set bed existed. Reused: `sfx` generators and `_finish`, the
-  ambience beds' `AmbienceBed` / `plan_ambience` / `merge_spans` / `_circular`, `foley_cues`,
-  `pour_flow`, `RESHAPE_SHARE`, `on_spans`'s pattern for timings, the non-animating action shape
-  of `switch_on`.
-- **New built-in sounds** (`sfx.py`, now 29; finishing and level as §47; measured at intensity
-  0 / 0.5 / 1 as the loudest 400 ms, K-weighted): `creak` (0.9 s, 0.3–3: stick-slip pulses at a
-  rate gliding 45 → 110 → 70 Hz with a seeded 3.3 / 7.9 Hz wobble, filtered by wood bands at 550
-  Hz, 1.3 kHz, 2.6 kHz; −30.0 / −27.6 / −27.4 LUFS, peak-limited at −9 dBFS), `knock` (0.75 s,
-  0.3–2: three raps at 0, 0.19, 0.38 of 0.75 s, each a 190 Hz thump falling from +15 %, a 410 Hz
-  hollow and a tap of noise at 1.5 kHz; −30.0 / −27.0 / −24.0, peak −12.1 at 0.5), `splash`
-  (0.6 s, 0.2–3: a noise burst at 2.5 kHz decaying in 70 ms, a 250 → 600 Hz plunk, 18 droplets a
-  second of length (+4) placed early-weighted, a fading 4 kHz fizz; the burst and plunk × (0.35 +
-  1.3 · intensity); −30.0 / −27.0 / −26.4, peak −10.3 at 0.5). Generation 20–55 ms each.
-- **Set beds** (`ambience.py`, numpy only, seeded by `crc32("ambience:<bed>")`, circular so they
-  loop without a seam, `_leveled` to their integrated loudness; the rain and fire loops use the same
-  helper, unchanged): `birdsong_loop` (20 s; 18 phrases from `_bird_phrase`: 3–6 falling tweets at
-  3–5 kHz, a two-note whistle at 2–3.2 kHz, or a 0.5–0.9 s trill at 3.5–5.5 kHz warbling 18–25
-  Hz; each at 30–100 %, panned ±0.8 equal-power, placed around the loop by `_placed`; a rustle of
-  noise at 3 kHz at 0.04; −36 LUFS, peak −23.4 dBFS, channels correlate 0.63), `city_loop` (16 s:
-  a 35–250 Hz rumble swelling once a loop, 3–4 cars as wrapped Gaussian swells of 600 Hz noise
-  0.8–1.6 s wide, a 900 Hz murmur whose level wanders at three whole-cycle rates of 3–6 Hz; −35,
-  peak −23.1), `room_tone_loop` (8 s: 40–250 Hz noise + 0.2 × a wide 1.5 kHz hiss, ±5 % once a
-  loop; −46, peak −34.1). Ducking `BIRDSONG_DUCK` 4 dB, `CITY_DUCK` = `RAIN_DUCK` 5 dB,
-  `ROOM_TONE_DUCK` 0 (it is ~25 dB under the voice); fades `SET_FADE_IN` 2 s / `SET_FADE_OUT`
-  1.5 s. `AMBIENCE_BEDS` / `BEDS` gain the three, so `plan_ambience`, the mix report and the
-  pipeline's shift to video times take them unchanged. In a scratch 28 s preview (word-count
-  timing, so ducked all along): birdsong −38.2 LUFS, the city −41.3, the room with its foley −30.5.
+User keys: docs/CONFIG.md "Ambience and door sounds (`ambience`, `knock`)".
+
+- **Built-in sounds** (`sfx.py`, finished as §47): `creak`, `knock`, `splash`; `bell`, `engine`,
+  `phone` (§69.52, §69.56) serve bicycle, engine and ringing.
+- **Set beds** (`ambience.py`, numpy, seeded `crc32("ambience:<bed>")`, circular, `_leveled` to
+  integrated loudness, as rain and fire): `birdsong_loop`, `city_loop`, `room_tone_loop`, with
+  ducks (`BIRDSONG_DUCK`, `CITY_DUCK`, `ROOM_TONE_DUCK` 0) and `SET_FADE_IN` / `SET_FADE_OUT`; all in
+  `AMBIENCE_BEDS` / `BEDS`, so `plan_ambience`, the mix report and the shift to video times handle
+  them.
 - **Which bed** (`set_ambience(setting, room=, lights=, rain=, end=)`, pure): `False` none; a list
-  of `SET_BEDS` names: each for the whole scene (deduplicated, in order); `True` (automatic): a
-  room → `room_tone` for the whole scene; outdoors `birdsong` over the spans whose light is in
-  `DAYLIGHT` (`day`, `morning`; a tint counts as not), minus each rain span extended by
-  `BIRDS_AFTER_RAIN` 2 s, spans under `MIN_BIRDSONG_SECONDS` 2 s dropped; `city` never automatic.
-  `Stage.set_beds(rain, end)`: none without foley; the stage's `ambience` (`auto` / `true`
-  automatic, a bed name or a list, `false`), else the top-level `ambience` (bool, default true =
-  automatic). `Stage.light_marks`: `(0, params.light)` and, per `change_light`, `(start +
-  seconds / 2, preset or None)`. `Stage.timings()` appends the beds after the rain and fire ones,
-  with the rain spans of the foley-kept rain fields.
+  of `SET_BEDS` names: each for the whole scene (deduplicated, in order); `True` (automatic): a room
+  → `room_tone`; outdoors `birdsong` over spans whose light is in `DAYLIGHT` (`day`, `morning`; a
+  tint is not), minus rain spans extended by `BIRDS_AFTER_RAIN` 2 s, spans under
+  `MIN_BIRDSONG_SECONDS` 2 s dropped; `city` never automatic. `Stage.set_beds(rain, end)`: none
+  without foley; the stage's `ambience` (`auto` / `true`, a bed name or list, `false`), else the
+  top-level `ambience` (bool, default `true` = automatic; on by default because nothing tells an
+  old project from a new one). `Stage.light_marks`: `(0, params.light)` and per `change_light`
+  `(start + seconds / 2, preset or None)`. `Stage.timings()` appends the beds after rain and fire.
 - **Door foley**: `_played` maps a `PropReshape` to `PlayedAction(prop=kind)` and a `Walk` to
-  `through_door` (it fades in or out: a door passage, §69.42) and `opens_door` (`Walk(opens_door=)`,
-  set by `enter` / `exit` from `_door_closed` before `_door_x` opens it). `door_cues`: `open` →
-  `creak` (−8 dB, 0.9 s) at the start; `close` → `creak` (−10 dB, 0.5 s, +2 st), then `thud` (−6 dB,
-  0.3 s, +5 st) at `RESHAPE_SHARE` of the action, when it shuts. A walk through a door plays no
-  whoosh / swoosh (it fades in the doorway; the Step 109 gap), and a creak first when it opened
-  the door. An open door or one that is already in the asked shape makes no sound (no animation).
-- **Water**: a boat's `ride_to` adds `splash` (−12 dB, 0.9 s, −3 st, intensity 0.3) at its start;
-  a `pour`'s `WaterFlow` → `PlayedAction(pours=True)` → one long soft `splash` (−10 dB, +7 st,
-  intensity 0.15, as long as the water runs, 0.2–3 s) from `pour_flow`'s start +
-  `POUR_FALL_SECONDS` 0.25; `wet_steps(cues, wet_from)` adds a `splash` (−14 dB, 0.25 s, +4 st,
-  intensity 0.2) under every footstep from the first puddles' start (`Stage.puddles`) on.
-- **`knock`** (`scenes/knock_action.py`, non-animating like `switch_on`, `run_time` 0.75):
-  targets door props (a room's doors or a `door` prop; validate names the stage's doors otherwise,
-  and a scene without `knock_on`); `cue` → `Stage.knock_on(patterns, time)`: one `knock` at
-  `KNOCK_GAIN` −3 dB with foley, however many doors match. Nothing moves (a knock from outside).
-- **Compatibility, decided**: the automatic beds are on by default (top-level `ambience: true`),
-  as the step asks ("chosen automatically where it fits"), so a project rendered again sounds
-  different: outdoor day stages gain birdsong, rooms a room tone; door passages creak instead of
-  whooshing, a boat ride splashes. Turning it on only for new projects was rejected: nothing tells
-  an old project from a new one but a key `vidgen new` would write, and authors who write YAML by
-  hand would never get it. `ambience: false` (top level) brings back the earlier beds; `foley:
-  false` silences all. Pixels are untouched (no drawing changed).
-- **Not done**: no door rattle or visible shake on a knock (nobody needs to stand there); no
-  splash when getting in or out of a boat or for a fruit falling into water; the knock and creaks
-  are centred (not panned by the door's x); birdsong ignores snow and fog; a light action's
-  fade counts as one instant (its middle); no listening by a human. Tests:
-  `tests/test_cartoon_sounds.py` (13 without rendering, 2 tiny renders).
+  `through_door` (§69.42) and `opens_door` (`Walk(opens_door=)`, set by `enter` / `exit` from
+  `_door_closed` before `_door_x` opens it). `door_cues`: `open` → `creak` at the start; `close` →
+  a shorter `creak` then `thud` at `RESHAPE_SHARE`. A walk through a door plays no whoosh, and a
+  creak first when it opened the door; a door already in the asked shape is silent. Door sounds
+  are centred.
+- **Water**: a boat's `ride_to` adds a `splash` at its start; a `pour`'s `WaterFlow` →
+  `PlayedAction(pours=True)` → one soft `splash` as long as the water runs, from `pour_flow`'s start
+  + `POUR_FALL_SECONDS`; `wet_steps(cues, wet_from)` adds a `splash` under every footstep from the
+  first puddles' start (`Stage.puddles`).
+- **`knock`** (`scenes/knock_action.py`, non-animating, `run_time` 0.75): targets door props (room
+  doors or a `door` prop; validate names the stage's doors); `cue` → `Stage.knock_on(patterns,
+  time)`: one `knock` at `KNOCK_GAIN` −3 dB with foley however many doors match; nothing moves.
+  Tests: `tests/test_cartoon_sounds.py`.
 
 ### 69.63 More music: the `cartoon` and `lullaby` beds (Step 129)
 
-- **Searched first**: the beds of §48 (`music.py`: `_pads`, `_partials`, `_pluck`, `_bell`,
-  `_circular_add`, `_finish`, `BUILTIN_BEDS`, `bed_loop`), `sfx._filtered` / `_band` /
-  `_lowpass` for the noise tick. Both new beds are made the same way: numpy only, no recordings,
-  no samples, seeded `crc32("music:<name>")`, rendered circularly, `_finish`ed to `MUSIC_LEVEL`
-  −28 LUFS integrated. Original melodies written for schu-video-generator (no known tune, lullaby or theme).
-- **New voices** (`music.py`): `_pizzicato` (3 ms attack, harmonics 1–5 at 1 / .45 / .22 / .1 /
-  .05, the upper ones decaying faster), `_music_box` (1.5 ms strike, a second tine 3.5 cents
-  sharp at 0.3 for a slow shimmer, a faint octave, a short ping at 5.4×), `_woodblock` (60 ms,
-  partials 1 and 2.76, 0.5 ms strike), `_tick` (80 ms noise burst, band around 2.2 kHz, 4th-order
-  low-pass at 3.5 kHz); `_add_panned` places a mono note in the stereo loop.
-- **`cartoon`** (45 s = 24 bars of 4/4 at 128 BPM, G major): the score is data, `_CARTOON_BARS`
-  (chord, voicing, bass on beats 1 / 3 and an optional pickup, melody in eight eighth slots) in
-  six 4-bar phrases: A (G C D7 G), A' towards the dominant (G Em A7 D7), B syncopated and lower
-  (C G/B Am D7), A an octave up, C a call and response with the woodblocks (Em Am D7 G), a
-  turnaround (C D7 G D7) whose last bar runs back into the top. Pizzicato melody B4–D6 (pan
-  +0.2, off-beats at 0.8), a pizzicato bass D2–E3 bouncing root–fifth, short pizzicato chords on
-  beats 2 and 4 (three notes spread by 60 samples, pan −0.35), percussion per phrase
-  (`_CARTOON_PERCUSSION`: ticks, a high woodblock 1250 Hz right, a low one 880 Hz left; each
-  phrase's fourth bar a fill), a pad at 0.1. Layers before levelling: plucks −7.9 LUFS, pad
-  −16.8, woodblocks −23.1, ticks −30.3.
-- **`lullaby`** (45 s = 16 bars of 3/4 at 64 BPM, F major): `_LULLABY_BARS` (chord, voicing,
-  bass, melody as `(note, beats)`); a music-box melody C5–D6 (pan +0.2), a music-box broken
-  chord in eighths an octave over the voicing (E4–G5, pan −0.25; one pattern per 4-bar phrase,
-  `_LULLABY_PATTERNS`), a soft `_pluck` bass C2–B♭2 on each bar's first beat, a pad at 0.22.
-  Layers: music box −9.2 LUFS, pad −10.0, bass −16.3.
-- **Measured** (`vidgen list-music --render-dir`, then `loudness.integrated_loudness`): both
-  −28.00 LUFS, peak −14.4 / −14.5 dBFS (the others −16.3 to −17.2); energy above 5 kHz −53 /
-  −49 dB, below 35 Hz −38 / −46 dB; channel correlation 0.88 / 0.60; 3 s windows −28.7 to −27.2 LUFS;
-  made in ~1 s each.
-- **Seam test changed**: the old check (50 ms RMS before and after the seam within 1.5 dB) holds
-  for a pad but not for a bed whose loop starts on a downbeat with plucked attacks (cartoon
-  +6.6 dB, lullaby +5.3 dB: the first note's strike). For beds with a tempo the test now asks
-  that the change at the seam lies within the range of that change at the loop's other beats
-  (± 0.5 dB); `calm` keeps the 1.5 dB rule. The sample-step and tiled-read checks are unchanged.
-  Rotating the loop off the downbeat was rejected: `start: 0` should begin on the top of the tune.
-- **Not done**: no time signature field (`Bed` has none; the 3/4 is in the description); nobody
-  has listened to the beds (no audio playback here). Tests: `tests/test_music.py` (the
-  parametrized bed tests now cover five beds; a score test for both new beds).
+- Made like the §48 beds in `music.py` (`_pads`, `_partials`, `_pluck`, `_bell`, `_circular_add`,
+  `_finish`, `BUILTIN_BEDS`, `bed_loop`): numpy only, no samples, seeded `crc32("music:<name>")`,
+  circular, `_finish`ed to `MUSIC_LEVEL` −28 LUFS integrated; original melodies. Voices
+  `_pizzicato`, `_music_box`, `_woodblock`, `_tick`; `_add_panned`.
+- **`cartoon`**: 45 s, 24 bars of 4/4 at 128 BPM, G major; score data `_CARTOON_BARS`,
+  `_CARTOON_PERCUSSION`. **`lullaby`**: 45 s, 16 bars of 3/4 at 64 BPM, F major; `_LULLABY_BARS`,
+  `_LULLABY_PATTERNS`. `Bed` has no time-signature field.
+- **Seam test** (`tests/test_music.py`): for beds with a tempo the change at the seam must lie
+  within the range of that change at the loop's other beats (± 0.5 dB); `calm` keeps the 1.5 dB RMS
+  rule. Loops start on the downbeat (`start: 0` begins at the top of the tune).
 
 ### 69.64 Review of Phase L (Step 130)
 
-- **The example**: `examples/cartoon-rainbow-ride` (an original screenplay, `rainbow_ride.md`,
-  then a hand-edited `video.yaml`, 6 KB): a title `card` and `iris_in`; an orchard with a tree
-  with `fruit`, `birds`, a robot (`species: robot`, a screen face, on wheels, a `party_hat`)
-  holding a `watering_can` and pouring, an apple dropped on its head (`dizzy`), a fox (`fox`) who
-  gets on a `bicycle` and rides (bell, brakes), `laughing`, a gift picked up, a tint and rain with
-  two `lightning` strikes (thunder), `frightened`, the light back to day and a `rainbow`, the fox
-  riding on and the robot rolling out; a `crossfade` to an owl's (`owl`) room with a burning
-  `fireplace`, a running `clock`, a `kettle` switched on, a `knock` and two entrances through the
-  door (a creak), the gift given and opened (`blushing`, `tongue_out`), `night` and a `lamp`
-  switched on; `iris_out` on the robot and an end card; the automatic ambience (birdsong, rain,
-  fire, room tone) and the `cartoon` bed. End to end by the CLI and the MCP tools `screenplay` (also
-  with a `cast` of robots, foxes and owls), `cast`, `validate`, `direct`, `list_music`, `lint`
-  (`jobs: auto`), `storyboard`, `character_sheet`; lint clean at preview (word-count timing) and
-  with Kokoro audio. `tests/test_phase_l_review.py` repeats the cheap part.
-- **`vidgen screenplay` wrote an exit's edge as `side`**: `[X exits right.]` gave `{exit: x, side:
-  right}`, which `vidgen validate` refuses (`exit`'s edge option is `to`; `enter`'s is `side`), so
-  the draft of any screenplay with such a direction failed. It now writes `to` for an exit.
-- **A watering can poured backwards**: a held prop keeps the facing it was drawn with (§69.27), so a
-  character facing left poured onto its own feet with a can drawn spout right. `pour` now turns the
-  can round about its grip (`Prop.flip`, `facing`) when its spout points behind its holder.
-- **A prop held off stage showed at the edge**: a character waiting beyond the edge for its `enter`
-  stands half its width outside the view (§69.12), but a prop `hold` gives it (§69.50) is in its
-  hand in front of it, towards the stage: a gift showed at the right edge of the room. The construct
-  now puts such a holder a further half its width plus the prop's width outwards.
-- **Real narration**: Kokoro (narrator `bf_emma` 0.8 (0.85 read 3.58 words/s in one beat), the robot
-  `bm_fable` 0.85, the fox `af_bella` 0.8, the owl `af_heart` 0.75), rendered at 1280x720 with
-  `--jobs auto` (1 job under the 1500 MB cap): 93.9 s, −16.1 LUFS, true peak −1.9 dBTP.
-
+- **Example** `examples/cartoon-rainbow-ride` (screenplay `rainbow_ride.md`, hand-edited
+  `video.yaml`); `tests/test_phase_l_review.py` runs its cheap checks.
+- **Screenplay exits**: `[X exits right.]` writes `{exit: x, to: right}` (`exit`'s edge option is
+  `to`; `enter`'s is `side`).
+- **Pouring facing**: `pour` flips the can about its grip (`Prop.flip`, `facing`) when its spout
+  points behind its holder (held props otherwise keep their drawn facing, §69.27).
+- **Held off stage**: a character waiting beyond the edge for its `enter` while holding a prop
+  (§69.50) is put a further half its width plus the prop's width outwards, so the prop stays out
+  of view.
 ## 70. Render jobs: `--jobs auto` (Step 117)
 
 - `vidgen/render/jobs.py`: `jobs_for(available_bytes, cores, per_job_bytes)` =
@@ -7670,1793 +6928,687 @@ User keys: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 - Drawing the tile chunks dominates a level's render time.
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line`, `bar_chart` / `line_chart` "Values that
-change between beats", the lint rules `said_before_shown` / `unsaid_reveal` (more sections as the steps land). Help AI
-authors make clearer and better-looking presentation videos: coding Shorts, science and maths
-explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
-checked by `vidgen validate` with a `VidgenError` that says what to write, covered by `vidgen
-lint` where a rule helps, documented in docs/CONFIG.md and the author guide
-(`src/vidgen/data/guide/AGENTS.md`, copied to `AGENTS.md`), and work in 16:9 and 9:16. Same
-rules as Phases H–O: cheap tests, new public extension surface only through `vidgen.api`.
+User reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)",
+`code_morph`, `terminal`, `function_plot`, `number_line`, the chart sections. Every feature is
+checked by `vidgen validate` (a `VidgenError` saying what to write), works in 16:9 and 9:16, and
+adds public surface only through `vidgen.api`.
 
 ### 87.1 The plan
 
-| step | what | design intent |
-|---|---|---|
-| 156 | Actions timed to a spoken word | `at: "@word"` on any beat action and on `lower_third`; times from the beat's audio, else the estimate (§87.2) |
-| 157 | One colour per concept | a video-level `terms: {loss: accent, gradient: "#E07A5F"}` (theme colour names or hex) painting those words wherever they are on-screen text (TeX parts of equations, bullets, text cards, titles, captions / karaoke, chart and diagram labels, callout labels); per-scene opt-out; lint: too many concept colours (about 5), poor contrast on the theme background, a term coloured otherwise by a scene setting; cookbook §12 rule "same term, same colour" |
-| 158 | Code that morphs between versions | in the code scene(s) version A morphs to version B: unchanged tokens glide, new lines grow in, removed lines fade out; the diff is schu-video-generator's (`difflib`), timed to beats and words (§87.2); the phone readability rules of the code scenes still apply |
-| 159 | Terminal scene | a terminal window typing commands and showing their output, given by the author (schu-video-generator never runs a command), timed to beats / words; the code scenes' look and themes; usable beside code (a split) or after it (a carry / match cut if cheap) |
-| 160 | Maths, part 1: function plots | axes with f(x) from expressions evaluated safely (a small whitelisted parser, or sympy only if already a dependency; never `eval`), several functions, a dot moving along a curve with a live value, a tangent following the dot, shaded area between bounds, labels; driven by beat actions |
-| 161 | Maths, part 2: geometry basics | braces and angle arcs with labels, dimension lines, a number line (points, intervals, jumps), a coordinate plane with vectors (add, scale); a scene type or additions to Step 160's scene, decided and recorded there |
-| 162 | Charts that change between beats | the chart scenes take values per beat and animate between them (bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line, the axis rescaling); values stay the author's |
-| 163 | Narration–picture check in lint | deterministic rules on the layout dump / plan: a beat naming an on-screen label or term that only appears in a later beat; optionally a reveal the narration never mentions; stemming, case, stop words and a threshold keep false positives low; a setting tunes or turns it off |
-| 164 | Example, docs and review | a short science or coding explainer (16:9 and a 9:16 variant), guide / CONFIG / CHANGELOG / README / gallery, the Shorts cookbook (word timing, concept colours, code morphing, the terminal), a review of the phase with fixes in HANDOFF |
+Done: §87.2–§87.11.
 
 ### 87.2 Actions on a spoken word (Step 156)
 
-- **Syntax** (`vidgen/word_anchors.py`, no manim): `at: "@WORDS[#N][±S s]"`. `WORDS` is one word
-  or a few in a row, matched against the beat's text split at spaces (the words the word timings
-  are of) without case, accents (`textnorm.fold`) and the punctuation around them; `#N` is the
-  N-th time the beat says them (from 1); the offset needs its `s` so a hyphenated word
-  (`@K-Phi-3`) stays a word. `parse_word_anchor` refuses `@`, `#0`, a second `@` and, on an
-  action, a beat id before `@` (an action's word is in its own beat), each with an example.
-- **The field**: `ActionConfig.at` is `float (0 ≤ at < 1) | str (^\s*@)`. A `mode="before"`
-  validator checks the anchor's syntax (and gives a range error that mentions the word form);
-  the written anchor is kept in the private `_anchor` (`ActionConfig.anchor`), and `at` itself
-  is set to the anchor's fraction of the beat (`set_fraction`) once resolved. So every consumer
-  of `at` (the runner `ActionRunner.start_beat`, the stage's move ordering, `musicfit`'s
-  reveals, automatic directing, the host's looks) keeps reading a float and none had to change.
-  `shorthand()` and `model_dump` write the anchor back (a `field_serializer`), so `vidgen
-  direct --json` and a dumped config re-validate to the same anchor; `resolved()` (shorthand keys
-  sorted by a tool) keeps the fraction.
-- **Three resolutions, each refining the one before**:
-  1. `BeatConfig` (an after-validator): the beat must say the word (else `ValueError`, placed at
-     `scenes[i].beats[j]`, naming the beat, the action and "words like it" by `difflib`, or "its
-     words" when none is close, or "says X 2 times, so there is no #3"); `at` = the word's start
-     in `estimate_word_times` over the word-count length at the default rate.
-  2. `VideoConfig` (after its checks): the same estimate in the video's `language` and
-     `narration.words_per_second` (it matters only for syllables and for an offset's share).
-  3. `Project.__init__` (`retime_project_anchors`): a beat with an MP3 is re-timed from
-     `beat_word_times` over the MP3's length with the beat's spoken form (`Project.spoken`:
-     pronunciation, voice sounds, an emotion tag), i.e. the stored TTS alignment when it is the
-     MP3's, else the estimate within the MP3's speech: the same timings the karaoke captions use.
-     The render worker loads the project per scene, after `vidgen tts`, so renders, storyboards,
-     `lint` and `direct` all see the audio's times; before any audio they see the estimate.
-- **Fraction, not seconds**: the anchor resolves to `word start + offset` over the narration's
-  length, clamped to `0 .. MAX_FRACTION` 0.999, and the runner multiplies by the beat's body as
-  for any `at`. With an `overlap` / `interrupt` the body is shorter than the narration, so the
-  moment moves a little earlier in proportion (accepted: rare, and a fraction of the beat is what
-  `at` has always meant).
-- **Translations**: a translated beat says other words. `_translated` calls
-  `pin_translated_anchors` on the translated raw config before validating it: an anchor of a beat
-  whose text changed becomes the source config's fraction (rounded to 4 places); untranslated
-  beats keep their anchor (and its audio timing).
-- **`lower_third`**: its `at` also takes `"@Ada"` (the anchor scene's first beat that says it;
-  `#N` counts over the scene) or `"intro_b2@Ada"` (that beat). `locate_word_anchor` gives the
-  beat and the seconds into it from the planned beat (`BeatSlot`: its narration length) or, in
-  `validate_project` (no plan), the MP3's or estimated length.
-- **Not word-timed**: a scene's `sfx:` list (seconds from the scene's start, before any beat; an
-  anchor there is refused with a pointer to the beat's `sfx` action), `keyframes` keys (`t`:
-  seconds from the action's start or a share), the thumbnail's `at`, `sting` (`start` / `end`).
-- **`vidgen.api`** adds `WordAnchor`, `is_word_anchor`, `parse_word_anchor` and
-  `locate_word_anchor` (an overlay or scene of a project that starts something on a word; the
-  built-in `lower_third` uses them, as built-ins import only `vidgen.api`). Actions need none of
-  them: they get word timing through `at` without code of their own.
+- **Syntax** (`vidgen/word_anchors.py`, no manim): `at: "@WORDS[#N][±S s]"`. `WORDS` match the
+  beat's text split at spaces, ignoring case, accents (`textnorm.fold`) and surrounding
+  punctuation; `#N` = N-th occurrence (from 1); the offset needs its `s` (so `@K-Phi-3` is a word).
+  `parse_word_anchor` refuses `@`, `#0`, a second `@`, and on an action a beat id before `@`.
+- **The field**: `ActionConfig.at` is `float (0 ≤ at < 1) | str (^\s*@)`. The written anchor is
+  kept in private `_anchor` (`ActionConfig.anchor`) and `at` is set to the resolved fraction
+  (`set_fraction`), so every consumer reads a float. `shorthand()` / `model_dump` write the anchor
+  back (a dumped config re-validates to the same anchor); `resolved()` keeps the fraction.
+- **Resolution, each refining the last**: `BeatConfig` validator (the beat must say the word, else
+  `ValueError` with `difflib` suggestions or "there is no #3"; estimate at the default rate) →
+  `VideoConfig` (estimate in the video's `language` and `narration.words_per_second`) →
+  `Project.__init__` (`retime_project_anchors`: a beat with an MP3 is re-timed from
+  `beat_word_times` over the MP3 with the beat's spoken form — the karaoke timings). Renders,
+  storyboards, `lint` and `direct` see audio times after `vidgen tts`.
+- **A fraction**: `(word start + offset) / narration length`, clamped to `MAX_FRACTION` 0.999,
+  multiplied by the beat's body like any `at` (with `overlap` / `interrupt` it lands slightly
+  earlier; accepted).
+- **Translations**: `pin_translated_anchors` turns an anchor of a beat whose text changed into the
+  source fraction (4 places).
+- **`lower_third`** `at` also takes `"@Ada"` (first beat of the anchor scene saying it; `#N` over
+  the scene) or `"intro_b2@Ada"`; `locate_word_anchor` gives beat and seconds.
+- **Refused anchors**: a scene's `sfx:` list, `keyframes` `t`, the thumbnail's `at`, `sting`.
+- **`vidgen.api`**: `WordAnchor`, `is_word_anchor`, `parse_word_anchor`, `locate_word_anchor`.
 
 ### 87.3 One colour per concept (Step 157)
 
-- **Config**: `VideoConfig.terms: dict[str, ColorRef | TermConfig]` (`TermConfig`: `color`,
-  `tex: str | list[str]`, braces checked); keys must hold a word and differ beyond case and
-  spaces. `SceneConfig.terms: bool = True` (`false`: the scene's text, captions included, keeps
-  the usual colours). `vidgen validate` checks the colours against the theme
-  (`terms.term_color_problems`, located `terms.<term>`).
+- **Config**: `VideoConfig.terms: dict[str, ColorRef | TermConfig]` (`color`, `tex: str |
+  list[str]`); keys hold a word and differ beyond case and spaces. `SceneConfig.terms: bool =
+  True` (`false`: the scene's text and captions keep usual colours). Colours checked against the
+  theme (`terms.term_color_problems`).
 - **Matching** (`vidgen/terms.py`, no manim): `term_spans` finds whole words in any case with an
-  optional plural `s` / `es`, a phrase's words across any whitespace; longer terms first, no
-  overlaps. No accent folding: the spans must index the text as drawn.
-- **Where the colours go: the text helpers, not each scene.** `helpers.styled` (so `T`, a
-  scene's `self.text`, chart labels and legends, captions) and `layout.fit_text_sized` (so
-  `fit_text`, `readable_text` and every scene and overlay built on them) add Manim `t2c` slices
-  for the *active terms*; an explicit `t2c` / `highlights` keeps the letters it colours (explicit
-  scene settings win). `terms=False` opts a call out (a callout's text on its plate). `MarkupText`
-  (`MT`) is not coloured (its markup indexes differ), nor `Code` listings: syntax colours would
-  clash with concept colours, so code comments stay as they are (decided; the brief allowed it
-  "only if sensible").
-- **Active terms**: `NarratedScene.__init__` sets them (`set_active_terms(scene_terms(...))`)
-  before it builds anything (its overlays are built in `__init__`), `tear_down` clears them, and
-  `runtime.set_context` / `clear_context` reset them, so a later thumbnail or a test never sees a
-  scene's terms. A module global rather than a parameter: every text helper reads it without each
-  of the ~40 call sites passing it (the theme works the same way, `current_theme()`).
-  `using_terms(...)` narrows them for a block.
-- **Beyond words**: a `line_chart` series whose whole name is a term (not `training loss`: two
-  series would share a colour) defaults to the term's colour; a `callout` without its own `color`
-  takes the colour of the first term its label says (mark and plate; the label's text keeps its
-  readable ink); `equation` and `equation_derivation` isolate the `tex` parts present in a step as
-  whole tokens (`equation_derivation.isolated_source`, the derivation's own machinery; the
-  `equation` scene switches to it only when a step contains one, so other equations compile as
-  before) and colour them; a derivation's own `colors` wins, and its dimmed history keeps the
-  term colours readable (`readable_opacity` includes them).
-- **Captions**: a term colour is used only where it keeps the `contrast` rule's `min_ratio` on the
-  plate; the plate's opacity is raised (0.05 steps, up to 1) until the term colours read, and a
-  colour that does not read even on an opaque plate stays in the text colour with a warning.
-  Without a plate, against the theme background (the outline). The karaoke highlight still
-  paints the spoken word.
-- **Lint** `concept_colors` (scene scope, from the config like `look_alike`;
-  `vidgen/lint/term_rule.py`): more than `max_colors` (5) different colours and a colour below
-  `min_contrast` (4.5, WCAG AA for normal text; every preset's accents pass) on the theme
-  background, both reported once on the first scene with terms; and per scene
-  (`terms.term_conflicts`) a setting that colours a term otherwise: `title.highlight_color`, a
-  `line_chart` series' `color`, an `equation_derivation` `colors` entry for a term's `tex`
-  (compared without spaces), a `callout`'s explicit `color` on a label that says a term (on its
-  beat).
-- **Not coloured** (gaps): thumbnails (no scene is active), `MarkupText` (the `progress`
-  overlay), code, bar / pie / icon-grid categories' bar colours (only their label text), text
-  inside pictures; a translated variant must give its own `terms:`.
-- **`vidgen.api`** adds `Term`, `active_terms`, `find_term`, `term_spans` and `using_terms`
-  (for a project's `MarkupText`, picture or equation, or to narrow the terms on a plate of its
-  own); `T`, `fit_text` and `readable_text` take `terms=False`.
+  optional `s` / `es`, phrases across whitespace, longest first, no overlaps, no accent folding
+  (spans index the drawn text).
+- **Applied in the text helpers**: `helpers.styled` and `layout.fit_text_sized` (so `T`,
+  `self.text`, `fit_text`, `readable_text`, chart labels, captions) add `t2c` slices for the
+  active terms; explicit `t2c` / `highlights` win; `terms=False` opts out. `MarkupText` and `Code`
+  are never coloured.
+- **Active terms**: a module global (like `current_theme()`) set in `NarratedScene.__init__`
+  before anything is built, cleared by `tear_down` and `runtime.set_context` / `clear_context`;
+  `using_terms(...)` narrows them.
+- **Beyond words**: a `line_chart` series whose whole name is a term and a `callout` without
+  `color` take the term colour; `equation` / `equation_derivation` isolate `tex` parts as whole
+  tokens (`equation_derivation.isolated_source`, used only when a step contains one); a
+  derivation's own `colors` win.
+- **Captions**: a term colour is used only where it meets the `contrast` rule's `min_ratio`; the
+  plate opacity rises in 0.05 steps up to 1, else the term keeps the text colour with a warning.
+- **Lint `concept_colors`** (`lint/term_rule.py`): more than `max_colors` (5) colours, a colour
+  under `min_contrast` (4.5) on the background, and per scene (`terms.term_conflicts`) a setting
+  colouring a term otherwise (`title.highlight_color`, a series `color`, a derivation `colors`
+  entry, a `callout` `color`, plot / number-line item colours).
+- **Not coloured**: thumbnails, `MarkupText`, code, chart fills, pictures; a translated variant
+  gives its own `terms:`.
+- **`vidgen.api`**: `Term`, `active_terms`, `find_term`, `term_spans`, `using_terms`.
 
 ### 87.4 Code that morphs between versions (Step 158)
 
-- **A scene type, `code_morph`** (`scenes/code_morph.py`), not a mode of `code`: `code`'s beats
-  follow its `highlight` entries and its targets are the lines of one listing; here the beats
-  follow `versions` and every version has its own lines. `CodeMorph` subclasses `CodeListing`
-  to share the window, the colouring and the fitting. Params: `versions` (at least two; each
-  the code as a string, or `{code | path, highlight}`), and `code`'s `language`, `title`,
-  `line_numbers`, `style`, `font`, `size`, `highlight_color`, `wrap`.
-- **The diff is schu-video-generator's** (`diff_code`, `difflib`, no manim): lines are matched by their text
-  without indentation (`SequenceMatcher`, no autojunk); within a replaced block, lines are paired
-  in order by a small dynamic programme maximising their token similarity (each pair at least
-  `PAIR_RATIO` 0.5), so an edited line is one line, not one removed and one added; a line that
-  disappears in one place and appears unchanged elsewhere is a move. Within a pair, the shared
-  tokens (`\w+` or one other character) keep their characters. A glyph is addressed as (line,
-  n-th non-space character): Manim's `Code` draws exactly one glyph per such character, and
-  wrapping drops or adds only spaces, so a wrapped line's glyphs are its rows' glyphs in order.
-  `changed` (for `highlight: changed`) = new, edited (text differs, indentation included) or
-  moved lines.
-- **One size for all versions**: `CodeListing._fit_listing` became `_fit_listings` (one font
-  size, scale and wrap width for several listings, so the largest fits; `code` passes one). The
-  phone rules of `code` hold unchanged (wrap to at least `TARGET_COLUMNS` at no less than the
-  readable size). Placement: every version centred across the body, all with the top of the
-  tallest when centred, so lines a change keeps move only sideways (if the window's width
-  changes) or down (below inserted lines).
-- **The morph** (`_Morph`, an `AnimationGroup`): kept glyphs and line-number labels `Transform`
-  into copies of the new version's (`GLIDE` 0.1–0.9 of the run time), the window background
-  transforms into the new one, removed glyphs and bands fade to 0 (`FADE_OUT` 0–0.45; opacity,
-  not `FadeOut`: a remover would dissolve the old listing's group), new tokens of an edited line
-  fade in from 0.6x, a new line grows from its left end (`GROW_IN` 0.5–1), the new bands fade
-  in. At its end `_Morph` removes the whole families of everything it played (playing the group
-  lifts unanimated parts of the old listing, e.g. a wrapped line's empty number, into the scene
-  on their own) and adds the new version as one `Code` (with its bands), so the layout dump and
-  lint read a code listing at every beat end and `is_shown` tells which version shows.
-- **Timing**: the scene's reveal plays version *i* at beat *i* (`cap` 1.5 s). Targets
-  `version<N>` (and `version<N>.line<K>`) have the morph to N as their entrance, so `{reveal:
-  version2, at: "@word"}` morphs on a spoken word (§87.2); a version some `reveal` action shows
-  is left out of the scene's own steps (`action_uses("reveal")` resolved through
-  `find_targets`), else the beat would morph at its start and the action find it done. Morphs
-  only go forward: revealing an earlier version than the one shown does nothing; a skipped
-  version is diffed away directly (A to C).
-- **Highlights**: a version's `highlight` (a line spec of that version, or `changed`) dims the
-  other rows to 0.35 and lays `code`'s band (`listing_bands`, now shared) before the morph, so
-  the morph carries the dimming. `readable_band` runs once over every version's glyphs.
-- **Not done**: morphing in `code_walkthrough` (a scrolling window; a later step if wanted);
-  tokens moving between lines (a line split in two: the second half fades and grows); no lint
-  rule (the code scenes' rules apply to the stills; `validate` refuses a version equal to the one
-  before).
+- **Scene type `code_morph`** (`scenes/code_morph.py`, `CodeMorph(CodeListing)`): `versions`
+  (≥ 2; a string or `{code | path, highlight}`) plus `code`'s display params. `validate` refuses a
+  version equal to the one before.
+- **Diff** (`diff_code`, `difflib`, no manim): lines matched without indentation
+  (`SequenceMatcher`, no autojunk); within a replaced block lines are paired by a small DP on
+  token similarity (≥ `PAIR_RATIO` 0.5), so an edited line stays one line; a line removed and
+  re-added unchanged elsewhere is a move. A glyph is addressed as (line, n-th non-space char),
+  since `Code` draws one glyph per such char and wrapping only changes spaces. `highlight:
+  changed` = new, edited or moved lines.
+- **One size for all versions**: `CodeListing._fit_listings` fits several listings at one size
+  with `code`'s phone rules; versions share the tallest one's top.
+- **The morph** (`_Morph`): kept glyphs `Transform`, removed ones fade by opacity (not `FadeOut`,
+  whose remover would dissolve the group), new lines grow from the left. At its end the new
+  version is one `Code` with its bands, so the layout dump reads a listing and `is_shown` tells
+  which version shows.
+- **Timing**: version *i* at beat *i*; targets `version<N>` / `version<N>.line<K>` (entrance =
+  the morph, `entrance_time` `MORPH_SECONDS` 1.5 s); a version a `reveal` action shows is left out
+  of the scene's steps. Morphs only go forward; a skipped version is diffed directly.
+- **Highlights** dim other rows to 0.35 before the morph (`listing_bands`, shared with `code`).
 
 ### 87.5 Terminal scene (Step 159)
 
-- **A scene type, `terminal`** (`scenes/terminal.py`), subclassing `CodeListing` for the window,
-  colouring and fitting. `steps` (step *i* at beat *i*): `{command, output, clear,
-  output_color}` or a string (a command). schu-video-generator never runs a command: the output is the
-  author's. Params `prompt` (`$`), `language` (`bash`, the commands' lexer), `typing_speed`
-  (18 characters/s), `code` (`{code | path, language, highlight}`: a listing beside it),
-  `title`, `prompt_color` (`accent`) and `code`'s `line_numbers`, `style`, `font`, `size`,
-  `highlight_color`, `wrap`.
-- **The session as rows** (`session_pages`, no manim): a command's first line after the prompt
-  (`typed_from` = where typing starts), its other lines as typed, the output's lines (tabs
-  expanded, Pygments `Generic.Output`), and the prompt again after the last step when it has a
-  command (an output-only step is a program still running). `clear` starts a new page.
-  A blank last row would be dropped by Manim's `Code`, so a prompt-less end row is a space.
-- **Fitting**: the pages go through `code`'s `_fit_listings` (now with `lexed=` rows coloured by
-  the caller and `numbered=`; every listing keeps `fit_scale` and `shown_lines`), so the phone
-  rules of `code` hold (wrap to 32 columns at no less than the readable size, up to 1.5x).
-  With `code`, the terminal and the listing are fitted side by side and, in a landscape frame,
-  also one above the other; the layout giving the larger text wins (portrait: always stacked),
-  and both are set to the smaller of their two scales (one font size).
-- **One window**: a listing of `"M" * columns` over the tallest page's rows, its text removed,
-  so the window keeps its size when the screen clears; every page is placed at its top-left.
-- **Segments**: each prompt, each wrapped row of a command and of an output is its own one-line
-  `Paragraph` (Pango's space dots dropped, as `Code` does), moved onto the page listing's glyphs
-  and coloured like them, then the page listings are dropped. So a target (`command<N>`,
-  `output<N>`, `output<N>.line<K>`) is in the scene only once shown (`is_shown`, `entrance`
-  work unchanged), and the layout dump reads exactly the text on screen. Once shown, a segment
-  is moved into the window (a `Code`), so the dump reads it as `code`. A cell's position comes
-  from the monospace advance and a line fitted through the rows' centres.
-- **Timing**: the scene plays its own steps with `play_steps` (cap: the beat's longest step;
-  the run time recomputed with `play_steps`' formula), each step one `_Show` animation that
-  shows glyphs at fractions of its run time (printing, not fading), moves the block cursor and,
-  at its end, puts the texts into the window; the window's opening (0.5 s) is an
-  `AnimationGroup` with a windowed rate function. A step: prompt (if not already there), 0.25 s,
-  typing (`max(0.3, characters / typing_speed)`), Enter (0.3 s), output rows (0.06 s each,
-  0.1–0.8 s), then the next prompt (same page) or the end prompt. Too long for its slot, it is
-  shortened in proportion. `clear` hides the old page at once (its texts leave the window)
-  and the new one starts 0.3 s later.
-- **Actions**: a `reveal` of `command<N>` / `output<N>` (any of its line targets) leaves that
-  item to the action (`action_uses("reveal")`); a command an action types brings its output
-  unless an action shows that too. What comes before on the same page and is not shown appears
-  at once (`_schedule`'s catch-up). A first command left to an action still shows its prompt
-  with the window. **`NarratedScene.entrance_time(target)`** (new, public, default `None`):
-  the seconds a target's own entrance wants; `Reveal.run_time_for` returns the longest for the
-  targets not on screen, so `{reveal: command2, at: "@run"}` types for the typing time (an
-  explicit `run_time` still wins).
-- **Beside code / after code**: `code` and `code.line<K>` are targets, so `carry: ["listing ->
-  code"]` after a `code` / `code_morph` scene of the same code makes the listing glide into place
-  (the carry machinery, §50; the highlight band fades in after it).
-- **Not done**: a terminal in a split with a scene of another type (there is no general split;
-  the `code` pane covers the coding case); scrolling a long session (use `clear`); colours
-  inside the output (one colour per step); a blinking cursor (it would redraw every frame).
+- **Scene type `terminal`** (`scenes/terminal.py`, subclasses `CodeListing`): `steps` (step *i*
+  at beat *i*; `{command, output, clear, output_color}` or a command string). It never runs a
+  command. Params: docs/CONFIG.md#terminal (`prompt` `$`, `typing_speed` 18 chars/s, `code` for
+  a listing beside it).
+- **Rows** (`session_pages`, no manim): prompt + command lines, output lines (Pygments
+  `Generic.Output`), the prompt again after a last command; `clear` starts a page. One window
+  sized for the tallest page.
+- **Fitting** through `_fit_listings` (phone rules of `code`); with `code`, side by side or
+  stacked, whichever gives larger text (portrait: stacked), one shared scale.
+- **Segments**: each prompt and wrapped row is its own one-line `Paragraph` placed on the page
+  listing's glyphs; targets `command<N>`, `output<N>`, `output<N>.line<K>` exist in the scene only
+  once shown, so the dump reads exactly the visible text.
+- **Timing** (`play_steps`; each step one `_Show`, printing not fading): prompt, typing
+  `max(0.3, chars / typing_speed)`, Enter, output rows; shortened in proportion when too long.
+- **Actions**: a `reveal` of `command<N>` / `output<N>` leaves that item to the action; earlier
+  unshown items on the page appear at once. **`NarratedScene.entrance_time(target)`** (public,
+  default `None`) is the seconds a target's entrance wants; `Reveal.run_time_for` uses the
+  longest (an explicit `run_time` wins).
+- **After code**: `code` / `code.line<K>` are targets, so `carry: ["listing -> code"]` glides a
+  listing in (§50).
 
 ### 87.6 Maths, part 1: function plots (Step 160)
 
-- **A scene type, `function_plot`** (`scenes/function_plot.py`), not a mode of `line_chart`:
-  a chart plots the author's data points on chart axes at the plot's edges; here the author
-  writes functions, the axes are maths axes, and dots and areas move with beat actions. Params:
-  `functions` (an expression string, `f(x) = ...`, or `{expr, name, label, color, domain,
-  dashed}`), `x_range`, `y_range` (default from the values), `dots` (`{on, x, label, tangent,
-  guides, color, tangent_color, decimals}`), `areas` (`{under, over, between, label, color,
-  opacity, decimals}`), `x_label`, `y_label`, `grid`, `aspect` (`auto` | `equal`), `reveal`,
-  `title`, `title_size`, `title_color`, `label_size`.
-- **Expressions, never `eval`** (`vidgen/mathexpr.py`, no manim; sympy is not a dependency,
-  checked): a tokenizer and a recursive-descent parser compile the text into numpy closures.
-  Grammar: `+ -`, `* /` and implicit products (`2x`, `3(x + 1)`, `x sin(x)`, `(x+1)(x-1)`),
-  unary minus below `^` (`-x^2` is `-(x^2)`), `^` / `**` right-associative (`2^-x`), brackets,
-  numbers (`2e3`), `x`, `pi` / `e` / `tau`, the whitelisted functions `MATH_FUNCTIONS` (numpy:
-  trig, hyperbolic, `exp`, `ln` / `log`, `log10`, `log2`, `sqrt`, `abs`, `floor`, `ceil`, `sign`,
-  `min`, `max`) and functions defined before (`g(x) = f(x) + 1`; only earlier ones, so no
-  cycles). Unicode maths (`−`, `×`, `·`, `π`, `²`) is read too. Any other character or name is
-  a `ValueError` naming it, its column and the closest known names (`difflib`). Values are
-  evaluated under `np.errstate(all="ignore")`; non-finite values become `nan` (a gap).
-  `MathExpression.slope` is a central difference. `pretty_expression` writes the default curve
-  label (`x^2` -> `x²`, `2*x` -> `2x`, `-` -> `−`). Exported by `vidgen.api`: `MathExpression`,
-  `parse_expression`, `pretty_expression`, `split_definition`, `MATH_FUNCTIONS`,
-  `MATH_CONSTANTS`, `MATH_NAMES` (a project's own maths scene parses the same way).
-- **Axes** (`math_axes` -> `MathAxes`, in the scene module, for Step 161 to share): they cross
-  at the origin when it is in view, else run along the bottom / left edge; arrow tips; ticks from
-  `axis_ticks` within the range, labels thinned to every k-th (aligned on 0), negative numbers
-  with U+2212, one `0` at an inner origin; faint grid lines at the ticks; axis titles by the tips.
-  The plot region leaves room for labels next to an axis on (or near) an edge (iterated), half
-  an end tick label at both sides, and the tips. `aspect: equal` shrinks one side to a common
-  unit; `auto` fills the body, at most `MAX_TALL` (1.5) times as tall as wide (9:16). Draw order
-  by `z_index`: grid -2, areas -1, curves 0, tick / curve labels 1, tangents 1, dots and their
-  labels 3 (the layout dump sorts by it, so lint's `covered_text` sees what is drawn).
-- **Curves** (`curve_runs`): samples (90 per unit of plot width, at least 240), split where
-  undefined, where they leave the y range (ending on its edge by interpolation) and at a jump of
-  more than 1.5 ranges (an asymptote such as `tan`); each run a polyline (`DashedVMobject` when
-  `dashed`). `auto_y_range` drops the 3 % tails when the full span is 4x the trimmed one (an
-  asymptote), reaches 0 when it is within 0.6 spans, and adds 6 %.
-- **Labels**: a curve's label (`place_label`) goes beside a point of its curve on the side of
-  the normal, above or below, the first place (shares 0.88, 0.72, ... then every 5 %) inside
-  the plot that covers no axis or curve point and no other label; else the free spot nearest the
-  curve's right part on a 0.12-unit grid. A dot's label (`dot_label_spot`) sits on the side above
-  the curve (up-left of a rising curve), else another corner, clear of the curve labels and tick
-  labels, on a plate in the background colour; an area's (`area_label_spot`) inside the area
-  where it fits (from the middle outwards), else just above it, else anywhere clear.
-  Templates: `{x}`, `{y}`, `{slope}`, `{name}` (dot), `{area}`, `{from}`, `{to}`, `{name}`
-  (area), with `decimals` or a field's own format; checked by `label_problem`.
-- **Moving items**: `_Dot.place(x)` / `_Area.place(end)` move everything from the state (dot,
-  tangent clipped to the plot, guides, label text rebuilt only when it changes, keeping a dimmed
-  opacity; `become` resets `z_index`, so it is set again). The **`trace` action** (`to`; 2 s,
-  `smooth`; reversible with `until`) plays `_Trace` (an `Animation` on the dot or the area's
-  shape whose `interpolate_mobject` calls `place`) plus a no-op `_Moved` on each other shown part,
-  so Manim counts them as moving and redraws them (else they would be frozen in the static
-  background image). `scene_problems`: a `function_plot` only, a dot or an area only, `to`
-  inside the function's drawn range and where it has a value.
-- **Reveal**: each target has its own entrance and the targets it needs first (title, axes,
-  its function, its dot); an entrance brings that chain (each part once), so `{reveal: dot1}`
-  before its function draws the function too, and a step never plays a part twice. Steps:
-  functions, then dots, then areas, one per beat (`distribute`); an item a `reveal` action shows
-  keeps its slot, empty, so the others keep their beats; a dot's tangent comes with the dot
-  unless an action reveals `tangent<N>`.
-- **Terms** (§87.3): a function whose name or whole label is a term takes its colour
-  (`LineChart._term_color`); an area without `color` takes the first term its label says; all
-  labels are `self.text`, so terms in them are coloured. `terms.term_conflicts` reports a
-  function's or area's explicit `color` on a name / label that says a term.
-- **Lint**: `cap_height` counts U+2212 as a small glyph (like `-`), so `−3` measures as `-3`.
-- **Not done** (Backlog): a function of a parameter animated over beats (`a` in `a x^2`);
-  parametric and polar curves; a label that follows a curve's moving end; LaTeX labels; a dot
-  label's plate does not avoid other curves; `trace` moves in x only (a dot does not leave its
-  curve).
+- **Scene type `function_plot`** (`scenes/function_plot.py`; keys: docs/CONFIG.md#function_plot).
+- **Expressions, never `eval`** (`vidgen/mathexpr.py`, no manim, no sympy): a recursive-descent
+  parser compiling to numpy closures. Implicit products (`2x`, `x sin(x)`), unary minus below `^`
+  (`-x^2` = `-(x^2)`), `^` / `**` right-associative, `pi` / `e` / `tau`, the whitelist
+  `MATH_FUNCTIONS`, earlier definitions (`g(x) = f(x) + 1`; no cycles), Unicode `−×·π²`. Anything
+  else is a `ValueError` naming it, its column and close names. Non-finite values become `nan`
+  (gaps). `vidgen.api`: `MathExpression`, `parse_expression`, `pretty_expression`,
+  `split_definition`, `MATH_FUNCTIONS`, `MATH_CONSTANTS`, `MATH_NAMES`.
+- **Axes** (`math_axes` → `MathAxes`, §87.8): cross at the origin when in view, else along the
+  edges; `aspect: equal` one unit, `auto` fills the body (≤ `MAX_TALL` 1.5 tall:wide). Draw order
+  by `z_index` (grid, areas, curves, labels, dots); the dump sorts by it for `covered_text`.
+- **Curves** (`curve_runs`) split where undefined, out of range, or at a jump over 1.5 ranges
+  (asymptotes); `auto_y_range` trims asymptote tails.
+- **Labels**: placed clear of axes, curves and other labels (`place_label`, `dot_label_spot`,
+  `area_label_spot`); templates `{x}`, `{y}`, `{slope}`, `{name}`, `{area}`, `{from}`, `{to}`
+  checked by `label_problem`.
+- **The `trace` action** (`to`; 2 s; reversible with `until`) moves a dot or an area's end; other
+  shown parts get a no-op animation so Manim redraws them (else they freeze in the static
+  background).
+- **Reveal**: an entrance brings its chain (title, axes, function, dot) once; steps: functions,
+  dots, areas, one per beat; an item a `reveal` action shows keeps its slot empty.
+- **Lint**: `cap_height` counts U+2212 like `-`.
 
 ### 87.7 Maths, part 2: the plan for geometry basics (Step 161)
 
-Decided in Step 160 so that Step 161 extends the same scene where the things live on a
-coordinate system and sits beside it where they do not:
-
-- **On the plane: additions to `function_plot`.** `functions` becomes optional (at least one of
-  `functions`, `points`, `vectors`), so a coordinate plane is a `function_plot` with
-  `aspect: equal` (the default when there are vectors). New lists, revealed after the areas in
-  this order, each item a target: `points` (`point<N>`: a labelled dot at `[x, y]`), `vectors`
-  (`vector<N>`: an arrow `{from: [x, y] (default the origin), to | components, label, color}`),
-  and `marks` (`brace<N>`, `angle<N>`, `dimension<N>`): a brace under / beside a segment with a
-  label, an angle arc between three points with a label (and a right-angle square at 90°), a
-  dimension line with end ticks and a label, all in data coordinates on `MathAxes`. `axes:
-  false` hides the axes for pure geometry (the mapping stays). Vector sums are an item `{sum:
-  [vector1, vector2]}` (tip to tail, then the resultant); scaling is the `trace` action
-  generalised to points and vectors (`{trace: vector1, to: [2, 1]}` moves the tip, `{trace:
-  vector1, scale: 2}` scales it), so one action moves everything on the plane.
-- **The mark builders** (brace, angle arc, dimension line) go in a shared module exported by
-  `vidgen.api` (e.g. `vidgen/geometry_marks.py`), so `diagram`, `screenshot`-style scenes and
-  project scenes can draw the same marks in frame coordinates.
-- **Beside it: a `number_line` scene type** (1-D): one axis across the width (a vertical frame:
-  still horizontal, with fewer ticks), `points`, `intervals` (open / closed ends, shaded),
-  `jumps` (arcs from a to b with a label, e.g. `+3`), the same tick labels (factor the tick
-  and label part of `math_axes` into a helper both use), the same `reveal` and `trace` (a point
-  moving along the line). Its params of a 2-D plot (functions, `y_range`, `aspect`) would not
-  apply, so it is its own type rather than an `axes: x` mode.
-- **Terms and words** as in Step 160: every label through `self.text`, an item's colour from
-  the first term its label says, `{reveal: vector2, at: "@sum"}` / `{trace: ..., at: "@word"}`
-  on spoken words.
+Done: §87.8.
 
 ### 87.8 Maths, part 2: geometry basics (Step 161)
 
-Built as planned in §87.7; the changes and the details:
-
-- **Shared parts** (`scenes/math_axes.py`, a sibling module of the maths scenes): `MathAxes` /
-  `math_axes` (now with `visible=False`: the mapping only, for `axes: false`), `tick_label`,
-  `ticks_within`, `thinned_labels` (the tick part the number line shares), `fill_label` /
-  `label_problem`, `place_label`, `clip_segment`, `LiveLabel` / `label_plate`,
-  `ChainedTargets` (the "an entrance brings what the target stands on, each part once" machinery
-  and the one-item-per-beat steps that leave an item a `reveal` action shows to it, moved out of
-  `function_plot`), and the **`trace` action** with its animations. `trace` is generic: a scene
-  type that has it defines `trace_problem(params, name, options)` (the checks for
-  `vidgen validate`) and `traced_item(target)`, which returns a `Traced` (`state`, `place(state)`,
-  `driver`, `parts`, optionally `goal(to, scale)`); `TraceMove` interpolates the state (a number
-  or an `[x, y]` array). `Options`: `to: float | [x, y]` or `scale` (exactly one; not 0).
-- **The plane** (`scenes/plane_geometry.py`): `PlotPoint` (`[x, y]` or `{at, name, label,
-  color, decimals}`), `PlotVector` (`[x, y]` or `{from, to | components | sum, name, label,
-  color, decimals}`), `PlotMark` (one of `segment`, `brace`, `angle`, `dimension`, with `label`,
-  `side`, `color`, `closed`, `dashed`, `decimals`). **Added beyond the plan**: `segment` marks
-  (a figure needs its sides; a polyline or, `closed`, a polygon), `side` for braces and
-  dimensions, and label templates (`{x}`, `{y}`, `{length}`, `{angle}`) that follow movement.
-  `PlaneFigure` (no manim) resolves positions: `[x, y]`, a point's name or `point<N>`, a vector's
-  name or `vector<N>` (its tip; in a vector only earlier ones, so no cycles); a vector's state is
-  its tip (`to: [x, y]`) or its components, a vector `to` a point name follows the point, a sum
-  is derived (its chain: the summands tip to tail from the first one's tail). `move` sets a
-  point or a vector's state and everything derived follows. Names: no spaces or brackets, not
-  `point3` / `vector2` (they would shadow the numbered targets), unique across points and vectors.
-- **Defaults**: without `x_range` / `y_range` (`x_range` is still required with functions) the
-  plot spans the figure's positions with a margin (`geometry_range`: 12 % or 0.5, on whole
-  numbers beyond a span of 3) and the origin while the axes show; with functions too, the y
-  range grows to the positions. `aspect` defaults to `equal` with vectors or angle marks or
-  without functions, else `auto` (so plots of Step 160 keep their look). Every position must be
-  inside the plot (`validate`), and so must a `trace` goal (`trace_problem`: the default ranges
-  do not grow to fit actions; the message says to widen them).
-- **Drawing** (`PlaneGeometry.layout`, called at build and on every frame of a `trace`): arrows
-  (`Arrow`, buff 0; a vector scaled through 0 keeps a 1e-3 length), a sum's copies of the
-  summands at `GHOST_OPACITY` 0.45 (entrance: `TransformFromCopy` from each summand, then the
-  resultant grows), marks through the `geometry_marks` builders, then labels: marks' where their
-  builder puts them, points' in the first free of 8 directions starting away from the figure's
-  middle and kept while it moves (`point_label_spot`), vectors' with `place_label` along the
-  shaft. Obstacles: tick and curve labels, labels placed before; points to keep off: curves, axes,
-  every shaft and mark. `_renew` (`become` keeping a dimmed opacity) redraws each part. Colours:
-  an item's own, else the first term its label says, else points `text`, vectors the palette after
-  the functions, segments and braces `text`, angles `accent`, dimensions `dim`.
-- **Steps**: after functions, dots and areas, each point, vector and mark (in list order) one per
-  beat; a vector, sum or mark brings the points and vectors it names first (`needs`).
-- **The mark builders** (`vidgen/geometry_marks.py`, exported by `vidgen.api`: `GeometryMark`,
-  `brace_mark`, `angle_mark`, `dimension_mark`, `segment_normal`, `angle_between`), in frame
-  coordinates, the label a mobject the caller made: a brace is Manim's `BraceBetweenPoints` (no
-  LaTeX), its label beyond the tip; an angle is the smaller one, an `Arc` of radius 0.55 (at most
-  40 % of the shorter ray) or a square within 0.5° of 90°, its label outside on the bisector; a
-  dimension line sits 0.35 beside the segment with end bars and faint extension lines, its label
-  beside its middle. `segment_normal(a, b, away_from)` picks the side away from the figure
-  (default down / left). Marks are drawn in frame space, so with `aspect: auto` an arc shows the
-  drawn angle while `{angle}` is the angle in data units.
-- **`number_line`** (`scenes/number_line.py`): `range`, `step`, `points` (a number or `{at, name,
-  label, color, decimals}`), `intervals` (interval notation `"[-1, 3)"`, `"(-inf, 0]"`, `∞`,
-  or `{from, to, ends, label, color}`; `from` / `to` take `inf` as text, so the JSON Schema
-  allows a string), `jumps` (`[from, to]` or `{from, to, label, color}`; label `'{by}'` =
-  `+3` / `−2`, a preformatted field, so `{by:...}` is refused), `reveal`, title and label sizes.
-  Layout: the line across the body (arrow tips both ends), ticks from `ticks_within(…, 13)` with
-  labels thinned (so a vertical frame shows every 2nd number rather than 2.5 steps); jumps arc
-  above the line (both directions; an arc's rise `0.42 x` its length up to 1.1, `+0.32` per earlier
-  overlapping jump), intervals as a thick band with filled dots (closed), rings (open) or a
-  triangle (infinite), stacked in lanes when they overlap; labels: point labels above the dot,
-  or under the numbers where a jump starts or lands; interval labels above the band, or in a row
-  below the point labels where a jump arcs over it. The line sits so that this content is centred
-  in the body. Targets `title`, `line`, `point<N>`, `point:<name>`, `interval<N>`, `jump<N>`;
-  `trace` moves a point (`to`: a number in the range).
-- **Terms**: the colour rules above; `terms.term_conflicts` reports an explicit `color` on any
-  `function_plot` point, vector or mark and any `number_line` point, interval or jump whose label
-  (or name) says a term.
-- **Lint**: `cap_height` counts the operators `= + < > ≤ ≥ × ÷ ~` as x-height glyphs (a live
-  label `x = −3` measured 0.4 % under `min_font` at the readable size).
-- **Not done** (Backlog): reflex angles; a mark on a curve (a tangent's angle with the axis);
-  arcs of jumps below the line; a vertical number line; the default ranges growing to fit
-  `trace` goals; point labels avoiding dot labels of functions; vectors from a function's dot.
+- **Shared parts** (`scenes/math_axes.py`): `MathAxes` / `math_axes` (`visible=False` for `axes:
+  false`), tick and label helpers, `ChainedTargets` (entrance chains, one item per beat), and the
+  generic **`trace`**: a scene type defines `trace_problem(params, name, options)` and
+  `traced_item(target)` returning a `Traced` (`state`, `place(state)`, `driver`, `parts`,
+  optional `goal(to, scale)`). Options: exactly one of `to: float | [x, y]` or `scale` (not 0).
+- **The plane** (`scenes/plane_geometry.py`, on `function_plot`; at least one of `functions`,
+  `points`, `vectors`): `PlotPoint`, `PlotVector` (`from`, `to | components | sum`), `PlotMark`
+  (`segment`, `brace`, `angle`, `dimension`). `PlaneFigure` (no manim) resolves positions from
+  `[x, y]`, names or `point<N>` / `vector<N>` (only earlier vectors: no cycles); derived items
+  follow `move`. Names: no spaces or brackets, not `point3` / `vector2`, unique.
+- **Defaults**: without ranges the plot spans the figure (`geometry_range`); `aspect` is `equal`
+  with vectors or angle marks or without functions. Every position and `trace` goal must be
+  inside the plot (validate; ranges do not grow for actions).
+- **Steps**: after functions, dots, areas: points, vectors, marks in list order, one per beat; an
+  item brings what it names first (`needs`).
+- **Mark builders** (`vidgen/geometry_marks.py`, in `vidgen.api`: `GeometryMark`, `brace_mark`,
+  `angle_mark`, `dimension_mark`, `segment_normal`, `angle_between`), in frame coordinates: brace
+  = `BraceBetweenPoints` (no LaTeX), angle = the smaller one (a square within 0.5° of 90°). With
+  `aspect: auto` an arc shows the drawn angle while `{angle}` is in data units.
+- **`number_line`** (`scenes/number_line.py`; keys: docs/CONFIG.md#number_line): `points`,
+  `intervals` (notation `"[-1, 3)"`, `inf` as text, so the schema allows a string), `jumps` (label
+  `'{by}'` preformatted, so `{by:...}` is refused). Targets `title`, `line`, `point<N>`,
+  `point:<name>`, `interval<N>`, `jump<N>`; `trace` moves a point.
+- **Lint**: `cap_height` counts `= + < > ≤ ≥ × ÷ ~` as x-height glyphs.
 
 ### 87.9 Charts that change between beats (Step 162)
 
-- **Which charts**: the existing chart types were checked one by one. `bar_chart` and
-  `line_chart` take `changes` (a bar race and a morphing line are what "a chart that changes"
-  means in an explainer). Not done, and why: `pie` (shares that change would need the slice
-  labels re-placed every frame, and a pie compares parts of one whole, not states), `histogram`
-  (raw values are binned; changing counts is a bar chart), `scatter` (points that move are a
-  different feature: trajectories), `heatmap` (cells could recolour, but no request names it),
-  `stat` (already counts from `count_from` / a `before` comparison). Charts without `changes`
-  are built exactly as before (the gallery stills and clips of both types re-rendered byte for
-  byte).
-- **YAML**: `changes` lists the later states, each the values the chart changes to; the first
-  state is the existing `values` / `series`, so a one-state chart is unchanged and `changes`
-  never repeats the first state. `bar_chart`: `changes: [[...], ...]` (one value per label) and
-  `sort: true` (largest first, re-sorted at each change). `line_chart`: `changes: [{name:
-  [values]}, ...]` (series left out keep theirs; with one series a plain list), `x` fixed, and
-  `rescale` (default `true`). The change keys are `TextRef`s, so they follow a translated series
-  name. `vidgen validate` names the change, the series and the counts (`changes[0].loss has 2
-  values but x has 4`, `'los' is not a series (series: loss, acc)`, a list with several series).
-- **Steps and words**: each change is one step after the chart's own reveal steps (the bar
-  chart's `highlight` step stays last), so with enough beats change N lands on its own beat.
-  `change<N>` is a target (`scenes/chart_changes.py`, mixin `ChangingChart`): revealing it plays
-  that change (`{reveal: change2, at: "@word"}`), and the scene leaves that change's step empty,
-  as `code_morph` does with its versions. Its mobject is the whole chart (bars; axes and lines),
-  so `dim` / `highlight` on it act on the chart; `is_shown` is overridden for these targets to
-  mean "the chart has reached state N" (a target whose mobject is always on screen would never
-  be revealed), and `entrance_time` gives a `reveal` 1.2 s (`CHANGE_TIME`) instead of 0.8 s.
-  Changes only go forward: a later state shown already makes an earlier change a no-op. A change
-  before a bar or line is on screen sets its new shape at once (it grows / draws to the new
-  values later). `reveal_steps` adds one step per change, rising or falling as the bars' sum or
-  the lines' last values do, for host reactions and music cues.
-- **Bars**: one value scale over every state (the bar chart has no value axis, so rescaling
-  would hide the change: doubled values would look the same); the value labels are sized and the
-  room beside negative bars kept for every value any state shows. Bars keep their colour,
-  targets and highlight box (the `outline` rectangle is updated in place). A change animates each
-  shown bar with one `UpdateFromAlphaFunc` (value and slot interpolated: the layout functions
-  take a fractional slot), the value label counting and the category label sliding; with
-  `sort`, a bar's labels fade by up to 75 % half way (`SWAP_FADE`) while it changes slot, so two
-  labels passing never read as one. Labels are rebuilt with `become`, keeping the shown opacity
-  (`keep_opacity`, not `match_style`: after a `become` from a longer text the old label holds
-  padding glyphs, and copying their style glyph by glyph hid digits).
-- **Lines**: every state's points, end labels and y axis are computed up front. The y axis
-  rescales when the new values leave the current axis or span less than half of it
-  (`needs_rescale`, `RESCALE_SHARE` 0.5; `state_axes` keeps the same axis object otherwise, and
-  `y_min` / `y_max` pin an end); `rescale: false` makes one axis over every state. All axes
-  share one plot: `chart_axes` takes a new `tick_width` (the least room for the y tick labels,
-  default 0, so nothing else changes), set to the widest tick label of all the axes. A change
-  interpolates each line's frame points (so it morphs with the axis), its markers, end label
-  (counting) and cursor; on a rescale the old gridlines and tick labels slide to where their
-  values lie on the new axis while fading (first 60 % of the change), the new ones slide in from
-  their old-axis places (last 60 %). The `axes` target's group stays one group on screen: the
-  swap happens in `_SwapAtEnd.clean_up_from_scene` (an `Animation`, not an `AnimationGroup`,
-  whose group Manim would add to the scene, dissolving the group whose parts it animates).
-- **Cursor**: the `trace` action (Step 160) also takes a `line_chart` series: `trace_problem`
-  checks `to` (an x inside the data; on categories a position from 1), `traced_item` makes a
-  `_Cursor` on first use: a dot with a background ring and a `LiveLabel` with the line's value
-  (linear between points) above it, or below at the top of the plot. It sweeps over 2 s like any
-  trace, stays, follows the line through a change, and `until:` takes it back.
-- **Concept colours**: labels still go through `self.text` / `fit_text`, and a series named
-  after a term keeps the term's colour through changes; nothing new to lint.
-- **Not done** (Backlog): per-state notes (a caption or a title per change); changing labels
-  (bars entering or leaving a race); `x` changing between states; a line chart's cursor that
-  shows a guide line to the axes; `pie` / `heatmap` changes.
+- **`bar_chart` and `line_chart` take `changes`** (later states; the first is `values` /
+  `series`). Not `pie`, `histogram`, `scatter`, `heatmap`, `stat`. A chart without `changes`
+  builds as without the feature. Keys: docs/CONFIG.md (`sort`, `rescale` default `true`). Change
+  keys are `TextRef`s (follow a translated series name).
+- **Steps**: each change is one step after the reveal steps; `change<N>` is a target
+  (`scenes/chart_changes.py`, `ChangingChart`) whose mobject is the whole chart; `is_shown` means
+  "state N reached"; `entrance_time` `CHANGE_TIME` 1.2 s. Changes only go forward; a change before
+  the chart is on screen sets its shape at once. `reveal_steps` adds one rising / falling step per
+  change.
+- **Bars**: one value scale over every state (there is no value axis, so rescaling would hide the
+  change); labels sized for every state. Labels rebuilt with `become` keep opacity
+  (`keep_opacity`, not `match_style`, which hid digits).
+- **Lines**: every state precomputed; the y axis rescales when values leave it or span under
+  `RESCALE_SHARE` 0.5 of it (`rescale: false`: one axis for all); `chart_axes` `tick_width`
+  (default 0) reserves the widest tick label of all axes. The `axes` target stays one group
+  (`_SwapAtEnd` is an `Animation`, not an `AnimationGroup`, which Manim would add to the scene).
+- **Cursor**: `trace` takes a `line_chart` series (`to` an x inside the data); a dot with a live
+  value that follows changes.
 
 ### 87.10 Narration–picture check in lint (Step 163)
 
-- **Rules** (`src/vidgen/lint/narration_rule.py`, scene scope, last in `LINT_RULES`):
-  `said_before_shown` (warning) — the narration names an on-screen *label* more than `min_lead`
-  (1.5 s) before the label is on screen, and does not name it again in the beat that shows it;
-  `unsaid_reveal` (default severity `off`, `info` when given one) — a beat other than the
-  scene's first brings new labels and the scene's narration names none of them.
-- **Deterministic inputs**: the layout dump (every frame it holds: beat-end stills, plus the
-  mid-beat stills of a storyboard), the activity file's beat times, the beats' word times
-  (`word_anchors.beat_words`: the alignment of the MP3, else the estimate, so the rule works
-  before `vidgen tts`) and the config's actions. The runner reads them into
-  `SceneContext.narration` (a `NarrationPicture`) only when one of the two rules runs; the rules
-  are pure functions of it (tested without renders).
-- **A label** is a scene text (kind `text`; not an overlay — captions repeat the narration —,
-  not a speech bubble, not maths or code) of at most `max_words` (4) words with at least one
-  content word (not a stop word, not a single letter, not a number). Labels with the same
-  content words are one label, so a live label (`slope 0.50` → `slope 1.20`) or a value label
-  that counts is never "new". Its arrival is bounded by the frame before the first frame showing
-  it (`hidden_until`), narrowed to the time of a `reveal` / `callout` / `transform` of that beat
-  that shows it: a callout whose `label` has the same content words, or an action on a word
-  (Step 156) the label says. So a reveal on a word is timed to the word, not to the beat.
-- **Matching**: words folded (case, accents; NFKC so `x²` is `x 2`), English stems (plural,
-  `-ing`, `-ed`, final `e`, doubled consonant; other languages only a plural `s`), stop words
-  (English, Portuguese) dropped. A label of several words is named where all its content words
-  are said within `len + 1` content words of one beat. The mention's time is its first word's.
-- **Keeping false positives low**: `min_lead`; nothing within a beat unless an action pins the
-  label's arrival (one beat-end still cannot tell when in the beat it came); a label whose words
-  another text on screen already says (before or as it arrives: a heading, a legend) is not
-  "unseen"; a label named again in the beat that shows it means the early word was in passing
-  ("A render starts..." before a `Render` stage). Charts: the dump holds every category label and
-  series name from the beat the chart shows (Step 162's `changes` only change numbers), and
-  numbers are no content words, so changing values, rescaled ticks and the cursor's value never
-  count as reveals.
-- **Measured** on the repo's examples (existing dumps and fresh `vidgen lint`; numbers in
-  HANDOFF Step 163): `said_before_shown` reports a handful of findings, each a label named in an
-  earlier beat; `unsaid_reveal` reports about one beat in eight of the gallery, mostly labels
-  that need no narration (a map's cities, a quote's author, a terminal's command), hence off by
-  default.
-- **Not done**: other languages' stemming and stop words; a mention in an earlier *scene*;
-  labels inside pictures, maths (`MathTex` parts) and code; "shown but long gone" (a label that
-  left the screen before it is named).
+- **Rules** (`lint/narration_rule.py`, last in `LINT_RULES`): `said_before_shown` (warning: a
+  label named more than `min_lead` 1.5 s before it shows and not again in that beat);
+  `unsaid_reveal` (default `off`: a later beat brings labels the scene never names).
+- **Inputs** (deterministic): layout dump stills, beat times, word times
+  (`word_anchors.beat_words`: alignment or estimate) and actions, read into
+  `SceneContext.narration` (`NarrationPicture`) only when a rule runs; rules are pure.
+- **A label**: a scene text (not overlays, speech bubbles, name tags, maths, code) of at most
+  `max_words` (4) words with a content word; same content words = one label. Arrival is bounded
+  by the frame before it first shows, narrowed by a word-timed `reveal` / `callout` /
+  `transform` of that beat.
+- **Matching**: folded words (NFKC), English stems, English and Portuguese stop words; a
+  multi-word label is named where all its content words are said within `len + 1` content words.
+- **False positives kept low**: nothing within a beat unless an action pins the arrival; words
+  already on screen don't count; numbers are not content words.
 
 ### 87.11 Example, docs and the review of the phase (Step 164)
 
-- **The example** `examples/gradient-descent` ("Gradient descent, one step at a time", 10 scenes,
-  29 beats, about 3:00 voiced): every Phase P feature where the explanation needs it, not a
-  catalogue. Facts are checked in the file's header (the loss `(w − 3)²/2 + 1`, the steps from
-  `w = 0` at learning rate 0.5, the signed areas, divergence above a learning rate of 2, the
-  terminal's outputs from a real run). Base config voiced by Kokoro (`speed: 0.88`, under lint's
-  3.5 words/s); a 9:16 `short` variant. No audio committed.
-- **`code_morph`'s `reveal`** (Steps 158 / 159 gap): `CodeMorph.entrance_time` returns
-  `MORPH_SECONDS` (1.5 s, also the `cap` of the scene's own steps) for a `version<N>` /
-  `version<N>.line<K>` target, so `{reveal: version2, at: "@word"}` morphs at the scene's pace
-  without a `run_time` (the action's `run_time` still wins).
-- **`diagram`, a node on a word** (Step 163 observation): a node target's entrance is
-  `Diagram._node_entrance`: the node appears, then the edges between it and the nodes on screen
-  grow (not those a `steps` entry names: they keep their step). Inside the scene's own waves and
-  an edge's entrance (`_in_step`) a node only appears, as before, so no edge grows twice.
-- **Labels on the plane**: a `function_plot` dot's live label avoids the points', vectors' and
-  marks' labels (`PlaneGeometry.label_boxes`, read by `_Dot` on every move); `math_axes` puts a
-  background-coloured plate behind every axis number at z `LABEL_PLATE_Z` (−0.5: over the grid
-  and areas, under curves), so numbers read on a shaded area (lint `contrast` found 2.9:1 on a
-  negative area). A `number_line`'s jump label shows the decimals its ends need
-  (`ends_places`: `+0.375`, not `+0.4`) and `lift_clear` lifts a label that would meet an
-  earlier one or a point's label (seen in 9:16).
-- **Lint `min_font`**: sub- and superscript digits (`w₁`, `x²`) count as glyphs 0.4 em tall
-  (`_SCRIPT`), measured in Inter; an axis title `w₁` measured 9 % under the floor before.
-- **Readback** (found voicing the example): faster-whisper writes "1.5" as the words `1` `.5`,
-  which became "one five" against "one point five"; `textnorm._decimals_joined` joins a word
-  starting with the language's decimal mark to a number before it. A transcript's `-3` is now
-  "minus three" (`_MINUS`). Together they took the example's readback from 5.4 % to 0.0 % word
-  error rate without changing any audio.
-- **Colour advice, not a rule**: a term in `accent` looks like the default tangent, jump arc,
-  angle mark and terminal prompt; CONFIG and the guide say which tokens the scenes use, and the
-  doc examples use `tertiary` for `loss`. A lint check of "a default colour equal to a term's"
-  was not added (it would fire on every bullets marker in `primary`).
+- **Example** `examples/gradient-descent` (with a 9:16 `short` variant; no audio committed).
+- **`diagram` node on a word**: a node target's entrance (`Diagram._node_entrance`) shows the
+  node, then grows edges to nodes on screen (not edges a `steps` entry names); inside the scene's
+  own waves a node only appears, so no edge grows twice.
+- **Plane labels**: a dot's live label avoids plane labels (`PlaneGeometry.label_boxes`);
+  `math_axes` plates every axis number (`LABEL_PLATE_Z` −0.5); jump labels show the decimals their
+  ends need (`ends_places`).
+- **Lint `min_font`**: sub- / superscript digits count as 0.4 em glyphs (`_SCRIPT`).
+- **Readback**: `textnorm._decimals_joined` joins a word starting with the decimal mark to the
+  number before (`1` `.5`); a transcript's `-3` is "minus three" (`_MINUS`).
+- **Colour advice, no rule**: a term in `accent` looks like scene defaults (tangent, jump arc,
+  prompt); the docs name the tokens scenes use.
 
 
 ## 88. Built-in pronunciation lists (Step 165)
 
-Reference: docs/CONFIG.md "Built-in pronunciation lists". §45's dictionary was per project only;
-some words are read wrong by one engine in every project (Kokoro's American G2P, misaki, says
-"epoch" as /ˈɛpək/, like "epic"), so schu-video-generator ships entries that every project uses.
+User reference: docs/CONFIG.md "Built-in pronunciation lists". Shipped entries every project uses
+for words an engine reads wrong (Kokoro's misaki G2P says "epoch" like "epic").
 
-- **Data**: `src/vidgen/data/pronunciation/<engine>-<language>.yaml`, the format of a
-  `pronunciation_file` (package data `data/pronunciation/*`). A list name is layered by its
-  dashes: `kokoro-en-us` merges `kokoro-en.yaml` (every English Kokoro voice) then
-  `kokoro-en-us.yaml` over it (`builtin_files`); a name with no files has no entries
-  (`builtin_entries`, cached; a broken shipped file is a `VidgenError`). Shipped: `kokoro-en`
-  (21 entries) and `kokoro-en-us` (+3: `epoch`, `epochs`, `VS Code`); lists today
-  `builtin_list_names()` = `kokoro-en-gb`, `kokoro-en-us`. Each entry's file comment holds misaki's
-  phonemes before and after.
-- **Which list a beat uses** (`builtin_list_name(voice, language)`): the beat's **effective
-  voice** (§46, after a dub §80), because beats can have different voices and a dub changes the
-  voice. Kokoro: the language its G2P reads with, `kokoro_voices.resolve(voice, lang, language)`
-  (the voice's `lang`, else its first letter, else the video's `language`), mapped by
-  `KOKORO_DIALECTS` (`a` → `en-us`, `b` → `en-gb`, `p` → `pt-br`, ...). An `af_*` voice in a
-  Portuguese video still reads English with the American G2P, so it gets `kokoro-en-us`; a
-  dubbed `pf_dora` gets `kokoro-pt-br` (none ships). Other providers: `<provider>-<video
-  language, lower case, default en>` (`elevenlabs-en`, `openrouter-pt-br`); none ships, on
-  purpose: ElevenLabs reads "epoch" right and a respelling could make it worse. Decision: the
-  key is the engine's reading rules, not the video's language alone.
-- **Order** (`build_pronunciation(entries, language, builtin_list)`): the project's entries
-  (`project_entries`: the `pronunciation_file`s in order, then `pronunciation:`, `null` values
-  kept) go over the list's: the same term replaces the built-in entry, `null` removes it. A project
-  entry with another `language` is left out and does not replace the built-in one. The project's
-  rules get the lower `index`, so on the same span (`Epoch` and `epoch`) the project's wins.
-  `Rule.builtin`, `Replacement.builtin`, `Spoken.builtin_terms`, `Pronunciation.builtin_list`.
-  `load_pronunciation(config, root, builtin_list=None)` keeps its old result by default.
-- **Opt-out**: `pronunciation_defaults: bool = True` (top level, so per variant); left out of
-  the render fingerprint's config part like `pronunciation` (audio only).
-- **Project** (`vidgen/project.py`): `pronunciation_entries` (read at load, so a bad file is
-  still a load error), `builtin_list(voice)`, `pronunciation_for(voice)` (cached per list name),
-  `beat_pronunciation(beat_id)`, `pronounced(beat)` (no voice sounds or emotion tag),
-  `builtin_changes()` (beat id → built-in terms that changed it). `Project.pronunciation` is now
-  a property: the base voice's (project entries over its list). Every reader of a beat's spoken
-  form goes through the beat's own: `spoken` (TTS, hash, dry run, lint, captions, word anchors),
-  the SRT (`pipeline.video_cues` passes `pronounced` for every beat), the overlay fingerprint,
-  readback and its word flags.
-- **Hash and staleness**: unchanged formula (§7, §45): the hash covers the spoken text, so a
-  beat whose text has no list word keeps its hash, and a beat with one is stale after the update
-  and is the only one `vidgen tts` regenerates. A project entry for the same term (as the owner's
-  projects already had for `epoch`, `README`, `RMSProp`, `neural-api`) keeps the project's text,
-  so its audio stays valid. A variant's own audio folder (§7) follows from the spoken texts as
-  before.
-- **Visible**: `vidgen validate` prints `pronounce: built-in kokoro-en-us changes N beat(s): epoch
-  (2), JSON (1) (vidgen list-pronunciation)` (base config only; `cli.pronunciation_summary_lines`)
-  and its JSON has `pronunciation_defaults` (beat → terms). `pronunciation_warnings(p, beats,
-  beat_pronunciation)` checks each beat with its own pronunciation and never reports a built-in
-  entry (unused, inside a longer one, or losing a collision); a project entry hidden by a longer
-  built-in one is still reported. `vidgen tts --dry-run` adds `  (built-in: epoch)` to the
-  `says:` line, a run `, built-in pronunciation: epoch` to the `generated` line, `tts --json`
-  `builtin_pronunciation` per beat (`TTSPlan.builtin`). `vidgen list-pronunciation [PROJECT]
-  [--json]` (`builtin_listing`): all lists, or in a project the lists its beats use, with each
-  entry's state (`used`, `replaced`, `removed`) and the beats it changes.
-- **Readback**: `readback.entry_hint` (also used by `speech_flags`): a word of a built-in entry
-  heard wrong says to write the project's own entry or `term: null`; `TermReport` of a built-in
-  entry says the same, and a term misheard in two or more beats without any entry adds "(other
-  videos with it can share a pronunciation_file)". `Edit.builtin` is not in the JSON.
-- **Choosing entries** (Step 165): every candidate was phonemized with misaki as Kokoro runs it
-  (`en.G2P(trf=False, british=…, fallback=espeak.EspeakFallback(...))`), alone and in sentences,
-  for American and British, and kept only when the default is clearly wrong and the respelling
-  clearly better. Kept: README(s) → `readme(s)` (not "read me": misaki says ɹˈɛd, "red", after
-  "each"), JSON(s) → `Jason(s)`, YAML(s) → `yammel(s)`, ReLU(s) → `ray loo(s)`, RMSProp → `R M S
-  prop` (not in misaki's dictionary; only espeak-ng's guess), neural-api → `neural A.P.I.`,
-  Jupyter → `Jupiter`, ResNet → `Rez net`, C# / F# → `C sharp` / `F sharp` (said "C hash"), BERT →
-  `Burt` (spelled out in some sentences), NaN → `nan`, TeX → `tek`, tanh → `tanch` (said "tan"),
-  enum(s) → `E num(s)`, Cauchy → `Koh shee`; American only: epoch(s) → `E pock(s)` (British
-  already ˈiːpɒk), VS Code → `V S Code` (said "veez code"). Dropped: SGD (already ˌɛsʤˌidˈi),
-  and every term the defaults read acceptably (GPU, CUDA, PyTorch and NumPy through espeak-ng,
-  LaTeX, SQL, API, CLI, softmax, sigmoid, Adam, Hessian, Jacobian, Euler, Gaussian, Pascal,
-  Lazarus, GitHub, macOS, Linux, cache, tuple, sudo, Django, nginx, ...) or where usage is split
-  (regex, char, GIF, logits, Fourier, MNIST, CIFAR, GAN, Keras); Poisson has no respelling misaki
-  reads as "pwah-son". No project-specific readings (decimals).
-- **Not done**: no lists for ElevenLabs, OpenRouter or other Kokoro languages; a user-level
-  shared list (outside a project) is only possible as a `pronunciation_file` path; no MCP tool
-  for `list-pronunciation`; the checks are of phonemes, not of listening to Kokoro's audio.
+- **Data**: `src/vidgen/data/pronunciation/<engine>-<language>.yaml` (the `pronunciation_file`
+  format). A list name layers by dashes: `kokoro-en-us` = `kokoro-en.yaml` then
+  `kokoro-en-us.yaml` (`builtin_files`); no files = no entries (`builtin_entries`, cached; a
+  broken shipped file is a `VidgenError`). `builtin_list_names()` = `kokoro-en-gb`,
+  `kokoro-en-us`. An entry ships only when the default is clearly wrong and the respelling clearly
+  better (checked with misaki as Kokoro runs it); each records misaki's phonemes in a comment.
+- **Which list** (`builtin_list_name(voice, language)`): from the beat's **effective voice** (§46,
+  after a dub §80) — the engine's reading rules, not the video's language. Kokoro: the G2P language
+  (`kokoro_voices.resolve`) mapped by `KOKORO_DIALECTS` (`a` → `en-us`, `b` → `en-gb`, …). Other
+  providers: `<provider>-<language, default en>`; none ships on purpose.
+- **Order** (`build_pronunciation(entries, language, builtin_list)`): project entries
+  (`pronunciation_file`s, then `pronunciation:`) over the list's: same term replaces, `null`
+  removes; a project entry of another `language` neither applies nor replaces. Project rules get
+  the lower `index`, so they win on the same span. `load_pronunciation(config, root,
+  builtin_list=None)`.
+- **Opt-out**: top-level `pronunciation_defaults: bool = True`; out of the render fingerprint like
+  `pronunciation` (audio only).
+- **Project** (`vidgen/project.py`): `builtin_list(voice)`, `pronunciation_for(voice)` (cached per
+  list), `beat_pronunciation(beat_id)`, `pronounced(beat)`, `builtin_changes()`;
+  `Project.pronunciation` is the base voice's. Every reader of a beat's spoken form (TTS, hash,
+  lint, captions, SRT via `pipeline.video_cues`, word anchors, overlay fingerprint, readback) uses
+  the beat's own.
+- **Hash**: the §7 / §45 formula over the spoken text, so only beats a list entry changes go stale.
+- **Visible**: `validate` prints a `pronounce: built-in <list> changes N beat(s): …` line (base
+  config) and JSON `pronunciation_defaults`; `pronunciation_warnings` never reports a built-in
+  entry; `tts --dry-run` / `--json` mark built-in terms (`TTSPlan.builtin`); `vidgen
+  list-pronunciation [PROJECT] [--json]` (`builtin_listing`) shows lists with each entry's state
+  (`used`, `replaced`, `removed`) and beats.
+- **Readback** (`readback.entry_hint`): a misheard built-in word suggests a project entry or
+  `term: null`.
 
 ## 89. Isometric story worlds (Phase Q, Steps 166–171)
 
-Reference: docs/CONFIG.md "Isometric places (`iso`)". Isometric *environments* for cartoon
-stories: a place written as a small ASCII map with heights, seen from above at an angle, with
-ready-made objects, indoor rooms whose front walls are cut away and outdoor places. The
-characters stay the flat cut-outs of every stage (side and front views, expressions, actions,
-lip sync), standing upright in it. What matters most is telling a story clearly. No
-platforming in iso (no jumps, no gravity); a side walk cycle sliding along a diagonal is
-accepted (no new walk views).
+User reference: docs/CONFIG.md "Isometric places (`iso`)". An iso place is an ASCII map with
+heights seen from above at an angle, with ready-made objects, indoor rooms (front walls cut away)
+or outdoor places. Characters stay the stage's flat cut-outs. No platforming in iso; the side walk
+cycle slides along diagonals (accepted).
 
 ### 89.1 Layers, as in Phase O
 
-The three layers of §86.1, extended rather than forked:
+The three layers of §86.1:
 
-1. **World model** (`vidgen/world/iso.py`, no manim): `IsoPlace` (cells: a ground kind and a
-   height in steps; spots; objects), `IsoCell`, `IsoSpot`, `IsoObject`, `ObjectKind` /
-   `OBJECT_KINDS`, `ObjectPlacing`, `parse_iso_map`, `place_objects`. Step 167 adds the rules
-   (`vidgen/world/iso_moves.py`: routes on the grid, §89.9) beside `moves.py`, in its style
-   (pure functions, `VidgenError`).
-2. **The view** (`vidgen/world/iso_view.py`, no manim, no drawing): the projection
-   (`iso_point`, `ISO_RISE`) and the draw order of boxes (`Box3`, `in_front`, `draw_order`).
-   Kept apart from the place and from Pillow so a later presentation scene (`iso_diagram`:
-   blocks for architecture diagrams) can reuse it with `cartoon/iso_drawing.py` (`box_shapes`,
-   `draw_shapes`), which knows nothing of maps either.
-3. **Renderers** (`cartoon/`, Pillow, no manim): `iso_drawing.py` (shapes and drawing),
-   `iso_objects.py` (the ready-made objects), `iso_scenery.py` (a place's ground and pieces),
-   `iso_stage.py` (frame fit, layout, the pictures); `scenes/stage.py` shows them. The no-manim
-   test covers all six modules.
+1. **World model** (no manim, pure, `VidgenError`): `vidgen/world/iso.py` (`IsoPlace`, `IsoCell`,
+   `IsoSpot`, `IsoObject`, `ObjectKind` / `OBJECT_KINDS`, `ObjectPlacing`, `parse_iso_map`,
+   `place_objects`), `vidgen/world/iso_moves.py` (routes, §89.9).
+2. **The view** (`vidgen/world/iso_view.py`, no manim, no drawing): `iso_point`, `ISO_RISE`,
+   `Box3`, `in_front`, `draw_order`; shared with `iso_diagram` (§90.6).
+3. **Renderers** (`cartoon/`, Pillow, no manim): `iso_drawing.py`, `iso_objects.py`,
+   `iso_scenery.py`, `iso_stage.py`, `iso_pictures.py`, `iso_motion.py`, `iso_weather.py`;
+   `scenes/stage.py` and `scenes/stage_iso.py` (`IsoStaging`) show them.
 
 ### 89.2 `iso:` on the `stage`, not a new scene type
 
-Like `level:` (§86.2): the stage already has the characters, lip sync, acting, shots, the
-camera, light, foley and sets, so an iso place is the stage's `iso` param. Purely additive: a
-stage without `iso` takes no new branch (every iso branch tests `params.iso is not None` first),
-and no default changes. Mixtures that make no sense are refused by `Params._check_iso` with the
-conflict and the alternative: `level`, `room` (an indoor place is `iso: {place: indoor}`),
-`water` (`~` on the map), `fog` (bands by depth), `width` (the place fits the frame), `layers`,
-big flat `props` (use `iso.objects`; small ones stand on the place since Step 168, §89.10),
-`size` and `character_size` (`_default_size`:
-the place sets the size), a character's `depth`, a character `at` anything but a spot. A set
-gives an iso place its sky, light, ambience, particles and birds; `includes.ISO_DROPPED_KEYS`
-(`LEVEL_DROPPED_KEYS` + `layers`, `fog`, `width`) are left out, and the video's `character_size`
-is not copied into an iso scene (`expand_character_size`), so a video with `character_size:
-large` can have iso scenes. `size` / `character_size` stay refused: the camera's shots make
-characters large (Step 168, §89.10).
+An iso place is the stage's `iso` param (like `level:`, §86.2), purely additive: every iso branch
+tests `params.iso is not None` / `on_iso` first, so stages without `iso` are unchanged.
+`Params._check_iso` refuses, naming the alternative: `level`, `room` (`iso: {place: indoor}`),
+`water` (`~`), `fog`, `width`, `layers`, big flat `props` (use `iso.objects`), `size` /
+`character_size` (use shots), a character's `depth`, a character `at` anything but a spot. A set
+gives an iso place sky, light, ambience, particles, birds; `includes.ISO_DROPPED_KEYS`
+(`LEVEL_DROPPED_KEYS` + `layers`, `fog`, `width`) are dropped, and the video's `character_size` is
+not copied into iso scenes (`expand_character_size`).
 
 ### 89.3 The view: projection and draw order (Step 166)
 
-- **Coordinates**: world `x` = map column (to the viewer's lower right), `y` = map row from the
-  top line (lower left), `z` up, all in tile units (a cell's edge is 1). The top line of the map
-  is the back of the place; the map reads as the place looks, rotated 45°.
-- **Projection**: `u = (x − y) / 2`, `v = (x + y) / 4 − z·ISO_RISE` in *tile widths* (a cell's
-  diamond is 1 wide, ½ high: the 2:1 view of pixel-art games), `ISO_RISE = √1.5 / 2` (0.612):
-  a parallel view looking down at 30° from halfway between the axes. True isometric in the
-  brief's sense: no perspective, a character is the same size wherever it stands (so the
-  stage's `depth` scaling is not used).
-- **Draw order**: everything that can hide something stands in a `Box3`. `in_front(a, b)`:
-  `None` when their pictures are apart (bounds `PICTURE_SLACK` 0.35 tile widths apart: drawings
-  reach a little past their boxes, a tree's crown) or *side by side* (apart along `x` one way and
-  along `y` the other: their pictures cannot overlap, and ordering them made long false chains);
-  else the first axis they are apart on decides (the plane between them has the viewer on the
-  nearer one's side: larger `x`, larger `y`, higher `z`); overlapping boxes (the rules never make
-  them) by their middles. `draw_order` is a topological sort over the pairs with an order
-  (Kahn's, O(n²) pairs: a 16 x 10 place with 60 pieces sorts in milliseconds), ties broken by
-  the back corner `x0 + y0`, then `z0`, then the index: deterministic. A cycle (only from
-  overlapping boxes) is broken at the furthest-back box. Why boxes and not a per-cell depth key:
-  objects span several cells (a house is 3 x 3) and characters stand inside cells; a sum key
-  orders a character beside a house wrongly.
+- **Coordinates**: `x` = map column (to the lower right), `y` = row from the top (lower left), `z`
+  up, in tiles. The map's top line is the back.
+- **Projection**: `u = (x − y) / 2`, `v = (x + y) / 4 − z·ISO_RISE` in tile widths (2:1 diamonds),
+  `ISO_RISE = √1.5 / 2`. Parallel: a character has one size everywhere (no `depth` scaling).
+- **Draw order**: everything that can hide something is a `Box3`. `in_front(a, b)` is `None` when
+  their pictures are apart (`PICTURE_SLACK` 0.35) or side by side (apart along `x` one way, `y` the
+  other); else the first separating axis decides (larger `x` / `y`, higher `z` in front).
+  `draw_order` is Kahn's topological sort, ties by `x0 + y0`, `z0`, index (deterministic); a cycle
+  breaks at the furthest-back box. Boxes, not a per-cell depth key, because objects span cells and
+  characters stand inside cells.
 
 ### 89.4 The map (Step 166)
 
-- One text line per row, the top line furthest back. Symbols: a space or `-` outside the place
-  (`-` because a YAML block scalar cannot start its first line with a space), `.` floor, `:`
-  path, `~` water, `#` wall, `+` door (in a wall), `%` window (in a wall), `1`–`9` a raised
-  `BLOCK` that many steps high (`STEP_HEIGHT` 0.5 tiles; `0` is floor), `@` tree, `&` bush, `*`
-  flowers, `=` fence; a letter is a spot. Blank lines around the map are dropped, rows padded
-  with outside on the right, tabs expand to 4; at most `MAX_COLUMNS` x `MAX_ROWS` 48 x 48 (a
-  larger place would be too small to read in the frame).
-- **Letters and object symbols take the ground around them** (`_inherited`): the most common
-  standable ground with its height among the four neighbours; ties go to the lower, then floor
-  before path before block; none: floor at 0. So a spot on a path is path, in a terrace of `2`s
-  a block 2 steps high. Decided over "a letter is floor at 0" because that made a hole in every
-  path or terrace with a spot in it.
-- **`heights`**: an optional second map, a digit per cell (`.` or a space keeps the map's),
-  raising any cell but water (refused: water lies at 0) or outside (refused).
-- **Spots**: `IsoSpot(name, letter, column, row)`; `stand_cell(name)`: the spot's cell, or when
-  an object stands there the nearest free standable cell (Chebyshev distance, then the most in
-  front `−(c + r)`, then the leftmost), so `at: well` stands a character in front of the well.
-- **Objects from symbols** are named `tree_1`, `bush_1`, `flowers_1`, `fence_1`... in map order;
-  a fence joins (`links`) the fences and walls beside it, and alone runs left to right.
-- **Walls** (`wall_height`): outdoors a garden wall `GARDEN_WALL_HEIGHT` 1 tile, a door is a gap.
-  Indoors (`place: indoor`, the dollhouse view): a wall cell is **cut** (`is_cut`) when a cell of
-  the place that is not a wall lies right behind it (left, up or up-left on the map), else it
-  stands `WALL_HEIGHT` 3 tiles (a character and a half). So only the walls along the room's back
-  (its top and left edges on the map, and their front ends) stand; every front and inner wall is
-  cut to `CUT_WALL_HEIGHT` 0.45, and a door in a cut wall is an opening. One rule, no list of
-  "front" walls to keep in sync with the map; a room of any shape works.
-- **Standing**: `is_standable`: floor, path, block, door, or a walkable object (a rug, a bridge,
-  also over water); objects and walls are in the way (Step 167's routes use it).
-- **Errors** (`VidgenError`, `StageIso` turns them into errors at `scenes[i].params.iso`) name
-  the row and column from the top left, from 1: unknown symbol (with the list), a letter twice,
-  a `spots` letter not on the map, a name for two letters, nowhere to stand, a bad or too large
-  `heights` map, raised water, a height outside the place, too large, an unknown kind of place.
+- **Symbols** (one line per row, top = back): space or `-` outside (`-` because a YAML block
+  scalar cannot start with a space), `.` floor, `:` path, `~` water, `#` wall, `+` door, `%`
+  window, `1`–`9` a `BLOCK` that many steps high (`STEP_HEIGHT` 0.5; `0` floor), `@` tree, `&`
+  bush, `*` flowers, `=` fence, a letter = a spot. Tabs expand to 4; at most `MAX_COLUMNS` x
+  `MAX_ROWS` 48 x 48.
+- **Letters and object symbols take the surrounding ground** (`_inherited`: most common standable
+  ground and height of the four neighbours; ties to lower, then floor, path, block).
+- **`heights`**: an optional digit map; raising water or outside is refused.
+- **Spots**: `stand_cell(name)` is the spot's cell, or when an object stands there the nearest
+  free standable cell (Chebyshev, then most in front, then leftmost).
+- **Objects from symbols** are named `tree_1`, `fence_1`… in map order; fences link to fences and
+  walls beside them.
+- **Walls**: outdoors `GARDEN_WALL_HEIGHT` 1 (a door is a gap). Indoors a wall cell is cut
+  (`is_cut`, to `CUT_WALL_HEIGHT` 0.45) when a non-wall cell lies right behind it (left, up,
+  up-left), else stands `WALL_HEIGHT` 3 — one rule for rooms of any shape.
+- **Standing** (`is_standable`): floor, path, block, door, a walkable object (rug, bridge).
+- **Errors** (`VidgenError` at `scenes[i].params.iso`) name row and column from 1: unknown symbol,
+  a letter twice, a `spots` letter missing, one name for two letters, nowhere to stand, bad
+  `heights`, raised water, too large, unknown place kind.
 
 ### 89.5 Ready-made objects (Step 166)
 
-- `OBJECT_KINDS`: house 3 x 3, tree, pine, bush, rock, flowers, fence, bench 2 x 1, lamp, well,
-  sign, bridge 1 x 3 (walkable, over water), table 2 x 1, chair, bed 1 x 2, shelf 2 x 1, sofa
-  2 x 1, plant, rug 2 x 2 (walkable), each with a height for the draw order. The footprint is
-  given facing left (`width` along the front); `facing: right` swaps it, `size: [columns, rows]`
-  replaces it. `at` is the footprint's back (top-left) cell: a spot or `{column, row}` from 1.
-- `place_objects` checks each footprint: inside the place, not on a wall, not on water (but a
-  bridge), not on another object, all on one height; names default to the kind, numbered after
-  the map's (`house`, `house_2`); a name used twice is refused.
-- Colours: `OBJECT_COLORS` (main, detail) are theme tokens like the props' `PROP_COLORS` (a
-  house's walls `secondary` and roof `accent`, as the flat house prop; leaves `tertiary`,
-  darkened a little towards green so a tree reads on the grass), or a hex where no token fits
-  (stone, wood, glass). `color` / `detail` override them per object.
-- Drawn in their own frame (`_Frame`: `a` across the front, `b` from back to front, `z` up);
-  facing right mirrors the drawing (x and y swap), and faces are shaded as they face in the
-  world (light from the left). Round things (crowns, bushes, flowers) are `Blobs` (circles on
-  the picture, outlined as one form, like the flat tree prop); a pine's tiers and a sign's board
-  face the viewer like a cut-out. Round objects cast a soft shadow (`SHADOW_RADII`, ink at
-  `SHADOW_OPACITY` 0.16) lying under them, as the stage's props do.
+- `OBJECT_KINDS` (`world/iso.py`) gives each kind's footprint (facing left), height, deck and
+  top; `facing: right` swaps it, `size: [columns, rows]` replaces it. `at` is the back (top-left)
+  cell: a spot or `{column, row}`.
+- `place_objects` checks each footprint: inside, not on a wall, not on water (but a bridge), not
+  on another object, one height; names default to the kind (`house`, `house_2`); duplicates are
+  refused.
+- Colours: `OBJECT_COLORS` theme tokens (hex where none fits); `color` / `detail` override.
+- `iso_objects.BED_KINDS` (flowers, bush): a larger `size` draws a clump per cell.
 
 ### 89.6 Drawing (Step 166)
 
-- **Shapes** (`iso_drawing.py`): `Poly` (a flat polygon in the world, its outline per edge),
-  `Blobs`, `Disc` (a flat circle; with `opacity` below 1 a tint, alpha-composited through a
-  patch), `Upright` (a cylinder: trunks, posts, the well), `Line`. `draw_shapes` paints them in
-  order on an `IsoCanvas` (pixels per tile width, its top-left picture point) at
-  `ISO_SUPERSAMPLE` 3 (Step 168: always, as pictures are tiles, §89.10), reduced with a box filter. The
-  outline is `ISO_OUTLINE` 0.022 tile widths × the drawing style's `outline_factor`, in the
-  characters' ink. A polygon's fill also strokes its own edge one supersampled pixel wide: two
-  fills meeting on an edge showed a faint seam.
-- **Joined boxes** (`box_shapes`): a box's top, its face to the lower left (the map's `s` side)
-  and to the lower right (`e`), shaded `LEFT_SHADE` 0.12 / `RIGHT_SHADE` 0.26 (towards a cool
-  dark); a `joined` side continues into a neighbour of the same height: no face, no outline
-  there. So a terrace of blocks or a run of wall is one solid form, with outlines only on its
-  silhouette and creases.
-- **The ground** (`ground_shapes`, height 0, back to front): each cell's top (grass with a faint
-  checker and tufts, a sandy path with stones, boards with staggered seams indoors, tiles in a
-  checker), water sunk `WATER_DEPTH` 0.14 below its banks with a ripple, the place's slab
-  (`SLAB_DEPTH` 0.45) showing along its open front edges (outlined only at the slab's corners),
-  the outline along its back edges. Raised cells are `_block` pieces whose faces run down to their
-  lower neighbour's top (or the slab's bottom); grass hangs a lip over a raised grass cell's
-  faces; stone blocks and garden walls show courses.
-- **Walls** (`_wall`): a core standing `WALL_INSET` 0.24 in from the cell's open sides (flush
-  with the place's edge) and an arm to each wall it joins; drawn as one piece, so a corner of
-  an L has no hole (a single box per cell left the inner corner open). Indoors the standing walls
-  get a skirting board and their window or door on the faces that look into the room; cut walls
-  show the `cut` colour on top. The room's colours follow `room.py` (a warm cream wall, a wooden
-  floor).
+- **Shapes** (`iso_drawing.py`): `Poly`, `Blobs`, `Disc`, `Upright` (cylinder), `Line`;
+  `draw_shapes` paints them in order on an `IsoCanvas` at `ISO_SUPERSAMPLE` 3, box-filter reduced.
+  A polygon's fill also strokes its own edge (no seams between fills).
+- **Joined boxes** (`box_shapes`): top and the two front faces (`LEFT_SHADE`, `RIGHT_SHADE`); a
+  `joined` side has no face or outline, so terraces and wall runs are one form.
+- **Ground** (`ground_shapes`), raised `_block`s, walls (`_wall`: a core plus an arm to each joined
+  wall, one piece); room colours follow `room.py`.
 
 ### 89.7 The place on a stage (Step 166)
 
 - `StageIso` (`scenes/stage.py`): `place`, `map`, `heights`, `spots`, `objects`
-  (`IsoObjectParam`: `object`, `at` a spot or `IsoCellRef {column, row}`, `name`, `facing`,
-  `size`, `color`, `detail`), `colors` (`IsoColors`: grass, earth, path, water, stone, floor,
-  tiles, wall, cut). `parsed()` is cached (`_parsed_iso`, keyed by the map, spots, heights, kind
-  and the objects' `ObjectPlacing`s).
-- **Size and fit** (`iso_view`): the whole place fits the frame with `ISO_MARGIN` 5 % on each
-  side (`place_bounds`: every cell with the slab under it up to its wall or a character standing
-  on it, and the objects), centred: the establishing view. A character is
-  `ISO_CHARACTER_HEIGHT` 2 tiles tall (× its `scale`), so a larger place makes everyone smaller
-  (in a 16 x 10 place at 854 x 480 a character is about 70 px tall; a speaking close-up needs
-  Step 168's shots). `IsoView.point(x, y, z)` gives Manim units.
-- **Layout** (`iso_layout`): each character's feet in the middle of its stand cell, on its top
-  (`iso_stand`), `depth` 0, back to front by `x + y`, as `StagePlacement`s, so the stage's
-  construct, `stage_frame` (directing) and `stage_reframes` work unchanged. `Stage.grounds` is
-  the feet's y, so the soft shadow lies on the cell's top (on a block too).
-- **Marks**: each spot is also a stage mark at its cell's place across the picture of the map
-  (`map_fraction`, frame-independent, so validation needs no frame); the iso branch of
-  `stage_marks` comes first so `iso` with `level` reports the conflict, not an unknown mark.
-- **Pictures** (`iso_pictures`, `Stage._iso_scenery`): drawn once when the scene renders, at
-  `LEVEL_OVERSAMPLE` 1.25 × the frame's pixel density (1 in a draft): `base`, the ground and
-  every piece in draw order (`iso_place` in the backdrop, under the shadows and characters), and
-  for each character whose box something hides a front picture (`iso_front_<name>`, drawn right
-  after the character through `_iso_after`, graded by the light) with the pieces over it:
-  those in front of it (`in_front`) and, transitively, those in front of these
-  (`pieces_in_front`), so a piece drawn over the character never covers a nearer one. Why a
-  base with everything plus fronts, not the pieces cut into layers between characters: a terrace
-  or a wall split between two pictures showed a seam where the two anti-aliased edges met; a
-  front picture's pieces are in the base too, so its edges fall on the same colours. The
-  pictures are as large as the place on the canvas; Manim draws each static picture once per
-  animation (§86.5's cost is per moving picture). No disk cache: drawing the 16 x 10 village with
-  two front pictures takes 0.13 s at 854 x 480 and 0.7 s at 1920 x 1080.
-- Measured (854 x 480 @ 15 fps): a 16 x 10 village with a house, a well, steps, a bridge, nine
-  map objects and two characters renders 4.3 s of video in 8.0 s; the 12 x 8 room with six
-  objects 2.8 s in 6.0 s.
-- `vidgen.api` exports `ISO_CHARACTER_HEIGHT`, `OBJECT_KINDS`, `IsoPlace`, `ObjectPlacing`,
+  (`IsoObjectParam`), `colors` (`IsoColors`), `name_tags`. `parsed()` is cached (`_parsed_iso`).
+- **World scale**: the whole place fits the frame with `ISO_MARGIN` 5 % (`place_bounds`); the
+  camera starts on the wide view (§89.13). A character is `ISO_CHARACTER_HEIGHT` 2 tiles tall
+  (× `scale`).
+- **Layout** (`iso_layout`): feet in the middle of the stand cell on its top (`iso_stand`), as
+  `StagePlacement`s, so the stage's construct, `stage_frame` and `stage_reframes` work unchanged.
+- **Marks**: each spot is a stage mark at `map_fraction` (frame-independent); the iso branch of
+  `stage_marks` comes first so `iso` + `level` reports the conflict.
+- **Pictures** (`IsoScenery`): a `base` with ground and every piece in draw order, plus per body
+  something hides a front picture (`iso_front_<name>`, drawn right after it) holding the pieces in
+  front of it, transitively (`pieces_in_front`). Base-with-everything plus fronts, not layers cut
+  between characters, because split pieces showed seams. No disk cache.
+- `vidgen.api`: `ISO_CHARACTER_HEIGHT`, `OBJECT_KINDS`, `IsoPlace`, `ObjectPlacing`,
   `parse_iso_map`, `place_objects`, `Box3`, `draw_order`, `iso_point`, `draw_shapes`,
   `OBJECT_COLORS`, `ObjectLook`, `IsoColors`, `IsoView`, `body_box`, `canvas_center`,
-  `iso_layout`, `iso_stand`, `iso_view`, `map_fraction` (none shadows a manim name); Step 167
-  replaced `IsoPictures` / `iso_pictures` by `IsoScenery` (§89.9).
+  `iso_layout`, `iso_stand`, `iso_view`, `map_fraction`, `IsoScenery`.
 
 ### 89.8 The rest of the phase (plan)
 
-- **Step 167, characters and movement.** Rules beside `moves.py` (no manim): a cheapest-path
-  search over cells (8 or 4 neighbours, decided there; up or down at most one step per move;
-  not through walls, water, objects; doors and cut doorways pass), deterministic ties, a
-  `VidgenError` naming an unknown spot or where the way is blocked. `walk_to` / `run_to` a spot
-  (the stand cell), `wander`, `follow`, `meet` (both walk to free cells next to each other),
-  timed like level moves (the beat's `at`, words `@word`, natural run times scaled by speed).
-  Renderer: a route walk along the projected path (the side walk cycle sliding diagonally;
-  facing left / right by the picture's direction, the front view coming towards the camera if it
-  reads well, no back view), feet height following blocks and steps, the shadow on the cell top.
-  Draw order while moving: the pieces in front change as a character moves; the base-plus-front
-  pictures generalise to one front picture per (character, set of pieces in front), cached, and
-  swapped when the set changes (or a few pictures per route leg); the draw order between two
-  characters by their boxes (`in_front`), re-sorted when it changes (`_moving_in_order`).
-- **Step 168, staging.** Iso shots (the establishing view; follow the hero; zoom to a group;
-  dialogue close-ups reusing the flat close-ups / `shot:`), deciding then whether `size` /
-  `character_size` come back as the camera's base zoom; small items as cut-outs on the place
-  (gift, letter, key, flower) with `pick_up` / `give` / `drop` / `place`; doors that open, lamps
-  that light, place changes (a flower blooms, a bridge appears) as objects with states, redrawn
-  pictures swapped at the change.
-- **Step 169**: time of day / mood tints (the stage's `light` already grades the pictures),
-  speech bubbles or name tags when characters are small, footsteps by surface (grass, path,
-  boards, bridge), door, pickup and ambience through foley, lint (a speaker hidden behind an
-  object, too small for the line, an action off-screen).
-- **Step 170**: an original 2–3 minute kids' story in an iso village with narration, 16:9 (a
-  9:16 variant if cheap), the guide (+ `AGENTS.md`), CONFIG, the stage's gallery page.
-- **Step 171**: the phase's review, backwards compatibility against the baseline frames
-  recorded in Step 166 (platform-story `meadow`, cartoon `yard`, gradient-descent `curve` and
-  `code`/`run`: 31 PNGs at 854 x 480, rendered twice identically; the commands are in the
-  scratchpad's `phase-q-baseline/make_baseline.sh`, comparison `compare.py`).
+Done: §89.9–§89.13.
 
 ### 89.9 Characters moving on the place (Step 167)
 
-- **Rules** (`vidgen/world/iso_moves.py`, no manim). A route goes from cell to cell, to the **8
-  neighbours** (`NEIGHBOURS`; chosen over 4 because a diagonal of the map runs straight down or
-  across the picture, and 4 neighbours made zig-zags). A diagonal step needs both cells beside
-  it standable and all four cells level (`can_step`: no corner cut, no diagonal climb). A step
-  goes up or down at most **one step** of height, onto standable cells only (`is_standable`:
-  floor, path, block, door, a bridge or a rug). The search is a cheapest-path search over
-  (cell, heading) (`_reach`): 1 per side, √2 per diagonal, `TURN_COST` 0.05 per turn (fewest
-  turns among routes of equal length), `CROWD_COST` 4 per cell where another character stands
-  (the route goes round them when it can but is never refused, so a narrow lane does not jam).
-  Ties go by the order found (`NEIGHBOURS` order), so the same map gives the same route. A 48 x 48
-  place searches in milliseconds. `IsoRoute` holds the feet points and their cells (`None`
-  beyond the edge). The points are cell middles at `stand_z`: the cell top, or a walkable
-  object's deck (`ObjectKind.deck`: 0.22 for a bridge, 0.02 for a rug). `at(distance)` raises
-  the feet in the last `STEP_EASE` (0.3) of the leg before the higher cell's edge, and lowers
-  them in the 0.3 after it, so the feet are never inside a block.
-- **Goals** (`goal_cell`): a spot (its stand cell, §89.4) or a cell `{column, row}` from 1. A
-  `VidgenError` names an unknown spot (listing the spots), a cell outside the place, or a cell
-  nobody can stand on (saying what is there). A goal where someone stands becomes a free cell
-  **beside** that character on the picture (`BESIDE`, best first: on its level line, `(1, -1)`
-  or `(-1, 1)`, one tile width apart; then a tile and a half to the side; then its four sides).
-  It is never right in front of or behind that character, where the two would overlap. **No
-  route** gives a message like `'pip' cannot walk from row 2, column 1 to 'well': the way stops
-  at row 4, column 3: water (a bridge crosses it) at row 4, column 4`. The message names the
-  reached cell nearest the goal and the blocked neighbour towards it: the edge of the place, an
-  object by name, water, a wall, a climb of n steps, or a corner.
-- **Moves**:
-  - `walk_to` / `run_to` go `to:` a spot or a cell.
-  - `after: <character>` (with `gap`, default 1) walks to the leader and then on along the
-    route the leader walks *in the same batch*, stopping `gap` cells behind it. That route is
-    the one planned just before (`Stage._iso_planned`, keyed by the scene time). The action is
-    not called `follow` because that name is the camera's action.
-  - `meet` (`with:`) runs one search from each of the two characters and picks the side-by-side
-    pair of cells (`SIDE_BY_SIDE`, the level line first) that the longer of the two walks
-    reaches soonest. The character coming from the picture's left takes the left cell. Both end
-    facing each other; one that is already there turns.
-  - `wander` (`around`, `radius` 3, `stops` 3, `seed`; the default seed is `crc32(name/beat)`)
-    walks to random, seeded cells within the radius, each at least 2 cells from the one before.
-  - `enter` / `exit` without `door` cross the place's edge (`edge_ways`: standable edge cells
-    with outside next to them). `side` / `to` `left` means the map's west and south edges, which
-    are on the picture's left; `right` means its north and east edges. The edge cell cheapest
-    to reach from the goal is used, the front edges first between equals. The walk starts or
-    ends at a point `EDGE_STEP` (1 tile) beyond the edge, and the character fades in or out
-    over that step. With `door:` (a spot) the character comes out of that spot or goes into it,
-    fading over `DOOR_FADE_SECONDS`. Indoors only a door in an edge wall is a way out. A
-    character with an `enter` waits off the place until then, as on any stage.
-- **One plan for render and validate** (`plan_move`). Moves are planned from the stage's
-  *logical* cells (`Stage.iso_cells`: where each character stands once the moves planned so far
-  are over; `None` means off the place). So `vidgen validate`'s replay (`iso_move_problems`,
-  run by `Stage.action_sequence_problems`) sees what the render does. It reports a move of a
-  character not on the place, no route, or a bad cell, naming the beat and the option. A move
-  naming an unknown spot is left to the action's own check (one message, not two), and that
-  character is no longer followed.
-- **Timing** works as for every walk. `run_time_for` plans the move, and its natural time is
-  the route over its speed. `at` fractions and Phase P word anchors (`at: "@well"`) start it, and
-  a short beat speeds it up. Lint `rushed_animation` names an `IsoWalk` sped up more than
-  `max_speedup`, as it does a level's moves. Default speeds are scaled by `level_pace`: on an iso
-  place, the place's character height over a plain stage's (`STAGE_SIZE`). So characters walk as
-  many of their own heights per second as on any stage. A tile walked counts as a tile of height
-  (`IsoWalk._distance`), so footsteps keep step (in foley, `wander` and `meet` are walks).
-- **The walk drawn** (`cartoon/iso_motion.py`, `IsoWalk(Walk)`). The side walk cycle plays along
-  the projected route; it slides on diagonals, which is accepted. The facing follows the leg's
-  direction on the picture (`leg_facing`): left or right; straight towards the camera (a map
-  diagonal `(1, 1)`) the front view when the character has one; straight away, the side it last
-  showed (there is no back view). Its `ground_y` follows the feet, so the soft shadow lies on the
-  cell top or the step. `iso_feet` holds the feet's place in the world, for the draw order.
-- **Draw order while moving** (`Stage._iso_keep_order`). The stage's draw-order updater runs it
-  on every frame once a walk has been applied:
-  - Each character stands in a box (`standing_box`). This is `body_box` kept inside the cell
-    its feet are in, so a walker is in one cell or the next, never inside a neighbour's block.
-    On a bridge or a rug the box sits on top of the whole object.
-  - The box gives the pieces drawn over the character (`IsoScenery.over`: those in front of it,
-    and those in front of these). When they change, its front picture (`iso_front_<name>`,
-    right after it) is swapped.
-  - The characters are re-sorted by their boxes (`draw_order`), each with its front picture and
-    held props (`_moving_block`). The moving shadows stay before the first of them.
-  - While an `IsoWalk` plays, Manim redraws the characters, their front pictures and the shadows
-    on every frame (`_iso_redrawn`). The place's base picture stays in Manim's static image.
-  - Considered and dropped: pre-cut layers of the place between characters (they showed seams,
-    §89.7), and one front picture per route leg (a leg can pass several pieces).
-- **Front pictures** (`IsoScenery`, replacing Step 166's `IsoPictures`). The base is drawn once.
-  A front picture is made the first time a set of pieces needs one, and kept for the scene. It
-  is drawn on the part of the canvas its pieces cover (their boxes plus `FRONT_MARGIN`, 0.5 tile
-  widths), in whole pixels of the canvas, so its pixels fall on the base's and no seam shows. A
-  whole-canvas picture would cost about 13 MB at 1080p. A walk past a house and a tree makes a
-  handful of front pictures. Measured at 854 x 480 @ 15 fps: the 16 x 10 village with seven
-  walks, a meet and a follow renders 45 s of video in 29 s.
-- **Checks** (`moving.py`):
-  - On an iso place `to` is a spot or a cell. An x or another mark is refused with "on an iso
-    place a move goes to a spot of the map (...) or a cell {column, row}, not 'left'". There is
-    no `depth`.
-  - `after` needs an iso place, is not given with `to`, and names another character of the
-    scene.
-  - `meet` and `wander` need an iso place.
-  - On an iso place `door` is a spot, and is not given with `side` / `to`.
-  - A jump to a place, `react` and `step_aside` stay a platform level's; their existing checks
-    name the level.
-- **Public**:
-  - `vidgen.api` adds `IsoScenery`, `standing_box`, `IsoRoute`, `IsoStep`, `ISO_MOVES`,
-    `WANDER_RADIUS`, `WANDER_STOPS`, `cell_of`, `find_route`, `plan_move`, `iso_move_problems`
-    and `IsoWalk`.
-  - Config adds the actions `wander` and `meet`, and `after` and `gap` on `walk_to` / `run_to`.
-  - Nothing changes off an iso place: every new branch tests `params.iso` (or `on_iso`) first,
-    and the baseline frames of §89.8 are identical.
-- **Left for later**:
-  - Shots, `pan`, `zoom` and `follow` (the camera) on an iso place (Step 168: §89.10).
-  - A follower that ends straight behind its leader on the picture is partly hidden by it
-    (`gap: 2` spaces them out). Step 168: it steps aside (§89.10).
-  - The speed lines of a rushed walk are drawn level, not along the diagonal (Step 172: along
-    it, §90.4).
-  - Two walkers crossing in one cell pass through each other: routes avoid standing
-    characters, not moving ones (kept, Step 171: §89.13).
+- **Routes** (`world/iso_moves.py`): 8 neighbours (4 made zig-zags); a diagonal needs both side
+  cells standable and all four level (`can_step`); height changes at most one step. Cheapest path
+  over (cell, heading): 1 per side, √2 per diagonal, `TURN_COST` 0.05, `CROWD_COST` 4 per cell
+  where someone stands (never refused). Ties by `NEIGHBOURS` order: deterministic. `IsoRoute`
+  points stand at `stand_z` (cell top or an object's deck); feet ease over `STEP_EASE` 0.3 at a
+  height edge.
+- **Goals** (`goal_cell`): a spot or `{column, row}`; a goal where someone stands becomes a free
+  cell beside them on the picture (`BESIDE`, never straight in front or behind), else the nearest
+  free cell within `BESIDE_REACH` 2 of them. Errors name unknown spots (listing them), cells
+  outside or unstandable, and for **no route** the reached cell nearest the goal and what blocks
+  it (edge, object, water, wall, a climb, a corner).
+- **Moves**: `walk_to` / `run_to` `to:` a spot or cell; `after: <character>` (`gap` 1) follows
+  the leader's route of the same batch (`Stage._iso_planned`), and a follower right behind its
+  leader steps aside; `meet` (`with:`) picks the side-by-side pair (`SIDE_BY_SIDE`) the longer walk
+  reaches soonest, both end facing each other; `wander` (`around`, `radius` 3, `stops` 3, `seed`
+  default `crc32(name/beat)`); `enter` / `exit` cross the edge (`edge_ways`: `left` = the map's
+  west and south edges, `right` = north and east; `EDGE_STEP` 1 tile with a fade) or use `door:` a
+  spot (`DOOR_FADE_SECONDS`); indoors only a door in an edge wall leads out. Held props go with
+  the walker on enter / exit (`carried`).
+- **One plan for render and validate** (`plan_move`) from the logical cells (`Stage.iso_cells`,
+  `None` = off the place); `validate`'s replay (`iso_move_problems`) reports what the render would
+  meet, naming beat and option.
+- **Timing**: natural time = route / speed, scaled by `level_pace` (character height over
+  `STAGE_SIZE`); `at` and word anchors start it; lint `rushed_animation` covers `IsoWalk`. A tile
+  counts as a tile of height for footsteps (`IsoWalk._distance`).
+- **The walk** (`cartoon/iso_motion.py`, `IsoWalk(Walk)`): facing by the leg's picture direction
+  (`leg_facing`); towards the camera the front view if any; away, the last side (no back view).
+  `iso_feet` holds the world position.
+- **Draw order while moving** (`Stage._iso_keep_order`, every frame once a walk applies): each body
+  stands in `standing_box` (kept inside its feet's cell); `IsoScenery.over` gives the pieces over
+  it and its front picture is swapped when they change; bodies re-sort by box. Fronts are made on
+  first need, kept for the scene, drawn only over their pieces' boxes (`FRONT_MARGIN`) in whole
+  canvas pixels so they lie on the base pixel for pixel.
+- **Checks** (`moving.py`): on iso, `to` is a spot or cell, no `depth`; `after` needs iso, not
+  with `to`, names another character; `meet` / `wander` need iso; `door` is a spot, not with
+  `side` / `to`; jumps, `react`, `step_aside` stay a level's.
+- **Public**: `IsoScenery`, `standing_box`, `IsoRoute`, `IsoStep`, `ISO_MOVES`, `WANDER_RADIUS`,
+  `WANDER_STOPS`, `cell_of`, `find_route`, `plan_move`, `iso_move_problems`, `IsoWalk`.
+- **Decided**: walkers do not avoid each other (routes avoid standing characters only; time
+  reservation would change every route); a closed door does not block a route (room doors are
+  drawn closed; docs say to `open` a house door first).
 
 ### 89.10 Staging on the place (Step 168)
 
-The camera on the place, small things handed about, and changes to the place for cause and
-effect. Code: `cartoon/iso_stage.py` (tiles, levels of detail, layers, item points; no manim),
-`cartoon/iso_pictures.py` (`IsoTiles`, `draw_tile`), `scenes/stage_iso.py` (`IsoStaging`, the
-iso part of the `Stage`, moved there from `stage.py` with Step 167's methods), `scenes/hide_action.py`.
-
-- **Pictures in tiles, at levels of detail.** Close-ups on a place where a character is ~70 px
-  tall zoom 6–8x; Step 166's pictures (1.25x the frame's pixels) were blurred there, and Manim
-  warps a whole picture to its size on screen for every frame (8x zoom of a frame-sized picture:
-  64 frames of pixels per frame). So each picture (`Picture`: whether it has the ground, and the
-  pieces in it with their states) is drawn in square tiles of `TILE_PIXELS` 512 (overlapping
-  their right and bottom neighbours by `TILE_OVERLAP` 2: a resampled edge is half transparent)
-  on the canvas of a **level of detail**: level k has 2^k times level 0's pixels, up to
-  `MAX_DETAIL` 3 (10x the frame at 1.25 oversampling, beyond `MAX_ZOOM` 8). `detail_for(zoom,
-  density)` picks the least level as sharp as the camera's zoom needs (`DETAIL_SLACK` 1.1).
-  `IsoScenery.tiles(picture, level, view)` lists the tiles a view shows (a front or a layer only
-  its pieces' part of each tile, in whole pixels of the level's canvas, so they lie on the
-  base pixel for pixel); `tile_image` draws one once (an LRU of `TILE_CACHE` 320 tiles, about
-  1 MB each). `draw_shapes` now skips shapes off its canvas (`shape_bounds`). Pillow rounds a
-  polygon's corners off the picture slightly differently, so a tile can differ from the whole
-  picture by a third of a pixel along an edge that crosses its border; not seen.
-- **On the stage** each picture is an `IsoTiles` group (`api`) whose members are the tiles in
-  the camera's view with half a view's margin, swapped by a camera listener
-  (`Stage._iso_show_view`) and once more before Manim splits a frame into moving and static
-  mobjects (`get_moving_and_static_mobjects`: Manim lists the members before it asks for the
-  moving ones, which runs the listeners; after a cut the static image showed the tiles of the
-  view before). Tiles are drawn by `draw_tile` (installed on the camera by
-  `install_tile_drawing` before the light wraps it): only the part in the frame is resized
-  (bilinear, smooth also when it shrinks) and blended into just that part of the frame; Manim's
-  own way blends a frame-sized picture per image. The village test scene (50 s, with a follow
-  that redraws everything on every frame) went from 239 s to 59 s.
-- **The camera.** Nothing new to write: the stage's camera works on the place.
-  - The start is the establishing view (§89.7; since Step 171 the wide view, §89.13). `shot:` frames work as on any stage
-    (`shot_framing` measures the characters on screen); `wide` is the establishing view again.
-    `size` / `character_size` stay refused (decided: the shots are the way to make characters
-    large; a base zoom would crop the place and fight the shots).
-  - `follow` (`Stage.follow_start`): zoomed in until a character is `ISO_FOLLOW_SIZE` 0.45 of
-    the frame's shorter side (a plain stage's size; `follow_width`), unless the camera is closer.
-    The move tracks the body's middle up and down too (`_MoveThenFollow`'s new `y_of`; the
-    platform level's follow is unchanged), then the stage's `SmoothFollow` (as a level's) takes
-    over.
-  - `pan` (`Stage.pan_point`): to a spot (the object standing there: its picture's middle; else
-    a character's middle standing there) or to the targets' middle, across and up the picture.
-  - `zoom` on characters frames a group as anywhere. The bounds stay the frame (the whole place
-    is in it), also in 9:16.
-- **Small things** (the stage's `props`, `ISO_ITEMS`: `SMALL_PROPS` + key, ball, cup, box,
-  basket, umbrella, laptop, napkin, shell, mushroom; or an svg). Decided to reuse the stage's
-  props and actions rather than invent parallel ones: `drop` is `put_down` without `to` (beside
-  its feet in its own cell, `ISO_PUT_ASIDE` 0.36 along the picture's level line on the side it
-  faces), `place` is `put_down` with `to:` a spot (on the object there). New prop `flower` (one
-  flower with its stem, to give). A small thing stands `at` a spot: on the ground in the spot's
-  cell, or on the `ObjectKind.top` of the object standing there (`iso_item_point`; a table
-  0.98, a bench's seat 0.55, a well's rim at its front, `TOP_SPOTS`). It is a body like the
-  characters (its `iso_feet`, `item_box`: over the object it stands on, so drawn after it), with
-  its own front picture; held, it goes with its holder's block (§69.27) and has none.
-  `_check_iso` refuses big props (with the alternative `iso.objects`), `depth`, `lift`,
-  `against`, an `at` that is not a spot, and a name an object, door or spot has. `throw` and
-  `blow_away` are refused on the place.
-- **Reach in cells.** The stage's holding replay measures x distances on a flat stage; on an
-  iso place it gets no positions (it still checks who holds what), and `iso_move_problems`
-  replays `pick_up`, `give`, `put_down` (`ISO_ITEM_ACTIONS`) with the moves: the two must be
-  `ISO_REACH` 1 cell apart (8 neighbours; to anywhere on the object a thing stands on), naming
-  the `walk_to` (or `meet`) that fixes it.
-- **Changes to the place.** An object's state (`ObjectState`: `shown`, `open`, `on`; kinds:
-  `OPENING_KINDS` house, flowers, door; `SWITCHED_KINDS` house, lamp; `default_state`: flowers
-  open) is drawn by `object_shapes(..., state)`: a house's door open (a dark doorway, the leaf
-  swung out towards the viewer), its windows lit; a lamp lit (bright lantern, a translucent pool
-  of light on the ground); flowers in bud. The doors of a room's standing back walls are named
-  `door_1`... in map order (`IsoPlace.doors`; their wall piece is named so) and open into the
-  room. Objects start as `iso.objects` say (`open`, `on`, `shown`; YAML's bare `on` key read as
-  `on`). Actions: `open` / `close` (house, door, flowers: bloom), `switch_on` / `switch_off`
-  (lamp, house), `reveal` (the generic action: the object's entrance) and a new `hide` (cued
-  like `switch_on`). Each changeable object the scene names (or that starts changed) is
-  **layered**: left out of the base picture and drawn as its own layer, an `IsoObject` group
-  (the action's target, named after it) right after the base: the object with the pieces over
-  it, so the layer hides what stands behind the object and is hidden by what stands in front.
-  A change (`Stage.iso_change`) makes the new layer at once (transparent), and a scene updater
-  fades it in from the change's start over its time (the old one leaves at the end; a gone
-  object's group leaves the scene, so `reveal` can bring it again), sets the state at the start
-  (front pictures and the layers of objects behind it follow), and `_iso_redrawn` redraws the
-  layers and everything after them while a change overlaps an animation. Why layers and not
-  redrawing the base: the base is large and in Manim's static image; a layer is small and the
-  same pixels as the base would have.
-- **Not there.** An object with `shown: false` (or hidden) is left out of the place the moves
-  are planned on (`IsoPlace.without`), in the render and in `vidgen validate`'s replay
-  (`ISO_PLACE_CHANGES`), so a bridge that is not there is not walked on.
-- **A follower right behind its leader** (gap 1, the last step straight down or up the
-  picture) takes one step aside to a cell beside the leader half a tile to the side.
-- **Public**: `vidgen.api` adds `IsoTiles`, `install_tile_drawing`, `ObjectState`,
-  `default_state`, `OPENING_KINDS`, `SWITCHED_KINDS`, `ISO_FOLLOW_SIZE`, `follow_width`,
-  `iso_item_point`, `item_box`, `object_box`, `ISO_ITEM_ACTIONS`, `ISO_PLACE_CHANGES`,
-  `ISO_REACH`. Config adds the `hide` action, the `flower` prop, `open`, `on`, `shown` on
-  `iso.objects`, and allows small `props` on an iso place. Off an iso place nothing changes (the
-  new branches test `params.iso` / `on_iso`, or a scene hook only the stage has); the baseline
-  frames are identical.
-- **Left for later**: lint's `hidden_speaker` measures a front picture's tiles as rectangles, so
-  it reports a speaker behind a tree as wholly hidden (Step 169's iso lint); a lit lamp is graded
-  by the light like the rest (a night scene's glow is Step 169's); items are small on the
-  establishing view (shots or `follow` show them).
+- **Tiles at levels of detail** (`cartoon/iso_stage.py`, `iso_pictures.py`): each `Picture` is
+  drawn in `TILE_PIXELS` 512 tiles (`TILE_OVERLAP` 2) at level k = 2^k × level 0's pixels, up to
+  `MAX_DETAIL` 3 (`MAX_ZOOM` 8); `detail_for(zoom, density)` picks the least sharp-enough level.
+  `tile_image` caches (LRU `TILE_CACHE` 320). Each picture is an `IsoTiles` group of the tiles in
+  view (plus half a view), swapped by a camera listener (`Stage._iso_show_view`) and again before
+  Manim splits moving and static mobjects. `draw_tile` (`install_tile_drawing`) resizes and blends
+  only the part in the frame.
+- **Camera**: the stage's. `shot:` as anywhere (`wide` = the wide view); `follow` zooms until the
+  character is `ISO_FOLLOW_SIZE` 0.45 of the shorter side (`follow_width`) and tracks y too; `pan`
+  to a spot or character (§89.13); `zoom` frames a group. Bounds stay the frame.
+- **Small things**: `props` from `ISO_ITEMS` (`scenes/stage.py`) or an svg. `drop` = `put_down`
+  without `to` (beside the feet, `ISO_PUT_ASIDE` 0.36), `place` = `put_down` `to:` a spot (on the
+  object there, `ObjectKind.top`, `iso_item_point`). A thing is a body (`item_box`) with its own
+  front; held, it goes with its holder (§69.27). Refused: big props, `depth`, `lift`, `against`,
+  a non-spot `at`, a name an object / door / spot has, `throw`, `blow_away`.
+- **Reach**: `iso_move_problems` replays `ISO_ITEM_ACTIONS` with the moves; giver and taker must
+  be `ISO_REACH` 1 cell apart, naming the walk that fixes it.
+- **Changes to the place**: `ObjectState` (`shown`, `open`, `on`; `OPENING_KINDS`,
+  `SWITCHED_KINDS`, `default_state`), drawn by `object_shapes(..., state)`; room back-wall doors are
+  `door_1`… (`IsoPlace.doors`). Actions `open` / `close`, `switch_on` / `switch_off`, `reveal`,
+  `hide`. A changeable object the scene names is **layered**: left out of the base, its own
+  `IsoObject` group after the base (with the pieces over it); a change (`Stage.iso_change`) fades
+  the new layer in, and other pictures showing it follow (§90.15). Layers, not redrawing the base,
+  because the base is large and in the static image. A hidden or `shown: false` object is left
+  out of the place moves plan on (`IsoPlace.without`, `ISO_PLACE_CHANGES`).
+- **Public**: `IsoTiles`, `install_tile_drawing`, `ObjectState`, `default_state`,
+  `OPENING_KINDS`, `SWITCHED_KINDS`, `ISO_FOLLOW_SIZE`, `follow_width`, `iso_item_point`,
+  `item_box`, `object_box`, `ISO_ITEM_ACTIONS`, `ISO_PLACE_CHANGES`, `ISO_REACH`.
 
 ### 89.11 Mood, sound and who speaks on the place (Step 169)
 
-Time of day and weather, the sounds of the place, who speaks when the characters are small, and
-the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTile`),
-`iso_stage.py` (`place_outline`), `cartoon/rain.py` (`IsoRainGround`), `ambience.py` (crickets),
-`sfx.py` (step sounds), `cartoon/foley.py`, `world/iso_moves.py` (surfaces), `scenes/stage_iso.py`
-(`NameTag`, rain ground, watching actions), `introspect.py`, `lint/cartoon_rules.py`.
-
-- **Reuse, no new mood keys.** Time of day is the stage's `light` (`morning`, `day`, `sunset` for
-  the evening, `night`, `indoor`; the `light` action fades it), weather its `particles` (rain,
-  snow; the action too). Decided against a `mood` key or new presets: they would duplicate
-  `light` and need the room's window skies and the sun's path for each. A rainy day is a tint
-  (`{tint: "#6B7890", strength: 0.45}`, as the rain examples do); the docs say so.
-- **Lights glow.** `Poly` and `Disc` get `glow` (a lit window's glass and core, a lit lantern's
-  faces, the pool of light under a lamp). `draw_shapes(..., glow=True)` draws a *picture of the
-  lights*: glow shapes as drawn, every other shape clearing what it covers (tints excepted), so a
-  light behind a tree stays hidden. `IsoScenery.glows(picture)` says whether a picture has one
-  (cached); its tiles are drawn once per `(picture, level, tile, glow)`. `IsoTiles` adds the
-  light tiles after its tiles as `GlowTile`s, whose `light_graded` is always false (a property
-  `mark_lit` cannot set: the stage marks whole groups lit, also later), so the light grades the
-  place and its lights stay as drawn. By day the light tiles repeat the pixels under them (no
-  change to see); at sunset and night they glow. Every picture (base, fronts, layers) gets them,
-  so a character in front of a lamp is covered by the lamp's front picture with its light.
-  Considered: an ungraded copy of the object's layer (shows its post and roof bright too), a
-  halo (shows by day; not needed: the bright lantern and pool read at night).
-- **Rain on the place.** Seen from above the whole place is ground: `IsoRainGround` (a
-  `RainGround` whose `landing(shares, x)` depends on the drop's x) lands each drop between the
-  front and back edge of the place's picture at its x (`place_outline`: 256 xs across the place,
-  the lowest and highest y of the cells' tops there, measured once per scene), within the
-  camera's view; beside the place, or on a character or small thing standing there (their boxes:
-  no splash on a face in a close-up), it falls through (`NO_FLOOR`). No depth, so splashes keep one
-  size. `RainGround.landing` is the old band (`landing_lines`), so a flat stage's rain is
-  unchanged. Not on the place yet, refused with the alternative (`iso_particle_problem`, by the
-  params' check and the `particles` action): `puddles`, `settle` (Step 172: drawn, with shelter
-  from rain, §90.2–90.3); indoors no rain, snow, leaves, streaks.
-- **Ambience.** A new set bed `crickets` (four crickets at their own pitch, place and rate over a
-  faint low night air; −37 LUFS, ducking 4 dB like birdsong; a 12 s seamless loop). Chosen
-  automatically only on an iso place outdoors while the light is `sunset` or `night`
-  (`set_ambience(..., crickets=True)`; `NIGHT`), with birdsong's rules (not in rain, 2 s after it,
-  at least 2 s); a flat stage's night stays silent as before. An indoor iso place plays the room
-  tone. Any stage may name `ambience: crickets`.
-- **Footsteps by surface.** `surface_at(place, column, row)` (`SURFACES`): grass and path
-  outdoors, boards and tiles indoors, stone for raised blocks and a garden wall's gap, bridge and
-  rug for walkable objects. `route_surfaces(place, route)`: `(share of the route, surface)` from
-  the middle of the leg where the feet enter each new surface; `iso_walks` puts it on the walk
-  (`IsoWalk.surfaces`), `_played` on `PlayedAction.surfaces`. `foley._walk_steps` plays at each
-  footfall (`footfall_distances`: where each footfall of `footfall_shares` is along the walk) the
-  surface's sound (`SURFACE_STEPS`: four new built-in sounds `step_grass`, `step_gravel`,
-  `step_wood` (a bridge 4 semitones lower), `step_stone` (tiles 2 higher); a rug a soft
-  `footstep`). Without surfaces (every flat stage) the cues are exactly the old `footstep`s.
-  `wet_steps` splashes under any step sound (`STEP_SOUNDS`).
-- **Other sounds, iso only.** `handling_cues`: `pick_up` a soft `pop` when the hand gets there
-  (45 %), `give` a light `swoosh`, `put_down` a small `thud` as it lands (75 %), played by
-  `Stage.action_foley` once per action. `place_change_cues`, played by `iso_change`: a house's or
-  a room's door creaks open, creaks and thuds shut (`door_cues`), flowers bloom and an object
-  appears (`reveal`) with a soft `twinkle`; a lamp's click stays the switch's (Step 168). All
-  follow `foley`. A flat stage's `pick_up` stays silent (no new sounds in existing projects).
-- **Name tags.** Decided automatic (nothing for an author to remember), with `iso.name_tags:
-  false` to turn them off. `IsoStaging.speak` (every line's lip sync starts there: a voiced beat
-  or a `say`) adds a `NameTag`: the speaker's name (its voice's `label`, else its name) on a
-  `callout_label` plate in its `speaker_color` (white without a voice of its own) with a pointer
-  down, outlined in the text's ink, unlit, on top. Its updater keeps it the same size on screen
-  (scaled by the camera's view), over the head, inside the view (9:16 too), and shows it only
-  while that line's lip sync lasts and the head is smaller than `NAME_TAG_FACE` (0.075, lint
-  `small_speaker`'s `min_face`) of the view's shorter side; a `say` with a `bubble` hides it
-  (`iso_untag`: the tail shows who speaks). Ended lines' tags leave at the beat's end. Why not
-  automatic bubbles: a bubble with a whole narrated line covers the place; the tag is small.
-- **Lint.**
-  - `hidden_speaker` on an iso place (a character with the dump's `features`: the box of its eyes
-    and mouth, only on an iso place) measures what really covers them: the layout dump gives each
-    iso picture tile drawn after a character a `covers` mask (which of the 12 x 12 points of
-    `face_grid(features)` its pixels' alpha covers, from the tile's own pixels) and the `pieces` of
-    the place whose boxes reach there; the rule ORs the masks (other objects by their boxes) and
-    reports from `min_hidden_features` (0.25; `min_hidden` 0.5 stays the flat stage's face-box
-    share), naming the pieces (`the place's lamp`). The village's close-up of Dot under a tree's
-    crown is no longer reported; Dot with a lamp post across her face (33 %) is.
-  - `small_speaker`: a speaker whose name tag shows (`name_tag` in the dump: the tag would show or
-    a bubble replaced it) is not reported for a line of at most `max_tagged_words` (12; the
-    frame's `line_words`). Otherwise as before: it measures the face as seen, so shots and
-    `follow` count.
-  - New rule `offscreen_action` (warning): `iso_watch` records each walk, pick-up / give /
-    put-down (from `action_foley`, with the seconds it played) and each change of the place
-    (`iso_change`); a scene updater (removed once nothing is watched) counts the frames of each
-    and those on which at least `WATCH_IN_VIEW` (½) of it is in view, or enough of it to fill
-    `WATCH_FILLS` (¼) of the view (a house in a close-up). The dump's frame gets `iso_actions`
-    (`{action, who, seen}`, seen = the share of its frames) through a new scene hook
-    `layout_keys(beat_id)`; the rule reports `seen < min_seen` (0.5). The finding's object is the
-    character, or an `iso_object` stand-in, so two such findings never merge. It found a real
-    case in the test village: a `follow` lagging behind a rushed walk (43 %).
-- **Public**: `vidgen.api` adds `GlowTile`, `place_outline`, `IsoRainGround`, `SURFACES`,
-  `surface_at`, `route_surfaces`, `SURFACE_STEPS`, `handling_cues`, `place_change_cues`. Config
-  adds `iso.name_tags`, the bed `crickets`, the sounds `step_grass`, `step_gravel`, `step_wood`,
-  `step_stone`, the lint rule `offscreen_action` (`min_seen`), `hidden_speaker.min_hidden_features`
-  and `small_speaker.max_tagged_words`. Off an iso place nothing changes: the baseline frames are
-  identical, and `vidgen lint` of platform-story and the cartoon example gives the same (no)
-  findings and the same sounds as before.
-- **Left for later**: closed doors do not block routes (a room's doors are drawn closed by
-  default, so blocking would break existing walks through them; it needs a door state that is
-  open by default for walking; kept, Step 171: §89.13); no shelter from rain under a tree on the
-  place, no puddles or settling snow there; a character in a pool of light is graded like the
-  rest (Step 171: lamplight, §89.13).
+- **No mood keys**: time of day is the stage's `light`, weather its `particles`. An iso place with
+  `rain` and no `light` gets `ISO_RAIN_LIGHT` `("#6B7890", 0.45)` (`_check_iso`); rain started by
+  the `particles` action keeps the light.
+- **Lights glow**: `Poly` / `Disc` `glow`; `draw_shapes(..., glow=True)` draws a picture of the
+  lights (others clear what they cover). `IsoTiles` adds `GlowTile`s whose `light_graded` is
+  always false, so the stage light grades the place but not its lights.
+- **Rain**: `IsoRainGround` lands drops on the place's picture at their x (`place_outline`);
+  beside the place or on a body they fall through (`NO_FLOOR`). Shelter and puddles: §90.2. Indoors
+  no rain, snow, leaves or streaks (`iso_particle_problem`).
+- **Ambience**: bed `crickets`, chosen automatically only outdoors on iso at `sunset` / `night`
+  (birdsong's rules); indoors the room tone. Any stage may name it.
+- **Footsteps by surface**: `surface_at` (`SURFACES`), `route_surfaces` → `IsoWalk.surfaces`;
+  `foley._walk_steps` plays `SURFACE_STEPS` (`step_grass`, `step_gravel`, `step_wood`,
+  `step_stone`, rug a soft `footstep`); without surfaces plain `footstep`s.
+- **Other sounds, iso only**: `handling_cues` (pick up, give, put down), `place_change_cues`
+  (doors, blooms, reveals). A flat stage's `pick_up` stays silent.
+- **Name tags** (automatic; `iso.name_tags: false`): `IsoStaging.speak` adds a `NameTag` (voice
+  `label`, else name, in `speaker_color`) at constant screen size over the head, only during the
+  line and while the head is under `NAME_TAG_FACE` 0.075 of the view's shorter side (lint
+  `small_speaker`'s `min_face`); a `say` with a `bubble` hides it. Tags, not bubbles, because a
+  narrated line's bubble covers the place. Name tags are not labels for `said_before_shown`.
+- **Lint**: `hidden_speaker` on iso uses each later tile's `covers` mask over the 12 x 12
+  `face_grid(features)` and reports from `min_hidden_features` (0.25), naming the pieces;
+  `small_speaker` skips tagged lines of at most `max_tagged_words` (12); `offscreen_action`
+  (warning): `iso_watch` counts frames with at least `WATCH_IN_VIEW` ½ in view (or filling
+  `WATCH_FILLS` ¼), the dump gets `iso_actions` via the scene hook `layout_keys(beat_id)`, and the
+  rule reports `seen < min_seen` (0.5).
+- **Public**: `GlowTile`, `place_outline`, `IsoRainGround`, `SURFACES`, `surface_at`,
+  `route_surfaces`, `SURFACE_STEPS`, `handling_cues`, `place_change_cues`.
 
 ### 89.12 The example story and the docs (Step 170)
 
-- **The example** `examples/iso-story` ("Hazel and the Lamp by the Bridge", original story and
-  cast: a rabbit, an old bear, a bluebird): five iso scenes between a title card and an end card.
-  The village is a project `set` (`sets: {village: {background, iso}}`) that four scenes stand on
-  with their own `light`, characters, props and beats, so the map is written once (a YAML anchor
-  is not possible: the config refuses unknown top-level keys). The map puts the houses and the
-  well at the back, the path across the middle, the flower bed in front and the stream with its
-  bridge on the right, so nothing stands in front of a speaker's spot (the first draft had the
-  well's roof across Hazel's face in two close-ups and a tree in front of the bridge). Every
-  character has its own Kokoro voice (name tags show its label). Staging rules it follows: the
-  establishing view at each scene's start, `zoom` to point at the lamp, a `shot` for every line
-  longer than a tag's, `follow` for a run, `shot: wide` for the beats after a follow whose
-  action happens elsewhere (a follow keeps the camera on its walker until a shot says otherwise).
-- **A held thing leaves with its holder.** `IsoStaging.iso_walks` passes the props a character
-  holds as the walk's `carried` when it enters or exits (the flat stage does so only through a
-  door), so they fade with it: a key carried out of the room stayed at the doorway, fully drawn,
-  while its holder faded and was parked.
-- **A walk to where someone stands stays near them** (`find_route`, `BESIDE_REACH` 2): when no
-  cell of `BESIDE` can be reached, the goal is the nearest free cell at most two cells from the
-  character there; none reachable is "no way there" with the usual message. Before, it was the
-  nearest cell the walker could reach, which could be across a stream, and `vidgen validate`
-  said nothing (found writing the guide's snippet). Iso only; unreleased behaviour.
-- **Rain reads as rain** (`ISO_RAIN_LIGHT` `("#6B7890", 0.45)`, `Params._check_iso`): an iso
-  place with `rain` in its `particles` and no `light` given (by the scene or its set) gets the
-  rainy tint the docs recommend, instead of a sunny `day` with faint drops. Rain started by the
-  `particles` action keeps the light (the author pairs it with a `light` action, as the example
-  does). A flat stage is unchanged (the branch is in the iso check). Considered: stronger drops on
-  iso (the drops are visible once the place is darker; the light was what said "sunny").
-- **Name tags are not labels** (`narration_rule._label_texts`): lint `said_before_shown` skips
-  texts with the dump's `name_tag` key, as it skips speech bubbles. A tag names a speaker who is
-  on screen; the example's narration naming Juno a beat before her tag showed was reported.
-- **Docs**: guide topic `iso` ("Isometric places: villages and rooms for a story", a validated
-  snippet) + `AGENTS.md`; CONFIG (a set for one place in several scenes, the rain light, held
-  things, the beside rule, the stage table's `light` and `iso` rows); README feature and example
-  entries; CHANGELOG "Isometric story places (Phase Q)"; the Shorts cookbook (an iso place has no
-  `character_size`); `docs/gallery/stage.md` params table regenerated (it had no `iso` rows;
-  stills and clips unchanged).
+Example `examples/iso-story`: iso scenes on a project `set` (`sets: {village: {background, iso}}`)
+so the map is written once. Guide topic `iso`; CONFIG "Isometric places (`iso`)".
 
 ### 89.13 The review of Phase Q (Step 171)
 
-- **The wide view** (`iso_stage.wide_view`, `ISO_WIDE_MAX` 2, `ISO_WIDE_BODY_ROOM` 0.25). The
-  place's picture is a diamond, so fitting all of it (§89.7) left half the frame empty in 16:9
-  (the corners, and bands beside a place limited by its height) and in 9:16 put a wide village
-  small in the middle. The world's scale stays the whole-place fit (pictures, shots, follow, the
-  camera's bounds and every Step 166–170 measure are unchanged); the *camera* starts magnified:
-  as far as the place's bounds fill the frame both ways (its tips cut), at most `ISO_WIDE_MAX`,
-  but never so far that what must be seen leaves the view with `ISO_MARGIN`: the characters and
-  small things at their spots (those entering later too: the view shows where they come; without
-  them a 9:16 room's `enter` was off screen), and in a frame at least as wide as tall every spot
-  (a character standing there) and the objects of `iso.objects` whole (a house's roof is never
-  cut; the map's trees, bushes, flowers and fences may be cut at the edges); a room keeps all of
-  itself (its walls cut would look broken). A portrait frame keeps just the bodies. Centred on
-  the place's middle, moved as little as keeps all that in view (centring on what is kept left
-  the place off-centre), inside the frame. `shot: wide` on an iso place is the same view keeping
-  the characters on the place then (`IsoStaging.iso_wide_shot`); `camera_at` (a spot) moves it
-  across. The village: 1.21x in 16:9 (it spans the frame's width), 2x in 9:16. Considered: a
-  larger world scale with the camera's bounds beyond the frame (it changed every measure and the
-  shots' clamps), keeping every object whole in 16:9 (1.09x: a bush at the front tip decided it).
-- **`pan` moves in** (`IsoStaging.pan_width`, `ISO_PAN_ZOOM` 2): a pan to a spot or a character
-  of an iso place shows it at least twice as close as the whole place; it did nothing in the
-  whole-place view (nothing to move in), and the guide had to say "use zoom". A flat stage's pan is
-  unchanged (the branch is behind `pan_point`, which is `None` off an iso place).
-- **Lamplight on the characters** (`lighting.lamp_lit`, `LAMP_LIGHT` `#FFD98A` at 0.3,
-  `LAMP_LIFT` 0.6, `LAMP_DARK` 0.45; `shading.LampLit`, `mark_lamp_lit`, `LAMP_LIT`;
-  `stage_iso.ISO_LAMP_REACH` (1, 2.2)). A lit lamp's pool glowed but a character in it stayed
-  night-dark. Each character and small thing of an iso place with a lamp carries a `LampLit`
-  (on every member of its family); `StageLight` grades a member with one by
-  `lamp_lit(grade, share)`: `LAMP_LIFT` × share of the way to the warm lamp grade, scaled by how
-  dark the light is (nothing by day). The share is asked when the shape is drawn (once per
-  scene time, cached): the most over the lamps of the feet's distance falloff (full within 1
-  tile of the lamp's middle, none beyond 2.2: the lantern stands high) times the lamp's level,
-  which fades with its `switch_on` / `switch_off` / `reveal` / `hide` (`_iso_lamp_level`); a held
-  thing goes with its holder. While a lamp change overlaps an animation the bodies are redrawn
-  (`_iso_redrawn`). Drawn when drawn, not a scene updater: an updater would make every wait render
-  each frame. Considered: a per-pixel light (the pictures are cut-outs; a grade per body reads).
-- **Flower beds and hedges** (`iso_objects.BED_KINDS` flowers, bush; `_bed_cells`): a larger
-  `size` draws a clump (with its shadow) in each cell, back to front, a flower bed's clumps
-  alternating its two colours. A 1 x 1 one is drawn exactly as before.
-- **Decided, kept**: a closed door does not block a route (a room's doors are drawn closed and
-  every way in or out goes through one; blocking would need a door open by default for walking
-  and break existing walks; the guide and CONFIG say to `open` a house's door before going in);
-  two characters walking at the same time do not avoid each other (routes go round standing
-  characters; walkers are drawn in the order of their boxes, so they pass in front of or behind
-  each other; a reservation of cells in time would change the routes of every existing walk and
-  rarely matters with a story's few characters: time crossing walks apart, or `meet`).
-- **Schema**: `schema._yaml_on_key` adds a `"true"` property beside every boolean `on` (a prop, an
-  iso object): YAML 1.1 reads a bare `on` as `true`, JSON writes it `"true"`, schu-video-generator takes it.
-- **Messages**: a `jump` to a place on an iso place says to walk or run there; `character_size` /
-  `size` names the shots; `on` / `open` on flowers reads "not flowers"; two objects on one cell
-  say to move one.
-- **Public**: `vidgen.api` adds `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`,
-  `mark_lamp_lit`. Off an iso place nothing changes (the baseline frames are identical, the
-  examples' lint is as before).
+- **The wide view** (`iso_stage.wide_view`, `ISO_WIDE_MAX` 2): the world scale stays the
+  whole-place fit; the camera starts magnified until the place fills the frame, at most
+  `ISO_WIDE_MAX`, but keeping (with `ISO_MARGIN`) the characters and small things at their spots
+  (also later arrivals), and in a frame at least as wide as tall every spot and every
+  `iso.objects` item whole; a room keeps all of itself. In a tall frame it also keeps the spots
+  the scene's `walk_to`, `run_to` and `enter` go to (`_iso_arrivals`). `shot: wide` is this view
+  (`IsoStaging.iso_wide_shot`); `camera_at` (a spot) moves it.
+- **`pan` moves in** (`IsoStaging.pan_width`, `ISO_PAN_ZOOM` 2).
+- **Lamplight** (`lighting.lamp_lit`, `shading.LampLit`, `mark_lamp_lit`, `ISO_LAMP_REACH` (1,
+  2.2)): bodies near a lit lamp are graded towards `LAMP_LIGHT` by distance × the lamp's level,
+  scaled by darkness; computed when drawn (cached per scene time), not by an updater (which would
+  make every wait render each frame).
+- **Schema**: `schema._yaml_on_key` adds a `"true"` property beside every boolean `on` (YAML 1.1
+  reads a bare `on` as `true`).
+- **Public**: `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`, `mark_lamp_lit`.
 
 
 ## 90. Iso polish and iso diagrams (Phase R, Steps 172–176)
 
-Reference: docs/CONFIG.md "Isometric places (`iso`)". Two parts: the weather gaps Phase Q left
-on an iso place (§89.9–89.13: no shelter from rain, puddles and settling snow refused, speed
-lines drawn level), then a presentation scene type built on the same projection and block
-drawing.
+User reference: docs/CONFIG.md "Isometric places (`iso`)" and `iso_diagram`. Weather on an iso
+place, and the `iso_diagram` presentation scene on the same projection and block drawing.
 
 ### 90.1 The phase (plan)
 
-- **Step 172, iso weather polish** (this section's §90.2–90.4): shelter from rain, puddles,
-  settling snow, speed lines along the diagonal; the obsolete refusals removed. Deliberate
-  changes to iso output: in rain scenes drops that landed under a roof or crown now splash on it,
-  and a run's speed lines slant. Everything else renders as before.
-- **Step 173, `iso_diagram` core** (§90.6–90.7): a new presentation scene type reusing `world/iso_view.py`
-  (projection, `Box3`, `draw_order`) and the iso block drawing (`cartoon/iso_drawing.py`:
-  `box_shapes`, `draw_shapes`; moved to a neutral module if the diagram needs it, iso stage
-  output unchanged). Blocks (boxes, slabs, cylinders such as databases, flat tiles) placed on a
-  grid by name with sizes and heights; labels that stay flat and readable (phone rules); theme
-  colours and Phase P `terms:` concept colours; connectors along the grid; groups and stacks;
-  auto-fit to 16:9 and 9:16.
-- **Step 174, actions** (§90.8–90.11): build-in, raise / lower, highlight / dim, flow along
-  connectors, explode / collapse a stack, camera focus on a block or group, swap labels and
-  values, timed to beats and Phase P words (`at: "@word"`); lint where useful; the label
-  placement reworked after Step 173's stills.
-- **Step 175**: an original example (a short tech explainer, 16:9 and 9:16) with Kokoro
-  narration; docs.
-- **Step 176**: the review; backwards compatibility against Phase Q's 31 baseline frames and the
-  84 iso-story stills recorded in Step 172 before any change (`phase-r-baseline/make_baseline.sh`
-  in the session scratchpad: 16:9 `morning`, `evening`, `rowans_room`, `night`, `next_morning`;
-  9:16 `morning`, `night`; the 9:16 ones drawn with a worktree of `d792d86b`); the 9:16 render of
-  `examples/iso-story`.
+Done: §90.2–§90.15.
 
 ### 90.2 Rain on the place: shelter and puddles (Step 172)
 
-- **The top surface** (`cartoon/iso_weather.py`, no manim: `TopSurface`, `top_surface`): the
-  height of the highest thing facing up over each point of the map, `SURFACE_SAMPLES` 8 per
-  tile, made from the very shapes the place is drawn with (`IsoScenery.top_surface()`, cached per
-  set of object states, so a `reveal`ed bridge counts once it is there): every polygon whose unit
-  normal points up at least `SNOW_SLOPE` 0.45 (`iso_drawing.upward`: a top, a roof's slope; not a
-  wall or a cut-out), round puffs as balls (a circle of radius `r` on the picture is a ball of
-  `r·√2`: the view is a parallel projection scaled by 1/√2, `BALL_RADIUS`), opaque flat discs and
-  the tops of upright cylinders; shadows and pools of light do not count. `grounds` holds each
-  cell's top (water `-WATER_DEPTH`). Why from the shapes rather than a table per object kind: what
-  keeps the rain off is then exactly what snow lies on (§90.3), and a new object needs nothing.
-- **Shelter** (`lift_floors`, `IsoRainGround.lift`): a drop keeps Step 169's landing point on the
-  place's picture; the ground point there is found by undoing the projection at the cell top's
-  height (`world_at`, three steps: a raised block moves it), and when the top surface over it is
-  `SHELTER_CLEARANCE` 0.3 tiles or more higher (a roof, a crown, a bridge's deck over water) the
-  drop lands that much higher up the picture, on it, with its splash. `Stage.iso_rain_ground`
-  passes the lift (`_iso_shelter_lift`); a flat stage's `RainGround` has none and is unchanged.
-  Indoors there is no rain (refused as before). "Characters standing there stay dry": nobody can
-  stand under a shelter on the place (a house's or a tree's cells are not standable; eaves and a
-  crown's ball do not reach a neighbouring cell's middle, tested), so footsteps are unchanged;
-  drops landing on a character still fall through (no splash on a face).
-- **Puddles** (`puddles: true`, refused on an iso place before): `iso_puddles` picks seeded cells
-  (`random.Random("puddles:<seed>")`) among `puddle_cells`: grass (`.` outdoors) or path, nothing on
-  it, not sheltered, and no piece of the place in front of it (`in_front` with a flat box of the
-  cell) — the puddles are drawn over the place's pictures under the shadows and characters
-  (`_lay_on_ground`), so a piece in front would be covered. One per `CELLS_PER_PUDDLE` 10 cells,
-  2–12, radius 0.3–0.44 tile inside its cell. `IsoPuddles` (`cartoon/iso_pictures.py`) draws each as
-  the ellipse a ground circle makes in the view, `ISO_PUDDLE_COLOR` `#A9C8E8` at 0.8 (the plain
-  stage's darker puddle read as a hole in the grass from above), growing with `puddle_growth` and
-  staying when the rain stops, with `RIPPLES` 2 rings per puddle while it rains (`ripples`: each
-  spreads from a seeded point over `RIPPLE_SECONDS` 0.9 and starts again elsewhere; a ring is one
-  filled path, outer ellipse and inner reversed, so it scales with the zoom). Wet steps follow
-  the rain field as on a flat stage. Lit like the place; left out of the layout dump like
-  `Puddles`.
+- **Top surface** (`cartoon/iso_weather.py`, no manim: `TopSurface`, `top_surface`): the height of
+  the highest upward-facing shape over each point (`SURFACE_SAMPLES` 8 per tile), built from the
+  very shapes the place is drawn with (`IsoScenery.top_surface()`, cached per object states) —
+  so what keeps rain off is exactly what snow lies on, and new objects need nothing.
+- **Shelter** (`lift_floors`, `IsoRainGround.lift`): where the top surface is `SHELTER_CLEARANCE`
+  0.3 tiles above the ground, the drop lands on it. A flat `RainGround` has no lift.
+- **Puddles** (`puddles: true`): `iso_puddles` picks seeded cells (`"puddles:<seed>"`) among
+  `puddle_cells` (outdoor grass or path, free, unsheltered, nothing in front), one per
+  `CELLS_PER_PUDDLE` 10, 2–12; `IsoPuddles` draws them over the place under bodies, with `ripples`
+  inside each puddle while it rains. Left out of the layout dump.
 
 ### 90.3 Settling snow on the place (Step 172)
 
-- **A picture of the snow**: `draw_shapes(..., snow=True)` (as `glow=True` is a picture of the
-  lights) paints the snow lying on the shapes in order, each shape clearing the snow behind it:
-  an upward polygon that `holds_snow` (new `Poly` / `Disc` field, default true; water and door
-  knobs false; a well roof's fascia false) is `SNOW_WHITE` (`#F4F7FC`, a slope facing the back a
-  little shaded) with its outline kept; an upright polygon with `snow_cap` (new field: a pine's
-  tiers `PINE_SNOW_CAP` 0.72, the well's roof `ROOF_SNOW_CAP` 0.6) is white from its top down
-  that share; each puff of a `Blobs` gets a cap (a chord ±62° about its top), a later puff
-  clearing the caps behind it; an opaque disc and an upright's top are white; lines of at least
-  1.5 outline widths clear (a crank), thinner ones (seams, tufts, bars) are covered; tints leave
-  it. The fields' defaults keep every picture drawn exactly as before.
-- **Shown on the place** (`IsoSnow`, a living thing of the stage like `SettledSnow`): every
-  picture (`IsoTiles`: base, fronts, layers; `Stage._iso_groups` lists every one made) lays its
-  tiles' snow over each tile's own pixels in place, at `BLANKET_OPACITY × blanket_cover(amount)`,
-  the amount growing with `settle_amount(settled_seconds(...))` in Step 105's steps (one layer
-  for all the scene's settling fields, their amounts added). Considered and dropped: snow tiles
-  of their own, half transparent, over the picture tiles — the tiles overlap by `TILE_OVERLAP`
-  pixels and the doubled snow showed as white lines across the place while it grew. In place,
-  the tile stays the same mobject, so Manim's list of what moves stays right; while it grows the
-  place's tiles are redrawn (measured: the scratch village, 17 s of snow at 854 x 480, 30 s).
-  Flakes land where rain would (`snow_ground` is the iso rain ground; `ParticleField` asks the
-  ground's `landing`, which for a flat stage is the band as before). `color` colours the flakes
-  only. Not in a draft (§74), as on a flat stage.
+`draw_shapes(..., snow=True)` draws a picture of the snow lying on the shapes (`Poly` / `Disc`
+`holds_snow`, default true; `Poly.snow_cap` for uprights; the defaults draw every picture as
+without snow). `IsoSnow` lays each tile's snow over its own pixels in place (not separate
+overlapping snow tiles, which doubled into white lines), at `BLANKET_OPACITY ×
+blanket_cover(settle_amount(...))` (§69.60). Flakes land on the iso rain ground. `color` colours
+flakes only. Not in a draft (§74).
 
 ### 90.4 Speed lines along the walk (Step 172)
 
-- `MotionEffect._way`: for a character with `iso_feet` (on an iso place) the way is its feet's
-  move since the last frame projected to the screen (`(dx−dy)/2`, up `−((dx+dy)/4 − dz·ISO_RISE)`),
-  kept while it stands still for a frame (`ISO_STILL_MOVE`), and the lines start at its middle
-  half its width back along that way; before it has moved, as before (level, the way it faces).
-  A flat stage takes the old branch (no `iso_feet`).
+`MotionEffect._way`: a body with `iso_feet` draws its lines along its projected feet movement
+(kept for a still frame, `ISO_STILL_MOVE`); otherwise level along its facing.
 
 ### 90.5 Public (Step 172)
 
-- `vidgen.api` adds `TopSurface`, `top_surface`, `lift_floors`, `IsoPuddle`, `iso_puddles`,
-  `ripples`, `IsoPuddles`, `IsoSnow`. `Poly` gains `holds_snow` and `snow_cap`, `Disc`
-  `holds_snow`; `draw_shapes` and `IsoScenery.tile_image` / `picture` a `snow` keyword;
-  `IsoRainGround` a `lift`; `IsoTiles.set_snow_opacity`, `picture_tiles`. Config: `puddles` and
-  `settle` are accepted on an iso place outdoors (no new keys). Off an iso place nothing changes:
-  Phase Q's 31 baseline frames are identical.
+`TopSurface`, `top_surface`, `lift_floors`, `IsoPuddle`, `iso_puddles`, `ripples`, `IsoPuddles`,
+`IsoSnow`; `Poly.holds_snow` / `snow_cap`, `Disc.holds_snow`; a `snow` keyword on `draw_shapes`
+and `IsoScenery.tile_image` / `picture`; `IsoRainGround.lift`; `IsoTiles.set_snow_opacity`,
+`picture_tiles`. `puddles` and `settle` are accepted on an outdoor iso place.
 
 ### 90.6 The `iso_diagram` scene type (Step 173)
 
-Reference: docs/CONFIG.md `iso_diagram`. A presentation scene type (`scenes/iso_diagram.py`), not
-a mode of the `stage`: no characters, no map, its own params, and the view fitted to the frame
-like the other diagram scenes.
+User reference: docs/CONFIG.md `iso_diagram`. `scenes/iso_diagram.py`, not a stage mode.
 
-- **Three layers**, as for iso places (§89.1): `iso_blocks.py` (the model, no manim: what
-  `vidgen validate` runs), `iso_vector.py` (iso shapes as Manim mobjects), the scene (labels,
-  fitting, targets, steps). Shared with Phase Q without moving anything: the projection, `Box3`
-  and `draw_order` (`world/iso_view.py`) and the shape model and box faces of
-  `cartoon/iso_drawing.py` (`Poly`, `Upright`, `Line`, `box_shapes`, `shade`, `shape_bounds`),
-  imported as they are, so iso stage output cannot change (Phase Q's 31 baseline frames are
-  identical). Decided: **vector, not the stage's Pillow pictures.** A diagram is small (tens of
-  polygons), must stay sharp in a zoom, and Step 174's actions recolour, raise, fade and move
-  blocks one by one; a raster tile would have to be redrawn for each. `iso_vector.shape_mobject`
-  draws a `Poly` as a filled polygon, an `Upright` as a cylinder (body, its right part in shade,
-  the outline of its sides, a lighter top) and a `Line` as a stroke, so the diagram has the
-  stage's three-face shading in the theme's colours.
-- **Model** (`layout_iso_diagram`): items are `ItemSpec`s, a block (`BlockSpec`: shape of
-  `SHAPES` box / slab / cylinder / database / tile, footprint, height; defaults `SHAPE_SIZE`,
-  `SHAPE_HEIGHT`) or a stack of block layers (bottom first, `gap` apart, default 0.12) on one
-  footprint. `at` is an item's back cell (`x` = column, to the lower right; `y` = row, to the
-  lower left); an item fills its cells less `CELL_INSET` 0.1. All items have `at` or none
-  (`arrange`: `row`, `column`, `grid`, `zigzag`; a stack keeps `STACK_ROOM` 1.5 more cells to
-  its neighbours in a row or column, for its layers' labels). Group plates (`PLATE_PAD` 0.3 round
-  the members, `PLATE_HEIGHT` 0.08) lift their members. Refused with what to change (a
-  `ValueError` that the params validator turns into a located `vidgen validate` problem): items
-  with and without `at`, overlapping items, a non-member on a plate, overlapping plates, an item
-  in two groups, a connector between layers of one stack.
-- **Why `zigzag`**: in the 2:1 view a row of any shape is wider than tall (its picture is
-  `(columns + rows) / 2` wide), so a 9:16 frame fits it by its width and stays two-thirds empty.
-  Only the `x = y` diagonal runs down the picture; the zigzag (item k at `(⌈k/2⌉, ⌊k/2⌋)` steps)
-  follows it in two picture columns, its connectors all straight. `arrange: auto` is a row in
-  16:9 and a zigzag (spacing 2, so labels fit above and below) in 9:16. The floor follows the
-  union of the items, plates and connectors (padded `FLOOR_PAD` 0.45; `_Cover`: the union on the
-  grid of their own edges, traced to outlines) and is their bounding rectangle when that union
-  covers at least `FLOOR_FILL` 0.6 of it (a ragged edge under a row looked like a mistake).
-- **Connectors** (`route`): along `x` or `y` when the two footprints face each other over at
-  least `MIN_SHARED` 0.2, round the front of whatever is in the way (`DETOUR` 0.5 past it, when
-  that crosses fewer items), else one turn (the one crossing fewer items, `x` first); one each
-  way between the same ends run `TWIN_OFFSET` 0.16 apart. Ends stay `CLEARANCE` off the side, and
-  off a back side (`x0`, `y0`, which the view does not show) by `hidden_run`: the floor behind a
-  box is hidden for `min(far side − lateral position, 2·height·ISO_RISE)` (derived from the
-  silhouette's front corner and its top's back edge); a cylinder's by `r√2 − l − √(r² − l²)` from
-  its round side (`_on_circle`). Without it an arrow into a block from the left ended out of
-  sight behind it (the first stills). Flat arrows (`arrow_shapes`: a band `ARROW_WIDTH` 0.1 and a
-  head, dashes cut along the path) lie on the floor just over the plates and are drawn before
-  the blocks; a pipe is a low box per segment drawn in the blocks' draw order (`order`). All at
-  one height per connector (the higher ground of its ends); connectors run on the floor even to a
-  stack's upper layer (the stack's footprint).
-- **Labels** (the placement below was replaced in Step 174, §90.8; the sizes and the fit are
-  as here) stay flat, at a readable size: from `size` down (factors of 0.9) to the readable
-  minimum (× 1.05), never below; per size the largest scale (tile width ≤ `max_tile` 2.4 Manim
-  units) at which everything fits the body is found by bisection, and the first size giving a tile
-  of at least `min_tile` × size/32 wins (else the largest scale; a warning when it is small or
-  nothing fits, then the whole drawing is shrunk). At each scale the labels are placed greedily:
-  a stack's layer labels in a column at its side with leader lines (spread apart, `_spread`;
-  `label_side: auto` takes the side away from the middle unless the other one covers less), each
-  block's on its top when it fits inside the top's diamond (ink: background or text colour,
-  whichever contrasts more with the block, `readable_ink`; registered as `on_fill` so `dim` and
-  `highlight` keep it readable), else above, below, right or left on a plate; stack and group
-  captions below (else above, right, left); a connector's beside its longest segment (offset
-  along the screen normal by the label's half extent), else on it. A candidate's cost: the area
-  of other labels it covers, the share of each block's visible faces (25 points per face, worth
-  70% of the block's picture), and `line_cost` per connector sample (every `line_step` 0.1);
-  the first free candidate wins, else the cheapest.
-- **Colours**: a block's `color` (a layer's, else its stack's); else the colour of the first term
-  (§87.3) its label says (`find_term` over the active terms); else `block_color` (`palette`: the next
-  palette colour per block and layer in order). Faces as on the iso place (top, `LEFT_SHADE`,
-  `RIGHT_SHADE` towards a cool dark), outlines `outline_ink` (the fill 0.55 darker: an ink
-  outline vanished on dark themes); plates `PLATE_TINT` 0.32 of the group colour on the
-  background, the floor `FLOOR_TINT` / `FLOOR_LINE_TINT` of the text colour.
-- **Params**: one `blocks` list in order, a block with `layers` being a stack (first written as
-  a separate `stacks:` list; dropped because `arrange` then had to put all stacks after all
-  blocks, so "browser → app stack → database" could not be written without `at`). Shorthands as
-  in `diagram`: a block or layer is an id string (its label), edges `"a -> b: label"`, `-->`
-  dashed, chains; `->` takes the scene's `edge_style`. A stack's caption defaults to its id like
-  every label (the translation template lists it as for a block).
-- **Steps** (Step 173; Step 174 added `build: each` and the actions, §90.9): one step in the first beat: heading, floor, plates and captions, the
-  blocks back to front (each a little `FadeIn` from above), then the connectors. Planned for
-  Step 174 and kept possible by the model: per-block `lift` and growth in `block_shapes` /
-  `box_faces` (`lift`), a stack's `gap` (explode / collapse), connector paths and `samples` (flow),
-  picture bounds per block / stack / plate (focus), and every block, stack, group and connector a
-  target.
-- **Gaps**: no icons on blocks; a connector to a stack's upper layer runs on the floor; label
-  placement is greedy (a crowded diagram can still overlap a label and a block or connector;
-  Step 174's lint); a stack in 9:16 is narrow (its labels take the side).
+- **Layers**: `iso_blocks.py` (model, no manim: what `validate` runs), `iso_labels.py` (label
+  geometry, §90.8), `iso_vector.py` (iso shapes as Manim mobjects), the scene. Shares
+  `world/iso_view.py` and `cartoon/iso_drawing.py` unchanged. **Vector, not Pillow pictures**:
+  small, sharp under zoom, and actions change blocks one by one.
+- **Model** (`layout_iso_diagram`): `ItemSpec`s — a block (`BlockSpec`: `SHAPES` box / slab /
+  cylinder / database / tile; footprint; height) or a stack of layers on one footprint. `at` is
+  the back cell; all items have `at` or none (`arrange`: `row`, `column`, `grid`, `zigzag`,
+  `auto` = row in 16:9, zigzag in 9:16 — only the `x = y` diagonal runs down an iso picture).
+  Group plates lift their members. Refused (located by validate): mixed `at`, overlapping items or
+  plates, a non-member on a plate, an item in two groups, a connector between layers of one stack.
+- **Floor**: follows the union of items, plates and connectors, tidied to whole cells (`_tidy`),
+  or their bounding rectangle when the union covers at least `FLOOR_FILL` 0.6; when blocks arrive
+  a part at a time the floor arrives under them (`FloorCells.under`).
+- **Connectors** (`route`): straight when footprints face each other (`MIN_SHARED` 0.2), round the
+  front of obstacles (`DETOUR`), else one turn; twin connectors `TWIN_OFFSET` apart; ends kept
+  visible past hidden back sides (`hidden_run`). Flat arrows lie on the floor before the blocks;
+  pipes are low boxes in the blocks' draw order. A connector to raised blocks tilts evenly
+  between their lifts (`iso_blocks.ramped`; pipes as sheared boxes); draw order stays the ground
+  one.
+- **Fit**: label size from `size` down by 0.9 to the readable minimum, never below; per size the
+  largest scale (tile ≤ `max_tile` 2.4; 9:16 `portrait_tile` 1.35 ×) at which everything fits,
+  found by `IsoDiagram._largest` (fitting is not monotonic in scale: start at the largest scale
+  the drawing alone fits, scan down by `SCAN_STEP` 0.9, then `BISECT_STEPS` 8); labels beside
+  blocks are tried first when only the height overflows (`sideways`). Then a warning and a
+  shrink when nothing fits.
+- **Colours**: own `color` (layer, else stack), else the first term its label says (§87.3), else
+  the next palette colour in block order (so blocks shared by two scenes want their own `color`).
+  Outlines `outline_ink` (not ink: it vanished on dark themes); top-label ink `readable_ink`,
+  registered `on_fill`.
+- **Params**: one ordered `blocks` list (a block with `layers` is a stack); `diagram` shorthands
+  (`"a -> b: label"`, `-->` dashed, chains). Without `build: each` everything comes in one step in
+  the first beat. Every block, stack, group and connector is a target.
+- **9:16 layouts** (`Params.layouts(portrait)`): the preferred layout, the grid as written, and
+  slanted (`slant(..., share)`) all or half the way along x and y; the largest fit wins unless the
+  preferred one is within `LAYOUT_GAIN` 5 %. `portrait_grid: auto` enables slanting.
 
 ### 90.7 Public (Step 173)
 
-- `vidgen.api` adds `BlockSpec`, `ItemSpec`, `GroupSpec`, `EdgeSpec`, `IsoDiagramLayout`,
-  `layout_iso_diagram`, `DiagramShapes`, `diagram_shapes`, `outline_ink`, `readable_ink`,
-  `top_point`, `top_room`, `side_point` (`iso_blocks`) and `picture_to_scene`, `shapes_mobject`
-  (`iso_vector`): what the built-in scene uses, so a project scene can draw its own iso diagram.
-  Config: the scene type `iso_diagram` (no new video-level keys).
+`BlockSpec`, `ItemSpec`, `GroupSpec`, `EdgeSpec`, `IsoDiagramLayout`, `layout_iso_diagram`,
+`DiagramShapes`, `diagram_shapes`, `outline_ink`, `readable_ink`, `top_point`, `top_room`,
+`side_point` (`iso_blocks`), `picture_to_scene`, `shapes_mobject` (`iso_vector`).
 
 ### 90.8 Labels, reworked (Step 174)
 
-Step 173's greedy placement put labels where nothing covered their *bounding* box: a group's
-caption among the group's blocks ("Web tier" over Web 1, its members skipped as obstacles), a
-block label at the top of its box's bounding rectangle, far from a long flat tile ("Load
-balancer"), a block's label over a pipe or right on the next block ("Orders", "API server" on the
-cache), and a one-layer stack labelled twice ("Stored weights" and its caption "Weights"). The
-geometry now lives in `iso_labels.py` (no manim; the scene places with it, lint checks with it):
-
-- **Outlines, not boxes.** Every block is its convex outline on the picture (`block_outline`: a
-  box's corners, a cylinder's two ellipses; `convex_hull`), pipes their segments' outlines
-  (`<ref>#<k>`), connectors their samples. A label beside a block is slid out of the block's
-  outline along a direction (`slide_out`: exact, per separating axis, the first moment the
-  rectangle and the convex outline part, plus `gap`), in the order up, down, right, left, then
-  the diagonals (`AROUND`); what a candidate covers is measured exactly (`clip_area`,
-  Sutherland-Hodgman). `Obstacles.cost`: other labels' area (× `LABEL_WEIGHT` 3, each label kept
-  `clearance` apart so two do not read as one line), blocks' area (× `BLOCK_WEIGHT` 4) plus
-  `NEAR_WEIGHT` 0.3 of their area within `clearance` (2 × `gap`: a label nearly touching another
-  block reads as its label), `LINE_COST` 0.08 per connector sample under it. The first free
-  candidate wins; else the candidates pushed past whatever they met (`clear_of_all`) are tried,
-  each costing `FAR_COST` 1.0 per unit beyond `leader_from` (0.35), and the cheapest of all wins.
-  A label left more than `leader_from` from what it names gets a leader line (from the outline,
-  `ray_exit`, to the label's edge, `rect_exit`). The weights were tuned on Step 173's crowded
-  "Services in groups" grid: lower `FAR_COST` sent labels far off with long leaders, a lower block
-  weight let "Web 2" lie on the load balancer.
-- **Order**: a stack's layer labels (their column or list), group captions, block labels, stack
-  captions, connector labels. Group captions go before block labels so they get the plate's
-  front edges; the label of a block on the plate then finds another side.
-- **Group captions** by the plate's front edges (directions from the plate's middle to the
-  middle of its front-left and front-right edges and its front corner, then left, right, up),
-  else pushed clear, else outside the whole diagram (below, above). Blocks on the plate count as
-  obstacles (they did not in Step 173).
-- **Connector labels** beside the connector at 0.5, 0.3, 0.7 of each straight run, longest run
-  first, both sides, else on it, else pushed off along the normal with a leader to the nearest
-  point of the connector.
-- **One label per block** (`all_blocks`): a stack of one layer is labelled once, with its layer's
-  own label, else the stack's (its caption is not drawn); a stack's caption that repeats one of
-  its layers' labels is not drawn.
-- **9:16 stacks** (`label_side: below`, `auto` in 9:16): the caption under the stack's foot, then
-  its layers listed top layer first, each after a swatch (a flat 2:1 diamond, the shape of a top,
-  `swatch` 1.5 text heights wide) of its colour; the stack is not widened by a column at its side,
-  so it is drawn larger. `auto` tries, preferred first, in 9:16 below, the outward side, the
-  other side; in 16:9 the outward side, the other side, below (whichever covers least). The tile
-  may be `portrait_tile` 1.35 × `max_tile` in 9:16. Measured: Step 173's 9:16 stack 0.93 Manim
-  units a tile, now 2.5 (the floor's margin is now what limits it).
-- **An `at` grid in 9:16** (`portrait_grid: auto`): `slant(items, along)` moves each item along
-  the other axis by how far its middle lies along `along`, so that axis runs down the view's
-  `x = y` diagonal: a row becomes a column down the frame, neighbours keep their order and sides,
-  connectors are routed again. `Params.layout(portrait=True)` tries both axes and keeps the one
-  whose picture (`picture_size`) fits a 0.62-wide body best when it is `SLANT_GAIN` 1.15 better
-  than the grid as written; a slant that makes items or plates overlap is skipped. Considered:
-  turning the grid by 90° (the picture of a grid turned is as wide as before: only the diagonal
-  runs down an iso picture).
-- **Room for actions**: blocks are fitted and labels placed for where the scene's `raise` and
-  `explode` actions will take them (`_planned_lifts`): other labels keep clear of each block's
-  outline swept from its ground to its highest lift, the bounds include the lifted outlines and
-  the labels riding with them; a `relabel` action's texts are measured beforehand and each label
-  keeps room for the largest of its texts (`_Label.extent`).
+- **Outlines, not bounding boxes** (`iso_labels.py`, no manim; placement and lint share it):
+  blocks are convex outlines (`block_outline`, `convex_hull`), pipes their segments, connectors
+  their samples. Candidates slide out of an outline (`slide_out`) in `AROUND` order; covered area
+  is exact (`clip_area`). `Obstacles.cost` weighs labels, blocks, near-blocks and connector
+  samples (`LINE_COST`; for a raised block's label also its tilted connectors at the planned
+  lift). First free candidate wins, else pushed candidates (`FAR_COST` per unit beyond
+  `leader_from` 0.35), else the cheapest; beyond `leader_from` a leader line is drawn.
+- **Order**: layer labels, group captions (by the plate's front edges), block labels (on the top
+  when it fits), stack captions, connector labels.
+- **One label per block** (`all_blocks`): a one-layer stack is labelled once; a caption repeating
+  a layer's label is not drawn.
+- **Stacks**: a side column with leaders, or `label_side: below` (`auto` in 9:16) with a swatch
+  list under the stack.
+- **Room for actions** (`_planned_lifts`): fit and labels account for planned `raise` / `explode`
+  lifts and every `relabel` text (`_Label.extent`).
 
 ### 90.9 Actions (Step 174)
 
-Eight actions in `scenes/iso_actions.py` (written against `vidgen.api`; the animations in `scenes/iso_motion.py`; the scene does the
-drawing in `IsoDiagram.iso_*`). Each checks in `scene_problems` that the scene is an
-`iso_diagram` (`iso_diagram_actions = True`) and that its targets are of the kinds it acts on
-(`IsoDiagram.target_kind`), naming them. All take `at` (a share or a word); `mid_still_actions`
-gives the storyboard a half-way still of `build`, `raise`, `lower`, `explode`, `collapse`, `flow`
-and `relabel`.
+`scenes/iso_actions.py` (against `vidgen.api`; animations in `scenes/iso_motion.py`). Each checks
+that the scene is an `iso_diagram` (`iso_diagram_actions = True`) and its targets' kinds
+(`IsoDiagram.target_kind`). All take `at` (share or word); `mid_still_actions` covers `build`,
+`raise`, `lower`, `explode`, `collapse`, `flow`, `relabel`.
 
-- **Lifts**: the scene keeps each block's own raise and each stack's gap; a block's lift is its own
-  raise plus those of the layers under it plus `level × (gap now − its own gap)` (`_lifts_of`).
-  `_settle` moves every block (and the labels that ride with it: block and layer labels not in a
-  list under a stack, a group's caption with its plate) by the change of its lift — a pure move up
-  the picture (`ISO_RISE` per cell), points only (`LiftMove`), so colours being animated meanwhile
-  are left alone; parts not on screen move at once. A raised block standing on the floor (or a
-  stack's bottom layer, or a plate) gets a shadow on its ground, darker as it rises (`FillFade`,
-  `shadow_opacity` 0.35 at `shadow_lift` 0.6 cells). A raised plate is drawn over the arrows on
-  the floor under it (z 9).
-- **`raise`** (`by` 0.5, ≤ 4) / **`lower`** (`by`, default to the ground, never below it): raising
-  a layer raises the layers above (they rest on it); a group raises its members and its plate.
-  `until` undoes (raise: lower by the same; lower: the lifts before).
-- **`explode`** (`gap` 0.6, ≤ 3) / **`collapse`**: a stack's gap; a side column's labels go with
-  their layers, a list under the stack stays.
-- **`build`** (`style` grow, drop, fade) and **`reveal`** (the scene's `entrance`): the scene's
-  own steps leave to them what they name (`_left_to_actions`: blocks of the named block, stack,
-  group or the diagram; a stack's or group's caption and plate when it is named; named
-  connectors). Everything comes in through `_arrivals`: the floor, the plates and captions of the
-  arriving blocks' groups and stacks (unless an action waits to show them), the blocks back to
-  front, then every connector whose ends are both in (`_edge_arrivals`) — so a connector to a block
-  that waits comes with it. `grow` (`GrowBlock`) rebuilds the block each frame at `t` of its height
-  (`block_shapes` of a shortened box; only points are taken), the text on its top riding up, its
-  other labels fading in over the last 40 %; a block is unseen until its turn, and in a lagged
-  group (`lag_ratio` 0.9) each layer grows on the finished one below (with 0.5 the next layer
-  showed as a flat sheet floating over a half-grown one). `drop` fades in from `drop` 0.8 cells
-  above. A stack, group or `diagram` counts as shown once all its blocks are (`is_shown`), so a
-  `reveal` of a group whose plate came early still brings its blocks.
-- **`flow`** (`count` 3, `style` dots or packets, `color` highlight, `back`, `chain`): `FlowDots`
-  moves the dots along the connector's world path (raised a dot's radius, on top of a pipe) one
-  after another `flow_spacing` 0.16 of the way apart, fading in and out over the first and last
-  8 %, at the z-index of the pipe segment under them (blocks in front hide them); packets are
-  small iso cubes (`box_faces` of a 0.22-cell box, moved as one: a parallel projection moves a
-  cube's picture rigidly). Dots start invisible (a `Succession` for `chain` adds every connector's
-  dots at its start) and are removed at the end (`remover`).
-- **`focus`** (`padding` 0.12, `scale`): `MoveCamera` to the targets' box with padding (at most
-  3×); the whole frame when they fill it (`focus: diagram` goes back). Not temporary, unlike
-  `zoom`; no rotation (the view's angle is the diagram's meaning).
-- **`relabel`** (`text`): `Transform` of the old text into the new one (made by the label's
-  `make`, in the old text's ink when it was one colour: a highlight's, or the ink on a block's
-  top), the plate resized; when it ends the new text takes the old one's place in the label's
-  group (`SwapAtEnd`; nothing is removed from the scene, which would break up the groups holding
-  it). The targets' `on_fill` pairs follow the new text. A target without a label (`has_label`:
-  a group or connector without one, a stack whose caption repeats a layer's label) is refused.
-- **`dim` / `highlight` keep the shading** (`Target.recolor`, a generic hook): a target may say
-  which colours its members show when each of its colours is turned into another
-  (`recolor(paint) -> {member id: (fill, stroke)}`). `dim_to` then mixes the target's colours
-  towards the background (`mix_colors(colour, background, factor)`) instead of lowering opacity
-  — a see-through block showed the blocks behind it — and a colour highlight (and `flash`) paints
-  them with the shading kept (the three faces, a cylinder's shade and top, the outline:
-  `outline_ink` of the new colour); `Dim.revert` restores those members' colours. The iso
-  diagram builds `recolor` from each piece's shapes drawn again in the new colour (`_Solid`) and
-  maps the label plates to their own colour, so a highlighted label is coloured text on its plate,
-  not a block of colour (Step 173 painted the plate too). Targets without `recolor` (every other
-  scene) behave exactly as before.
-- **Targets**: a new `diagram` (floor, plates, connectors, blocks and labels). `target_kind`
-  tells actions what a name stands for.
+- **Lifts** (`_lifts_of`): own raise + layers below + stack gap; `_settle` moves points only
+  (`LiftMove`), so concurrent colour animations are untouched; raised blocks cast a shadow.
+- **`raise`** (`by` 0.5, ≤ 4) / **`lower`** (to the ground by default, never below); `until`
+  undoes. **`explode`** (`gap` 0.6, ≤ 3) / **`collapse`**.
+- **`build`** (`style` grow, drop, fade) / **`reveal`**: the scene's own steps leave named items to
+  them (`_left_to_actions`); `_arrivals` brings floor, plates, captions, blocks back to front, then
+  connectors whose both ends are in. `GrowBlock` is an introducer (§90.15).
+- **`flow`** (`count` 3, `style` dots / packets, `back`, `chain`): dots along the connector's world
+  path at the z of the segment under them, removed at the end.
+- **`focus`** (`padding` 0.12 of the safe area's shorter side, `scale`): `MoveCamera` to the
+  targets within the scene's `safe_area` (`iso_focus_view`, ≤ 3×); `focus: diagram` = the whole
+  frame. Not temporary; no rotation. Labels not wholly inside the new view fade out and back
+  (`iso_veil`).
+- **`relabel`** (`text`): `Transform` to the new text, swapped into the label's group at the end
+  (`SwapAtEnd`; nothing removed). A target without a label is refused.
+- **`dim` / `highlight` keep shading** via the generic hook `Target.recolor(paint) -> {member id:
+  (fill, stroke)}`: `dim_to` mixes colours towards the background (not opacity: see-through
+  blocks); highlights repaint with shading kept. Targets without `recolor` are unchanged.
+- **Target** `diagram`: the whole drawing.
 
 ### 90.10 Lint `iso_labels` (Step 174)
 
-The scene adds to each still of its layout dump (`layout_keys`) an `iso_diagram` key: the labels
-shown (text, kind, owner, box of the plate or text in pixels, on a block's top, with a leader
-line; a layer's label counts as having one), the outlines of the blocks and plates on screen
-(convex hulls of their points in pixels), the stacks' layers and the connectors' paths (samples
-every 0.25 cell, in pixels). The rule (`lint/iso_rule.py`, last in `LINT_RULES`, default
-warning) reports a label covering at least `min_cover` (0.1) of its box over a block it does not
-name (a block's or layer's label may lie on its own block, a stack's caption on its layers), two
-labels sharing at least `min_overlap` (0.05) of the smaller box, a label (not on a top) over
-at least 2 samples of another connector, and a label without a leader line more than `max_gap`
-(0.06 of the shorter side) from what it names (its block's or plate's outline, the stack's
-layers, the connector's path). Text size and contrast stay `min_font`'s and `contrast`'s (the
-labels are ordinary texts in the dump), the narration `said_before_shown` / `unsaid_reveal`.
-Step 173's "Services in groups" still is reproduced in the tests ("Web tier" covering 33 % of
-its box over Web 1); its re-render with this step's placement has no finding, and the actions
-project in the session's scratchpad found three real ones while the weights were tuned (a raised
-plate's caption left behind, now riding with it).
+The scene adds an `iso_diagram` key to each dump still (`layout_keys`): labels (box, owner, on a
+top, leader), block / plate outlines, stacks, connector paths, `zoom`. `lint/iso_rule.py` (last in
+`LINT_RULES`, warning) reports a label covering at least `min_cover` (0.1) of its box over a block
+it does not name, two labels sharing `min_overlap` (0.05), a label over 2+ samples of another
+connector, and a leaderless label further than `max_gap` (0.06) × short side × `zoom` from its
+subject.
 
 ### 90.11 Public (Step 174)
 
-- `vidgen.api` adds `PIPE_HEIGHT`, `PlacedBlock`, `arrow_shapes`, `block_outline`,
-  `block_shapes`, `box_faces`, `box_outline`, `picture_size`, `plate_shapes`, `slant`
-  (`iso_blocks`), `AROUND`, `FAR_COST`, `Obstacles`, `clip_area`, `convex_hull`, `hull_box`,
-  `hull_gap`, `hull_of_point`, `polyline_gap`, `ray_exit`, `rect_exit`, `rect_of`, `rect_union`,
-  `slide_out` (`iso_labels`), `ISO_RISE`. `Target` gains `recolor` and
-  `NarratedScene.target` a `recolor` keyword (default `None`: unchanged behaviour).
-- Config: actions `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`;
-  `iso_diagram` params `build`, `entrance`, `portrait_grid`, a stack's `label_side: below`; the
-  target `diagram`; the lint rule `iso_labels` (`min_cover`, `min_overlap`, `max_gap`).
-- Output of `iso_diagram` scenes changes (Step 173's placement replaced; it shipped one step
-  ago). Phase Q's 31 baseline frames are identical.
+`PIPE_HEIGHT`, `PlacedBlock`, `arrow_shapes`, `block_outline`, `block_shapes`, `box_faces`,
+`box_outline`, `picture_size`, `plate_shapes`, `slant` (`iso_blocks`); `AROUND`, `FAR_COST`,
+`LINE_COST`, `Obstacles`, `clip_area`, `convex_hull`, `hull_box`, `hull_gap`, `hull_of_point`,
+`polyline_gap`, `ray_exit`, `rect_exit`, `rect_of`, `rect_union`, `slide_out` (`iso_labels`);
+`ISO_RISE`. `Target.recolor`; `NarratedScene.target(..., recolor=None)`. Config: the actions
+above, params `build`, `entrance`, `portrait_grid`, `label_side: below`, target `diagram`, rule
+`iso_labels` (`min_cover`, `min_overlap`, `max_gap`).
 
 ### 90.12 The example and the fixes it found (Step 175)
 
-- **The example** `examples/iso-web-page` ("What happens when you open a web page", 5 scenes, 18
-  beats, 2:00 with Kokoro `af_heart` at 0.82 and the `bright` bed): a title; `trip` (browser, DNS,
-  load balancer, two app servers on a group plate, cache, database on an `at` grid, each block
-  built on the word that names it, dots and packets along the connectors); `one_request` (the same
-  diagram: `dim` the busy server, `raise` the chosen one, `focus` on the cache and database,
-  `relabel` for the miss, `Database: 40 ms` and the hit, `focus: diagram`, a `chain` of packets
-  back); `render` (the rendering stack DOM / Styles / Layout / Paint built, exploded, each layer
-  highlighted `until` the next beat, collapsed); a `bullets` recap. `terms:` cache and database.
-  Blocks that appear in two scenes have their own `color` (by default the palette follows the
-  order of the blocks, so leaving DNS out of the second scene recoloured the others).
-- **Fit by scanning** (`IsoDiagram._largest`): whether the diagram fits the body is not monotonic
-  in the scale — at a middle scale a label can be pushed clear with a long leader and overflow,
-  while at a larger one it lies by its block — so Step 173's bisection from the smallest scale
-  could settle on a third of the possible size (the example's second scene, with the browser one
-  row up: "the blocks are drawn small"). Now: the largest scale `cap` if it fits, else scales
-  `SCAN_STEP` 0.9 apart downwards until one fits, then `BISECT_STEPS` 8 between it and the one
-  above; none fitting down to 0.15 as before. At most about 30 placements per label size (the
-  example's scenes render in the same time). The gallery sample's 9:16 still is now drawn larger
-  (regenerated).
-- **`focus` in the safe area** (`iso_focus_view`): the magnification fits the targets into the
-  scene's `safe_area` (the frame less margins and reserved overlays such as karaoke captions),
-  and the camera centre puts their middle on the safe area's middle (`centre = middle − area
-  centre / factor`), clamped to the camera bounds as before. Before, they were centred on the
-  frame and a cache's label went under the captions. A `diagram` target returns the whole frame
-  (`focus: diagram` zoomed onto the diagram's own box and cut the heading off).
-- Considered and left: a `flow` on a connector whose end is not built yet shows the connector
-  early (as any action shows its target); the example builds before it flows. In 9:16 the
-  slanted grid can route a connector round the outside, and `iso_labels` warns that "App 2" lies
-  on part of `lb->app2` (one warning, judged acceptable: the arrow is still read).
+Example `examples/iso-web-page`. Fit by scanning and `focus` in the safe area: §90.6, §90.9.
 
 ### 90.13 Review of Phase R (Step 176)
 
-Found by watching the example's contact sheet and fixed (iso_diagram only; no change to iso
-stages, platform levels, presentations: the Phase Q baseline's 31 stills are identical, and
-iso-story differs from the pre-Phase-R stills only in Step 172's intended rain and run stills):
-
-- **Filling the body.** A wide body whose height the labels above and below the blocks take
-  (the example's first diagram used two thirds of the width and a third of the frame) is now
-  tried with the labels beside the blocks first (`_place(sideways=True)`, directions
-  `iso_labels.SIDEWAYS`), at each scale where the usual order overflows the height only; the
-  scan starts at the largest scale the drawing alone fits (`_bounds`), which also makes the fit
-  cheaper. Above and below, a label wider than its block is also tried lined up with the block's
-  left or right edge (`aligned`), clear of a neighbour on the other side. `Obstacles` keeps each
-  outline's box (a cheaper cost). In the example, dropping the "App servers" caption (the blocks
-  say "App 1", "App 2") took the trip from 1.01 to 1.35 units a tile.
-- **9:16.** `Params.layouts(portrait)`: the preferred layout (`layout()`, as before), the grid as
-  written and slanted all or half the way (`slant(..., share)`: half the move, whole cells) along
-  x and y; the scene fits each at the label size asked for (a scan and 2 bisection steps) and
-  draws the largest unless the preferred one is within `LAYOUT_GAIN` 5 %.
-- **Focus never cuts a label.** `focus` (and its `until`) calls `iso_veil(width, centre)`: each
-  label group (plate, text, leader) and the heading not wholly inside the new view fades out
-  (`Veil`, in the first 40 % of the move; its colours kept in `_veiled`), and those wholly inside
-  again fade back in (the last 40 %). A relabel of a faded label swaps its kept colours to the
-  new text. Blocks may still be cut by the view's edge. `padding` is a share of the safe area's
-  **shorter** side, both ways: in 9:16 a share of the width left the targets no room to grow.
-- **Connectors to raised blocks.** A flat connector whose ends are raised tilts evenly along its
-  path from the source's lift to the target's (`iso_blocks.ramped`, `Reshape` while it moves);
-  flows follow the tilt, and the layout dump gives lint the tilted path. Pipes stay on the floor.
-- **The floor.** When it follows the blocks (they cover under 60 % of its rectangle) it is grown
-  out to whole cells of a grid half a cell off the diagram's, its edges mid-cell all round as a
-  rectangular floor's, and filled across rows and columns between their ends (`_tidy`): steps
-  only where the diagram's width changes, no ragged end. When blocks come in a part at a time
-  (`build: each`, `build` / `reveal` actions) the floor comes with them: `FloorCells.under(items)`
-  is the floor the items alone would get (`_floor_of`, the same rule), within the whole floor's
-  cells; each arrival adds the cells not shown yet, reaching `FLOOR_SEAM` under the shown ones (no
-  seam). A diagram built at once keeps its one floor mobject.
-- **Puddle ripples** (Step 172) could spread 1.2 radii from a puddle's middle onto the grass: a
-  ripple now starts at most `RIPPLE_OFFSET` (1 − reach − 0.05) of the radius off the middle.
-- Considered and left: a raised block's label rides with it and may lie on the start of its own
-  outgoing connector (the example's "App 2" in `one_request`, one `iso_labels` warning; keeping
-  the label clear at both heights crowded the others off their blocks). L-routes in a slanted
-  9:16 grid read as a ">" round the side (the grid's nature). Snow's `color`, puddles only on
-  ground cells and the snow-growth redraw cost (Step 172's gaps) stay.
+Folded into §90.6 (sideways labels, 9:16 layouts, floor, tilted connectors), §90.9 (focus veil,
+padding) and §90.2 (ripples stay inside their puddle, `RIPPLE_OFFSET`).
 
 ### 90.14 Follow-ups (Step 177)
 
-- **A raised block's label keeps off its tilted connectors.** The label rides up with its block
-  (§90.9), so placed clear of the floor's connectors it could lie over the start of its own
-  connector tilted up to it (the example's "App 2", Step 176's gap). `_geometry` keeps each
-  connector with a raised end sampled along its tilt at the planned lifts (`_raised_lines`, the
-  same even ramp as `ramped`); a block label's candidate (not one on its top) also costs
-  `LINE_COST` per such sample under it moved up by its planned lift (`raised` in `_place`). Only
-  that label's own choice changes, so the crowding Step 176 saw when other labels kept clear of
-  both heights does not come back. The example lints clean in 16:9 and 9:16.
-- **Lint at the diagram's scale.** The label then sat a little further off, within
-  `leader_from`, and `iso_labels`' `max_gap` fired only while a `focus` magnified the gap: the
-  layout dump's `iso_diagram` key gains `zoom` (frame width over the camera's), and the gap limit
-  is `max_gap × short side × zoom` (the reported value divided by it). Whether a label reads as its
-  block's does not change when everything is magnified.
-- **Pipes tilt too.** `_draw` keeps each pipe's segments with their ground boxes
-  (`_pipe_pieces`); `_settle` reshapes a connector's arrow and its pipe segments alike, each
-  segment `ramped(box_faces(box))` (the box sheared along the slope: faces stay planar, its
-  visible faces the ground box's), animated with `Reshape` during a raise or lower. `_edge_lift`
-  now follows pipes, so `flow` dots and packets ride the slope (they already added it) and the
-  layout dump gives lint the tilted path. Draw order stays the ground one.
-- **9:16 shots on an iso place** (`shots.portrait_shot`, called by `Stage.shot_framing` only on
-  an iso place in a tall frame): the place's characters are small, so a 9:16 close-up is held at
-  `MAX_SHOT_SCALE` and its view is about three characters tall and 1.6 wide; framed with the head
-  at the top it left two thirds of ground below and cut a neighbour in half at the edge (the
-  contact sheet's bench "with nobody on it"). Now: across, the nearest centre at which every other
-  character is wholly in (`PORTRAIT_EDGE` 0.04 of the width inside) or wholly out, the subjects
-  wholly in; up and down, the figures in view centred when the view is `PORTRAIT_ROOM` 1.6 times
-  their height. `wide` and `over_shoulder` (its near one cut on purpose) are kept. The wide
-  view in a tall frame (start and `shot: wide`) also keeps the spots the scene's `walk_to`,
-  `run_to` and `enter` go to and the cells round them (`_iso_arrivals`: two sent to one spot stop
-  side by side), so a walk does not end half out of the frame. A 16:9 frame and flat stages are
-  untouched: iso-story's 61 16:9 baseline stills and Phase Q's 31 are identical.
-- **Public**: `vidgen.api` adds `portrait_shot`, `LINE_COST`. Layout dump: `iso_diagram.zoom`.
-- **Gaps**: a `zoom` or `pan` action on an iso place in 9:16 can still cut a character at the
-  edge (only shots are reframed); a raised block's label is kept off tilted connectors at the
-  highest planned lift only; a pipe's draw order is its ground one (a pipe climbing to a block
-  raised high in front of another could be drawn behind it).
+- Tilted connectors and pipes, raised labels, lint at `zoom`: §90.6, §90.8, §90.10.
+- **9:16 shots on an iso place** (`shots.portrait_shot`, from `Stage.shot_framing` on iso in a
+  tall frame): across, the nearest centre where every other character is wholly in
+  (`PORTRAIT_EDGE` 0.04) or wholly out; vertically, figures centred when the view is
+  `PORTRAIT_ROOM` 1.6 times their height. `wide` and `over_shoulder` unchanged; `zoom` / `pan` not
+  reframed. `vidgen.api`: `portrait_shot`.
 
 ### 90.15 Nothing shows its final look before it comes in (Step 178)
 
-- **The bug** (owner, `examples/iso-web-page`): a block built with `grow` appeared at full size
-  for a moment (12 frames at 30 fps), then jumped back to nothing and grew. Every grown block the
-  first time it came in, and at a scene's start (the "HTML response" slab during the crossfade).
-- **Cause**: `_arrivals` plays what comes with a block first (the floor piece under it, a group's
-  plate, the heading at a scene's start) and then the block, in a `Succession`. Manim adds every
-  non-introducer sub-animation's mobject to the scene when the `Succession` starts, but begins
-  (and so first interpolates) each sub-animation only when its turn comes. `GrowBlock` was not an
-  introducer, so the block sat in the scene at its final look until the fade before it ended.
-  `drop` and `fade` (`FadeIn`, an introducer) and connectors (`FadeIn`) were not affected.
-- **Fix**: `GrowBlock` is an introducer: the block joins the scene when its growth begins, at its
-  start (unseen, no height) on that very frame; in a `LaggedStart` (a stack's layers) every layer
-  starts unseen too. Whatever the timing (beat start, `at:`, `@word`, `build: each`, the scene's
-  first beat) and target (block, stack, layer, group, the diagram, `reveal`).
-- **Same class on an iso place** (Step 168's `reveal` / `hide` / `open` / `switch_*`): when a
-  change started, the *other* pictures showing the object were swapped at once: the layer of an
-  object behind it and a character's front picture showed a revealed object at full on the
-  change's first frame (a pine in front of a lamp, the buds of iso-story opening each other at
-  once), and a hidden one vanished at once there. Now they follow the change (`_IsoFollow`): the
-  new picture goes right under the old one, fades in during the first half and the old one fades
-  out over it in the second (what both show stays as it is; never two pictures left drawn at the
-  end); a picture alone fades in or out with the change; a second change while one is under way
-  continues it; an object fading in by its own change keeps its opacity when redrawn.
-- **Two more of that class**: a picture made mid-play (those new layers) was in neither Manim's
-  static image nor its moving list, so it was not drawn until the next animation; one taken out
-  mid-play (an old picture when its change ended) was still in the moving list, so it was drawn
-  on, at full once its fade was undone (a hidden pine came back; a closed door's open leaf stayed
-  under it until the beat ended; doubled outlines). New pictures join the moving list and removed
-  ones leave it (`_iso_undraw`).
-- **Compatibility**: Phase Q's 31 baseline stills identical. iso-story: 79 of 84 stills identical;
-  5 differ where a change ends or runs at the still (the door closed at the end of `morning` b10
-  and `next_morning` b2 no longer shows its open leaf; single instead of doubled outlines after
-  the lamp door opens in `evening`; in `next_morning` b6 the third bud is still a bud at the
-  still instead of fully open at the start of its opening). Deliberate fixes.
-- **Gaps**: an object's own change with two pictures (a lamp switched, a door opened) still fades
-  the new one over the old one, so their soft edges are drawn twice until it ends (a faint
-  sharpening of outlines on its last frame).
-
+- **Rule**: Manim adds a non-introducer sub-animation's mobject when a `Succession` starts but
+  interpolates it only at its turn, so an animation that builds its mobject from nothing must be
+  an introducer. `GrowBlock` is one (also each layer of a `LaggedStart`).
+- **Iso place changes**: other pictures showing a changing object follow the change
+  (`_IsoFollow`): the new picture under the old, fading in over the first half while the old fades
+  out over the second; never two left drawn at the end.
+- **Moving list**: pictures made mid-play join Manim's moving list, removed ones leave it
+  (`_iso_undraw`).
+- **Known limit**: an object's own two-picture change (lamp, door) draws soft edges twice until it
+  ends.
 ## 91. Documentary music beds (Step 179)
 
 Five built-in beds with more drive than §48's `pulse` / `bright`: `discovery` (D minor, 104 BPM,
@@ -19677,1470 +17829,588 @@ their keys (the scene fingerprint of `vidgen storyboard`, which holds vidgen's w
 
 ## 123. Air, planes and giant ships (Phase AO, Steps 379–394)
 
-Phase AO (owner's request, 2026-11-17) adds flight inside atmospheres (the sky from inside, ocean,
-cloud decks and gas giants, terrain; no forests), parametrized space plane parts and giant ships,
-a cache for baked maps and the owner's orchestral Shorts as examples. It starts with a gallery of
-its own for scenes drawn in a web page.
+Flight inside atmospheres (sky from inside, ocean, cloud decks and gas giants, terrain; no
+forests), parametrized space planes and giant ships, a cache for baked maps, and a second gallery
+for scenes drawn in a web page.
 
 ### 123.1 Two galleries: the main one and the web gallery (Step 379)
 
-- **Why.** The entries of types drawn by a web page are the heaviest (a star field under a
-  moving camera changes every pixel of every frame) and Phase AO adds more of them; the main
-  gallery's budget had already been raised to 17 MB for `space` (Step 378). Decision (owner): a
-  second gallery, `docs/gallery/web/`, with a budget of its own (20 MB); the main gallery back to
-  16.5 MB (16.1 MB without `web/` at Step 379); the two indexes link to each other; the "Videos on
-  YouTube" section (videos and Shorts) stays at the end of the main index, unchanged.
-- **The rule** (a property of the type, not a list of names): an entry is a web entry when its
-  scene class is drawn by a web page in headless Chromium. `NarratedScene.drawn_in_browser`
-  (a `ClassVar[bool]`, default `False`) says so; `web` (`scenes/web.py`) and `3d`
-  (`scenes/scene_3d.py`) set it, and every subclass inherits it: `space` (a `Web`) and any later
-  type built on `Web` (a straight-cut scene type of the music films, Step 394) land in the web
-  gallery with no further work; a project's own type sets it the same way. `gallery.is_web_type`
-  reads it from the registry, `GalleryType.web` carries it (an alias has its class's), a showcase
-  is a web entry when one of its scenes is (`is_web_showcase`; none at Step 379). The music films
-  (`examples/escapement`, `parallel-space`, `signal-fire`, `outbound`) are not gallery entries;
-  the line naming them under "Pictures and media" moved to the web index (`WEB_SECTION_NOTES`,
-  links one folder deeper), with links to the 3D and space cookbooks.
-- **Layout.** A web entry's page is `web/<name>.md`, its media `web/media/<name>-16x9|9x16.png|gif`
-  (`gallery_folder`); the page, the stills and the GIFs are written exactly as before (same sizes,
-  palettes, caps, `ENTRY_MAX`), only their folder differs, and the page's last line reads "[All
-  web scenes](README.md) · [All scene types](../README.md)". `write_index(..., web=True)` writes
-  `web/README.md` ("# Web scene gallery", the same table per guide group, no YouTube section);
-  the main index lists the other entries and, when the web gallery has any, one line naming the
-  web types and linking `web/README.md`. A showcase's links to the types it shows go to either
-  gallery (`page_link`), its footer one folder deeper in the web gallery (`relink_for_web`). When
-  an entry is written, its page and media in the other gallery are removed (`_remove_other_copy`),
-  so a type that becomes a web type moves on the next `vidgen gallery --types <name>`. A
-  project's gallery splits the same way (`<output>/web/` only when it has a web type).
-- **Elsewhere.** `vidgen gallery` prints the web index too; `--json` gains `web_index` and `web`
-  per type and showcase; the MCP server serves the web gallery's pages as `vidgen://gallery/<type>`
-  (names are unique across the two) and its index as `vidgen://gallery/web-index`.
-  `.gitignore` lets `docs/gallery/web/media/` in.
-- **Moved, not regenerated** (Step 379): the 12 media files of `3d`, `web` and `space` were moved
-  with `git mv`; the generator writes them from the same renders with the same code, only into
-  `web/media/`, so they are byte-identical to what it would write. The three pages and both
-  indexes were rewritten by `write_page` / `write_index` from the committed media (no render):
-  `3d.md` and `space.md` differ only in the last line; `web.md` also picked up the `web` type's
-  current description and params (`design_width`, `music_data`, `orbit_data`), which had changed
-  since its entry was made (its YAML, which the tests compare, had not). A main page written the
-  same way (`pie.md`, `stat.md`) came out byte-identical.
-- **Tests** (`tests/test_gallery.py`): `BUDGET` 16.5 MB for `docs/gallery` without `web/`,
-  `WEB_BUDGET` 20 MB for `web/`, `ENTRY_MAX` per entry in either; each index lists exactly its
-  entries and its folder holds exactly their pages; the two link each other; no relative link in
-  any page of either gallery is broken; the rule (`{3d, web, space}`); writing into two galleries
-  without rendering; the tiny render test checks `web_index`. Not changed: which types
-  `vidgen validate` warns about when Chromium is missing (`browser.chromium.BROWSER_SCENE_TYPES`,
-  `3d` and `web`; `space` scenes are not in it).
+- **Rule** (a property of the type, not a list): an entry is a web entry when its scene class is
+  drawn in headless Chromium: `NarratedScene.drawn_in_browser` (`ClassVar[bool]`, default
+  `False`), set by `web` (`scenes/web.py`) and `3d` (`scenes/scene_3d.py`) and inherited (`space`,
+  any `Web` subclass, a project's own type). `gallery.is_web_type` reads it from the registry;
+  `GalleryType.web` carries it (an alias has its class's); a showcase is web when one of its
+  scenes is (`is_web_showcase`).
+- **Layout.** Web entries: `docs/gallery/web/<name>.md`, media `web/media/<name>-16x9|9x16.png|gif`
+  (`gallery_folder`), same sizes and caps as main entries; last line "[All web
+  scenes](README.md) · [All scene types](../README.md)". `write_index(..., web=True)` writes
+  `web/README.md` ("# Web scene gallery", same table per guide group, no YouTube section). The main
+  index lists the other entries, one line linking `web/README.md` when it has entries, and keeps
+  "Videos on YouTube" at its end. Showcase links go to either gallery (`page_link`; footer
+  `relink_for_web`). Writing an entry removes its copy in the other gallery (`_remove_other_copy`).
+  The web index names the music films (`WEB_SECTION_NOTES`), which are not entries. A project's
+  gallery splits the same way (`<output>/web/` only with a web type).
+- **Budgets** (`tests/test_gallery.py`): `BUDGET` 16.5 MB for `docs/gallery` without `web/`,
+  `WEB_BUDGET` 20 MB for `web/`, `ENTRY_MAX` per entry.
+- **Elsewhere.** `vidgen gallery` prints both indexes; `--json` has `web_index` and `web` per type
+  and showcase; MCP serves `vidgen://gallery/<type>` (names unique across both) and
+  `vidgen://gallery/web-index`. `.gitignore` lets `docs/gallery/web/media/` in.
+  `browser.chromium.BROWSER_SCENE_TYPES` (the `vidgen validate` Chromium warning) is `3d` and `web`
+  only.
 
 ### 123.2 The cache of baked maps (Step 380)
 
-- **Why.** Pages bake pictures before their first frame: a planet's two surface cube maps
-  (`vidgen/space-bodies`, §122.7: about 30 s for `size: 2048` on 2 cores in software GL) and the
-  sky's cube map (`vidgen/space-sky`, §122.6: 4.5 s of the 5.6 s a 1024 sky takes). Every page is
-  new (each `web` / `space` scene, each `vidgen still`, draft and render, each parallel job), so
-  the same map was baked again every time. Later steps of Phase AO bake more (the air's lookup
-  tables, Step 381; terrain, 384; a giant ship's detail maps, 389).
-- **Every bake in the modules** (read at Step 380). Cached: `space-bodies` (the maps A and B,
-  RGBA 8-bit cube maps with mipmaps; the coarse and field cubes are intermediate and not kept)
-  and `space-sky` (the cube, RGBA half float with mipmaps). Not cached: the CPU-made textures of
-  `space-light` (a corona of six 256 faces), `space-phenomena` (a 256 noise texture, lanes, a
-  heat ramp, a disc), `space-craft` (256 tiling panel maps, made once per page and shared) and
-  the ring profile (1024 texels) — each costs well under a second; `space-sky`'s stars (69,000 from
-  the seed, 0.55 s, CPU arrays), its `background` and `environment` (drawn from the sky on first
-  use) and `space-craft`'s reflection cubes (drawn from the scene round the craft: they depend on
-  the scene, so they have no key); `three-kit`'s and `three-finish`'s nebula and studio bakes
-  (small; changing those modules would change the key of every 3d-kit page).
-- **One helper, `vidgen/baked`** (`data/web/modules/baked.js`, on the import map):
-  `baked(renderer, name, inputs, {targets, draw})` returns the render targets `targets()` makes
-  (2D or cube, RGBA, unsigned byte / half float / float; `null` for one not needed), filled by
-  `draw(targets)` or from the cache. Synchronous, so `planet()` and `spaceSky()` stay
-  synchronous. `inputs` is every input that changes the pixels besides what vidgen adds: the
-  bodies pass `{type, size, float, inputs: bakeInputs(o)}` (all the bake reads), the sky
-  `{size, seed, color, band, milkyWay, dust, limit, density, galaxies, nebulae}`. A later bake
-  (Steps 381, 384, 389) calls it the same way; a project's script may too, with a version of its
-  own bake code in `inputs`. Also exported, pure and tested in Node: `inflate`, `halfBits`,
+- **Cached:** `space-bodies` maps A and B (§122.7; RGBA 8-bit cubes with mipmaps), the `space-sky`
+  cube (§122.6; RGBA half float with mipmaps), and later bakes through the same helper (§123.3,
+  §123.4, §123.6). Not cached: cheap CPU textures (`space-light`, `space-phenomena`, `space-craft`
+  panels, ring profile, sky stars), anything scene-dependent (sky `background` / `environment`,
+  craft reflection cubes), and `three-kit` / `three-finish` bakes.
+- **Helper `vidgen/baked`** (`data/web/modules/baked.js`, on the import map):
+  `baked(renderer, name, inputs, {targets, draw})` returns the render targets `targets()` makes (2D
+  or cube, RGBA, unsigned byte / half float / float; `null` for one not needed), filled by
+  `draw(targets)` or from the cache. Synchronous (so `planet()` and `spaceSky()` stay so).
+  `inputs` holds every input that changes the pixels besides what vidgen adds (a project script
+  includes a version of its own bake code). Also exported, pure: `inflate`, `halfBits`,
   `joinPlanes`, `layout`.
-- **The key** (`web/baked.py` `bake_key`): SHA-256 of canonical JSON (sorted keys) of `name`,
-  `inputs`, the parts' layout (target, face, width, height, type, bytes), the GL renderer
-  (`RENDERER`, `VERSION`, shading language, the sorted extension list), `vidgen/baked`'s
-  `VERSION`, `code_digest()` (every file in `data/web/modules/` and the bundled three.js: any
-  change of vidgen's page code is a new key), `engine_id()` (vidgen's page files, Chromium's
-  flags, time zone, locale, the Playwright version that pins Chromium and SwiftShader) and
-  `STORE_VERSION`. Values cross as JSON (a number keeps all its bits; `-0` and `0` are one key).
-- **How the bytes travel.** The page asks with a synchronous `XMLHttpRequest` to vidgen's own
-  origin, `POST __vidgen__/baked/lookup` (`WebPage._serve_baked`; never a loaded file, so no
-  scene's key sees it). *Miss*: the page draws, reads level 0 of each face back (`readPixels`; a
-  half-float target read as float and made half again by `halfBits`, exact for every half),
-  keeps the bytes as Blobs in `globalThis.__vidgenBaked` and says `POST <key>/ready`; when the
-  hook returns, `WebPage._store_baked` reads each Blob with CDP `IO.resolveBlob` / `IO.read`
-  (36 MB/s here; a request body through Playwright's route was 6 MB/s) into a staged folder and
-  commits it. *Hit*: `GET <key>/<n>` per face, answered with `route.fulfill(path=...)`; the page
-  inflates (raw deflate, `inflate`), joins the planes of a float type (`joinPlanes`), uploads
-  with `texSubImage2D` into the target's own texture and, when the bake had mipmaps, calls
-  `generateMipmap` — the call three.js makes after a bake, on the same bytes. A part that does
-  not arrive or does not inflate: the page says `POST <key>/damaged` (vidgen removes the entry),
-  bakes and stores it anew. Off, or anywhere but vidgen's pages (Node, a browser): `draw` runs.
-- **The store** (`BakedStore`): `<cache folder>/baked/<key>/` (`VIDGEN_CACHE_DIR`, else
-  `~/.cache/vidgen`, `%LOCALAPPDATA%\vidgen`, `~/Library/Caches/vidgen`), one file per face
-  (`<n>.z`: zlib level 1 raw deflate; a half float's or float's bytes split into byte planes
-  first, a third smaller) and `meta.json` (sizes, stored sizes, SHA-256 of each file, the page's
-  `meta`: which targets had mipmaps). Written into `baked/.staging/` and renamed into place: two
-  pages or render jobs baking one map at once both bake, the second rename finds the folder and
-  drops its copy, and no reader ever sees half an entry. Before a hit vidgen checks every file
-  against its hash (about 0.1 s for a 2048 planet's 50 MB); a damaged entry is removed and baked again.
-  **Limit** 2000 MB by default (`VIDGEN_BAKED_CACHE_MB`; counted on disk, after compression);
-  after each store the least recently used entries go (a hit touches `meta.json`); an entry is
-  not stored when it is larger than the limit or would leave under 500 MB free on the disk;
-  staged copies left by stopped pages go after an hour. **Off**: `VIDGEN_BAKED_CACHE_MB=0` (an
-  environment variable like `VIDGEN_CACHE_DIR`: the cache serves every command that opens a page,
-  not one project). **Commands**: `vidgen cache` / `vidgen cache info` (the cache folder, the
-  baked maps' count, size and limit, the other folders and who keeps them) and
-  `vidgen cache clear` (removes the baked maps only; the SoundFont, studio sessions and model
-  list stay). Before Step 380 vidgen had no cache command.
-- **Same pixels.** Proved with `vidgen still` at 320x180 (PNG bytes compared, cache off vs cold
-  vs warm): a 512, a 2048 and a moon-like planet, the seeded and the real sky, `examples/outbound`
-  scenes `01_dawn` and `02_depart`, and the default sky at 1280x720 — all byte-identical. The
-  slow test draws a planet, a sky and a float target of the page's own off, cold, warm, with a
-  damaged entry and switched off by the environment: the same pixels and floats every time.
-- **Measured** (2 cores, SwiftShader; "page ready" of `vidgen still`, off / cold / warm):
-
-  | Page | Off | Cold (bake + store) | Warm |
-  |---|---|---|---|
-  | Earth-like world, `size: 2048` (201 MB of maps, 50 MB stored) | 30.5 s (bake 29.7 s) | 40.0 s | 7.1 s (6.3 s) |
-  | Earth-like world, default size (256 at 320x180) | 1.9 s | 2.1 s | 1.1 s |
-  | Moon-like world, default size (256 at 320x180) | 2.1 s | 2.4 s | 1.2 s |
-  | Default sky at 1280x720 (cube 1024, 50 MB half float, 22 MB stored) | 6.4 s (sky 5.6 s) | 9.9 s | 4.5 s (sky 3.5 s) |
-  | Default sky at 320x180 (cube 512) | 2.8 s | 3.8 s | 2.3 s |
-  | `examples/outbound` `02_depart` at 320x180 (Earth 1024, sky, ship) | 13.7 s | 17.5 s | 7.6 s |
-
-  Warm, the 2048 planet's time is the bytes crossing from vidgen to the page (sync requests
-  through Playwright's route: about 16–19 MB/s) and inflating them (60–150 MB/s in V8); the
-  sky's 3.5 s include its 0.55 s of stars and its shaders. Memory: a part (one face) at a time
-  in the page and in Python, the Blobs of one bake in the page until vidgen reads them (201 MB
-  for a 2048 planet, 50 MB for a 1024 sky).
-- **Cache keys of scenes.** No scene's key depends on the cache (the requests are not loaded
-  files, the setting is not in any key). But `space-bodies.js` and `space-sky.js` changed and a
-  page importing them now also loads `baked.js`, so every scene whose page imports either module
-  (every `space` scene, the outbound example, a `web` page using them) draws its frames clip once
-  more after Step 380 — unavoidable, as the modules must call the cache — with the same pixels.
-  Other pages (three-finish, three-kit, music films without these modules, `3d`) keep their keys.
-- **Tests** (`tests/test_web_baked.py`): the module and its imports; the limit from the
-  environment; the key changes with each input, the engine and the code digest, not with key
-  order; part sizes checked; an entry stored whole and read back (planes, deflate); damaged
-  (flipped, cut, unreadable record) entries removed; two pages storing one key (the second
-  loses); least-recently-used eviction and stale staged copies; `vidgen cache` and
-  `vidgen cache clear`; `WebPage`'s answers to every request (status, lookup miss and hit, part,
-  ready, unknown paths, off, a full disk or limit), never in `loaded`; in Node: `inflate` of
-  Python's raw deflate at levels 0, 1, 6, 9, damaged streams refused, every half survives
-  `halfBits`, `joinPlanes`, `layout`, no vidgen means a bake; `slow`, in Chromium: the pixels off /
-  cold / warm, a damaged part (hash) and an unusable part (inflate) baked again, the cache off.
-  `tests/conftest.py` sets `VIDGEN_BAKED_CACHE_MB=0` for every test: no test writes the user's
-  cache folder unless it passes its own store.
+- **Key** (`web/baked.py` `bake_key`): SHA-256 of canonical JSON (sorted keys) of `name`, `inputs`,
+  the parts' layout (target, face, width, height, type, bytes), the GL renderer (`RENDERER`,
+  `VERSION`, shading language, sorted extensions), `vidgen/baked`'s `VERSION`, `code_digest()`
+  (every file in `data/web/modules/` and the bundled three.js), `engine_id()` (page files, Chromium
+  flags, time zone, locale, Playwright version) and `STORE_VERSION`. `-0` and `0` are one key.
+- **Transport.** Synchronous XHR to vidgen's origin `POST __vidgen__/baked/lookup`
+  (`WebPage._serve_baked`; never a loaded file, so no scene key sees it). *Miss*: the page draws,
+  reads level 0 of each face (half float read as float, re-halved exactly by `halfBits`), keeps
+  Blobs in `globalThis.__vidgenBaked`, says `POST <key>/ready`; `WebPage._store_baked` reads them
+  via CDP `IO.resolveBlob` / `IO.read` and commits. *Hit*: `GET <key>/<n>` per face; the page
+  inflates, joins byte planes, uploads with `texSubImage2D`, calls `generateMipmap` if the bake had
+  mipmaps. A missing or broken part: `POST <key>/damaged` (entry removed), bake anew. Outside
+  vidgen pages (Node, a browser), or off: `draw` runs.
+- **Store** (`BakedStore`): `<cache folder>/baked/<key>/` (`VIDGEN_CACHE_DIR`, else
+  `~/.cache/vidgen`, `%LOCALAPPDATA%\vidgen`, `~/Library/Caches/vidgen`): `<n>.z` per face (zlib
+  level 1 raw deflate; half/float split into byte planes first) and `meta.json` (sizes, stored
+  sizes, SHA-256 per file, which targets had mipmaps). Written in `baked/.staging/` and renamed in
+  (concurrent bakers: the second rename drops its copy; no reader sees half an entry). Hashes are
+  checked before every hit; damaged entries are removed. **Limit** 2000 MB on disk
+  (`VIDGEN_BAKED_CACHE_MB`; `0` = off; an environment variable, not config); LRU eviction after each
+  store (a hit touches `meta.json`); nothing stored larger than the limit or leaving under 500 MB
+  free; staged leftovers removed after an hour. `tests/conftest.py` sets it to 0.
+- **Commands.** `vidgen cache` / `vidgen cache info` (folder, baked count, size, limit, other
+  folders and their owners); `vidgen cache clear` (baked maps only).
+- **Invariants.** Off, cold and warm give byte-identical pixels; no scene cache key depends on the
+  cache. Tests: `tests/test_web_baked.py`.
 
 ### 123.3 The sky from inside an atmosphere: `vidgen/space-air` (Step 381)
 
-One line gives the view from within the air: `const sky = air(renderer, "earth", {sun}); scene.add(sky.object);
-sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import name `vidgen/space-air`, in
-`VIDGEN_MODULES`; imports `three`, `baked` of `vidgen/baked`, and `AIRS`, `PRESETS`, `resolveOptions`,
-`linearColor` of `vidgen/space-bodies`) is one model for every height, from the ground to space.
+`const sky = air(renderer, "earth", {sun}); scene.add(sky.object); sky.update(t, {camera})`.
+`data/web/modules/space-air.js` (`vidgen/space-air`, in `VIDGEN_MODULES`; imports `three`,
+`baked`, and `AIRS`, `PRESETS`, `resolveOptions`, `linearColor` of `vidgen/space-bodies`): one
+model for every height, ground to space.
 
-- **One source of the air's numbers.** The air is the one `vidgen/space-bodies` draws round the
-  same world from outside (§122.7): its `AIRS` (zenith optical depths per colour of the gas,
-  `rayleigh`, the haze, `haze`, and what is absorbed besides, `absorb`; one scale height `height` as
-  a share of the radius; the shell's top at 8 scale heights; the haze's forward throw `forward`; the
-  night glow `glow`) and the same closed form for the air along a ray (Chapman's function after
-  Schueler; under the horizon twice the tangent path less the path upward). `airOf(what, extra)`
-  resolves a name of this module's `PRESETS`, a world of `vidgen/space-bodies` (its own air and, from
-  `RADII`, its radius in metres: the real worlds' radii, invented ones for the invented), an air of
-  `AIRS`, a body made by `planet()` (that body's air as it is drawn), or `{world | air, radius,
-  forward, ozone, ozoneHeight, ground}`. Earth-like: scale height 8.92 km, zenith optical depth
-  0.088 / 0.164 / 0.313 (red, green, blue; the gas alone 0.062 / 0.130 / 0.290, where the Earth's
-  measured Rayleigh depths are about 0.04 / 0.10 / 0.25 at 680 / 550 / 440 nm: the numbers are broad
-  bands chosen for the outside look), 36.6 columns of air towards the horizon (the Earth: about 38).
-- **Two things only the inside view has, both stated.** (1) A thin absorbing layer (`ozone`: zenith
-  optical depth per colour; `ozoneHeight` metres): each crossing costs the depth over the line's
-  cosine at the layer, at most 41 times (the layer has a depth: a ray grazing a layer 15 km deep
-  runs 58 times its depth in it); the Earth-like preset has 0.030 /
-  0.028 / 0.004 at 25 km (about 300 Dobson units in the Chappuis band: physical). Without it the
-  zenith at sunset is grey (blue over red 1.5); with it 2.1. The outside view has no such layer.
-  (2) The haze's phase function per colour, in two lobes: `forward` (the broad lobe, a number or one
-  per colour) and `aureole` / `aureoleForward` (a narrow second lobe: its share of the haze's light
-  per colour and its forward throw). The Mars-like preset: broad 0.36 / 0.42 / 0.55, narrow 0.93
-  with shares 0.02 / 0.06 / 0.35 (chosen for the look, after the real dust's tight blue forward
-  peak: grains larger than the wave diffract a narrow cone, narrower in blue): a blue-white glow of
-  some 15 degrees round a low sun, falling into a tawny sky.
-- **Presets.** `earth` (the world's own air and the layer); `mars` (a dusty season: `air: {like:
-  "mars", density: 3, absorb: [0, 0.013, 0.031]}`, grey extinction 0.26, where the world's own air
-  seen from orbit has 0.09: the world's own is `air(renderer, {world: "mars"})`, and
-  `planet(renderer, "mars", {air: PRESETS.mars.air})` shows the dusty air from outside); `thin`
-  (invented: `AIRS.thin`, radius 2,400 km: a dark sky by day with stars in it) and `thick`
-  (invented: four times the Earth-like air with more haze, radius 7,400 km: a pale bright sky, a
-  yellowed sun). Another atmosphere is stated with scattering numbers, not gases: `air(renderer,
-  {air: {rayleigh: [r, g, b], haze: [r, g, b], absorb: [r, g, b], height: share, forward: g}, radius:
-  metres, forward: [r, g, b], ground: colour})`, or `{like: name, density: factor}`.
-- **The sums.** A unit of light is a white, matt ground square to the sun (as §122.7). Along a ray
-  the air's light is summed slab by slab with each slab's exact share (what the slab takes of the
-  light behind it, times the air's share of that, times the source at its middle): once-scattered
-  light (the sun's light after its own path, Rayleigh's and Henyey-Greenstein's phase functions),
-  and light scattered more often as one stated approximation (after Hillaire's 2020 method): a
-  point's second-hand light from all round (8 bearings x 14 elevations crowded towards the level,
-  where the twilight's light lies, each weighing its share of the sphere; 24 steps each; an
-  isotropic phase, the ground's bounce included) over one minus what such light passes on, i.e. every later bounce as a
-  geometric series. That term is a table over height (32 rows, spaced by the square root, 0 to 8
-  scale heights) and the sun's cosine (64 columns, -0.4 to 1), **baked once through `vidgen/baked`**
-  (`space-air/psi`, half float; inputs: the module's `VERSION`, the table's shape, every number of
-  the air and the ground's colour). The Earth-like zenith's light is 20 to 35 % second-hand.
-- **The sky table.** A frame does not march rays: `update` draws a small table of the whole sky for
-  this height and this sun (128 x 192 texels at `quality: "standard"`, 32 steps a texel; `fast` 96 x
-  96 with 16, `fine` 192 x 320 with 48), only when height or sun changed. Across: the bearing from
-  the sun over half the circle (the sky is the same left and right of it); along: the angle from the
-  horizon by its square root, rows above and below the horizon kept apart (so the ground's edge never
-  bleeds into the sky; seen from above the air the rows span only the shell). Left half: light
-  scattered once without its phase function (the picture multiplies it in per pixel, so the glow
-  round the sun stays sharp at any table size); right half: light scattered more often. A pixel
-  costs two reads, the air along its ray in closed form (for what passes from behind), and the
-  phase functions.
-- **The dome** (`sky.object`): a mesh that follows any camera (`frustumCulled = false`,
-  `renderOrder` -900: after a `vidgen/space-sky` sky, before the scene; in `vidgen/space-scale`'s sky
-  pass), premultiplied over what is behind: the stars pass by what the air leaves of them. Under the
-  horizon a plain matt ground of one colour (`ground`; a stand-in until ocean and terrain cover it;
-  `ground: false` for none), lit by the sun after the air and by the sky (a table of 64 entries made
-  in JavaScript), its edge a pixel soft. The sun's disc (`disc`, `sunSize` degrees): limb darkening
-  per colour, seen through the air on its ray; in `camera` and `auto` its true brightness (1 /
-  sin^2 of its radius, 46,000 whites) held at `BURN` 32 with its hue kept; in `film` between 1.6
-  and 32 whites by (what is left of it)^1.6, drawn in front of the sky's glow instead of added to it
-  (added, a low red sun washed out to the glow's pale orange), so a low sun is an orange-gold ball
-  with a darker, redder limb. Round the disc a soft bloom in its colour, at most 1.4 whites at the
-  rim (a lens's, not the air's; stated). The disc has the Sun's true size, 0.53 degrees across: 7 px
-  at 640 px width through a 50 degree lens, 19 px through a 22 degree lens; `sunSize` enlarges it
-  (a stated choice). Straight to the
-  canvas the dome applies ACES and sRGB itself and dithers by two display codes (one where the
-  picture is bright): with one code `vidgen motion check` found `banding` on 16 % of a dusk clip's
-  frame after the encoder; with two, none.
-- **Aerial perspective** (c): `sky.haze(material)` patches a three.js material (once; a list is
-  fine): each pixel becomes `colour x what passes + the air's light in front of it`. The air's light
-  in front of a point is the ray's whole light from the sky table times (1 - passes to the point) /
-  (1 - passes along the whole ray): exact where the source is the same along the ray, and at both
-  ends always, so a far thing ends in exactly the dome's colour and a ground plane meets the dome's
-  horizon without a seam. A `ShaderMaterial` includes `AIR_GLSL`, takes `sky.uniforms` and calls
-  `airThrough(colour, toPoint)` (or `airLight(mu, cosv, dist, through, hit)`). Shadows inside the
-  haze (light shafts, the dim air under a deck, mountains' shadows): Step 403, §123.17.
-- **Light for things in the air** (d): `sky.light.sun` (a `DirectionalLight`: the sun after the
-  air at the camera's height, mean over the disc as it sinks, pi x its strength as `vidgen/space-light`'s
-  `light.directional`) and `sky.light.sky` (a `HemisphereLight`: the sky from above, the lit ground
-  from below); `scene: scene` adds them. `sky.state` holds `height`, `elevation`, `ev`, `gain`,
-  `stars`, `sunlight`, `ambient`, `inside`.
-- **Exposure**, as `vidgen/space-light` (§122.8). `"film"` (default; a convention): nothing changed
-  by day (a sunlit ground is 1, as in space); as the zenith darkens the exposure opens by
-  `filmExposure` = 0.93 x^2 / (x + 0.3) stops (x: the stops the zenith has lost against a sun 25
-  degrees up), at most 16, and not at all above the air; with it comes the **dusk curve**
-  (`duskCurve`: from half a stop of lift, fully from 4): the air's light over a twentieth of white
-  is drawn as knee x (light / knee)^0.5, its colour kept, as a negative's shoulder, because the
-  twilight arch is hundreds of times as bright as the zenith (true: measured skies say the same)
-  and no one exposure shows both. The sky 3 degrees up under the sun is never drawn over 1.6
-  whites after that curve: the lift stops there, and where a hazy air's glow round a low sun is
-  brighter by itself the exposure closes, by at most 3 stops (the Mars-like sunset: a dark tawny sky
-  round the glow, as a camera set for the glow shows it). A `stars` sky is shown from 5 stops
-  (first stars) to 11 (all), and wherever the zenith is drawn black (high up, thin air). Measured
-  on the Earth-like ground: 0.4 stops with the sun 10 degrees up, 2.5 at the horizon, 5.7 at -4,
-  8.4 at -6, 11.7 at -8, 16 from -12; the zenith is drawn 0.033 of white by day, 0.022 at sunset,
-  0.016 at -6, 0.013 at -8, 0.007 at -12, black by -18. `"camera"`: `ev` stops over a sunlit ground's, honest: the stars at
-  2^(ev - 20) of their look, the night glow at 2^(ev - 12). `"auto"`: metered on nine rays through
-  the frame (a pure function of the frame's inputs).
-- **Measured** (2 cores, SwiftShader, straight to the canvas; `vidgen still` adds the screenshot):
-
-  | | 320x180 | 1280x720 |
-  |---|---|---|
-  | the dome, sun and height unchanged | 0.013 s | 0.185 s |
-  | the dome, sun or height moving (the sky table drawn again): `standard` / `fast` / `fine` | 0.043 s | 0.22 / 0.20 / 0.30 s |
-  | with aerial perspective on small things (seven hills) | 0.018 s | 0.205 s |
-  | with aerial perspective on half the frame (a ground plane) | 0.027 s | 0.28 s |
-  | making the air (two tables in JavaScript, shaders, the baked table) | 0.30 s | 0.30 s; 0.21 s with the table from the cache |
-
-  The baked table is 64 x 32 half floats (24 KB stored): its bake is 0.1 s of the 0.3 s, so the cache
-  saves little here; the tables that cost are the JavaScript ones (the ground's ambient light, the
-  film exposure's meter: 0.1 s). `vidgen parts --kind air`: 10 tiles in 8 s.
-- **Agreement with the outside view** (stills `/home/claude/work/scratch/ao381/stills/09_*`): from
-  400 km, same camera, sun and 14 degree lens, the limb has the same heights and colour order (a blue
-  line over a pale band over the ground) as `planet(renderer, "earth")`; this module's blue line is
-  about twice as bright and more saturated, because the body sums the air in 4 slabs (`quality:
-  "fine"`, 8, comes closer) and has no ozone layer. For the descent of Step 391 two ways are open:
-  hand over above the air where both agree in shape (a brightness step would have to be cross-faded),
-  or draw the body with `air: false` and this module's dome over it (`ground: false, over: true`:
-  drawn once: the ground then takes this model's haze, bluer near the limb than the body's own).
-- **Where it is true and where not.** True: the geometry (a round world, the horizon's dip and the
-  shadow of the world in the air at dusk), single scattering, extinction, the ozone layer's
-  absorption, the sun's size and colour, the order of colours at sunset (red, orange, pale, blue-grey;
-  no green band). Approximate: later bounces (one isotropic term); the air between the camera and a
-  point (differences of the closed form: 4 to 15 % under the true column over 1.5 to 200 km at most
-  angles, up to 55 % over it on a short, exactly level path); no refraction (the sun is not flattened and sets when geometry says). A look:
-  the film exposure, the Mars-like forward throw, the invented airs, the plain ground. Weak: the Earth's shadow band
-  opposite the set sun is there but faint (checked again in Step 403, §123.17); the horizon seen from 10 km shows a pinkish line (long
-  red paths over a dark ground); from -13 to -16 degrees the last of the arch is a thin red line on
-  the horizon; the sunset disc is orange-gold rather than deep red (clear air).
-- **Twilight to night (Step 381.1).** At Step 381 the sky was black by -10 degrees and the arch a
-  detached band. The cause was the table of second-hand light: its sum took 8 x 8 directions evenly
-  over the sphere, the nearest 7 degrees from the level, and so never saw the twilight arch, which is
-  the only light a shadowed air gets (it lies within a few degrees of the horizon). With the
-  directions crowded towards the level the zenith's light now falls from sunset by 5 x at -3 degrees,
-  70 x at -6, 2,000 x at -9, 30,000 x at -12, 10^7 x at -18 (measured skies, from memory: about 150 x at -6,
-  10^5 x at -12): no cliff, no step over 30 x in two degrees (tested). The ozone layer's longest
-  slant path went from 16 to 41 crossings' worth, which makes the dusk blue (zenith blue over red
-  3.0 at -6, 3.4 at -9, 2.3 at -12; it was 1.6). Physical: both of these. A look: the film
-  exposure's lift to 16 stops, the dusk curve, the closing for a bright glow, the disc's film
-  brightness and its bloom, the Mars-like lobes. A strip of the sun at +4, 0, -3, -6, -9, -12,
-  -15, -18 degrees (`stills/11_twilight_strip.png`) and a 3 s clip from +4 to -18 through
-  `vidgen motion check`: no findings. The noon, 10 km and aerial perspective stills changed by at
-  most 3 display codes; the 100 km still only in the limb's rows (the longer ozone path: a touch
-  bluer). A frame costs 6 % more (0.228 → 0.242 s at 1280x720 in the same session, which ran slower
-  than Step 381's 0.185 s), making the air 0.43 s (0.36 s).
-- **Parts** (`data/web/parts/space-air.js`, a new kind `air` in `vidgen/parts` and
-  `vidgen.web.parts.KINDS`, after `light`): `air-earth-noon`, `air-earth-golden-hour`,
-  `air-earth-sunset`, `air-earth-twilight`, `air-mars-day`, `air-mars-sunset`, `air-thin`,
-  `air-thick`, `air-from-30-km`, `air-haze`.
-- **Exports.** `air`, `Air`, `airOf`, `AIR_GLSL`, `PRESETS`, `RADII`, `column`, `crossings`,
-  `opticalDepth`, `transmittance`, `phaseRayleigh`, `phaseHaze`, `psiTable`, `skyLight`, `sunlightAt`,
-  `skyAmbient`, `ambientTable`, `filmExposure`, `duskCurve`, `filmStars`, `sunDirection`, constants `TOP`,
-  `SUN_SIZE`, `BURN`, `SKY_STOPS`, `FILM_STOPS`, `FILM_CLOSE`, `ARCH_WHITE`, `DUSK_CURVE`, `DUSK_KNEE`, `LIMB`, `EXPOSURES`, `QUALITIES`,
-  `VIEW_TABLES`, `PSI_TABLE`, `VERSION`. The functions without a renderer are pure and run in Node:
-  they are the tests' reference and what the lights and the exposure are computed from.
-- **Cache keys.** No shipped module's bytes changed except `parts.js` (the kind; no film page
-  imports it): every existing scene keeps its key. The cache of baked maps keys on every module's
-  bytes (§123.2), so existing baked maps are baked once more after this step.
-- **Tests** (`tests/test_web_space_air.py`): the module and its imports; the parts and their kind;
-  in Node: the airs equal the bodies' numbers, a body's air handed over, errors with a did-you-mean;
-  the air along a ray (one column overhead, 33 to 40 at the horizon, 1 / e a scale height up, no
-  step at the level), the layer's crossings, the phase functions keep the light; a blue zenith under
-  a paler, brighter horizon, a red sunset with no green over red, the dusk above still blue, a
-  butterscotch Mars-like day and a blue glow round its setting sun, thin and thick air, black above
-  the air, twilight's ladder and arch, no more light on the ground than came in, the sun reddened
-  and gone under the horizon, the same numbers twice; the film exposure's curve, its cap by the
-  arch and an evening's stops; `slow`, in Chromium: the same properties as pixels, a far black box
-  lighter and bluer than a near one, a frame twice the same, a camera two stops under, the limb from
-  150 km, the baked table against JavaScript's (within a quarter), the lights' colours, and the
-  same pixels with the table baked, from the cache and without the cache.
-- **Added by Step 382** (for `vidgen/space-sea`, §123.4; nothing drawn before changes): `sky.skyAt(height)`
-  → `{texture, map}`, a second sky table as seen from another height over the same place under the
-  last update's sun (drawn again only when the height or the sun changes; one other height at a
-  time); in `AIR_GLSL` `airPlace(map, mu, cosv)` and `airRead(table, uv, cosv)` read any such table
-  (`airWhere` and `airFromTable` are those for the camera's own); `DISPLAY_GLSL` (`display(linear)`:
-  the dome's tone curve and encoding, `dither(pixel)`) for a shader that draws itself to the canvas
-  beside the dome; `sky.under(covered)`: something of the scene hides all that is under the horizon,
-  so the dome draws neither its plain ground nor anything else there; `sky.state.up` and
-  `sky.state.center`.
+- **One source of numbers.** The air is `vidgen/space-bodies`' `AIRS` (§122.7: per-colour zenith
+  depths `rayleigh`, `haze`, `absorb`; scale height `height` as a share of the radius; shell top at
+  8 scale heights (`TOP`); `forward`; night `glow`) and its closed-form air along a ray (Chapman
+  after Schueler). `airOf(what, extra)` takes a `PRESETS` name, a `space-bodies` world (radius from
+  `RADII`), an `AIRS` air, a `planet()` body, or `{world | air, radius, forward, ozone,
+  ozoneHeight, ground}`. Inside only: an absorbing layer (`ozone` per-colour depth at
+  `ozoneHeight` m, at most 41 crossings' worth; Earth-like 0.030 / 0.028 / 0.004 at 25 km) and a
+  two-lobe haze phase (`forward`, plus `aureole` / `aureoleForward`).
+- **Presets.** `earth`, `mars` (a dusty season: `air: {like: "mars", density: 3, absorb: [0, 0.013,
+  0.031]}`; the plain world's air is `air(renderer, {world: "mars"})`), `thin` (radius 2,400 km:
+  dark day sky with stars), `thick` (four times Earth-like, radius 7,400 km). Custom:
+  `{air: {rayleigh, haze, absorb, height, forward}, radius, forward, ground}` or `{like, density}`.
+- **Sums.** Unit of light: a white matt ground square to the sun (§122.7). Single scattering
+  (Rayleigh, Henyey-Greenstein) slab by slab, plus multiple scattering as one isotropic term (after
+  Hillaire 2020) from a table over height (32 rows) x sun cosine (64, -0.4 to 1), baked via
+  `vidgen/baked` (`space-air/psi`; inputs: `VERSION`, table shape, every air number, ground colour).
+  Its directions crowd towards the level so twilight is lit.
+- **Sky table.** `update` redraws a small table only when height or sun change (`QUALITIES`:
+  `standard` 128 x 192, 32 steps; `fast` 96 x 96, 16; `fine` 192 x 320, 48): bearing from the sun
+  over half the circle, angle from the horizon by its square root with rows above and below kept
+  apart; single scattering without phase (applied per pixel) and multiple scattering side by side.
+- **Dome** (`sky.object`): follows any camera (`frustumCulled = false`, `renderOrder` -900: after a
+  `space-sky` sky, before the scene), premultiplied over what is behind. Under the horizon a plain
+  matt ground (`ground` colour; `false` for none). Sun disc (`disc`; `sunSize` degrees, default the
+  Sun's 0.53, `SUN_SIZE`) with per-colour limb darkening; brightness held at `BURN` 32 whites in
+  `camera` / `auto`, 1.6 to 32 in `film`; a soft lens bloom. Drawn straight to the canvas it
+  applies ACES and sRGB itself and dithers by two display codes (one code bands after encoding).
+- **Aerial perspective.** `sky.haze(material)` patches a three.js material (once; a list is fine):
+  colour x transmittance + in-scattered light, exact at both ray ends, so far things end in the
+  dome's colour and a ground plane meets its horizon seamlessly. A `ShaderMaterial` includes
+  `AIR_GLSL`, takes `sky.uniforms`, calls `airThrough(colour, toPoint)` (or `airLight(mu, cosv,
+  dist, through, hit)`). Shadows in the haze: §123.17.
+- **Lights.** `sky.light.sun` (`DirectionalLight`: sun after the air at camera height, scaled as
+  `vidgen/space-light`'s `light.directional`) and `sky.light.sky` (`HemisphereLight`); `scene:
+  scene` adds them. `sky.state`: `height`, `elevation`, `ev`, `gain`, `stars`, `sunlight`,
+  `ambient`, `inside`, `up`, `center`.
+- **Exposure** (`EXPOSURES`, as §122.8). `"film"` (default): unchanged by day; as the zenith
+  darkens it opens by `filmExposure` stops (at most `FILM_STOPS` 16, none above the air) with the
+  dusk curve (`duskCurve`: a shoulder on air light; `DUSK_CURVE`, `DUSK_KNEE`), capped so the low
+  sky under the sun stays under `ARCH_WHITE`, closing by up to `FILM_CLOSE` 3 stops for a bright
+  hazy glow; stars appear with the lift (`filmStars`). `"camera"`: `ev` stops over a sunlit
+  ground's. `"auto"`: metered on nine rays (a pure function of the frame's inputs).
+- **Fidelity.** True: round-world geometry, single scattering, extinction, ozone, sun size and
+  colour, sunset colour order. Approximate: later bounces, camera-to-point air; no refraction. The
+  dome's limb is brighter than `planet()`'s (fewer slabs, no ozone there): a descent cross-fades
+  above the air, or draws the body with `air: false` under this dome (`ground: false, over: true`).
+- **For other modules.** `sky.skyAt(height)` → `{texture, map}` (a second sky table from another
+  height, same place and sun; one at a time); `AIR_GLSL` `airPlace(map, mu, cosv)`,
+  `airRead(table, uv, cosv)` (`airWhere`, `airFromTable` for the camera's own); `DISPLAY_GLSL`
+  (`display(linear)`, `dither(pixel)`); `sky.under(covered)`: the scene covers everything below
+  the horizon, so the dome draws nothing there.
+- **Parts** (`data/web/parts/space-air.js`, kind `air` after `light` in `vidgen/parts` and
+  `vidgen.web.parts.KINDS`): `air-earth-noon`, `air-earth-golden-hour`, `air-earth-sunset`,
+  `air-earth-twilight`, `air-mars-day`, `air-mars-sunset`, `air-thin`, `air-thick`,
+  `air-from-30-km`, `air-haze`.
+- **Exports.** `air`, `Air`, `airOf`, `AIR_GLSL`, `DISPLAY_GLSL`, `PRESETS`, `RADII`, `column`,
+  `crossings`, `opticalDepth`, `transmittance`, `phaseRayleigh`, `phaseHaze`, `psiTable`,
+  `skyLight`, `sunlightAt`, `skyAmbient`, `ambientTable`, `filmExposure`, `duskCurve`, `filmStars`,
+  `sunDirection`, constants `TOP`, `SUN_SIZE`, `BURN`, `SKY_STOPS`, `FILM_STOPS`, `FILM_CLOSE`,
+  `ARCH_WHITE`, `DUSK_CURVE`, `DUSK_KNEE`, `LIMB`, `EXPOSURES`, `QUALITIES`, `VIEW_TABLES`,
+  `PSI_TABLE`, `VERSION`. Renderer-free functions are pure and run in Node. Tests:
+  `tests/test_web_space_air.py`.
 
 ### 123.4 Water to the horizon: `vidgen/space-sea` (Step 382)
 
 `const water = sea(renderer, sky, {state: "breeze", seed: 3}); scene.add(water.object);
-water.update(t, {camera})` after the air's own `update`. The module
-`data/web/modules/space-sea.js` (import name `vidgen/space-sea`, in `VIDGEN_MODULES`) imports
-`three`, `baked` of `vidgen/baked` and `AIR_GLSL`, `DISPLAY_GLSL`, `PSI_TABLE`, `SUN_SIZE`, `BURN` of
-`vidgen/space-air`. The sea lies under an air of §123.3: the air's radius is sea level, its sun,
-its light, its exposure and its table of the sky are the sea's. Scene units are the air's (metres
-by default), +y up at the anchor.
+water.update(t, {camera})` after the air's `update`. `data/web/modules/space-sea.js`
+(`vidgen/space-sea`, in `VIDGEN_MODULES`; imports `three`, `baked`, `AIR_GLSL`, `DISPLAY_GLSL`,
+`PSI_TABLE`, `SUN_SIZE`, `BURN` of `vidgen/space-air`, `latticeNoise` / `NOISE_GLSL` of
+`vidgen/space-clouds`). Sea level is the air's radius; sun, light, exposure and sky table are the
+air's. Units the air's (metres), +y up at the anchor.
 
-- **The surface is the world's sphere.** No mesh in the world: a grid of the picture's own cells
-  (8 px at `standard`) is laid on the sphere along each cell's line of sight every frame, corners
-  over the horizon are put on the horizon, and the pixel works out its own place on the sphere. So
-  there is no edge, no tile and nothing to pop, the horizon is `acos(R / (R + h))` under the level
-  (0.227 degrees and 25.2 km away from 50 m, 1.44 degrees from 2 km, 4.53 from 20 km, 10.09 from
-  100 km on the Earth-like world) and curves in the frame when the height is large. The dome
-  stops drawing under the horizon (`sky.under(true)`); the horizon's pixel mixes sea and sky by
-  how far the pixel's middle is under it; far water is seen through the air (`airThrough`), so it
-  ends in the dome's own colour at the horizon: no seam. `water.horizon` = `{distance, dip,
-  height}` after every update. Away from the anchor the scene's y is not the height over the
-  water (the sphere drops d^2 / 2R: 3.45 m at 6.6 km): `water.pointAt(x, z)` is the surface in
-  scene units, `water.horizon.height` the camera's height.
-- **Waves** (`waveList(state, {seed, count, lifted})`, pure): a list of sine waves, the longest
-  first. The wind sea: wavelengths from twice the dominant one down to its 180th (0.25 m at
-  least), spaced evenly in the logarithm and jittered by the seed, amplitudes after Pierson and
-  Moskowitz' spectrum scaled so that four standard deviations are the stated significant height,
-  directions spread round the wind's (16 degrees for the long, 50 for the short). A swell beside
-  it: 5 to 8 waves within 17 % of its length and 13 degrees of its direction. Every wave moves at
-  the deep-water speed (omega^2 = g k) on vidgen's clock. Crests are sharpened by a second
-  harmonic where waves of about one length are steep together (`chop`). Three things keep a sum
-  of sines from looking like one: **bends** (three long slow fields; since Step 393 each wave's
-  phase wanders by its own share of each, `WOBBLE` 1.4 rad at most, less for a wave longer than an
-  eighth of the field (`WOBBLE_SPAN`): crests run roughly parallel yet vary along their length and
-  the waves drift in and out of step, short-crested and in groups; until Step 393 one shared warp
-  moved the whole pattern, which drew rings and whorls from 100 m to a few km up), **gusts**
-  (since Step 396 six octaves of endless gradient noise, 0.5 to 9 km, each turned its own way
-  and drifting with half the wind, `GUSTS`, weight `GUST_WEIGHT` 0.556 each: the spread of the six
-  sines they replaced, whose crossed lattice showed as a fine grid on the glitter from 20 to 60 km
-  up; their sum raises or lowers the waves shorter than a third of the dominant one in patches),
-  **the short waves' warp** (Step 396, `FINE_WARP`: close up the finest waves of a steep sea read
-  as a woven texture, a lattice of a few straight-crested trains; now each wave shorter than a
-  third of the dominant one has its phase shifted by k . D(p), D the shift of three fields of
-  endless noise whose cells are 6 times an eighth of the dominant length, a 4.5th of that and a
-  20th of it, D up to about 0.25 of a cell, drifting along the wind at their waves' speed; a wave
-  takes from the one or two fields nearest its length, as much as the gusts ruffle it, so the long
-  waves and the swell keep their crests; its slope takes the shift's derivatives, so the normals
-  follow the bent crests) and more swell waves than a narrow band needs. Measured against a baked spectrum only by reasoning, not by trial: a baked tile repeats
-  (the task forbids visible tiling) and needs its own filter chain; the sum costs 32 sines a near
-  pixel and nothing a far one, and its lookup on the JavaScript side is the same sum exactly.
-- **Sea states** (`STATES`, `seaState(what, extra)`): `calm` (1.5 m/s, a 0.25 m swell), `breeze`
-  (6 m/s, the default; 0.77 m, 30 m long, a 0.4 m swell), `swell` (4 m/s, a 2.2 m swell 190 m
-  long), `rough` (13 m/s, 3.2 m, 80 m), `storm` (22 m/s, 8 m, 170 m). Stated by numbers: `wind`
-  (m/s), `direction` (degrees, as `sunDirection`'s azimuth: where the waves run to), `height` and
-  `length` (default from the wind for a fully developed sea: 0.21 U^2 / g and 8.17 U^2 / g),
+- **The surface is the world's sphere**, no mesh: a grid of picture cells (8 px at `standard`) is
+  laid on the sphere along each line of sight every frame and each pixel solves its own place: no
+  edge, tile or pop; horizon at `acos(R / (R + h))` below the level, mixed with the sky by coverage
+  and seen through the air (`airThrough`), so no seam. The dome stops under the horizon
+  (`sky.under(true)`). `water.horizon` = `{distance, dip, height}`. Scene y away from the anchor
+  is not height over water (the sphere drops d^2 / 2R): use `water.pointAt(x, z)`.
+- **Waves** (`waveList(state, {seed, count, lifted})`, pure): sine waves, longest first: a wind
+  sea (twice the dominant length down to its 180th, at least 0.25 m, log-spaced and seed-jittered,
+  Pierson-Moskowitz amplitudes with four standard deviations = the significant height, directions
+  spread round the wind) and a swell (5 to 8 waves); deep-water speeds (omega^2 = g k) on vidgen's
+  clock; second-harmonic crest sharpening (`chop`). Against a sum-of-sines look: **bends** (three
+  slow fields; each wave's phase wanders by its own share, at most `WOBBLE` 1.4 rad, less for
+  waves longer than `WOBBLE_SPAN`), **gusts** (`GUSTS`: six octaves of endless gradient noise, 0.5
+  to 9 km, drifting at half the wind, weight `GUST_WEIGHT` 0.556 each, scaling waves shorter than a
+  third of the dominant), **short-wave warp** (`FINE_WARP`: phases of those waves shifted by k .
+  D(p) from three endless-noise fields, slopes following). A sum, not a baked spectrum, because a
+  tile repeats.
+- **Sea states** (`STATES`, `seaState(what, extra)`): `calm`, `breeze` (default), `swell`,
+  `rough`, `storm`. Keys: `wind` (m/s), `direction` (degrees, as `sunDirection`'s azimuth: where
+  waves run to), `height` and `length` (default fully developed: 0.21 U^2 / g and 8.17 U^2 / g),
   `swell` `{height, length, direction}` or `null`, `foam`, `chop`, `gusts`, `gravity`. A height
-  over a tenth of the length is refused. `rough` and `storm` are young seas, steeper than their
-  winds would raise given days, and the storm's foam is held back (`foam: 0.6`): looks, stated here.
-- **No shimmer.** A pixel's footprint on the water (across the line of sight, and along it: long
-  where the look is level) fades each wave by a Gaussian-like factor of wavenumber times footprint
-  (`filter`, 0.8 px, sets how early); the loop stops at the first wave finer than the footprint.
-  What is faded is kept as roughness: the lost slopes' covariance widens the glitter's
-  distribution and turns the mirror towards the eye. The slopes finer than the list are a
-  constant covariance: Cox and Munk's mean square slope for the wind (0.003 + 0.00512 U) less the
-  list's own. A 1.5 s clip at 1280x720, 50 m up at 60 m/s towards a glitter path: no findings in
-  `vidgen motion check`; frame-to-frame flicker of the 60 rows under the horizon 1.0 display code,
-  the same as the sky's own grain (0.9).
-- **Light** (linear, per pixel): `(1 - F) body + glitter + mirrored sky`, then foam, the film
-  look's dusk curve, the air between. **Mirror**: Fresnel's equations for the water's index
-  (1.34); the sky is the air's own table as seen from sea level (`sky.skyAt(0)`, read with
-  `airRead`), not a gradient of its own, so a sunset, a dusk and another world's sky are mirrored
-  as they are. A rough far sea is stood for by two faces, one hardly turned towards the eye (it
-  mirrors much, from low in the sky: the bright horizon, the twilight arch) and one well turned
-  (little, from higher up): at dusk the far sea carries the arch's glow and is not black; `fast`
-  uses one face between them. **Glitter**: the share of faces, resolved and not, that mirror the
-  sun to the eye (a Gaussian of the slope the half vector asks for, less the resolved slope, with
-  the kept covariance; Smith's shadowing), times the sun after the air, so the path's width
-  follows the sea state and the sun's height, and it turns gold and orange at sunset; as for the
-  sun's disc, the redder the air leaves the sun the less its mirror image may burn out
-  (2 to `BURN` whites: a look). The face's slope is taken in the water's own level there (the
-  world's roundness tilts far water against the sea's plane: 4.5 degrees at the horizon from
-  20 km). The model's glitter is brightest at the horizon under a sun up to about 35 degrees
-  (grazing faces mirror most) and the air of §123.3 lets much of it through from 20 km, so
-  the path ended at the horizon at full strength; since Step 382.1 a low haze over the water,
-  which the air's model does not have, dims the glitter along its way under the haze's top
-  (`LOW_HAZE`: optical depth 0.03 a km under 2,500 m): from high up the path is a tongue that
-  fades before the horizon; from under 2.5 km little changes (a look: only the glitter takes
-  it, the air's picture is not changed). **Dusk** (Step 382.1, a look, film exposure only: by
-  the air's dusk curve, once the sun is under the horizon): the water mirrors at least
-  `DUSK_MIRROR` (0.4) of the sky and from 0.4 of the mirror's height in the sky, so near water
-  carries the arch's and the low sky's colours and the waves stay readable to a sun about 9
-  degrees down (a true mirror shows 3 % of the dark zenith there: 2 to 5 display codes).
-  **Relief** (Step 382.1, a look, for seas steeper than `RELIEF`: height over length from 0.03,
-  full at 0.045: `rough`, `storm`): troughs are darker and crests lighter (up to 44 % at two
-  standard deviations of the height) and faces turned from the sun are shaded 2.5 times as
-  much as the light alone would. **Body**: the water's colour as a matt surface under the sun on
-  the resolved normal and the sky's light, more of it through a face turned to the eye (`glow`).
-- **Waters** (`WATERS`, `waterOf`): `ocean`, `green`, `tropical`, `grey` (looks of the Earth's
-  seas) and `methane` (an invented dark sea for an invented world: the index 1.27 is liquid
-  methane's, the colour is a guess: a look); or `{color, shallow, index, foam, glow}`.
-- **Foam** only when it blows: the cover is Monahan and O'Muircheartaigh's 3.84e-6 U^3.41 times
-  `foam`, at most `FOAM_MOST` (0.12): 0.00002 calm, 0.002 in a breeze (a rare speck), 0.02 rough,
-  0.09 in the storm state. Where: a measure of crests meeting (each wave's steepness times its
-  cosine, for the waves longer than a 25th of the dominant length, fading out to a 60th; unit variance) over the threshold a normal
-  value exceeds with the cover's probability, since Step 382.1 together with the steepness of
-  the front face along the wind: white along the steep front of a high crest, a broken line
-  across the wind with soft edges; the crest measure `FOAM_LAG` (2.2 s) ago draws thin streaks
-  along the wind behind it (at most 0.3 opaque). Both are varied by soft patches of the baked
-  pattern (`space-sea/lace`, 256 px, through `vidgen/baked`; its green channel only: no cell
-  walls are drawn any more). Since Step 396 the pattern never repeats: both readings go through
-  `untiledGrad` (NOISE_GLSL of `vidgen/space-clouds`: cells one repeat wide on an endless lattice, each
-  at its own offset and turn, blended within `UNTILE.blend` of an edge about the pattern's mean,
-  read at the level of detail of the untouched place), at the place the short waves' warp moves
-  it to (so the streaks bend with the crests and do not stand in rows), and only where a crest is
-  near breaking (elsewhere neither reading can show). The storm state's foam factor is 0.6. Beyond where the waves are resolved the
-  foam is its mean cover. The drawn cover is not measured against the stated one.
-- **Depth** (optional, for a later coast): `depth: {glsl, uniforms}` with `float seaDepth(vec2
-  p)` (metres of water at p, metres along the sea's +x and +z): the water's colour goes to
-  `shallow` over `shoal` metres, and where the depth is under 0.25 m the sea is not drawn (the
-  scene's ground shows; the dome draws nothing there).
-- **Lookup** (for a hull, a low camera, a plane's shadow): `water.heightAt(x, z, t)` (metres
-  over sea level at the scene's x and z), `water.normalAt(x, z, t)`, `water.pointAt(x, z, t)`
-  (the surface point in scene units, on the sphere); pure: `heightAt(list, x, z, t)`,
-  `surfaceAt` (height and both slopes), `normalAt`, `gustAt`. It is the sum the picture draws,
-  bends and gusts included; every wave's phase at the camera is worked out in double precision
-  each frame, so the picture keeps its fine waves far from the origin (tested 6.6 km out). The
-  list depends on `quality` and `waves`: a `fast` preview is another, smoother sea than the
-  `standard` film. `LOWEST` (0.5 m): the lowest camera the sea is drawn for.
-- **Options** of `sea(renderer, sky, options)`: `state` and any of a state's keys beside it,
-  `seed`, `water`, `quality` (`fast`: 16 waves, a 16 px grid, one mirror face; `standard`: 32, 8
-  px, two; `fine`: 48, 4 px, two), `waves`, `anchor` (the unit vector from the world's middle to
-  where the waves' plane touches the sphere; default +y), `filter`, `depth`, `shoal`. Unknown
-  names are refused with the closest one.
-- **Cost** (2 cores, SwiftShader, to the canvas, with the dome; the dome alone 0.15 s at
-  1280x720, 0.011 s at 320x180):
-
-  | 1280x720 | 50 m | 20 km |
-  |---|---|---|
-  | `standard`, calm / rough | 1.08 / 1.13 s | 0.62 / 0.65 s |
-  | `fast`, calm / rough | 0.80 / 0.78 s | 0.54 s |
-  | `fine`, rough | 1.66 s | 0.83 s |
-
-  At 320x180: `standard` 0.069 (calm) / 0.078 (rough) s from 50 m, 0.049 s from 20 km; `fast`
-  0.056 s; `fine` 0.106 s. Making the sea 0.15 to 0.35 s. Where the time goes at 20 km (0.54 s
-  then): gusts and bends 0.10 s, the air between 0.05 s, the mirrored sky and the sun 0.02 s a
-  face; near the camera the 32 waves are the rest. After Step 382.1: 1.13 s for `standard`,
-  rough, 50 m (1.09 s before it in the same session).
-- **Honest notes.** The waves are a sum of sines with stated statistics, not a simulation: no
-  breaking shapes, no spray, no wakes, no shore waves, no shadows of things on the water and no
-  mirror image of things (only the sky and the sun). The waves lie on a plane touching the sphere
-  at the anchor: beyond some hundreds of kilometres from it their pattern is stretched (it is
-  filtered away long before from any height it could be seen at). A wave's crest turns by at most
-  3 x `WOBBLE` / `WOBBLE_SPAN` radians where its phase wanders (its speed is the deep-water one). No refraction at the horizon. No moon or
-  planet light on the water. The mirror does not see the sun's disc itself, only the glitter.
-- **Parts** (`data/web/parts/space-sea.js`, a new kind `sea` after `air` in `vidgen/parts` and
-  `vidgen.web.parts.KINDS`): `sea-calm`, `sea-breeze`, `sea-rough`, `sea-storm`, `sea-sunset`,
-  `sea-dusk`, `sea-from-20-km`, `sea-methane` (8 tiles in 9 s).
-- **Exports.** `sea`, `Sea`, `seaState`, `waveList`, `waterOf`, `surfaceAt`, `heightAt`, `normalAt`,
-  `gustAt`, `horizonDistance`, `horizonDip`, `fresnel`, `slopeVariance`, `whitecaps`, constants
-  `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_WEIGHT` and `FINE_WARP` (Step 396; `GUST_SHIFT` until then), `BEND`, `FOAM_MOST`, `FOAM_LAG`,
-  `LOWEST`, `LOW_HAZE`, `RELIEF`, `DUSK_MIRROR`, `VERSION`.
-- **Cache keys.** `space-air.js` changed (the additions above; the dome's pictures are the same),
-  so a page importing it draws once more; no page of Phase AN imports it. `parts.js` gained the
-  kind. Baked maps are baked once more (their key holds every module's bytes).
-- **Tests** (`tests/test_web_space_sea.py`): the module and its imports; the parts and their
-  kind; in Node: the horizon's dip and distance against the formula for four heights and a
-  smaller world, Fresnel's limits and rise, Cox and Munk's slopes, the whitecaps' cover by wind,
-  the states and waters with errors and a did-you-mean; the list twice the same and another for
-  another seed, deep-water speeds, the stated height in the heights' spread, the slopes against
-  central differences of the height, the normal, one wave alone travelling at its speed;
-  `slow`, in Chromium: the glitter towards the sun, blue water, the far sea at dusk carrying the
-  arch, foam in a storm and none in a breeze, the horizon's row from 50 m, 2 km, 20 km and 100 km
-  within a row of the formula at 720 rows, the picture's own heights against the lookup at 49
-  places (within 8 cm), the sphere's drop 6.6 km out, a frame twice the same, and the same pixels
-  with the foam's pattern baked, from the cache and without the cache.
-- **The sea does not weave (Step 396).** Close up a steep sea's finest waves read as a woven
-  texture, the foam's pattern was a repeating tile, and from 20 to 60 km up the glitter showed a
-  fine grid (the gusts' crossed sines). Now: the short waves' warp and the endless gusts (above),
-  the foam read untiled (above). The endless noise is `vidgen/space-clouds`' (`latticeNoise`, with
-  derivatives, and `NOISE_GLSL`, written once into a shader however often included; the sea
-  imports it): cells counted modulo 65536, so the shader gets each field's whole cells at the
-  camera exactly and the JavaScript lookup is the same sum. Where it is worked out: the gusts and
-  the coarser two warp fields at the grid's corners (`vGust`, `vWarp0/1`: their cells span many of
-  the grid's; the gusts each faded as half a cell outgrows them, a ring of wave vectors through a
-  long footprint keeping some strength across the line of sight; the fields faded where the grid's
-  cell passes a quarter to a half of theirs), the finest field per pixel (faded where every wave
-  that takes from it is finer than the pixel). Measured (CPU twin, `tests` and
-  /home/claude/work/scratch/ao396/node/acf.mjs): the slope along the wind of the waves shorter
-  than an eighth of the dominant length came back to 0.47 (rough) and 0.43 (storm) of itself a few
-  wavelengths on (a lattice); now 0.08 and 0.06; the gusts came back to 0.30 along a diagonal, now
-  never. Cost (1280x720, the page's own timing, SwiftShader; before three runs of Step 395's module):
-  50 m over a rough sea 1.23–1.34 → 1.55 s a frame, 20 m over a storm 1.26–1.50 → 1.53 s, 50 m
-  over a calm sea 1.23–1.30 → 1.39 s, 20 km 0.59–0.61 → 0.69 s. Tried and dropped: a constant
-  array or arithmetic for the sixteen directions (no difference), the foam's cells without a
-  blend (cheaper by about 0.1 s close up, hard seams through the streaks), the gusts per pixel
-  (about 0.3 s more), skipping the warp's turn of the normals (about 0.08 s, the normals no longer
-  follow the bent crests). The pictures change for every page with a sea (intended): close up the
-  finest crests bend (a combed look rather than a weave), the foam's streaks curve, the glitter's
-  patches are other ones and soft (from 2 km the feathered bands of the old sines are gone; at sunset
-  the path near the camera is wider or narrower where the patch is another), from 20 to 60 km no grid;
-  calm seas look the same. `VERSION` 2 (the foam's baked key).
+  over a tenth of the length is refused.
+- **No shimmer.** Each wave fades by wavenumber x the pixel's footprint on the water (`filter`, 0.8
+  px); the loop stops at the first wave finer than it. Faded slopes become roughness (a covariance
+  widening the glitter); slopes finer than the list: Cox-Munk (0.003 + 0.00512 U) less the list's.
+- **Light**: `(1 - F) body + glitter + mirrored sky`, then foam, dusk curve, air. Fresnel at index
+  1.34; the mirrored sky is the air's own table from sea level (`sky.skyAt(0)`); a rough far sea
+  uses two facet orientations (`fast` one). Glitter: Gaussian slope distribution with the kept
+  covariance and Smith shadowing x the sun after the air (redder sun, lower burn: 2 to `BURN`);
+  slopes in the water's local level. Looks: `LOW_HAZE` (glitter dimmed by a low haze), `DUSK_MIRROR`
+  (0.4: least mirrored share at dusk, film exposure), `RELIEF` (darker troughs and lit crests for
+  steep seas). Body: matt water colour, more through faces turned to the eye (`glow`).
+- **Waters** (`WATERS`, `waterOf`): `ocean`, `green`, `tropical`, `grey`, `methane` (index 1.27);
+  or `{color, shallow, index, foam, glow}`.
+- **Foam** only when it blows: cover 3.84e-6 U^3.41 (Monahan and O'Muircheartaigh) x `foam`, at
+  most `FOAM_MOST` 0.12, placed where crests meet and fronts are steep; streaks from the crest
+  measure `FOAM_LAG` 2.2 s ago; varied by the baked pattern `space-sea/lace` (256 px) read through
+  `untiledGrad` (never repeats). Beyond resolved waves: mean cover.
+- **Depth** (optional): `depth: {glsl, uniforms}` defining `float seaDepth(vec2 p)` (metres of
+  water along the sea's +x/+z): colour goes to `shallow` over `shoal` m; under 0.25 m the sea is not
+  drawn. **Shade** (optional): `shade: {glsl, uniforms}` defining `float seaShade(vec2 p)` (share of
+  sunlight reaching the water; default 1), used by §123.5.
+- **Lookup**: `water.heightAt(x, z, t)`, `normalAt`, `pointAt` (on the sphere); pure
+  `heightAt(list, x, z, t)`, `surfaceAt`, `normalAt`, `gustAt`: exactly the sum the picture draws
+  (phases at the camera in double precision each frame). The list depends on `quality` and `waves`
+  (a `fast` preview is a smoother sea). `LOWEST` 0.5 m: lowest supported camera.
+- **Options** of `sea(renderer, sky, options)`: `state` and any state key, `seed`, `water`,
+  `quality` (`fast`: 16 waves, 16 px grid, one facet; `standard`: 32, 8 px, two; `fine`: 48, 4 px,
+  two), `waves`, `anchor` (unit vector from the world's middle to the tangent point; default +y),
+  `filter`, `depth`, `shoal`, `shade`. Unknown names refused with the closest one.
+- **Limits.** No breaking shapes, spray, wakes, shore waves, shadows or reflections of objects
+  (only sky and glitter, not the sun's disc); waves on a plane tangent at the anchor; no refraction;
+  no moon light.
+- **Parts** (`data/web/parts/space-sea.js`, kind `sea` after `air`): `sea-calm`, `sea-breeze`,
+  `sea-rough`, `sea-storm`, `sea-sunset`, `sea-dusk`, `sea-from-20-km`, `sea-methane`.
+- **Exports.** `sea`, `Sea`, `seaState`, `waveList`, `waterOf`, `surfaceAt`, `heightAt`,
+  `normalAt`, `gustAt`, `horizonDistance`, `horizonDip`, `fresnel`, `slopeVariance`, `whitecaps`,
+  constants `STATES`, `WATERS`, `QUALITIES`, `DETAIL`, `GUSTS`, `GUST_WEIGHT`, `FINE_WARP`, `BEND`,
+  `FOAM_MOST`, `FOAM_LAG`, `LOWEST`, `LOW_HAZE`, `RELIEF`, `DUSK_MIRROR`, `VERSION` (2; in the foam's
+  bake key). Tests: `tests/test_web_space_sea.py`.
 
 ### 123.5 Cloud decks, towers, lightning and a giant's decks: `vidgen/space-clouds` (Step 383)
 
 `const weather = clouds(renderer, sky, {sky: "fair", seed: 4}); scene.add(weather.object);
-weather.update(t, {camera})` after the air's own `update`. The module
-`data/web/modules/space-clouds.js` (import name `vidgen/space-clouds`, in `VIDGEN_MODULES`)
-imports `three`, `AIR_GLSL`, `DISPLAY_GLSL`, `RADII`, `sunlightAt`, `skyAmbient` of
-`vidgen/space-air` and `resolveOptions`, `bandRamp`, `linearColor` of `vidgen/space-bodies`. The
-clouds stand in an air of §123.3: its radius is height 0, its sun, light and exposure are theirs.
-Scene units are the air's (metres by default), +y up at the anchor (as §123.4's sea: the same
-frame, so the two agree on the horizon and on places).
+weather.update(t, {camera})` after the air's `update`. `data/web/modules/space-clouds.js`
+(`vidgen/space-clouds`, in `VIDGEN_MODULES`; imports `three`, `AIR_GLSL`, `DISPLAY_GLSL`, `RADII`,
+`sunlightAt`, `skyAmbient` of `vidgen/space-air` and `resolveOptions`, `bandRamp`, `linearColor` of
+`vidgen/space-bodies`), in the air's and §123.4's frame.
 
-- **Measured first** (2 cores, SwiftShader, 1280x720, the dome's 0.15 to 0.17 s included; the
-  `fair` sky from 150 m unless said): a march of 10 jittered steps a deck at half the picture's
-  size 1.6 s, at a third with 6 steps 0.68 s, at full size with 16 steps 7.8 s. Such a march
-  showed grain (jitter) or terraces (no jitter) on every cloud narrower than a step, at any
-  affordable count: a slanting ray crosses a 1.4 km deck in 4 to 10 km. Chosen instead, at about
-  the same cost: steps that are exact where they can be (below). Not built: shells with parallax
-  (the same code with one step a shell: it cannot be flown through), billboards for towers (a
-  tower costs only on the pixels its two cylinders cover, and a billboard cannot be flown round).
-- **A deck is a shell of the world's sphere** between `base` and `top` (metres). Each pixel's ray
-  is cut with every shell (`shellSpan`: the first stretch of the ray inside; closed form, the
-  sea's stable roots) and with every tower's two cylinders (trunk, anvil); the stretches are walked
-  nearest first, front to back, until 1.5 % of the light is left. So the camera may be under,
-  in, between or over the decks, and nothing changes kind when it crosses a deck's face: inside,
-  the stretch starts at the eye and the first steps are short (the stated simple fog: the same
-  cloud, read as coarsely as its steps).
-- **The cloud is a height field read from one tile of noise.** `noiseTile()`: 256 x 256, four
-  channels (soft noise in five sizes; round caps in three sizes; finer caps; a second soft noise),
-  made in JavaScript from integer hashes (the same numbers on every machine and in Node; 0.09 s a
-  page; not baked through `vidgen/baked`: its key would add nothing, and the tests and
-  `coverAt` read the same numbers). A deck reads it four times (`deckField`): the weather twice
-  (31 and 12.7 clouds' widths a tile, turned against each other, so no repeat can be seen to the
-  horizon), the clouds (4 widths a tile, stretched along the wind by `stretch`), the fine caps
-  (0.9). The pattern is `(soft (1 - puff) + caps puff) (1 - weather) + weather's share`; cloud is
-  where it stands over `level`, the value a share `cover` of 4096 places exceeds (so `cover` is
-  roughly the covered share of sky: within 0.06 in the pattern, tested). A cloud's top is
-  `floor + sqrt(rise (pattern - level) / span)` of the deck's depth (round tops: the caps are one
-  less a squared distance), its base flat but for `ragged`. Each reading has its own drift with
-  the wind (0.75 to 1.2 of it), so the field moves and slowly changes; a pure function of time.
-  Every reading uses the mip level of the larger of the pixel's footprint and the step, so far
-  cloud turns into its mean and the tile is never seen sharper than it is sampled.
-- **Steps that are exact where they can be.** `COARSE` steps a stretch (8 at `standard`) read the
-  pattern's mean; a step with no cloud near (with room for what the mean hides), or that passes
-  wholly over the highest possible top, is skipped. The others are walked in `FINE` steps (4):
-  the pattern is read at a fine step's two ends and taken as even between them, and so is the
-  height; the part of the step under the cloud's top is then a quadratic's roots (`cloudPart`),
-  so a face is found exactly and no step can straddle a cloud unseen. What a step shows is the
-  cloud a fifth into that part (what the ray meets first). A thin sheet (`floor` >= 1: cirrus)
-  takes three steps. A tower's step is a height and a stretch: its trunk (a round body whose
-  width takes the caps) and its anvil (a flat ball under the top) are cut with the step in closed
-  form.
-- **Light** (shaped to look right, not a simulation of scattering in cloud): the sun after the
-  air at each deck's own height (`sunlightAt`: a deck at 10 km is pink when one at 2 km is in the
-  world's shadow), dimmed by `exp(-tau)` where `tau` is the cloud over the place and over a place
-  0.3 depths sunward (one more reading: sunward sides bright, far sides grey), half of it thrown
-  onward by a forward lobe (g 0.76, at most 3.2: the silver lining at thin edges) and half
-  `exp(-0.22 tau)` (many bounces reach deeper); near a top the sun's share follows the top's
-  slope towards the sun (relief on a cloud sea, strong under a low sun); the sky's light from
-  above (`skyAmbient` at the top) on what is open to it, 1.3 times (a look: bluer shadows); the
-  light from below (the sky's at the base and the lit ground's); the fine caps' creases 2.2 x
-  `fray` darker; a thin sheet a third brighter (it passes the sky behind it on: a look). Decks
-  whose depth takes more than 1 optical depth cast a shadow on the decks under them
-  (`cloudShade`: the pattern where the sun's ray crosses the upper deck, read as softly as the
-  deck is deep) and, through `shade`, on §123.4's sea. Then the film look's dusk curve and the air
-  between the camera and the cloud's mean distance (`airLight`: once a stretch).
-  Densities are 0.0006 to 0.012 a metre, a tenth of real cloud's: edges stay soft at the steps
-  the picture can afford.
-- **Lightning.** `stormOf(lightning, {seed, towers, deck})`: the seed's own flashes
-  (`strikeTimes`: `rate` a minute, never two within 0.25 s) and those at stated `times` (seconds:
-  numbers, events with `time` such as `ctx.music`'s, or a track of `vidgen/music-time`'s
-  `trackArrays`, whose gains scale them), each at a seeded place inside a tower (or in the lowest
-  deck near the camera when there are none). A flash is a point of light inside the cloud for
-  `FLASH_SECONDS` (0.55): `flashLevel(age, strokes)`, one to four strokes 0.11 s apart, each
-  rising in 0.01 s and falling in 0.045 s; it adds `3 power level / (1 + (d / radius)^2)^2` of a
-  noon sun's light to the cloud round it, lifted with the film look's exposure to the power
-  `FLASH_LIFT` (0.8; a look: with all of it a flash at dusk turns every cloud white). At most
-  three at once.
-- **A giant of gas** has no ground. `giantAir(world)`: the world's own air of
-  `vidgen/space-bodies` made 8 times as deep (ice giants 8 / 3), so that height 0 has about as
-  much gas overhead as the Earth's sea level (a giant's one-bar level scatters about as much);
-  a stated choice: the limb from orbit is the thinner air, so the two views are not one air here.
-  `giantSky(world, {latitude, scale})`: three decks and towers at `GIANT`'s heights in units of
-  `scale` (the air's scale height, 112 km for the Jupiter-like world in this model): a deep deck
-  at 0.16 to 0.34 in the belts' mean colour, the main deck at 0.56 to 0.8 in the colour
-  `bandRamp` gives that latitude (the ramp the planet is painted with from outside: the same seed,
-  the same bands), changing to the neighbouring band's colour where the ramp says that band
-  begins north or south of the origin (`beyond`), a haze at 1.5, towers from 0.3 to 1.45, and
-  `floor`: the dark under the decks (0.06 of the belts' colour), drawn to the horizon of the
-  sphere, which the dome leaves out (`sky.under(true)`). The heights, the depths and the decks'
-  optical depths (10, 9, 0.3) are a look. The sphere the planet is drawn as from outside is
-  height 0 here: the decks float up to 170 km over it, 0.25 % of the radius.
-- **The picture.** The clouds are drawn into a half-float target of `QUALITIES`' share of the
-  picture (`standard` a half, `fast` a third, `fine` all) in `update`, with their light times
-  their share and the share itself, and laid over the dome and the sea by one full-screen pass
-  (`renderOrder` -800, no depth test), with the dome's tone curve and dither straight to the
-  canvas. So every thing of the scene stands in front of every cloud: a plane is not hidden in a
-  cloud (Step 387 or 390 may add depth).
-- **Options.** `sky` (`fair`, `overcast`, `layers`, `towers`, `storm`) or `decks` (names of
-  `DECKS`: `cumulus`, `stratus`, `cirrus`, or `{type, base, top, cover, size, stretch, density,
-  weather, rise, floor, soft, fray, ragged, puff, color, beyond, stripes}`; at most 4), `towers` (a number
-  or `{count, seed, spread, radius, base, top, anvil, density, color, at}`; at most 6),
-  `lightning`, `seed`, `wind`, `direction`, `quality`, `floor`, `anchor`. Unknown names fail with
-  the closest known one.
-- **The object.** `object`, `update(t, {camera})` (the camera the picture is drawn with: the
-  clouds' own picture is drawn here), `decks` (each `deckField`), `towers`, `flashes(t)`,
-  `coverAt(deck, x, z, t)`, `horizon(deck)`, `shade` (`{glsl, uniforms}` for the sea),
-  `uniforms`, `target`, `dispose()`.
-- **Changed in `vidgen/space-sea`**: a new option `shade: {glsl, uniforms}` defining
-  `float seaShade(vec2 p)`, the share of the sun's light that reaches the water p metres from the
-  camera; without it the shader multiplies by 1 (a still of a rough sea: byte-identical).
-- **Measured** (as above; clouds alone = less the dome's 0.17 s): `fair` from 150 m `fast`
-  0.80 s, `standard` 1.89 s, `fine` 8.3 s; `overcast` from 10 km 0.43 / 0.94 / 3.9 s; `towers`
-  from 4 km 1.43 s; `layers` between its decks 2.5 s (three decks and their shadows); a giant
-  1.87 s; `fair` over the sea from 3.5 km 2.75 s (the sea alone 1.12 s); at 320x180 `standard`
-  0.07 to 0.13 s, `fast` 0.05 s; making the clouds 0.1 s; 9 part tiles in 13 s.
-- **Checked.** Eleven stills (`/home/claude/work/scratch/ao383/stills/`); a 5 s clip at 640x360
-  (climbing out of a deck at 150 m/s; over a broken deck with towers at 220 m/s; under cumulus at
-  70 m/s) through `vidgen motion check`: no findings but the `web` scene's own fade-out.
-- **Honest notes.** A cloud is a height field: one top over one base, no overhangs, no cloud
-  over cloud within a deck; cumulus is soft-edged and smooth (no cauliflower detail under about
-  150 m), and blurs to its mean where steps are long (level looks through a deck far away). The
-  towers are a round trunk and a lens: they read as storm towers from afar and as mushrooms
-  close up; a tower casts no shadow and takes none. No rain, no virga, no fog on the ground, no
-  crepuscular rays, no rainbow or glory. The sea mirrors no cloud; the dome's plain ground takes
-  no shadow. The sun's light at a deck is the camera's place's (a deck 500 km away under another
-  sun is lit as here). The decks lie on a plane's coordinates touching the sphere at the anchor:
-  beyond a few thousand kilometres on a giant the pattern is stretched. A giant's rings are not
-  drawn in the sky (`vidgen/space-bodies`' rings are a mesh round a globe, not a function of a
-  direction: a later step may add the arc to the dome). Seen from orbit the same world's clouds
-  are `vidgen/space-bodies`' map: this module agrees with it in colour (`color`, a giant's band)
-  and in `cover` as a share, not in where the single clouds are (Step 391 may read the body's
-  map as the weather).
-- **Step 383.1** (a fix pass on four faults of the pictures; where this differs from the lines above, this holds):
-  - *Fine lumps.* Where a ray comes into a deck's cloud (a face), the fine caps of the tile (the
-    deck's fourth reading: green and blue, 0.55 and 0.45, stretched between 0.15 and 0.85) are read
-    as finely as the pixel shows them and the face is pushed in along the ray by
-    `3.4 fray depth (1 - lump) (0.25 + 0.75 y)` metres (up to 490 m for cumulus, 285 m for
-    stratus; less at a base than at a top); a cloud thinner than the push is a hole there. The
-    face's light is 0.8 + 0.2 lump times 0.7 + 0.6 lump. So the height field itself and its exact
-    solve are unchanged; the lumps are a displacement of the face as seen, not cloud modelled
-    inside (from another direction the same lump is pushed along another ray). Far away the
-    caps are their mean and the push is even: nothing to shimmer.
-  - *Edges.* Four neighbouring pixels of the clouds' picture walk their fine steps a quarter of
-    a step apart (a fixed pattern of four), and the pass that lays the picture over the scene
-    reads it four times half a texel apart: an edge drawn at half the picture's size is soft, not
-    stepped (checked at 1280x720 `standard` on a crop).
-  - *Towers.* A tower is a column of lumps round a middle that leans downwind (0.9 radii at the
-    top) and wanders across the wind (0.3 radii), 0.42 to 0.84 radii wide from foot to top times
-    0.6 to 1.4 by two readings of the caps, its face pushed in by the fine caps (0.22 radii); from
-    its seed it is still growing (4 in 10: a round top) or has an anvil: a flat ball 1.5 `anvil`
-    radii long downwind and 0.7 across, 0.065 of the tower's height thick, its middle 0.8 of its
-    length downwind of the top, its cloud thinning downwind and drawn out in streaks. The foot is
-    darker (0.5 at the base to 1 at 0.4 of the height). 24 steps (3 `COARSE`). Still closed forms.
-  - *A giant.* `giantSky` gives the main deck `stripes`: 64 colours of the planet's ramp from 12
-    scale heights south to 12 north of the place, the latitudes `squeeze` (40) times closer than on
-    the world (a stated look: a true band is wider than the view from inside reaches; `squeeze: 1`
-    is true and shows one colour), each with a lift of the pattern (up to 0.1: a bright band has
-    more and higher cloud, a dark one gaps); the stripes' edges wander with the puffs. The wind
-    blows east (`direction: 90`, 90 m/s) and the clouds are drawn out along it (`stretch` 4 and
-    5); the deep deck is darker (0.5 of the belts' colour), the floor 0.03; default latitude 22,
-    no towers unless asked for (`towers: n`). A deck may be given `stripes: {colors, span}`
-    itself. A page without stripes compiles none of it.
-  - *Cost* (same session, 1280x720 `standard`, with the dome): `fair` from below 1.95 s before,
-    1.95 s after; `overcast` from 10 km 1.03 / 1.05 to 1.11 s; `towers` 1.43 / 1.63 s; `layers`
-    2.50 / 2.72 s; a giant 1.90 / 2.42 s; `fair` over the sea 2.75 / 2.95 s; `fast` 0.84 and
-    0.52 s. (A deck's stripes behind a run-time switch cost every sky 20 %: SwiftShader read the
-    stripes for every deck; they are compiled in only when a deck has them.)
-- **Parts** (`data/web/parts/space-clouds.js`, a new kind `cloud` after `sea`): `clouds-fair`,
+- **Exact spans, not a jittered march** (marches grain or terrace thin clouds). A deck is a shell
+  of the world's sphere between `base` and `top` (m); each ray is cut with every shell
+  (`shellSpan`, closed form) and tower, stretches walked front to back until 1.5 % of the light is
+  left; the camera may be under, in, between or over decks.
+- **Height field from one tile.** `noiseTile()` (`TILE` 256, four channels, from integer hashes:
+  the same numbers in Node; not baked; `.mean`). `deckField` reads it four times (broad weather
+  twice, clouds stretched along the wind by `stretch`, fine caps); cloud where the pattern exceeds
+  `level`, the value a share `cover` of places exceeds (so `cover` is the covered share, within
+  0.06); top `floor + sqrt(rise (pattern - level) / span)`, flat base but for `ragged`. Readings
+  drift with the wind: a pure function of time. Mip level from the larger of footprint and step.
+- **Never repeats.** Every reading goes through `untiled(u, v, salt, warp)` (`UNTILE`: endless
+  lattice of cells one repeat wide, each with its own offset and one of sixteen turns, edges blended
+  over `blend` keeping mean and contrast); the clouds' reading is first shifted by `warpNoise()`.
+  Whole repeats at the camera reach the shader as `uDeckI` beside the fraction `uDeckR` (stable far
+  from the origin). `aloft(deck, height)` boosts the broad weather when the camera is high above a
+  deck (`ALOFT` `{from: 3, to: 15, boost: 2}` cloud widths over the top; closed or empty decks stay
+  so); camera height reaches the shader as `uDeckG.x`; `valueAt` / `coverAt` take it as a fourth
+  argument (default 0); `Clouds.coverAt` uses `clouds.height`.
+- **Steps.** `QUALITIES` `[picture share, COARSE, FINE]`: `fast` [1/3, 6, 3], `standard` [1/2, 8,
+  4], `fine` [1, 10, 5]. Coarse steps read the mean and skip empty space; fine steps solve the part
+  under the top as a quadratic's roots (`cloudPart`), so no cloud is straddled. Faces are pushed in
+  by the fine caps (`fray`; a displacement as seen, faded with distance); four neighbouring pixels
+  offset their steps and the overlay reads four times, so edges are soft.
+- **Towers.** Lumpy columns leaning downwind, either still growing (round top) or with an anvil,
+  by seed; 24 steps; closed forms.
+- **Light** (shaped, not simulated): sun after the air at each deck's height (`sunlightAt`) dimmed
+  by the cloud over the place and sunward, a forward lobe for silver linings, sky light from above
+  (`skyAmbient`), light from below. Decks deeper than one optical depth shade decks below
+  (`cloudShade`) and, via `shade`, the sea. Then the dusk curve and the air to the cloud.
+- **Lightning.** `stormOf(lightning, {seed, towers, deck})`: seeded flashes (`strikeTimes`: `rate`
+  a minute, never two within 0.25 s) and stated `times` (seconds, events with `time` such as
+  `ctx.music`'s, or a `vidgen/music-time` `trackArrays` track whose gains scale them), inside a
+  tower (else the lowest deck near the camera). A flash lasts `FLASH_SECONDS` 0.55
+  (`flashLevel(age, strokes)`: one to four strokes), lifted with the film exposure to the power
+  `FLASH_LIFT` 0.8. `MOST`: decks 4, towers 6, flashes 3.
+- **A gas giant** has no ground. `giantAir(world, {density = 8})`: the world's `space-bodies` air 8
+  times as deep (ice giants 8 / 3). `giantSky(world, {latitude = 22, scale = 27000, radius, towers
+  = 0, squeeze = 40})`: decks at `GIANT` heights in units of `scale`: a dark deep deck, the main
+  deck with `stripes` (64 colours of the planet's `bandRamp` round the latitude, `squeeze` times
+  narrower than true; `squeeze: 1` is true), a haze, towers only when asked, wind east 90 m/s, and
+  `floor` (0.03 of the belts' colour) to the sphere's horizon (`sky.under(true)`). A deck may take
+  `stripes: {colors, span}`; stripe code is compiled only when a deck has them.
+- **Picture.** Drawn in `update` into a half-float target at the quality's share, laid over dome
+  and sea by one full-screen pass (`renderOrder` -800, no depth test): every scene object stands in
+  front of every cloud.
+- **Options.** `sky` (`SKIES`: `fair`, `overcast`, `layers`, `towers`, `storm`) or `decks`
+  (`DECKS`: `cumulus`, `stratus`, `cirrus`, or `{type, base, top, cover, size, stretch, density,
+  weather, rise, floor, soft, fray, ragged, puff, color, beyond, stripes}`; at most 4), `towers` (a
+  number or `{count, seed, spread, radius, base, top, anvil, density, color, at}`; at most 6),
+  `lightning`, `seed`, `wind`, `direction`, `quality`, `floor`, `anchor`, `behind` (§123.6).
+  Unknown names fail with the closest one.
+- **Object.** `object`, `update(t, {camera})`, `decks`, `towers`, `flashes(t)`, `coverAt(deck, x,
+  z, t)`, `horizon(deck)`, `shade` (`{glsl, uniforms}` for the sea), `uniforms`, `target`,
+  `dispose()`.
+- **Limits.** One top over one base (no overhangs); no rain, fog, rainbow; towers cast and take no
+  shadow; the sea mirrors no cloud; decks lit by the sun at the camera's place; decks on a plane
+  tangent at the anchor; no rings in a giant's sky; matches `space-bodies`' cloud map in colour and
+  cover, not placement.
+- **Parts** (`data/web/parts/space-clouds.js`, kind `cloud` after `sea`): `clouds-fair`,
   `clouds-sea-of-cloud`, `clouds-sunset`, `clouds-towers`, `clouds-between-decks`,
   `clouds-lightning`, `clouds-over-sea`, `clouds-giant`, `clouds-ice-giant`.
-- **Exports.** `clouds`, `Clouds`, `deckOf`, `deckField`, `towerList`, `stormOf`, `strikeTimes`,
-  `flashLevel`, `giantSky`, `giantAir`, `noiseTile`, `shellSpan`, `deckHorizon`, constants
-  `DECKS`, `SKIES`, `QUALITIES`, `MOST`, `TILE`, `GIANT`, `FLASH_SECONDS`, `FLASH_LIFT`,
-  `VERSION`.
-- **Cache keys.** `space-sea.js` changed (the `shade` option; its pictures are the same), so a
-  page importing it draws once more; no film page imports it. `parts.js` gained the kind. Baked
-  maps are baked once more (their key holds every module's bytes).
-- **Tests** (`tests/test_web_space_clouds.py`): the module and its imports; the parts and their
-  kind; in Node: the tile (a fixed digest, it repeats), `shellSpan` against a walk along the ray
-  for ten rays, a deck's horizon and a ray just over and under it, decks and skies with errors
-  and a did-you-mean, the cover asked for against the pattern's (nine decks), drift with the
-  wind, towers and storms from a seed and from stated times, a giant's decks against `bandRamp`;
-  `slow`, in Chromium: tops brighter than bases, a sunset's tops warmer than noon's, more cover
-  hides more ground, a flash lights a tower, a giant's tawny decks, `fast` the same sky, a frame
-  twice the same, and the same pixels with the air's table baked, from the cache and without it.
-- **The pattern never repeats (Step 395).** From 20 km up the decks still showed the same cloud
-  shapes in rows (still 390 `09_rise`, 6.7 and 8 s): the shapes came from the clouds' reading of
-  the tile (4 clouds' widths a repeat, turned 3°), and the broad weather (Step 393) changed their
-  strength, never their shape. Now every reading of the tile goes through `untiled(u, v, salt,
-  warp)` (`UNTILE`), in the shader and in the CPU twin alike:
-  - *Cells.* The plane is cut into cells one repeat wide on an endless lattice; each cell reads
-    the tile at its own offset (two 10-bit numbers of its hash) and turn (one of the sixteen
-    directions (k + 0.5) x 22.5°, the gradients' table); within `blend` (0.15 of a cell) of an
-    edge the neighbours are blended, their departures from the tile's mean (`noiseTile().mean`,
-    uniform `uCloudMean`) summed over the root of the sum of the weights' squares, so the blend
-    keeps the tile's mean and contrast (a plain mix would thin the cloud along every edge: a
-    grid). The turn is in the tile's own coordinates, so `stretch` still draws cloud out along
-    the wind. The mip level is the un-offset reading's (offset and turn do not change a texel's
-    size).
-  - *Warp.* The clouds' reading (not the weather's two or the fine caps': cells are enough
-    where the pattern weighs less or is fine) is first shifted by `warpNoise()`: two gradient
-    noises from one lattice's hashes (the gradients from the hash's lowest four bits and the
-    next four), `warpSize` 3 repeats a cell, `warp` 0.5 repeat at most about; the cells' edges
-    wander with it. The shader reads the warp with the weather, at three places along a deck's
-    stretch of the ray, and takes it as even between them (it changes over 30 km for cumulus);
-    the cloud shadow (`cloudShade`) reads it at the place.
-  - Each reading's whole repeats at the camera reach the shader as `uDeckI` (x, y, the reading's
-    salt) beside the share of a repeat in `uDeckR`, so the lattice is the same far from the
-    origin; salts from the seed and the deck's index (the seed's other numbers unchanged).
-  - *From high up.* `aloft(deck, height)` multiplies the broad weather: 1 until the camera is
-    `ALOFT.from` (3) clouds' widths over a deck's top, 1 + `boost` (2) from `to` (15) on (cumulus:
-    9 to 38 km; cirrus: 37 to 145 km), the boost times `min(1, 5 cover (1 - cover))` (a closed or
-    empty deck stays so: an overcast from orbit is still closed). From 20–400 km the decks read
-    as bands and clear patches. Round the place the broad weather is still drawn to nothing, so
-    the cover asked for is the one seen there. The camera's height reaches the shader through
-    `uDeckG.x`; `deckField(...).valueAt` / `coverAt` take it as a fourth argument (default 0),
-    `Clouds.coverAt` uses the last update's (`clouds.height`).
-  - `level` is calibrated on the new pattern, so `cover` is still the covered share (tested
-    within 0.06). Measured on the CPU twin (Step 395 stills, `autocorrelation.txt`): the
-    clouds' pattern alone correlated 0.81 / 0.70 / 0.75 with itself one, two and three repeats
-    away before, 0.06 / 0.01 / -0.02 after; cloud-or-not of `fair` 0.62 / 0.49 / 0.46 before,
-    0.25 / 0.19 / 0.15 after (falling with distance: the broad weather, no peak at a repeat).
-  - *Cost* (one session, 1280x720 `standard`, the Step 390 rise over a breeze sea under `fair`):
-    15–100 m over the sea 2.6 → 3.3 s a frame; 20–60 km up 3.55 → 5.0 s; 426x240 0.63 → 0.80 s
-    a still. The blend's loop is the dearer part in SwiftShader (one cell without a blend costs
-    nearly nothing; a blend written out as four or as three readings costs more than the loop);
-    the warp, read three times a stretch, nearly nothing. Seen from high up the cost depends on
-    how much of the view is cloud (the boosted weather leaves more open sea to skip).
-  - *Pictures that change.* Every page that draws cloud decks or their shadow: the clouds parts
-    (`clouds-*`), the descent's and the air camera's parts, surface scenes with `clouds:`, the
-    descents (`descend`/`ascend`) over decks, a sea or ground shaded by decks. Towers, lightning
-    and a giant's stripes are drawn as before; a giant's decks (`fronts: 0`) change by the cells
-    and the warp only. `VERSION` 2; the module's bytes change the scene keys of pages importing
-    it, and baked maps are baked once more.
-  - Exports added: `untiled`, `warpNoise`, `aloft`, `UNTILE`, `ALOFT`; `noiseTile()` has `mean`.
+- **Exports** (this section's; later sections add more): `clouds`, `Clouds`, `deckOf`,
+  `deckField`, `towerList`, `stormOf`, `strikeTimes`, `flashLevel`, `giantSky`, `giantAir`,
+  `noiseTile`, `shellSpan`, `deckHorizon`, `untiled`, `warpNoise`, `aloft`, `latticeNoise`,
+  `NOISE_GLSL`, constants `DECKS`, `SKIES`, `QUALITIES`, `MOST`, `TILE`, `GIANT`, `FLASH_SECONDS`,
+  `FLASH_LIFT`, `UNTILE`, `ALOFT`, `VERSION` (2). Tests: `tests/test_web_space_clouds.py`.
 
 ### 123.6 Ground with relief: `vidgen/space-land` (Step 384)
 
-`data/web/modules/space-land.js` (import name `vidgen/space-land`, in `VIDGEN_MODULES`)
-draws ground under a `vidgen/space-air` sky: `land(renderer, sky, options)` → `Land`. No
-forests and no plants.
+`data/web/modules/space-land.js` (`vidgen/space-land`, in `VIDGEN_MODULES`): `land(renderer, sky,
+options)` → `Land`, ground under a `vidgen/space-air` sky. No forests or plants.
 
-- **What the ground is.** A height over the world's sphere (the air's radius), a pure function
-  of the place (x east, z south of the place under the scene's origin, metres):
-  `heightOf(field, x, z) = reliefAt(recipe, macroAt(macro, x, z)[0], x, z)`.
-- **The tie to the globe (the macro).** The large forms are the same world's of
-  `vidgen/space-bodies`: `macroOf(renderer, world, at, radius)` runs that module's own bake code
-  (its GLSL through the new export `surfaceSource(type)`; `bakeInputs(o)` for the numbers of the
-  seed: the same continents, climates, placed craters, volcanoes, canyons, cracks) on a lattice
-  of 384 x 384 points a 400th of the radius apart (16 km on an Earth, 8.5 km on a Mars, 4.3 km
-  on a Moon) round the place `at` ([latitude, longitude]; +x east, -z north), and the type's
-  paint code for the colour there. Differences from the globe's own maps, stated: the slow
-  fields a globe reads from 128 px cube maps are summed directly; the octaves are a 1024 px
-  map's (7 and 6); an ocean world's clouds are left out. A cubic B-spline through the lattice
-  is the macro's height (`macroAt`), times `TYPES[type].relief` x radius metres a unit (ocean
-  0.001, desert 0.11, rocky and icy 0.2, lava 0.15: chosen so that the heights are plausible;
-  the globe itself only shades its relief). So forms wider than about two lattice cells (30 km
-  on an Earth) are the globe's, in the globe's places; everything finer is this module's. The
-  flat ground takes the globe's colour (`materials.ground`: its share; an ocean world's greens
-  are the globe's paint, damped to 0.55: nothing grows), the snow line of an ocean world is the
-  globe's climate (the height where its `warm` field falls to the globe's snow threshold, plus
-  `snowOver` 300 m because the finer peaks stand over the macro), rock, snow and sand are the
-  globe's palette colours (`TYPES[type].colors`). From high up (pixels wider than 150 m on the
-  ground) the macro's slopes are shaded `materials.wide` (8) times steeper, as the globe
-  exaggerates its relief (a look).
-- **The recipe** (`recipeOf(type, changes, seed)`; every number an option; `reliefAt`):
-  `mountains` (a ridged multifractal after Musgrave: up to 12 octaves from `length` down to
-  `FINEST` 16 m, each weighted by the one before to the power `erosion`, so ridges carry finer
-  ridges and valleys stay smooth; the first `ridged` octaves are ridges with a crest rounded
-  under 0.03, the rest plain; read through a warp of `warp` x `length`; `height` x
-  (sum^`sharp` - `mid`); grown where the macro stands between `from` and `to` metres, `base`
-  elsewhere), `strata` (the mountains' height cut into benches `step` metres apart with cliffs
-  between, `soft` the cliff's share of a step: mesas and scarps), `rough` (four octaves on the
-  plains), `dunes` (ridges `length` apart across the wind `direction`, a gentle windward side
-  and a steep lee, wandering, with a second finer set, in fields), `craters` (five classes of
-  bowls with rims, the largest `largest` metres across, at most one a lattice cell, `density`
-  the share of cells), `materials` (below). Noise: gradient noise on an integer lattice with a
-  32-bit hash, sixteen gradients, quintic fades (`hash2`, `noised`, `GRADIENTS`).
-- **Presets** (`PRESETS`: a world, a place, changes, the air that suits): `alpine` (the
-  Earth-like world at [-34.5, 20]), `mars` ("mars" at [-8, 40]), `canyon` (the invented "ochre"
-  at its long canyon, benches 600 m high), `dunes` ("ochre" at [-52, -150], dunes 90 m high),
-  `snow` (the ice world "boreas"), `volcanic` ("ember" under a thin air, its basalt lighter than
-  the globe's: a look), `airless` (the "moon"; `vacuum(radius)` is an air thin enough for a
-  black sky, since `vidgen/space-air` needs one; `RADII` has the airless worlds' radii).
-  `survey(renderer, world)` gives a world's heights all round the globe to choose a place by.
-- **Method, measured first** (2 cores, SwiftShader, 1280x720, the alpine range from 2,500 m, with
-  the dome's 0.17 s). Two candidates over the same height maps: (a) a camera-centred mesh of
-  rings lifted in the vertex shader: 512 x 384 vertices (edges 9 px long) 0.54 s with a plain
-  colour and 0.67 s with a simple light, 1024 x 512 (4.5 px) 1.0 s, 2048 x 768 (2.3 px) 2.1 s,
-  and 0.59 s at 320x180 (the cost is the vertices'); it would still need the full shading
-  (about 0.8 s) and its outline is a polygon whose vertices slide over the ground unless
-  snapped; (b) each pixel's ray walked through the maps: 1.35 s a frame at 1280x720 and 0.12 s
-  at 320x180 all in, the outline exact to the pixel. Shipped: (b).
-  - *The maps.* Up to 11 square maps of doubling width round the camera (`WIDTH` 4,096 m, then
-    8,192 m ... 4,194 km; never wider than 1.6 radii), each `cells` across (`QUALITIES`: `fast`
-    256 / 512, `standard` 512 / 1024, `fine` 1024, for a picture up to 400 rows / larger),
-    layers of one float texture. A map's middle moves in steps of a sixteenth of its width
-    (`mapMiddle`), so a cell stays where it is in the world and holds the same height in
-    whichever map it lies: a map is baked again only when the camera has moved that far,
-    and nothing pops. Each term of the recipe is faded in a map as it gets finer than two of
-    its cells (a wavelength of four cells is whole), an octave not shown standing at its mean.
-    A place is read from map k from 0.4 of map k - 1's width on (`mapFor`), blended into the
-    next over the last third, and from no finer a map than a pixel is wide on the ground.
-    Maps finer than the picture needs are not baked (from the camera's height over the ground
-    and the steepest ray of the picture).
-  - *The walk.* At half the picture's size (`fast`: a third) each ray is walked from where it
-    enters the shell the ground can lie in: steps of 0.7 of its height over the ground, at
-    least 1 % of the distance, up to 96 steps (`fast` 64, `fine` 144), then five halvings.
-  - *The picture.* Every pixel takes the nearest and the farthest of the four answers round it
-    and puts its own ray on the ground there (Newton's steps): an outline between two ridges
-    is exact; against the sky the pixel beside the ground is its soft edge (one pixel). Then
-    the slope from the maps, four octaves of grain finer than the maps' cells (shading only,
-    faded at the pixel's size, longer along a level look: no shimmer), materials, light, air,
-    and the depth (`gl_FragDepth`, 0.3 % nearer; ground under water behind everything).
-- **Materials** by height and slope: the flat ground (the globe's colour), scree and rock on
-  slopes from `steep[0]` to `steep[1]` (rock in two colours in beds about `band` metres high: Step
-  393 below), sand
-  (`sandy`), snow above the line and off faces steeper than `snowSteep`, an open crust's glow
-  (lava worlds).
-- **Light.** The sun after the air at the ground's height, the ground's own shadow (for each
-  cell of a map 32 steps towards the sun through the maps, the world's roundness counted, soft
-  over a tangent of 0.06; baked once a map and sun: a moving sun bakes every map's shadow
-  again), `shade` (clouds), the sky's light from the air's table dimmed in hollows, the light
-  lit ground throws back, the film look's dusk curve, the air between (`airThrough`).
-- **With the other parts.** Order: the dome, the ground (render order -860), the sea, the
-  clouds. `sea(renderer, sky, {depth: ground.depth})`: the sea ends where the ground rises out
-  of it, the shallows paler. `clouds(renderer, sky, {behind: ground.behind})` (new option of
-  `vidgen/space-clouds`: how far each ray may go): a cloud behind a mountain is hidden, a peak
-  stands in the deck; then `ground.shadedBy(weather.shade)` for the clouds' shadows. Meshes of
-  the scene are hidden by the ground in front of them (its depth).
-- **The lookups.** `ground.heightAt(x, z)` (scene coordinates; `heightOf` on the frame's
-  metres), `normalAt`, `pointAt(x, z)` (the scene's y falls with the world's roundness),
-  `above(position)` (a point's height over the ground under it), `cell(map, i, j)` (a baked
-  cell, for checks), `horizon` (`{distance, dip, height, over, finest}`), `definition()` (the
-  recipe and the macro's heights as plain data). The finest map agrees with `heightAt` to
-  0.1 to 0.5 m (cells of 4 to 16 m), a pixel's own place within 1,200 m to 0.4 m in the mean.
-- **For another program** (Step 385's paths): the height is `reliefAt` on `macroAt`, both in
-  the module's first 260 lines with no three.js: 32-bit wrapping integer products for the
-  hash, double arithmetic elsewhere. The macro's lattice comes from the page
-  (`ground.definition().macro.heights`: n x n values, rows along +z, times `scale`): it is the
-  one part made by the GPU.
+- **The ground** is a height over the world's sphere, a pure function of the place (x east, z south,
+  metres): `heightOf(field, x, z) = reliefAt(recipe, macroAt(macro, x, z)[0], x, z)`.
+- **Macro: tie to the globe.** `macroOf(renderer, world, at, radius)` runs `vidgen/space-bodies`'
+  own bake code (GLSL via its export `surfaceSource(type)`, numbers via `bakeInputs(o)`: same
+  continents, craters, volcanoes, canyons) on a 384 x 384 lattice a 400th of the radius apart
+  (`MACRO`) round `at` ([latitude, longitude]; +x east, -z north), plus the paint code for colour.
+  A cubic B-spline through it (`macroAt`) x `TYPES[type].relief` x radius is the macro height:
+  forms wider than about two cells are the globe's, in its places; finer ones are this module's.
+  Flat ground, snow line (plus `snowOver` 300 m) and rock, snow and sand colours come from the
+  globe (`TYPES[type].colors`). The macro lattice is the one part made by the GPU.
+- **Recipe** (`recipeOf(type, changes, seed)`; every number an option; `reliefAt`): `mountains`
+  (ridged multifractal after Musgrave, octaves from `length` down to `FINEST` 16 m, `erosion`,
+  `ridged`, crest rounded under `CREST`, `warp`, `height`, `sharp`, `mid`, grown between macro
+  heights `from` and `to`, `base` elsewhere), `strata` (benches `step` apart, `soft`), `rough`,
+  `dunes` (`length`, `direction`, fields), `craters` (five classes, `largest`, `density`;
+  `CRATER_CELLS`), `canyons` (`{depth, width, length, floor, steps, branches, wander}`: winding
+  loops where a slow noise is zero, benched walls with risers `RISER` 0.12), `volcanoes` (`{height,
+  radius, spacing, density, crater, ridges}`: at most one cone per cell; `coneAt`), `materials`.
+  `reliefAt` adds cones, then cuts canyons, after everything else. Noise: integer-lattice gradient
+  noise, 32-bit hash, sixteen gradients, quintic fades (`hash2`, `noised`, `GRADIENTS`).
+- **Presets** (`PRESETS`: world, place, changes, suitable air): `alpine` (Earth-like at [-34.5,
+  20]), `mars` ([-8, 40]), `canyon` ("ochre" at [49, -172]), `dunes` ("ochre" at [-52, -150]), `snow`
+  ("boreas"), `volcanic` ("ember", thin air), `airless` ("moon"; `vacuum(radius)` gives a black-sky
+  air; `RADII`). `survey(renderer, world)`: a world's heights all round, to choose a place.
+- **Method: per-pixel ray walk through height maps** (a camera-centred mesh's outline slides; the
+  walk's is exact).
+  - *Maps.* Up to `MAPS` 11 square maps of doubling width round the camera (`WIDTH` 4,096 m up,
+    never over 1.6 radii; `mapWidths`), `cells` across by `QUALITIES` (`fast` 256 / 512, `standard`
+    512 / 1024, `fine` 1024; for pictures up to 400 rows / larger). A map's middle moves in
+    sixteenths of its width (`mapMiddle`), so cells keep their world place and nothing pops; terms
+    finer than two cells fade to their mean; a place reads map k from 0.4 of map k - 1's width on
+    (`mapFor`), blending over the last third. Maps finer than needed are not baked.
+  - *Walk* at half picture size (`fast` a third): steps of 0.7 of the height over ground, up to 96
+    (`fast` 64, `fine` 144), five halvings. Each full pixel then refines on the nearest and farthest
+    of four answers (outlines between ridges exact, one-pixel soft edge to the sky), shades with
+    shading-only grain, and writes `gl_FragDepth`.
+  - *Baked* via `vidgen/baked` (`space-land/map`, float bits exact): all maps of a page's first
+    update, later only maps from the fourth on, so a flying camera does not fill the cache. Shadows
+    are not cached.
+- **Materials** by height and slope: flat ground, scree and rock between `steep[0]` and `steep[1]`
+  (two colours in beds `band` m high), `sandy`, snow above the line and off faces steeper than
+  `snowSteep`, `gullies`, lava `glow`. Volcanoes (code compiled only with them) have lava lakes and
+  channels; `ground.setGlow(level)` sets the glow from then on (call per frame for a music pulse).
+- **Light.** Sun after the air; the ground's own shadow (baked per map and sun: a moving sun
+  rebakes all); `shade` (clouds); sky light dimmed in hollows; bounce; dusk curve; `airThrough`.
+- **With the other parts.** Order: dome, ground (render order -860), sea, clouds.
+  `sea(renderer, sky, {depth: ground.depth})`; `clouds(renderer, sky, {behind: ground.behind})`
+  (compiled in only when given: clouds behind a mountain are hidden); then
+  `ground.shadedBy(weather.shade)`. Scene meshes are hidden by ground in front (its depth).
+- **Lookups.** `ground.heightAt(x, z)`, `normalAt`, `pointAt(x, z)`, `above(position)`,
+  `cell(map, i, j)`, `horizon` (`{distance, dip, height, over, finest}`), `definition()` (recipe and
+  macro heights as plain data; the recipe's 34 slots keep fixed index, length, turn and seed). The
+  finest map agrees with `heightAt` to about 1.3 m.
+- **For another program** (§123.7): `reliefAt` and `macroAt` sit at the top of the module with no
+  three.js (32-bit wrapping integer products in the hash, doubles elsewhere); the lattice comes from
+  `ground.definition().macro.heights` (n x n, rows along +z, times `scale`).
 - **`LAND_GLSL`** with `ground.fieldUniforms` and `NL = ground.maps.length`:
-  `float landHeight(vec2 p, float foot)` for a shader of another module.
-- **Changed elsewhere.** `vidgen/space-bodies`: the export `surfaceSource(type)` (its pictures
-  are the same; its bytes changed, so a scene importing it has a new cache key and draws once
-  more with the same pixels). `vidgen/space-clouds`: the option `behind` (compiled in only
-  when given).
-- **Cost** (1280x720, with the dome): 1.35 s a frame (`fast` 1.25 s, `fine` 1.4 s: the shading
-  is most of it), with a sea 2.05 s, under cumulus 2.5 s, airless craters 1.45 s; 0.12 s at
-  320x180. The first frame bakes the maps and their shadows: 9 to 10 s at 1280x720 (1024
-  cells; a cratered world 19 s; from 30 km 7 s), 2.4 s at 320x180, `fast` 2.3 s at 1280x720;
-  the macro 1.0 s (0.45 s from the cache). A camera moving 150 m/s near the ground bakes the
-  finest map again every 1.7 s of film (about 1 s of work), each wider one half as often. A
-  moving sun costs 2.4 s a frame more (every shadow again).
-- **Parts** (`data/web/parts/space-land.js`, a new kind `land` after `cloud`): `land-alpine`,
+  `float landHeight(vec2 p, float foot)` for another module's shader.
+- **Limits.** Soft under about 400 m (no rocks or cliffs); one ridge character (no rivers); far
+  skylines smoother than near; a camera inside the ground gets a plain colour; the frame is flat
+  (usable within about half a radius of the place).
+- **Parts** (`data/web/parts/space-land.js`, kind `land` after `cloud`): `land-alpine`,
   `land-alpine-from-30-km`, `land-mars`, `land-canyon`, `land-dunes`, `land-snow`,
   `land-volcanic`, `land-airless`, `land-coast`.
-- **Honest notes.** The mountains are soft in close-up: under about 400 m over the ground the
-  relief's finest forms (16 m) and the grain do not replace rocks and cliffs, and from 200 m
-  the ground reads as smooth slopes (the deserts and the crater fields hold up better than the
-  range). Ridges repeat one character (no rivers, no glacier valleys, no talus fans). `canyon`
-  gives scarps and benches on a plain rather than table mountains; `snow` and `volcanic` are
-  plain. Forms between the lattice's cells and the relief's longest wave (the globe's
-  mid-sized craters, 10 to 30 km) are not the globe's. Snow covers more of a range than the
-  globe shows there. Far relief is no finer than a map's cells (a 250th of the distance at
-  1024 cells): a far skyline is smoother than a near one. Outlines between two ridges are
-  hard-edged (one against the sky is soft). A camera inside the ground gets a plain colour.
-  The frame is flat (x and z are the scene's): usable within about half a radius of the place.
-- **Step 384.1** (a fix pass: canyon land, volcanoes, a sharper range, the start).
-  - *Canyons* (new recipe part `canyons: {depth, width, length, floor, steps, branches, wander}`,
-    used by `canyon` only): a canyon runs where a slow noise (cells of `length`, read through a
-    warp of `wander` x `length`) is zero, so the canyons are a network of winding loops with
-    mesas left between; finer ones (`length` / 3.1, 0.45 of the width, `branches` of the depth)
-    lie beside and across them. Across its width `d` (0 the middle, 1 the rim, half the width
-    `width` metres) the ground is cut by `depth` x (1 - wall): the floor flat to `floor`, then
-    `steps` benches with risers `RISER` (0.12) of a step wide, 15 % of the wall a plain slope
-    (talus). The rock's two colours alternate in bands (`materials.band`). The preset: the
-    world "ochre" at [49, -172] (was [-1, 74]), a nearly flat plateau (mountains 160 m, no
-    ridges, no strata, no craters), canyons 1,100 m deep and 2 x 2,200 m wide, four benches,
-    the floor half the width. Not a drainage tree: loops and crossings (stated).
-  - *Volcanoes* (new part `volcanoes: {height, radius, spacing, density, crater, ridges}`, used
-    by `volcanic` only): at most one cone in each cell of a lattice `spacing` wide (`density`
-    the share of cells), 0.6 to 1 of `height` and `radius`; the height (1 - d)^1.6 with nine
-    ridges down the flanks and a crater `crater` of the radius wide (`coneAt`). In the picture
-    (compiled in only with volcanoes): a lava lake in the crater, five channels winding down
-    each cone, fresh flows beside them darker and older ones lighter than the ash, the cone
-    bare rock; lake and channels glow (`materials.glow`; 2.5 whites, lifted with the exposure
-    to the power 0.8, so they carry a dusk picture) and light the ground beside them a little
-    (5 % of the glow: a look, no light is cast). `ground.setGlow(level)` changes the glow from
-    then on: call it every frame with a level of `ctx.music` for a pulse. The preset: cones
-    3,000 m high, 6.5 km in radius, 30 km apart, on ash plains (mountains 260 m, no craters).
-    A snow cap: `materials: {snowLine: 2200}`.
-  - *The range* (`alpine` and every ocean world): the mountains' `gain` 0.5 → 0.55 (finer
-    ridges 1.5 to 3 times higher), rock bands 55 m high at half strength, and on slopes over
-    0.25 the grain is ridges and gullies (`materials.gullies`), with snow lying in the gullies.
-    The finest map now differs from `heightAt` by up to 1.3 m at 8 m cells (was 0.5 m).
-  - *What Step 385 reads*: `definition().recipe` has two more parts (`canyons`, `volcanoes`) and
-    34 slots (29 before: the old ones keep their index, length, turn and seed); `reliefAt`
-    adds the cones and then cuts the canyons, after everything else. For `mars`, `dunes`,
-    `snow`, `airless` the heights are the same numbers as before (both parts are off there).
-  - *The start*: the height maps go through `vidgen/baked` (`space-land/map`; a map's own
-    float bits as four bytes a cell, so a map from the cache is the baked one bit for bit): all
-    maps of the first update of a page (a still, a camera at rest, a shot's start), later only
-    the maps from the fourth on (32 km wide and wider: they move every 2 km or more). A camera
-    that flies does not fill the cache with fine maps. Measured, the alpine range's first still:
-    1280x720 without the cache 11.8 s, cold 14.8 s (the maps are read back and stored), warm
-    8.0 s; 320x180 3.2 / 4.1 / 2.1 s; on disk 37 MB for the ten maps of 1024 cells, 9 MB for
-    512 cells (a place and a quality). Not kept: the shadows (2.3 s at 1280x720 for a sun).
-    The pictures are the same with, without and from the cache (compared byte for byte).
-  - *Cost*: the range from 2,500 m at 1280x720 1.375 s a frame before, 1.386 s after.
-- **Exports.** `land`, `Land`, `macroOf`, `survey`, `recipeOf`, `reliefAt`, `macroAt`,
-  `heightOf`, `normalOf`, `flatMacro`, `hash2`, `noised`, `bowl`, `coneAt`, `horizonDistance`,
-  `horizonDip`, `rayHeight`, `mapWidths`, `mapFor`, `mapMiddle`, `placeFrame`, `vacuum`,
-  constants `PRESETS`, `TYPES`, `QUALITIES`, `WIDTH`, `MAPS`, `FINEST`, `MACRO`, `OCTAVES`,
-  `GRADIENTS`, `CREST`, `RISER`, `CRATER_CELLS`, `RADII`, `LAND_GLSL`, `VERSION`.
-- **Tests** (`tests/test_web_space_land.py`): the module and its imports; the parts and their
-  kind; in Node: the noise and its slope, recipes with errors and a did-you-mean, the relief
-  from a seed within its bound, benches, craters and dunes only where asked, the spline, the
-  horizon's and the maps' geometry, the place's frame, `surfaceSource`; `slow`, in Chromium: a
-  frame twice the same, a low sun's dark ground, snow above its line only, the maps' cells and
-  the picture's places against `heightAt`, the horizon's row from 100 m to 100 km, a black
-  airless sky, a coast, clouds on and behind the ground, and the same pixels with the macro
-  baked, from the cache and without it.
+- **Exports.** `land`, `Land`, `macroOf`, `survey`, `recipeOf`, `reliefAt`, `macroAt`, `heightOf`,
+  `normalOf`, `flatMacro`, `hash2`, `noised`, `bowl`, `coneAt`, `horizonDistance`, `horizonDip`,
+  `rayHeight`, `mapWidths`, `mapFor`, `mapMiddle`, `placeFrame`, `vacuum`, constants `PRESETS`,
+  `TYPES`, `QUALITIES`, `WIDTH`, `MAPS`, `FINEST`, `MACRO`, `OCTAVES`, `GRADIENTS`, `CREST`,
+  `RISER`, `CRATER_CELLS`, `RADII`, `LAND_GLSL`, `VERSION`. Tests: `tests/test_web_space_land.py`.
 
 ### 123.7 Flight paths: `vidgen.flight`, `flight_data:` → `ctx.flight` (Step 385)
 
-Python beside `vidgen.orbits` (`src/vidgen/flight/`, no manim) turns a flight told in words into
-float64 position, velocity and attitude for every frame of a `web` scene, checked never to come
-under the ground, and hands it to the page the way `orbit_data` does (§122.3).
+`src/vidgen/flight/` (no manim) turns a flight told in words into float64 position, velocity and
+attitude for every frame of a `web` scene, checked never to come under the ground, and hands it to
+the page as `orbit_data` does (§122.3).
 
-- **One bridge, not two.** The flights travel inside the orbit bridge's payload
-  (`orbits.flights`): the same `WebPage(orbits=)`, `make_web_clip`, `web_page_layouts`,
-  `clip_inputs` and `vidgen still` plumbing, untouched. The param is a sibling, `flight_data:`,
-  because a flight is not an orbit model (it needs no central body or span and is told in
-  another frame); its maker `vidgen/scenes/flight_data.py` and its cache
-  `vidgen/web/flights.py` (`build/flights/flight-data-<key>.json`) follow `orbit_data`'s files
-  one for one. A second init script, `data/web/flight.js`, is added only on pages whose payload
-  carries flights; it runs after `orbits.js`, takes the flights out and builds `ctx.flight`
-  (a page with flights and no orbit data then has no `ctx.orbits`). `orbits.js` and every
-  existing key are unchanged: the clip inputs gain `orbits.flight_helper` (the helper's
-  SHA-256) only when the payload carries flights.
-- **The frame (one definition, `vidgen.flight.frames`).** *Planet-fixed* (PF): origin the
-  world's centre, z the IAU north pole, x the prime meridian, y = z × x; a place at
-  planetocentric latitude φ, east longitude λ, height h over the sphere of radius R is
-  (R + h)(cos φ cos λ, cos φ sin λ, sin φ) (`vidgen/space-bodies`' `onGlobe` in three.js's
-  axes). *Local* (L, the scene's): metres, origin on the sphere under the anchor `at = [φ₀, λ₀]`,
-  x east, y up, z south (three.js's axes: −z north), the centre at (0, −R, 0) — the frame of
-  `vidgen/space-air`, `space-sea`, `space-clouds` and `space-land` at their defaults
-  (`unit: 1`, `center: null`). Its axes in PF are `space-land`'s `placeFrame(at)`:
-  east = (−sin λ₀, cos λ₀, 0), up = (cos φ₀ cos λ₀, cos φ₀ sin λ₀, sin φ₀),
-  south = (sin φ₀ cos λ₀, sin φ₀ sin λ₀, −cos φ₀); PF = R·up + M·L, L = Mᵀ(PF − R·up),
-  M = [east | up | south]. A height is always over the sphere, |L − (0, −R, 0)| − R; the land's
-  ground at (x, z) is the point (x, √((R + g)² − x² − z²) − R, z) with g = `heightAt(x, z)`, so
-  a craft at L is h − `heightAt(L.x, L.z)` over the ground (`Land.above`). *Ecliptic* (E, the
-  orbit bridge's): E = F(jd)·PF with F the body-fixed frame of `vidgen.orbits.rotation` on that
-  date; v_E = F·v_PF + ω × r_E (ω the spin rate along the pole; the pole's slow motion left out).
-  `LocalFrame.to_fixed / from_fixed / to_ecliptic / from_ecliptic / ecliptic_axes / place /
-  geodetic / chart / heading_vector / heading_of` (tests both ways: 1e-8 m, 1e-9 m/s). A flight's
-  velocity is over the ground; with no wind it is also the air speed. A flat world (`ground:
-  flat`) has no sphere: x, y, z with y the height, no latitudes, no re-entry.
-- **The worlds** (`vidgen.flight.worlds`): radius the page's air's (`space-air` `RADII`, the
-  airless worlds' of `space-land`), GM the body's (`vidgen.orbits.BODIES`; invented worlds the
-  Earth's mean density), turning from `vidgen.orbits.rotation`, and an **isothermal exponential
-  air**: scale height the page's (`AIRS[...].height` × radius: 8.9 km Earth-like, 10.8 km
-  Mars-like), sea-level density and γ this module's (1.225 kg/m³ and 1.40; 0.020 and 1.29;
-  invented `thin` 0.25, `thick` 4.9). Speed of sound a = √(γ g₀ H), the same at every height:
-  350 m/s Earth-like (the real air's falls to 295 m/s at 11 km), 228 m/s Mars-like. A land
-  preset's world is its air's (`canyon` and `dunes` lie on the Mars-like sphere, `snow` and
-  `volcanic` on `thin`'s, `airless` on the Moon's).
-- **Kinematics** (`vidgen.flight.plan`). Three channels of flight time: air speed V(t), height
-  h(t), turn rate ψ̇(t) (heading from north towards east, positive to the right). V_h =
-  √(V² − ḣ²); r = c + (R + h) n̂, ṙ = ḣ n̂ + V_h ê; the frame (n̂, ê, r̂ = ê × n̂) turns with body
-  rates (ψ̇, 0, V_h / (R + h)), integrated by the fourth-order Magnus method at steps of at most
-  0.05 s and composed by a parallel prefix product (log₂ N passes); a frame between grid points
-  takes one Magnus step from the point before. Acceleration analytic:
-  r̈ = (ḧ − k V_h²) n̂ + (V̇_h + k ḣ V_h) ê + V_h ψ̇ r̂, k = 1 / (R + h). Every change of V, ḣ, bank
-  or curvature goes through the septic smoothstep S(u) = 35u⁴ − 84u⁵ + 70u⁶ − 20u⁷ (first three
-  derivatives zero at its ends; peak slope 35/16 of the mean), so position is smooth to its third
-  derivative where legs meet and the attitude has no kink (tested at 30 fps). Integration step
-  0.05 s against 0.005 s: positions agree to 0.5 µm.
-- **Manoeuvres** (legs; `vidgen.flight.spec`). A leg holds at most one horizontal manoeuvre,
-  one vertical one and a speed change; it lasts `for` seconds, `until` a scene time (seconds or
-  'bar 9 beat 3', the `space` scene's `scene_time`), or as long as its manoeuvres need; what it
-  does not name is held (wings level, the vertical rate, the speed). `straight: s`. `turn: {to |
-  by, side, bank | radius, roll_rate}`: a coordinated turn, ψ̇ = g_eff tan φ / V_h with
-  g_eff = g(h) − V_h² / (R + h), radius V_h² / (g_eff tan φ) (v² / (g tan φ) within 0.1 % at
-  airliner speeds), bank rolled in and out at the roll rate (default 20°/s); the hold is solved
-  so the heading change is exact (aimed again after integration: the heading drifts on a
-  sphere). `climb` / `descend: {to | by, rate, accel}` (default 10 m/s, vertical acceleration
-  0.25 g at the ramps' peaks; a target too near for the rate lowers the rate), `{rate}` alone
-  climbs on; `level: true`. `speed: {to | mach, rate}` (mean 2 m/s²). `waypoints: [[x, z] |
-  {lat, lon}, ...]`: septic Hermite pieces in the tangent plane of the leg's start
-  (azimuthal-equidistant), tangents the bisectors, curvature that of the circle through three
-  places, its rate zero at the knots (geometric continuity of order 3), flown at ψ̇ = −κ ṡ
-  (ṡ = V_h R / (R + h)); the bank the sharpest point needs is checked against `bank_limit`
-  (default 60°: an error naming the waypoint). Passes 16 km of places within 1 m. `circle:
-  {around, radius, turns, side}`: a Hermite piece to the tangent point with the circle's
-  curvature, the arc, a roll-out; flown radius within 3 mm of 4,000 m. `follow: {clearance, rate,
-  push, smoothing}`: terrain following over a span of legs that follow one after another (turns
-  inside allowed): the lowest curve over the highest ground of each 0.25 s plus the clearance,
-  the margin and the sea's waves whose push-overs are at most (1 − push) g and slopes at most
-  `rate` (an envelope of parabolas turning into lines), plus the most a smoothing can lose
-  ((1 − push) g w² / 22), smoothed by the bump (1 − s²)⁴ of half-width `smoothing` (4 s): a
-  smooth function of time with all derivatives; blended in from the span's start state and out
-  into a steady rate; planned from the span's track in up to three passes. `land: {glide,
-  flare, touchdown, brake}`: speed to the touchdown speed, a descent at V tan(glide) whose last
-  ramp, 2 × flare / sink seconds long, takes the sink to zero exactly at the ground's height
-  under the touchdown point (found again after integration), then a roll-out to a stop.
-  `reentry`: below.
-- **Attitude and the numbers.** Nose along the velocity, raised by the angle of attack (a look:
-  `aoa` 3° per g of lift; a re-entry's own during the entry); bank from the specific force
-  (acceleration less gravity, with the turning world's Coriolis and centrifugal parts):
-  φ = atan(f_side / D), D = ½(f_up + √(f_up² + (0.1 g)²)), which is the force's own bank in
-  flight (to 0.07°), stays upright through push-overs and is 0 in free fall. Body axes x the left
-  wing, y up, z the nose (three.js's facing +z, `vidgen/space-craft`'s). Load factor: the
-  specific force across the path over g₀, negative when it points down. Per frame: position,
-  velocity (m, m/s, local frame), quaternion (x, y, z, w; w ≥ 0), speed, Mach number, height over
-  the sphere, height over the ground, load factor, bank, pitch (flight-path angle), heading, angle
-  of attack (rad), vertical rate, the heating indicator √(ρ / 10⁻⁴ kg/m³)(v / 7 km/s)³ (1 is about
-  a returning orbiter's peak; a 200 m/s plane at sea level 0.02), flight time (negative before
-  the flight's start: it waits there), the path (`path_samples` points) and the legs as planned
-  (kinds, flight and scene times, a curve's misses, a landing's touchdown).
-- **Never below ground.** The path is checked at 1/24 s wherever it is within 500 m of the
-  highest the ground can be (a land's macro maximum plus its recipe's bound; a level ground's
-  elevation; above that every 0.5 s) against the ground's height plus `margin` (default 20 m:
-  the land's finest map differs from `heightAt` by up to 1.3 m and far ground is drawn smoother —
-  valleys filled — by up to 100–180 m at 30 km, so a camera far from the craft can see it under
-  the drawn ground; keep it near or raise the margin) plus the sea's `waves`; a landing's
-  approach may come down to the touchdown level. Too low: a `VidgenError` naming the flight, the
-  time, the leg, the place (x, z and latitude, longitude), the clearance and the remedies (climb
-  before, follow the terrain, `lift: true`). With `lift: true` the shortfall is raised by a
-  smooth lift (the same envelope at 0.5 g and 30 m/s, the smoothing's margin added first,
-  smoothed over 4 s), the flight planned again with it, up to four times, and a warning said.
-  A load factor over `max_load` (3) is a warning naming the time.
-- **Ground heights** (`vidgen.flight.terrain`, `vidgen/web/land.py`). `LandGround` is
-  `space-land`'s height definition ported to numpy: `hash2` on unsigned 32-bit integers with
-  wrapping products, `noised`'s value, `reliefAt` with every part (mountains, strata, rough,
-  dunes, craters, volcanoes, canyons), `macroAt`'s B-spline, the operations in the same order.
-  The macro lattice is made on the GPU: `land_definition(options, air)` opens a 16x16 page once
-  (headless Chromium, `WebPage`, about 3 s), reads `ground.definition()` and keeps it in vidgen's
-  cache folder (`ground/land-<key>.json`, 0.8 MB, the heights as float32 bits; key: the options,
-  the air, `vidgen/baked`'s digest of vidgen's page modules and three.js, the layout's version;
-  `vidgen cache clear` removes them). Agreement: at 300 seeded places for each of the seven
-  presets the numpy heights equal the page's `heightAt` to 1.4 × 10⁻¹² m (slow test); in Node
-  with a lattice of one's own to 1.2 × 10⁻¹² m (default test; asserted under 10⁻⁹). A page's `ground.above(p)` at the flight's
-  position equals the data's height over the ground to 4 × 10⁻⁸ m (a still of the alpine range).
-  `SphereGround` (a level ground at `elevation`), `SeaGround` (height 0, `waves` added to the
-  margin) and `FlatGround` need no page.
-- **Re-entry** (`vidgen.flight.reentry`; `start: {orbit: Ship, at: 'bar 5'}` reads the orbit
-  data's body at that frame and turns it into the local frame by `from_ecliptic` on that frame's
-  date; or a start with height, speed, climb). *Physical*: the start is the orbit's own two-body
-  motion seen from the turning world (position, velocity and their next derivatives: tested
-  equal to 10⁻⁶ m, 10⁻⁶ m/s, and the Kepler path 2 s later to 1 cm); the glide is the equilibrium
-  glide in the exponential air — L = m g (1 − v²/v_c²), v_c = √(g₀ R), D = L / E (`lift_to_drag`,
-  1.2) — so dv/dt = −(g₀/E)(1 − v²/v_c²) and h_eq(v) = H ln(ρ₀ v² / (2 β g₀ (1 − v²/v_c²))),
-  β = m / (C_L S) (`loading`, 450 kg/m²); the speed has a closed form,
-  v = v_c tanh(atanh(v₀/v_c) − g₀ W(t) / (E v_c)), W the integral of the drag's weight; the
-  heating indicator ∝ √ρ v³. *A look*: over `blend` seconds (600) the orbit's height, speed and
-  turn rate turn into the glide's by S, the drag's weight growing with it (no deorbit burn, no
-  coast); S-turns between ±`bank` (60°) with `reversals` (3) of `reversal` seconds, the heading's
-  weave following the coordinated-turn relation (the glide's height does not answer to the bank;
-  the drawn bank during the entry is the S-turns', not the shaped descent's specific force); the
-  end: from where the glide's own sink, 2 H g₀ / (E v), is a tenth of the speed (or 1.5 × the end
-  speed), over `end` seconds the height turns into `to.height` and the drag's weight falls to
-  zero exactly as the speed reaches `to.speed`, level: the next leg goes on from that state with
-  three derivatives continuous. `aoa` (40°) falls to the cruise's over the end. The air is the
-  page's (8.9 km scale height): the glide is higher than a real entry's (about 90 km at 6.6 km/s
-  against 75 km). Measured from a 400 km orbit to 12 km and 250 m/s: 37 minutes of flight, peak
-  heating 0.66 between 6.8 and 6.2 km/s (90 to 85 km), pitch within −7°, planned in 0.7 s.
-- **YAML** (a `web` scene's `flight_data:`, `vidgen.scenes.flight_data.FlightData`): `flights`
-  (each `name`, `start`, `legs`, `roll_rate`, `accel`, `vertical_accel`, `bank_limit`,
-  `max_load`, `aoa`, `lift`), `ground` (`{land: alpine}` or `{land: {preset | world + at, seed,
-  mountains, ..., air}}`, `sea` / `{sea: {waves}}`, `sphere` / `{sphere: {elevation}}`, `flat`),
-  `world` (default the land's air's, else earth), `at` (default the land's place, else [0, 0]),
-  `start` (the scene time of flight time 0), `speedup` (flight seconds per scene second; default
-  1, with a start from orbit the orbit data's), `margin`, `path_samples`. Unknown keys get a
-  did-you-mean (pydantic models; a land's options and parts are checked against
-  `space-land.js`'s own names); bars need `music_data`, a start from orbit `orbit_data` with
-  that body.
+- **One bridge.** Flights ride in the orbit payload (`orbits.flights`): the same `WebPage(orbits=)`,
+  `make_web_clip`, `web_page_layouts`, `clip_inputs` and `vidgen still` plumbing. Sibling param
+  `flight_data:` (maker `scenes/flight_data.py`, cache `web/flights.py`, mirroring `orbit_data`).
+  `data/web/flight.js` is added only on pages whose payload carries flights; it runs after
+  `orbits.js` and builds `ctx.flight` (no orbit data: no `ctx.orbits`). Clip inputs gain
+  `orbits.flight_helper` (its SHA-256) only then.
+- **Frames** (`vidgen.flight.frames`). *Planet-fixed* PF: origin the centre, z the IAU north pole,
+  x the prime meridian; a place (φ, λ, h) is (R + h)(cos φ cos λ, cos φ sin λ, sin φ). *Local* L
+  (the scene's): metres, origin on the sphere under `at = [φ₀, λ₀]`, x east, y up, z south, centre
+  (0, −R, 0): the default frame of `space-air`, `space-sea`, `space-clouds`, `space-land`. PF = R·up
+  + M·L, M = [east | up | south] (`space-land`'s `placeFrame(at)`). Heights are over the sphere,
+  |L − (0, −R, 0)| − R; height over ground is h − `heightAt(L.x, L.z)` (`Land.above`). *Ecliptic*
+  E = F(jd)·PF (F from `vidgen.orbits.rotation`), v_E = F·v_PF + ω × r_E. `LocalFrame.to_fixed /
+  from_fixed / to_ecliptic / from_ecliptic / ecliptic_axes / place / geodetic / chart /
+  heading_vector / heading_of`. Velocity is over the ground (= air speed, no wind). `ground: flat`:
+  y is the height, no latitudes, no re-entry.
+- **Worlds** (`vidgen.flight.worlds`): radius the page air's (`space-air` `RADII`, airless from
+  `space-land`), GM from `vidgen.orbits.BODIES` (invented: Earth's mean density), spin from
+  `vidgen.orbits.rotation`, an isothermal exponential air (scale height the page's; sea-level
+  density and γ here: Earth-like 1.225 kg/m³, 1.40; Mars-like 0.020, 1.29; `thin` 0.25, `thick`
+  4.9; speed of sound √(γ g₀ H), constant). A land preset's world is its air's.
+- **Kinematics** (`vidgen.flight.plan`): channels air speed V(t), height h(t), turn rate ψ̇(t)
+  (heading from north towards east). The local frame turns with body rates (ψ̇, 0, V_h / (R + h)),
+  integrated by fourth-order Magnus at steps ≤ 0.05 s, composed by a parallel prefix product;
+  acceleration analytic. Every change of V, ḣ, bank or curvature uses the septic smoothstep S(u) =
+  35u⁴ − 84u⁵ + 70u⁶ − 20u⁷, so position is smooth to the third derivative where legs meet.
+- **Legs** (`vidgen.flight.spec`): at most one horizontal manoeuvre, one vertical, one speed
+  change; lasting `for` seconds, `until` a scene time (seconds or 'bar 9 beat 3'), or as long as
+  needed; unnamed things are held. `straight: s`. `turn: {to | by, side, bank | radius,
+  roll_rate}` (coordinated, g_eff = g(h) − V_h² / (R + h); roll rate default 20°/s; heading change
+  exact). `climb` / `descend: {to | by, rate, accel}` (default 10 m/s, 0.25 g peak; `{rate}` alone
+  climbs on); `level: true`. `speed: {to | mach, rate}` (mean 2 m/s²). `waypoints: [[x, z] | {lat,
+  lon}, ...]` or `{points, bank_limit}`: septic Hermite pieces in the leg start's tangent plane with
+  G3 continuity; bank checked against `bank_limit` (60°; error names the waypoint). `circle:
+  {around, radius, turns, side}`. `follow: {clearance, rate, push, smoothing}`: terrain following
+  over consecutive legs (push-overs ≤ (1 − push) g, slopes ≤ `rate`, smoothed over `smoothing` 4 s).
+  `land: {glide, flare, touchdown, brake}`: descent at V tan(glide), flare to zero sink exactly at
+  the ground under the touchdown point, roll-out to a stop. `reentry`: below.
+- **Attitude and numbers.** Nose along velocity raised by the angle of attack (`aoa`, a look: 3°
+  per g); bank φ = atan(f_side / D), D = ½(f_up + √(f_up² + (0.1 g)²)) from the specific force
+  (with Coriolis and centrifugal parts): upright through push-overs, 0 in free fall. Body axes x
+  left wing, y up, z nose (as `vidgen/space-craft`). Per frame: position, velocity (local frame),
+  quaternion (x, y, z, w; w ≥ 0), speed, Mach, height over sphere and over ground, load factor
+  (negative when down), bank, pitch (flight-path angle), heading, angle of attack (rad), vertical
+  rate, heating √(ρ / 10⁻⁴ kg/m³)(v / 7 km/s)³ (1 ≈ a returning orbiter's peak), flight time
+  (negative before the start: it waits), the path (`path_samples` points) and the planned legs.
+- **Never below ground.** Checked at 1/24 s within 500 m of the highest possible ground (else every
+  0.5 s) against ground plus `margin` (default 20 m: far ground is drawn smoother than `heightAt`)
+  plus the sea's `waves`; a landing may reach touchdown level. Too low: `VidgenError` naming flight,
+  time, leg, place (x, z, lat, lon), clearance and remedies (climb, follow, `lift: true`). `lift:
+  true` adds a smooth lift and replans, up to four times, with a warning. Load factor over
+  `max_load` (3): a warning.
+- **Ground heights** (`vidgen.flight.terrain`, `web/land.py`). `LandGround` ports `space-land`'s
+  height definition to numpy (unsigned 32-bit wrapping hash, every recipe part, the B-spline, same
+  order: must equal the page's `heightAt`; tests assert under 10⁻⁹ m). `land_definition(options,
+  air)` opens a 16x16 page once, reads `ground.definition()` and caches it at
+  `<cache folder>/ground/land-<key>.json` (heights as float32 bits; key: options, air,
+  `vidgen/baked`'s code digest, layout version; cleared by `vidgen cache clear`). `SphereGround`
+  (level at `elevation`), `SeaGround` (`waves` added to the margin), `FlatGround` need no page.
+- **Re-entry** (`vidgen.flight.reentry`; `start: {orbit: Ship, at: 'bar 5'}` takes the orbit body
+  at that frame via `from_ecliptic`, or a start with height, speed, climb). Physical: the start is
+  the orbit's two-body motion seen from the turning world; the glide is the equilibrium glide in the
+  exponential air (L = m g (1 − v²/v_c²), v_c = √(g₀ R), D = L / E with `lift_to_drag` 1.2, β =
+  `loading` 450 kg/m²; closed-form speed). A look: a `blend` (600 s) from orbit to glide by S;
+  S-turns between ±`bank` 60° with `reversals` 3 of `reversal` seconds; an `end` that reaches
+  `to.height` and `to.speed` level with three continuous derivatives; `aoa` 40° falling to cruise.
+- **YAML** (`flight_data:`, `vidgen.scenes.flight_data.FlightData`, pydantic): `flights` (each
+  `name`, `start`, `legs`, `roll_rate`, `accel`, `vertical_accel`, `bank_limit`, `max_load`, `aoa`,
+  `lift`), `ground` (`{land: alpine}` or `{land: {preset | world + at, seed, mountains, ...,
+  air}}`, `sea` / `{sea: {waves}}`, `sphere` / `{sphere: {elevation}}`, `flat`), `world` (default
+  the land's air's, else earth), `at` (default the land's place, else [0, 0]), `start` (scene time
+  of flight time 0), `speedup` (default 1; from orbit the orbit data's), `margin`, `path_samples`.
+  Unknown keys get a did-you-mean (land options checked against `space-land.js`'s names); bars need
+  `music_data`, an orbit start `orbit_data` with that body. User keys: docs/CONFIG.md ("Flight data").
 - **Python API.** `vidgen.flight` (in `vidgen.api` as `flight`): `Flight`, `Leg`, `Start`, …,
   `FlightContext(world, frame, ground, margin, to_flight)`, `FlightRun(spec, context,
-  start_state)` with `sample(t)`, `position`, `state_at`, `path`, `legs`, `warnings`;
-  `LocalFrame`, `world`, `WORLDS`, the grounds, `height_of`, `relief_at`, `macro_at`, `hash2`,
-  `noise`, `entry_profile`, `heating`. `vidgen.api.web_scene_flights` (= `scene_flight_data`,
-  mirroring `web_scene_orbits`), `web_with_flights`, `web_land_definition`, `web_land_settings`.
-- **The page** (`ctx.flight`): `names`, `flights` (start, end, warnings, legs), `world`,
-  `anchor` (lat, lon, the local axes in the planet-fixed frame), `ground`, `frame`, `units`,
-  `approximations`, `warnings`, `index(t)`, `time(name, t)`, `active`, `position`, `velocity`,
-  `quaternion`, `speed`, `mach`, `height`, `aboveGround`, `load`, `bank`, `pitch`, `heading`,
-  `aoa`, `heating`, `climb`, `path(name)`, `legs(name)`, `series(name)` and
-  `place(object, name, t)` (sets a three.js object's position and quaternion). Every value is
-  the frame's own (round(t × fps)), never interpolated; the slow test reads three frames and gets
-  Python's float64 numbers exactly. `craft.fly(ctx.flight, {flight: "Plane"})`
-  (`vidgen/space-craft`, extended) places and turns a craft by the data every `update(t)`.
-- **Cache and keys.** `build/flights/flight-data-<key>.json`; key: the data version, vidgen's
-  version, the SHA-256 of the flight code (`vidgen/flight/`, `vidgen/orbits/`,
-  `scenes/flight_data.py`, `scenes/space_params.py`, `web/land.py`), the settings, the frame
-  rate, frames drawn and the scene's own, with a land the page code's digest, with bars the
-  score's bar and beat lengths and `t0`, with a start from orbit the orbit payload's digest.
-  Deterministic (the same settings give the same JSON: test). Existing clip keys are unchanged;
-  pages importing `vidgen/space-craft` are drawn again once (its bytes changed: `fly`).
-- **Measured** (2 cores): a sea flight of four legs over 1,802 frames 0.05 s (433 KB of JSON); the
-  alpine range with terrain following over a turn, 602 frames, 2.3 s (151 KB) after the ground's
-  page (3 s, once); the re-entry above 0.7 s to plan. Tests: `tests/test_flight.py` (21 default,
-  about 5 s; slow: the 400 km re-entry, the page's numbers and `craft.fly`, the seven presets'
-  heights against the page, 21 s).
-- **For later steps.** 386: `craft.fly(ctx.flight, {flight})` with the data's bank; a plane's
-  own control surfaces can read `bank`, `load`, `climb`. 387: `heating`, `mach`, `speed`,
-  `height`, `aboveGround` per frame. 390: `ctx.flight.position / velocity / quaternion` for chase
-  and fly-past moves; `path`. 391: `LocalFrame.to_ecliptic` / `ecliptic_axes` place the local
-  frame in the orbit bridge's; `start: {orbit}` hands an orbit over; the page must draw the land
-  and the air with the same `at` and world. 392: `FlightData` is a pydantic model a `space`
-  scene can hold as it is.
+  start_state)` with `sample(t)`, `position`, `state_at`, `path`, `legs`, `warnings`; `LocalFrame`,
+  `world`, `WORLDS`, the grounds, `height_of`, `relief_at`, `macro_at`, `hash2`, `noise`,
+  `entry_profile`, `heating`. `vidgen.api.web_scene_flights` (= `scene_flight_data`, mirroring
+  `web_scene_orbits`), `web_with_flights`, `web_land_definition`, `web_land_settings`.
+- **Page** (`ctx.flight`): `names`, `flights`, `world`, `anchor` (lat, lon, local axes in PF),
+  `ground`, `frame`, `units`, `approximations`, `warnings`, `index(t)`, `time(name, t)`, `active`,
+  `position`, `velocity`, `quaternion`, `speed`, `mach`, `height`, `aboveGround`, `load`, `bank`,
+  `pitch`, `heading`, `aoa`, `heating`, `climb`, `path(name)`, `legs(name)`, `series(name)`,
+  `place(object, name, t)`. Values are the frame's own (round(t × fps)), never interpolated: exactly
+  Python's float64. `craft.fly(ctx.flight, {flight: "Plane"})` (`vidgen/space-craft`) places a
+  craft every `update(t)`. Pages drawing land and air must use the flight's `at` and world.
+- **Cache key** (`build/flights/flight-data-<key>.json`): data version, vidgen version, SHA-256 of
+  the flight code (`vidgen/flight/`, `vidgen/orbits/`, `scenes/flight_data.py`,
+  `scenes/space_params.py`, `web/land.py`), settings, frame rate, frames drawn and the scene's own;
+  with a land the page code digest; with bars the score's bar and beat lengths and `t0`; from orbit
+  the orbit payload's digest. Deterministic. Tests: `tests/test_flight.py`.
 
 ### 123.8 Space plane parts: `vidgen/space-plane` (Step 386)
 
-`data/web/modules/space-plane.js` (import name `vidgen/space-plane`, in `VIDGEN_MODULES`)
-makes winged craft from parametrized parts: a lofted body, one wing function with presets,
-tails, engines, landing gear, moving surfaces, and six ready-made planes that differ by seed.
-The designs are invented; it is a look, not aerodynamics (nothing here says a plane would fly).
+`data/web/modules/space-plane.js` (`vidgen/space-plane`, in `VIDGEN_MODULES`): winged craft from
+parametrized parts (lofted body, one wing function with presets, tails, engines, gear, moving
+surfaces) and six ready-made planes varying by seed. Invented designs; a look, not aerodynamics.
 
-- **Where it lives and why.** A sibling of `vidgen/space-craft`, not a part of it: that
-  module's bytes are in the cache key of every page that imports it (the `space` scenes of
-  Phase AN, `examples/outbound`), and it is 135 KB already. `space-plane` imports its `CraftKit`,
-  `Craft`, `GLARE`, `ACCENTS` and `platingMaps` and adds 97 KB only to pages that want a plane.
-  `PlaneKit` extends `CraftKit` (every part of the craft kit is there: `engine`, `thrusters`,
-  `light`, `radiator`, the surfaces), `Plane` extends `Craft` (`update`, `fly`, `shade`,
-  `occluders`, `shadows`, `size`, `info`, the far point of light). `space-craft.js` is unchanged.
-- **Axes** (the craft kit's): +z the nose, +y up, +x the LEFT wing; metres, true size. A plane's
-  origin is the middle of its body (not of its bounding box, so lowering the gear or opening the
-  bay does not move it). `craft.fly(ctx.flight, {flight})` (§123.7) puts the flight's attitude on
-  these axes: in a right turn the right wing (−x, the green light) is the lower one. Checked in
-  the Chromium test by projecting the wing tips (camera behind, level, in a right and a left
-  turn) and on a still.
-- **Body** (`kit.body(options)`, the numbers alone: `bodyShape(options)`): `length` (3 to 120 m),
-  `width`, `height` (or `diameter` for both), `nose` (`NOSES`: `ogive`, `blunt`, `pointed`,
-  `chined`: widened and flattened into a lens, `needle`: the slender body of least wave drag),
-  `noseLength` (a share of the length, 0.3), `droop` (how far under the middle line the tip sits,
-  in heights), `belly` (0 round .. 1 flat: the lower half's superellipse exponent 2 to 5.5),
-  `tail` (the end's size, a share) with `tailLength` and `upsweep` (0: it narrows evenly, 1: only
-  the underside rises: a boat tail), `hump` (`{from, to, height}`: a dorsal fairing or a cabin
-  hump), `bay` (`{from, to, width}`: a payload bay under two doors), `cap` (the dark nose cap's
-  share of the length), `waterline` (degrees under the widest line where the belly's surface
-  begins), `skins` (`{top, belly, cap}`). The surface is lofted from cross-sections (a
-  superellipse above the widest line and one below; 72 points round, about 44 stations, closer in
-  the nose) with the normals of the whole sheet, so a border between two surfaces has no crease.
-  `userData.shape` gives `point(s, angle, out)`, `normal`, `top`, `bottom`, `half`, `under(s, x)`,
-  `over(s, x)` (s: 0 the nose's tip .. 1 the tail's end; angle: 0 the left side, 90 the top).
-- **Wing: one function** (`kit.wing(options)`, the outline alone: `wingPlanform(options)` →
-  `{semi, le(eta), te(eta), chord(eta), sweepAt(eta), area, aspect, taper, mean}`): `preset`
-  (below), `span` (tip to tip), `rootChord` (or `chord`: a share of the span), `tipChord` (or
-  `taper`: a share of the root's), `sweep` (the leading edge's, degrees, −60 to 85), `crank` +
-  `sweepInner` (the leading edge runs at `sweepInner` to that share of the half span), `curve`
-  (0..1: an ogival leading edge), `dihedral`, `thickness` (a share of the chord), `airfoil`
-  (`round`: a rounded leading edge and a sharp trailing edge; `sharp`: a lens; `flat`: flat
-  underneath), `twist` (degrees at the tip), `fillet` (0..1: the root swells into the body) with
-  `inboard` (metres from the middle line to the body's side), `edge` (the dark leading edge's
-  share of the chord), `controls` (`[{name: elevon | flap, from, to, chord}]`), `tip`
-  (`{height, cant, sweep, taper}`: winglets or tip fins), `allMoving` (a canard), `skins`
-  (`{upper, lower, edge}`). Left and right are the same panel mirrored. The trailing edge is
-  straight. Presets (`WINGS`, parameter sets and nothing more): `delta`, `double-delta`,
-  `cranked-arrow`, `swept`, `straight`, `ogival`, `stub` (short, thick), `blended` (a lifting
-  body's: long root, full fillet), `long` (high aspect ratio for thin air).
-- **Tails** (`kit.fin(options)`): `type` `single`, `twin` (`spacing` apart, leaning out by
-  `cant`: 12°), `vee` (`cant` 42°: fin and tailplane in one); `height`, `rootChord`, `tipChord`,
-  `sweep`, `thickness`, `airfoil`, `rudder` (true, false or `{from, to, chord}`), `sink`. Tip fins
-  are the wing's `tip`; no tail: leave it out. A fin is the wing's panel stood up.
-- **Other parts**: `kit.nozzles({count, exit, kind, layout: row | block | ring})` (the craft
-  kit's bells and plumes for a tail's end, sunk into it), `kit.nacelle({length, radius, spike,
-  pylon, kind})` (an air-breathing pod), `kit.intake({width, height, length})` (a scoop under
-  the belly for engines inside the body), `kit.gear({length, wheel, wheels, fold})`,
-  `kit.patch(bins, body, {from, to, a0, a1, skin})` (a thin piece lying on a body: panes,
-  stripes, text).
-- **A plane from one description**: `planeFrom(spec, options)`; `spec` is plain numbers and
-  words: `body`, `wing`, `fins`, `canard`, `engines` (`{count, layout, exit, kind}`), `nacelles`
-  (`{count, mount: wing | body | tail, at, radius, length}`), `intakes` (`{count: 1 | 2, at,
-  width, height, length}`), `gear` (`{nose, main, track, clearance, wheel}`), `cockpit`
-  (`{style: panes | band, panes, at, width, length}` or false), `windows` (a number of portholes
-  a side), `markings` (`{stripes, numbers, registration, at}`), `brake`, `bodyFlap`, `rcs`,
-  `lights`; a wing, canard or tail is placed by `at` (a share of the length from the nose) and
-  `up` (−1 the belly .. 1 the back). Or with the kit: `kit.plane(body)` after `body.add(wing)`
-  at a position of one's own. `planeSpec(kind, {seed, ...})` returns a ready-made plane's
-  description to change.
+- **A sibling of `vidgen/space-craft`**, so `space-craft`'s bytes (in every space page's key) do
+  not grow. Imports `CraftKit`, `Craft`, `GLARE`, `ACCENTS`, `platingMaps`; `PlaneKit` extends
+  `CraftKit` (all its parts), `Plane` extends `Craft` (`update`, `fly`, `shade`, `occluders`,
+  `shadows`, `size`, `info`, far point of light).
+- **Axes** (craft kit's): +z nose, +y up, +x the LEFT wing; metres, true size; origin the body's
+  middle (gear or bay never move it). With `craft.fly` (§123.7) a right turn lowers the right wing
+  (−x, green light).
+- **Body** (`kit.body(options)`; numbers: `bodyShape`): `length` (3 to 120 m), `width`, `height`
+  (or `diameter`), `nose` (`NOSES`: `ogive`, `blunt`, `pointed`, `chined`, `needle`),
+  `noseLength` (0.3), `droop`, `belly` (0 round .. 1 flat), `tail`, `tailLength`, `upsweep`,
+  `hump` `{from, to, height}`, `bay` `{from, to, width}`, `cap`, `waterline`, `skins` `{top, belly,
+  cap}`. Lofted from superellipse sections with whole-sheet normals (no crease between surfaces).
+  `userData.shape`: `point(s, angle, out)`, `normal`, `top`, `bottom`, `half`, `under(s, x)`,
+  `over(s, x)` (s 0 nose .. 1 tail; angle 0 left, 90 top).
+- **Wing** (`kit.wing(options)`; outline: `wingPlanform` → `{semi, le(eta), te(eta), chord(eta),
+  sweepAt(eta), area, aspect, taper, mean}`): `preset`, `span`, `rootChord` (or `chord`),
+  `tipChord` (or `taper`), `sweep` (−60 to 85°), `crank` + `sweepInner`, `curve`, `dihedral`,
+  `thickness`, `airfoil` (`round`, `sharp`, `flat`), `twist`, `fillet` with `inboard`, `edge`,
+  `controls` (`[{name: elevon | flap, from, to, chord}]`), `tip` (`{height, cant, sweep, taper}`),
+  `allMoving` (canard), `skins` `{upper, lower, edge}`. Mirrored; straight trailing edge. `WINGS`
+  presets: `delta`, `double-delta`, `cranked-arrow`, `swept`, `straight`, `ogival`, `stub`,
+  `blended`, `long`.
+- **Tails** (`kit.fin`, the wing panel stood up): `type` `single`, `twin` (`spacing`, `cant` 12°),
+  `vee` (`cant` 42°); `height`, `rootChord`, `tipChord`, `sweep`, `thickness`, `airfoil`,
+  `rudder` (bool or `{from, to, chord}`), `sink`.
+- **Other parts**: `kit.nozzles({count, exit, kind, layout: row | block | ring})`,
+  `kit.nacelle({length, radius, spike, pylon, kind})`, `kit.intake({width, height, length})`,
+  `kit.gear({length, wheel, wheels, fold})`, `kit.patch(bins, body, {from, to, a0, a1, skin})`.
+- **From one description**: `planeFrom(spec, options)` with `body`, `wing`, `fins`, `canard`,
+  `engines`, `nacelles` (`mount: wing | body | tail`), `intakes`, `gear` (`{nose, main, track,
+  clearance, wheel}`), `cockpit` (`{style: panes | band, ...}` or false), `windows`, `markings`,
+  `brake`, `bodyFlap`, `rcs`, `lights`; surfaces placed by `at` (share from the nose) and `up` (−1
+  belly .. 1 back). Or `kit.plane(body)` after `body.add(wing)`. `planeSpec(kind, {seed})` returns
+  a ready-made description to change.
 - **Moving parts** (`Plane`): `controls({elevon, roll, rudder, flap, brake, bodyFlap, canard})`
-  (degrees; elevon + is trailing edges down, roll + is a roll to the right, rudder + turns the
-  nose left; a vee tail also answers `elevon`), `gear(k)` (0..1: the doors open over the first
-  third, the legs swing down after; the wells and legs are not drawn when up), `bay(k)` (the
-  doors open to 112°, radiators inside them, a foil-lined trough with frames), `cabin(k)` (the
-  cockpit lit from inside; dark glass by day), and `update(t, {controls, gear, bay, cabin, auto,
-  ...a craft's})`. **On a flight the surfaces move by themselves** (a stated look,
-  `controlsFromRates`): roll = 0.9 × the bank's rate in degrees a second (within 18°), elevon =
-  −1.6 × the pitch's rate less a tenth of the bank's size (within 14°), rudder a quarter of the
-  roll, brake 9° for every m/s² of slowing (to 50°); `auto: false` or `controls: {...}` stops it.
-- **Places for effects** (`plane.anchors`, in the plane's axes; `plane.anchor(name)` in the
-  scene): `nose`, `tail`, `belly`, `cockpit`, `leadingEdges` and `finEdges` (lines of points),
-  `wingTips`, `finTips`, `nozzles` (with radius and kind), `intakes`, `gear`, `ground` (the
-  height the wheels stand on), `low` (the lowest part without gear). For Step 387.
-- **Surfaces** (computed, `SURFACES`, three 512 px maps made with the craft kit's
-  `platingMaps`, 0.18 s for all, once a page: not put through `vidgen/baked`): heat tiles (a
-  grid of tiles 0.35 m wide by default — larger than real ones, so that the grid reads —, every
-  other row moved half a tile, each of its own tone), quilted blankets with seams, panels with
-  lines and rivets; bare metal; a dark leading edge and nose cap. Schemes (`SCHEMES`): `tiles`
-  (white blankets over black tiles), `grey`, `metal` (bare), `dark` (tiles all over), `paint`
-  (white paint with panel lines over black tiles), `plain` (painted all round: no heat shield).
-  Colours: `color` (the back), `belly`, `accent` (stripes). `scorch` (0 factory fresh .. 1 many
-  flights): streaks behind the nose cap and the leading edges and greyed tiles, in the vertices'
-  colours (the request's "wear"; the craft kit's own `wear` is the depth of the surfaces'
-  relief). Markings: stripes round the body and across the wing tips, an invented registration
-  (two letters, a hyphen, three figures from the seed) in block letters on the sides and wings.
-  No flags, no names, no emblems.
-- **Ready-made planes** (`plane(kind, {seed, ...})`, `PLANES`; each seed another one of the
-  kind: proportions, sweep, wing preset or tail where the kind allows, scheme, scorch, stripes,
-  accent, registration): `glider` (a small crewed orbital glider, 22 to 30 m: chined nose, a
-  delta or ogival wing low on a flat belly, two fins leaning out, a bay, two bells),
-  `freighter` (a large cargo spaceplane, 56 to 74 m: a wide low body with a cabin hump, short
-  thick drooping wings, one or two fins, two air-breathing pods, four or five bells, a long
-  bay), `needle` (single-stage, 60 to 78 m: a pointed body with portholes, a cranked wing far
-  back, a vee tail, engines inside behind a belly intake), `lifter` (a lifting-body shuttle, 16
-  to 22 m: the body is most of the wing, short blended wings with tall tip fins), `scout` (an
-  atmospheric scout for other worlds, no crew, 9 to 13 m with a span of 17 to 32 m: long thin
-  wings, winglets, a vee tail, no heat shield), `skiff` (12 to 17 m: swept wings with winglets,
-  canards, two fins). `planeFleet(kind or kinds, {count, seed, spacing})` is a vee formation of
-  seeds seed, seed + 1, ... at the "far" detail.
-- **No look-alikes.** No ready-made plane has a double delta with one tall fin and three
-  bells; `problems()` says so if a description of one's own comes near that layout. No real or
-  invented vehicle, agency or company is named anywhere.
-- **`problems()`** (as `vidgen/space-scale`'s: sentences, an empty list when nothing is wrong):
-  a wing, canard or tail whose root does not touch the body or stands past its ends, a span that
-  hardly leaves the body or is over three times its length, a wing whose area sits in the first
-  30 % of the body or behind its tail, gear that does not reach below the lowest part, the
-  layout above. Every ready-made plane of seeds 1 to 12 has none (test: 1 to 5).
-- **In the air and in space.** The materials are `MeshStandardMaterial`s with the craft kit's
-  glare cap: lit by `sky.light.sun` and `sky.light.sky` when the air was given the scene;
-  `for (const m of Object.values(plane.materials)) sky.haze(m)` for the air between (the page's
-  call, as for any mesh). The land hides a plane behind a ridge (it writes depth: still 10); a
-  plane is drawn in front of every cloud (§123.5) and casts no shadow on the ground or the sea.
-  In space: a hard sun, `plane.shade(star)`, `scene.environment` from `craftEnvironment` or
-  `paintedEnvironment`. Self-shadows are the page's light's (`plane.shadows` gives the size).
-- **Parts** (`data/web/parts/space-plane.js`; no new kind): kind `craft`: `plane-glider`,
-  `plane-freighter`, `plane-needle`, `plane-lifter`, `plane-scout`, `plane-skiff`, `plane-open`,
-  `plane-landing`, `plane-fleet`; kind `craft-part`: `plane-part-bodies`, `plane-part-wings`,
-  `plane-part-tails`, `plane-part-engines`, `plane-part-gear`, `plane-surfaces`. 15 tiles in
-  24 to 26 s.
-- **Measured** (2 cores, SwiftShader): building the first plane of a page 1.0 s (the craft
-  kit's and the plane's surface maps), each later one 25 to 90 ms ("far" 7 to 25 ms); 21,000 to
-  60,000 triangles ("far" 5,000 to 14,000), 63 to 97 meshes (each moving surface is its own). A
-  frame at 1280x720: a plane a third of the frame wide over the sea at sunset 1.24 s against
-  1.12 s without it (+0.12 s, its shadows 0.03 to 0.05 s of that), at 320x180 0.15 against
-  0.13 s; a plane filling the frame over a world in space 0.63 s against 0.44 s (+0.19 s;
-  without shadows 0.60 s), at 320x180 0.13 against 0.05 s. A page's first frame is 1.0 to 1.3 s
-  longer with a plane.
-- **Honest notes.** Proportions are chosen to look right: wing areas, tail sizes, gear and
-  intake sizes follow no calculation, the heat shield's extent follows no heating, and a scout's
-  wing is not sized for any particular air. Tiles are larger than real ones. The auto controls
-  are a look. A plane has no interior beyond the bay's trough, no wheel wells behind the doors
-  (a dark patch), no flexing wing. The canopy does not show a cabin. Soot is a tint of the
-  vertices, so it is as fine as the mesh (about 0.5 m).
-- **Tests** (`tests/test_web_space_plane.py`): the module and its parts; in Node: outlines and
-  cross-sections as numbers, presets, did-you-mean (default); every kind for five seeds: sizes,
-  determinism, mirror symmetry, gear reach, triangles; surfaces, gear, bay, auto controls,
-  `problems()`, a plane from kit parts, a fleet (`slow`); in Chromium (`slow`): drawn on a
-  flight, banked the way it turns, twice the same picture.
+  (degrees; elevon + trailing edges down, roll + right, rudder + nose left), `gear(k)`, `bay(k)`
+  (doors to 112°), `cabin(k)`, `update(t, {controls, gear, bay, cabin, auto, ...})`. On a flight
+  the surfaces follow the rates (`controlsFromRates`, a look); `auto: false` or `controls` stops it.
+- **Anchors** (`plane.anchors`; `plane.anchor(name)` in the scene): `nose`, `tail`, `belly`,
+  `cockpit`, `leadingEdges`, `finEdges`, `wingTips`, `finTips`, `nozzles`, `intakes`, `gear`,
+  `ground`, `low`. Used by §123.9.
+- **Surfaces** (`SURFACES`: three 512 px maps from `platingMaps`, once a page, not baked): heat
+  tiles, blankets, panels, bare metal, dark edges and nose cap. `SCHEMES`: `tiles`, `grey`,
+  `metal`, `dark`, `paint`, `plain` (no heat shield). `color`, `belly`, `accent`, `scorch` (0 .. 1
+  wear as vertex tint). Markings: stripes and an invented registration from the seed. No flags,
+  names or emblems.
+- **Ready-made** (`plane(kind, {seed})`, `PLANES`): `glider`, `freighter`, `needle`, `lifter`,
+  `scout`, `skiff`; `planeFleet(kind or kinds, {count, seed, spacing})`: a vee of consecutive seeds
+  at "far" detail. No ready-made plane is a double delta with one tall fin and three bells, and no
+  real or invented vehicle, agency or company is named.
+- **`problems()`** (as `vidgen/space-scale`'s: sentences, empty when fine): surfaces off the body,
+  implausible span, misplaced wing area, gear not reaching below the lowest part, the look-alike
+  layout above. Ready-made planes have none.
+- **In air and space.** `MeshStandardMaterial`s with the glare cap, lit by `sky.light.*`; call
+  `sky.haze(m)` on each of `plane.materials`. Land hides a plane by depth; planes draw in front of
+  every cloud and cast no shadow on ground or sea. In space: `plane.shade(star)`, environment from
+  `craftEnvironment` or `paintedEnvironment`; `plane.shadows` sizes self-shadows.
+- **Parts** (`data/web/parts/space-plane.js`): kind `craft`: `plane-glider`, `plane-freighter`,
+  `plane-needle`, `plane-lifter`, `plane-scout`, `plane-skiff`, `plane-open`, `plane-landing`,
+  `plane-fleet`; kind `craft-part`: `plane-part-bodies`, `plane-part-wings`, `plane-part-tails`,
+  `plane-part-engines`, `plane-part-gear`, `plane-surfaces`. Tests: `tests/test_web_space_plane.py`.
 
 ### 123.9 Re-entry and flight effects: `vidgen/space-effects` (Step 387)
 
-`data/web/modules/space-effects.js` (import name `vidgen/space-effects`, in `VIDGEN_MODULES`;
-imports `three` and `AIR_GLSL` / `DISPLAY_GLSL` / `sunlightAt` / `skyAmbient` of
-`vidgen/space-air`). What the air does to a craft and a craft to the air: the glow of a re-entry,
-vapour trails, engine exhaust in air, the vapour of a transonic pass and of a hard turn.
+`data/web/modules/space-effects.js` (`vidgen/space-effects`, in `VIDGEN_MODULES`; imports `three`
+and `AIR_GLSL`, `DISPLAY_GLSL`, `sunlightAt`, `skyAmbient` of `vidgen/space-air`): re-entry glow,
+vapour trails, exhaust in air, transonic and hard-turn vapour. Imports neither `space-craft` nor
+`space-plane` (works on landers and ships; keeps their keys).
 
-- **A module of its own (decision).** Not inside `space-craft.js` (its bytes are in the cache key
-  of every Phase AN scene and of `examples/outbound`; it is byte-identical to Step 385's) and not
-  inside `space-plane.js`: the effects must also work on a lander and on Step 388's ships. The
-  module imports neither. It takes a craft as "anything with an `object`", a bounding ellipsoid
-  (`shape: {center, radii}`; default from a plane's anchors `nose` / `tail` / `belly` / `wingTips`,
-  else from the meshes' boxes) and named places (`anchors`: `nozzles`, `wingTips`, `tail`), and
-  finds a craft kit's engines through `craft.engines` when they are there.
 - **One call.** `effects(craft, {flight: ctx.flight, name, sky, seed, quality, shape, anchors,
-  scaleHeight, path, sun, light, ambient, reentry, contrails, exhaust, vapour})` → `Effects` with
-  `object` (what is laid in the world: add it to the scene), `attached` (what rides with the craft:
-  added to the craft's object by the call), `update(t, {...})` (after the craft's own update),
-  `state` (the numbers of the last update: `heat`, `air`, `wind`, `cone`, `wingVapour`, `plume`,
-  ...), `parts`, `shape`, `dispose()`. Each of the four groups is `true` or its options:
-  `reentry` {`full` 0.65, `level`, `shock`, `skin`, `wake`, `sparks`, `trail`, `head`, `thickness`
-  0.055, `length` 7, `persist` 5}, `contrails` {`from` nozzles | wingTips | tail | places, `band`
-  [8000, 9000], `always`, `life` 70, `size`, `level`, `color`}, `exhaust` {`nozzles`, `level`,
-  `air`}, `vapour` {`cone`, `wings`, `tips`, `level`}. `update` options (a number or a function of
-  t, each replacing the flight's): `velocity`, `heating`, `mach`, `load`, `height`, `aboveGround`,
-  `air`, `throttle`, `boost` (the afterburner), `pulse` (multiplies glow and exhaust: a level of
-  `ctx.music`), `sun`. Unknown names are refused with a did-you-mean.
-- **No state.** Every picture is a function of the `t` given to `update` and of the flight; the
-  seed feeds a whole-number hash (`hash`), flicker is a sum of fixed sines. The one thing kept is
-  the windward map (below), drawn again when the wind's direction in the craft's axes changes and
-  a function of that direction alone. Tested: a frame drawn after other frames is byte-identical
-  to the frame drawn first.
-- **Where the numbers come from.** With `flight`: `tracker(ctx.flight, name)` reads the frame of
-  `t` (`now`) and any flight second between frames by straight lines (`at`); before the scene's
-  first frame the path is taken straight back along that frame's velocity (the data holds the
-  scene's frames only: stated). Without a flight every number is given to `update`, and trails
-  follow `path(tau)` or a straight line. The air's density over sea level's is `exp(-height /
-  scaleHeight)` (the sky's scale height, the flight's own air), or `air` given.
-- **Re-entry** (strength `heat` 0..1: the flight's `heating` over `full`, or `heating` by hand).
-  - *Colour and brightness*: `heatColor(h)` runs through `HEAT_STOPS` (dull red, red, orange, a
-    pale orange, a white-pink), `heatLevel(h)` = `HEAT_WHITES` (3.2) x h^1.6, nothing under 0.02;
-    both rise with h and never fall (tested). A look: no spectrum of any gas.
-  - *The shock layer*: the craft's solid meshes are drawn once, seen from upwind through an
-    orthographic camera, into a small half-float map with mipmaps (192 px; `fast` 64, `fine` 256):
-    how far upwind the surface reaches and how squarely it faces the flow, premultiplied by cover.
-    A view ray sums a layer whose light falls off as exp(-distance upwind of that surface /
-    thickness): between two samples the distance is taken as a straight line, so the sum over a
-    step is closed-form and a layer much thinner than a step has no bands (14 samples; 8 / 24).
-    The sum is drawn twice: on the inside of a ball round the craft (the rays that miss the
-    craft: the ball's far side is hidden where the craft is), and on the craft's own surfaces
-    drawn once more ("hot surface" meshes sharing the geometry), each summing only as far as
-    its own surface. So the craft hides the glow behind it and nothing shines through a wing,
-    with no depth texture. The layer hugs nose, belly and leading edges of any craft because it
-    is made from the craft's own shape. Tried first and dropped: a glowing ellipsoid shell (a
-    blade standing off a flat belly, visible as an ellipse from below).
-  - *Hot surfaces*: the same extra meshes glow where their normal faces the flow (power 1.6),
-    mottled, and take a little light where they do not (the layer's spill): a look, no heat
-    conduction.
-  - *Bloom*: a ball of light round the windward side, summed in closed form.
-  - *The wake*: two streams behind the craft along the flow, as wide as the craft is across the
-    flow, each summed in closed form where the view ray passes nearest the stream's axis (no
-    steps), with streaks that run down it with the time; white-hot only close to the craft.
-  - *Sparks*: up to 36 points (14 / 72) born on the windward rim of the ellipsoid, carried back,
-    each living again and again from its own numbers (`sparkAt`); shown from heat 0.25.
-  - *From afar*: a head (a point at least 3.4 px in radius that keeps 45 % of its light when
-    shown larger than true: a marker, stated; it fades out when the craft is over 40 px) and the
-    train: a tube of light along the path flown, glowing `persist` flight seconds (5: a look; real
-    trains last from under a second to minutes), at least 1.2 px wide (30 % of its light kept).
-  - *Exposure*: light is multiplied by the air's exposure gain in `camera` and `auto` (honest: a
-    lifted night exposure burns the glow out) and by min(gain, 1) in `film` (never lifted). To the
-    canvas the glow is laid on as a screen blend of display values, so layers roll off towards
-    white instead of clipping; into a target (`vidgen/three-finish`) as linear light, added.
-- **Vapour trails.** A trail is a soft tube through rings at birth times that are fixed multiples
-  of a step (`trailTimes`: the newest 24 rings a 30th of a second apart, the next 24 a 15th, ...,
-  back to `life`), each ring where the trail's place on the craft was at its time, from the
-  flight. A piece of trail therefore stays where it was laid while the craft flies on (tested in
-  Node on the rings and in Chromium on the pixels); it widens (radius 1.2 + 2.2 age^0.75 m times
-  the craft's size) and thins, breaks into lumps along its length and, when old, snakes slowly
-  (`wave`). Laid only where the craft was above `band` at the time (8 to 9 km: where the air is
-  cold enough on an Earth-like world; chosen), or `always`. Engines nearer than 1.5 m join into
-  one trail; at most four. Lit by the sun after the air at the craft's height (`sunlightAt`) and
-  by the sky (`skyAmbient`): white by day, orange at dusk; the shaded side at 40 % (a cloud is
-  never black), a forward gleam at thin edges; hazed by `airThrough`. No wind, no shadow on or
-  from clouds.
-- **Exhaust in air** (Step 387.1; the first version, the craft kit's stepped plume with other
-  numbers, drew a pale fog with three blobs). Each bell has its own flame of three parts, all
-  summed in closed form where the view ray passes nearest the flame's axis (no steps, so the
-  core's edge stays sharp): a sharp-edged core leaving the bell (blue-white; orange-yellow with
-  the afterburner), a translucent outer flame that tapers to a point in dense air and opens to a
-  wide faint bell in thin air, and on the axis a row of shock diamonds: lozenges every `spacing`
-  exit radii, each 16 % smaller and a third dimmer than the one before, only from 45 % throttle.
-  `plumeShape(air, boost)` gives the numbers: half angle 0.045 + 0.6 e^2 with e = 1 - air^0.3
-  (2.6 degrees at sea level, 31 in a vacuum), length 9 exit radii to 1/e (x 1.55 with the
-  afterburner), diamonds x (1 - e)^2, spacing (1.7 + 2.6 e) exit radii (wider as the pressure
-  ratio grows), taper (1 - e)^2. The exponents and the angles are a look tied to the air's
-  density, not nozzle theory. Two bells side by side give two flames whose outer parts merge
-  downstream. Part throttle: a shorter flame, no diamonds. On a craft with kit engines the
-  module hides the kit's plume and draws its own in its place at the power the kit's has now
-  (so `ship.update(t, {throttle})` and burns still drive it). No heat shimmer (it would need the
-  picture behind as a texture). Seen along its axis the flame is an approximation (the sum is
-  taken at one place on the ray).
-- **Condensation** (Step 387.1; the first cone was a flared tube that read as a glass bell).
-  `coneLevel(mach, air)` = exp(-((mach - 0.97) / 0.026)^2), a tenth at 0.93 and 1.01, and only
-  in air denser than 0.4 to 0.8 of sea level's (low and humid). The cone is two balls of mist
-  summed in closed form: a dense thin disc across the flow just aft of the body's middle, opaque
-  at its core, and a longer, thinner one behind it; their density is made uneven by noise at the
-  place where the ray passes nearest (it drifts with the time), so it is not a perfect surface of
-  revolution; rim and back feather to nothing. `wingVapour(load, air)`: from 2.4 g, full at 5 g:
-  two flat patches of the same mist just over each wing half (a sheet, 0.5 m thick) and a thread
-  from each wing tip (a trail of 1.6 s, laid in the world). Looks; brief by construction (the
-  flight passes Mach 0.97 in seconds). The mist is summed along the whole ray: a wing or body
-  inside it does not cut it. No sonic-boom ring, by decision. No dust or spray from the ground
-  (not built).
-- **What is physical and what is a look.** Physical: the windward side from the velocity and the
-  attitude; when things show (heating, Mach number, load, height from the flight); a trail along
-  the path flown, ages in flight seconds; the plume widening as the air thins. Looks: every
-  shape, colour, brightness and lifetime above; the head's and the train's least size.
-- **Limits.** Everything is drawn in front of every cloud (Step 383's order) and is hidden by
-  ground only through the depth the land writes (trails and glows test it; a trail never fades
-  softly into a ridge). The windward map sees solid meshes only and ends half a texel inside the
-  craft's outline: in a frame-filling close-up from below, steps of a few pixels show at the
-  layer's edge behind a trailing edge, and on an unlit craft seen from the side the layer's
-  edge along the belly is toothed (Step 387.1 tried four reads of the map round each place:
-  no visible gain for four times the reads, not kept). The wake is straight (it does not follow a turn); the
-  train and trails do. The glow lights neither the air, the clouds nor the sea. A trail's lumps
-  come from value noise and can show faint cross lines. The ball of the layer is tested against
-  the craft only: another craft inside it would not hide its part of the glow.
+  scaleHeight, path, sun, light, ambient, reentry, contrails, exhaust, vapour})` → `Effects`:
+  `object` (add to the scene), `attached` (added to the craft), `update(t, {...})` (after the
+  craft's), `state` (`heat`, `air`, `wind`, `cone`, `wingVapour`, `plume`, ...), `parts`, `shape`,
+  `dispose()`. A craft is anything with an `object`, a bounding ellipsoid (`shape: {center,
+  radii}`; default from plane anchors, else mesh boxes) and `anchors`; kit engines via
+  `craft.engines`. Groups (`true` or options): `reentry` {`full` 0.65, `level`, `shock`, `skin`,
+  `wake`, `sparks`, `trail`, `head`, `thickness` 0.055, `length` 7, `persist` 5}, `contrails`
+  {`from` nozzles | wingTips | tail | places, `band` [8000, 9000], `always`, `life` 70, `size`,
+  `level`, `color`}, `exhaust` {`nozzles`, `level`, `air`}, `vapour` {`cone`, `wings`, `tips`,
+  `level`}. `update` overrides (number or function of t): `velocity`, `heating`, `mach`, `load`,
+  `height`, `aboveGround`, `air`, `throttle`, `boost`, `pulse` (glow and exhaust multiplier), `sun`.
+  Unknown names: did-you-mean.
+- **No state.** Every picture is a function of `t` and the flight (integer `hash`, fixed sines);
+  only the windward map is kept, a function of the wind direction in craft axes alone. A frame
+  drawn after others is byte-identical to the same frame drawn first.
+- **Inputs.** `tracker(ctx.flight, name)`: `now` (the frame of `t`) and `at` (linear between
+  frames; before the scene's first frame, straight back along its velocity). Without a flight,
+  numbers come from `update` and trails follow `path(tau)` or a line. Density `exp(-height /
+  scaleHeight)` or `air`.
+- **Re-entry** (`heat` = `heating` / `full`): `heatColor` (`HEAT_STOPS`) and `heatLevel` =
+  `HEAT_WHITES` 3.2 x h^1.6 (none under 0.02), both monotonic. Shock layer: solid meshes drawn
+  once from upwind (orthographic) into a small half-float map (192 px; `fast` 64, `fine` 256); view
+  rays sum a layer falling off with distance upwind of that surface, in closed form per step, drawn
+  on a ball round the craft and on duplicate "hot surface" meshes each summing only to its own
+  surface (the craft hides the glow behind it without a depth texture). Plus hot surfaces, bloom, a
+  straight two-stream wake, sparks (`sparkAt`; 36, `fast` 14, `fine` 72; from heat 0.25), and from
+  afar a head (≥ 3.4 px marker) and a train along the path for `persist` flight seconds (≥ 1.2 px).
+  Exposure: x gain in `camera` / `auto`, x min(gain, 1) in `film`; screen-blended to the canvas,
+  added linear into a `vidgen/three-finish` target.
+- **Vapour trails.** Soft tubes through rings at fixed birth times (`trailTimes`: 24 a 30th of a
+  second apart, 24 a 15th, ..., back to `life`), each where its place on the craft was then, so
+  trails stay where laid; widen, thin, lump and snake with age. Only above `band` (or `always`);
+  engines within 1.5 m join; at most four. Lit by `sunlightAt` and `skyAmbient`, hazed by
+  `airThrough`.
+- **Exhaust in air.** Per bell a closed-form flame: core, outer flame and shock diamonds (from 45 %
+  throttle), shaped by `plumeShape(air, boost)` (tight in dense air, wide in thin; longer with the
+  afterburner; a look tied to density). Replaces a kit engine's plume at the kit's current power.
+- **Condensation.** `coneLevel(mach, air)` = exp(-((mach - 0.97) / 0.026)^2) in dense air: two
+  closed-form mist discs aft of the body's middle. `wingVapour(load, air)`: from 2.4 g, full at
+  5 g: sheets over the wings and wing-tip threads. No sonic-boom ring (by decision).
+- **Limits.** In front of every cloud; hidden by ground only via the land's depth; the windward
+  map sees solid meshes only; the wake does not follow turns; the glow lights nothing else; the
+  layer is tested against its own craft only.
 - **Parts** (`data/web/parts/space-effects.js`, kind `effect`): `effect-reentry`,
   `effect-reentry-early`, `effect-reentry-lander`, `effect-reentry-far`, `effect-contrails`,
-  `effect-exhaust-air`, `effect-exhaust-thin`, `effect-vapour-cone`, `effect-wing-vapour`.
-- **Measured** (2 cores, SwiftShader, straight to the canvas, with the dome and the plane;
-  seconds a frame at 1280x720 / 320x180). A plane a third of the frame wide in a re-entry at
-  75 km: 0.46 / 0.08 without effects, 0.83 / 0.12 with all of `reentry` (+0.37 / +0.04), `fast`
-  0.76 / 0.11, without hot surfaces 0.78; the plane filling the frame from below 1.13 / 0.16. A
-  plane over the sea at 90 m: 1.39 / 0.15 without, 1.31 to 1.39 / 0.16 with exhaust, vapour,
-  trails or all three (their cost is inside the measurement's scatter of 0.05 s). The first
-  frame of a page is 0.5 s longer with `reentry` (shaders, the map).
-  The nine part tiles: 13 s. After Step 387.1 (same shots, another session): a re-entry 0.86,
-  the plane filling the frame 1.16 to 1.4, over the sea 1.45 without and 1.38 to 1.52 with
-  exhaust, vapour or all (inside the scatter; the exhaust no longer takes steps).
-- **Tests** (`tests/test_web_space_effects.py`): the module and its parts; in Node: heat to
-  colour and brightness (monotonic), the plume's shape by density, cone, wing vapour and
-  contrail levels, ring times, a flight read between frames and before the scene, sparks,
-  did-you-mean, a trail's rings the same after other frames and staying where laid; in Chromium
-  (`slow`): brighter at higher heating, brighter under the belly than over the back, a frame
-  after other frames identical, the windward map drawn once, the picture not burnt out, a
-  trail's middle line unmoved while the plane flies on.
-
+  `effect-exhaust-air`, `effect-exhaust-thin`, `effect-vapour-cone`, `effect-wing-vapour`. Tests:
+  `tests/test_web_space_effects.py`.
 ### 123.10 Giant ship hulls: `vidgen/space-hull` (Step 388)
 
 `data/web/modules/space-hull.js` (import name `vidgen/space-hull`, in `VIDGEN_MODULES`; imports
