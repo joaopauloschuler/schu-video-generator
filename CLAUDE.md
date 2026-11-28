@@ -55,5 +55,6 @@ to the user.
   Exception: the kphi3 example's narration MP3s/hashes under `examples/kphi3/audio/` ARE committed.
 
 ## Task list
-`tasklist.md` is the roadmap. Each step is done by one agent, in order. Tick the boxes of your
-step (`[x]` done, `[~]` partial with a note) in the same commit.
+`tasklist.md` lists open work only. Each step is done by one agent, in order. In the same commit,
+remove your step's items when they are done (completed work lives in the git history), leave a
+partly done item as `[~]` with a note on what is left, and raise the file's "Next step number".
