@@ -6221,1468 +6221,486 @@ rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure fun
 
 ### 69.25 Screenplays (Step 91)
 
-`vidgen screenplay FILE [--out DIR|FILE.yaml] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` (`cli.cmd_screenplay`, MCP tool
-`screenplay`) makes a stage project from a screenplay without AI. `screenplay.py` (no manim;
-props' kinds imported when a `set:` line is read) has the parser and the builder; the writing is
-`vidgen plan`'s (`plan_yaml.commented_yaml`: a config with comments above top-level keys, scenes
-and, new, beats, checked to load back; `write_project`: scaffold like `vidgen init`, write the
-config; `write_plan` now calls both, its output unchanged).
+`vidgen screenplay FILE [--out DIR|FILE.yaml] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]`
+(`cli.cmd_screenplay`, MCP `screenplay`) builds a stage project from a screenplay without AI.
+`screenplay.py` (no manim) parses and builds; writing reuses `plan_yaml.commented_yaml` (checked
+to load back) and `write_project`, as `write_plan` does.
 
-- **Parsing** (`parse_screenplay(text) -> Screenplay(title, front, scenes)`): optional YAML
-  front matter (a mapping of top-level keys; `scenes` refused); elements by `_paragraphs` (a
-  heading, `set:` or `NAME:` line stands alone; other lines join the element above until a blank
-  line; HTML comments dropped). The first level-1 heading not starting with `Scene` is the title;
-  any other heading starts a `ScriptScene` (`Scene:` stripped; text before any heading: `scene 1`).
-  `set:` lines right under it are joined. `[...]` alone is a `Direction`; `NAME [(manner)]: text`
-  (`_SPEAKER`: words in capitals) a `Line`, its inline `[...]` taken out as directions with `at` =
-  words before / words (≤ 0.9) and the speaker as default subject; `NARRATOR`, `NARRATION`,
-  `VOICE OVER`, `V.O.` and plain paragraphs are the narrator (`speaker None`). Errors
-  (`VidgenError`) name the line.
-- **The set** (`parse_set(text, names) -> SetDesign(params, placed, props, todos)`): `;` parts
-  `background` (`SKIES` gradient + `GROUNDS` colour, else tokens / hex / `a to b`, else an image
-  file), `props` (built-in `PROP_KINDS`, `kind (name) at place`, else the next of `PROP_SLOTS`;
-  `BACKDROP_PROPS` house / tree get `depth`), `marks`, `characters`. Not understood: a scene
-  `# TODO:`. Characters not placed take the marks of `PLACES[count]` at least `SPACING` 0.12 from
-  placed ones, in order of appearance; the scene's cast is the placed, speaking and
-  direction-named characters (`_scene_cast`).
-- **Directions** (`direction_actions(text, state, default) -> (groups, unmatched)`): sentences
-  (`.`, `;`, `!`, `then`) cut at `and` unless a name follows (`_clauses`); leading `then` /
-  `suddenly`..., trailing `-ly` words tried off on a second attempt. Subject: character names
-  (written names and, for a multi-word name, its last word when unique), `he` / `she` / `it` for a
-  single last subject, `they`; else `default`. `_VERBS` (in order): walk / go / run... `to` ->
-  `walk_to` (a mark or x as given; a prop or character: `PROP_GAP` 0.1 / `CHARACTER_GAP` 0.14
-  before it on the walker's side; when another character stands within `CHARACTER_GAP` of that
-  spot, the other side, then `CHARACTER_GAP` further out (Step 106); `runs` `speed: RUN_SPEED`
-  5), `enter` / `exit` with a side,
-  `jump`, `look at` (characters, props by name or unique kind, marks, `camera` / `us`; `each
-  other`), `point at` (`look_at` + `gesture: point`), `wave` / `nod` (+ a look when they name
-  someone), `shrug`, `shake ... head`. `StageState` follows each character's x (`home`: its
-  starting mark), the last subjects and object (`it`, `him`, `her`). Each action carries its
-  estimated seconds (`walk_motion_seconds(walk_seconds(distance))`, a jump's, `LOOK_SECONDS`,
-  `GESTURE_SECONDS`, + `MARGIN` 0.1); `_add_scene`'s `attach` puts a beat's direction groups one
-  after the other: `at` = start / the line's estimated seconds (words / 2.6, or the front
-  matter's `narration.words_per_second`), rounded down, ≤ `LATEST_AT` 0.95. Directions before a
-  line start at its 0; after a scene's last line at `TRAILING_AT` 0.6 of it; inline ones at
-  their word. A manner (`manner_actions`: built-in expression / pose names, `MANNERS` words) is a
-  `react` first in the beat; unknown words and unmatched sentences are beat `# TODO:`s.
-- **Characters and voices** (`screenplay_project`): front matter `characters` are kept as
-  written (declared; only a screenplay `voice_kind:` key is taken out); every other speaker
-  (`character_id`: `OLD ASH` -> `old_ash`) gets a look of `LOOKS` (eleven looks differing in body,
-  hair, eyes, ears, accessories, skin, clothes and hair colours, the last five also in outfit,
-  pattern, shoes and facial hair, §69.47; since Step 115 no look is taken twice: random
-  well-contrasted looks follow, §69.49) and a `<id>_voice`
-  entry with `label`. **Voice kinds** (`VOICE_KINDS` feminine / masculine / neutral; Phase I
-  review follow-up): each look carries the `voice_kind` that suits it (bun + scarf, long hair,
-  ponytail + dress and braids + apron feminine; tall short hair + glasses, bald + hat, beard +
-  coat and moustache + shorts masculine; the other three neutral). `_stated_kinds` reads a kind from a pronoun in a line's brackets (`FEN (she): ...`,
-  `(he, doubtful)`, `(they)`; `_pronoun_kind` takes it out of the manner, `Line.voice_kind`;
-  `PRONOUN_KINDS`) or a front matter character's `voice_kind:`; two kinds for one character, a
-  pronoun on the narrator or an unknown kind are `VidgenError`s naming the line.
-  `_generated_looks` (Step 115, replacing `_pick_look`; §69.49) gives a generated character the
-  first unused look of its stated kind (then a neutral look; without a kind: the first unused
-  look in order) that keeps `MIN_CONTRAST` against the declared, cast and earlier generated
-  characters, else a random look of its kind, and the character's voice kind is the stated one,
-  else its look's. Declared characters keep their entries; one without a
-  `voice` gets one of its stated kind (else any).
-  `assign_voices(voice, language, kinds)` (`kinds`: one per character, or a count of
-  characters without a kind): Kokoro: the voices of the narrator's language
-  (`kokoro_voices.resolve`), for English American and British, grouped by accent and gender,
-  each group best grade first without the narrator's voice (and no `santa` voice), the narrator's
-  own group last; `_kokoro_picks` takes for each character a group of its kind's gender
-  (neutral: the gender used less so far), the least used group, then the least used accent, then
-  in order; within a group the next voice. Without kinds this gives the groups in turn as before.
-  OpenRouter: the model's listed voices (`openrouter.known_voices`) without the narrator's, in
-  turn (no kinds known); ElevenLabs: no list, the entries only get a `label` and a video `# TODO:`
-  asks for `voice_id`s, naming each character's voice kind. Defaults (`DEFAULTS`): 1920x1080,
-  preview 854x480, `soft_pastel`, Kokoro `bf_emma` at 0.85, `narration.pad` 0.7, `auto_direct:
-  true`; front matter keys win.
-- **Output**: a header comment, `# generated: ...` above `characters`, the notes above `voices`,
-  scene and beat `# TODO:`s; then `validate_all` (exit 1 on problems). JSON:
-  `jsonout.screenplay_document`.
-- **Sample**: `examples/screenplay/humming_box.md` (three original characters, two scenes): 11
-  beats, 0 TODOs; the project validates, `vidgen lint` (preview) finds nothing, `vidgen direct`
-  adds 18 actions (looks, reactions, a head shake on `*anything*`, a shrug). Tests:
-  `tests/test_screenplay.py`.
-- **Not done here**: English grammar and manner words only; no grammar for props moving, sitting
-  (Step 94), holding (Step 93) or shots (Step 95, §69.29); a walk to a character goes where it stood at
-  the start of the beat; one set per scene (no set changes inside a scene); ElevenLabs voices are
-  not chosen.
+- **Parse** (`parse_screenplay(text) -> Screenplay(title, front, scenes)`): optional YAML front
+  matter (`scenes` refused). First level-1 heading not starting `Scene` = title; other headings
+  start a `ScriptScene`. `[...]` alone is a `Direction`; `NAME [(manner)]: text` a `Line` whose
+  inline `[...]` become directions at words-before / words (≤ 0.9). `NARRATOR`, `NARRATION`,
+  `VOICE OVER`, `V.O.` and plain paragraphs are the narrator. Errors are `VidgenError`s naming the
+  line.
+- **Set** (`parse_set(text, names) -> SetDesign`): `;` parts `background`, `props` (`PROP_KINDS`,
+  `kind (name) at place`, else next `PROP_SLOTS`), `marks`, `characters`; the rest becomes a scene
+  `# TODO:`. Unplaced characters take `PLACES[count]` marks ≥ `SPACING` 0.12 from placed ones.
+- **Directions** (`direction_actions(text, state, default)`): `_VERBS` map clauses to `walk_to`
+  (to a prop / character: `PROP_GAP` 0.1 / `CHARACTER_GAP` 0.14 before it, the other side if
+  taken; `runs`: `RUN_SPEED` 5), `enter` / `exit`, `jump`, `look_at`, `point at`, `wave`, `nod`,
+  `shrug`, head shake; subjects by name or pronoun (`StageState`). Groups chain by estimated
+  seconds at `at` = start / line seconds (words / 2.6 or `narration.words_per_second`), ≤
+  `LATEST_AT` 0.95; after a scene's last line at `TRAILING_AT` 0.6. A manner is a leading `react`;
+  unmatched text becomes beat `# TODO:`s.
+- **Characters and voices** (`screenplay_project`): front-matter `characters` kept (only
+  `voice_kind:` removed); other speakers (`OLD ASH` -> `old_ash`) get a `LOOKS` look (§69.47) and
+  a `<id>_voice` entry. Voice kind (`VOICE_KINDS` feminine / masculine / neutral) from a bracket
+  pronoun (`FEN (she):`, `PRONOUN_KINDS`) or `voice_kind:`, else the look's; conflicting kinds, a
+  pronoun on the narrator, an unknown kind: `VidgenError`. `_generated_looks` (§69.49): first
+  unused look of the kind keeping `MIN_CONTRAST`, else a random contrasting one; never twice.
+  `assign_voices(voice, language, kinds)`: Kokoro voices of the narrator's language by accent and
+  gender, best grade first, minus the narrator's and `santa`; OpenRouter `known_voices` in turn;
+  ElevenLabs: `label` only plus a `# TODO:` for `voice_id`s. `DEFAULTS`: 1920x1080, preview
+  854x480, `soft_pastel`, Kokoro `bf_emma` at 0.85, `narration.pad` 0.7, `auto_direct: true`;
+  front matter wins.
+- **Output**: commented YAML, then `validate_all` (exit 1 on problems); JSON
+  `jsonout.screenplay_document`. Sample `examples/screenplay/humming_box.md`; tests
+  `tests/test_screenplay.py`. One set per scene.
 
 ### 69.26 Arms and legs in two segments (Step 92)
 
-Arms and legs bend at the elbow and the knee. `cartoon/limbs.py` (no manim) holds the limb names,
-the two-bone solver and the fold of one-piece limbs; `Character` (§69) applies them.
+`cartoon/limbs.py` (no manim): limb names, two-bone solver, fold of one-piece limbs.
 
-- **Parts**: `arm_left` / `arm_right` keep their names and are now the upper arm (pivot: the
-  shoulder); `arm_left_lower` / `arm_right_lower` are the forearm and hand (pivot: the elbow,
-  parent: the upper arm). Legs are either `legs` (both in one piece, as before) or `leg_left` /
-  `leg_right` (a thigh each, pivot the hip, parent `body`) with optional `leg_left_lower` /
-  `leg_right_lower` (shin, pivot the knee); a character with `legs` and a single leg is a
-  `VidgenError` (and an SVG split error). Draw order: each lower segment over its upper one, the
-  far leg (`leg_right`) behind the near one, all legs behind the body. `CharacterPart.end` (new,
-  optional) is the hand's middle or the foot's sole on a limb's last segment; without it the
-  drawn point of the limb farthest from its root is taken. A default parent the character lacks
-  is replaced by its own parent (a forearm without an upper arm hangs from the body); an
-  explicit `parent` must still exist.
-- **Generated characters** (`generator.py`): arms and legs in two capsule segments
-  (`LIMB_WIDTH` 0.08, round ends centred on the joints, so a bent joint stays smooth); the elbow
-  and the knee half-way; the sole at the ground. The figure at rest is unchanged in size and
-  place (the sleeve and leg ends are rounder). They have no `legs` part any more: one-leg parts
-  replace it (`cast.GENERATED_SHAPES`).
-- **Solver** (`solve_two_bone(root, target, upper_length, lower_length, bend) -> TwoBone(direction,
-  bend, reached)`): law of cosines; `bend`'s sign picks the joint's side (`ELBOW_BEND` +1:
-  counterclockwise as drawn facing right, the hand forward and the elbow behind / below the line
-  to the hand; `KNEE_BEND` −1: the foot back, the knee forward). Too far: straight at the point;
-  too near: folded as far as the lengths allow; `reached` says which.
-- **Character API**: `reach(hand, point, bend=+1)` (`hand` `left` / `right`), `plant(foot, point,
-  bend=-1)` (needs `leg_left` / `leg_right`), `hand_point(hand)`, `foot_point(foot)` (screen,
-  Manim units; Step 93 holds props at `hand_point`), `sole_height(state=None)` (the lower sole
-  above the ground, character units; `None` without single legs), `grounded(state, level=0)`
-  (the body shifted so the lower sole is at `level`). `reach` / `plant` work in the parent's frame
-  through the inverse of the screen matrix, so facing left, squash and Manim moves are handled;
-  they set only the two angles (shift and scale kept; lengths as drawn at rest).
-- **One-piece limbs keep working (folded)**: a character with `arm_left` but no `arm_left_lower`
-  (sprout, any older SVG) still has a pose for `arm_left_lower` (in `state()`, `pose_of`,
-  `set_part`, poses, gestures and walks; not in `parts`, `has_part`, keyframe targets). Its bend
-  `b` is shown on the one piece by `fold(b)`: turned by `b / 2` and shortened along the limb
-  to `cos(b / 2)` (at least `FOLD_MIN_LENGTH` 0.6) about the root, which puts its end where a limb
-  of two equal halves would. So `reach` also works on one-piece arms, and the built-in poses and
-  gestures were chosen so that upper + half the elbow is the one-piece angle they had before
-  (pointing 82 + 12/2 = 88, wave 115 + 60/2 = 145, shrug 15 + 60/2 = 45, waving 150, thinking
-  160; arms_crossed −55 against −65). The look changes a little: a bent one-piece arm is shorter
-  (waving 0.82, thinking 0.6 against the old explicit 0.72, arms_crossed 0.77 against 0.8).
-  `validate` does not warn about a lower segment whose upper part the character has.
-- **Poses** (§69.3): `pointing`, `waving`, `thinking`, `shrug`, `arms_crossed` bend the elbows;
-  `sitting` names both `legs` (80°, one piece) and the single legs (thighs 80° / 75°, knees
-  −35°: the feet forward on the ground); a character uses the entries of the parts it has. A
-  pose names the new parts like the others (`PosePart`), so own poses can bend elbows and knees.
-- **Pose changes**: `part_windows` gives a part of `TIMING_GROUP` its group's window: a lower
-  segment moves with its upper part, single legs together as `legs` did, so pose changes keep
-  their timing.
-- **Gestures** (§69.12): `point` and `wave` turn the upper arm and bend the forearm
-  (`POINT_DEGREES` 82 + `POINT_ELBOW` 12; `WAVE_DEGREES` 115 + `WAVE_ELBOW` 60, the wave's
-  `WAVE_SWING` 40° to and fro now about the elbow), `shrug` both (15 + 60). The planner's
-  `GESTURE_REACH` (§69.24) was measured again: the reaches did not grow (round look: point 0.484
-  → 0.484, wave 0.384 → 0.373, shrug 0.415 → 0.386 heights), so it stays.
-- **Walk** (§69.12): legs in one piece walk as before. Single legs swing opposite ways
-  (`WALK_THIGH_DEGREES` 20), the knee of the leg swinging forward bends most as it passes the
-  other (`WALK_KNEE_DEGREES` 40 × max(cos πs, 0)) and both are straight at the footfall; elbows
-  bend `WALK_ELBOW_DEGREES` 10, plus `WALK_ELBOW_SWING` 20 as the arm swings forward
-  (`WalkCycle.thigh_angle`, `knee_bends`, `elbow_bends`). Instead of the fixed `WALK_BOB`, `Walk`
-  keeps the lower sole at the height it started at (`grounded`; only when that is within
-  `GROUND_TOLERANCE` 0.02 of the ground, so a sitting walk is not pulled down): the body dips at
-  the footfall and rises as the legs pass, and no foot sinks or floats.
-- **SVG** (§69.2): ids `arm_left_lower`, `leg_left`, `leg_left_lower`, ... (the longest part name
-  wins, so `arm_left_lower` is a part, no longer arm_left's shape `lower`); default pivots: a single
-  leg and a lower segment the top centre of their box; `pivot_warnings` names them too; the feet
-  are under the middle of all leg parts. `examples/svg_character`'s sprout stays one-piece (the
-  compatibility case); its raised hand in `waving` / `thinking` is behind its head, as before,
-  since the file draws `arm_left` before `head`.
-- **Not done here**: no knees in `Jump` (the crouch is still the whole-figure squash); no
-  follow-through on forearms; no YAML action for `reach` / `plant` (Step 93's `pick_up`, Step
-  94's sitting use them); a generated `legs` reference (an own pose's `legs:`, a `kit.legs`
-  keyframe target) no longer applies to generated characters (validate warns / reports an
-  unknown part). Tests: `tests/test_cartoon_limbs.py`.
+- **Parts**: `arm_left` / `arm_right` = upper arm (pivot shoulder), `arm_*_lower` = forearm
+  (pivot elbow). Legs are `legs` (one piece) or `leg_left` / `leg_right` (pivot hip) with optional
+  `leg_*_lower` (knee); `legs` plus a single leg is a `VidgenError`. Lower segments draw over
+  upper, `leg_right` behind `leg_left`, legs behind the body. `CharacterPart.end` (optional) marks
+  hand middle / sole. A missing default parent falls back to its parent; an explicit `parent` must
+  exist. Generated characters have two capsule segments per limb (`LIMB_WIDTH` 0.08) and single
+  legs (`cast.GENERATED_SHAPES`).
+- **Solver / API**: `solve_two_bone(root, target, upper_length, lower_length, bend) ->
+  TwoBone(direction, bend, reached)` (`ELBOW_BEND` +1, `KNEE_BEND` −1). `Character.reach(hand,
+  point, bend=+1)`, `plant(foot, point, bend=-1)`, `hand_point`, `foot_point`,
+  `sole_height(state=None)`, `grounded(state, level=0)`; solved in the parent frame via the
+  inverse screen matrix, setting only angles.
+- **One-piece limbs**: poses for `arm_left_lower` still apply to a character without it, shown by
+  `fold(b)` (turn `b/2`, length `cos(b/2)` ≥ `FOLD_MIN_LENGTH` 0.6); built-in poses keep upper +
+  elbow/2 equal to the one-piece angle.
+- **Motion**: `part_windows` moves a lower segment with its upper (`TIMING_GROUP`). Gestures:
+  `POINT_DEGREES` 82 + `POINT_ELBOW` 12, `WAVE_DEGREES` 115 + `WAVE_ELBOW` 60 (`WAVE_SWING` 40°),
+  shrug 15 + 60. Walk: `WALK_THIGH_DEGREES` 20, `WALK_KNEE_DEGREES` 40, `WALK_ELBOW_DEGREES` 10 +
+  `WALK_ELBOW_SWING` 20; the lower sole stays at its start height (`grounded`, only within
+  `GROUND_TOLERANCE` 0.02 of the ground).
+- **SVG** (§69.2): ids `arm_left_lower`, `leg_left`, ...; longest part name wins; default pivot of
+  single legs / lower segments: top centre. `examples/svg_character` stays one-piece. A `legs`
+  reference does not apply to generated characters (validate reports it). Tests
+  `tests/test_cartoon_limbs.py`.
 
 ### 69.27 Props in hands (Step 93)
 
-Five beat actions (`scenes/handling.py`, against `vidgen.api` only, on the `_Acting` base of
-§69.11: the targets are characters) let a stage's characters handle its props: `pick_up`,
-`hold`, `put_down`, `give`, `throw`. Same `to:` convention as §69.11–69.12: the character is the
-target; `to` is the prop (`pick_up`, `hold`), the place (`put_down`, `throw`: a mark or x) or the
-other character (`give`); `prop` picks one of two held props, `hand` a hand (`left`, the near
-one, drawn in front of the body; `right`).
+Beat actions `pick_up`, `hold`, `put_down`, `give`, `throw` (`scenes/handling.py`, `_Acting`
+§69.11; target = character; `to` = prop, place or receiver; `prop` picks one of two; `hand`
+`left` (near, default) / `right`).
 
-- **State** (`cartoon/holding.py`, no manim): `Holdings` maps prop -> (character, hand).
-  `take(character, prop, hand=None)` (a free hand, `HAND_ORDER` left first), `release(character,
-  prop=None)` (the only prop it holds, else `prop` must say which), `give(giver, receiver, prop,
-  hand)`, `hands(character)`, `holder(prop)`; each refusal is a `HoldingError` whose message says
-  what to do (`'ball' is held by pip; pip can give it (give: pip, to: kit)`, `kit holds no prop
-  then; pick_up one first`, a full hand). The stage keeps one (`Stage.holdings`), `vidgen validate`
-  replays the scene through one, and the directing planner keeps one.
-- **Attached, not added** (§69.22's invariant): a held prop never becomes a part or a submobject
-  of its character (the character's family never changes, and the layout dump's character box is
-  the figure only). It stays its own mobject; `attach` gives it an updater that puts its middle at
-  `Character.hand_point(hand)` on every frame and moves it in `scene.mobjects` to right after its
-  holder (drawn in front of it, behind whatever is drawn after the holder: characters nearer the
-  camera, foreground layers). Manim runs the updaters after the frame's animations, so the prop
-  follows walks, jumps, turns, gestures, pose changes, keyframes and exits of its holder.
-  `Character.holding` (hand -> prop) and `Prop.held_by` / `Prop.hand` record it; the layout dump
-  writes them as `holding` (character) and `held_by` / `hand` (prop).
-- **Geometry** (Manim units, character heights): `hold_point(shoulder, height, facing)`: the
-  hand and the prop's middle `HOLD_FORWARD` 0.12 heights in front of the arm's shoulder
-  (`Character.shoulder_point`) and `HOLD_DROP` 0.13 below it, within reach of the generated
-  arms (0.23 heights long) with the elbow bent. `held_height(factor, holder_height)`: a prop's
-  height next to its holder (`Prop.height_factor`, set by the stage from `StageProp.height_factor()`),
-  at most `HOLD_MAX_HEIGHT` 0.4 of it. A put-down or landed prop stands on the ground at its
-  character's depth (that character's feet y) at `factor` × that character's height.
-  `put_down_x`: `PUT_DOWN_AHEAD` 0.35 heights in front of the feet. Throws: `throw_point(t, start,
-  end, rise)` (x even, y a parabola peaking `rise` above the higher end), `spin_degrees` (whole
-  turns, clockwise flying right), `throw_seconds(distance)` = `THROW_WIND_UP` 0.35 +
-  `THROW_SWING` 0.15 + flight (0.45 s + 0.06 s per unit, at most 1.6 s).
-- **Animations** (`cartoon/transition.py`, exported): `ArmMove(character, keys)` eases the parts
-  named in `(share, part -> PartPose)` keys from their pose at its start (`smooth`, held after the
-  last key; like `PoseChange` it ends a blink and keeps lip sync in step). `PropMove(prop, to=,
-  follow=, leave=, arrive=, height=, rise=, turns=, lands=)`: until `leave` the prop is at
-  `follow()` (a hand) or where it is; from `leave` to `arrive` it goes to `to` (a point, or a
-  function read every frame, such as the receiver's hand), changing to `height`, on an arc with
-  spin when `rise` > 0; each frame is drawn from its points at the start (so it ends upright);
-  `lands_at` is `arrive` for a landing. Arm targets come from `Character.reached_parts(hand,
-  point)` (new: the poses `reach` would set, without setting them; `reach` uses it).
-- **Actions**: `pick_up` (`ArmMove` to the prop's top at `REACH_SHARE` 0.45 then to the hold
-  point; `PropMove` from there into the hand, scaled to its held height; 1.2 s), `hold` (the arm
-  to the hold point while the prop moves into the hand, 0.4 s; no distance check: for a prop the
-  character has from the start), `put_down` (reaches to the spot at 0.5, the prop goes from the
-  hand to the ground by 0.75, the arm back to its pose before the prop was taken; 1.0 s), `give`
-  (both turn to face each other at once, both reach to the middle of their hold points at 0.45,
-  the prop goes from one hand to the other; 1.2 s), `throw` (turns towards the spot, the arm winds
-  up behind and above the shoulder, swings forward and lets go at `throw_release_share`, settles
-  back; the prop flies, spins `spin` turns and lands; `run_time_for` = `throw_seconds`). The
-  arm's pose before the prop was taken is kept with the held prop and put back when it is let
-  go. A character holds at most one prop per hand.
-- **Validate**: each use's `scene_problems` checks names (a prop of the stage, a character on
-  the stage and not the giver, a place); the new class hook `NarratedScene.action_sequence_problems
-  (spec, params, uses)` (default none; `scene_actions` calls it once every use is valid, so
-  `vidgen validate` and the render's `plan_actions` both run it) lets the stage replay the scene's
-  actions in play order (beat, `at`, written order) through `holding_problems` with
-  `stage_frame`'s geometry: characters' x from their marks, `walk_to` / `enter` move them,
-  `move_along` / `keyframes` make them unknown (no distance check), `exit` / `enter` take them off
-  and on; a prop's x is its holder's while held and the spot after `put_down` / `throw`. Reported:
-  a prop someone else holds, a full hand, nothing to put down / give / throw, two props and no
-  `prop`, `pick_up` farther than `PICK_UP_REACH` 0.75 heights, `put_down` farther than
-  `PUT_DOWN_REACH` 0.75, `give` to a character farther than `GIVE_REACH` 1.2 heights or not on
-  stage, a `keyframes` / `move_along` of a held prop. The distance messages end with the
-  `walk_to` that fixes them (`STAND_BESIDE` 0.4 heights from the prop on the character's side,
-  as a 0..1 x).
-- **Foley** (§69.19): `PlayedAction.lands` (share of the action's time); `foley_cues` gives a
-  `thud` (`LANDING_GAIN` −4 dB) there; `Stage.action_foley` passes a `PropMove`'s `lands_at`.
-- **Automatic directing** (§69.23–24): the planner's state follows the written prop actions
-  (`Holdings`, and where a put-down or thrown prop stands, for `look_at` a prop); an arm gesture
-  is not added while a hand it moves holds a prop (`GESTURE_HANDS`: `point` / `wave` the near
-  hand, `CastMember.near_hand`, `shrug` both); prop actions count as moves for close-ups
-  (`MOVING_ACTIONS`). Storyboards show `pick_up`, `put_down`, `give` and `throw` half-way
-  (`mid_still_actions`).
-- **Not done here**: a crouch to the ground came with Step 94 (§69.28); a held prop is not mirrored when
-  its holder turns, and pose changes and gestures of the holding arm move it (written ones are
-  allowed); `dim` / `highlight` on a held prop pauses its following for that animation (Manim
-  suspends a mobject's updaters while it is animated); no `on: <prop>` to put a prop on a
-  table; the screenplay grammar (§69.25) has no prop verbs yet. Tests:
+- **State** (`cartoon/holding.py`, no manim): `Holdings` (prop -> (character, hand)); refusals are
+  `HoldingError`s that state the fix. Kept by `Stage.holdings`, validate's replay and the planner.
+  One prop per hand.
+- **Attached, not added** (§69.22): a held prop is never a submobject of its character; an
+  updater keeps its grip at `hand_point(hand)` and the prop right after its holder in
+  `scene.mobjects`. Layout dump: `holding`, `held_by`, `hand`.
+- **Geometry** (character heights): hold point `HOLD_FORWARD` 0.12 ahead, `HOLD_DROP` 0.13 below
+  the shoulder; held height ≤ `HOLD_MAX_HEIGHT` 0.4; `PUT_DOWN_AHEAD` 0.35. `throw_seconds` = 0.35
+  + 0.15 + flight (0.45 s + 0.06 s/unit, ≤ 1.6 s).
+- **Animations** (`cartoon/transition.py`, exported): `ArmMove(character, keys)`, `PropMove(prop,
+  to=, follow=, leave=, arrive=, height=, rise=, turns=, lands=)`; arm targets from
+  `Character.reached_parts`. Run times `pick_up` 1.2 s, `hold` 0.4, `put_down` 1.0, `give` 1.2. The
+  arm pose before a take is restored on release.
+- **Validate**: hook `NarratedScene.action_sequence_problems(spec, params, uses)` (default none;
+  `scene_actions` calls it once all uses are valid, so validate and `plan_actions` both run it).
+  The stage replays actions in play order (beat, `at`, written) through `holding_problems`: held
+  elsewhere, full hand, nothing to release, ambiguous `prop`, `pick_up` > `PICK_UP_REACH` 0.75
+  heights, `put_down` > `PUT_DOWN_REACH` 0.75, `give` > `GIVE_REACH` 1.2 or off stage, animating a
+  held prop. `move_along` / `keyframes` make x unknown. Messages suggest a `walk_to`.
+- **Foley / directing**: `thud` at `PlayedAction.lands` (`LANDING_GAIN` −4 dB); no gesture with a
+  holding hand (`GESTURE_HANDS`); prop actions are `MOVING_ACTIONS`. Tests
   `tests/test_cartoon_holding.py`.
 
 ### 69.28 Sitting, leaning and crouching (Step 94)
 
-Three beat actions (`scenes/sitting.py`, against `vidgen.api` only, on the `_Acting` base of
-§69.11) let a stage's characters sit on its props and lean on them, and `pick_up` / `put_down`
-(§69.27) crouch for a low prop. They reuse the two-bone solver of §69.26 for the hips and knees.
-The target is the character; `to` is the prop.
+Beat actions `sit_on`, `lean_on`, `stand_up` (`scenes/sitting.py`; `to` = prop); `pick_up` /
+`put_down` crouch for low props.
 
-- **Seats and lean edges** (`cartoon/seating.py`, no manim), in prop units (origin the middle of
-  the prop's foot, `y` up, top 1, `x` in the same unit) as drawn facing right:
-  `PROP_SEATS` (the middle of the seat line: chair (0.1, 0.54), rock (0, 0.9), box (−0.1, 0.9)),
-  `PROP_LEANS` (the left and right x a back leans on: tree ±0.08 (the trunk), door ±0.3, sign
-  (−0.4, 0.36) (the board), lamp ±0.04, house ±0.5), `SEAT_BACKS` (`chair`: a sitter faces the way
-  it faces); the furniture's seats and lean edges are in §69.43. `Prop` keeps `seat` / `lean` mirrored with its facing (`mirrored_seat`,
-  `mirrored_lean`); `seat_point()` / `lean_edges()` give them on screen. An SVG prop gives
-  `data-seat="x y"` / `data-lean="left right"` on its `<svg>` element in `viewBox` coordinates
-  (the sanitiser keeps them; `svg_seat_and_lean`, `read_svg_seat_and_lean`; a bad value is a
+- **Seats** (`cartoon/seating.py`, prop units): `PROP_SEATS`, `PROP_LEANS`, `SEAT_BACKS` (a chair
+  sets the sitter's facing); mirrored with the prop (`seat_point()`, `lean_edges()`). SVG props:
+  `data-seat="x y"` / `data-lean="left right"` on `<svg>` (kept by the sanitiser; bad value:
   `VidgenError`).
-- **State**: `Postures` maps character -> (`sitting` | `leaning`, prop): `sit` (one sitter per
-  prop; per place on a sofa or a bed since Step 110, §69.43), `lean` (several may lean on one), `stand`, `pinned(character, action)` (refuses
-  `PINNED_ACTIONS`: `walk_to`, `enter`, `exit`, `jump`, `turn`, `move_along`, `keyframes` while it
-  sits or leans); each refusal is a `PostureError` saying what to do (`pip sits on 'chair' then;
-  stand_up first (- stand_up: pip)`). The stage keeps one (`Stage.postures`), `vidgen validate`
-  and the planner too. `Character.sitting_on` / `leaning_on` record it (layout dump keys of the
-  same names).
-- **Character states** (`Character`, none drawn; character units as drawn facing right):
-  `seated(state, seat)`: the body shifted until the hips (the leg parts' pivot; without legs the lowest
-  point of the body) are on the seat (since Step 102, §69.36; before, the body's lowest point);
-  single legs planted at `seated_sole(hip, thigh, shin)` (the shin straight down to the ground in
-  front, the knee forward; a seat higher than shin + thigh: the thigh level, the foot hanging; a
-  seat too low: folded); a one-piece `legs` part turned forward until its end is on the ground
-  (`acos(hip height / leg length)`), or `SEATED_LEGS_DEGREES` 80 when the seat is higher than the
-  legs are long. `leaning(state, degrees=LEAN_DEGREES 12)`: the body turned back about its pivot
-  (the legs, its children, swing forward), lowered until the higher sole is on the ground and both
-  soles planted there. `lowered(state, drop, stoop=, soles=)`: the body `drop` lower and turned
-  `stoop` degrees forward, the soles planted where they were (a one-piece `legs` part shortened
-  from its top and turned back upright instead). `planted(state, soles)` re-solves each single leg
-  so its sole is at a point (`plant` for a state); `sole_points`, `part_box`, `limb_rest`,
-  `hip_height` read the geometry. `reached_parts(..., state=)` reaches from the shoulder of a
-  state (a crouch). `_limb_poses` now works in character units with given poses, so `reach`,
-  `plant`, `reached_parts` and `planted` share one solver path.
-- **Animation**: `BodyMove(character, keys, x=, facing=, soles=)` (`cartoon/transition.py`) is
-  an `ArmMove` (parts eased through keys) that faces `facing` at its start, eases the feet's x to
-  `x` and, with `soles`, re-plants the single legs every frame on the way from their soles at the
-  start to `soles` (so feet stay on the ground while the hips go down or up).
-- **Actions**: `sit_on` (`SIT_SECONDS` 1.0): the character's feet x goes to the seat's x, it
-  faces the chair's way (rock, box: its own), and eases to `seated` with the seat
-  `(seat_y − feet_y) / height` character units high. `lean_on` (`LEAN_SECONDS` 0.8): it faces
-  away from the prop (it stays on its side), eases to `leaning`, and its feet x is put where the
-  back edge of its body (`part_box("body")` of the leaning state) meets the prop's near lean edge.
-  `stand_up` (`STAND_UP_SECONDS` 0.8): the body and legs back to how they were before the
-  `sit_on` / `lean_on`, the feet x moved to the middle of its soles (it stands up over its feet,
-  so they stay put on screen). Only body and legs (`POSTURE_PARTS`) change; arms and head keep
-  their poses. One character per action (the first target), like the prop actions.
-- **While seated or leaning** (`is_posed`): `look_at` keeps the facing and tilts only the head
-  (the point is taken on the side it faces); `pose` / `react` keep the body and legs
-  (`_kept_posture`); `give` / `throw` do not turn it; it does not crouch.
-- **Crouch** (`handling.crouch`): when the arm (`limb_rest`: upper + lower, using `CROUCH_REACH`
-  0.95 of it) cannot reach the point from the shoulder, `crouch_drop(above, ahead, arm, hips)` is
-  how far the body lowers (at most `CROUCH_MAX` 0.6 of the hips' height), `crouch_stoop` bends it
-  forward up to `CROUCH_STOOP` 15° in proportion; under `CROUCH_MIN` 0.01 no crouch. `pick_up` and
-  `put_down` then play a `BodyMove` with the soles kept: crouched with the arm at the prop at the
-  reach share, standing with the carry (or the arm before) at the end. A point still out of reach
-  (beside, not below the shoulder) is reached as far as the arm goes, as before.
-- **Validate**: `_Posture.scene_problems` checks the prop (of the stage, with a seat / lean
-  edges; an SVG prop's attributes read through the sanitiser); `holding_problems` (§69.27) also
-  replays the postures: a seat taken, a prop held, a prop farther than `SIT_REACH` 0.75 /
-  `LEAN_REACH` 1.0 heights (with the `walk_to` that fixes it; sitting or leaning puts the
-  character at the prop's x), a `stand_up` with nothing to stand up from, a pinned action of a
-  posed character, a `pick_up` / `hold` / `keyframes` / `move_along` of a prop someone sits or leans
-  on. `Stage.action_sequence_problems` runs it when a scene has a handling or posture action.
-- **Automatic directing** (§69.23–24): the planner follows written `sit_on` / `lean_on` /
-  `stand_up` (`Postures`; a seat's facing from `StageFrame.seat_facings`, a leaner faces away
-  from its prop); a posed character is not turned by a look (`_turn_to`) and gets no look at a
-  speaker behind it (`_behind`); the three actions count as moves for close-ups and make a look
-  unknown. Storyboards show them half-way (`mid_still_actions`).
-- **Checked by eye** (scratch storyboards at 854x480): a tall generated look and sprout on a
-  chair, a rock and a box; leaning on a tree, a door and a sign; crouching to pick up and put down
-  a box (generated) and a ball (sprout, shortened legs).
-- **Not done here**: sitting on the ground or on a table; a seat at another depth than the
-  character's is not refused (the hips go to the seat's screen height); no arms on the prop while
-  leaning; no foley for sitting down. Tests: `tests/test_cartoon_seating.py`.
+- **State**: `Postures`: `sit` (one per prop or per sofa / bed place, §69.43), `lean` (many),
+  `stand`, `pinned` (refuses `PINNED_ACTIONS` `walk_to`, `enter`, `exit`, `jump`, `turn`,
+  `move_along`, `keyframes` while posed); refusals are `PostureError`s naming the fix. Layout dump
+  `sitting_on` / `leaning_on`.
+- **Bodies**: `Character.seated(state, seat)` (hips — the first leg part's pivot — on the seat;
+  one-piece legs to the ground or `SEATED_LEGS_DEGREES` 80), `leaning(state, LEAN_DEGREES 12)`,
+  `lowered`, `planted`; `BodyMove(character, keys, x=, facing=, soles=)` re-plants feet every frame.
+  `sit_on` 1.0 s, `lean_on` 0.8 s (faces away), `stand_up` 0.8 s; only `POSTURE_PARTS` change.
+  While posed, `look_at` turns only the head, `pose` / `react` keep body and legs.
+- **Crouch** (`handling.crouch`): if the arm (`CROUCH_REACH` 0.95) cannot reach, lower ≤
+  `CROUCH_MAX` 0.6 of hip height and stoop ≤ `CROUCH_STOOP` 15°; none under `CROUCH_MIN` 0.01.
+- **Validate**: the prop needs a seat / lean edges; the replay checks a taken seat, a held prop,
+  `SIT_REACH` 0.75 / `LEAN_REACH` 1.0 heights, `stand_up` from nothing, pinned actions, handling a
+  sat-on prop. Tests `tests/test_cartoon_seating.py`.
 
 ### 69.29 Shots within a scene (Step 95)
 
-A beat's `shot:` frames characters of a `stage` for that beat: the camera cuts (or, with `move:
-true`, eases) to a framing computed from where they stand, holds it for the beat, and the next
-beat without a shot goes back to the view before the shots.
+A beat's `shot:` frames characters of a `stage`: the camera cuts (or eases, `move: true`) to a
+framing from where they stand, holds it, and the next shot-less beat returns to the pre-shot view.
 
-- **Framing maths** (`cartoon/shots.py`, no manim). `ShotFigure(name, x, feet_y, height, facing,
-  top)` (the figure's middle x, its feet, its standing height, the top of its head: lower while
-  it sits); its box is `FIGURE_HALF_WIDTH` 0.21 heights to each side (as the planner's predicted
-  stills, §69.24). `frame_shot(kind, subjects, frame_width=, frame_height=, bounds=, near=) ->
-  ShotView(center_x, center_y, scale)`, kept inside `bounds` with `view_center_within`, scale
-  within 1 .. `MAX_SHOT_SCALE` (= `MAX_ZOOM` 8, what the parallax layers are sized for):
-  - `wide`: scale 1, centred on the middle of the subjects' boxes (the stage's middle without any);
-  - `two_shot`: the union of the subjects' boxes with `TWO_SHOT_PADDING` 0.1 of the view free on
-    each side (the tighter of the width and height fits);
-  - `medium` / `closeup`: `SHOT_SPANS` (below / above the head's top, in heights) 1.0 / 0.12 and
-    0.62 / 0.1 give the view's height, so its scale; the subject moved `LOOK_ROOM` 0.1 of the
-    view's width away from the side it faces;
-  - `over_shoulder` (subject, near): vertically like `medium`; the view's width puts the subject
-    at `SUBJECT_AT` 0.66 of it from the near character's side and the near one's middle on that
-    edge (scale `0.66 × frame width / their distance`, between 1 and the close-up's scale); then
-    centred from the subject, so a clamped scale keeps the subject in place. Characters are flat
-    and side-on, so the near character is as large as the subject (both magnified), cut by the
-    edge; far apart (the `left` and `right` marks) the shot is only about 1.3x.
-  - `shot_figures(kind, named, present, speakers=, looked_at=) -> Shot(kind, subjects, near)` fills
-    in names: `wide` every present character; `two_shot` the named two, else the named one or the
-    beat's first speaker (else the first present) and the present character nearest it;
-    `over_shoulder` the near one named second, else the one the subject last looked at, else the
-    nearest. A named character not present (waiting to enter, gone) is left out; nothing to frame
-    gives a `wide`. `shot_view(shot, present, ...)` = `frame_shot` of those figures.
-- **Config** (`config.py`): `ShotConfig(kind, of, move, run_time)`, from a mapping or the words
-  `"over_shoulder kit pip"` (`of` may be one name). `SHOT_NAMES` (kind -> fewest, most names: wide
-  0, two_shot 0–2, medium 1, over_shoulder 1–2, closeup 1) checked there, names twice, `run_time`
-  without `move`. `BeatConfig.shot`. `ShotConfig.action()` is the `shot` action it stands for.
-- **The `shot` action** (`scenes/shot_action.py`, against `vidgen.api`, on `_Acting` so its
-  targets must be characters): options `kind` (none: back to the view before the shots) and
-  `move`; `needs_target` / `needs_visible` false (a character waiting to enter is not brought
-  in), `moves_camera`, `alters_targets` false, run time `SHOT_MOVE_SECONDS` 1.0 when moving, 0
-  (`run_time_for`) when cutting. `scene_problems`: a scene type without `shot_framing` (only
-  `stage`) is refused; the targets' names are checked as for the acting actions. `apply`: asks
-  `Stage.shot_framing(kind, names)` for the view (present = characters whose feet are inside the
-  stage; `ShotFigure` top = the highest of the `head` and `accessory` parts, so a hat is in
-  frame; height = the new `Character.standing_height`; speakers = `Stage.beat_speakers`, set by
-  `narrate`; `looked_at` of each character), stores the view before the first shot and what the
-  camera followed in `NarratedScene.shot_home`, stops following, sets `NarratedScene.camera_shot`
-  (`Shot.layout()`), and cuts by setting the camera frame directly (no animation: the runner
-  batches a camera move with the other actions due on its frame and plays the batch for the
-  longest run time, so a cut must not be an animation) or returns a `MoveCamera`. Without a kind
-  it goes back to `shot_home` (cut, or `MoveCamera` / `_MoveThenFollow` when following was
-  paused) and clears both attributes. `pan` and `follow` call `end_shot` (both cleared): the
-  camera stays where they take it.
-- **Where shots come from** (`actions.beat_action_list(spec, known)`, the list `scene_actions`
-  validates and the runner plays): each beat's `shot:` key first (location `beats[j].shot`), then
-  its written actions; a beat after one with a shot (key or a written `shot` action with a kind)
-  gets a `shot` without a kind first, unless it has a shot at `at: 0` (`move` and `run_time` as the
-  last shot, so it eases back as it eased in). The planner reads the key too (`_resolved_actions`).
-- **Layers, particles, bubbles, stills**: a cut changes the camera between two plays; the next
-  play's `get_moving_mobjects` runs the camera listeners first (§69.20), so the parallax layers
-  and Manim's static image are for the new view; particles draw themselves over the view each
-  frame (screen-sized, §69.9). A `say` bubble is `after_camera`, so it is built (sized and placed)
-  for the shot's view. Beat-end and mid-action stills (§69.16) show the shot as rendered; a walk
-  in a shot can leave the view (the shot does not follow).
-- **Layout dump / lint**: frames in a shot get `shot: {kind, subjects, near}`
-  (`introspect`, from `camera_shot`). `off_stage` with a shot other than `wide`: only the
-  subjects are checked, also when wholly outside or zoomed; their `face` box in `medium`,
-  `over_shoulder` and `closeup` (`FACE_SHOTS`), their box in `two_shot`; the near character and
-  characters not framed are left out. Without a shot, a zoomed still is still skipped (§69.17).
-- **Automatic directing** (§69.24): `shot` is a framing action (`FRAMING_ACTIONS`: it does not
-  touch its characters) and a move (`MOVING_ACTIONS`: no close-up in its beat; after it, none in
-  the next). A close-up whose 0.5 s moves fit the line stays a `zoom`; otherwise (was: a 0.03 s
-  zoom cut in and back) it is a `shot` of kind `closeup` of the speaker, held for the line and cut
-  back at the next beat: no cut back at the end of the pad, and the framing is a close-up (head and
-  shoulders), not a 2x zoom. Its check (`_closeup_shot`) predicts the still with the shot's view
-  and `shot` key, so `off_stage` checks the speaker's face and `facing_away` the one it talks to
-  if in view. In a beat with a written shot, the passes check their looks and gestures on the
-  shot's view (`_SceneState.shot`); a shot whose framing cannot be predicted leaves the camera
-  unknown for that beat (no arm gestures, unchecked looks). `vidgen direct --print` writes an
-  automatic shot as the beat's `shot: closeup kit` line (and `actions:` only when others remain),
-  `auto_label` as `shot closeup kit`; `--json` keeps the action's shorthand.
-- **Not done here**: the shot does not follow a walk (lint reports a subject that walks out); a
-  pan or follow in a shot ends it; a seated character's head top is taken from its parts at
-  runtime but from its standing height in the planner; no shots in `vidgen screenplay`'s grammar;
-  the near character of an over-the-shoulder shot is not drawn larger (no depth change). Tests:
-  `tests/test_cartoon_shots.py`.
+- **Framing** (`cartoon/shots.py`, no manim): `ShotFigure(name, x, feet_y, height, facing, top)`
+  (box `FIGURE_HALF_WIDTH` 0.21 heights each side); `frame_shot(kind, subjects, ...) ->
+  ShotView(center_x, center_y, scale)`, scale 1 .. `MAX_SHOT_SCALE` (= `MAX_ZOOM` 8): `wide`,
+  `two_shot` (`TWO_SHOT_PADDING` 0.1), `medium` / `closeup` (`SHOT_SPANS`, `LOOK_ROOM` 0.1),
+  `over_shoulder` (subject at `SUBJECT_AT` 0.66). `shot_figures(kind, named, present, speakers=,
+  looked_at=) -> Shot(kind, subjects, near)` fills in missing names; nothing to frame gives `wide`.
+- **Config**: `ShotConfig(kind, of, move, run_time)` from a mapping or words (`"over_shoulder kit
+  pip"`); `SHOT_NAMES` (wide 0, two_shot 0–2, medium 1, over_shoulder 1–2, closeup 1);
+  `run_time` needs `move`. `ShotConfig.action()` gives the `shot` action.
+- **`shot` action** (`scenes/shot_action.py`): `kind` (none: back home), `move`; run time
+  `SHOT_MOVE_SECONDS` 1.0 moving, 0 cutting; only scene types with `shot_framing` (`stage`). Stores
+  the pre-shot view in `NarratedScene.shot_home`, sets `camera_shot`. A cut sets the camera frame
+  directly, never an animation (the runner plays a batch for its longest run time). `pan` /
+  `follow` call `end_shot`.
+- **Ordering** (`actions.beat_action_list`): a beat's `shot:` key first (location `beats[j].shot`),
+  then its actions; a beat after a shot gets a kind-less `shot` (same `move` / `run_time`) unless it
+  has one at `at: 0`.
+- **Rendering / lint**: camera listeners run first after a cut (§69.20); `say` bubbles are
+  `after_camera`; the shot does not follow walks. Dump frames get `shot: {kind, subjects, near}`;
+  `off_stage` in a non-wide shot checks only subjects (face box in `FACE_SHOTS`).
+- **Directing** (§69.24): `shot` is in `FRAMING_ACTIONS` and `MOVING_ACTIONS`; a close-up whose
+  moves do not fit the line becomes a `closeup` shot held for the line (`_closeup_shot`); a written
+  shot makes looks and gestures checked on its view. Tests `tests/test_cartoon_shots.py`.
 
 ### 69.30 Vertical cartoons follow the speaker (Step 96)
 
-On a `stage` wider than the frame the camera keeps whoever speaks in view (`reframe: speaker`),
-so a cartoon written for 16:9 renders in a 9:16 variant without camera directions of its own.
+On a `stage` wider than the frame the camera keeps the speaker in view, so a 16:9 cartoon renders
+as 9:16 without camera directions.
 
-- **Setting** (`config.ReframeSetting` = `speaker | none`): `VideoConfig.reframe` and the stage
-  param `reframe` (the stage's wins), both default none. `directing.stage_reframes(project,
-  params)`: the setting if given, else `speaker` when the characters' boxes (`FIGURE_HALF_WIDTH`
-  heights to each side of their start marks, laid out as while reframing) are wider together
-  than the frame (`reframe_needed`). A video variant can turn it off (`reframe: none` merges into
-  the top level; a variant cannot change one scene's params, §7).
-- **The landscape stage** (`cartoon/reframe.py`, no manim): `stage_base_width(frame_width,
-  frame_height, reframing)` is the width of a `width: 1` stage: the frame's, or while reframing
-  `max(frame width, 16/9 × short side)` (`LANDSCAPE_ASPECT`). In 9:16 (8 × 14.22) a reframing
-  stage is 14.22 units per `width`, as in 16:9, so marks, sizes (the short side, §69.6) and walk
-  lengths match the landscape video and the frame crops it. `Stage.stage_width` and
-  `stage_frame` use it; 16:9 frames are unchanged. Without reframing, a 9:16 stage is squeezed
-  into the frame as before (§69.6).
-- **The path** (`reframe_path(beats, frame_width=, bounds=, start_x=) -> [CameraMove(beat, x,
-  seconds)]`, pure): `ReframeBeat(id, speakers, seconds, figures, camera, camera_x, bubble)` with
-  `ReframeFigure(name, x, half_width, facing, start_x)` (where it ends the beat's written moves,
-  and where it started when it moved). The camera's centre starts at `start_x` (clamped in
-  `bounds`). Per beat: a written `pan` sets it (`camera_x`, `None` when not known: then nothing
-  until a known pan), a `follow` makes it unknown, `held` (a `zoom` or a `shot` with a kind)
-  changes nothing (the view comes back); in a `free` beat the first speaker on stage with a line
-  of at least `REPLY_HOLD_SECONDS` 1.5 s (a shorter reply holds the view) that is not wholly in
-  view (`CUT_TOLERANCE` 0.02 of its width) moves the camera to `_view_for`: the speaker's span
-  (start and end of a walk, else its end box), `REFRAME_LOOK_ROOM` 0.1 of the view in front of
-  its face, then the nearest centre inside the stage that shows it wholly and puts no view edge
-  inside another figure (candidates: that ideal and the centres whose edge sits at a figure's
-  tolerance; none: the ideal kept in range). The move eases `REFRAME_SECONDS` 1.0 (at most 0.8
-  of the shortest line that moves it), or is a cut (`seconds` 0) in the first beat and in a beat
-  whose `say` draws a bubble (built for the view at its start). Before the first line, the first
-  beat cuts to the scene's first speaker (before any written camera move) when the start view
-  does not show it.
-- **Planner** (`cartoon/directing.py`): `plan_reframe(cast, beats, stage)` replays the written
-  actions with the planner's state (`_start_state`, `_follow_written`: enters, exits, walks,
-  pans, follows; `CAMERA_ACTIONS` = pan, follow, zoom, shot) into `ReframeBeat`s and turns each
-  move into an automatic `pan` with `to` (the stage fraction, 4 decimals) and `run_time`, or
-  `cut: true`. `stage_directions(..., reframe=)` reads every speaking beat's length when
-  reframing, puts the pans first in their beats' `DirectedBeat`s and gives them to
-  `plan_directions` as written actions (so automatic close-ups avoid their beats and the lint
-  checks see the camera); `Stage.auto_actions` passes `stage_reframes`. The pans are ordinary
-  automatic actions: `vidgen direct` / `--print`, the storyboard's `auto:` line (`auto_label`
-  writes a true flag by its name: `pan 0.3062 cut`), and pasted they count as written.
-- **`pan` `cut`** (§69.7): `cut: true` moves the camera frame at once in `apply` (no animation,
-  `run_time_for` 0), as a shot's cut does (§69.29). **Runner**: in a batch of actions due
-  together, camera moves now come first (they start at their `at`; before, a camera move listed
-  after two actions on one character joined the second's batch), then the others, then
-  `after_camera` actions.
-- **Checked**: a scratch copy of `examples/cartoon` with a 9:16 variant (`vidgen storyboard` and
-  `vidgen lint --variant vertical`): the yard scene (dot and moss at `left` / `right`, 7.1 units
-  apart in a frame 8 wide) cuts to dot at the start, eases to moss and back, follows dot's walk,
-  cuts to moss for his bubble and leaves the written zoom alone; the hill (both start within one
-  view) does not reframe. Lint: 1 warning, `off_stage` in hill_count, from the written `follow`
-  of the kite (present without this step too), so the variant is not added to the example.
-- **Not done here**: the camera moves only in x (no zoom to the speaker in a tall frame, where
-  the characters stay small); a walk that does not speak is not followed; the entering side of an
-  `enter` is predicted from the written camera only; props are not framed. Tests:
+- **Setting** (`config.ReframeSetting` = `speaker | none`): `VideoConfig.reframe`, stage param
+  `reframe` (wins), default none; `directing.stage_reframes` returns `speaker` when the start
+  layout is wider than the frame (`reframe_needed`). A variant may set `reframe: none`.
+- **Stage width** (`cartoon/reframe.py`): `stage_base_width(frame_width, frame_height,
+  reframing)` = `max(frame width, 16/9 × short side)` while reframing (`LANDSCAPE_ASPECT`), so
+  marks and walks match the landscape video; else the frame width (§69.6).
+- **Path** (`reframe_path(beats, ...) -> [CameraMove(beat, x, seconds)]`, pure): written `pan`
+  sets the centre, `follow` makes it unknown, `zoom` / kinded `shot` change nothing; otherwise the
+  first speaker with a line ≥ `REPLY_HOLD_SECONDS` 1.5 not in view (`CUT_TOLERANCE` 0.02) is
+  framed (`REFRAME_LOOK_ROOM` 0.1, no edge cutting a figure). Eases `REFRAME_SECONDS` 1.0 (≤ 0.8 of
+  the shortest line); cuts in the first beat and in beats whose `say` draws a bubble.
+- **Planner**: `plan_reframe(cast, beats, stage)` emits automatic `pan`s (`to` 4 decimals,
+  `run_time` or `cut: true`), placed first in their beats and passed to `plan_directions` as
+  written.
+- **`pan` `cut: true`** (§69.7) moves the frame at once (`run_time_for` 0). **Runner**: in a batch,
+  camera moves first, then other actions, then `after_camera` ones. Tests
   `tests/test_cartoon_reframe.py`.
 
 ### 69.31 Lighting and mood (Step 97)
 
-A `stage` has a light (`light:` param, the `light` beat action) and soft shadows on the ground
-(`shadows:` param, on by default).
+A `stage` has a light (`light:` param, `light` action) and ground shadows (`shadows:`, default on).
 
-- **The grade** (`cartoon/lighting.py`, no manim): `LightGrade(multiply, glow, stars, shadow)`;
-  a colour channel `c` becomes `clip(c * multiply + glow, 0, 1)`, alpha unchanged
-  (`grade_rgbas` for Manim's RGBA rows, `grade_pixels` for 8-bit pictures). `tint_grade(tint,
-  strength)`: `multiply = 1 - strength * (1 - tint)` per channel. Presets (`PRESET_LIGHTS`,
-  `LIGHT_PRESETS`): `day` (no change), `morning` (`#FFE4CC` 0.3 + a small warm glow, shadows
-  0.8), `sunset` (`#FF8A5C` 0.55 + a warm glow, so a blue sky turns warm instead of grey; shadows
-  0.9), `night` (`#2A3C78` 0.72, stars 1, shadows 0.45), `indoor` (`#E6BC7E` 0.4, shadows 0.75).
-  `{tint, strength}` (`CustomLight`, default strength 0.5) has no glow, no stars, shadows 1.
-  `blend_grades` mixes every field linearly (exactly the ends at 0 and 1).
-- **Fades**: `LightChange(start, seconds, grade)`; `light_at(base, changes, now)` applies the
-  changes in start order, each from the light at its own start (so one that starts during
-  another continues from where that one is), eased with smoothstep. `light_changing(changes,
-  start, end)`: whether any change is under way in a window.
-- **Drawing** (`cartoon/shading.py`): the grade is applied as Manim draws, not to the mobjects'
-  colours. `StageLight(camera, base)` wraps the scene camera's `get_fill_rgbas`,
-  `get_stroke_rgbas` and `display_image_mobject` (Cairo camera; same names in Manim 0.21 and
-  0.22): a mobject with the `light_graded` attribute (`mark_lit`, set on every family member of
-  the backdrop, the layers, the props and the characters) is drawn graded; a picture's pixel
-  array is graded while it is drawn and put back. Nothing is recoloured, so `dim`, `highlight`,
-  expressions and lip sync keep working, and what the stage does not mark (speech bubbles,
-  callouts, particles, captions, text) keeps the theme's colours and contrast. A stage whose
-  light is `day` and that has no `light` action installs nothing (renders as before, apart from
-  the shadows). A lit stage without a picture or `background` gets a `background` rectangle in
-  the theme's background colour, so the sky is graded too.
-- **The `light` action** (`scenes/light_action.py`): `- light: night` or `tint` + `strength`;
-  `animates = False`, so the runner cues it at its `at` (`cue`) and it never stretches a batch of
-  other actions; `run_time` (default `LIGHT_FADE_SECONDS` 2) is the fade; not reversible (a later
-  `light` action changes it again); `scene_problems` refuses scene types without
-  `change_light`. `Stage.change_light(setting, start, seconds)` adds the change and a scene
-  updater (`_light_step`, kept as `_light_updater`: Manim removes an updater by identity and
-  each `self._light_step` is a new bound method) that sets the grade for the scene time on every
-  frame and removes itself once every change is over (Step 99; before, the removal in
-  `get_moving_mobjects` never matched and ran only when a new animation started); while it is
-  installed a wait is not frozen. **Static image** (§69.20): `Stage.get_moving_mobjects` updates
-  the light first, returns every mobject while a change falls in the animation's time
-  (`self.duration`; unknown: until the changes are over), otherwise Manim's moving mobjects, so
-  the set stays in the static image before and after a fade. Measured on a scratch copy of `examples/cartoon`: `yard` storyboard at
-  preview 12.5–13.1 s with `day` (HEAD 12.3–13.0 s), 13.4 s with `night` (the grading of every
-  lit shape on every frame drawn).
-- **Stars**: when the starting light or any `light` action has stars and the stage has no
-  picture, `night_stars(area_share, seed, preview)` draws positions, sizes and brightness from
-  the `sparkles` particles' seeded stream (`particle_seeds`; `STAR_DENSITY` 1.0 of their count,
-  half at preview; `STAR_SIZE` 0.7 of their size; brightness from each seed's speed) and
-  `StarField` builds them with the sparkle's shape (`particle_field.particle_shape("star")`) in
-  `STAR_COLOR` over the top `STAR_SKY` 0.75 of the sky above the ground band (since Step 102 ending
-  `STAR_HEAD_ROOM` 0.04 of the frame height above the highest character's head at the start), right after the
-  sky in the backdrop (behind the layers and the props). They do not twinkle (a moving field
-  behind the set would take the whole set out of the static image); `set_level(grade.stars)`
-  fades them with the light. Not graded.
-- **Shadows**: `shadow_ellipse(x, ground_y, width, above=, size=, strength=)`: on the ground
-  line of the caster's depth, `SHADOW_FLATNESS` 0.16 as high as wide, opacity `SHADOW_OPACITY`
-  0.3 × the light's `shadow`; `above` the ground the shadow shrinks and fades by `1 / (1 +
-  SHADOW_SHRINK (1.5) × above / size)`. Widths: `SHADOW_WIDTH` 0.55 of a character's standing
-  height, `PROP_SHADOW_WIDTH` 0.9 of a prop's width, so depth scales them with their caster.
-  `Shadow` is three ellipses in the characters' ink (`SHADOW_RINGS`, darker inside: soft
-  edges). `ShadowCaster(mobject, ground, width, size)` reads `feet()`; a prop with `held_by` set
-  casts none. `Stage._shadows` splits the casters: props on the ground that no action can move
-  form one `StageShadows` in the backdrop (after the ground band, static); characters and the
-  props a `pick_up` / `hold` names or `keyframes` / `move_along` targets form another, with an
-  updater (`follow`), faded in just before the first of them in the reveal, so the back of the
-  set stays in the static image. Props with a `lift` (cloud, sun, moon) cast none. The layout
-  dump leaves `StageShadows` and `StarField` out (`introspect`), so lint never sees them.
-- **Checked by eye** on scratch copies of `examples/cartoon` with each preset on both stages
-  (storyboards at preview), and the hill scene fading `sunset` then `night` (3 s, with
-  confetti): the bubble stays white with dark text, stars show in the night sky behind the cloud
-  and hills, the jump's shadow shrinks under dot, the kite's shadow leaves with it. `vidgen lint`
-  on the night and the fading copies: 0 findings (the `contrast` rule included).
-- **Not done here**: stars do not twinkle and are not drawn over a picture background
-  (`generate:` / `image`: the sky is unknown); particles are not graded; shadows do not stretch
-  with a low sun; a held prop's shadow is not under its holder's (the holder's covers it).
-  Tests: `tests/test_cartoon_lighting.py`. Since Step 98 `light_at` / `light_changing` are
-  `fade_at` / `changing` (any change with `start`, `seconds`, `end`, `value`), shared with the wind.
+- **Grade** (`cartoon/lighting.py`): `LightGrade(multiply, glow, stars, shadow)`; `c ->
+  clip(c * multiply + glow, 0, 1)`, alpha kept. `tint_grade(tint, strength)`. Presets
+  (`PRESET_LIGHTS`): `day`, `morning`, `sunset`, `night` (stars), `indoor`; `{tint, strength}`
+  (`CustomLight`, strength 0.5). Fades: `LightChange`, generic `fade_at` / `changing` (shared with
+  wind) wrapped by `light_at` / `light_changing` (start order, each from the light at its start,
+  smoothstep).
+- **Drawing** (`cartoon/shading.py`): graded as drawn, never recoloured: `StageLight` wraps the
+  Cairo camera's `get_fill_rgbas`, `get_stroke_rgbas`, `display_image_mobject` for mobjects marked
+  `light_graded` (`mark_lit`: backdrop, layers, props, characters); bubbles, callouts, particles and
+  captions keep theme colours. A `day` stage without `light` actions installs nothing.
+- **`light` action** (`scenes/light_action.py`): `animates = False` (cued, never stretches a
+  batch), `run_time` = fade (`LIGHT_FADE_SECONDS` 2). The updater is kept as `_light_updater`
+  (Manim removes updaters by identity) and removes itself when changes end;
+  `get_moving_mobjects` returns everything only while a change overlaps (§69.20).
+- **Stars**: without a picture, `night_stars` (seeded from the `sparkles` stream) and `StarField`
+  fill the top `STAR_SKY` 0.75 of the sky, ending `STAR_HEAD_ROOM` 0.04 frame heights above the
+  highest head; static (no twinkle), not graded.
+- **Shadows**: `shadow_ellipse` (`SHADOW_FLATNESS` 0.16, `SHADOW_OPACITY` 0.3 × light `shadow`,
+  shrink `1 / (1 + SHADOW_SHRINK 1.5 × above / size)`), `SHADOW_WIDTH` 0.55 of height,
+  `PROP_SHADOW_WIDTH` 0.9 of width. Held and lifted props cast none. Unmovable props' shadows are
+  one static `StageShadows` in the backdrop; moving casters share one with a `follow` updater. The
+  layout dump omits `StageShadows` and `StarField`. Tests `tests/test_cartoon_lighting.py`.
 
 ### 69.32 Wind (Step 98)
 
-A `stage` has a wind (`wind:` param, the `wind` beat action): props sway, characters' trailing
-pieces follow it on a spring, particles drift.
+A `stage` has a wind (`wind:` param, `wind` action): props sway, trailing pieces follow on a
+spring, particles drift.
 
-- **Levels and gusts** (`cartoon/wind.py`, no manim): a level is signed, `0` calm, `1` a gale
-  blowing right (`+x` on screen), `-1` left; `wind_level` reads a number (also as text) or
-  `WIND_LEVELS` (`calm` 0, `breeze` 0.3, `windy` 0.6, `gale` 1). `gust(t, seed)` is smooth value
-  noise in 0..1: two octaves (`GUST_OCTAVES`: knots 2.6 s apart weight 0.65, 0.85 s weight 0.35),
-  knot values from splitmix64 of (seed, octave, knot) (pure integers: the same on every
-  platform, cached), eased between knots with a quintic. `Wind(base, seed, changes)`: `level(t)`
-  fades through `WindChange(start, seconds, value)` with the light's `fade_at` (smoothstep, a
-  change during another continues from where it is); `force(t, delay) = level ×
-  (STEADY_SHARE 0.5 + 0.5 × gust(t − delay))`; `delay(x_share, t)` = `GUST_CROSSING_SECONDS` 1.2
-  × the distance from the upwind edge (gusts cross the stage); `blown(start, t)` adds the force
-  up with trapezoids `BLOWN_STEP` 0.05 s apart from 0 (cached; the same whatever order frames are
-  asked in). The scene's seed is `wind_seed(scene id)` (the idle motion's name hash).
-- **Sway** (Step 104 changed the numbers and added `felt_force`, §69.38): `SWAYS` (tree 5° at force 1, 0.45 Hz, straight up to 0.08 of its height; bush 4°;
-  plant 9°, from 0.45 (above the pot); sign 1.5°; lamp 1.2°); `sway_degrees(kind, force, t,
-  phase) = degrees × force × (1 + SWAY_WOBBLE 0.25 × sin(2π hz t + phase))`, phase from the
-  prop's name (`wind_phase`). `bent_points(points, degrees, foot_y, height, bend_from)` moves
-  each point sideways by `tan(degrees) × bending length × u²` (`u` the share of the height above
-  `bend_from`): the base stays, the top leans; `y` is kept. Exactly the rest points at 0°.
-- **Trailing pieces**: the generator marks members of a shape with `TRAIL_ATTRIBUTE`
-  (`wind_trail` = pivot x, pivot y, weight; scaled with the figure): the scarf's end (weight
-  1.2, pivot its top), long hair (0.55, above the head's middle), a bun (0.35, its bottom),
-  pointy ears (0.35, their base), floppy ears (1.0, their top), the hat's crown, band and brim
-  (0.3, the brim's middle) (`TRAIL_WEIGHTS`). Hair and ears are drawn inside the `head` part
-  and the scarf inside `body`, so trailing is per member inside a part, not a new part: the part
-  set, poses, sheets, SVG ids and the look cache are unchanged. `Character` finds them once
-  (`_trailing_members`; sign + for a piece hanging below its pivot, − for one standing above it,
-  so a positive turn always moves its free end right as drawn facing right) and
-  `set_wind(degrees)` turns each by `degrees × weight` about its pivot after its part's matrix,
-  mirrored for `facing: left`, on top of the poses (not in `state()`); at 0 `refresh` takes the
-  old path. `trail_degrees(wind, t, delay, phase) = TRAIL_DEGREES 24 × TRAIL_SPRING.follow(force)
-  + FLUTTER_DEGREES 4 × level × sin(2π 2.5 t + phase)`, `TRAIL_SPRING = Spring.tuned(1.2 Hz,
-  ζ 0.3)` (Step 82: it lags a gust and swings past it); exactly 0 once the force has been 0 for
-  `Spring.memory_seconds` (6 decay times, 2.65 s). Imported SVG characters have no marks.
-- **Particles** (`particles.py`): `WIND_DRIFT` per kind (shorter sides per second at force 1;
-  dust 0.4, snow 0.35, rain / confetti 0.3, smoke 0.25, bubbles 0.2, sparkles 0.08);
-  `particle_states(..., blown, wind)` shifts each particle by drift × |speed| × blown and slants
-  rain by `atan2(drift + WIND_DRIFT × wind, fall)`; 0 adds nothing. `ParticleField(wind=)` reads
-  `(blown since it started, force now)`; `particle_field` passes the scene's `particle_wind`.
-- **Stage** (`windblown.py`, `scenes/stage.py`): `_start_wind` installs nothing when the param
-  and every `wind` action are 0 (`blowing` and `particle_wind` stay `None`: proved by frame
-  hashes, below). Otherwise `StageWind(wind, props, cast, x_share)`: the swaying props are
-  built-in `SWAYS` kinds on the ground that no action moves, holds (`_movable_props`), sits on or
-  leans on (`_posture_props`), each a `SwayingProp` keeping its rest points; characters with
-  trailing pieces. A scene updater (kept in `_wind_updater`: Manim removes updaters by identity)
-  calls `update(t)` each frame after the animations; `refresh` is anchor-based, so turning
-  trailing pieces during a walk or pose change is consistent. **Static image** (§69.20, cost
-  asked for): `get_moving_mobjects` returns, while `moving(now − spring memory, end)`, the scene's
-  family from the first swaying prop or trailing character on (the sky, layers, ground band,
-  still shadows and props behind stay static); otherwise Manim's set, and the updater is removed
-  once nothing can move again (since Step 100 also by `_wind_step` itself, on that frame, so a
-  calm that starts inside a long wait does not keep Manim redrawing every frame). Measured (854x480, 15 fps, no audio, 2 runs each, a scratch copy
-  of `examples/cartoon`): `yard` 11.5 / 10.9 s → 12.8 / 12.8 s with `wind: windy` (+13 %, the
-  tree and everything in front of it redrawn); `hill` 13.2 / 12.9 s → 13.8 / 14.3 s with `gale`
-  (+7 %). `trail_degrees` costs about 0.4 ms per character per frame.
-- **The `wind` action** (`scenes/wind_action.py`): `- wind: 0.8` / `calm` / `breeze` / `windy`
-  / `gale`; like `light`: `animates = False`, cued at its `at`, `run_time` the fade
-  (`WIND_FADE_SECONDS` 2), `scene_problems` refuses scenes without `change_wind`; validate:
-  none, several, unknown name (did-you-mean), out of range. `number_target = True`: the YAML
-  number is kept as text by `ActionConfig` (a `before` validator on `target`) and the schema's
-  shorthand accepts a number.
-- **`wind: 0` changes nothing**: a scratch copy of `examples/cartoon` with `wind: 0` on both
-  stages rendered at 160x90, 5 fps on this step's code gives the same frame hashes as the
-  unchanged copy on HEAD 868914f (`yard` 147 frames, `hill` 127); `tests/test_cartoon_wind.py`
-  checks `wind: 0` plus a `- wind: calm` action against no wind frame by frame.
-- **Not done here**: wind relative to a walking character (walking into it), wind on held props,
-  SVG props or picture backgrounds, layers swaying, a `wind` setting at the top level, leaves
-  blowing as particles of their own (Step 104 adds `leaves` and a held prop blowing away, §69.38). The light's updater, found never removed here, is fixed in
-  Step 99 (§69.31). Tests: `tests/test_cartoon_wind.py`.
+- **Model** (`cartoon/wind.py`): signed level (`1` = gale to `+x`); `WIND_LEVELS` calm 0, breeze
+  0.3, windy 0.6, gale 1. `gust(t, seed)`: value noise from splitmix64 integers (identical on every
+  platform). `Wind.force(t, delay) = level × (STEADY_SHARE 0.5 + 0.5 × gust)`, delay
+  `GUST_CROSSING_SECONDS` 1.2 across the stage; `blown(start, t)` integrates force (`BLOWN_STEP`
+  0.05 s, cached, frame-order independent). Seed `wind_seed(scene id)`.
+- **Sway**: `SWAYS` (per felt force, §69.38), `sway_degrees`, `bent_points` (exactly the rest
+  points at 0°).
+- **Trailing pieces**: generator members marked `TRAIL_ATTRIBUTE` (`wind_trail` = pivot x, y,
+  weight; `TRAIL_WEIGHTS`) inside `head` / `body`, so parts, sheets, SVG ids and the look cache are
+  unchanged. `Character.set_wind(degrees)` (not in `state()`); `trail_degrees` uses `TRAIL_SPRING =
+  Spring.tuned(1.2 Hz, ζ 0.3)` and is exactly 0 once force has been 0 for `memory_seconds`.
+- **Particles**: `WIND_DRIFT` per kind; `particle_states(..., blown, wind)`.
+- **Stage** (`windblown.py`): calm param and actions install nothing (`wind: 0` renders
+  frame-identical to no wind — tested). Else `StageWind`: swaying props are `SWAYS` kinds no action
+  moves, holds, sits or leans on. `_wind_updater` removes itself once nothing can move;
+  `get_moving_mobjects` redraws from the first swaying prop / trailing character on.
+- **`wind` action**: `- wind: 0.8` or a level name; `animates = False`, fade `WIND_FADE_SECONDS`
+  2; `number_target = True` (`ActionConfig` keeps a YAML number as text). Tests
+  `tests/test_cartoon_wind.py`.
 
 ### 69.33 Non-speech voice sounds (Step 99)
 
-A beat's text may hold `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` (any case,
-an `s` allowed: `[laughs]`): sounds of its speaker at that point (CONFIG "Voice sounds").
+`[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` (any case, plural `s`) in a beat's
+text are sounds of its speaker. User docs: docs/CONFIG.md "Voice sounds".
 
-- **One place for the markers** (`voicesounds.py`, no manim): `BeatConfig`'s after-validator
-  calls `take_out_sounds` (`SOUND_MARKER`, the spaces before a marker go with it, a word glued
-  to it gets a space) before `strip_emphasis`: `text` is the plain line, `marked_text` keeps the
-  `*word*` marks (the same words, so the gesture planner's word count holds), `voice_sounds` the
-  `VoiceSound(kind, word)` list, `word` = how many words of `text` come before it (independent
-  of the asterisks). Everything that reads `beat.text` (captions, SRT, bubbles, slides, lint,
-  readback's written side) never sees a marker; a text of markers only is a config error. Other
-  brackets stay in the text. `model_copy` keeps the private attributes (automatic actions copy
-  beats).
-- **What the TTS gets**: `Project.spoken(beat)` = `pronunciation.apply(beat.text)` (the rules
-  see the written words only), then `voiced_spoken`, which inserts what the beat's voice says
-  for each sound (`sound_voicing`) after its word with `Spoken.inserted` (zero-length
-  `Replacement`s: the said words belong to no written word in `word_groups`, so
-  `map_word_times` times the written words around them). `spoken_texts` (the audio hash, the
-  dry run, `context_texts`, lint's speed, `vidgen tts`) is built from it. A beat without
-  markers is unchanged (pinned cache keys in `tests/test_voice_sounds.py`).
-- **Per provider** (`VOICE_SOUNDS`): ElevenLabs models starting `eleven_v3` read audio tags
-  (`[laughs]`, `[gasps]`, `[sighs]`, `[giggles]`, `[groans]`; `hmm` is said `Hmm.`). Every other
-  voice (Kokoro, other ElevenLabs models, OpenRouter's models) says `Ha ha ha!`, `Hee hee!`,
-  `Hmm.`, `Ugh.`; `gasp` / `sigh` at the line's first or last position are the built-in
-  generated `gasp` / `sigh` sounds (`sfx.py`, breath noise through formant bands, plus a falling
-  hum for the sigh), not in the text, so the beat's audio and hash stay as without the marker;
-  inside a line they are said `Hah!` / `Haah.` (the speech leaves no silence: Kokoro makes a
-  0.05 s pause for `…` and 0.11 s for `...`, measured). Real Kokoro (`af_heart`, Step 99): `Ha ha
-  ha!` 0.73 s, `Hee hee!` 0.43 s, `Hmm.` 0.28 s, `Ugh.` 0.33 s, `Hah!` 0.23 s; with timings, so
-  the alignment holds the sound and the mouth follows it (`Hmm` -> `M`).
-- **When** (`sound_spans`, `beat_sound_spans`): from the written words' times (the caption
-  path: alignment of the spoken text, else the estimate over the spoken words, which weighs the
-  sound's words and pauses): a said sound spans the gap between its words (from 0 / to the
-  beat's end at the edges); a generated one ends `SOUND_GAP` (0.05 s) before the first word or
-  starts that long after the last, its built-in length long (the gasp may start before the beat,
-  in the previous beat's pad; clamped to the scene's start).
-- **Generated sounds** are recorded by `NarratedScene.narrate` (any scene type) as sound effects
-  of the beat at `SOUND_GAIN_DB` (+6 dB: built-ins sit −27 LUFS, about 7 dB under the voice; a
-  breath belongs to it), so `assets/sfx/gasp.wav` replaces one like any built-in.
-- **Mouth**: said sounds are in the viseme track (stored or built from the spoken text).
-  `beat_visemes` lays the generated ones over it with `with_cues` (`gasp` `O`, `sigh` `A`;
-  before 0 cut off, past the end with `rest` before it), at read time, so stored
-  `.visemes.json` files are unchanged.
-- **Face**: `directing.sound_reactions` (run first by `stage_directions`, whatever
-  `auto_direct` says; `directing_used` is true for a stage with sounds) adds per beat an
-  automatic `react` with the expression of its first sound (`laugh` / `giggle` happy, `gasp`
-  surprised, `sigh` sad, `hmm` thinking, `groan` worried) at the sound's start as a share of the
-  beat (at most `REACTION_AT`), for each speaker (`say` targets, else the voice's characters)
-  that can emote and that no written `emote` / `react` (`FACE_ACTIONS`) acts on. The planner
-  then sees it as written, so it adds no gesture or reaction for that speaker in that line.
-  `vidgen direct` lists it (pasting it makes it written; the automatic one then goes away).
-- **Captions, SRT, readback**: `captions` and `write_srt` (`spoken=` per beat, from the
-  pipeline) time the written words with `Project.spoken`; `directing._beat_words` too for a beat
-  with sounds. `readback` compares with the line without sounds and `compare_beat(...,
-  skip_heard=)` drops heard tokens in `heard_sound_words` that the line does not say.
-- **Screenplay** (§69.25): inside a line, a bracket whose content `is_voice_sound` stays in the
-  line's text; every other `[...]` is a direction. On its own line a `[laugh]` stays a direction
-  (no verb matches: a `# TODO:`). A line of sounds only is an error naming its line.
-- **Fingerprint**: a scene with sounds adds `voice_sounds` (beat -> `[kind, word]`), since a
-  generated sound changes the SFX, the mouth and the face but not the text or audio.
-- **Not done here**: one face per beat (the first sound's); a sound marker on a line of its own
-  (a beat needs words); no panning; the `[gasp]` foley `pop` of a `surprised` react plays with
-  the gasp; ElevenLabs v3 tags and OpenRouter models were not tried against the real services
-  (no API calls), and how a given OpenRouter model says `Ha ha ha!` is unknown.
-  Tests: `tests/test_voice_sounds.py`.
+- **Markers** (`voicesounds.py`): `BeatConfig` calls `take_out_sounds` before `strip_emphasis`:
+  `text` plain, `marked_text` with `*word*`, `voice_sounds` = `VoiceSound(kind, word)`. Nothing
+  reading `beat.text` sees markers; markers only is a config error.
+- **TTS text**: `Project.spoken(beat)` = `pronunciation.apply(text)` then `voiced_spoken` (voicings
+  as zero-length `Replacement`s, so `map_word_times` times only written words); `spoken_texts`
+  (audio hash, `vidgen tts`, lint) uses it. Beats without markers are unchanged (pinned keys).
+- **Per provider** (`VOICE_SOUNDS`): `eleven_v3*` gets audio tags; others say `Ha ha ha!`, `Hee
+  hee!`, `Hmm.`, `Ugh.`; `gasp` / `sigh` at a line's start / end are generated `sfx.py` sounds
+  (audio and hash unchanged), inside a line `Hah!` / `Haah.`.
+- **Timing / mix**: `sound_spans`; generated sounds `SOUND_GAP` 0.05 s from the words, recorded by
+  `NarratedScene.narrate` as beat SFX at `SOUND_GAIN_DB` +6 dB (overridable in `assets/sfx/`).
+- **Mouth / face**: `beat_visemes` overlays generated sounds at read time (`.visemes.json`
+  unchanged); `directing.sound_reactions` (always run first) adds a `react` for the first sound's
+  expression unless a written `FACE_ACTIONS` acts on that speaker.
+- **Captions / readback**: `captions`, `write_srt(spoken=)`; `compare_beat(..., skip_heard=)`.
+- **Fingerprint**: a scene with sounds adds `voice_sounds` (beat -> `[kind, word]`). Tests
+  `tests/test_voice_sounds.py`.
 
 ### 69.34 Overlapping speech and interruptions (Step 100)
 
-A beat's `overlap: S` starts it `S` seconds before the speech of the beat before it ends;
-`interrupt: true` cuts that line where the beat starts (CONFIG "Overlapping lines").
+`overlap: S` starts a beat `S` s before the previous speech ends; `interrupt: true` cuts that line.
+User docs: docs/CONFIG.md "Overlapping lines".
 
-- **Only within a scene**: `SceneConfig` refuses the keys on a scene's first beat, so a scene's
-  start, end and length rules (transitions §49, carry §50, chapters §52) are unchanged; scenes
-  only get shorter. `BeatConfig` refuses `interrupt` with `overlap: 0` (cuts nothing); `overlap`
-  is `>= 0`. `vidgen validate` warns about an overlap of a line of the same voice
-  (`overlap.overlap_warnings`).
-- **The timeline** (`overlap.py`, no manim): `beat_lines` builds a `SpokenLine(seconds,
-  speech_end, overlap, interrupt)` per beat; the speech end (`speech_bounds` of the MP3, the
-  trailing silence cut off; `d` without audio) is read only for a beat the next one joins.
-  `beat_windows(lines, pad, fps)` gives each beat a `BeatWindow(body, rest, heard, shape)`: not
-  joined, `(d, pad, d, plain)`, so `window = d + pad` is the same float expression as before;
-  joined, `body = max(speech_end - lead, MIN_WINDOW)` in whole frames (with `fps`, so the cut
-  lands where the next beat really starts), `rest = 0`, `heard = d` (overlap; `VoiceShape(dip_from
-  = body)`) or `body` (interrupt; `VoiceShape(cut = body)`), and `next_lead = speech_end - body`.
-  The lead (`SpokenLine.lead_after(earlier)`) is `overlap`; for an interrupt without `overlap`,
-  inside the earlier line's last word: `speech_end - (start + INTERRUPT_WORD_SHARE 0.7 *
-  length)` of that word (`SpokenLine.last_word`, read by `beat_last_word` from the stored
-  alignment of what the TTS said, `speech.stored_word_times`, only for a beat an interrupt
-  without overlap follows), so at most its last 30% is cut; without a stored alignment
-  `INTERRUPT_LEAD` (0.2 s; it was a fixed 0.5 s, which cut the whole word "normal" of a Kokoro
-  line in the Phase I showcase). `NarratedScene.beat_window` and `VideoPlan` call the
-  same function, so the plan and the render agree; `narrate` yields `body`, gives the action
-  runner `(body, rest)`, waits to `window`, records `end = start + heard`, captures `window`
-  worth of frames, puts an `end` sting at `heard` and drops a generated voice sound after a cut.
-- **The mix plan**: `VoiceShape.gain(seconds)` (raised-cosine `DIP_RAMP` 0.1 s to
-  `-OVERLAP_DIP_DB` 3 dB; fade to 0 over `INTERRUPT_FADE` 0.05 s from the cut) and
-  `shape_voice(samples, rate, shape)` (also drops what follows the fade). `add_narration` shapes
-  the beat's decoded WAV before Manim adds it, at the beat's start as before; a plain shape is
-  not applied at all (the pinned test compares every WAV Manim gets with the plain decode). The
-  shape is for the planned start of the next beat: a custom scene that plays between two
-  `narrate` blocks starts the next beat later than the cut. Music ducking and sting ducking read
-  the beats' `start` / `end`, so they cover both voices.
-- **Mouths** (§69.11): `NarratedScene.end_lip_sync(character, track)` stops a beat's lip sync
-  now, or, while the voice of the beat just narrated still sounds (`_voice_until`), keeps it in
-  `_lingering` until the next `narrate` ends; `Stage.narrate` and `Say.revert` call it. The track
-  past its end shows `rest`; `beat_visemes` of an interrupted beat is `VisemeTrack.until(cut)`,
-  and as `heard` ends at the cut, the mouth is stopped there.
-- **Captions**: `cues.overlapping_beats(spans)` (beats whose narrations intersect) get
-  one-line cues; `cues.stack_cues([(beat, cue)])` cuts the cues' timeline at every start / end
-  and shows the cues sounding at once (at most `MAX_STACK` 2, earlier beat on top). Without
-  overlaps it gives one stack per cue with its own times (the overlay draws the same mobjects).
-  The `captions` overlay draws a stack as one caption: lines of both cues on one plate, each in
-  its speaker's colour, tags as before; karaoke highlights the current word of each part (state
-  `(caption, (word, ...))`). The last cue of an overlapped beat lasts to its own end (`until =
-  max(next start, end)`). The SRT (`cues_from_timings`) uses one-line cues for overlapping beats
-  and lets their cues overlap in time (sorted by start); players stack them.
-- **Directing** (§69.23-24, §69.33): `BeatInput.next_joins`; `stage_directions` gives a joined
-  beat `seconds = body` and only the words that end before it, and the reactions pass adds no
-  listener reaction after it (no pause). A voice-sound face after the cut is left out.
-- **Lint**: the activity file's beats get `window` (joined) and `overlap` / `interrupt` (the
-  joining beat; for an interrupt without `overlap`, `overlap` is the lead used, the earlier
-  beat's `next_lead`); `animation_overrun` measures against `window`; the new rule `talked_over` (scene
-  scope, default warning, `TalkedOverRule` without settings) reports words of the earlier line
-  (`beat_word_times`) spoken entirely after the overlapping beat's speech starts (`talked_over`),
-  with the largest overlap that keeps them clear. For an interrupt (`_cut_words`, a line with an
-  MP3 only) it reports the words that start at or after the cut (the beat's `end`), timed over
-  the whole MP3, with the overlap below which they would be heard.
-- **Fingerprint**: the beat keys are left out of the scene's config dump while unset and added
-  as `joins` when set (scene, overlay inputs, the next transition's scene), so renders made
-  before Step 100 stay valid.
-- **Unchanged**: `timings.json` keys (the interrupted beat's `end` is the cut, an overlapped
-  beat's `end` passes the next `start`; consumers that took the last beat's `end` as the scene's
-  speech end now take the latest end), readback (it transcribes the whole MP3), the MP3s and
-  their hashes, the screenplay format (no syntax for overlaps yet).
-- **Not done here**: no screenplay syntax; no per-beat dip or fade settings; no overlap across
-  scenes. Tests: `tests/test_overlap.py`, `tests/test_overlap_pinned.py`.
+- **Rules**: refused on a scene's first beat (§49, §50, §52 unchanged); `interrupt` with `overlap:
+  0` refused; `overlap >= 0`; validate warns on overlapping the same voice.
+- **Timeline** (`overlap.py`): `beat_lines` -> `SpokenLine`; `beat_windows(lines, pad, fps) ->
+  BeatWindow(body, rest, heard, shape)`: not joined `(d, pad, d, plain)` (same float `d + pad`);
+  joined `body = max(speech_end - lead, MIN_WINDOW)` in whole frames, `rest = 0`. Lead =
+  `overlap`, or for a bare interrupt `INTERRUPT_WORD_SHARE` 0.7 into the last word (stored
+  alignment), else `INTERRUPT_LEAD` 0.2 s. `NarratedScene.beat_window` and `VideoPlan` share it.
+- **Mix**: `VoiceShape` dip (`DIP_RAMP` 0.1 s, `OVERLAP_DIP_DB` 3) or cut fade (`INTERRUPT_FADE`
+  0.05 s) applied in `add_narration`; a plain shape is not applied at all.
+- **Mouths / captions**: `end_lip_sync` keeps a still-sounding beat in `_lingering`; an interrupted
+  track is `VisemeTrack.until(cut)`. `cues.stack_cues` shows ≤ `MAX_STACK` 2 cues on one plate;
+  SRT cues may overlap.
+- **Lint**: rule `talked_over` (scene scope, warning) reports words spoken over or cut.
+- **Fingerprint**: keys enter the scene dump as `joins` only when set. `timings.json` keys
+  unchanged (the scene's speech end is the latest `end`). Tests `tests/test_overlap.py`,
+  `tests/test_overlap_pinned.py`.
 
 ### 69.35 Shared casts and sets (Step 101)
 
-A series keeps its characters, voices and places in files every episode includes
-(CONFIG "Shared casts and sets").
+A series keeps characters, voices and places in included files. User docs: docs/CONFIG.md
+"Shared casts and sets".
 
-- **Loading** (`includes.py`, no manim): `Project._load` calls `read_project_config(config_file,
-  confine)`, which reads the `include:` tree depth first (paths relative to the including file; a
-  file reached twice merged once, where first reached) and merges the files in that order, then the
-  project's own mapping: `merge_config` merges mappings key by key, `characters` entries by name
-  (a later entry's keys win; new names are added), anything else replaces. Only `include`,
-  `characters`, `voices` and `sets` may be in an included file. File paths in it (`look.svg`, a
-  set's `image`, `layers[].image`, `props[].svg`) are rewritten relative to the project and
-  collected (`ConfigSource.named_files`). Missing, unreadable, circular, non-YAML or (under `vidgen
-  mcp`) outside-the-root includes raise a `VidgenError` naming the chain of files, with a problem
-  at `include[k]` of the file that names it. Variants keep `deep_merge` (lists replace) and may not
-  contain `include`. `VideoConfig.include` / `sets` and `SceneConfig.set` are model fields (schema,
-  docs); `include` is read only by the loader.
-- **Sets**: `expand_sets` applies each scene's `set:` before validation (`apply_set`), so the
-  stage's `Params` never sees it: `image` / `generate` / `background` are one choice (a scene
-  giving one drops the set's three), mappings merge, `characters` / `props` / `layers` /
-  `particles` combine (set first; a scene entry named like a set entry, by explicit name for the
-  scene and own-or-default name for the set, `numbered_names`, changes it; `[]` clears), the rest
-  replaces. Chosen over replacing lists because a set is furniture a scene adds to; the
-  explicit-name rule keeps an unnamed `tree` in a scene a second tree. An unknown set is a config
-  problem (`set_reference_problems`, did-you-mean). Unused sets are not validated on their own.
-- **Where problems are written**: the loader records `Origin(file, location)` for every location
-  an included file, a set or a merge moved (`ConfigSource.origins`, `Project.origins`; empty
-  without includes or sets). `attributed(problems, origins)` takes the longest recorded prefix of
-  a problem's location and rewrites it: a set's value -> `sets.NAME...` in its file (dropping the
-  repeats from other scenes using the set), a character merged by name -> its own index in its
-  file, an appended scene entry -> its index in the scene. `Project._load` applies it to config
-  errors (the message is rebuilt from the problems), `cli.project_problems` to its result.
-  `Problem.file` (JSON `file`) names the included file, `None` for the project's config file;
-  `str()` shows `location (in FILE): message`. YAML line numbers are not kept (`yaml.safe_load`).
-  Warnings (strings) are not attributed.
-- **Caches**: the merged config is what renders, TTS hashes and imagegen keys see. The scene
-  fingerprint leaves `include`, `sets` and the scene's `set` out of its config dumps (the expanded
-  params carry what a set gives, so an unused set changes nothing and old renders stay valid),
-  and adds `included_files` (stats of `named_files` outside `assets/`) when there are any.
-- **`vidgen validate`** prints `included:`; `--json` gains `included` (absolute paths).
-- **`vidgen screenplay --cast FILE`** (MCP `cast`): `read_include_file` reads the cast with its
-  includes; `screenplay_project(play, title, cast, include)` writes `include: [<path from the
-  project>]`, treats the cast's characters as declared (their voices kept, not written into the
-  project), and `parse_set(text, names, sets)` reads a first part naming a cast set as `set:` (no
-  default sky; the set's marks, props and character places count for placing and directions;
-  characters the set already places at the same spot are not written again).
-- **Example**: `examples/cartoon_series/` (`shared/cast.yaml`, `shared/sets.yaml`, `episode_1`,
-  `episode_2`), both episodes validate and lint clean at preview. Tests: `tests/test_includes.py`.
+- **Loading** (`includes.py`, no manim): `read_project_config(config_file, confine)` reads the
+  `include:` tree depth first (paths relative to the including file; a file reached twice merged
+  once), then the project: `merge_config` merges mappings by key, `characters` by name (later keys
+  win), anything else replaces. Included files may hold only `include`, `characters`, `voices`,
+  `sets`; their file paths are rewritten relative to the project (`ConfigSource.named_files`).
+  Missing, unreadable, circular, non-YAML or (under `vidgen mcp`) out-of-root includes raise a
+  `VidgenError` naming the chain. Variants may not contain `include`.
+- **Sets**: `expand_sets` applies each scene's `set:` before validation (`Params` never sees it):
+  `image` / `generate` / `background` are one choice; mappings merge; `characters` / `props` /
+  `layers` / `particles` combine (set first; same explicit name replaces, `numbered_names`; `[]`
+  clears) — combine, because a set is furniture a scene adds to. Unknown set: config problem with
+  did-you-mean.
+- **Problem locations**: `Origin(file, location)` (`Project.origins`); `attributed(problems,
+  origins)` rewrites by longest prefix; `Problem.file` (JSON `file`; `None` = project config).
+- **Caches**: the merged config is what renders and hashes see; the scene fingerprint leaves out
+  `include`, `sets`, `set` and adds `included_files` (stats of `named_files` outside `assets/`).
+- **CLI**: `vidgen validate` prints `included:` (`--json` `included`). `vidgen screenplay --cast
+  FILE` (MCP `cast`) writes `include: [...]`, treats cast characters as declared, and
+  `parse_set(text, names, sets)` reads a leading cast set name as `set:`. Example
+  `examples/cartoon_series/`; tests `tests/test_includes.py`.
 
 ### 69.36 Review of Phase I (Step 102)
 
-- **End to end**: `examples/screenplay` (`vidgen screenplay` -> project -> `validate`, `direct`,
-  `storyboard`, `lint`, `character-sheet --all`, `render --preview`), `examples/cartoon` with
-  `auto_direct: true` and both `examples/cartoon_series` episodes (`validate`, `direct`, `lint`,
-  sheets, a storyboard, a preview render), by the CLI and by the MCP tools `screenplay` (also with
-  `cast`), `validate`, `direct`, `character_sheet`, `lint`: lint clean everywhere.
-  `tests/test_phase_i_review.py` repeats the cheap part and renders one 160x90 stage using the
-  Phase I features together.
-- **Captions over an automatically directed scene**: `overlays.scene_overlays` looked the scene up
-  with `list.index(spec)`; a stage with `auto_direct` renders a copy of its `SceneConfig` with the
-  automatic actions merged (§69.23), which equals no scene of the config, so any overlay on such a
-  scene raised `ValueError`. It now looks the scene up by id.
-- **Seats**: generated characters' hips are 0.15–0.24 of their height (big heads, short legs;
-  `head_size` 1.6 to 0.6), the SVG examples' 0.19–0.23, but the built-in seats were at 0.27
-  (chair, box) and 0.2 (rock): a seated character sat higher than it stood, its feet hanging, and
-  read as standing on the prop. `PROP_HEIGHTS` now makes `chair` 0.26 (seat 0.14), `box` 0.155 and
-  `rock` 0.155 (seats 0.14), below every generated look's hips, and `Character.seated` puts the
-  hips (`_hips_y`: the pivot of the first leg part) on the seat line, the body's bottom sinking a
-  little in front of the seat, so the knees bend and the soles reach the ground. Tested for every
-  body and head size and the SVG examples. A box or rock is drawn smaller than before everywhere
-  (`examples/cartoon`'s box, the series' crate).
-- **Stars**: the night's stars stopped `STAR_SKY` of the sky above the ground, which is beside
-  the characters' heads; the stage now builds its backdrop after the layout and ends the stars
-  `STAR_HEAD_ROOM` 0.04 of the frame height above the highest character's head at the start (a
-  jump or a close-up can still bring a head among them).
-- **`vidgen mcp` confinement**: `svg` (a character's `look.svg`, a stage or set prop's `svg`)
-  joins `PATH_KEYS`; a Kokoro `voice` part ending in `.pt` (Kokoro reads it from the current
-  folder, which under `vidgen mcp` is the root) is checked against the project folder and the
-  current folder; `read_include_file` (`screenplay --cast`) confines the cast's own includes when
-  `VIDGEN_CONFINE_ROOT` is set. Files found by scanning a folder (`assets/sfx/`, `assets/icons/`,
-  `audio/`) are not checked (a link there can still point outside: Backlog).
-- **Unused voices of a shared cast**: `voices.voice_warnings(config, origins)` leaves out voices
-  written in an included file (an episode need not use the whole cast).
-- **Real narration**: a scratch copy of the screenplay project with a two-shot, a close-up, an
-  overlap, an interrupt, `[gasp]` / `[laugh]`, sitting, leaning, a crate picked up and given,
-  sunset fading to night, wind and captions; Kokoro at speed 0.75 / 0.8 (`narration_speed` warned
-  at 0.85), lint clean, rendered at 1280x720 (`/home/claude/work/phase-i-review/showcase.mp4`,
-  57.6 s). Not transcribed (the owner skipped the Whisper check).
+Invariants this review fixed (check: `tests/test_phase_i_review.py`):
+
+- `overlays.scene_overlays` finds a scene by id (an `auto_direct` stage renders a merged copy).
+- Seat lines sit below every generated look's hips (0.15–0.24 of height): `PROP_HEIGHTS` `chair`
+  0.26, `box` / `rock` 0.155 (seats at 0.14); `Character.seated` puts the hips (`_hips_y`) on the
+  seat line.
+- `vidgen mcp` confinement: `svg` is in `PATH_KEYS`; a Kokoro `.pt` `voice` is checked against
+  the project and current folders; `read_include_file` confines nested includes under
+  `VIDGEN_CONFINE_ROOT`. Folder scans (`assets/sfx/`, `assets/icons/`, `audio/`) are not checked.
+- `voices.voice_warnings(config, origins)` skips unused voices from included files.
 
 ### 69.37 Props: basket, umbrella, napkin (Step 103)
 
-Three built-in props for Phase J's picnic in the rain, and the two things the umbrella needs: a
-prop with more than one shape, and a prop held somewhere other than its middle.
+Props `basket`, `umbrella`, `napkin` (`cartoon/props.py`, §69.8), plus multi-shape props and grips.
 
-- **Drawings** (`cartoon/props.py`, primitives and theme colours like §69.8): `basket` (0.2 of a
-  character; `secondary` wicker with weave lines, an `accent` cloth peeking out, an arched
-  handle), `umbrella` (0.6; `primary` canopy with lighter panels and ribs, `dim` wooden shaft
-  and hook), `napkin` (0.05; a light cloth `#F4F6FA` lying flat with `accent` checks and a
-  turned-up corner; small, for Step 104's wind to blow away). Both umbrella shapes are one prop
-  unit tall (tip or hook at 0, the top at 1), so a swap keeps its height; closed it stands on its
-  tip with the hook up, open it stands on its hook with the canopy up.
-- **Shapes** (`PROP_SHAPES = {"umbrella": ("closed", "open")}`): a drawer returns a dict of shapes
-  instead of a list; `Prop(shapes=...)` adds each shape as a group and shows the first. Like a
-  character's part shapes (§69.22) every shape stays in the family for the prop's life: a hidden
-  shape's members have no points, and `Prop.show_shape(name)` hides the shown one and draws the
-  other from its points in prop units (recorded at construction) through an invisible anchor
-  triangle (`character.anchor_mobject` / `anchor_placement`, now shared with `Character`; the
-  affine helper is `apply_matrix`) that moves, scales and mirrors with the prop, so the new shape
-  appears where the old one was, at its size and facing, whatever moved it since (a `PropMove`, a
-  hand's updater, a throw). `Prop.shape` (`None` for one shape), `shapes`, `shape_width(shape)`.
-  `draw_prop(..., shape=)` draws another shape first; `StageProp.open: true` passes `shape="open"`
-  (only for props with an `open` shape; else a config error).
-- **Grips** (`PROP_GRIPS`, prop units per (kind, shape)): where a hand holds a prop:
-  `("basket", None)` the top of its handle (it hangs below the hand), `("umbrella", "open")` the
-  shaft just above the hook; others (a closed umbrella, every other prop) by their middle.
-  `Prop.grip_point()` maps it through the anchor (the middle without one). Every hand use goes
-  through it: the follow updater keeps the grip at `hand_point` (was the middle), `PropMove`
-  moves and scales the prop about its grip (`_standing_grip` gives the grip's spot on the ground
-  for `put_down` / `throw`), `pick_up` reaches for the grip when there is one (else the top).
-  `Prop.feet()` of a prop with an anchor is the bottom edge below the anchor's origin (the tip or
-  hook), the same for each shape, so opening on the ground does not slide it sideways.
-- **Overhead** (`cartoon/holding.py`): an `OVERHEAD_PROPS` prop (an umbrella; §69.56) showing an `OVERHEAD_SHAPES` shape (`open`) is held
-  with the hand at `overhead_point(feet, height, facing)`, `OVERHEAD_FORWARD` 0.08 heights in
-  front of the feet and `OVERHEAD_HAND` 0.6 above them, and is `OVERHEAD_HEIGHT` 0.85 of the
-  holder tall (`held_height(..., overhead=True)`, not capped at 0.4). Measured on every body
-  (round, tall, square, bean) at head size 0.6 / 1.0 / 1.6 with a bun: the arm reaches 0.6 or
-  stops at 0.53–0.57 (big heads), the canopy's rim is 1.02–1.09 heights up (the head top is 1.0)
-  and it spans −0.34 to +0.50 heights about the feet (heads are at most ±0.25). A prop held
-  overhead is drawn right *before* its holder in `scene.mobjects` (the shaft behind the head and
-  body, the canopy above the head; the hand in front), others right after (§69.27).
-- **Actions** `open` / `close` (`scenes/handling.py`, `_Reshape`; the targets are props, `0.6 s`
-  `RESHAPE_SECONDS`): each target prop that has the shape and does not show it switches at
-  `RESHAPE_SHARE` 0.5 (`PropReshape(prop, shape, at=, height=, follow=)` in
-  `cartoon/transition.py`: shows the shape, rescales about the grip, and keeps the grip at
-  `follow()` every frame, since Manim pauses the prop's own follow updater while it is
-  animated). A held one: an `ArmMove` to the overhead point (open) or the hold point (close) and
-  the new held height; standing: it changes where it stands. Validate (`scene_problems`): a target
-  that is not a prop, or a prop without that shape (`'tree' cannot open (props that can:
-  umbrella)`). No sequence check: opening an open umbrella does nothing. An open umbrella stays
-  open through `pick_up`, `hold`, `give` (the receiver holds it overhead), `put_down` and `throw`.
-- **Shadows**: props targeted by `open` / `close` are movable (§69.31: their shadow follows), and
-  a `ShadowCaster` takes `widths` per shape, so a closing umbrella's shadow narrows.
-- **Layout dump**: a prop with shapes carries `shape`.
-- **Gallery**: `docs/gallery/media/props.png` shows the 20 props plus the open umbrella (and, since Step 109, the open door).
-- **Not done here**: no tilt of the umbrella towards the head (it stays upright, the canopy
-  centred on the hand); no opening animation in between (the shape switches at once, half-way);
-  the automatic directing planner does not count `open` / `close` as moves; a closed umbrella is
-  held upright by its middle; wind does not move a held umbrella (Step 104), rain does not
-  stop under it (Step 105). Tests: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py`.
+- **Shapes** (`PROP_SHAPES = {"umbrella": ("closed", "open")}`): a drawer may return a dict;
+  every shape stays in the family (hidden = no points). `Prop.show_shape(name)` redraws from
+  points recorded in prop units through an invisible anchor (`character.anchor_mobject` /
+  `anchor_placement`, shared with `Character`), so the new shape keeps place, size and facing.
+  `Prop.shape` (`None` for one shape), `shapes`; `StageProp.open: true` (config error without an
+  `open` shape).
+- **Grips** (`PROP_GRIPS`): basket handle top, open umbrella shaft; else the middle.
+  `Prop.grip_point()` is what follow updaters, `PropMove` and `pick_up` use.
+- **Overhead** (`cartoon/holding.py`): an `OVERHEAD_PROPS` prop (§69.56) showing an
+  `OVERHEAD_SHAPES` shape is held at `overhead_point` (`OVERHEAD_HAND` 0.6), `OVERHEAD_HEIGHT` 0.85
+  of the holder (not capped), drawn right *before* its holder (others after, §69.27).
+- **`open` / `close`** (`_Reshape`, targets props, `RESHAPE_SECONDS` 0.6, switch at
+  `RESHAPE_SHARE` 0.5 via `PropReshape`, which keeps the grip at `follow()` because Manim pauses
+  the prop's updater while animated). Validate: not a prop / no such shape. Targets are movable
+  for shadows; `ShadowCaster` takes `widths` per shape; dump key `shape`. Tests
+  `tests/test_cartoon_props.py`.
 
 ### 69.38 Visible wind and props that blow away (Step 104)
 
-Step 98's wind was barely visible (Backlog); Step 104 makes it read at `windy` and above and lets
-the wind take a light prop.
-
-- **Felt force** (`cartoon/wind.py`): `felt_force(f) = f × (1 + WIND_BOOST 2 × |f|)` (odd, 0 at 0,
-  3 at force 1). `sway_degrees` uses it, and `SWAYS` grow to tree 8°, bush 6°, plant 12°, sign
-  2°, lamp 1.5° (per felt force 1). `trail_degrees` feeds the felt force to the spring and the
-  flutter, then limits softly: `TRAIL_LIMIT 80 × tanh(x / 80)` (a scarf streams out flat, never
-  over the head). `TRAIL_WEIGHTS`: long hair 0.55 → 0.7, bun 0.35 → 0.4, hat 0.3 → 0.35. Measured
-  over 30 s (seed 5; mean / max |degrees|; before → after): tree breeze 1.1 / 1.7 → 2.5 / 4.1,
-  windy 2.1 / 3.3 → 6.4 / 10.9, gale 3.6 / 5.5 → 14.1 / 24.5; scarf end (weight 1.2) windy 12.5 /
-  18.5 → 23.0 / 37.0, gale 20.9 / 30.9 → 46.3 / 69.4; long hair windy 5.7 / 8.5 → 15.3 / 24.7 at
-  weight 0.8 (0.7 kept: at a gale the hair, turned as one piece about the head's top, swings out
-  too far on the other side). Stills checked by eye at breeze, windy and gale (854x480): the tree
-  bends visibly at windy and leans hard at a gale.
-- **Leaves and streaks** (`particles.py`, reusing particles): `leaves` (shape `leaf`, a pointed
-  lens; 28 per frame, falling slowly, tumbling like confetti, `WIND_DRIFT` 0.6, green / ochre /
-  rust hex colours like snow's white) and `streaks` (the `streak` shape, `fall` 0, so the
-  existing "along its fall" angle lays them along the wind; twinkling in and out; `WIND_DRIFT`
-  1.6). `ParticleKind.wind_shown` (streaks 0.2): opacity × `clip((|force| − wind_shown) /
-  WIND_SHOWN_RAMP 0.3, 0, 1)`, so streaks show the gusts and are never seen on a calm stage or a
-  scene without a stage wind. Not automatic: the author adds `particles: [leaves, streaks]` (an
-  automatic field would change the layout dump and lint of every windy stage).
-- **The blown path** (pure): `gusty_progress(share, seed)` is how far along the way a prop is,
-  the normalised running sum of `0.35 + gust(share × BLOW_GUSTS 6, seed)` (64 trapezoids, cached):
-  monotone, surging and slowing, 0 → 1. `blown_point(share, start, end, rise=, seed=)` = x along
-  by that progress, y on the straight line plus `rise × sin(π g) × (1 + 0.3 sin(2π 3 g + phase))`
-  (never below the line, so a landing prop never dips under the ground), turn
-  `−360 × blow_turns(dx) × g × direction + 25° wobble × sin(π g)` (whole turns, so it ends
-  upright; `blow_turns` = one per 3 units, at least 1). `blow_seconds(distance, level) = 0.6 +
-  distance / (3 × max(felt_force(|level|), 0.5))`, at most 6 s.
-- **`blow_away`** (`scenes/handling.py`, `BlowAway`; targets are props, `to` optional): light
-  props only (`LIGHT_PROPS` napkin, umbrella, ball, cup, basket, box; SVG props allowed). The end:
-  `to` → its grip standing there at its standing height on its own ground line (a held prop:
-  its holder's, like `put_down`); no `to` → beyond the stage edge downwind (the sign of the
-  stage's level now; right when calm) by the prop's size + 0.3, `BLOW_AWAY_UP` 0.2 frame heights
-  above where it started. Rise: `min(0.12 frame heights, 0.35 × distance)`; seed
-  `wind_seed("<scene>:<prop>")`. It plays as `PropMove(..., path=blown_point)` (the new keyword:
-  `path(u, start, end) -> (x, y, degrees)` replaces the arc) from the hand at once (`follow`,
-  `leave` 0), growing back to its standing size; a held prop is dropped from the scene's
-  `Holdings` (`drop`), detached (`held_by` / `hand` cleared, so the layout dump agrees) and its
-  holder's arm goes back to how it was before it took the prop (`ArmMove` by `BLOW_ARM_SHARE`
-  0.35). `run_time_for` from the distance and the level now. Blown props are movable
-  (`_movable_props`: their shadow follows, they do not sway); `mid_still_actions` includes it;
-  the directing planner counts it as a move and follows it (`Holdings.drop`, where it lands).
-- **Validate**: `scene_problems`: not a prop, too heavy, a bad `to`. `holding_problems` (the
-  replay): a prop someone sits or leans on; a prop blown off stage (no `to`) is *gone*: a later
-  `pick_up`, `hold`, `sit_on`, `lean_on` (`.to`), `move_along`, `keyframes`, `open`, `close` or
-  `blow_away` of it is reported with where it blew away; the former holder's `put_down` / `give`
-  / `throw` reads "holds no prop then"; a prop blown `to` a mark lies there for later reach
-  checks. `Stage._calm_blow_problems`: a `blow_away` without `to` while the stage's level (its
-  `wind`, then the `wind` actions in play order) is 0.
-- **`wind: 0` still changes nothing**: nothing in the calm path changed (no `StageWind`, the new
-  particle kinds appended last); the Step 98 frame-hash test passes, and a scratch copy of
-  `examples/cartoon` with `wind: 0` at 160x90, 5 fps gives the same frame hashes as HEAD 837eb8b
-  (`yard` 147 frames, `hill` 127).
-- **Not done here**: an open umbrella tugging its holder or turning inside out (optional, left
-  out); hair bending rather than turning as one piece; no sound for a blown prop; leaves and
-  streaks are not added automatically. Tests: `tests/test_cartoon_wind.py`.
+- **Felt force** (`cartoon/wind.py`): `felt_force(f) = f × (1 + WIND_BOOST 2 × |f|)`, used by
+  `sway_degrees` and `trail_degrees`; trails soft-limit to `TRAIL_LIMIT 80 × tanh(x / 80)`.
+- **Particles**: `leaves` and `streaks` (`fall` 0, along the wind; opacity ramps in above
+  `wind_shown` 0.2 over `WIND_SHOWN_RAMP` 0.3). Never automatic (that would change every windy
+  stage's dump and lint).
+- **Path** (pure): `gusty_progress(share, seed)` (monotone 0 → 1), `blown_point` (never below the
+  straight line, whole turns so it ends upright), `blow_seconds(distance, level) = 0.6 + distance
+  / (3 × max(felt_force(|level|), 0.5))`, ≤ 6 s.
+- **`blow_away`** (`BlowAway`, targets props, `to` optional): `LIGHT_PROPS` (napkin, umbrella,
+  ball, cup, basket, box) and SVG props. With `to`: lands standing there; without: beyond the
+  downwind edge, `BLOW_AWAY_UP` 0.2 frame heights up. Seed `wind_seed("<scene>:<prop>")`;
+  `PropMove(..., path=blown_point)`; a held prop leaves `Holdings` (`drop`) and the arm returns.
+- **Validate**: not a prop, too heavy, bad `to`; a prop blown off stage is gone for later
+  actions; `blow_away` without `to` at level 0 is a problem. `wind: 0` still renders identically.
 
 ### 69.39 Rain on the ground (Step 105)
 
-Step 76's rain fell through the whole frame, past the ground and through an open umbrella. On a
-`stage` it now ends on the ground, depth-aware, with splashes; open umbrellas and trees keep it
-off; puddles may grow; and a generated rain sound bed plays under it.
+On a `stage`, rain lands on the ground (depth-aware) with splashes; open umbrellas and trees
+shelter; puddles may grow; a rain bed plays. Other scene types are unchanged.
 
-- **Model** (`cartoon/rain.py`, pure numpy, Manim units of the scene, `y` up): `rain_ground(ground,
-  top, frame_height, shelters)` → `RainGround(ground, front, back, frame_height, shelters)`: the
-  *landing band* from `LANDING_FRONT` 0.05 frame heights in front of the ground line (never below
-  the frame) up to the top of the ground area (`ground_top`, the deepest thing on the ground).
-  Each drop gets a landing share (and a splash spread) once from `landing_shares(count, seed)`,
-  `default_rng([seed, 105])`, a stream of its own so the drops keep Step 76's positions;
-  `landing_lines` maps it into the band. `ShelterBox(left, right, top, feet)`: `covers(x, landing,
-  reach)` = over it, landing at most `reach` in front of its feet (`SHELTER_REACH` 0.1 frame
-  heights: a shelter up to depth ~0.4 keeps its whole column dry; at 0.05 a few drops landing in
-  front of a tree's crown crossed it on screen and read as rain through it), and below its top.
-  `drop_floors` = the landing line, or the highest covering shelter's top. `drop_landings(tip,
-  floor, speed, slant)`: a drop whose lower tip is below its floor is not drawn (it reappears at
-  the top when it wraps, as before) and splashes for `SPLASH_SECONDS` 0.3 after its tip crossed
-  (age = distance below / fall speed; `back` = how far it slid along the slant since, so the
-  splash stays where it landed). `splash_shapes(age, spread, scale)`: three ellipses per splash
-  (a flat ring widening from 0.008 to 0.024 shorter sides and flattening to nothing; two droplets
-  thrown left and right up to 0.022, radius 0.0045 shrinking to 0), scaled by the floor's depth
-  (`splash_depth_scale`). Puddles: `puddle_spots(count, seed, left, right, ground, short_side)`
-  (`default_rng([seed, 1105])`, rejected under a shelter, half width 0.05–0.1 shorter sides × depth
-  scale, `PUDDLE_FLAT` 0.22 high), `puddle_count` = 4 per frame width, `puddle_growth(seconds)`
-  eases out to full at `PUDDLE_GROW_SECONDS` 10. `prop_shelter(kind, shape, box, feet)`:
-  `SHELTER_PROPS` tree (any shape) and umbrella (`open` only).
-- **Drawing** (`particle_field.py`): `ParticleField` takes `ground` (a callable giving the
-  `RainGround` now; `particle_field` passes the scene's `rain_ground` for kind `rain` only) and
-  `seed`; with a ground it holds one more child, `splashes`, a single `VMobject` whose subpaths
-  are every splash's ellipses this frame (opacity `SPLASH_OPACITY` 0.85 × the field's level),
-  and multiplies each drop's alpha by "still falling". `drops` lists the particles; `ended` is
-  set by its fade out. `Puddles(spots, start=, ended=, clock=)` (a `VGroup` of ellipses,
-  `#7393B8` at 0.55) resize about their centres from the rain's seconds and drop their updater
-  once full or once the rain ended; they hold plain functions, not the field or the scene,
-  because Manim deep-copies a mobject it fades in. The layout dump leaves puddles out (like
-  shadows and stars).
-- **Stage** (`scenes/stage.py`): `rain_ground()` builds the shelters every frame from its props
-  (box = the prop's drawn bounds now, so a held umbrella and a swaying tree carry theirs; feet =
-  the holder's feet for a held one). `NarratedScene.particles_started(field, settings)` (new hook,
-  nothing by default; `particle_field` calls it) on a stage keeps rain fields for the sound bed
-  when foley is on (`_foley_on`: the stage's `foley`, else the video's, shared with
-  `action_foley`) and lays `Puddles` (lit by the light) right after the set behind the characters
-  (`_lay_on_ground`: into the backdrop while it has not come on screen, so they fade in with it;
-  else into `scene.mobjects` after the ground band, before the shadows). `puddles` on another kind
-  is a config error (stage param) or a validate problem (the action). Other scene types have no
-  `rain_ground`: their rain is unchanged.
-- **Sound bed** (`ambience.py`, `mix.py`): a stage's `timings()` adds `ambience: [{bed: rain,
-  start, end}]` (scene seconds: each kept field's start to its `ended`, or the scene's end);
-  `join_scenes` shifts them to video times in the combined timings. `ambience_spans` merges spans
-  closer than `JOIN_GAP` 0.25 s (rain across a cut plays on). `rain_loop()`: 8 s stereo, numpy
-  only, seeded by `crc32("ambience:rain")`: per channel a hiss (noise, Gaussian band 2.5 kHz σ 1.1
-  octaves, high-pass 300 Hz, low-pass 9 kHz), 240 drop ticks per second (impulses, Pareto
-  amplitudes capped at 3×, band 3.5 kHz) and 25 plops per second (band 900 Hz), a 2-cycle ±15 %
-  swell; every filter one circular FFT, so the loop has no seam; set to `RAIN_LEVEL` −32 LUFS
-  integrated (measured: −32.0, peak −14.9 dBFS, 62 % of its energy at 1–4 kHz, 31 % at 4–8 kHz).
-  `plan_ambience` places it like a music cue (`AmbiencePlacement`, read by `MusicTrack`):
-  raised-cosine fades `RAIN_FADE_IN` / `RAIN_FADE_OUT` 1.5 s inside the span, ducked by
-  `RAIN_DUCK` (depth 5 dB, attack 0.4, release 1.0, hold 1.5; the music's default depth is 12) over
-  `speech_spans`. So in a pause it sits 4 dB under the music's −28 LUFS (~11 dB under narration
-  at ~−21), under speech at about −37 LUFS (~16 dB under the voice; music ducked: −40). A bed
-  makes `mix_audio` write the mix (like music) but does not trigger `normalize: auto`; the `mix`
-  report gains `ambience: [{bed, start, end, duck}]` when one played. Measured on a 20 s
-  word-count preview (every beat counts as speech, so ducked throughout): −37.5 LUFS integrated,
-  per-second −36.4 to −38.3 (the swell), −45 / −44 in the first and last second (the fades).
-- **Render cost**: drops stay capped (`MAX_PARTICLES`, half at preview); the ground adds a few
-  numpy operations per frame and one `VMobject`. A 20 s preview of a stage with rain at density
-  1.5 (120 drops): HEAD 518e142 14.2 s, this step 14.3 s, with puddles 14.8 s (without rain:
-  10.3 s).
-- **Checked by eye**: a scratch stage (854x480) with a held open umbrella, a tree at depth 0.3, a
-  bush, wind `breeze`, rain 1.5 with puddles: the umbrella's and the tree's columns stay dry, the
-  splashes read as small light marks on the ground band, puddles sit on the ground under the
-  characters, the rain still falls on the character before the umbrella opens.
-- **Not done here**: drops are drawn in front of everything (Step 76), so a drop landing behind a
-  character still crosses it on screen; no rain on other props (a house's roof, a table); puddles
-  do not reflect or ripple; the bed has one intensity (no light / heavy rain by density); snow does
-  not settle. Tests: `tests/test_cartoon_rain.py`.
+- **Model** (`cartoon/rain.py`, numpy): `rain_ground(...) -> RainGround` (landing band from
+  `LANDING_FRONT` 0.05 frame heights in front of the ground line to `ground_top`); landing shares
+  from their own stream (`default_rng([seed, 105])`) so drop positions are unchanged;
+  `ShelterBox.covers` (`SHELTER_REACH` 0.1); splashes `SPLASH_SECONDS` 0.3; puddles
+  (`default_rng([seed, 1105])`, 4 per frame width, full at `PUDDLE_GROW_SECONDS` 10).
+  `SHELTER_PROPS`: tree, umbrella (`open`).
+- **Drawing**: `ParticleField(ground=, seed=)` (rain only) adds one `splashes` `VMobject`.
+  `Puddles` hold plain functions, not the field or scene, because Manim deep-copies a mobject it
+  fades in. Layout dump omits puddles.
+- **Stage**: hook `NarratedScene.particles_started(field, settings)` (default nothing); the stage
+  keeps rain fields for the bed when foley is on and lays lit puddles behind the characters.
+  `puddles` on another particle kind: config error / validate problem.
+- **Sound bed** (`ambience.py`, `mix.py`): stage `timings()` adds `ambience: [{bed: rain, start,
+  end}]`; spans closer than `JOIN_GAP` 0.25 s join. `rain_loop()`: 8 s seamless stereo, seeded
+  `crc32("ambience:rain")`, `RAIN_LEVEL` −32 LUFS, fades 1.5 s, `RAIN_DUCK` 5 dB under speech. A bed
+  makes `mix_audio` write the mix but does not trigger `normalize: auto`; the `mix` report gains
+  `ambience`. Tests `tests/test_cartoon_rain.py`.
 
 ### 69.40 Effect symbols over characters (Step 107)
 
-A feeling should read at a glance: the `effect` beat action pops a small symbol over a character's
-head (`- effect: pip` + `to: idea`, the `to:` convention of §69.11).
+Beat action `effect` pops a symbol over a head (`- effect: pip` + `to: idea`).
 
 - **Symbols** (`cartoon/effects.py`, pure): `EFFECT_KINDS` sweat, anger, idea, question, exclaim,
-  sleep, hearts, stars, sparkle, tear. Each is one or more *pieces* (`effect_pieces(kind)`), each a
-  few closed outlines (`EffectShape`: counterclockwise points in *symbol units*, about 1 tall;
-  fill `main` = the symbol's colour, `shine` white, `base` grey; ink outline or none) drawn from
-  circles, ellipses, stars, a parametric drop and heart, explicit polygons (`!`, `Z`) and
-  `thick_path` (a polyline turned into a band, so it fills and outlines like the rest: the `?`
-  hook, the bulb's rays). Original simple shapes only; no font glyphs. `EFFECT_STYLES` gives each
-  a spot, a size in head heights (0.2 tear .. 0.7 sleep / stars) and a theme token (`primary`,
-  `accent`, `highlight`, `secondary`: tokens every preset defines).
-- **Where** (`spot_at(spot, kind, head, facing, eye, crown)`, `effect_spot(..., avoid=)`): from
-  the head's box on screen (`head_box`: the `head` part, else the top 30 % of the figure) and the
-  facing: `above` (0.12 head heights over the head, a little forward), `front` / `back` (beside
-  it near the top; the back one overlapping the head's edge), `corner` (on the head's top front
-  corner), `ring` (round the top), `eye` (under the `eyes` part's middle, else a default eye
-  point). A hat (`crown_top`: the `accessory` part's top when higher) lifts `above` and `ring`; the
-  size always goes by the head. `effect_spot` takes the symbol's own spot unless its box overlaps
-  one of `avoid` (the speech bubbles on screen), then tries `ALTERNATE_SPOTS` (above → front, back;
-  corner → front, back...). The spot is chosen once when the effect starts and worked out again
-  every frame from the head (it moves with walks, jumps, turns and shots).
-- **Motion** (pure, a function of the seconds since it appeared): `pop_scale(t, strength)` blends
-  an eased grow over `POP_SECONDS` 0.25 (strength 0) with the step response of `POP_SPRING`
-  (3 Hz, ζ 0.35: about 30 % overshoot, settled by ~1 s; Step 82's `Spring`) by the character's
-  `cartoon_motion` strength; `exit_scale` shrinks over `EXIT_SECONDS` 0.3. `piece_pose(kind, k, t)`
-  → `PiecePose(dx, dy, scale, angle)`: the drop slides down 0.25 and stays, the anger mark and the
-  bulb's rays pulse, `?` rocks ±10°, `!` shakes and calms, the Zs rise along a diagonal one after
-  another (2.4 s cycle, growing and shrinking), hearts bob, the stars orbit (1.6 s) and spin,
-  sparkles twinkle, the tear forms, runs down and forms again (2 s). Shapes are never mirrored (a
-  `?` reads the same either way); offsets forward and turns follow the facing.
-- **Drawing** (`cartoon/effect_symbols.py`): `EffectSymbol(kind, color=, character_height=)` is a
-  `VGroup` of one `VGroup` per piece, each shape a `VMobject` with corners; strokes 0.8 of a
-  character's outline for its height, at least one pixel. `place(spot, facing, strength)` redraws
-  every member from its stored points (an affine per piece: scale, turn, offset); a member smaller
-  than 3 % of the symbol gets no points (no ink dot at scale 0). `follow(character, avoid=)` adds a
-  time-based updater (`age += dt`, then `place`). The symbol is a mobject of its own, never part
-  of the character (§69.22).
-- **The action** (`scenes/effect_action.py`, against `vidgen.api`): options `to` (required),
-  `color`, `sound`; `run_time` `EFFECT_SECONDS` 0.4 (the pop); reversible, `until_next_beat`;
-  `alters_targets = False`, so it plays in the same batch as the character's other actions due
-  with it instead of after them (a `react` and an `effect` at one `at` do not stretch the beat).
-  `apply` makes a symbol per character, chooses its spot clear of the speech bubbles on screen,
-  puts it above everything drawn (`z_index` top + 1) and returns `EffectAppear` (an `Animation`
-  that only holds time: no starting copy, updating not suspended, `introducer`); `revert` sets
-  `leaving` and returns `EffectAppear(leave=True)` (a `remover`). A `say` bubble placed later
-  avoids the symbols on screen (`Say._bubble`). Not marked lit, so the stage's light never grades
-  it (§69.31). Validate: targets must be characters (`_Acting`), `to` one of the kinds.
-- **Sound** (`cartoon/foley.py`): `PlayedAction.effect`; `EFFECT_SOUNDS`: idea `chime` 0.5 s
-  +3 st (the short ding), sparkle `chime` 0.4 s +12 st, exclaim / question / hearts / sweat a `pop`
-  at +5 / −4 / +2 / −5 st, anger a 0.3 s `thud`; sleep, stars, tear silent; at the pop's start.
-  `Stage.action_foley` passes the kind unless `sound: false`; `foley: false` silences all.
-- **Layout dump and lint**: an `EffectSymbol` is one object of kind `effect` named after the kind,
-  with `effect` and `effect_of`; `describe` says `effect 'idea' of character 'pip'`;
-  `lint_ignore`'s `object` matches `effect_of`. `bubble_overlap` also reports a speech bubble
-  covering at least `min_overlap` of a symbol's box; `hidden_speaker` ignores symbols (a tear sits
-  on the face on purpose).
-- **Automatic directing** (`cartoon/directing.py`, kind `effects`, last in `DIRECTING_KINDS`): at
-  most one symbol per beat, for the first change of expression in it (written `emote` / `react`,
-  a voice sound's face, then this beat's automatic reactions, recorded in `_SceneState.faces_now`)
-  to one of `EXPRESSION_EFFECTS` (surprised → exclaim, thinking → question, angry → anger; since
-  Step 125 dizzy → stars, frightened → sweat, §69.59), at the
-  change's `at`, for a character on the stage; none in a beat with a written `effect`. Unlike the
-  other passes it acts on a character a written `emote` / `react` targets: the symbol adds to that
-  face and changes nothing the action set. Pasting `vidgen direct --print` makes it written, so
-  the planner adds no other one there.
-- **Screenplay** (`screenplay.py`, `_EFFECT_VERBS`, tried before the other verbs): `has / gets an
-  idea`, `lights up` (idea); `is / looks confused`, `puzzled`, `wonders`, `scratches his head`
-  (question); `is startled`, `alarmed`, `shocked` (exclaim); `sweats`, `gulps`, `is nervous`
-  (sweat); `is angry`, `furious`, `fumes` (anger); `falls asleep`, `dozes off`, `nods off`,
-  `snores` (sleep); `falls in love [with X]`, `swoons` (hearts); `is dizzy`, `sees stars` (stars);
-  `sparkles`, `beams with pride` (sparkle); `cries`, `weeps`, `sheds a tear` (tear).
-- **Checked by eye**: every symbol on two generated looks (`dot`, round with a bun; `moss`, tall
-  with a hat and glasses) and the SVG `sprout`, facing right and left, at 1 s (scratch sheets);
-  a scratch copy of `examples/cartoon` with six written effects and `auto_direct: true` at
-  preview: the bulb over Dot, the sparkle after her walk, the exclamation mark following Moss's
-  jump, the anger mark moved in front of Moss's face by his speech bubble, Zs over Moss while
-  Dot enters;
-  `vidgen lint` 0 findings (before the fixes: the anger mark under the bubble, and a
-  `rushed_animation` from the effect waiting for a `react`).
-- **Not done here**: symbols do not scale with a close-up beyond the head's own size; a symbol
-  that cycles (tear, Zs) can be between cycles in a still; no symbol for a prop. Tests:
-  `tests/test_cartoon_effects.py`.
+  sleep, hearts, stars, sparkle, tear; `effect_pieces(kind)` (primitives only, no font glyphs);
+  `EFFECT_STYLES` (spot, size in head heights, theme token). `effect_spot(..., avoid=)` picks the
+  spot from `head_box` and facing, trying `ALTERNATE_SPOTS` when a speech bubble overlaps; chosen
+  once, recomputed from the head each frame. Motion is pure in time (`pop_scale` with
+  `POP_SPRING`, `exit_scale`, `piece_pose`); shapes are never mirrored.
+- **Drawing** (`cartoon/effect_symbols.py`): `EffectSymbol(kind, color=, character_height=)`,
+  `place`, `follow`; never part of the character (§69.22).
+- **Action** (`scenes/effect_action.py`): `to` (required), `color`, `sound`; `EFFECT_SECONDS` 0.4;
+  reversible, `until_next_beat`; `alters_targets = False` (same batch as the character's other
+  actions). Placed at `z_index` top + 1 via `EffectAppear`; later `say` bubbles avoid it; not lit.
+  Sounds `EFFECT_SOUNDS` (`cartoon/foley.py`).
+- **Dump / lint**: kind `effect`, keys `effect`, `effect_of`; `bubble_overlap` covers symbols;
+  `hidden_speaker` ignores them.
+- **Directing** (kind `effects`, last in `DIRECTING_KINDS`): ≤ 1 per beat, for the first
+  expression change in `EXPRESSION_EFFECTS` (§69.59); none with a written `effect`. Screenplay
+  phrases: `_EFFECT_VERBS`. Tests `tests/test_cartoon_effects.py`.
 
 ### 69.41 Motion effects and running (Step 108)
 
-Fast moves read better with the cartoon marks of speed; the motion code adds them on its own.
-
-- **When** (`cartoon/motion_effects.py`, pure): `motion_effect_cues(played, strength)` turns one
-  animation of an action *as it played* (`PlayedAction`, the record foley reads, §69.19; new
-  fields `step_length`, `lift`, `gesture`, `big`, `flight`) into `MotionEffectCue(kind, time,
-  seconds, toward, arm)`, scene times. Strength 0 (`cartoon_motion: none`) gives none. A walk
-  (`walk_to`, `run_to`, `enter`, `exit`) whose top speed (`walk_top_speed`: heights over the
-  feet's seconds × (1 − `WALK_EASE`)) is at least `FAST_SPEED` 1.15 heights/s (default walk ≈
-  0.7, run ≈ 1.7): `dust` blowing `back` where the feet set off (after the wind-up; not for an
-  `enter`, off view), `speed_lines` while the speed is at least `SPEED_SHOWN` 0.7 of the top,
-  `dust` blowing `front` where the feet stop (not for an `exit`). A `jump`: `dust` both ways at
-  the landing (the end of the flight phase), plus `impact` stars from `HARD_LANDING` 0.7 heights.
-  A prop `PropMove` that flies (`rise > 0`: a throw; `path`: blown): `speed_lines` from `leave`
-  to `arrive`. A `gesture` with `big: true` of `WHOOSH_ARMS` (point, wave: the gesture's arm;
-  shrug: both): `whoosh` while the arm moves in (the ease-in window without the anticipation and
-  settle of `motion_ease`) plus `WHOOSH_TRAIL_SECONDS` 0.15. Lasting `DUST_SECONDS` 0.55,
-  `IMPACT_SECONDS` 0.6.
-- **Shapes** (pure, seconds since the cue started + a seed, lengths in mover heights):
-  `dust_puffs` (5 round puffs, each a little later, drifting away and up, growing, fading),
-  `speed_lines` (3 lanes, flickering length, faded in and out by `fade`), `impact_stars` (4 stars
-  bursting in a 25–155° fan, popping in, spinning, shrinking), `arc_band` (a band along a circle
-  tapering from nothing to its width: the whoosh). `motion_seed(scene, mover, kind, time, arm)`
-  (crc32) makes every render alike. `effect_scale(strength)` = 0.6 + 0.4 × strength (`calm`
-  0.76).
-- **Drawing** (`cartoon/motion_effect_shapes.py`): `MotionEffect(cue, mover, delay=, seed=,
-  scale=, star_color=, effect_of=)`, a `VGroup` of a fixed pool of `VMobject`s redrawn from the
-  pure shapes by a `dt` updater (`clock`; nothing before `delay`, `done` and no points after
-  the cue). Dust and stars stay where the mover's feet were when they started (`feet_of`); speed
-  lines follow the mover: behind a character's back edge at 0.45 of its height along its facing,
-  behind a prop along its frame-to-frame motion (sized by at least `PROP_LINE_UNIT` 2 units so a
-  ball's lines are not specks); the whoosh follows the hand about the shoulder (`hand_point`,
-  `shoulder_point`), trailing back to where the hand was 0.15 s ago (angle history, so its arc is
-  round at any frame rate). Ink outline and lines (`CHARACTER_INK`, lines at 0.55 opacity), dust
-  in the `dust` particles' colour, stars in `highlight`. Never added to a character (§69.22).
-- **On a stage** (`scenes/stage.py`): the runner calls the new hook
-  `NarratedScene.action_motion_effects` right after `action_foley` with the same arguments (base:
-  nothing). `Stage` returns at once with `motion_effects: false` (the stage's param, else the
-  top-level `motion_effects`, default true); else per animation the strength is the animation's
-  (`Walk` / `Jump` / `Gesture` `.strength`), for a prop move its thrower's `cartoon_motion`, else
-  the scene's. Each `MotionEffect` goes right after its mover in `scene.mobjects` (speed lines
-  right before it), with its `z_index`; it is not marked lit, so the light never grades it
-  (§69.31). A scene updater (`_motion_sweep`, kept by identity) removes finished effects and
-  itself when none is left, so a scene after its effects keeps Manim's static frames. Foley and
-  motion effects build their `PlayedAction` with one helper (`_played`).
-- **Running** (`run_to`, `scenes/moving.py`, a `WalkTo` subclass): `Walk(gait=RUNNING)`; `Gait`
-  (`cartoon/acting.py`) scales the walk cycle: `stride` 1.6 (`Walk.step_length` = `STEP_LENGTH`
-  × stride, also for the footsteps: `footfall_shares(..., step_length)`), `swing` 1.5, `knee`
-  1.6, `elbow` 2, `bob` 2 and `lean` 12° forward × `walk_amplitude` (part of the gait, so also
-  with `cartoon_motion: none`). `RUN_SPEED` 6 units/s. `WALKING` is the plain walk, computed with
-  the same floating-point operations as before. `run_to` counts as a walk everywhere a walk does
-  (foley, directing's look and move sets, the holding replay, a pinned seat, mid-action stills).
-- **`big` gestures**: `gesture` option `big` (default false); only the whoosh reads it.
-- **Layout dump and lint**: kind `motion_effect` named after the kind, keys `motion_effect` and
-  `effect_of` (`lint_ignore`'s `object` matches it); `describe` says `motion effect 'dust' of
-  'pip'`; `off_frame`, `covered_text` and `hidden_speaker` skip it (a mark that passes in a
-  moment).
-- **Checked**: a scratch stage at preview 854×480 / 15 fps (run, high jump, big wave, fast walk,
-  throw, big point): stills by eye (the run's long strides and lean, lines behind it, dust at
-  set-off and stop, stars and dust at the landing, the whoosh behind the waving hand, lines
-  behind the ball); `vidgen lint`: only an author-caused `off_frame` of the tree. The same scene
-  with `motion_effects: false` (run_to → a fast walk_to, no `big`) gives a video whose 350 frames
-  have the same `framemd5` as one rendered by the code before this step.
-- **Not done here**: no sound of its own (foley has footsteps, boing, thud); no dust where a prop
-  lands; `big` does not enlarge the gesture itself; no effects for `keyframes` / `move_along`
-  moves; the screenplay has no "runs" verb for `run_to` (`runs to` still means `walk_to`).
-  Tests: `tests/test_cartoon_motion_effects.py`.
+- **Cues** (`cartoon/motion_effects.py`, pure): `motion_effect_cues(played, strength)` maps a
+  `PlayedAction` (§69.19) to `MotionEffectCue(kind, time, seconds, toward, arm)`; strength 0 gives
+  none. Walks at ≥ `FAST_SPEED` 1.15 heights/s: `dust` at set-off and stop, `speed_lines`; `jump`
+  landing: dust, plus `impact` stars from `HARD_LANDING` 0.7; flying props: `speed_lines`;
+  `gesture` with `big: true`: `whoosh`. `motion_seed` (crc32) makes renders identical.
+- **Drawing** (`cartoon/motion_effect_shapes.py`): `MotionEffect(cue, mover, ...)`, a fixed pool
+  of `VMobject`s with a `dt` updater; never added to a character.
+- **Stage**: hook `NarratedScene.action_motion_effects` called right after `action_foley`;
+  `motion_effects` (stage, else top level, default true). Effects go next to their mover in
+  `scene.mobjects`; not lit; `_motion_sweep` removes finished ones and itself.
+- **Running** (`run_to`, `WalkTo` subclass): `Walk(gait=RUNNING)`; `Gait` (`cartoon/acting.py`)
+  stride 1.6, swing 1.5, knee 1.6, elbow 2, bob 2, lean 12°; `RUN_SPEED` 6 units/s. `WALKING`
+  uses the same floating-point operations as the plain walk (frames identical). `run_to` counts as
+  a walk everywhere.
+- **Dump / lint**: kind `motion_effect`, keys `motion_effect`, `effect_of`; `off_frame`,
+  `covered_text`, `hidden_speaker` skip it. Tests `tests/test_cartoon_motion_effects.py`.
 
 ### 69.42 Rooms: indoor sets (Step 109)
 
-Indoor stories need a set that reads as a room at once. A stage's `room:` param draws one instead
-of the sky and the ground band; everything else on the stage stays as it is.
+A stage's `room:` draws a room instead of sky and ground band. User docs: docs/CONFIG.md "Rooms".
 
-- **Geometry** (`cartoon/room.py`, pure): the wall stands at a *depth* (§69.6):
-  `wall_depth(items, depth)` is the given `room.depth`, else the larger of `WALL_DEPTH` 0.4 and
-  the deepest item standing on the floor (`lift` 0), so the floor always reaches behind what
-  stands on it (a given depth with something deeper is a config error). `room_geometry(ground=,
-  depth=, size=, frame_width=, frame_height=, stage_width=, ceiling=)` → `RoomGeometry`: the
-  `floor` box from the frame's bottom edge up to the *wall line* (`ground + FAR_RISE × depth`,
-  where a thing at that depth stands, which is also `ground_top` of the stage's items, the
-  doors included), the `wall` above it to the frame's top, the `skirting` board
-  `SKIRTING_HEIGHT` 0.07 wall units high on the wall, an optional `ceiling` band
-  (`CEILING_HEIGHT` 0.07 of the frame height); all as wide as the stage. The *wall unit* is the
-  height of a character of scale 1 at the wall's depth; windows and doors are sized in it, so
-  they match the characters in 16:9, 9:16 and on a wide stage. Patterns: `wallpaper_stripes`
-  (`STRIPE_WIDTH` 0.11), `wallpaper_dots` (a grid `DOT_SPACING` 0.28, every other row shifted);
-  `floor_rows` (rows of boards or tiles, the first `ROW_DEPTH` 0.16 deep at the wall, each
-  further one deeper by a constant ratio so the front row is about `FRONT_ROWS` 2.2 times the
-  first: perspective without a camera model), `floor_lines(flooring, floor, unit)`: `boards`
-  (row seams plus joints every `BOARD_LENGTH` 0.9, scaled with the row, staggered by 0.37 of a
-  board per row), `tiles` (row seams plus lines from the wall line to the bottom edge spreading
-  `FLOOR_SPREAD` 1.6 times from the stage's middle, cut at the side edges), `plain`.
-  `window_parts(x, wall_line, unit, width, height, sill, curtains)` → `WindowParts`: frame,
-  glass (inset by `FRAME_SHARE` 0.08 of the smaller side), a cross of bars, the sill, the rod and
-  two gathered curtains (closed outlines, `CURTAIN_SHARE` 0.3 of the width each).
-- **The sky outside** (pure): `window_sky(light)` → `WindowSky(top, bottom, stars)`:
-  `WINDOW_SKIES` per preset (`day` blue, `morning` peach low in the sky, `sunset` blue over
-  orange, `night` dark blue with stars at 1, `indoor` an evening blue with stars at 0.6: lamplight
-  inside means evening outside), a `(tint, strength)` light multiplies the day's sky as the grade
-  would. `SkyChange` + `sky_at(base, changes, now)` fade it with the light (§69.31's `fade_at`,
-  smoothstep, `blend_skies`).
-- **Drawing** (`cartoon/room_drawing.py`): `draw_room(geometry, colors, wallpaper=, flooring=,
-  windows=[WindowLook(parts, frame, curtains)], sky=, short_side=, frame_area=, preview=)` →
-  `RoomDrawing` of three mobjects, back to front: `room` (wall, wallpaper in `shade(wall, 0.1)`:
-  darker on a light wall, lighter on a dark one; floor, seams, skirting, ceiling), `window_views`
-  (`WindowViews`: a gradient per glass and a `StarField` per window, seeded per window) and
-  `room_front` (frames with the glass cut out, bars, sills, rods, curtains, ink outlines as wide
-  as a character's at the wall). `room_colors` fills in the skirting (the floor's colour 0.3
-  darker) and a `ceiling: true` (the wall's 0.25 lighter). Default colours are fixed hex
-  (`DEFAULT_WALL` cream, `DEFAULT_FLOOR` wood, `WINDOW_FRAME` white; no theme token is light and
-  warm in every preset, like the cloud's white, §69.8); curtains default to `accent`.
-- **On the stage** (`scenes/stage.py`): `StageRoom` (`wall`, `wallpaper`, `floor`, `flooring`,
-  `skirting`, `ceiling`, `depth`, `windows`, `doors`; `room: true` = defaults), `RoomWindow` and
-  `RoomDoor` (a mark or an x alone is one). `_backdrop` returns the room's three mobjects then the
-  background / middle layers (no picture, colour, ground band or open-sky stars); the construct
-  marks everything lit but `WindowViews` (and stars): the room is graded by the light, the sky
-  outside is not. `_room` keeps `_sky_base`; `change_light` adds a `SkyChange` per `light` action;
-  `_show_light` (the light's listener, called on every grade change, so every frame of a fade)
-  shows `sky_at(...)` in the windows. Manim's static image keeps the whole room while the light
-  does not change (§69.20).
-- **Doors are props** (§69.8): the `door` prop gains the shapes `closed` / `open` (§69.37's live
-  copies; open: the doorway in a dark shade, the leaf swung towards the viewer on the hinge side,
-  nearly edge on, within the prop's box), so `open` / `close`, `open: true`, `lean_on` and the
-  layout dump's `shape` work as for an umbrella. `Params.stage_props()` is the props, then one
-  `StageProp(prop: door, depth: wall depth, scale: DOOR_SCALE 1.3...)` per room door;
-  `prop_names()` (numbered together, so a second door is `door_2`), `items()`, the holding /
-  seating / reshape / blow-away checks, `stage_frame` and the construct read it. A door's name is
-  also a **mark** (`stage_marks()`: own marks plus doors; used for characters' `at`, `camera_at`,
-  `camera_place`, `stage_layout` and the planner's frame); a door named like a mark, a character
-  or another prop is a config error. Doors cast no shadow (they are in the wall). The prop
-  gallery still (`docs/gallery/media/props.png`) gains `door (open)`.
-- **Through a door** (`scenes/moving.py`): `enter` / `exit` option `door` (not with `side` /
-  `to`). The action opens the door at once if it is closed (`Stage.door(name).show_shape`), then
-  `Walk(start_x=door x, fade_in=DOOR_FADE_SECONDS 0.35)` (exit: `Walk(door x, park_x=offstage,
-  fade_out=...)`), at least twice the fade long. `Walk` keeps every family member's fill and
-  stroke alphas at `begin` and scales them by `passage_fade(t, run_time, fade_in, fade_out)`
-  (smoothstep ramps, each at most half the walk), sets `Character.shown`, and puts them back
-  after parking; `ShadowCaster` fades the shadow by `shown`. Without `door` nothing changes (no
-  alphas kept, the same `run_time`). The character keeps its own depth (moving in depth is Step
-  111), so it fades in in front of the doorway.
-- **No weather inside**: a room with `wind` not 0, or `particles` of `OUTDOOR_PARTICLES` (rain,
-  snow, leaves, streaks), is a config error; the `wind` action and an outdoor `particles` action
-  are validate problems. Rain or snow seen through a window was left out: drawn behind the
-  characters, an animated window would put the whole set in Manim's moving mobjects (§69.20).
-- **Sets** (`includes.apply_set`, §69.35): a stage's `room` drops the set's `image`, `generate`,
-  `background` and `ground_color`; a stage's `image` / `generate` / `background` drops the set's
-  `room`; a set's room and a stage's merge key by key (a mapping).
-- **Checked by eye** (scratch projects at preview 854×480, `vidgen storyboard`): a striped room
-  with boards, a table, a window and a door where moss comes in through the door (half-way still:
-  fading in in the doorway, the door open) and dot leaves through it (fading out); `sunset` with
-  dots, tiles, a ceiling and an open door facing left (the window sky blue over orange);
-  `night` (dark sky with stars in both windows, the room graded blue); `indoor` then `- light:
-  night` (evening blue, then night); a 2-frame-wide room in `morning` with a close-up and
-  automatic reframing pans, and its 9:16 variant. `vidgen lint` on both projects: 0 findings
-  (one author-caused `rushed_animation`).
-- **Not done here** (Step 110 adds furniture and the screenplay's rooms, §69.43): rain or snow
-  through the windows; a door's own sound; walking in depth through a door.
-  Tests: `tests/test_cartoon_room.py`.
+- **Geometry** (`cartoon/room.py`, pure): `wall_depth(items, depth)` = `room.depth`, else
+  max(`WALL_DEPTH` 0.4, deepest floor item); a given depth with something deeper is a config error.
+  `room_geometry(...) -> RoomGeometry` (floor to the wall line `ground + FAR_RISE × depth`, also
+  the items' `ground_top`; wall; skirting; optional ceiling). Wall unit = a scale-1 character's
+  height at the wall depth (windows and doors sized in it). Patterns: stripes, dots, `boards`,
+  `tiles`, `plain`.
+- **Window sky**: `window_sky(light)` (`WINDOW_SKIES`), `SkyChange` / `sky_at` fade with the
+  light.
+- **Drawing** (`cartoon/room_drawing.py`): `draw_room(...) -> RoomDrawing` of `room`,
+  `window_views`, `room_front`. Default colours are fixed hex (no token is light and warm in every
+  preset).
+- **Stage**: `StageRoom` (`wall`, `wallpaper`, `floor`, `flooring`, `skirting`, `ceiling`,
+  `depth`, `windows`, `doors`; `room: true` = defaults), `RoomWindow`, `RoomDoor`. All lit except
+  `WindowViews`; `_show_light` updates the windows.
+- **Doors are props**: `door` shapes `closed` / `open`; `Params.stage_props()` appends a
+  `StageProp(prop: door, depth: wall depth, scale: DOOR_SCALE 1.3)` per room door (numbered with
+  props). A door name is also a mark (`stage_marks()`); clashes with marks, characters or props are
+  config errors. Doors cast no shadow.
+- **Through a door**: `enter` / `exit` option `door` (not with `side` / `to`) opens it and fades
+  the walker (`DOOR_FADE_SECONDS` 0.35, `passage_fade`, `Character.shown`). Without `door` nothing
+  changes.
+- **No weather inside**: `wind` ≠ 0 or `OUTDOOR_PARTICLES` (rain, snow, leaves, streaks) in a room
+  is a config error (actions: validate problems).
+- **Sets** (§69.35): a stage `room` drops the set's `image`, `generate`, `background`,
+  `ground_color`, and vice versa; rooms merge by key. Tests `tests/test_cartoon_room.py`.
 
 ### 69.43 Furniture (Step 110)
 
-Rooms need furniture that characters use: sit on, lean on, stand in front of. All of it is
-built-in props (§69.8), so placing, sizing, colours, the layout dump, lint, shadows, the light and
-shots work as for any prop.
+Furniture is built-in props (§69.8): `FURNITURE` in `cartoon/props.py` (sofa, armchair, bed,
+bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk); gallery
+`docs/gallery/media/furniture.png` via `still.write_props_png(..., kinds=FURNITURE)`.
 
-- **The props** (`cartoon/props.py`, `FURNITURE`): `sofa` 0.36, `armchair` 0.38, `bed` 0.34,
-  `bookshelf` 0.9, `counter` 0.5 (a kitchen counter: cupboards, drawers, a worktop), `fridge`
-  0.95, `picture` 0.3 (a framed hill and sun), `rug` 0.06 (an oval seen nearly edge on, 20
-  prop units wide), `houseplant` 0.75 (broad leaves in a round pot; the older `plant` stays the
-  small one), `clock` 0.2 (ten past ten), `tv` 0.55 (on a low cabinet), `desk` 0.42 (with its
-  chair); heights relative to a character (`PROP_HEIGHTS`). Primitives, two theme colours each
-  (`PROP_COLORS`) plus shades and the ink, except fixed light colours where no token is light in
-  every theme: the fridge and the clock's face (`#F4F6FA`), a bed's sheet and pillow (`CLOTH`),
-  a television's case (`TV_CASE`). Drawn as seen from the front of the room, their backs to its
-  wall; a bed and a desk side on, along it (headboard / chair on the left as drawn facing
-  right). Every drawing's box is centred on x 0, so a prop's feet are its middle. Original simple
-  shapes; nothing imitates a known design. Gallery: `still.write_props_png(..., kinds=FURNITURE,
-  columns=4)` → `docs/gallery/media/furniture.png` (16 KB, 4×3), shown in CONFIG.md "Rooms";
-  `props.png` keeps the other props (`kinds` default: everything but `FURNITURE`; the file is
-  byte-identical to Step 109's).
-- **Seats** (`cartoon/seating.py`): every built-in seat line is at **0.14 of a character's
-  height** (the prop's height × the seat's y), the rule of §69.36: below every generated
-  character's hips, so `Character.seated` puts the hips on the line with the knees bent and the
-  feet on the floor. `PROP_SEATS` gains sofa (0, 0.39), armchair (0, 0.37), bed (0.15, 0.41), desk
-  (−0.64, 0.333: its chair); `SEAT_BACKS` gains `desk` (the sitter faces the desk).
-  `SEAT_PLACES` (sofa ±0.6, bed −0.45 / 0.75 prop units): a seat with more than one place seats
-  one character per place. `Prop.seat_places` (mirrored with the facing,
-  `mirrored_places`), `Prop.seat_point(place)`. `Postures.sit(character, prop, places,
-  prefer)` takes the first free place in `prefer`, then in order, and returns it
-  (`Postures.places`); a full seat is a `PostureError` ("'sofa' is full: pip and kit sit on it
-  then"; one place keeps "'chair' is taken: ..."). `sit_on` prefers the place nearest to the
-  character's feet. `holding_problems(seat_places=)` and the planner (`StageFrame.seat_places`,
-  from `stage_frame`) count the places. `PROP_LEANS` gains bookshelf, counter and fridge (their
-  sides).
-- **Against the wall** (`scenes/stage.py`): `StageProp.against: wall | None`. In a room, a prop
-  `on_wall()` (`against: wall`, or a prop that hangs, without a `depth` of its own) is put at the
-  wall's depth by `Params.stage_props()` (a copy with `depth` set), which every reader of the
-  props already uses (§69.42); such props are left out of `wall_depth`'s "deepest thing on the
-  floor", so they never push the wall back. A given `depth` wins (in front of the wall; behind it
-  is the room's config error). `against: wall` without a room is a config error.
-- **Hanging on the wall**: `PROP_HANGS` (picture 0.5, clock 0.85): how far above the floor the
-  prop's bottom edge is, in the heights of a character at its depth. `StageItem.hang` (new,
-  default 0) is added by `stage_layout` to the feet's y (`hang × size × short side × depth
-  scale`), so the height is right in 16:9, 9:16 and at any depth, unlike `lift` (frame heights).
-  Hanging props cast no shadow; nor does a prop in `FLAT_PROPS` (`rug`). (The napkin keeps its
-  shadow: it can fly.)
-- **Screenplay** (`screenplay.py`): `set:` gains `room` (alone: `room: true`; else comma
-  separated `ROOM_WORDS`, `window [at place]`, `[open] door [(name)] [at place]`); a room drops the
-  sky / ground colour defaults (a written background is left out with a TODO). Props take
-  `against the wall` / `on the wall` (→ `against: wall`; without a room it is left out with a
-  TODO) and other words (`PROP_WORDS`: couch, bookcase, kitchen counter, refrigerator, picture
-  frame, carpet, plant pot, wall clock, television...). No sit / lean verbs yet (§69.28's gap).
-- **Checked by eye** (scratch project at preview 854×480, `vidgen storyboard`, `indoor` light): a
-  striped living room with a bookshelf, a sofa (two characters sitting side by side, each on the
-  place nearer to it), a picture above it, an armchair (a third sitting), a clock, a houseplant, a
-  rug and a door; a tiled studio with a ceiling, a fridge, a counter (a character leaning on its
-  end), a television, a desk (a character sitting on its chair, facing it) and a bed (a character
-  sitting on its edge). Hips on the seats, feet on the floor. `vidgen lint`: only the author's
-  props cut at the frame's edges.
-- **Not done here**: sitting on furniture from another depth (characters stand at the wall's
-  depth to use it; Step 111 walks there in depth, and `vidgen validate` asks for that walk,
-  §69.44); lying on a bed; a prop on another (a tv on a
-  counter: `lift` by hand); door marks in the screenplay's directions ("walks to the door").
-  Tests: `tests/test_cartoon_furniture.py`.
+- **Seats**: every built-in seat line is at 0.14 of a character's height (§69.36). `SEAT_PLACES`
+  (sofa, bed): one sitter per place; `Postures.sit(character, prop, places, prefer)` takes the
+  first free preferred place; full: `PostureError` (`'sofa' is full: ...`). `sit_on` prefers the
+  place nearest the feet. `SEAT_BACKS` `desk`: the sitter faces the desk.
+- **Against the wall**: `StageProp.against: wall | None`. In a room an `on_wall()` prop gets the
+  wall depth in `Params.stage_props()` and is excluded from `wall_depth`; a given `depth` wins;
+  `against: wall` without a room is a config error.
+- **Hanging**: `PROP_HANGS` (picture 0.5, clock 0.85 character heights); `StageItem.hang` (default
+  0) is added to the feet y by `stage_layout`, unlike `lift` (frame heights). Hanging and
+  `FLAT_PROPS` (`rug`) cast no shadow.
+- **Screenplay**: `set:` takes `room` (`ROOM_WORDS`, windows, doors), `against the wall`, and
+  `PROP_WORDS` synonyms. Tests `tests/test_cartoon_furniture.py`.
 
 ### 69.44 Moving in depth, and a front view (Step 111)
 
-Characters stood at one depth all scene and showed only their side. Now they walk towards and
-away from the camera, and turn to face the viewer.
-
-- **Depth paths** (pure, `cartoon/stage.py`): `walk_to` / `run_to` take `depth` (0..1) or `to:
-  {mark, depth}` (`WalkPlace` in `scenes/moving.py`; `walk_destination(options)` reads the raw
-  options for the planner and `vidgen validate`). x and depth move together in a straight line:
-  `depth_along(start, end, share)` is the depth at a share of the distance, and
-  `depth_walk_distance(dx, start, end, height)` the length, a unit of depth counting
-  `DEPTH_WALK_HEIGHTS` (2) of the walker's heights where it starts (`hypot`). The run time is
-  `walk_seconds` of that length (plus `cartoon_motion`'s wind-up and settle), so a walk across
-  is unchanged. Missing `to` keeps the x, missing `depth` the depth; one of them is required,
-  the depth only once (a validate problem), and in a room not behind the wall
-  (`wall_depth()`).
-- **The walk** (`Walk(..., depth=, feet_y=, carried=)`): every frame the walker's depth is
-  `depth_along` of the share walked (`walk_progress`), its feet on `feet_y(depth)` (the stage's
-  `feet_y_at`: `feet_point`'s ground line there), and it is scaled about its feet by
-  `depth_scale(depth) / depth_scale(previous)`, its stroke widths by the same factor
-  (`scale_strokes`, no floor, so a walk back restores them), and so are the props it holds
-  (`carried`, about their grip). `Character.stage_depth` and `ground_y` follow (not `depth`:
-  that is Manim's z-size property, whose setter rescales). A walk only in depth keeps the
-  facing; the walk cycle counts steps along the whole path. The action passes the props whose
-  `held_by` is the walker and calls `Stage.walk_in_depth`, which also moves `grounds[name]`
-  (the `keyframes` y 0) to the new depth.
-- **Draw order** (pure: `depth_crossings(start, end, others)` → the shares where the walker's
-  depth passes another's, `acting.depth_switch_times(...)` → the seconds, through the inverse
-  `walk_time_at` of `walk_progress` and the `cartoon_motion` phases; `depth_slot(depth, others,
-  current)` → where a character at a depth goes among the others, back to front: after the deeper
-  ones and the props at its depth, before the nearer ones, keeping its place among characters at
-  its depth). Manim lists the mobjects it draws when an animation begins (`moving_mobjects`, a
-  flat family list), so reordering `scene.mobjects` alone shows only at the next `play`. The
-  stage therefore runs a scene updater while a walk in depth is under way (`_draw_order_step`,
-  installed by `walk_in_depth`, or from the start when a character faces or turns to the front):
-  each frame it moves the walker, with the props right after it that it holds, to its
-  `depth_slot` (`_keep_depth_order`), keeps the moving shadows group before the first thing whose
-  shadow it draws (`_shadows_first`: the walker's shadow lies under a tree it walks behind), and,
-  when anything moved or a character's parts changed order, sets `scene.moving_mobjects` again
-  from `get_moving_and_static_mobjects`. `get_moving_mobjects` redraws, during a walk in depth,
-  everything from the first character or prop whose depth it passes (`_depth_crossers`), so the
-  static image never holds something the walker goes behind. A put-down or thrown prop takes its
-  holder's `stage_depth`.
-- **Shadows**: `ShadowCaster.ellipse` takes the ground from the caster's `ground_y` when it has
-  one, and with `grows` (the stage's characters) scales the shadow by `standing_height / size`.
-- **Front view** (`generate_parts(look, colors, front=True)`, `look_parts(..., front=)`, cached
-  per view): the same parts and shape names as the side view; the face centred (`face_x` 0), the
-  pupils ahead, the triangle nose symmetric, the fringe parted in the middle, long hair and the
-  bun symmetric, the bean body without its back pinch, a temple each side of glasses.
-  `Character(..., front=parts)` checks the parts and shape names match (`_check_front`) and keeps
-  one `_View` per view (shapes, drawings, members, pivots, limbs, order, trailing pieces); each
-  part's `VGroup` holds both views' live copies (side first), only the shown one has points, so
-  the family never changes (§69.22). Facing `front` (`FACINGS`) activates the front view: no
-  mirror, `FRONT_DRAW_ORDER` (both arms in front of the body). Switching views hides what the
-  other showed and reorders the parts (`submobjects`), counted by `order_changes` (the stage's
-  updater then refreshes Manim's list). Poses, expressions, visemes, blinks and gestures use the
-  same entries: the pose tables already move the two arms symmetrically on screen.
-  `side_facing` remembers the side; `turn()` from the front goes back to it. A character without
-  a front view (an SVG one) ignores `front`; `cast.front_view_warnings` (in `vidgen validate`)
-  warns for a stage character `facing: front` or a `turn` `to: front` of one.
-- **Turning**: `PoseChange` between a side and the front swaps the view at half (like the mirror)
-  and narrows the figure about its feet by `turn_squash(progress)` (1 at the ends, 1 −
-  `TURN_SQUASH` 0.12 half-way). `turn` takes `to: front` (default from the front: `side_facing`).
-- **Walking facing front**: `walking_state(..., "front")` keeps the legs from swinging sideways:
-  a leg drawn one each is shortened (thigh and shin y scale, by `FRONT_STEP_SHORTEN` 0.25 at the
-  largest knee bend) so its foot lifts, one-piece legs narrow, the body bobs, the arms sway
-  together by `FRONT_ARM_SWING` 0.3 of the swing; no lean or follow-through (they would tilt
-  sideways). Sitting (`sit_on` keeps `side_facing`), leaning and crouching (`_reach_low` turns a
-  front-facing character to its side first) are drawn from the side.
-- **Facing in the pure modules**: `facing_sign(facing, front=1.0)`: effect symbols, held props,
-  motion effects treat the front like `right`; shots and reframing leave no look room in front of
-  a front-facing face (`front=0`); `look_pose` / `camera_look` keep the eyes centred from the
-  front; the planner never sees a speaker behind a front-facing posed character.
-- **Validate and lint**: `holding_problems(depths=)` (from `StageFrame.depths`, every character
-  and prop's start depth) follows walks in depth (a character's height scales with
-  `depth_scale`) and reports a `sit_on`, `lean_on`, `pick_up` or `give` across more than
-  `DEPTH_REACH` (0.05) with the walk that fixes it (`- walk_to: dot, to: {mark: 0.42, depth:
-  0.4}`); `StageFrame.place_x` and the planner read `{mark, depth}`. The layout dump writes a
-  character's `depth` when it is above 0; `character_overlap` and `walk_overlap` skip pairs
-  `DEPTH_APART` (0.15) or more apart in depth, also in the planner's predicted stills (start
-  depths).
-- **Checked by eye** (a scratch project at preview 854×480, `vidgen storyboard`, 3 and 5
-  stills per beat): dot walking away past a tree at depth 0.5 (in front of it, then behind it,
-  shrinking, her shadow under the trunk), behind moss at depth 0.5, and back to the front facing
-  her side; moss walking towards the camera in front of a box; dot facing front, talking (lip
-  sync), waving; moss turning to the front and both turning back; in a room dot walking back to
-  the sofa at the wall's depth and sitting on it, and moss facing front stepping towards the
-  camera (a lifted foot each step). Stills of `vidgen character --png --facing front` for both
-  looks. `vidgen lint`: no findings.
-- **Not done here**: a back view (walking away facing front walks backwards: keep the side);
-  `enter` / `exit` at a depth; a speech bubble does not resize with its speaker; the planner
-  (automatic directing, reframing) keeps each character's start depth and size; sitting on the
-  ground or lying, from the front.
-  Tests: `tests/test_cartoon_depth.py`.
-
+- **Depth walks** (`cartoon/stage.py`, pure): `walk_to` / `run_to` take `depth` or `to: {mark,
+  depth}` (`WalkPlace`, `walk_destination`); straight line (`depth_along`,
+  `depth_walk_distance`: one unit of depth = `DEPTH_WALK_HEIGHTS` 2 heights), so walks across are
+  unchanged. Not behind a room's wall. `Walk(..., depth=, feet_y=, carried=)` rescales the walker,
+  its strokes and held props each frame; `Character.stage_depth` / `ground_y` follow (not `depth`:
+  Manim's z-size property).
+- **Draw order**: `depth_slot` puts a character after deeper ones and props at its depth.
+  Manim fixes `moving_mobjects` when an animation begins, so `_draw_order_step` reorders and
+  resets it during depth walks (and front-facing scenes); `get_moving_mobjects` redraws from the
+  first crossed object. Put-down props take the holder's `stage_depth`; shadows scale with depth.
+- **Front view** (`generate_parts(look, colors, front=True)`, cached per view): same parts and
+  shape names (`_check_front`); each part holds both views' copies, only the shown one with points,
+  so the family never changes (§69.22). Facing `front` (`FACINGS`): no mirror, `FRONT_DRAW_ORDER`;
+  `side_facing` remembers the side. SVG characters ignore it (`cast.front_view_warnings`).
+  `PoseChange` side <-> front swaps half-way with `TURN_SQUASH` 0.12; `turn` takes `to: front`.
+  Walking front shortens the lifting leg; sitting, leaning, crouching are drawn from the side.
+  `facing_sign(facing, front=1.0)` (shots and reframing use `front=0`).
+- **Validate / lint**: `holding_problems(depths=)` reports `sit_on`, `lean_on`, `pick_up`, `give`
+  across more than `DEPTH_REACH` 0.05 with the fixing walk; dump writes `depth` when > 0;
+  `character_overlap` / `walk_overlap` skip pairs ≥ `DEPTH_APART` 0.15 apart. Tests
+  `tests/test_cartoon_depth.py`.
 ### 69.45 Iris transitions (Step 112)
 
 - **Config** (`config.py`): `TransitionConfig.type` adds `iris_out` and `iris_in` (default 1.2 s,
@@ -17634,1433 +16652,516 @@ the example (Kokoro audio) 0 in 16:9 and 9:16, and of s230–s233: 0.
 
 ## 99. Particle physics (Phase Y, Steps 237–244)
 
-Particle-physics videos at university level (and for science YouTube): the Standard Model, Feynman
-diagrams in proper notation with conservation checked at every vertex, relativistic kinematics,
-detectors and event displays, resonances emerging from data. The phase **builds on Phase W and
-Phase X's patterns** and re-implements none of them: histograms, peak fits (Gaussian,
-Breit–Wigner, polynomial backgrounds, Poisson likelihood), live plots and the plot core are Phase
-W's (§97.3–§97.7); worked numbers with units are `calculation` scenes and `vidgen.quantities`
-(GeV, GeV/c, GeV/c², ħ and e from the SI 2019 constants, §97.9–§97.10); the accuracy lint extends
-`calc_*` / `plot_*` as Phase X's did (§97.11, §98.8); `from_scene` (§98.5) lets a calculation read
-a scene's computed values. Additive and opt-in: a new package, a new scene type, two new actions;
-existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q baseline 31/31
-after Step 237).
+Particle-physics videos: the Standard Model, Feynman diagrams checked at every vertex,
+relativistic kinematics, detectors and event displays, resonances in data. It **builds on Phase W /
+X** and re-implements none of it: histograms, fits, live plots and the plot core are §97.3–§97.7;
+worked numbers are `calculation` and `vidgen.quantities` (§97.9–§97.10); the lint extends `calc_*`
+/ `plot_*` (§97.11, §98.8); `from_scene` (§98.5) reads a scene's values. Additive, opt-in, no new
+dependency or config key. Author docs: docs/COOKBOOK-PARTICLES.md; params: docs/CONFIG.md (one
+section per scene type); guide topic `particle-physics` (aliases particle, particle_physics, hep,
+higgs, standard-model, collider, feynman-diagrams; never `particles`, the cartoon effect).
 
-**Physics honesty**: values from the Particle Data Group, PDG 2024 (S. Navas et al., *Review of
-Particle Physics*, Phys. Rev. D 110, 030001 (2024)), stated in the module and on the chart;
-schemes and approximations stated (quark masses MS-bar / direct; neutrino masses only bounded; the
-Δ(1232) Breit–Wigner values rounded; diagrams and detectors schematic and labelled so); computed
-rather than hard-coded (Q values, thresholds, Γ = ħ/τ, p*, decay lengths, significances); data in
-examples simulated and labelled "simulated data"; no real experiment's logo or exact geometry.
+**Physics honesty** (invariant): values from PDG 2024 (Phys. Rev. D 110, 030001), stated in the
+module and on screen; schemes and approximations stated; derived numbers (Q, thresholds, Γ = ħ/τ,
+p*, decay lengths, significances) computed, never hard-coded; example data simulated and labelled
+so; detectors and diagrams schematic and labelled so; no real experiment's logo or geometry.
 
 ### 99.1 The phase (plan)
 
-- **Step 237, plan and particle model** (this section): `vidgen.particle_physics` (no manim,
-  §99.2), the conservation checker (§99.3), the `standard_model` scene type with the actions
-  `antiparticles` and `couplings` (§99.4).
-- **Step 238, Feynman diagrams**: a `feynman` scene type (name checked: no type, action or target
-  is called `feynman`). The diagram is data in a model module of the package (`feynman.py`: lines
-  between vertices, each line a particle key from §99.2 with a direction — fermion arrows,
-  antifermions against time —, external legs before / after); the layout of tree diagrams (s-, t-,
-  u-channel, decays) and one-loop diagrams (a triangle for H → γγ / gg → H) is computed there; the
-  scene draws the notation (fermion lines with arrows, wavy γ / W / Z with labels, curly g, dashed
-  H, vertex dots, time left → right by default, `time: up` configurable). **Vertex checks reuse
-  §99.3**: each vertex is a little process (the particles into it → the particles out of it) checked
-  with `check` for charge, baryon and lepton numbers, plus the allowed vertex types of the Standard
-  Model (from `chart.COUPLINGS`: which boson meets which fermion; flavour change only at a W vertex;
-  colour flow at q q g and g g g). Presets: e⁺e⁻ → μ⁺μ⁻, Compton, Møller, Bhabha, β⁻ decay at quark
-  level, μ⁻ decay, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → Wb. Animation: lines drawn in time
-  order, a particle travelling along them, labels.
-- **Step 239, relativistic kinematics**: a model module `kinematics.py` (four-vectors (E, p) in
-  MeV with c = 1, conversions shown with units through `vidgen.quantities`; invariant mass;
-  two-body decay momentum p* from the masses (the Källén function); boosts; thresholds — the
-  checker's `Threshold` (§99.3) already gives √s and the fixed-target energy —; time dilation and
-  decay length βγcτ from §99.2's lifetimes). Pictures: a momentum-vector diagram view (a new scene
-  type or a `plot` model; decided in 239), and `calculation` scenes for the worked numbers (units
-  GeV, GeV/c, GeV/c²; `from_scene` reading the diagram's values).
-- **Step 240, detectors and event displays**: a `detector` scene type: a schematic cylindrical
-  detector in the transverse (x–y) and longitudinal (r–z) views (pixel / strip tracker, solenoid,
-  ECAL, HCAL, muon chambers; sizes generic, labelled schematic), particles from §99.2 leaving their
-  signatures (e: track + ECAL; γ: ECAL, no track; μ: track through everything + muon chambers;
-  charged hadron: track + HCAL; neutral hadron: HCAL; ν: missing p_T), tracks as helices with the
-  right sign and radius (p_T [GeV/c] = 0.3 B [T] R [m]), jets as cones, seeded events; actions to
-  build the event layer by layer, highlight a particle, show missing p_T.
-- **Step 241, collisions, decays and data**: invariant-mass histograms filling event by event are
-  Phase W's live `plot` with a new built-in model for sampling a resonance (Breit–Wigner with the
-  §99.2 mass and width, or Gaussian resolution) on a falling background (seeded, labelled
-  simulated); fits and a local significance (Asimov / likelihood ratio on Phase W's Poisson
-  likelihood, clearly labelled); decay chains and exponential decay times from §99.2's lifetimes;
-  branching ratios from PDG as pie / bar (values sourced in the module).
-- **Step 242, accuracy lint**: rules on the narration, labels and calculations against the model:
-  masses, charges, spins, lifetimes, branching ratios (§99.2), "allowed" / "forbidden" claims
-  against `check` (§99.3), the boson named for an interaction (`chart.COUPLINGS`), kinematics
-  numbers (239), detector signature claims (240), significance claims (241); on the
-  `calc_numbers` / `plot_*` machinery, with `target_text` (§99.4) for on-screen names. The
-  checker's explanations are the lint's messages.
-- **Step 243, example, docs, gallery**: "How the Higgs boson was found" (the chart, gg → H and
-  H → γγ / H → ZZ* → 4ℓ diagrams, the two-photon signature, the diphoton invariant mass in a
-  `calculation`, a simulated spectrum with a bump near 125 GeV and its fit, the meaning of 5σ),
-  Kokoro, music bed low, 16:9 and 9:16; a guide topic (**name to settle**: `particles` collides in
-  spirit with the cartoon `particles` action and `vidgen/particles.py`; `particle-physics` is
-  clearer); CONFIG; `docs/COOKBOOK-PARTICLES.md`; the gallery section "Particle physics" (started
-  in Step 237 with `standard_model`; the gallery is 13.9 MB of 15 after it: room for about three
-  entries); README; CHANGELOG.
-- **Step 244, review**: physics against independent sources (the PDG values marked `# check` in
-  `data.py`, conservation logic, vertex rules, kinematics), compatibility, render performance, the
-  phase's and related suites, `tests/test_mcp.py`.
-
-**Names** (checked against the registry and the code): the package `vidgen.particle_physics`
-(`vidgen.particles` is the cartoon particle effects); scene types `standard_model` (237),
-`feynman` (238), `kinematics` (239), `detector` (240), `mass_spectrum`, `decay_chain`, `branching`,
-`branching_pie` (241); actions `antiparticles`, `couplings` (237), `travel`,
-`vertex_rule`, `swap_channel` (238), `boost` (239), `switch_view` (240); no collisions.
+Built as described below. Names: package `vidgen.particle_physics` (`vidgen.particles` is the
+cartoon effect); scene types `standard_model`, `feynman`, `kinematics`, `detector`,
+`mass_spectrum`, `decay_chain`, `branching`, `branching_pie`; actions `antiparticles`, `couplings`,
+`travel`, `vertex_rule`, `swap_channel`, `boost`, `switch_view`.
 
 ### 99.2 The model: `vidgen.particle_physics` (Step 237)
 
-A package without manim (a fresh-interpreter test), exported by `vidgen.api` as the module
-`particle_physics`. Energies and masses in MeV (c = 1), times in seconds.
+No manim anywhere in the package (a fresh-interpreter test); `vidgen.api.particle_physics` is the
+module. MeV with c = 1, seconds.
 
-| module | contents |
-|---|---|
-| `data` | `Particle` (frozen): `key` (ASCII: `e-`, `anti-nu_e`, `pi0`, `K0_S`, `J/psi`), `name`, `symbol` (Unicode: `ν̄ₑ`, `π⁰`), `markup` (Pango), `tex`, `family` (quark, lepton, gauge boson, scalar boson, meson, baryon), `mass_mev` (0 for γ, g and the neutrinos, whose `mass_limit_mev` is 0.8 eV), `charge`, `spin`, `baryon` (Fractions), `lepton` (L_e, L_μ, L_τ), `flavour_numbers` (S, C, B′, T in the PDG sign convention: the quark's charge sign), `parity`, `c_parity`, `g_parity`, `colour` (1, 3, 3̄, 8), `lifetime_s` or `width_mev` (the one PDG quotes; `lifetime` / `width` compute the other with ħ = 6.582 × 10⁻²² MeV s from the exact SI h and e), `stable`, `mass_scheme`, `content` / `components` (quark keys; several for a mixture: π⁰, η, K⁰_S, K⁰_L, whose undefined numbers are `None` in `flavour`), `generation`, `note`, `aliases`; text helpers `mass_text`, `charge_text`, `lifetime_text`, `width_text` (`energy_text`, `time_text`). `PARTICLES`: the Standard Model particles (6 quarks, 6 leptons and their antiparticles, γ, g, W⁺, W⁻, Z, H: 30 keys) and 27 hadrons with their antiparticles (47 keys; 77 in all). Hadrons get their baryon number and flavour from their quarks; their charge is given and checked (`particle_problems`). Antiparticles by conjugation (`_anti`): charge, baryon, lepton, flavour reversed, colour conjugated, a fermion's parity reversed. Unsure values are marked `# check` in the source |
-| `names` | `particle(text)`: the key, an alias, Unicode as printed (combining macron / overline = anti; superscript charges; Greek → ASCII), ASCII anti markers (`anti-`, `anti`, `bar`, `~`, `nubar_e`), unique case-insensitive matches; **a bar keeps the antiparticle's own charge, as PDG writes it** (`Σ̄⁻` is the antiparticle of Σ⁺); `VidgenError` with did-you-mean. `antiparticle`, `find_key`, `normalize`, `suggestions` |
-| `process` | `parse_process("n -> p e- anti-nu_e")` → `Process(initial, final)` of `Leg(particle, off_shell)`: one arrow (`->`, `→`, `=>`, `⟶`), spaces, `+` and commas between, runs such as `e+e-` split greedily; `Z*` / `W*` off-shell (bosons and fermions only; `K*` refused: excited hadrons are not in the table); `Process.text("unicode" | "ascii" | "tex")` |
-| `conservation` | `check(process)` → `Verdict` (§99.3); `CONSERVATION_TABLE` (what strong / EM / weak conserve), `INTERACTIONS` (one line each) |
-| `chart` | `Cell` (the particle shown, target label and other names, group, fermion row, generation, grid position wide / tall, label and Pango symbol for particle and antiparticle, `bar`); `CELLS` (17); `GRID` (wide 5 × 4, tall 3 × 6); `COUPLINGS` (by boson: the fermions and bosons it couples to and why, tree level: g → quarks + g; γ → quarks, charged leptons + W; Z → all fermions + W, H; W → all fermions (flavour-changing) + γ, Z, W, H; H → quarks, charged leptons + W, Z, H); `SHORT_LABELS` |
-
-**Values** (PDG 2024 central values; masses in MeV unless GeV is given): u 2.16, d 4.70, s 93.5
-(MS-bar, μ = 2 GeV), c 1.273 GeV, b 4.183 GeV (MS-bar m(m)), t 172.57 GeV (direct, Γ 1.42 GeV);
-e 0.51099895, μ 105.6583755 (τ 2.1969811 µs), τ 1776.93 (290.3 fs); W 80.3692 GeV (Γ 2.085 GeV),
-Z 91.1880 GeV (Γ 2.4955 GeV), H 125.20 GeV (Γ 4.1 MeV, the SM prediction); p 938.27209, n
-939.56542 (878.4 s); π± 139.57039 (26.033 ns), π⁰ 134.9768 (8.43 × 10⁻¹⁷ s), η 547.862 (1.31 keV),
-K± 493.677 (12.38 ns), K⁰ 497.611, K⁰_S 89.54 ps, K⁰_L 51.16 ns, φ 1019.461 (4.249 MeV), J/ψ 3096.900
-(92.6 keV), Υ(1S) 9460.40 (54.02 keV), D± 1869.66 (1.033 ps), D⁰ 1864.84 (410.3 fs), B± 5279.41
-(1.638 ps), B⁰ 5279.72 (1.517 ps), Λ 1115.683 (261.7 ps), Σ⁺ 1189.37 (80.18 ps), Σ⁰ 1192.642
-(7.4 × 10⁻²⁰ s), Σ⁻ 1197.449 (147.9 ps), Ξ⁰ 1314.86 (290 ps), Ξ⁻ 1321.71 (163.9 ps), Ω⁻ 1672.45
-(82.1 ps), Δ(1232) 1232 (117 MeV). The values Step 237 marked for the owner (the quark masses u,
-d, s, c, b, t and Γ_t; m_τ; τ(π⁰); τ(D⁰); m(B±), m(B⁰)) were **re-checked in Step 244's review**
-(the reviewer's independent reading of the PDG 2024 summary tables agrees with every one; §99.15);
-only the Higgs width prediction stays marked. **Checked in Step 238's
-review** against the PDG 2024 summary tables: m_W 80.3692 GeV, m_Z 91.1880 GeV, Γ_Z 2.4955 GeV,
-m_H 125.20 GeV confirmed; τ(Λ) corrected from 2.632 to the PDG 2024 average (2.617 ± 0.010) ×
-10⁻¹⁰ s (and Λ̄ with it).
+- `data`: `Particle` (frozen; `key` ASCII such as `e-`, `anti-nu_e`, `K0_S`, `J/psi`; `symbol`,
+  `markup`, `tex`, `family`, `mass_mev`, `mass_limit_mev` for neutrinos, `charge`, `spin`, `baryon`
+  (Fractions), `lepton` (L_e, L_μ, L_τ), `flavour_numbers` (S, C, B′, T, PDG signs), parities,
+  `colour`, `lifetime_s` or `width_mev` (the other computed with ħ from exact SI h, e), `stable`,
+  `mass_scheme`, `content` / `components` (mixtures π⁰, η, K⁰_S, K⁰_L have `None` for undefined
+  numbers), text helpers). `PARTICLES`: 30 Standard Model + 47 hadron keys. Hadrons take B and
+  flavour from their quarks; their given charge is checked (`particle_problems`); antiparticles by
+  conjugation (`_anti`). Only the H width (SM prediction 4.1 MeV) is marked `# check`.
+- `names`: `particle(text)` accepts keys, aliases, printed Unicode and ASCII anti markers;
+  **a bar keeps the antiparticle's own charge, as PDG writes it** (`Σ̄⁻` = anti-Σ⁺); unknown →
+  `VidgenError` with did-you-mean.
+- `process`: `parse_process("n -> p e- anti-nu_e")` → `Process(initial, final)` of `Leg(particle,
+  off_shell)`; one arrow (`->`, `→`, `=>`, `⟶`); `Z*` / `W*` off-shell (`K*` refused);
+  `Process.text("unicode" | "ascii" | "tex")`.
+- `conservation`: `check` (§99.3), `CONSERVATION_TABLE`, `INTERACTIONS`.
+- `chart`: `Cell`, `CELLS` (17), `GRID` (wide 5 × 4, tall 3 × 6), `COUPLINGS` (tree level, by
+  boson; the source of every "which boson meets which particle" rule), `SHORT_LABELS`.
 
 ### 99.3 The conservation checker (Step 237)
 
 `check(process)` → `Verdict(process, allowed, interaction, checks, violations, notes, threshold,
-energy, energy_ok)`; `summary()` ("allowed: weak interaction", "forbidden: baryon number not
-conserved: B = +1 → 0"), `explain()` (every `Check` with ✓ / ✗ / Δ — Δ: a flavour the weak
-interaction may change — and each particle's share: "L_e: n 0 → p 0, e⁻ +1, ν̄ₑ −1 (total 0)", the
-energy line, notes).
+energy, energy_ok)` with `summary()` and `explain()` (every `Check` ✓ / ✗ / Δ, per-particle shares).
 
-1. **Every interaction**: Q, B, L_e / L_μ / L_τ (checked when a lepton of that family takes part;
-   a note says that only neutrino oscillations change family numbers); angular momentum as far as
-   counting can tell (the number of fermions changes by an even number); energy — a decay needs the
-   parent heavier than the on-shell products ("m(H) = 125.2 GeV is not more than the products' 182.4
-   GeV", with the hint "write Z*" when one W / Z off-shell would do; a massless parent: "pair
-   production needs a nucleus"; p → n e⁺ νₑ: "in a nucleus the binding energy can make up the
-   difference"); a reaction gets `Threshold` (masses before and after, Q, the least √s, and for two
-   particles the fixed-target beam energy E = (M² − m_a² − m_b²) / 2m_b and its kinetic part: p p →
-   p p p p̄ needs 6 m_p = 5.63 GeV); the **Landau–Yang theorem** (a spin-1 particle never decays to
-   γγ: Z, J/ψ, φ, Υ); **two real particles merging into one** (Step 244): only at √s = M of the
-   product, so it must weigh at least m_a + m_b (e⁺e⁻ → Z allowed; e⁺e⁻ → γ and p p̄ → γ with a
-   real photon forbidden, with the hint to write `gamma*`; p p̄ → π⁰ forbidden).
-2. **Flavour**: S, C, B′, T summed per side; a mixture (K⁰_S, K⁰_L) is read as the component that
-   changes flavour least, said in a note ("read here as K⁰ (S = +1)").
-3. **The interaction**: a Higgs boson → `higgs` (flavour must be kept: no H → b s̄ at tree level; a
-   note for H with only massless partners: "a loop of heavy particles"); a W, Z or neutrino, or any
-   flavour change → `weak`, each flavour changing by at most one unit ("strangeness changes by 2 …
-   it would take two weak steps", Ξ⁻ → n π⁻); otherwise photons or charged leptons →
-   `electromagnetic`, else `strong`. Strong and electromagnetic processes conserve **C-parity**
-   (checked when every particle has one: π⁰ → γγγ refused) and the strong one **G-parity** (all
-   particles with G: η → πππ is then electromagnetic with the note "not strong … slow").
-4. Quark-level processes get a note: current-quark masses depend on the scheme and quarks are
-   bound, so the energy check is indicative; colour is not checked (238 does colour flow).
+1. **Always**: Q, B, L_e / L_μ / L_τ (when that family takes part); fermion number changes by an
+   even number; energy (a decay needs the parent heavier than its on-shell products, hint "write
+   Z*"); a reaction gets `Threshold` (least √s; fixed-target E = (M² − m_a² − m_b²) / 2m_b);
+   Landau–Yang (spin 1 never → γγ); **2 → 1 with nothing off-shell needs M ≥ m_a + m_b**
+   (`_merge_problem`: e⁺e⁻ → γ refused, hint `gamma*`).
+2. **Flavour** S, C, B′, T per side; a mixture is read as the component changing flavour least.
+3. **Interaction**: Higgs → `higgs` (flavour kept); W, Z, neutrino or flavour change → `weak`
+   (each flavour by ≤ 1 unit); photons or charged leptons → `electromagnetic`; else `strong`.
+   Strong and EM conserve C-parity, strong G-parity (when every particle has one).
+4. Quark-level processes: energy check indicative (note); colour is `feynman`'s (§99.5).
 
-Not checked: parity and orbital angular momentum (they need partial waves), CKM suppression,
-FCNC loops (a K⁺ → π⁺ e⁺ e⁻ passes as weak), isospin beyond G.
+Not checked: parity / orbital L, CKM suppression, FCNC loops, isospin beyond G.
 
 ### 99.4 The `standard_model` scene type (Step 237)
 
-`scenes/standard_model.py` (drawing, targets), `scenes/standard_model_actions.py` (actions).
-
-- **Arrangement**: `layout: auto` = `wide` in 16:9 (the classic grid: generations I–III, rows
-  up-type quarks, down-type quarks, charged leptons, neutrinos; a column of gauge bosons g, γ, Z, W;
-  the Higgs boson; the source note in the free cells under H; the key cell at the bottom right) and
-  `tall` in 9:16 (the fermion grid, the bosons in two rows under it: g γ Z / W H key, the source
-  line as a caption). Rotated group labels on the left (quarks, leptons; tall: bosons), the
-  generation numbers above; wide: "gauge bosons" and "scalar boson" over their columns. The grid
-  fills the area under the title: cell width from the width, height from the height, width at most
-  1.9 × height, height at most the width.
-- **Cells**: a rounded outline in the group colour (`quark_color` default the palette's third
-  colour, `lepton_color` tertiary, `gauge_color` accent, `higgs_color` secondary — the theme's
-  `highlight` stays free for actions), fill 0.1; texts at the readable size (×1.08 margin for the
-  lint's cap-height estimate), up to 25 % larger when wide cells have room. **Row mode** when every
-  cell's mass and charge fit on one line (16:9): mass top left, charge top right, spin right of the
-  middle, the symbol in the middle, the name at the bottom; **column mode** (the classic chart, 9:16)
-  when they do not and the height holds three lines over the name: mass, charge, spin down the left,
-  the symbol beside them. Lines share baselines. If neither fits, row mode with the top line scaled
-  down and a warning. Names that do not fit take shorter forms for all cells alike (`electron
-  neutrino` → `e-neutrino` → `neutrino`, separately for the antiparticle names). Antiparticle bars
-  are drawn as lines over the first glyph (a combining macron sits badly on ν); every symbol carries
-  its bar (invisible when none), so the flip morphs letters into letters and bar into bar (a
-  `Transform` between different structures left a copy that the layout dump read as text).
-- **Reveal**: `groups` (default): frame and quarks, leptons, gauge bosons, Higgs (+ key, source,
-  caption) as four steps over the beats; `all`: one step.
-- **Targets**: `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<target>`
-  and `particle:<name>` (u / up, e / electron, nu_e / electron_neutrino, g / gluon, photon / gamma,
-  Z / Z_boson, W / W_boson, H / higgs / Higgs), `generation:1`–`3` (with the numeral),
-  `group:quarks | leptons | fermions | gauge_bosons | scalar_bosons | bosons` (with their labels),
-  `row:up_type | down_type | charged_leptons | neutrinos`; `target_text` gives the on-screen names
-  (the antiparticle's when `antiparticles: true`).
-- **Actions**: `antiparticles` (no target: all fermions; or targets; reversible): each cell's
-  charge, symbol and name `Transform` into the antiparticle look built beside the particle look;
-  the group label becomes antiquarks / antileptons once all its cells are anti. `couplings`
-  (target: a boson cell; `color`, `dim`, `note`; reversible, `until_next_beat`): an outline around
-  the fermion block the boson couples to (contiguous rows by construction), a solid ring on the
-  boson, dashed rings on the bosons it meets, the rest dimmed to 0.45 (`dim_to` of the built-in
-  actions; restored by `Repaint`), the reason in words in the note area (wide: under H; tall: in
-  place of the source line). Both check the scene type; `couplings` checks that its targets are
-  boson cells.
-
-**Shared code** (Step 237): `lint/layout_rules._GLYPH_EM` knows Greek lowercase heights (x-height
-α ε ι κ ν ο π σ τ υ ω; descenders γ η μ ρ ς φ χ ψ): the cap-height estimate of `τ-neutrino` or a
-`ν_μ` symbol was 10–15 % low (texts without Greek letters are measured as before; frames unchanged).
-
-**Public (additive)**: `vidgen.api.particle_physics` (the module); the scene type
-`standard_model`; the actions `antiparticles`, `couplings`. No dependency, no config key.
-
-**Known gaps after Step 237**: the chart's labels and names are English only (not translatable;
-`title` and `caption` are); `max_words` warns on a full chart (about 50 words: `show:` fewer
-fields or `key: false`); cells dimmed by `couplings` can get `contrast` warnings for their large
-symbols (the backdrop sampler counts a dimmed glyph's own pixels); the neutrino-mass display uses
-one limit for all three flavours; no lint rules (242).
+`scenes/standard_model.py`, `scenes/standard_model_actions.py`; params docs/CONFIG.md#standard_model.
+`layout: auto` = `wide` in 16:9, `tall` in 9:16. Cells in group colours (the theme's `highlight`
+stays free for actions); row mode when every mass and charge fit on one line, else column mode, else
+row mode scaled with a warning; names shorten for all cells alike. Antiparticle bars are drawn
+lines and **every symbol carries a bar (invisible when none)** so the flip morphs like to like (a
+`Transform` between different structures leaves a stray copy). Reveal `groups` (default) | `all`.
+Targets `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`,
+`generation:1`–`3`, `group:quarks | leptons | fermions | gauge_bosons | scalar_bosons | bosons`,
+`row:up_type | down_type | charged_leptons | neutrinos`; `target_text` gives on-screen names.
+Actions: `antiparticles` (reversible); `couplings` (target a boson cell, checked; reversible,
+`until_next_beat`; rows from `chart.COUPLINGS`, the rest dimmed via `dim_to`, restored by
+`Repaint`). Both check the scene type. Chart labels are English only. Shared:
+`lint/layout_rules._GLYPH_EM` knows Greek lowercase heights.
 
 ### 99.5 Feynman diagrams: the model (Step 238)
 
-Two modules of `vidgen.particle_physics` (no manim), exported with `Diagram`, `DiagramCheck`,
-`build_diagram`, `check_diagram`, `preset_diagrams`, `vertex_rule` and `diagram_layout`.
+`feynman` and `feynman_layout`; exported `Diagram`, `DiagramCheck`, `build_diagram`,
+`check_diagram`, `preset_diagrams`, `vertex_rule`, `diagram_layout`.
 
-**`feynman`**: a `Diagram(name, lines, groups, label)` of `DiagramLine(id, particle, start, end,
-off_shell, label)`: the particle that runs **forward in time** from `start` to `end`, each a vertex
-id, `in` (an incoming leg starts there) or `out`; `in` → `out` is a spectator quark. The fermion
-arrow follows the fermion-number flow (`flow` +1 for a fermion, −1 for an antifermion, whose arrow
-points back along the line); vertices are the ends other than `in` / `out`. `HadronGroup(particle,
-side, lines)` brackets quark lines as a hadron (its quark content must match). `build_diagram`
-refuses what is not a diagram (an `in` at a line's end, a vertex joining fewer than 3 or more than 4
-lines, pieces not joined, more than one loop, tadpoles, a hadron as a line, a non-quark spectator,
-groups not on their side).
+`Diagram(name, lines, groups, label)` of `DiagramLine(id, particle, start, end, off_shell,
+label)`: the particle runs **forward in time** from `start` to `end` (a vertex id, `in` or `out`;
+`in` → `out` is a spectator quark); the arrow follows fermion-number flow. `HadronGroup(particle,
+side, lines)`. `build_diagram` refuses non-diagrams (vertex of < 3 or > 4 lines, disconnected,
+> 1 loop, tadpoles, a hadron line, a non-quark spectator, groups on the wrong side).
 
-`check_diagram(d)` → `DiagramCheck(vertices, chains, verdict, hadron_verdict)` with `problems`,
-`ok`, `explain()`:
-1. **Vertex rule** (`vertex_rule(into, out)` → `VertexRule(kind, name, coupling, interaction,
-   note)` or why not), on the lines read as all outgoing (crossing): two fermions (one fermion,
-   one antifermion: "the arrows must run through the vertex") and one boson — γ: same flavour,
-   charged (`QED`); g: same quark flavour (`QCD`); Z: same flavour (`NC`); H: same flavour,
-   massive (`Hff`; neutrinos massless in the SM); W: a weak doublet — a charged lepton with the
-   neutrino of its family, an up-type with a down-type quark (`CC`, the CKM element in the coupling
-   text, "CKM-suppressed" across generations); a flavour change at γ / g / Z / H is refused ("no
-   flavour-changing neutral currents at tree level"); three or four bosons — g g g, g g g g, W W γ,
-   W W Z, H W W, H Z Z, H H H, W W W W, W W Z Z, W W γ γ, W W Z γ, H H W W, H H Z Z, H H H H; **H γ γ,
-   H g g and H Z γ are refused with the loop** ("the Higgs boson couples to mass and the photon is
-   massless; … draw the loop (preset h_to_gammagamma)"); four fermions: "Fermi's contact is the
-   low-energy picture of a W exchanged: draw the W".
-2. **Conservation at the vertex** with §99.3's `check` (the vertex as a process, every line
-   off-shell so no energy check; a vertex with every line on one side is crossed): Q, B, L_e, L_μ,
-   L_τ (`VertexCheck.conservation_text()`: "Q: −1 → 0 + −1 ✓ · L_μ: +1 → +1 + 0 ✓").
-3. **Colour** (basic, `colour_problem`): the colours as outgoing (3, 3̄, 8) must be able to make a
-   singlet — triplets minus antitriplets a multiple of 3, a gluon never alone among colourless
-   lines.
-4. **Fermion lines** (`fermion_chains`): each chain in the direction of its fermion number (d → u,
-   νₑ → e⁻, a closed top loop) with the conserved number along it ("B = 1/3 along the line").
-5. **The reaction** of the external legs with `check` (spectators left out) and, with groups, the
-   hadron reaction (n → p e⁻ ν̄ₑ, π⁺ → μ⁺ ν_μ). The scene refuses a diagram with any problem.
+`check_diagram(d)` → `DiagramCheck(vertices, chains, verdict, hadron_verdict)` (`problems`, `ok`,
+`explain()`): (1) `vertex_rule(into, out)` → `VertexRule(kind, name, coupling, interaction, note)`
+or why not — fermion pair + γ / g / Z / H (same flavour; H needs mass) or W (a weak doublet, CKM in
+the text); **no tree-level flavour change at γ / g / Z / H; H γ γ, H g g, H Z γ refused with a
+pointer to the loop preset**; the Standard Model's 3- and 4-boson vertices; four-fermion contact
+refused; (2) §99.3's `check` at each vertex (all lines off-shell); (3) colour can form a singlet
+(`colour_problem`); (4) `fermion_chains`; (5) the external reaction and, with groups, the hadron
+reaction. The scene refuses any problem. Couplings shown are computed from constants (α, α_s(m_Z),
+G_F → v, g, y_f); sin²θ_W and CKM magnitudes are display-rounded.
 
-Couplings shown (computed): α = e²/4πε₀ħc from the SI 2019 / CODATA 2022 constants (1/137.036);
-α_s(m_Z) = 0.1180 (PDG 2024); G_F = 1.1663788 × 10⁻⁵ GeV⁻² (PDG 2024) → v = (√2 G_F)^−½ = 246.22
-GeV, g = 2m_W/v = 0.653, y_f = √2 m_f/v (top 0.991), H W W 2m_W²/v ≈ 52 GeV, H H H 3m_H²/v ≈ 191
-GeV. Rounded and marked for checking: sin²θ_W ≈ 0.231 (MS-bar at m_Z), the CKM magnitudes to two
-figures.
+**Presets** (`PRESETS`, `preset_diagrams(key, spectators)`): `ee_to_mumu`, `compton`, `bhabha`,
+`moller`, `beta_decay`, `muon_decay`, `pion_decay`, `drell_yan`, `gg_to_h`, `h_to_gammagamma`,
+`h_to_zz_4l`, `top_decay`; **line ids are stable across a preset's diagrams** (`swap_channel`
+morphs by id).
 
-**Presets** (`PRESETS`, `preset_diagrams(key, spectators)`; line ids are stable across a preset's
-diagrams so `swap_channel` can morph them): `ee_to_mumu` (photon, Z), `compton` (s, u),
-`bhabha` (s, t), `moller` (t, u), `beta_decay` (quark; `spectators` adds u, d and the n / p
-groups), `muon_decay`, `pion_decay` (group π⁺), `drell_yan` (photon γ*, Z), `gg_to_h` (top loop),
-`h_to_gammagamma` (top, W loops), `h_to_zz_4l`, `top_decay` (W, leptonic).
-
-**`feynman_layout.layout(d)`** → `DiagramLayout(vertices, lines, columns, timelike, groups,
-crossings, bounds)` in (t, y): t = 0 incoming ends, 1 outgoing ends; y spread −1 … 1 (spectators
-above). (1) Time order: a bridge line whose one side holds no incoming leg (or the other no outgoing
-one) is timelike and orders its vertices, otherwise spacelike (shared time); on a loop, vertices
-whose outside part holds only incoming legs are early, only outgoing late; spacelike-joined
-vertices form columns layered by the longest path, placed at fixed t (0.31 / 0.69 for two
-columns). (2) Vertex y: the weighted mean of the neighbours with the external ends fixed (solved
-exactly), same-column vertices at least 1.0 apart. (3) Every order of the incoming and of the
-outgoing ends (up to 4 per side) is scored by (crossings + lines passing through a vertex dot,
-hadron groups not beside their spectators, inversions of the written order): the u-channel comes out
-uncrossed with its outgoing legs swapped. Two lines between the same vertices bow apart (±0.32 of
-the chord). Every preset: 0 crossings, deterministic.
+**`feynman_layout.layout(d)`** → `DiagramLayout(...)` in (t, y), t 0 → 1: timelike bridges order
+vertices, spacelike ones share a column; vertex y solved exactly as neighbour means; every order of
+the ends (≤ 4 per side) scored by crossings, lines through dots, groups apart, inversions of the
+written order. Deterministic; every preset 0 crossings. One loop at most.
 
 ### 99.6 The `feynman` scene type (Step 238)
 
-`scenes/feynman.py` (params, layout on screen, targets, reveal, the actions' drawing),
-`scenes/feynman_draw.py` (notation), `scenes/feynman_actions.py`.
-
-- **Params**: `preset` or `diagrams` (`{name, label, lines, groups}`; a line `{id, particle, from,
-  to, label}` or the string `"id: particle from -> to"`), `diagram` (shown first), `spectators`,
-  `time` (`right` | `up`), `time_axis`, `process`, `labels`, `reveal` (`time` | `all`), `title`,
-  `caption`, `fermion_color` (text), `boson_color` (accent), `higgs_color` (secondary). Validation
-  builds and checks every diagram: a rule broken is a param error with the reason.
-- **Notation**: fermions solid with a filled arrowhead on the fermion-number flow; γ, W, Z a sine
-  wave (amplitude 0.075, wavelength ≈ 0.3); g a coil (a circle rolling along the line); H dashed;
-  vertices dots; labels from the particle's Pango markup with the antiparticle bar drawn as a line
-  (as §99.4), `*` for off-shell; hadron brackets with the hadron's name outside the quark labels.
-  External labels sit beyond the open ends; internal ones beside the middle, away from the centre
-  unless that side meets another line. Lines are drawn from their earlier end (`Create` draws in
-  time order).
-- **Screen**: title, the reaction line (`e⁻ e⁺ → μ⁻ μ⁺ · s-channel`, hadrons when grouped),
-  caption; the diagram fitted into the rest with room for the labels and brackets (a transverse
-  unit at most 3.0, width at most 2.8 × height; 9:16 may grow to 1.8 × its width tall; Step 239); the `time`
-  arrow under the diagram's left end (time right) or left of its bottom (up). When the scene uses
-  `vertex_rule`, its text (1.3 × the readable size) gets a column on the right (16:9, up to 5 units / 36 %) or a band at the
-  bottom (9:16, eight lines, at most 30 % of the height; Step 239).
-- **Reveal** (`time`): the incoming lines with title, reaction and time arrow; then per column the
-  vertex dots and the lines beginning there (outgoing legs with their vertex), spread over the beats.
-- **Targets**: `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`,
-  `hadron:<particle>` — the union over the scene's diagrams; each is a container whose parts are
-  swapped by `swap_channel`, so targets follow their lines. `target_text`: a line's particle name.
-- **Actions**: `travel` (targets `line:<id>` / `diagram`; one clock from the earliest to the latest
-  time of the lines; each dot on its line while the clock is within the line's times, a spacelike
-  line crossed in ±0.08; fades in the last 12 %, removed at the end), `vertex_rule` (one vertex: a
-  ring, the rule text — name and lines, coupling, each conservation check; `until_next_beat`),
-  `swap_channel` (`to`, default the next diagram; same-id parts `Transform`, others `Create` /
-  `FadeOut`, the reaction line morphs; reversible).
-
-**Shared code** (Step 238): `vidgen.api.find_scene_type` (= `registry.find`) so that
-`scenes/calculation.py` no longer imports `vidgen.registry`; `scenes/orbit_text.py` imports through
-`vidgen.api` (the built-ins' public-API rule). No frame changes (Phase Q baseline 31/31).
-
-**Public (additive)**: scene type `feynman`; actions `travel`, `vertex_rule`, `swap_channel`;
-`vidgen.api.find_scene_type`; `particle_physics.feynman`, `particle_physics.feynman_layout` and the
-names above. No dependency, no config key.
-
-**Known gaps after Step 238**: two-loop and box diagrams are not laid out (one loop: triangles and
-bubbles); vertices with more than four ends per side keep the written order (no search); colour
-flow is checked, not drawn (no colour lines on the quarks); CKM magnitudes and sin²θ_W are rounded
-display values; the vertex-rule text is English only (the scene's title and caption translate);
-`travel` follows lines, not a fermion chain by name.
-
-**Step 239 review fixes** (notation and frame use, from the stills of 238): gluons are drawn as
-proper coils — radius 0.14, one turn per 0.3 units, each turn swinging back by its full radius so
-it closes into a loop (`COIL_RADIUS`, `COIL_PITCH`, squash 1.0; tested: the gluon's path runs
-backwards in every turn, the photon's never) — clearly unlike the photon's sine wave in a
-thumbnail; the diagram may take more of the frame (`MAX_UNIT` 2.3 → 3.0, `MAX_STRETCH` 2.3 → 2.8,
-in 9:16 up to 1.8 × its width tall, was 1.15); the vertex-rule text is 1.3 × the readable size
-(`NOTE_SCALE`), its column in 16:9 up to 5 units / 36 % of the width, its band in 9:16 eight lines
-(at most 30 % of the height). The `feynman` gallery entry was regenerated. A test of 238 compared
-label boxes with `config.frame_height` after the render (restored to the landscape frame by then);
-it now uses the rendered size.
+`scenes/feynman.py`, `scenes/feynman_draw.py` (notation), `scenes/feynman_actions.py`; params
+docs/CONFIG.md#feynman. Validation builds and checks every diagram (a broken rule is a param error
+with the reason). Notation: fermions with arrowheads; γ / W / Z sine waves; g a coil whose path runs
+backwards in every turn (`COIL_RADIUS`, `COIL_PITCH`); H dashed; lines drawn from their earlier end.
+Fit limits `MAX_UNIT`, `MAX_STRETCH`; `vertex_rule` cards at `NOTE_SCALE` in a right column (16:9)
+or bottom band (9:16); `_areas = {False: whole frame, True: beside the cards}` and `_dock(docked)`
+re-lay the diagram out, so it is full size before the first card and after the last. The card's
+reaction uses no-break spaces. Reveal `time` (per column) | `all`. Targets `title`, `caption`,
+`process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`, `hadron:<particle>` (containers, so
+they follow `swap_channel`). Actions `travel` (dots along lines on one clock), `vertex_rule` (one
+vertex, `until_next_beat`), `swap_channel` (`to`, default next diagram; reversible). Shared:
+`vidgen.api.find_scene_type` (= `registry.find`; built-ins import through `vidgen.api`).
 
 ### 99.7 Relativistic kinematics: the model (Step 239)
 
-`particle_physics.kinematics` (no manim). **Natural units**: energies, momenta and masses in MeV
-with c = 1 (`value_text(29.79, "momentum")` → `29.79 MeV/c`, `"mass"` → MeV/c², the unit growing to
-GeV / TeV as `energy_text` does); **SI** through `vidgen.quantities`' units (`to_si`, `from_si`,
-`si_text`: `29.79 MeV/c = 1.592 × 10⁻²⁰ kg·m/s`, exact e and c), `natural_value("10 GeV/c")` parses a
-value with any unit of the right dimension.
+`particle_physics.kinematics`. MeV, c = 1 (`value_text`), SI via `vidgen.quantities`
+(`to_si`, `from_si`, `si_text`), `natural_value("10 GeV/c")`.
 
-- `FourVector(energy, px, py, pz)`: `from_mass(m, p, angle)` (x–y plane), `p`, `mass2` (rounding
-  below 10⁻⁹ E² is 0), `mass` (**negative m² is an error** with the numbers), `beta_vector`,
-  `gamma` (massless: error), `dot` (Minkowski), `boost(beta)` — the vector seen from a frame in
-  which the current one moves with velocity β (a number along x or a vector): E' = γ(E + β·p),
-  p' = p + [(γ − 1)(β·p)/β² + γE] β; `total`, `invariant_mass`, `rest_frame_beta` (Σp/ΣE; a
-  massless system has no rest frame), `to_rest_frame`.
-- `gamma_of(β)` (**β ≥ 1 is refused**: "superluminal"), `Boost(beta, gamma)` with `from_beta`,
-  `from_gamma` (≥ 1), `from_momentum` (βγ = p/m), `from_energy` (**E < m refused**: "did you mean
-  the kinetic energy?"), `from_kinetic`; `motion(m, momentum= | energy= | kinetic= | beta= |
-  gamma=)` (exactly one).
-- **Two-body decays**: `kallen(x, y, z)`, `two_body_momentum(M, m₁, m₂)` = √λ(M², m₁², m₂²)/2M
-  (**below threshold refused**); `two_body("pi+ -> mu+ nu_mu")` → `TwoBodyDecay` (one particle into
-  two on-shell ones, allowed by §99.3's `check` — the checker's explanation is the error —, above
-  threshold) with `p_star`, `energies` (E₁ = (M² + m₁² − m₂²)/2M), `q_value`, `rest_vectors(angle)`
-  (back to back), `lab_vectors(boost, angle)`, `parent_vector`, `opening_angle(boost, angle)`,
-  `min_opening_angle` (scanned over the emission angle; massless products: sin(θ_min/2) = 1/γ).
-  Textbook values (tested): π⁺ → μ⁺ν_μ 29.79 MeV/c, K⁺ → π⁺π⁰ 205.1, Λ → pπ⁻ 100.6, Z → μ⁺μ⁻
-  45.59 GeV/c, H → γγ 62.60 GeV/c, π⁰ → γγ 67.49 MeV/c.
-- `MomentumPicture` (the scene's model): the particles' four-vectors in the system's rest frame,
-  the boost direction and the lab rapidity η (β = tanh η); `vectors(eta)` any frame along the
-  boost. `decay_picture(decay, angle, lab)` (the parent along +x), `system_picture([(particle,
-  p, angle), ...])` (lab given; the rest frame from Σp/ΣE).
-- **Thresholds**: `threshold("p p -> p p p anti-p")` → `Thresholds` built on §99.3's `Threshold`
-  (the reaction must be allowed): `sqrt_s` (Σ m after), `fixed_target` E = (s − m_a² − m_b²)/2m_b and
-  its kinetic part, `collider` (the beams' energies in the centre-of-momentum frame, (s + m_a² −
-  m_b²)/2√s), `ratio`. The antiproton: √s = 4m_p, fixed target E = 7m_p (kinetic 6m_p = 5.63 GeV),
-  collider 2m_p per beam (kinetic m_p). `fixed_target_energy(M, m_a, m_b)`.
-- **Time dilation and decay length**: `decay_length("mu-", energy=4000)` → `DecayLength` with
-  `c_tau`, `lab_lifetime` (γτ), `length` (βγcτ), `survival(d)` = e^(−d/L), `text()`; stable
-  particles refused. A 4 GeV muon: γ = 37.86, L = 24.93 km; B⁺ at 30 GeV/c: 2.8 mm; π± at 10 GeV/c:
-  559 m; π⁰: 1.9 µm. `length_text` (km … fm).
-- **PDG values for calculations**: `pdg_value(name, "mass" | "lifetime" | "width", unit)` →
-  `PdgValue(number, unit, meaning, source)`: the table's figures as a decimal string (`139.57039`
-  MeV/c²; masses below 1 GeV in MeV/c², else GeV/c²; a width computed from the mean life with 4
-  figures), "π⁺ mass", "PDG 2024"; a neutrino mass (only bounded) and a stable particle's lifetime
-  refused.
-- **Plot model** `two_body_opening` (registered with `plotcore.register_model`, `kind:
-  function`): params `M`, `m1`, `m2` (GeV/c²), `p_min`, `p_max` (GeV/c), `samples`; columns `p`,
-  `gamma`, `theta_min`, `theta_90` (degrees). The opening-angle plot is Phase W's `plot` — nothing
-  re-implemented.
+- `FourVector(energy, px, py, pz)` (`from_mass`, `p`, `mass2`, `mass`, `gamma`, `dot`,
+  `boost(beta)`, `total`, `invariant_mass`, `rest_frame_beta`, `to_rest_frame`); `gamma_of`,
+  `Boost` (`from_beta`, `from_gamma`, `from_momentum`, `from_energy`, `from_kinetic`),
+  `motion(m, …)` (exactly one of momentum / energy / kinetic / beta / gamma). **Refused with
+  `VidgenError`**: negative m², β ≥ 1, γ < 1, E < m (hint "kinetic energy?"), a massless rest frame.
+- `kallen`, `two_body_momentum`, `two_body("pi+ -> mu+ nu_mu")` → `TwoBodyDecay` (must pass
+  `check`; below threshold refused) with `p_star`, `energies`, `q_value`, rest / lab vectors,
+  `opening_angle`, `min_opening_angle`.
+- `MomentumPicture` (`decay_picture`, `system_picture`; planar, two-body only).
+- `threshold(reaction)` → `Thresholds` (`sqrt_s`, `fixed_target`, `collider`, `ratio`);
+  `fixed_target_energy`.
+- `decay_length(name, energy=…)` → `DecayLength` (`c_tau`, `lab_lifetime`, `length`, `survival`);
+  stable refused. `length_text`.
+- `pdg_value(name, "mass" | "lifetime" | "width", unit)` → `PdgValue(number, unit, meaning,
+  source)` (the table's figures as a decimal string); neutrino mass, stable lifetime refused.
+- Plot model `two_body_opening` (columns `p`, `gamma`, `theta_min`, `theta_90`).
 
 ### 99.8 The `kinematics` scene type and PDG symbols in calculations (Step 239)
 
-**Decision**: a new scene type `kinematics` (name checked: no type, action or target is called
-so; the action `boost` neither), not a `plot` model: arrows from a common origin with labels at
-their tips, two frames side by side and a frame that moves continuously are a picture of their
-own, not data on axes; the numbers are worked out by `calculation` scenes (`from_scene` and the
-new particle symbols), the curves by `plot` (`two_body_opening`).
+A scene type, not a `plot` model (arrows from one origin and moving frames are not data on axes).
+`scenes/kinematics.py`, `scenes/kinematics_actions.py`; params docs/CONFIG.md#kinematics; §99.7's
+errors become param errors. Panels side by side (16:9) or stacked (9:16); one arrow scale unless
+frames differ by more than `SHARED_SCALE_LIMIT` (1.25×), then the header says `arrows ×N`;
+`readout: key` (default) | `all`. Targets `title`, `caption`, `process`, `panel:rest`, `panel:lab`,
+`arrow:<n>` / `arrow:<particle>`, `sum`, `values`. **`boost`** (`to: lab | rest | β`; reversible)
+runs the rapidity linearly and redraws with `orbit_text.LiveText`; containers keep identity and
+dropped parts are made invisible (the renderer keeps drawing the family collected at the start).
+`calc_values`: decay `M`, `p_star`, `E1`, `E2`, `Q`, `beta`, `gamma`, `beta_gamma`, `p_lab`,
+`E_lab`, `opening_angle` (rad), `decay_length`; particles `m_inv`, `E_total`, `p_total`,
+`opening_angle`.
 
-`scenes/kinematics.py`, `scenes/kinematics_actions.py`.
-
-- **Params**: `decay` (two-body) with the parent's `momentum` / `energy` / `kinetic` (text with a
-  unit) / `beta` / `gamma` (at most one; needed unless `frames: rest`) and `angle` (the first
-  product's rest-frame direction from the flight direction, default 60°); or `particles` (`{particle,
-  momentum, angle}` in the lab); `frames: both | rest | lab`; `values`, `sum`, `decay_length`, `si`,
-  `process`, `reveal: steps | all`, title, caption. Validation builds the picture: the errors of
-  §99.7 become param errors.
-- **Layout**: panels side by side (16:9) or stacked (9:16), each with a header ("rest frame of π⁺",
-  "lab frame", "rest frame (Σp = 0)", "boosted frame"), a β / γ readout (not in a rest frame shown
-  beside the lab), the arrows and the numbers under them (room reserved for the tallest set the
-  frame will show). The arrow scale fills the panel with the labels (name + momentum beyond each
-  tip, the centre moved along the arrow just far enough for its box to clear the tip; a label that
-  overlaps an earlier one moves up or down): found by a few rounds since labels do not scale. Both
-  frames share one scale unless they differ more than 2× — then the larger one's header says
-  `arrows ×2.4`. One decay frame in 9:16 turns the picture a quarter (the flight direction up).
-  Particle colours from the theme palette; Σp grey at 0.75 opacity.
-- **Numbers**: decay at rest — p*, the products' energies, √((ΣE)² − |Σp|²) = M; a moving frame —
-  the parent's p and E, the opening angle, the same invariant mass, βγcτ; particles — ΣE, |Σp|, the
-  opening angle of two, the invariant mass; `si` adds one SI line.
-- **Reveal**: (1) title, process, headers, the first frame's arrows; (2) the second frame's arrows;
-  (3) sums, numbers, caption.
-- **Targets**: `title`, `caption`, `process`, `panel:rest`, `panel:lab`, `arrow:<n>` /
-  `arrow:<particle>` (unique keys; every frame's arrow and label), `sum`, `values`.
-- **`boost`** (`to: lab | rest | β`; reversible): the last frame's rapidity runs linearly from its
-  value to the target; each frame redraws arrows, labels, Σp and the readout (`orbit_text.LiveText`
-  for the changing numbers — no `Text` per frame); header and numbers `Transform` into the new
-  frame's. The containers keep their identity (targets follow); the parts they drop are made
-  invisible, because the renderer keeps drawing the family it collected when the animation began
-  (a first version left the rest-frame arrows on screen). The panel's scale covers every rapidity
-  its boosts pass through.
-- **`calc_values`** (`from_scene`): decay `M`, `p_star`, `E1`, `E2`, `Q`, with the lab `beta`,
-  `gamma`, `beta_gamma`, `p_lab`, `E_lab`, `opening_angle` (rad, shown in deg), `decay_length`;
-  particles `m_inv`, `E_total`, `p_total`, `opening_angle`.
-
-**`calculation` symbols** (shared code, additive): `{name, mass: pi+}`, `lifetime: mu-`, `width:
-Z` — one more kind of source beside `value`, `constant`, `from_scene` (exactly one); written into
-`quantities` as the value string and unit of `pdg_value` (meaning and source by default), so the
-substitution, significant figures and lint are those of any measured value. `CalcSymbol.pdg()`,
-`source_input()`. Existing calculations are unchanged.
-
-**Render performance**: a two-frame scene of 15.7 s renders in about 9 s at preview (1280×720,
-10 fps); the boost scene (7.5 s) in about 9 s.
-
-**Public (additive)**: scene type `kinematics`; action `boost`; calculation symbol keys `mass`,
-`lifetime`, `width`; `particle_physics.kinematics` and the names `Boost`, `DecayLength`,
-`FourVector`, `Thresholds`, `TwoBodyDecay`, `decay_length`, `invariant_mass`, `threshold`,
-`two_body`, `two_body_momentum`; the plot model `two_body_opening`. No dependency, no config key.
-
-**Known gaps after Step 239**: the pictures are planar (pz = 0); three-body decays (Dalitz plots,
-the muon's electron spectrum) are not modelled; lab distributions are shown as single events and
-the opening-angle curve, not as sampled angular distributions; the opening-angle model takes masses
-as numbers (plot params are numbers), not particle names; a dense two-frame picture trips
-`max_words` (about 45 words with every number: `values: false` or fewer beats' worth of detail).
-
-**Review of 239's stills (Step 240)**: each frame fills its half (`SHARED_SCALE_LIMIT` 2 → 1.25,
-the larger frame's header says `arrows ×N`); `readout: key` (new default) writes at most three
-key numbers per frame at 1.3 × the readable size (rest: p*, the invariant mass, the SI value when
-`si`; lab: the parent's p, the invariant mass, βγcτ — or the opening angle for a stable parent),
-`readout: all` every number at 1.15 ×; plain-text symbols drop the subscript underscore (`νμ`).
-Shared code, additive: a product next to the root of a sum is set apart by a thin space
-(`\sqrt{\gamma^2-1}\,c\tau`: the root's last term no longer runs into the factor; other products
-unchanged); `register_model(name, labels=..., units=...)` gives a model's columns axis names and
-default units (`Column.label`, `Simulation.labels`; the plot's `units` and an axis `label`
-override them) — `two_body_opening` names its axes "parent momentum (GeV/c)" and "smallest opening
-angle θ (deg)". `feynman` with `vertex_rule` in 16:9: the diagram is centred in the frame until the
-first rule card, glides left beside it, and back to the centre after the last one (`_dock`; parts
-not yet drawn are swapped silently). Phase Q baseline 31/31 identical. (Step 244: the diagram is
-also *laid out* for the whole frame before the first card and after the last — larger, not only
-centred — and refitted beside the cards, in 9:16 above the card band: `_areas[docked]`.)
+**`calculation` PDG symbols**: `{name, mass: pi+}`, `lifetime:`, `width:` — a fourth source beside
+`value`, `constant`, `from_scene` (exactly one), written into `quantities` as `pdg_value`'s string
+and unit so it behaves as a measured value (`CalcSymbol.pdg()`, `source_input()`). Shared: a thin
+space after a root in products; `register_model(name, labels=, units=)` (`Column.label`,
+`Simulation.labels`; the plot's `units` / axis `label` override).
 
 ### 99.9 Detectors and events: the model (Step 240)
 
-`particle_physics/detector.py`, no manim. Lengths in metres, momenta and energies in GeV (c = 1),
-angles in radians, the field in tesla along +z.
-
-- **Geometry (schematic, generic sizes of our own; no experiment's)**: tracker r ≤ 1.10 m, |z| ≤
-  2.6 m (pixel layers at 5, 9, 13 cm; strips at 0.30–1.05 m), solenoid 1.18–1.30 m (|z| ≤ 2.8 m; the
-  field volume is inside it), ECAL 1.40–1.80 m (endcaps |z| 3.05–3.45 m), HCAL 1.90–2.90 m (endcaps
-  |z| 3.55–4.55 m), two iron layers interleaved with three muon stations to 4.60 m (endcaps to |z|
-  6.02 m). `Layer` (barrel shell and endcap discs), `Detector(field, return_field)` refuses a field
-  ≤ 0; `bz(r, z)`: B inside the coil, −`yoke_field` (default B/2, schematic) in the barrel iron, 0
-  elsewhere.
-- **Signatures** (`signature(p)`): electron, photon, muon, charged hadron, neutral hadron, neutrino
-  with what each must / may leave (`SIGNATURES`; parts track, ecal, hcal, muon, missing).
-  Particles that never reach the detector are errors with the reason: cτ < 1 m (τ, K⁰_S, Λ, D, B…:
-  "decays before it reaches the detector (cτ = 87 µm)"; π⁰: "give two photons"), Z / W / H / t
-  ("decays at the collision point; give its products or use a preset"), quarks and gluons ("make a
-  jet"). `signature_problem(p, parts)` checks a claim ("a photon leaves no track (it is neutral)") —
-  for Step 242's lint too.
-- **Trajectories** (`trajectory`): stepped in transverse steps (≤ 1 cm, ≤ R/40, ≤ 1 cm along z for
-  forward tracks); the heading turns by −0.2998 q B / p_T per metre (clockwise for qB > 0: the force
-  q v × B), z = sinh η per metre of transverse path; stops where absorbed (e, γ at the ECAL; hadrons
-  at the HCAL, whose ECAL entry is recorded on the way), after a full turn inside the field (a
-  curler; drawn for one turn) or at the envelope (muons). Records tracker-layer crossings, the
-  middle of each muon station crossed, calorimeter entry points. Verified: the path lies on the
-  circle of radius p_T / (0.3 B) with its centre on the force's side.
-- **Deposits and towers**: the energy shared by `CALO_SHARE` (e, γ: ECAL; charged hadrons 30 / 70 %;
-  neutral hadrons HCAL; schematic), at the entry points; `towers` bins them in cells (ECAL 7.5° /
-  HCAL 12° in φ; 6° / 9° in θ — coarser than real cells so a tower reads on video), hadron
-  showers spread 20 / 60 / 20 % over three cells; `tower_fraction` (linear or log, a floor of 0.12).
-- **Events**: `generate(preset, seed, soft)` with `SplitMix64` (seed × 1000003 + preset index):
-  `z_to_mumu`, `h_to_gammagamma`, `h_to_4l` (H → Z Z*, the Z* mass uniform from 12 GeV to what is
-  left, Z → e⁺e⁻, Z* → μ⁺μ⁻), `w_to_enu` (W⁺ → e⁺ν_e), `dijet` (two jets of equal p_T, back to
-  back). Boson mass from a Breit–Wigner (PDG mass and width, within ±3Γ), p_T exponential (mean 8 or
-  15 GeV, ≤ 60), rapidity in [−1, 1]; isotropic two-body decay in the rest frame boosted with
-  `FourVector.boost` (Step 239); retried until leptons and photons have |η| ≤ 2.4 and p_T ≥ 10 GeV
-  and a neutrino p_T ≥ 20 GeV (display events are chosen to be seen). The boson's p_T is balanced by a
-  recoil jet (≥ 15 GeV) or two soft pions; soft pions come in back-to-back pairs of equal p_T. So
-  every preset event balances exactly and its missing p_T is the neutrinos' (tested). Jets
-  (`make_jet`): 5–10 constituents (60 % charged pions, 25 % photons, 15 % K⁰_L / n) within ΔR ≲ 0.25,
-  rotated and scaled so their p_T sums exactly to the jet's. `custom_event` takes listed particles
-  (`particle: jet` allowed; |η| ≤ 3, p_T > 0) and `products` for the invariant mass.
-  `Event.missing_pt()` = −Σ visible p_T; `products_mass()`; `transverse_mass()` (one visible
-  product); `objects()` (by p_T for presets, listed order for lists).
+`particle_physics/detector.py`: metres, GeV, B along +z. Generic schematic geometry (`Layer`,
+`Detector(field, return_field)`, field ≤ 0 refused, `bz(r, z)`). `signature(p)` / `SIGNATURES`
+(track, ecal, hcal, muon, missing); particles that never reach the detector (cτ < 1 m, Z / W / H /
+t, π⁰, quarks, gluons) are errors with the reason; `signature_problem(p, parts)` checks claims
+(§99.13). `trajectory` steps the helix (p_T = 0.2998 q B R; clockwise for qB > 0), stopping at
+absorption, a full turn, or the envelope. `CALO_SHARE`, `towers`, `tower_fraction`.
+`generate(preset, seed, soft)` (`SplitMix64`, seed × 1000003 + preset index; presets `z_to_mumu`,
+`h_to_gammagamma`, `h_to_4l`, `w_to_enu`, `dijet`): boson mass a Breit–Wigner truncated to M ±
+`DISPLAY_WIDTHS` (1) Γ from one seeded uniform; retried until visible; **every preset event balances
+exactly and its missing p_T is the neutrinos'**; `make_jet` sums exactly to the jet's p_T.
+`custom_event` (|η| ≤ 3, p_T > 0). `Event.missing_pt()`, `products_mass()`, `transverse_mass()`,
+`objects()`. No displaced vertices, material effects, pile-up or smearing.
 
 ### 99.10 The `detector` scene type (Step 240)
 
-**Decision**: the scene type is `detector` (planned in §99.1; no type, action or target is called
-so) and the one new action `switch_view` (checked: `switch_on` / `switch_off` exist, no clash).
-Highlighting, dimming and revealing reuse the generic actions on the scene's targets.
-
-`scenes/detector.py`, `scenes/detector_actions.py`.
-
-- **Views**: x–y (circles, annuli; the field out of the screen, said in the label line) and r–z
-  (barrel and endcap rectangles, the beam dashed; a particle is drawn on the side of the beam its
-  azimuth points to, a tower on its own deposit's side). Each view's scale is fitted to the room
-  between the side columns (16:9) or above the blocks (9:16); object names sit in the muon system
-  (0.8 of the way out) beside their direction with a halo of the background (no ring of room around
-  the drawing — the detector is larger).
-- **Parts**: tracks as polylines (≤ 160 points) in the kind's colour (e primary, μ accent, hadrons
-  text; soft tracks thinner), tracker hits as dots, a muon's outer path and chamber hits (small
-  bars across the track); towers per owner (a listed particle, a jet, the soft tracks) as annular
-  sectors (x–y, at the barrel's radius by azimuth) or quadrilaterals along their polar angle (r–z,
-  clipped to the barrel's length / the endcap's radii); jet cones (ΔR 0.4); the missing p_T as a
-  dashed arrow ∝ p_T (its share of the largest object's p_T, at most 0.95 of the HCAL's radius;
-  x–y only).
-- **Side blocks**: the readout table (object, p_T, η; then p_T miss and the invariant or transverse
-  mass), the signature legend with small icons and the tower scale, the layer key, the label line
-  ("schematic detector · simulated event · B = 2 T out of the screen"). 16:9: key and label left,
-  readout and legend right; 9:16: readout beside the key, the legend in two columns, the label at
-  the bottom, the stack centred.
-- **Reveal** (`layers`): (1) detector, layer key, legend, label, title; (2) tracks (Create from the
-  collision point) and hits; (3) towers growing outward from the inner face (one
-  `UpdateFromAlphaFunc` on the container so the scene holds the container — a first version with a
-  `GrowFromPoint` per tower left the towers top-level and a view switch could not morph them) and
-  jet cones; (4) muons beyond the tracker and their hits; (5) missing p_T, names, readout, caption.
-  `all` deduplicates the entrances.
-- **Targets** registered on containers (one per part, holding the current view's mobject) so
-  `switch_view` can `Transform` each part into its counterpart and targets follow; parts not on
-  screen are swapped silently; an empty part (the missing p_T in r–z) is put on screen empty so
-  switching back draws it.
-- **Validation**: `field > 0`, the event (preset name with did-you-mean, particle names, reach,
-  |η| ≤ 3, p_T > 0), `products` numbering, `leaves` claims, `soft` 0–40.
-
-**Render performance**: preview (1280×720, 10 fps): a five-beat Z → μμ scene (15.9 s) renders in
-about 9 s; one with `switch_view` (5.7 s) in about 9 s; a few hundred mobjects, no memory concern.
-
-**Public (additive)**: scene type `detector`; action `switch_view`; `particle_physics.detector`;
-`register_model(..., labels=, units=)` keywords, `Column.label`, `Simulation.labels`. No
-dependency, no config key.
-
-**Known gaps after Step 240**: no displaced vertices (K⁰_S, Λ, b hadrons decay before the
-detector is drawn), no material effects (bremsstrahlung, conversions, multiple scattering), no
-pile-up and no resolution smearing (missing p_T of a simulated event is exact); muons leave no MIP
-deposit in the calorimeters; endcap muons in x–y are drawn where they cross the stations; a full
-display trips `max_words` (about 50 words with readout, legend and key: `legend: false` /
-`layers: false` for a busy narration).
-
-**Review of 240's stills (Step 241)**: a display preset's boson mass is now a Breit–Wigner draw
-truncated to M ± Γ (`DISPLAY_WIDTHS` = 1; was ±3Γ: `z_to_mumu` seed 3 gave 85.9 GeV, now 89.0),
-still one seeded uniform through the truncated inverse CDF, so presets stay deterministic (a test
-checks 20 seeds within Γ_Z). In 16:9 the drawing is about 15 % larger (the circle 60 → 69 % of the
-frame height): the label column writes the field on two lines ("B = 2 T", "out of the screen") so
-it is as narrow as the layer key, and the columns stand 0.6 × `GAP` from the drawing (its labels
-sit inside it). The `detector` gallery entry was regenerated.
+`scenes/detector.py`, `scenes/detector_actions.py`; params docs/CONFIG.md#detector. Views x–y and
+r–z; tracks, hits, towers, jet cones, missing p_T (x–y only); side blocks readout, legend, layer
+key, label line ("schematic detector · simulated event · …"). Reveal `layers` (detector; tracks;
+towers grown by one `UpdateFromAlphaFunc` on the container; muons; missing p_T and readout) |
+`all`. Targets are containers per part holding the current view's mobject, so **`switch_view`
+`Transform`s each part and targets follow**; empty parts are put on screen empty. Highlight / dim /
+reveal use generic actions. Validation: `field > 0`, the event, `products`, `leaves`, `soft` 0–40.
 
 ### 99.11 Collisions, decays and data: the model (Step 241)
 
-Two modules of `vidgen.particle_physics` (no manim), exported as `particle_physics.spectrum` and
-`particle_physics.branching`.
+**`particle_physics.spectrum`** (simulated, `SplitMix64`: same seed, same events with any numpy):
+`SpectrumSpec(...)` with `problems()` (1 ≤ events ≤ 200 000, 0 ≤ signal ≤ events) and `window`;
+`CHANNELS` `z_to_mumu`, `h_to_gammagamma`, `h_to_4l`; `channel_spec`; `generate(spec)` →
+`Spectrum` (cached per spec; Cauchy ⊗ Gaussian signal, `exponential` | `power` | `flat`
+background). Significance, all local: `asimov`, `counting_significance`, `p_value`
+(`FIVE_SIGMA_P`), `asimov_curve()` / `counting_curve()` (shares from `window_shares`, its signal
+share from its own fixed seed), `likelihood_significance(...)` → `Significance` (binned Poisson
+fits via Phase W `fit_curve(poisson=1)`, Z = √q₀), `meaning_lines` / `short_meaning` (the p-value
+stated correctly). `decay_times`, `mean_lifetime`, `z_cross_section`. Plot models `mass_spectrum`,
+`decay_times`, `z_lineshape`. 4ℓ fits fail for about 1 seed in 40; the error suggests another seed,
+more events or wider bins.
 
-**`spectrum`** — everything simulated from a seed (`SplitMix64`, the same seed the same events with
-any numpy) and labelled so on screen.
-
-- `SpectrumSpec(mass, width, resolution, lo, hi, events, signal, shape, slope, index, seed)` with
-  `problems()` (window, widths, 1 ≤ events ≤ 200 000, 0 ≤ signal ≤ events, shape parameters),
-  `window` (the peak window M ± 2√(σ² + (Γ/2)²)); `CHANNELS` (`z_to_mumu`: 70–110 GeV, 6000 events,
-  ≈4800 Z, σ = 1 GeV, exponential λ = 18 GeV, Breit–Wigner fit, no significance readout;
-  `h_to_gammagamma`: 100–160 GeV, 30 000 events, ≈320 H, σ = 1.6 GeV, exponential λ = 30 GeV,
-  Gaussian on a cubic, expected 5.3σ; `h_to_4l`: 100–160 GeV in 2 GeV bins, 40 events, ≈16 H, σ = 1.8
-  GeV, flat, Gaussian on a constant; masses and widths from §99.2; counts and shapes schematic),
-  `channel_spec(channel, seed, **overrides)`.
-- `generate(spec)` → `Spectrum(spec, masses, signal)` (cached): each event signal with probability
-  signal/events; signal = Cauchy(M, Γ) + σ·N(0, 1), redrawn until inside [lo, hi]; background by the
-  inverse CDF of `exponential` (∝ e^(−m/λ)), `power` (∝ m^−k) or `flat`, truncated to the window.
-- Significance (all local): `asimov(s, b)` = √(2((s + b) ln(1 + s/b) − s)) (Cowan et al. 2011);
-  `counting_significance(n, b)` = √(2(n ln(n/b) − (n − b))) for n > b; `p_value(z)` = ½ erfc(z/√2)
-  (`FIVE_SIGMA_P` = 2.867 × 10⁻⁷); `Spectrum.asimov_curve()` / `counting_curve()` after 0 … N events
-  with s, b expected in the window from `window_shares(spec)` (the background's CDF; the signal's
-  share from 20 000 draws with a fixed seed of its own — the simulation's own shares fluctuated to
-  0 with few events); `likelihood_significance(edges, counts, peak, degree, guesses)` → `Significance`
-  (`z`, `q0`, `p`, `fit`, `background`, `lnl_sb`, `lnl_b`): binned Poisson maximum-likelihood fits
-  (Phase W's `fit_curve(poisson=1)`) of a polynomial alone and of the peak on it, started from the
-  expected mass and width (`peak_guesses`) and the background-only polynomial (the plain peak guess
-  latches on the curvature of an exponential background), q₀ = 2(ln L_s+b − ln L_b), Z = √q₀;
-  `meaning_lines(z, method, narrow)` (the p-value said correctly: "the chance that background alone
-  fluctuates this high, not that the result is wrong (5σ: p = 2.9 × 10⁻⁷)"; "> 20σ" beyond 20).
-- Decay times: `decay_times(tau, events, seed)` (inverse CDF), `mean_lifetime(times)` → (τ̂ = mean,
-  τ̂/√N).
-- `z_cross_section(√s, neutrinos)`: σ(e⁺e⁻ → Z → hadrons) in nb, relativistic Breit–Wigner with an
-  s-dependent width, peak 12π Γ_ee Γ_had / (m_Z² Γ_Z²) × (ħc)² = 41.5 nb (the PDG pole fit 41.48);
-  each neutrino family adds Γ_inv/3 = 166 MeV. Schematic: no initial-state radiation.
-- Plot models (`register_model`): `mass_spectrum` (numbers only: mass, width, resolution, lo, hi,
-  events, signal, slope | index | flat; columns `n`, `m`, `signal`), `decay_times` (`tau`, `events`;
-  `n`, `t`), `z_lineshape` (`lo`, `hi`, `samples`; `sqrt_s`, `sigma`, `sigma_2nu`, `sigma_4nu`).
-
-Measured behaviour (40 seeds; tests on 20): the fitted mass is unbiased (mean pull ≈ 0); Z and 4ℓ
-pulls have the expected spread (≥ 90 % within 2σ); H → γγ, a 1 % signal on a cubic-approximated
-exponential, has wider pulls (sd ≈ 1.4, ≥ 75 % within 2σ: the Fisher errors underestimate a little
-when the bump is small) — said in the docs. The likelihood-ratio Z is a little above the Asimov
-expectation on average (6.0 against 5.3 for γγ: the mass and width are fitted, Wilks at the best
-point). 4ℓ fits fail for about 1 seed in 40 (a narrow spike in one bin): the scene's error says to
-try another seed, more events or wider bins.
-
-**`branching`**: `Branching(parent, modes, source, kind)` of `Mode(process, fraction, name, note,
-check)`; `branching(name)` (antiparticles by charge conjugation), `listed()`,
-`branching_problems()` (every process allowed by §99.3's checker, its parent the table's, each
-table ≤ 1 within `SUM_TOLERANCE` = 10⁻³ — the Z's separately averaged measurements add up to
-1.0001). Tables: **H at 125 GeV — Standard Model prediction**, LHC Higgs Cross Section Working
-Group, Yellow Report 4 (2016), the table at m_H = 125 GeV (125.00; Step 242: the label said
-125.09, where YR4 gives e.g. bb̄ 58.09, WW* 21.52, ZZ* 2.641 %) (bb̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, cc̄
-2.891, ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176; `kind: theory`, said on screen); PDG 2024
-measurements: Z (hadrons 69.911 %, invisible 20.000, e⁺e⁻ 3.3632, μ⁺μ⁻ 3.3662, τ⁺τ⁻ 3.3696), W⁺
-(hadrons 67.41 %, each ℓν the lepton-universality average 10.86), π⁺ (μ⁺ν 99.98770 %, e⁺ν 1.230 ×
-10⁻⁴), π⁰ (γγ 98.823 %, e⁺e⁻γ 1.174), K⁺ (μ⁺ν 63.56 %, π⁺π⁰ 20.67, π⁺π⁺π⁻ 5.583, π⁰e⁺ν 5.07, π⁰μ⁺ν
-3.352, π⁺π⁰π⁰ 1.760), μ⁻ (e⁻ν̄ₑν_μ ≈ 100 %). **For the owner to check** (`check=True`, written from
-memory of the tables): every H, Z, W and K value. Decay chains: `chain(decays)` → `Chain(nodes,
-decays, fractions)`; each later decay's parent is the first product not yet decayed with that key
-(an off-shell `Z*` matches its own leg first); every decay checked (the checker's summary is the
-error); `ChainNode.lifetime_lines()` (τ and cτ; a resonance Γ and τ = ħ/Γ, Γ_H to two figures; an
-off-shell leg "off shell (virtual)"); `mode_fraction(process)`.
+**`particle_physics.branching`**: `Branching(parent, modes, source, kind)` of `Mode(process,
+fraction, name, note, check)`; `branching(name)`, `listed()`, `branching_problems()` (every mode
+passes `check`, sum ≤ 1 within `SUM_TOLERANCE` 10⁻³). H: SM prediction (YR4 at m(H) = 125 GeV,
+`kind: theory`, said on screen, `check=True` for the owner); Z, W⁺, π⁺, π⁰, K⁺, μ⁻: PDG 2024.
+`chain(decays)` → `Chain` (each decay's parent is the first undecayed product with that key; every
+decay checked); `ChainNode.lifetime_lines()`; `mode_fraction` skips the Z's `invisible` mode.
 
 ### 99.12 Scenes: `mass_spectrum`, `decay_chain`, `branching`, `branching_pie` (Step 241)
 
-**Decisions.** (1) The spectrum is **a `plot` underneath**: `MassSpectrum(Plot)` whose `Params`
-(a subclass of the plot's) turn the physics (`channel`, `seed`, `events`, `signal`, `mass`,
-`width`, `resolution`, `window`, `bin_width`, `background`, `slope`, `index`, `peak`,
-`background_degree`, `fit`, `significance`, `explain`, `subtract`, `style`, `ticker`, `label`) into
-plot params in a `mode="before"` validator: the model `mass_spectrum`, one live histogram series,
-the Phase W peak fit (starting values from the likelihood fit), the significance note
-(`annotation:significance`), axis names, caption. Filling, rescaling, fits, `zoom`, `grow`, `fit`,
-`annotate`, `reveal` are the plot's — nothing re-implemented. `series`, `fits`, `panels` are typed
-loosely there (converted by field validators) so translation does not offer the made texts; an
-author giving `series`, `models`, `fits`, `data`, `panels`, `arrange`, `share` or `aspect` is told to
-use `plot`. (2) Branching ratios are **`bar_chart` and `pie` subclasses** (`branching`,
-`branching_pie`) whose labels, values, unit, format, title and source caption come from the model —
-two types because a scene type is one class; bars are the default (the Higgs boson's γγ at 0.23 %
-is a sliver in a pie). (3) `decay_chain` is a scene of its own (a tree of particles is not data on
-axes). (4) Decay times and the Z line shape are **plot models** (no scene type): a histogram of
-`decay_times` with `model: custom, expr: "N*exp(-x/tau)"` gives τ ± its error; `z_lineshape` gives
-σ for 2, 3, 4 neutrino families.
+Params: docs/CONFIG.md#mass_spectrum, #decay_chain, #branching, #branching_pie.
 
-**`mass_spectrum`** (`scenes/mass_spectrum.py`): the readout (`_readout_lines` override) writes
-`events: 12 400` (a narrow no-break space) and `local significance: 3.4σ` / `(expected, Asimov)` or
-`(observed, counting)` from the precomputed curve — boxes sized to the widest text over the growth
-as Phase W's. The note gives the likelihood-ratio Z and the meaning of its p-value. With a `fit`
-action and no action showing the note, the note is held and follows the fit (`_held`, `entrance`):
-otherwise the plot's own note step would grow the data to its end before the fit. Text at
-`readable_size(margin=1.08)` (lint's `min_font` passes; the plot keeps the room; Step 242: 1.2, a
-short note, headroom in 16:9 and the 9:16 box at `auto` — §99.13). In 9:16
-(`_portrait`): the count axis fixed at 2 × the highest bin (the bars rise into it; the readout finds
-room there), no legend, and one box at the top left — the fitted mass and width, then the
-significance in short lines — instead of the fit box and the note (they overlapped, or every box
-went above the plot and left it a fifth of the frame).
-
-**`plot` additions** (shared, additive): fits take `residuals: background` (a peak fit with a
-background: the data minus the fitted background, √N bars, the fitted peak drawn over them; its
-axes enter with the plot's — they carry the x labels — and its content with the fit) and
-`parameters` (which parameters the box lists; unknown names are an error with the model's); targets
-`residuals<N>` / `residuals:<name>` (a residual panel revealed on its own word, then not with the
-fit); a note's text with line breaks is drawn line by line. **Fixed**: a note or fit step on a live
-histogram whose series a `grow` action holds faded in the re-shaping axes while the data grew (manim
-"zip() argument 2 is shorter"); the axes now come in first (`reveal()` plays them before targets
-whose entrance grows data). `plotcore.fit._covariance` scales J's columns before the rank test and
-inverts the scaled matrix (the same inverse): a cubic background in x ≈ 100–160 (columns 1 … 10⁶
-apart) was taken for rank-deficient.
-
-**`decay_chain`** (`scenes/decay_chain.py`): a tidy tree (each subtree as wide as its node or its
-children side by side; parents centred), depth along the flow — left → right in 16:9, top → bottom
-in 9:16 — scaled to fill the room up to 1.6×; symbols at 2 × the readable size with a rounded
-outline when they decay, family colours (neutrinos dim); τ / cτ (or Γ / τ) under each decaying
-particle; arrows from the parent (below its lifetime lines in 9:16) to each product; the branching
-fraction above the top arrow (16:9) or right of the rightmost (9:16), clear of it; the caption states
-the sources. Steps: the first particle, then one decay per beat (arrows grow, products fade in).
-Targets `title`, `caption`, `chain`, `decay<N>`, `particle:<n>`, `particle:<particle>`,
-`lifetime:<particle>`.
-
-**`branching` / `branching_pie`** (`scenes/branching.py`): `particle`, `modes` (the largest N, the
-caption says so); bars sorted and horizontal, values `{:.3g} %`; the pie shows values in % and
-groups modes under 1.5 %. Labels are the products' symbols (not translated).
-
-**Gallery budget** (recorded change): 15 → 16.5 MB (`tests/test_gallery.py`). The four types' entries
-(mass_spectrum 0.33 MB, decay_chain 0.15, branching 0.17, branching_pie 0.10) took the gallery to
-15.4 MB; the rest leaves room for Step 243's showcase and one more entry. `ENTRY_MAX` (0.36 MB) and the
-150 KB GIF cap are unchanged; the guide's first `mass_spectrum` snippet has two beats so its GIF
-stays under the cap.
-
-**Render performance**: preview 1280×720 at 10 fps — the six-beat H → γγ scene (30 000 events,
-26.4 s with fit, subtraction, note and zoom) in about 35–40 s (bars are drawn, one `bincount` per
-frame); the Z (6.5 s) and 4ℓ (5.4 s) scenes in about 10–14 s; a decay chain (9.3 s) in 6 s;
-branching bars in 9 s. Simulating 30 000 events takes about 40 ms (cached per spec).
-
-**Public (additive)**: scene types `mass_spectrum`, `decay_chain`, `branching`, `branching_pie`;
-`particle_physics.spectrum`, `particle_physics.branching`; plot models `mass_spectrum`,
-`decay_times`, `z_lineshape`; `plot` fit keys `residuals: background`, `parameters`; targets
-`residuals<N>`, `residuals:<name>`; `particle_physics.detector.DISPLAY_WIDTHS`. No dependency, no
-config key.
-
-**Known gaps after Step 241**: the Z peak is fitted with a Breit–Wigner (no Voigt): its Γ includes
-the resolution and χ²/ν ≈ 2 (said in the caption and docs); significances are local (no
-look-elsewhere effect); the 9:16 note box can cover the top of a tall peak (4ℓ); a full spectrum
-with its note trips `max_words` (about 45 words); in 9:16 the fit's values appear with the note,
-not with the fit curve; a pie of small modes may label them below the readable size (the pie's
-own behaviour); 4ℓ fits fail for about 1 seed in 40 (a clear error); no lint rules yet (Step 242:
-significance and branching-ratio claims).
+- **`mass_spectrum` is a `plot` underneath**: `MassSpectrum(Plot)` turns physics keys into plot
+  params in a `mode="before"` validator (live histogram, Phase W peak fit, note
+  `annotation:significance`); `series`, `fits`, `panels` typed loosely so translation does not
+  offer generated text; giving `series`, `models`, `fits`, `data`, `panels`, `arrange`, `share` or
+  `aspect` is an error pointing to `plot`. `explain: true | short` (default) | `long`; with a `fit`
+  action the note is held for it (`_held`). Text `LABEL_MARGIN`; 16:9 headroom
+  `LANDSCAPE_HEADROOM`; 9:16 (`_portrait`) one combined box at `auto`.
+- **`plot` additions** (shared): fit keys `residuals: background`, `parameters` (unknown names
+  error); targets `residuals<N>` / `residuals:<name>`; `reveal()` plays axes before data-growing
+  entrances; `plotcore.fit._covariance` scales J's columns before the rank test;
+  `plot_live._readout_label` keeps only `READOUT_CACHE` (64) texts.
+- **`decay_chain`** (own scene: a tree is not data on axes): left → right (16:9), top → bottom
+  (9:16); one decay per beat. Targets `title`, `caption`, `chain`, `decay<N>`, `particle:<n>`,
+  `particle:<particle>`, `lifetime:<particle>`.
+- **`branching` / `branching_pie`**: `bar_chart` / `pie` subclasses (two types since a scene type
+  is one class; bars default, small modes are slivers in a pie) fed from `branching`; labels are
+  product symbols (not translated).
+- Gallery budget 16.5 MB (`tests/test_gallery.py`), `ENTRY_MAX` 0.36 MB, GIF cap 150 KB.
 
 ### 99.13 Particle-physics accuracy lint (Step 242)
 
-**Review fixes of Step 241 first.** (1) `mass_spectrum` in 16:9: the plot took about 55 % of the
-width beside a column of three boxes in small text, and the full note tripped `max_words`. Now the
-note is short by default — `explain: true | short` gives three short lines (`6.7σ local`, `p = 7.6
-× 10⁻¹²`, `(background only)`; `spectrum.short_meaning`), `explain: long` the four lines of Step
-241 —, the readout is `events: 30 000` / `expected: 5.3σ` / `(local, Asimov)`, the text is 1.2 × the
-readable size (`LABEL_MARGIN`; phones), and the count axis reaches 1.35 × the highest bin
-(`LANDSCAPE_HEADROOM`) so the legend sits above the data: the side column is narrow and the plot
-keeps about 70 % of the width (H → γγ, preview 1280 × 720: 745 px of plot, was 545); `max_words`
-and `min_font` pass. In 9:16 the combined box (fit values + short note) is placed at `auto` — a free
-spot of the plot, else above it — instead of forced top left, where it covered the 4ℓ peak.
-(2) The Higgs branching ratios are YR4's table for m_H = 125 GeV (125.00), not 125.09 (at 125.09:
-bb̄ 58.09, WW* 21.52, ZZ* 2.641 %): the source label says "m(H) = 125 GeV"; values unchanged and
-still `check=True`. The SM width 4.1 MeV is YR4's 4.088 MeV at 125.00 GeV rounded (noted in
-`data.py`, `# check`). (3) `branching` bars use `label_size` and `value_size` `body` (were
-caption / readable size).
+Scene rules last in `LINT_RULES`; the runner adds `particle_issues` (`lint/particle_rule.py`) to
+`SceneContext.science`. Rules (default severity): `particle_mass` (warning), `particle_charge`
+(error), `particle_spin` (error), `particle_lifetime`, `branching_ratio`, `conservation_claim`,
+`feynman_boson`, `kinematics_number`, `detector_signature`, `significance_claim` (`sigmas` 0.5),
+`simulated_label` (warnings), `particle_units` (info); what each catches:
+docs/COOKBOOK-PARTICLES.md §6.
 
-**Rules** (scene scope, last in `LINT_RULES`; the runner adds `particle_issues`,
-`lint/particle_rule.py`, to `SceneContext.science` like the calc / plot / orbit rules):
-
-| rule | default | reads |
-|---|---|---|
-| `particle_mass` | warning | a mass said for a particle against PDG 2024 (`tolerance` 0.05 with "about"; quark masses 30 %: the scheme); did-you-mean another particle's mass; a power-of-1000 mix-up |
-| `particle_charge` | error | "X has (a) charge (of) Q", "X carries Q charge", "the charge of X is Q", "X is neutral / positively charged"; sums left alone |
-| `particle_spin` | error | "X has spin S", "spin of X is S", "a spin-S X", "X is a fermion / boson / spinless" |
-| `particle_lifetime` | warning | mean life, half-life (τ ln 2) or width said next to its word; moving particles (dilation words) and fitted widths left alone |
-| `branching_ratio` | warning | "most / mostly", "rarely", "the most common", a % or "1 in N" standing by the decay ("70 % of Z bosons", "… 70 % of the time") against `branching` |
-| `conservation_claim` | warning | allowed / forbidden / "forbidden by X" / "violates X" / "conserves X" per clause, for a process written with an arrow, said in words, or the scene's own |
-| `feynman_boson` | warning | couplings ("couples to"), forces ("feel the strong force"), flavour change by a non-W boson, a boson said exchanged that a `feynman` diagram lacks |
-| `kinematics_number` | warning | a `kinematics` scene's `calc_values` (the `from_scene` names) by the quantity named; βγcτ and γτ said with a momentum / energy / γ anywhere; a written reaction's threshold (√s, fixed-target beam energy and kinetic energy) |
-| `detector_signature` | warning | leave / be seen in / stop in / reach / pass through / curve, against `detector.SIGNATURES` and the layer order tracker < ECAL < HCAL < muon chambers |
-| `significance_claim` | warning | the p-value read as the chance of being wrong or of existing (unless said the right way: "background alone", "if there were no…"); "1 in N" or a % against the σ said (one- or two-sided); in a `mass_spectrum`, a σ for the bump against the Asimov expectation with all events and the likelihood-ratio fit (`sigmas` 0.5; "so far", "already": anything along the filling) |
-| `simulated_label` | warning | "real data", "data from the LHC / CMS…" in a scene with simulated data; a `detector` label or a `plot` of `mass_spectrum` / `decay_times` without "simulated" on screen |
-| `particle_units` | info | masses on screen both in GeV and GeV/c² in one video |
-
-**Knowledge** (`vidgen.particle_physics.accuracy`, no manim, not re-exported): `mentions` (names —
-"the Z boson", "bottom quarks", "positrons", "neutral pions", "electron antineutrinos" — and symbols
-— μ⁺, π⁰, ν̄ₑ, W⁻, e⁺e⁻; generic mentions keep every key: "W" is W⁺ or W⁻, "neutrinos" any flavour,
-"pions" π⁺ π⁻ π⁰; "muon chambers", "electron number" are not particles; single Latin letters only
-with a charge mark or "quark"; W, Z, H only as capitals, never before "="), the claim readers (one
-per rule, each returning `Said(rule, quote, message, severity)`), `said_decays` ("X decays (mostly)
-to Y, Z and W"; counts, pairs, categories hadrons / leptons / invisible), `written_processes`
-(arrow runs; a word is never split into particles: "needs" is not n e e d s). Numbers, units and
-"about" are `quantities.accuracy`'s (`said_values`, `agrees`, `mixup_power`); a value is about the
-particle named just before it in its clause (no other mention between, at most 70 characters).
-
-**Narrow by design.** Negations, contrasts and questions are left alone by every reader except
-`conservation_claim` (`_plain_only`): "photons do not leave tracks", "the W is not a photon",
-"unlike photons, electrons leave tracks". `conservation_claim` reads its own polarity ("not
-allowed", "not forbidden", "violates", "conserves") per clause (", and" / ", but" / ";" / "while";
-a clause without a process takes the one before: "…, but it violates muon number") and reads a
-decay said in words in every way it may mean (a narrator's "a muon" may be μ⁺; "a neutrino" any
-flavour): only when no reading is allowed is "allowed" wrong. A mass claim needs a mass word or
-"X is N GeV"; energies ("a 45 GeV electron", "each photon carries"), differences ("11 GeV
-heavier"), invariant masses of several particles are not masses. Branching shares must stand by
-their decay ("…, twenty percent to neutrinos" is a later clause's).
-
-**The gate.** `particle_charge` and `particle_spin` read every project (their patterns need a
-particle and a charge or spin word); the others only projects with a particle-physics scene
-(the eight Phase Y types, a `plot` of a particle model, a `calculation` with `mass:` /
-`lifetime:` / `width:` symbols). Measured: 0 findings on every example (radioactive-decay,
-mars-transfer, cystic-fibrosis included), the gallery and the Step 237–241 scratch projects; with
-the gate removed, still 0 on the examples' narration and screens; a 60-sentence corpus of correct
-particle narration: 0.
-
-**Scene facts** (`particle_rule.facts`, cached per project): `feynman` — each diagram's process and
-bosons; `decay_chain` — its decays; `kinematics` — `calc_values` and its decay; `mass_spectrum` —
-the Asimov curve's last and largest value and the likelihood-ratio z of the scene's own fit
-(`mass_spectrum.significance`, cached); `detector` / simulated `plot` — simulated, and whether the
-screen says so.
-
-**Known gaps**: claims in other languages are not read; a second clause without its own subject
-("the up quark has +2/3 and the down quark −1/3") is not read; charges of composite systems said
-as sums are skipped; decays said in words with plural products and no count are read as a pair;
-no check of CKM or helicity claims ("the W couples only to left-handed particles"), of cross
-sections, or of a `feynman` scene's narration naming the channel (s / t) wrong.
+Knowledge lives in `vidgen.particle_physics.accuracy` (no manim, not re-exported): `mentions`,
+one reader per rule returning `Said(rule, quote, message, severity)`, `said_decays`,
+`written_processes` (a word is never split into particles); numbers from `quantities.accuracy`. A
+value belongs to the particle named just before it in its clause (≤ 70 characters). **Narrow by
+design**: negations, contrasts and questions are skipped, except `conservation_claim`, which reads
+polarity per clause and flags "allowed" only when no reading is allowed. **Gate**: charge and spin
+rules read every project, the rest only projects with a particle-physics scene, particle `plot`
+model or PDG calculation symbol; the examples must stay at 0 findings. Scene facts
+(`particle_rule.facts`, cached per project) come from each scene type. English only.
 
 ### 99.14 Example, docs and gallery (Step 243)
 
-**Example** `examples/higgs-discovery` ("How the Higgs boson was found"; `video.yaml`, `README.md`):
-eleven scenes, 3:49 with Kokoro (`af_heart` 0.85), the `discovery` bed at −10 dB, a 9:16 `short`
-variant — `intro` (title); `chart` (`standard_model`, `reveal: all`, flashes on the groups, a box
-on H, `couplings: "particle:H"`; the narration is careful that the Higgs field gives the W and Z
-their masses and the fermions theirs through Yukawa couplings, while most of a proton's mass is
-the energy of its quarks and gluons); `production` (`feynman` `gg_to_h`, `vertex_rule` on the
-t t H vertex, `travel`); `decays` (`branching` H: bb̄ dimmed on "hides", γγ, ZZ*; τ = ħ/Γ =
-1.6 × 10⁻²² s said); `loop` (`h_to_gammagamma`, `reveal: all`, `swap_channel` to the W loop);
-`event` (`detector` `h_to_gammagamma` seed 10, `legend: false`); `mass` (`calculation`: m² = 2
-p_T1 p_T2 (cosh Δη − cos Δφ) = 1.57 × 10⁴ GeV², then m = √m² = 125 GeV, the display's p_T and η
-as its readout writes them, Δφ = 178.2° from the event; natural units, c = 1); `diphoton`
-(`mass_spectrum` seed 13: fitted 124.9 ± 0.4 GeV, local 5.2σ); `four_leptons` (seed 4, points,
-3.9σ); `five_sigma` (`plot`: the one-sided p-value ½ erfc(Z/√2) on a log axis with labels at 2σ
-"1 in 44", 3σ "1 in 740", 5σ "1 in 3.5 million" annotated on words); `recap` (bullets: 4 July
-2012, ATLAS and CMS at CERN's LHC, each about 5σ on its own). No real data, counts or
-significances are shown.
-
-Choices: **seeds** picked by the fitted significance (diphoton seeds 1–20 give 2.9–7.6σ; 13 gives
-5.2σ, near the threshold the video explains; seed 1, the channel default, gives 6.7σ); a
-realistic single-channel 3.9σ for four leptons. **m² then m**: one calculation with an outer
-square root of GeV² wrote its intermediate in SI (kg² m⁴/s⁴) — the calculation's SI fallback for a
-unit it cannot keep under a root; two steps keep GeV throughout (the cookbook says so). The
-**five-sigma picture** is a `plot` of inline p-values (computed with erfc, tested) rather than a
-`function_plot` of the normal curve: the tails beyond 3σ are invisible on a linear axis and the
-area labels overlapped. **Length**: 3:49 (the brief aimed at 2.5–3.5 min); Kokoro faster than
-0.85 put short beats over `narration_speed`, and cutting a scene would drop part of the requested
-arc.
-
-**Guide topic `particle-physics`** (aliases particle, particle_physics, hep, higgs,
-standard-model, collider, feynman-diagrams; not `particles`, the cartoon effect — `vidgen guide
-particles` stays unknown): planning, choosing the scene, units, honesty, pacing, lint, a pattern
-(the m² → m calculation); listed in the guide's topic list; the scenes topic points to it.
-**`docs/COOKBOOK-PARTICLES.md`**: planning the arc, choosing (table), units (natural units vs
-GeV/c², m² first), honesty (simulated data, schematic detector, PDG 2024 and YR4 sources, theory vs
-measurement, local vs global, expected vs observed, what a p-value is, real history), pacing,
-mistakes → the twelve `particle_*` rules and `calc_*`, a validated pattern (tested in
-`test_docs`). CONFIG needed nothing new (no new key).
-
-**Gallery "Particle physics"**: the section note and footer (`gallery.SECTION_NOTES` /
-`SECTION_FOOTERS`) and a showcase `higgs_diphoton` (a `detector` H → γγ event, seed 10, `soft: 0`,
-`legend: false`, the two photons highlighted on words; 0.32 MB, GIFs 103 and 146 KB). The `feynman`
-entry's 9:16 GIF was regenerated for the fix below. The gallery is 15.7 MB of the 16.5 MB budget.
-
-**Fix**: `feynman`'s vertex-rule card writes the reaction with no-break spaces, so it wraps before
-the reaction and never inside it (9:16: "t → t" / "H").
-
-**Known gaps**: the Standard Model chart's own lint warnings remain in the example (`max_words`
-for a full chart; `contrast` on a dimmed gluon cell during `couplings`; a 16:9 `contrast` reading
-of the dim generation numeral "II" against a sampled backdrop of #282C32, a sampler effect — the
-numeral reads fine in the stills); the detector's display layout keeps room for the readout on the
-right in 16:9 before the readout appears.
+`examples/higgs-discovery` (every Phase Y type, a 9:16 `short` variant, simulated data only; its
+mass is two `calculation`s, m² then m, because a root of GeV² falls back to SI). Guide topic and
+cookbook as in §99's intro (the cookbook pattern is tested in `test_docs`). Gallery section
+"Particle physics" (`gallery.SECTION_NOTES` / `SECTION_FOOTERS`, showcase `higgs_diphoton`).
 
 ### 99.15 Review of Phase Y (Step 244)
 
-**Physics.** Every value in `data.py` re-read independently against the PDG 2024 summary tables
-(masses, widths / mean lives, charges, spins, J^P, C and G parities, flavour signs): all agree;
-the Step 237 `# check` marks are replaced by "confirmed in review (Step 244)". Couplings: G_F
-1.1663788 × 10⁻⁵ GeV⁻², α_s(m_Z) 0.1180, sin²θ_W (MS-bar) 0.23129 kept as 0.2313; the CKM
-magnitudes rounded to two figures (global fit ≈ 0.974, 0.225, 0.0037; 0.225, 0.973, 0.042; 0.0086, 0.041,
-0.999) — confirmed.
-Branching ratios: Z (hadrons 69.911 %, invisible 20.000 %, e e 3.3632, μμ 3.3662, ττ 3.3696), W
-(hadrons 67.41 %, ℓν 10.86 % universal), K⁺ (63.56, 20.67, 5.583, 5.07, 3.352, 1.760 %), π⁺, π⁰ —
-confirmed, `check` removed. **Left marked for the owner**: the Higgs boson's Standard Model
-predictions from YR4 at m_H = 125.00 GeV (b b̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, c c̄ 2.891,
-ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176 %; Γ_H 4.088 MeV): the reviewer recalls the same
-numbers but cannot confirm the table line by line. Hand computations in
-`tests/test_phase_y_review.py`: p* (π → μν 29.79 MeV/c, Λ → pπ⁻ 100.6 MeV/c, Z → ee), thresholds
-(p p → p p p p̄: E = 7 m_p, T = 6 m_p; π⁻p → K⁰Λ), βγcτ (a 4 GeV/c muon 24.93 km, B⁰ at βγ = 1
-454.8 µm, π⁺ at γ = 10), m_γγ = √(2E₁E₂(1 − cos θ)), R = p_T / (0.299792458 B) and the bend (a μ⁺
-leaving along +x in B along +z turns to −y, clockwise seen from +z; the sagitta matches R),
-Asimov / counting / one-sided p (5σ 2.87 × 10⁻⁷), the Z peak σ⁰_had ≈ 41.5 nb (no radiative
-corrections). Conservation, tried on 24 reactions (p → e⁺π⁰ by B and L_e; μ⁻ → e⁻γ by L_e / L_μ;
-n → p e⁻ ν̄ₑ, π⁰ → γγ, K⁰_S → π⁺π⁻, Λ → pπ⁻, νₑ n → p e⁻, K⁻p → Ω⁻K⁺K⁰ allowed; Z → γγ by
-Landau–Yang; π⁰ → γγγ by C) and vertex rules on 29 vertices (no flavour change by γ / Z / g / H;
-gluons only to quarks and gluons; the W within a doublet, leptons in their family; H only to
-massive particles; no Z Z γ, Z γ γ, Z Z Z, γ γ γ, H γ γ, H g g, H Z γ at tree level).
-
-**Fixes.** (1) `conservation.check`: two real particles merging into one (2 → 1, nothing
-off-shell) must make one at least as heavy as both (√s = M ≥ m_a + m_b) — e⁺e⁻ → γ (real photon)
-and p p̄ → γ were allowed; now refused with "write `gamma*`" (`_merge_problem`). (2)
-`branching.mode_fraction` skips the Z's `invisible` mode (all three νν̄ pairs), so a chain with
-Z → νₑ ν̄ₑ is not labelled 20 %. (3) `feynman` with `vertex_rule`: `_areas = {False: whole frame,
-True: beside the cards}`; `_dock(docked)` re-lays the diagram out (Transform of the drawn parts,
-the time arrow following) — before the first card and after the last the diagram is as large as
-without cards (16:9 and 9:16), not the card-time size shifted to the centre. (4) `plot_live`
-(Phase W, shared): `_readout_label` keeps the latest `READOUT_CACHE` = 64 readout lines instead of
-every text ever shown (`events: N` changes nearly every frame): a 57 s `mass_spectrum` preview
-622 → 392 MB peak RSS, the example's 25 s one 518 → 435 MB. Output frames unchanged (a cache).
-
-**Not changed, on purpose.** The example's 16:9 `detector` circle is 69 % of the frame height
-(375 / 540 px), as in the gallery: in x–y it is bound both by the height under the title and by
-the width between the phone-readable layer key and readout. A corner layout (title top left, text
-in the corners the circle leaves) was tried: 72.5 %, at the cost of a left-aligned title unlike
-every other scene; dropped. The `calculation` in 16:9 fills as its steps come (unchanged).
-
-**Performance** (preview 854 × 480, 15 fps, Kokoro timings; render seconds / peak RSS):
-`standard_model` 36.2 s of video in 19.2 s / 453 MB; `feynman` 21.3 s in 9.4 s / 378 MB, 11.6 s in
-6.4 s / 339 MB; `branching` 32.3 s in 15.5 s / 407 MB; `detector` 20.3 s in 9.2 s / 382 MB;
-`mass_spectrum` 25.3 s in 32.7 s / 518 MB (before the readout fix), 11.1 s in 14.2 s / 412 MB;
-gallery `kinematics` 9.3 s in 7.7 s / 384 MB, `decay_chain` 4.7 s in 6.2 s / 357 MB,
-`branching_pie` 3.9 s in 7.2 s / 305 MB. Final 1080p: 16:9 scenes 299 s in all (diphoton 63.6 s),
-9:16 310 s, each plus the join.
-
-**Compatibility.** Phase Q baseline 31/31 identical (after every shared change); `vidgen validate`
-and `lint` on kphi3 (1 warning, as before), radioactive-decay, mars-transfer, cystic-fibrosis
-(4 info), iso-story, higgs-discovery (3 warnings, the chart's known ones): no errors, no particle
-findings. Gallery entries unchanged (no gallery scene uses `vertex_rule`).
-
+Hand computations are pinned in `tests/test_phase_y_review.py`; only the Higgs SM predictions stay
+marked for the owner. Fixes are folded into §99.3, §99.6, §99.11, §99.12.
 
 ## 100. Story-cartoon features (Phase Z, Steps 245–248)
 
-Reference: docs/CONFIG.md "Voice effects (`effect`)", "Holograms (`hologram`)", "Portals
-(`portal`)", "Iridescent skins and afterimages", "Hologram displays", "Alarms and shutters",
-"Flashbacks", "Holding hands", "Shots", "Isometric places". A private story cartoon (a lab at night, a newly conscious AI as a hologram, a rift
-in space, visitors from another world, a farewell; narrated with several Kokoro voices) drives
-generic features for every author. The story project lives in the scratchpad and is never
-committed; docs and samples use neutral content.
+Generic story-cartoon features, additive and opt-in. User docs in docs/CONFIG.md: Voice effects,
+Holograms, Portals, Iridescent skins and afterimages, Hologram displays, Alarms and shutters,
+Flashbacks, Holding hands, Isometric places. Samples use neutral content.
 
 ### 100.1 The phase (plan) and the gap analysis (Step 245)
 
-- **245**: the adapted script (shot list, speakers, voices, camera, light, sounds, music; private),
-  a test render of an iso lab, the gap list below, this plan, and the first features: voice
-  effects (§100.2), hologram characters (§100.3), portals (§100.4).
-- **246**: the rest of the gaps: a hologram's materialise entrance (wireframe → solid, flicker)
-  and an occasional flicker; a hologram display prop (a projector with a floating translucent
-  panel of moving patterns and text lines); a view through a portal (a picture or a simple scene
-  inside it); alarm lighting (a pulsing coloured light) and window shutters on an iso room; the
-  sounds `alarm`, `crackle`, `hum`, `drone`, `slam`; iridescent characters (an oil-on-water
-  colour shift) and afterimages; hand in hand (two characters holding hands, standing and
-  walking); lab objects on an iso place (console, server rack, projector pad); props for memory
-  vignettes (chess board, flower arch) and a flashback look if tints are not enough.
-- **247**: the story video (private): build, previews, stills, iteration, final 16:9 1080p (9:16
-  if it reads well), lint clean, −16 LUFS.
-- **248**: review with fixes (story fidelity, stills of every shot, audio, compatibility).
-
-**What schu-video-generator did already** (test render: an iso indoor lab at `light: night`, a table, shelves, a
-rug as a pad, a lamp, three characters, a closeup and a red `light` tint; 6.3 s of video in
-10.9 s at 854 × 480): the lab as an iso room with windows and a door; per-speaker Kokoro voices
-with labels and name tags; emotions (frightened, crying, blushing, laughing; `emotion` on lines);
-`enter` / `exit` through a spot (`door:`) that fades a character in or out (stepping out of a
-rift); a cold or red tint with the `light` action; lights dimming; gestures (wave); interruptions;
-iris transitions and tints for memory vignettes; music cues per scene range.
-
-**Gaps per need** (generic names): voice effects for non-human speakers; a hologram figure and a
-hologram display; a portal / rift with a view through it; pulsing alarm light; window shutters;
-sounds (alarm, crackle, hum, singing drone, slam); iridescent skin and afterimages; hand in hand;
-lab furniture on an iso place; props for memory vignettes; a flashback look.
+Built as §100.2–§100.16.
 
 ### 100.2 Voice effects (Step 245)
 
-- **Config**: `effect` on `VoiceConfig` and `VoiceEntry`: `VoiceEffectSetting` = a preset name
-  (`VoiceEffectName`, = `voice_effects.VOICE_EFFECTS`, a test keeps them equal), a list of names,
-  or `VoiceEffectConfig {use, pitch (−12..12), amount (0..1)}`. `voices.SPEAKER_FIELDS` gains
-  `effect`: a named voice does not inherit the base voice's (like `emotion`).
+- **Config**: `effect` on `VoiceConfig` / `VoiceEntry`: a preset (`VoiceEffectName` =
+  `voice_effects.VOICE_EFFECTS`, kept equal by a test), a list, or `{use, pitch (−12..12), amount
+  (0..1)}`. In `voices.SPEAKER_FIELDS`: a named voice does not inherit the base voice's.
 - **Model** (`vidgen/voice_effects.py`, no manim, no ffmpeg run): `voice_effect(setting) ->
-  VoiceEffect | None` (`names` in the fixed order of `VOICE_EFFECTS`, combined presets expanded:
-  `otherworldly` = deep −3 + chorus + hall; `deep` / `high` become the `pitch` (−4 / +4) unless
-  given), `VoiceEffect.spec()` (in the hash), `tail` (s added: `TAILS` echo 0.35, hall 0.9,
-  chorus 0.1), `effect_filter(effect)`: an ffmpeg chain — resample to 48 kHz mono, `apad` (the
-  tail minus what the filters add themselves: `aecho` / `chorus` play out their longest delay,
-  `DELAYS`), the pitch (`asetrate` + `aresample` + `atempo`, the length kept), then robot
-  (`afftfilt` with every phase set to 0: the voice's pitch replaced by the frame rate, 48000 / 256
-  = 187.5 Hz, a flat buzz; a 6 / 11 ms comb; +12.5 dB; with the robot the pitch shift comes after
-  it, moving the buzz), radio (320–3200 Hz band, compressor, +5.5 dB), chorus (3 voices), echo
-  (110 / 230 ms), hall (8 taps 37–347 ms), `amount` scaling the wet decays; last
-  `alimiter=0.89`. The gains were measured on Kokoro lines so each preset stays within about
-  1 dB of the dry voice (`am_echo`: source −25.6 LUFS; deep −26.4, robot −24.9, radio −26.1, hall
-  −25.8, otherworldly −25.5). Robot measured: median 188 Hz, interquartile range 2 Hz (dry 106 /
-  38 Hz). `afftfilt`, `chorus`, `aecho`, `apad pad_dur` and `alimiter` are in every ffmpeg the
-  project supports (4.2+).
-- **Applying it** (`vidgen/tts/effects.py`): `get_provider` wraps the provider of a voice with an
-  effect in `EffectProvider(inner, effect)`: `synthesize` / `synthesize_timed` call the inner
-  provider and run the audio through the chain (`with_effect`: `convert_to_mp3(..., filters=)`,
-  re-encoded); timings and Kokoro's phonemes are the inner provider's (no effect moves the speech);
-  everything else (`name`, `timings_included`, `last_phonemes`, `reported_cost`, `requests`) is
-  passed through by `__getattr__`. `cache_key` = sha1(inner key | "effect" | spec): a voice
-  without an effect keeps every hash (pinned keys unchanged); a different effect re-voices only
-  that voice's beats; `audio_fields` includes it, so a variant with another effect gets its own
-  audio folder. Decided over doing it at mix time: the beat's MP3 is then what is heard
-  (`readback`, the visemes' duration, `narration_speed`, the tail in the beat's length), and
-  the mix stays unchanged.
-- **Dry run**: `describe_voice` adds `, effect chorus+hall (pitch -3)`.
-- **Public**: `vidgen.api` adds `VOICE_EFFECTS`, `VoiceEffect`, `effect_filter`, `voice_effect`.
-- **Not done**: an effect per beat (it is per voice; a second named voice with the same `voice`
-  does it); a true convolution reverb (taps are enough for a cartoon's hall).
+  VoiceEffect | None` (names in `VOICE_EFFECTS` order; `otherworldly` = deep −3 + chorus + hall;
+  `deep` / `high` set pitch ∓4); `spec()` (hashed; includes `level: matched`); `tail` (`TAILS`);
+  `effect_filter(effect)`: an ffmpeg chain (48 kHz mono, `apad` for the tail, pitch with length
+  kept, robot / radio / chorus / echo / hall, `GAINS`, `alimiter`), only filters in ffmpeg 4.2+.
+- **Applied at voicing** (`vidgen/tts/effects.py`): `get_provider` wraps the voice in
+  `EffectProvider(inner, effect)`; audio goes through the chain then `level_match` (the dry voice's
+  BS.1770 loudness, ±`MATCH_LIMIT` 15 dB). Timings and phonemes are the inner provider's; other
+  attributes pass through. `cache_key` = sha1(inner key | "effect" | spec): **a voice without an
+  effect keeps every hash**; `audio_fields` includes it. Voicing, not mixing, so the beat's MP3 is
+  what is heard (`readback`, visemes, `narration_speed`, tail in the beat length). Per voice, not
+  per line. `describe_voice` names the effect.
+- **Public**: `VOICE_EFFECTS`, `VoiceEffect`, `effect_filter`, `voice_effect`.
 
 ### 100.3 Hologram characters (Step 245)
 
-- **Config**: `CharacterEntry.hologram: bool | HologramConfig {color: ColorRef = "#5FD8FF",
-  opacity 0.2–1 = 0.6}`; `hologram_look()` gives the settings or `None`.
-- **Drawing** (`cartoon/hologram.py`): `build_character` ends with `apply_hologram(figure, color,
-  opacity)` when set: every family member's fill becomes `hologram_fill(original, tint)` — the
-  tint scaled by the original's Rec. 709 lightness from `DARK_SHARE` 0.28 (black) to
-  `BRIGHT_SHARE` 1.15 (white), clipped — at `opacity` × its fill opacity, and every outline the
-  tint `EDGE_WHITE` 0.55 of the way to white at 0.95 × its opacity (`family=False`, so a group's
-  own style never spreads over its members). Hidden shapes (mouths, eyes, the front view) are
-  recoloured too: their styles are kept while they have no points (§69.22), so every expression
-  and viseme shows as a hologram. The figure carries `hologram = (color, opacity)`.
-  `is_hologram`. Decided over a separate glow / scanline overlay: the figure's own parts move,
-  speak and act; an overlay would have to follow every part (Step 246 may add a flicker as a
-  living thing that changes only during a flicker).
-- **Stage**: after `mark_lit`, `unmark_lit(figure)` for holograms (the light grade skips them, as
-  it skips a lit lamp) and `mark_shaded` leaves them out.
-- **Public**: `vidgen.api` adds `HOLOGRAM_COLOR`, `apply_hologram`, `is_hologram`, `unmark_lit`.
-- **Seen**: an iso lab at night, a hologram with a light grey look (skin `#F0F0F0`, clothes
-  `#C8C8C8`): cyan, eyes and mouth readable in a closeup, arms showing the body through them.
+`CharacterEntry.hologram: bool | HologramConfig {color = "#5FD8FF", opacity 0.2–1 = 0.6, flicker =
+true}`. `cartoon/hologram.py`: `build_character` ends with `apply_hologram(figure, color,
+opacity)`, recolouring every member (fill by `hologram_fill`, lightness-scaled tint; outlines
+whitened; `family=False`) **including hidden shapes** (styles survive without points, §69.22), so
+every expression and viseme stays a hologram; the figure's own parts, not an overlay, so it moves
+and speaks normally. `figure.hologram`, `is_hologram`. Stage: `unmark_lit` (the grade skips it),
+`mark_shaded` skips it. Public: `HOLOGRAM_COLOR`, `apply_hologram`, `is_hologram`, `unmark_lit`.
 
 ### 100.4 Portals (Step 245)
 
-- **The prop** `portal` (`SCIFI_PROPS`, new group in `PROP_KINDS`; 1.5 characters tall; colours
-  `#C9A8FF` rim / glow, `#1B1240` inside; `FLOATING_IN_PLACE`: no shadow, no snow on top). Its
-  static drawing (`_portal`) is an invisible box as large as the open portal with its sparks
-  (`portal.EXTENT`, so it is placed and sized the same open or sealed) and a faint zig-zag seam
-  (a thin filled band, tagged `seam`: its colour is the glow's).
-- **Switched** like a lamp (`SWITCHED_PROPS` and `LIVING_KINDS` gain it): `on`, `switch_on` /
-  `switch_off`; validation messages list it. Living overlays (`living_drawing._portal_overlays`,
-  `PORTAL_PARTS`): the inside (detail), two depth rings (detail mixed 30 % / 60 % towards main),
-  three swirl arms, the rim (main, 3.2 × outline) and its white core, six sparks — all without
-  points until placed; `GLOWS["portal"]` in the seam's colour.
-- **Maths** (`cartoon/portal.py`, no manim): `openness(on, switches, now)` (a ramp from where it
-  was: `OPEN_SECONDS` 1.6 to open, `CLOSE_SECONDS` 1.0 to seal), `opening_size(level)` (the crack
-  reaches full height in `CRACK_SHARE` 0.4 at `CRACK_WIDTH` 4 % wide, then widens), `changing`
-  (open, opening or sealing at either end, or switched between), `portal_shape(level, now, seed)`
-  → `PortalShape` (inside oval, a jagged rim of `RIM_POINTS` 36 with new jags `CRACKLE_RATE` 14
-  times a second, ±`JAG` 7 %, depth rings, swirls turning `SWIRL_SPEED` 0.9 rad/s, sparks living
-  `SPARK_SECONDS` 0.28 s, a pulse of 3 % every 1.8 s, a glow strength flickering by `_noise`);
-  seeded by the stage's `motion_seed`, so every render is the same.
-- **`LivingProp`** for a portal: `_open(now)` places the parts (`closed_curve` for the ovals,
-  corners for the rim, swirls and sparks) through the prop's anchor, or clears them while
-  sealed; `changing` from `portal.changing`, so a sealed portal stays in Manim's static image and
-  an open one redraws its parts, its glow and what is drawn over them. The parts and the glow are
-  unlit (the generic living rule).
-- **Stage**: `switch_props` plays `PORTAL_OPEN_SOUNDS` (a whoosh 1.4 s pitched −5 at −2 dB and a
-  thunder rumble 2.5 s at intensity 0.2, pitched −4, −8 dB) or `PORTAL_SEAL_SOUNDS` (a swoosh and
-  a thud), no click. `ISO_ITEMS` gains the portal: it stands at a spot (`iso_item_point`, its
-  `item_box` by its height), drawn in order with the characters; `enter` / `exit` with `door:` its
-  spot fade a character in or out there (it walks to its own `at`: put that in front).
-- **Public**: `vidgen.api` adds `SCIFI_PROPS`, `FLOATING_IN_PLACE`.
-- **Seen** (the iso lab, red tint, `scale: 1.4`): the rift glows over the tint, crackles and turns,
-  a character comes out to its spot in front; a closeup fills the frame with the rim and swirls.
-  Render: a 21.3 s test scene with the portal open about 9 s, a hologram, three characters and
-  two closeups in 27.9 s at 854 × 480.
-- **Not done**: a view through it (Step 246); `pick_up` of a portal is not refused; its glow, unlit,
-  can look a little darker than a strongly tinted dark sky around it.
+Prop `portal` (`SCIFI_PROPS`, a `PROP_KINDS` group; `FLOATING_IN_PLACE`: no shadow, no snow): its
+static drawing is an invisible box of the open size (`portal.EXTENT`, so it places the same open or
+sealed) and a faint `seam`. Switched like a lamp (`SWITCHED_PROPS`, `LIVING_KINDS`); living overlays
+`PORTAL_PARTS` (`living_drawing._portal_overlays`), unlit, with `GLOWS["portal"]`. Maths
+(`cartoon/portal.py`, no manim): `openness`, `opening_size`, `changing`, `portal_shape(level, now,
+seed)` → `PortalShape`, **seeded by the stage's `motion_seed`** (every render identical); a sealed
+portal is not `changing`, so it stays in Manim's static image. `switch_props` plays
+`PORTAL_OPEN_SOUNDS` / `PORTAL_SEAL_SOUNDS` (no click; other kinds keep it). In `ISO_ITEMS`; `enter`
+/ `exit` with `door:` its spot fade a character in or out there. Public: `SCIFI_PROPS`,
+`FLOATING_IN_PLACE`.
 
 ### 100.5 Compatibility (Step 245)
 
-Every branch is new and opt-in: no voice without `effect` is wrapped (hashes unchanged), no
-character without `hologram` is recoloured or unmarked, the portal is a new prop kind.
-`switch_props` keeps the click for every other kind. Phase Q baseline 31/31 identical; the
-existing tests whose messages list the switched props were updated (they now name `portal`).
-
-Step 246 (§100.6–§100.13) drew on a reviewer's notes on the 245 test stills: the room filled
-only ~60 % of the frame, close-ups cropped awkwardly (a leg poking in over a head), the visitor
-did not read tall or iridescent, the "alarm" was a salmon-pink tint, the "lab" looked like a
-living room. The story effects of a stage live in `scenes/stage_story.py` (`StoryStaging`, a
-part of `Stage` like `IsoStaging`) and `scenes/story_actions.py` (the actions); the maths in
-`cartoon/alarm.py`, `cartoon/apparition.py`, `cartoon/holo_display.py`, `cartoon/portal.py`,
-`cartoon/vignette.py` (no manim except `CameraVignette`); the drawing in `cartoon/figure_fx.py`,
-`cartoon/iso_overlays.py` and `cartoon/living_drawing.py`.
+Voices without `effect`, characters without `hologram` and other prop kinds are untouched. Layout
+for §100.6–§100.13: `scenes/stage_story.py` (`StoryStaging`, a part of `Stage` like `IsoStaging`),
+`scenes/story_actions.py`; maths in `cartoon/alarm.py`, `apparition.py`, `holo_display.py`,
+`portal.py`, `vignette.py` (no manim except `CameraVignette`); drawing in `cartoon/figure_fx.py`,
+`iso_overlays.py`, `living_drawing.py`.
 
 ### 100.6 Framing: a fuller wide view, faces together, clear shots (Step 246)
 
-- **`iso.wide`** (`StageIso.wide`: `auto` | `fill` | 1–2.5): `wide_view(..., fit=)`. `auto` is
-  §89.13's (a room keeps all of itself in a landscape frame). `fill` drops that keep: the place's
-  bounds are filled (at most `ISO_WIDE_MAX`), still keeping the spots, the placed objects and the
-  bodies (with `ISO_MARGIN`). A number is the magnification over the whole place's fit
-  (`_zoomed_view`), the centre moved as little as keeps the bodies in view. Portrait frames keep
-  their own rule (§90.14). Measured on a 13 x 8 lab: auto ~60 % of the frame's width is room,
-  fill ~80 %.
-- **Group close-ups**: `SHOT_NAMES` closeup and medium take 1–3 names (`ShotConfig._check_names`
-  says "names 1 to 3 characters"). `shot_figures` keeps up to three named subjects for them;
-  `frame_shot` → `_group`: each subject's `SHOT_SPANS` box (head and shoulders / hips up) and its
-  figure's width, the union with `GROUP_PADDING` (8 %) at the sides, no narrower than
-  `SHOT_MIN_WIDTHS` of the tallest, scale clamped to 1..`MAX_SHOT_SCALE`; centred across, the
-  view's top at the highest head's span top (a figure further back on an iso place stands higher:
-  both faces show). One name: as before (`LOOK_ROOM` in front of the face).
-- **`clear`** (`ShotConfig.clear`, the `shot` action's option): `Stage.shot_clear(keep)` hides
-  every other character through its `FigureAlpha` factor `shot` (§100.9; opacities 0, kept for
-  the restore), sets `hidden_by_shot` (the layout dump's `hidden`: lint's `_figures` leaves it
-  out) and shows them again when the view goes back (`_back`) or at the next shot.
-- Tall visitors need no feature: an iso character's `scale` is its size (1.4–1.5).
+- `iso.wide` (`auto` | `fill` | 1–2.5; `wide_view(..., fit=)`): `auto` is §89.13's; `fill` fills
+  the place's bounds (≤ `ISO_WIDE_MAX`) keeping spots, objects and bodies; a number magnifies
+  (`_zoomed_view`). Portrait keeps §90.14.
+- `closeup` / `medium` take 1–3 names (`ShotConfig._check_names`); `frame_shot` → `_group` frames
+  the union of the subjects' `SHOT_SPANS` boxes, top at the highest head. One name is unchanged.
+- `shot` `clear`: `Stage.shot_clear(keep)` hides the others via `FigureAlpha` factor `shot`, sets
+  `hidden_by_shot` (dump `hidden`, skipped by lint's `_figures`), restored on the way back or the
+  next shot.
+- An iso character's `scale` is its size.
 
 ### 100.7 Alarms and shutters (Step 246)
 
-- **Alarm** (`alarm` action, `start` | `stop`, `color` default `#FF2A1F`, `period` 0.4–6 s
-  default 1.6; `animates = False`, cued): `Stage.alarm` keeps the changes and gives the
-  `StageLight` `alarms = alarm_spans(changes)` (`AlarmSpan(start, end | None, color, period)`; a
-  `start` while running ends that span and starts another, they cross-fade). `StageLight.update`
-  applies `alarm_grade(grade, spans, now)` after the light and the lightning: the strongest
-  span's envelope (`ALARM_RISE` 0.4 s in, `ALARM_FALL` 0.8 s out, smoothstep) blends from the
-  stage's grade to `alarm_light(color, pulse)`: from `ALARM_DARK` (`#2B1B26` at 0.82: the set
-  barely seen) to the colour's tint at `ALARM_STRENGTH` 0.82, its multiply × `ALARM_BRIGHTNESS`
-  0.72 (a dim room lit red, not pink paint) plus `ALARM_GLOW` 0.06 of the colour; the pulse a
-  raised cosine of the period ^`ALARM_SHARPNESS` 2 (short and bright, a beacon passing), starting
-  dark; the stars fade with the envelope. `changing` / `settled` include the alarms (the stage
-  redraws every frame while one shows). Unlit things (portal, hologram, screens, a lab's lights)
-  keep shining over it: the 245 note about the portal's glow is moot in the dark phase. A draft
-  (`flat`) keeps the light; the siren still plays. The siren is the **`alarm` ambience bed**
-  (`Stage.alarm_beds` in the scene's timings: start to stop or the scene's end; §100.8).
-- **Shutters** (`shutters` action, `close` | `open`; `iso.shutters: true` starts them down; only
-  an indoor iso place with a window showing into the room): `window_faces(place)` gives each
-  window's frame on a standing back wall (the same insets as `_wall`), `IsoShutters` (a living
-  thing of the stage, §100.11's mechanism) draws a steel plate from the top down to
-  `shutter_level` (closing in `SHUTTER_CLOSE_SECONDS` 0.5, accelerating: level += (1 − level)·s²;
-  opening in 1.4 s, eased) with `SHUTTER_SLATS` 7 slats, graded by the light. Sounds: a `slam`
-  at 85 % of the drop, a low `swoosh` rolling up.
+- `alarm` action (`start` | `stop`, `color` `ALARM_COLOR`, `period` 0.4–6 s default
+  `ALARM_PERIOD`; `animates = False`): `alarm_spans(changes)` → `AlarmSpan`s on `StageLight`;
+  `alarm_grade(grade, spans, now)` applies after light and lightning (a dim room lit red, pulsing
+  from dark). `changing` / `settled` include alarms; unlit things shine over it; a `flat` draft
+  keeps the light. The siren is the `alarm` ambience bed (`Stage.alarm_beds`, start to stop or
+  scene end).
+- `shutters` action (`close` | `open`; `iso.shutters: true` starts closed; indoor iso place with a
+  window into the room only): `window_faces(place)`, `IsoShutters` (a story thing, §100.11),
+  `shutter_level` (`SHUTTER_CLOSE_SECONDS`); sounds `slam`, `swoosh`.
 
 ### 100.8 Story sounds (Step 246)
 
-- **Built-in sounds** (`BUILTIN_SOUNDS`, numpy, seeded, `_finish`ed to the loudness target):
-  `alarm` (2.7 s: `siren` — `SIREN_TONES` 960 / 780 Hz alternating every `SIREN_HALF` 0.45 s,
-  whole cycles in each half, 7 harmonics, 15 ms edges, low-passed 4.5 kHz), `crackle` (1.5 s:
-  250–500 snaps a second in seeded clusters, each ringing 1.5 ms, band ~3.8 kHz, over a 100 Hz
-  buzz flaring with them), `hum` (3 s: 110 Hz + 110.125 Hz harmonic tones, a 3.5 kHz whine,
-  air), `drone` (6 s: `DRONE_PARTIALS` C6 G6 C7 E7 G7 swelling in turn with a slow shimmer, over a
-  rumble under 90 Hz and a 55 Hz sine; slow fades), `slam` (0.8 s: a 75 Hz impact, an
-  inharmonic clang ~0.3 s, a rattle of six slat bursts). Measured: −27 LUFS each, peaks −9 to −24
-  dBFS.
-- **Beds** (`AMBIENCE_BEDS` + `hum`, `alarm`; `SET_BEDS` + `hum`): `hum_loop` (8 s, whole cycles
-  of both voices: no seam, −42 LUFS, not ducked; chosen only by name: `ambience: hum`) and
-  `alarm_loop` (10 siren periods, the lowpass around a circle (`siren(circular=True)`), the right
-  channel 11 ms behind, −31 LUFS, ducked 7 dB, 0.15 s in / 0.6 s out).
-- The Listen page gains the row `sfx-story` and the two beds in its ambience clip; its budget
-  test grows from 6.5 to 6.8 MB (6.6 MB now).
+`BUILTIN_SOUNDS` gain `alarm`, `crackle`, `hum`, `drone`, `slam` (numpy, seeded, loudness-finished).
+Beds `hum` (seamless, not ducked, by name only) and `alarm` (seamless via `siren(circular=True)`,
+ducked) in `AMBIENCE_BEDS` / `SET_BEDS`. The Listen page has row `sfx-story` (budget 6.8 MB).
 
 ### 100.9 Characters: appearing, flickering, shimmering, trailing (Step 246)
 
-- **`FigureAlpha`** (`figure_fx.py`): a character's fill / stroke opacities snapshot when first
-  asked (`figure_alpha(figure)`), and named factors (`shot`, `flicker`, `appear`) whose product
-  `apply()` writes (a member whose rgba rows changed length gets its first value); it sets the
-  figure's `shown` (its shadow fades with it). One place for every opacity effect, so a flicker
-  and a materialise do not fight.
-- **Materialise** (`materialise` / `dematerialise` actions, `run_time` default
-  `MATERIALISE_SECONDS` 2.2): `Materialise` animation: `materialise_levels(share, now, seed)` —
-  outlines rise over `WIREFRAME_SHARE` 0.4, fills over the rest, both × a flicker that fades as it
-  completes (`MATERIALISE_FLICKER` 0.45, `_noise`); ends at (1, 1), or (0, 0) for a
-  dematerialise. `StoryStaging._materialising()`: a character whose first such action is a
-  materialise starts with `appear` 0 (it stands at its spot unseen: shots and walks treat it as
-  there). Sounds: a `riser` (+5 semitones) and a `chime` at 85 %, or a `swoosh`.
-- **Flicker** (`HologramConfig.flicker`, default true): `_Flicker` sets `flicker` =
-  `flicker_level(now, seed)`: a 5 % shimmer and, every 2.2–5 s (seeded slots), a 0.16 s dip with
-  two drops to 0.25–0.65; skipped while the character walks through a door (that fade is the
-  walk's). Holograms were new in 245 (no committed render shows one), so the default flickers.
-- **Iridescence** (`CharacterEntry.iridescent`: true | `{seconds 2–120 = 12, strength 0.1–1 =
-  0.8}`): `Iridescence` keeps every filled member's drawn colour and recolours it every frame by
-  `iridescent_rgb(rgb, height, now)`: its hue turned by `now / seconds + IRIDESCENT_BANDS (1.3) ×
-  height on the figure` plus a small wobble, at least `IRIDESCENT_SATURATION` 0.5 saturated,
-  mixed by strength; lightness under 0.18 (ink) or over 0.93 (eye whites) kept. Graded by the
-  light like any character (at night it is muted).
-- **Afterimages** (`CharacterEntry.afterimages`: true | `{spacing 0.12, life 0.6, opacity
-  0.35}`): `Afterimages` copies the figure's drawn leaves (no updaters) every `spacing` s while
-  its feet moved `AFTERIMAGE_MOVE` 3 % of its height (not while it is less than half shown),
-  puts the copy right before the figure in `scene.mobjects` and in the animation's
-  `moving_mobjects` (else Manim would not draw it until the next `play`), fades it by (1 − age)^1.5
-  and removes it after `life`.
-- All run in one scene updater (`_story_step`, after the animations: a walk's state then a held
-  hand). Draft renders skip flicker, iridescence and afterimages.
+- **`FigureAlpha`** (`figure_alpha(figure)`): opacities snapshot on first use, named factors
+  (`shot`, `flicker`, `appear`) multiplied by `apply()`; sets `shown`. **The one place for every
+  opacity effect.**
+- `materialise` / `dematerialise` (`run_time` default `MATERIALISE_SECONDS`): `Materialise` via
+  `materialise_levels` (outlines then fills, with a fading flicker). A character whose first such
+  action is a materialise starts at `appear` 0 at its spot (`StoryStaging._materialising()`).
+- Flicker (`HologramConfig.flicker`, default true): `flicker_level(now, seed)`; skipped during door
+  walks.
+- `CharacterEntry.iridescent` (true | `{seconds 2–120 = 12, strength 0.1–1 = 0.8, glow 0–1 =
+  0.5}`): `Iridescence` recolours each frame by `iridescent_rgb` (ink and eye whites kept).
+- `CharacterEntry.afterimages` (true | `{spacing 0.12, life 0.6, opacity 0.35}`): `Afterimages`
+  copies the drawn leaves while the feet move and adds each copy to `scene.mobjects` **and** the
+  animation's `moving_mobjects` (else Manim does not draw it until the next `play`).
+- All run in one updater (`_story_step`, after the animations); drafts skip flicker, iridescence,
+  afterimages.
 
 ### 100.10 Holding hands and the hologram display (Step 246)
 
-- **`hold_hands`** (target one character, `with` the other; generated characters only):
-  `HandHold(a, b, start)`: each one's hand nearer the other (`_nearer_hand`, by hand point to
-  the other's feet) reaches (`reached_parts`) for the shoulders' midpoint `HAND_DROP` 0.3 of the
-  taller one's height lower, blended from the arm's pose at the start over `HAND_REACH_SECONDS`
-  0.4; every frame, so they stay joined while one or both walk (two walks in the same beat to
-  places side by side; no joint route planning). `let_go_hands` returns `PoseChange`s of the
-  holding arms to rest. `figure.hand_in_hand` names the partner (the layout dump's
-  `hand_in_hand`): lint's `walk_overlap` / `character_overlap` let the pair stand close.
-- **`hologram_display`** prop (`SCIFI_PROPS`, a switched living prop; 1.0 character tall;
-  `#5FD8FF` light, `#3A3F4B` projector; `pattern: fractal | data | text`): drawn off as a
-  projector puck in an invisible box as large as the panel (`PANEL` −0.46..0.46 × 0.4..0.98);
-  `DISPLAY_PARTS` overlays (beam, panel, scan lines, bars, text lines, curves, edge) placed by
-  `LivingProp._project` from `display_frame(pattern, since, now, seed)`: the panel grows over
-  `GROW_SECONDS` 0.6 (stretching up from its bottom) with a flicker, `level` 0.88 ± 0.12 noise;
-  fractal = three rose curves (3–5 petals) turning and breathing + a spiral; data = six bars, a
-  running wave, a ring gauge; text = lines written one per `LINE_SECONDS` 0.7 to seeded lengths,
-  scrolling once `TEXT_LINES` 7 are shown. Unlit, glow in its own colour; switched on with a
-  `hum` and a chime (no click). It and a portal cannot be held (`_Handling.scene_problems`).
+- `hold_hands` (target, `with`; generated characters only): `HandHold(a, b, start)` reaches the
+  nearer hands for a point `HAND_DROP` below the shoulders' midpoint every frame (§100.15);
+  `let_go_hands` returns `PoseChange`s. `figure.hand_in_hand` (dump key) lets lint's
+  `walk_overlap` / `character_overlap` accept the pair.
+- `hologram_display` prop (`SCIFI_PROPS`, switched living prop; `pattern` in `DISPLAY_PATTERNS`
+  `fractal | data | text`): parts placed by `LivingProp._project` from `display_frame(pattern,
+  since, now, seed)`; unlit; on with `hum` + chime. It and a portal cannot be held
+  (`_Handling.scene_problems`).
 
 ### 100.11 Lab and memory objects on an iso place (Step 246)
 
-`OBJECT_KINDS` + `console` (2 x 1, 1.8 high, `top` 0.86: two cabinets, a long top, three
-monitors whose screens and text lines are `glow` polygons), `server_rack` (1 x 1, 2.6: six units
-with vents and dark lights), `projector_pad` (1 x 1, walkable, deck 0.12: a cylinder, a glowing
-ring, an emitter; footsteps `stone`), `whiteboard` (2 x 1), `flower_arch` (2 x 1, 3.2: posts, an
-arch line, leaf blobs with flowers), `chess_table` (1 x 1, `top` 0.86: a board of squares, four
-pieces). `object_lights(item, base)` gives a rack's 18 and a console's 4 small lights;
-`IsoBlinkers` (a living thing, unlit, drawn over the place's pictures) blinks each at its seeded
-period (0.35–2.4 s, every fourth four times faster) and duty, with a halo (`LIGHT_HALO` 1.8 ×,
-0.22). The stage's **story things** (`story_things`: shutters, blinkers) join `_living_things`
-(`update_to`, `changing`, `done`, `movers`, `region`) and are made in `_iso_story_overlays` at
-the end of `_iso_scenery`.
+`OBJECT_KINDS` include `console`, `server_rack`, `projector_pad` (walkable; `surface_at` stone),
+`whiteboard`, `flower_arch`, `chess_table`. `object_lights` / `LIT_OBJECTS`; `IsoBlinkers` blinks
+them (seeded, unlit). Story things (`story_things`: shutters, blinkers) join `_living_things`,
+built in `_iso_story_overlays` at the end of `_iso_scenery`.
 
 ### 100.12 A flashback's look (Step 246)
 
-`flashback: true | {tint, strength, saturation, vignette, color}` on a stage
-(`FlashbackSetting`): `LightGrade` gains **`saturation`** (default 1; `grade_rgbas` /
-`grade_pixels` move colours towards their Rec. 709 grey first; `blend_grades` keeps it exactly
-when both are equal, so no other light changes a pixel), and `flashback_grade(grade)` multiplies
-the stage's light by the tint's grade (`#E8C08A` at 0.45), lifts the blacks by 6 % of the tint and
-keeps 40 % of the saturation; `Stage.flashback_look` wraps the light at the start and every
-`light` change. `CameraVignette` (an RGBA picture, `vignette_pixels`: clear inside 45 % of the way
-to the corners, rising smoothly to `vignette` 0.7 of `#2A1C12`) is stretched over the camera's
-frame every frame and added on top of the set's foreground (bubbles, tags and captions come
-later, over it).
+Stage `flashback: true | {tint, strength, saturation, vignette, color}` (`FlashbackSetting`).
+`LightGrade.saturation` (default 1; `blend_grades` keeps it exactly when equal, `flash_grade`
+carries it, **so no other light changes a pixel**). `flashback_grade(grade)` (`FLASHBACK_TINT`,
+`FLASHBACK_STRENGTH`, `FLASHBACK_SATURATION`) wraps the light at the start and every `light` change
+(`Stage.flashback_look`). `CameraVignette` (`VIGNETTE_COLOR`, `VIGNETTE_OPACITY`) is stretched over
+the camera frame each frame, above the set and below bubbles, tags and captions.
 
 ### 100.13 A view through a portal (Step 246)
 
-`view: coast | stars | meadow` on a portal prop: `living_overlays(..., view=)` adds
-`VIEW_SHAPES` (18) `portal_view` members after the inside (the depth rings are left out, the
-swirls drawn at 0.22). `portal_view(view, rx, ry, now, seed)`: the sky in bands from the top to
-the horizon (`_band`: the oval's part between two curves, sampled at 28 cosine-spaced x's), each
-edge rippling ±1.2 % of the half height at 2.2 rad/s, a sun or moon (clamped into the oval), the
-sea with four glints shimmering under the sun, the land (coast: a far headland and a near cliff;
-meadow: two hills); stars: eight twinkling diamonds. `LivingProp._show_view` places them in the
-oval as large as it is, fading in from 25 % to 85 % of its width.
+Portal `view: coast | stars | meadow` (`PORTAL_VIEWS`): `living_overlays(..., view=)` adds
+`VIEW_SHAPES` `portal_view(view, rx, ry, now, seed)` members inside the oval
+(`LivingProp._show_view`).
 
 ### 100.14 Compatibility (Step 246)
 
-Additive and opt-in. Shared code touched: `LightGrade.saturation` (default 1: `grade_*` skip it,
-`blend_grades` returns it exactly; `flash_grade` carries it), `StageLight` (empty `alarms`),
-`wide_view(fit="auto")`, `frame_shot` / `shot_figures` (one name: unchanged), the layout dump
-(two optional keys), lint's `_figures` / `_riding_together` (hidden and hand-in-hand
-characters) and `character_overlap` (characters wholly out of view, e.g. two waiting off stage
-to enter, are no longer reported), `surface_at` (a projector pad is stone). Phase Q baseline
-31/31 identical. **Public** (`vidgen.api` adds): `ALARM_COLOR`, `ALARM_PERIOD`,
+Shared code with neutral defaults: `LightGrade.saturation` 1, empty `alarms`, `wide_view(fit="auto")`,
+one-name shots, optional dump keys, lint's `_figures` / `_riding_together`; `character_overlap` does
+not report characters wholly out of view. **Public** (`vidgen.api`): `ALARM_COLOR`, `ALARM_PERIOD`,
 `SHUTTER_CLOSE_SECONDS`, `AlarmSpan`, `alarm_grade`, `alarm_spans`, `shutter_level`,
 `MATERIALISE_SECONDS`, `flicker_level`, `iridescent_rgb`, `materialise_levels`, `Afterimages`,
 `FigureAlpha`, `HandHold`, `Iridescence`, `Materialise`, `figure_alpha`, `DISPLAY_PATTERNS`,
 `display_frame`, `IsoBlinkers`, `IsoShutters`, `PORTAL_VIEWS`, `portal_view`, `CameraVignette`,
 `FLASHBACK_SATURATION`, `FLASHBACK_STRENGTH`, `FLASHBACK_TINT`, `VIGNETTE_COLOR`,
-`VIGNETTE_OPACITY`, `flashback_grade`, `LIT_OBJECTS`, `object_lights`, `window_faces`. Config:
-`characters[].iridescent`, `.afterimages`, `.hologram.flicker`; stage `flashback`; `iso.wide`,
-`iso.shutters`; props `view`, `pattern`, prop `hologram_display`; `shot.clear`, closeup / medium
-of 2–3; iso objects as §100.11; actions `alarm`, `shutters`, `materialise`, `dematerialise`,
-`hold_hands`, `let_go_hands`; sounds and beds as §100.8. Tests updated for the new counts and lists: the switched props
-(`hologram_display`), 71 prop kinds, the shot names message, the set beds (the first four), the
-portal's parts without a view, the Listen page budget.
+`VIGNETTE_OPACITY`, `flashback_grade`, `LIT_OBJECTS`, `object_lights`, `window_faces`.
 
 ### 100.15 Light on the characters, hands that show (Step 247)
 
-From a reviewer's notes on the 246 test cut (night faces too dark, darker skin especially; the
-visitors' iridescence swallowed by the night light; held hands not visible, one character in
-front of the other; the visitors not reading tall) and the story video built in Step 247.
-
-- **Fill light** (stage param `fill_light`, 0–1, default 0): `lighting.lifted(grade, share)` moves
-  a grade `share` of the way back to the colours as drawn (`multiply` towards 1, `glow` towards
-  0; stars, shadows and saturation kept; 0 returns the grade itself). `shading.mark_light_lift`
-  sets `LIGHT_LIFT` on a mobject's family; `StageLight._grade_of` applies it after a lamp's
-  light (§89.13), each (grade, share) made once (`_lifted`, cleared past 256). `StoryStaging
-  ._fill_lights` marks each non-hologram character with `max(fill_light, iridescent.glow)`.
-  Computed: skin `#B98560` at `night` has a mean channel 0.25, with 0.45 of fill 0.38. An alarm's
-  grade (§100.7) is lifted the same way: faces show red, not black. A draft is flat anyway.
-- **An iridescent visitor's glow** (`IridescentConfig.glow`, 0–1, default 0.5): how much of the
-  stage's light it shrugs off. Default 0.5, not 0: iridescence was new in 246 (no committed
-  render or sample shows it), and a muted shimmer at night was the reviewer's note.
-- **Hands that show** (`HandHold._keep_close`): each of the two is drawn at its own place (where
-  the stage or its walk puts it: when its feet moved since the last frame an animation placed
-  it anew, else the last offset is taken back) plus an offset. Standing, the offsets step both in
-  across the picture, `share` of the reach blend, until the shoulders are no further apart than
-  the arms reach to the meeting point (`HAND_REACH` 0.92 of the shorter arm, measured as it hangs
-  at the start, at `HAND_DROP` below the shoulders), never closer than `HAND_MIN_GAP` 0.22 at the
-  shoulders nor `HAND_MIN_APART` 0.42 (of the taller one's height) at the feet. Both moved by
-  walks on a frame: the first keeps its offset and the second its place beside the first (the
-  formation from the last standing frame), so two walking to neighbouring spots go side by side
-  instead of one behind the other on their routes (give the walks the same `run_time`). On an
-  iso place the offsets are across the picture only while standing; the cells, draw order and
-  `iso_feet` stay the walks'. Decided over moving the spots or planning a joint route: the
-  stage's spots are cells, and two neighbouring cells side by side are 1.7 tiles apart, much
-  further than arms reach.
-- **Tall visitors** checked: `scale` does apply on an iso place (layout, shots, two-shots); at
-  1.45 next to a `tall` human the visitor read human-sized in wide views (its small head, the
-  room's depth). The guide and CONFIG now suggest 1.5–1.8 and a `two_shot` with a human.
-- **Not done** (seen in the story video): a 9:16 variant of an iso story whose characters spread
-  over the whole room shows the room small in a tall frame (the portrait rule keeps all bodies in
-  view) — a vertical cut would need its own staging; zooms with `until` across a beat with a
-  `shot` move the camera back during that shot (write `until` as the next beat, or none).
-- **Public** (`vidgen.api` adds): `lifted`, `mark_light_lift`. Config: stage `fill_light`,
-  `characters[].iridescent.glow`.
-- **Compatibility**: `fill_light` defaults to 0 (nothing marked); `HandHold` is used only by
-  `hold_hands` (new in 246, no committed render); iridescence likewise. Phase Q baseline 31/31.
+- Stage `fill_light` (0–1, default 0 = nothing marked): `lighting.lifted(grade, share)` moves a
+  grade towards the drawn colours (0 returns the grade itself); `shading.mark_light_lift` sets
+  `LIGHT_LIFT`; `StageLight._grade_of` applies it after a lamp's light (cached in `_lifted`,
+  cleared past 256). `StoryStaging._fill_lights` marks non-hologram characters with
+  `max(fill_light, iridescent.glow)`; alarm grades are lifted too.
+- `HandHold._keep_close`: each partner is drawn at its own place plus an offset that steps them
+  together until within reach (`HAND_REACH`), never closer than `HAND_MIN_GAP` (shoulders) /
+  `HAND_MIN_APART` (feet); walking together, the second keeps its place beside the first (give
+  both walks the same `run_time`). On an iso place offsets apply only while standing (cells and
+  draw order stay the walks'). Offsets, not moved spots, because neighbouring cells are farther
+  apart than arms reach.
+- Public: `lifted`, `mark_light_lift`.
 
 ### 100.16 Review of Phase Z (Step 248)
 
-A critical review of the story video (every shot at 1080p, the speech levels per voice, the mix)
-and of the issues Step 247 left. Generic fixes:
-
-- **A shot inside a zoom's `until`** (`Zoom.revert`): a zoom with `until` over a beat that has its
-  own `shot` moved the camera back during that shot (the temporary zoom is undone at the end of
-  the beat before `until`) and a later beat without a shot went back to the zoomed view. Now the
-  shot wins for its beat; after it the runner's way back (§69.29) returns to the zoomed view (the
-  zoom resumes); when the zoom is undone while a shot that came after it holds the camera, the
-  camera stays on the shot and the view the shot goes back to becomes the one before the zoom.
-  The zoom records the shot on screen when it starts (`camera_shot`); a zoom started inside a
-  shot is undone as before. Test: `test_cartoon_shots` (a tiny render).
-- **Voice effects level-matched** (`tts.effects.level_match`): each effect's audio is brought to
-  the dry voice's integrated loudness (BS.1770, `vidgen.loudness`), within ±`MATCH_LIMIT` 15 dB,
-  then limited below full scale; the fixed `GAINS` stay as a first rough step. Measured before:
-  the robot +4.5 dB on a test signal (+5 on Kokoro speech), `otherworldly` +1.9, `radio` −1.6;
-  after: within 1 dB (test), the story's robot line +0.4 dB of the narrator. The effect's spec
-  gains `level: matched`, so voices with an effect are voiced again once (no committed audio has
-  an effect).
-- **Rendering in steps** (`render --max-scenes N`, MCP `render.max_scenes`): render at most N of
-  the scenes to render (config order), then stop without joining when more are left
-  (`VidgenError` with `details.rendered` / `remaining`); running again goes on (finished scenes'
-  renders are kept, as after an interrupted run). A long final render fits a per-command time
-  limit that way. A single scene longer than the limit still has to be split into two scenes
-  (beats keep their ids, so their audio is reused); resuming inside a scene would need manim to
-  replay the scene's state up to a beat, which a skipped animation does not reproduce exactly.
-- **`tests/test_actions.py`**: the three tests that listed the built-in actions by hand (failing
-  since Phase X added actions) now share one `BUILTIN_ACTIONS` list (the registry is checked
-  against it; the unknown-action message and the schema's enum are built from it) and take the
-  reversible ones from the registry.
-
-The story project (private) was changed, not schu-video-generator, for what it alone needed: closer shots on
-the key beats, a title card in the story's colours, speech outliers evened out with an emotion's
-`gain`, a quieter drone. Compatibility: the zoom change only acts while a shot holds the camera
-(no committed project zooms across a shot); effects only for voices with an effect; Phase Q
-baseline 31/31.
+- **A shot inside a zoom's `until`** (`Zoom.revert`): the shot wins for its beat, then the way back
+  (§69.29) returns to the zoomed view; if the zoom ends while a later shot holds the camera, the
+  camera stays and the shot's way back becomes the pre-zoom view. The zoom records `camera_shot` at
+  its start. Test: `test_cartoon_shots`.
+- **`render --max-scenes N`** (MCP `render.max_scenes`): render at most N of the scenes still to
+  render (config order), then stop without joining with `VidgenError` (`details.rendered` /
+  `remaining`); rerunning continues. No resume inside a scene (manim cannot replay state to a beat
+  exactly); split a long scene instead (beat ids keep the audio).
+- `tests/test_actions.py` `BUILTIN_ACTIONS` is the one list the registry, the unknown-action
+  message and the schema enum are checked against.
 
 ## 101. Shorts from a longer video (Phase Z2, Steps 249–250)
 
-Phase Z2 cuts vertical Shorts (9:16, under 60 s, a hook in the first second, burned-in word-synced
-captions, an end card) out of a longer cartoon. What existed: variants (deep-merged overrides;
-a list replaces the base's, so a variant could only repeat the whole `scenes` list), karaoke
-captions (a few words at a time, the spoken one highlighted, word times from the alignment or
-the MP3), shots and zooms, `reframe` for 16:9 stages in 9:16, title and end cards, `render
---max-scenes`. What was missing and is built here (Step 249): a way to pick scenes and beats
-with changes per cut, a hook caption, an end card for a cut, overlays that keep out of the phone
-app's buttons, lint for that and the 60 s limit, and a zoom that stays.
+Cuts 9:16 Shorts (under 60 s, hook, word-synced captions, end card) out of a longer video. User
+docs: docs/CONFIG.md "Cuts and Shorts", "`hook`", docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md.
 
 ### 101.1 Cuts (`cut:`, `vidgen.cuts`)
 
-- `cut: {scenes, beats, hook, end_card}` (`CutConfig`; `CutScene` entries allow extra keys).
-  `apply_cut(data, origins)` rewrites the **raw** config before sets are expanded and before
-  validation, in `Project._load` for the base config and for a variant (after the variant is
-  merged): everything later (sets, audio, timing, rendering, lint) sees an ordinary config. The
-  cut stays in the config (`config.cut`), so `voice_warnings` skips unused voices in a cut.
-- Beat ids are written out (`<scene>_b<n>` of the full video) before beats are chosen, so a cut
-  shares the full video's audio (`Project.has_own_audio` compares by beat id: unchanged lines
-  match). Beats are kept in the order listed (a list) or as a run (`{from, to}`).
-- Scene changes: `params` merge like a set's (`merge_params`: mappings recursively, the
-  `characters` / `props` / `layers` entries by name via `includes.entry_names`, an empty list
-  clears), other keys merge (mappings) or replace. A scene may be shown twice under another id.
-  The first scene's transition is dropped unless its entry gives one (it came from a scene that
-  is not in the cut; a crossfade into the first scene is invalid).
-- Beat changes (`cut.beats`): merged onto the beat (mappings merge, lists — `actions` — replace).
-- `hook` → an overlay entry `{type: hook, id: hook, ...}` appended to `overlays`; `end_card` → a
-  silent `end_card` (title and line) or `card` (text and subtitle) scene `cut_end` of `seconds`.
-- Errors (unknown scene or beat, a beat range backwards, a scene id or beat twice, a beat change
-  for a beat not in the cut) are one `VidgenError` with problems at `cut...` (variant-tagged).
-  Malformed `cut:` is left to the config check. `origins` under `scenes[i]` move with the scene.
-- Decision: no "fast-forward" of left-out beats (playing their actions instantly): manim cannot
-  skip animations exactly (updaters get one step, §100.16); a cut states where the characters
-  start instead, which is also what a re-staged Short needs.
+- `cut: {scenes, beats, hook, end_card}` (`CutConfig`; `CutScene` allows extra keys).
+  `apply_cut(data, origins)` rewrites the **raw** config before set expansion and validation, in
+  `Project._load` for the base and each merged variant; everything later sees an ordinary config.
+  `config.cut` stays (`voice_warnings` skips unused voices).
+- Beat ids (`<scene>_b<n>` of the full video) are written out before beats are chosen, **so a cut
+  shares the full video's audio** (`Project.has_own_audio` compares by id). Beats: a list (that
+  order) or `{from, to}`.
+- Scene `params` merge like a set's (`merge_params`; named entries via `includes.entry_names`; an
+  empty list clears; `drop: true` (`cuts.DROP`, `_merge_named`) removes a named entry, unknown
+  names ignored); other keys merge or replace. A scene may appear twice under another id. The first
+  scene's transition is dropped unless its entry gives one. `cut.beats` merge onto beats (lists such
+  as `actions` replace).
+- `hook` → overlay `{type: hook, id: hook, ...}`; `end_card` → a silent `end_card` or `card` scene
+  `cut_end`.
+- Errors (unknown scene / beat, backwards range, duplicates, a change for a beat not in the cut) are
+  one `VidgenError` with problems at `cut...`. `origins` move with the scene.
+- No fast-forward of left-out beats (manim cannot skip animations exactly); a cut states where
+  characters start.
 
 ### 101.2 Shorts (`shorts:`) and the `hook` overlay
 
-- `shorts: true | {max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}`
-  (`ShortsConfig`; `VideoConfig.shorts_zones`). `overlays.shorts_area(project, area)` is the area
-  without those shares of the frame; `captions` (no default lift in a Short), `lower_third` and
-  `hook` place themselves in it, `NarratedScene.safe_area` is cut to it (built-in layouts keep
-  their text out of the app's parts) and a `card` narrows and centres its words in it (the burst
-  stays centred on the frame). Without `shorts:` nothing changes.
-- `hook` overlay (`scenes/overlays.py`, layer 11 over the captions): bold text (default 1.25 × the
-  theme's `title`), wrapped (`readable_text`), on a `primary` plate with an automatic text colour
-  (`text_color_on`), near the top of the Shorts area (6 % below its top) or centred; window `at`
-  .. `at + seconds`, a 0.25 s pop (opacity and scale 0.85 → 1) and a 0.4 s fade.
-- Layout dump: a Short's header gets `shorts: [x0, y0, x1, y1]` (px, the part of the frame the
-  app leaves clear); other dumps are unchanged.
-- Lint: `shorts_safe_area` (still): text (scene or overlay) reaching past that box by more than
-  `tolerance`; a face (`face` box of a character, not hidden by a clear shot) with `min_face` of
-  it outside; an overlay's union box over `min_face` of a face. `shorts_length` (scene, default
-  error): on the video's last scene, the planned length (`VideoPlan`) over `max_seconds`
-  (`SceneContext.video_seconds` / `shorts_max`). `vidgen validate` (`cuts.shorts_warnings`): not
-  portrait, planned length over the limit.
-- `zoom` option `hold` (`Zoom.revert` returns nothing): the camera stays zoomed after the beat
-  until a later camera move; shots return to the held view. Without it a zoom whose beat ends
-  just before a cut (a shot, the scene's end) zooms out over the beat's last moment — a flash of
-  the wide view in a Short.
-- `audio.bitrate` (`128k`–`320k`, default `192k`; `ffmpeg.join(audio_bitrate=)`): FFmpeg's
-  native AAC at 192k raised a dense −14 LUFS mix's true peak from −1.9 (the limited WAV) to
-  +1.9 dBTP; 256k gave −1.6 (the 16:9 story at −16 LUFS: −1.9 → −1.1). Default unchanged.
+- `shorts: true | {max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}` (`ShortsConfig`,
+  `VideoConfig.shorts_zones`). `overlays.shorts_area(project, area)`: captions, `lower_third`,
+  `hook`, `NarratedScene.safe_area` and `card` text keep inside it. **Without `shorts:` nothing
+  changes.**
+- Karaoke in a Short (`SHORTS_KARAOKE`): default `size` `body`, `max_lines` 1, `max_words` 5;
+  bottom captions `SHORTS_LIFT` above the area's bottom (`lift` overrides).
+- `hook` overlay (`scenes/overlays.py`, layer 11): bold on a `primary` plate (`text_color_on`),
+  window `at` .. `at + seconds`; without `size` it shrinks from 1.25 × `title` to `HOOK_MIN_SCALE`
+  until it fits `HOOK_LINES` (2), else stays 1.25 ×.
+- Layout dump: a Short's header has `shorts: [x0, y0, x1, y1]` (px); captions have `reach`.
+- Lint `shorts_safe_area` (the only `mid_beat` rule): text past the box beyond `tolerance`; a face
+  with `min_face` (0.25) outside; an overlay (its `reach` if any) over `min_cover` (0.1) of a face.
+  `shorts_length` (error): planned length (`VideoPlan`) over `max_seconds`. `vidgen validate`
+  (`cuts.shorts_warnings`): not portrait, too long.
+- `zoom` `hold` (`Zoom.revert` returns nothing: stays zoomed until the next camera move) and `cut:
+  true` (jump). `Action.opens_scene()` (`Zoom`: `cut`, not a plot region): at `at: 0` on a scene's
+  first beat it applies before the entrance (`_apply_now`). A first-beat `shot:` still starts after
+  the entrance (existing frames unchanged).
+- `audio.bitrate` (`128k`–`320k`, default `192k`; `ffmpeg.join(audio_bitrate=)`): 256k keeps a
+  −14 LUFS mix's AAC true peak under 0 dBTP.
 
 ### 101.3 Public surface and compatibility (Step 249)
 
-- `vidgen.api` adds `apply_cut`, `shorts_area`. Config: top-level `cut`, `shorts`; overlay type
-  `hook`; zoom option `hold`; `audio.bitrate`; lint rules `shorts_safe_area`, `shorts_length`
-  (last in `LINT_RULES`).
-- Additive and opt-in: a config without `cut` / `shorts` / `hold` loads, lays out, renders and
-  lints as before (the layout dump's header has no new key; the safe area, the captions', lower
-  third's and card's placement change only in a Short). Phase Q baseline re-run.
-- The private story project's Shorts 1–3 were built with these (scratchpad, never committed).
+`vidgen.api`: `apply_cut`, `shorts_area`, `Action.opens_scene`, `Rule.mid_beat` /
+`rule(mid_beat=)`. Config: `cut` (params `drop`), `shorts`, overlay `hook`, zoom `hold` / `cut`,
+`audio.bitrate`, lint `shorts_safe_area` (`min_cover`), `shorts_length` (last in `LINT_RULES`).
+Without `cut` / `shorts` / `hold` everything behaves as before.
 
 ### 101.4 Review fixes (Step 250)
 
-A review of Shorts 1–3 found: captions of one or two words (title-size words in the narrow
-Shorts area), a caption over a face that lint missed, a hook of four lines, hooks over the
-establishing wide view, and a visitor shown before its entrance. Fixes (all only in a Short or
-opt-in; Phase Q baseline unchanged):
-
-- **Karaoke in a Short** (`scenes/captions.py`, `SHORTS_KARAOKE`): when not given, `size` `body`,
-  `max_lines` 1, `max_words` 5 — a phrase of about three to five words on one line, the spoken
-  word highlighted (the segmenter still breaks at punctuation first). Bottom captions sit
-  `SHORTS_LIFT` (0.03 of the Shorts area's height) above its bottom edge; `lift` replaces it.
-  (The reported "low caption" in the last beat of Short 1 was at the same place as the others —
-  the plate's bottom on the 80 % line; the margin makes that visible.)
-- **Caption reach** (`_mark_reach`; introspect `reach`, a Short only): each caption mobject gets
-  `overlay_reach`, the box of every caption of its beat(s); the layout dump writes it in px on
-  the caption's objects. `shorts_safe_area` checks faces against an overlay's reach when it has
-  one (a still shows one caption; a longer caption of the same line covered the face).
-- **Mid-beat stills** (`Rule.mid_beat`; `rule(..., mid_beat=True)`): `_scene_findings` runs such
-  rules on mid-beat stills too (others still only on beat ends; `stills` counts beat ends).
-  `lint_project` renders `SHORTS_STILLS` (3) stills per beat in a Short and reuses a dump with
-  two or more (`_stills_current`). `shorts_safe_area` is the only `mid_beat` rule.
-- **`min_cover`** (`ShortsSafeAreaRule`, 0.1): an overlay over that share of a face is reported
-  (`min_face`, 0.25, stays for the app's parts): a caption over a chin and mouth is 10–20 %.
-- **`zoom` `cut: true`**: the camera jumps (the frame is moved in `apply`, no animation).
-  `Action.opens_scene()` (default `False`; `Zoom`: `cut` and not a plot region): in
-  `Actions.start_beat` of a scene's first beat, such a use due at `at: 0` is applied at once
-  (`_apply_now`) before the scene's entrance plays, so the set fades in already framed. Without
-  it a stage's entrance (up to 1 s) plays first and a zoom at 0 starts after it. A beat `shot:`
-  on a first beat still starts after the entrance (unchanged: it would move existing videos'
-  frames); a Short uses `zoom ... cut: true` instead.
-- **`drop: true`** in a cut's `params` list entries (`cuts.DROP`, `_merge_named`): the scene's
-  entry of that name is left out (a character who only arrives in a left-out beat; unknown names
-  are ignored).
-- **Hook size** (`HOOK_LINES` 2, `HOOK_MIN_SCALE` 0.8): without `size`, the hook steps down from
-  1.25 × title by 0.05 to 0.8 × title until it fits on two lines; if none does, it keeps 1.25 ×
-  (three lines at the large size read better than three at a smaller one).
-
-Public surface: `Action.opens_scene` (vidgen.api `Action`), `Rule.mid_beat` / `rule(mid_beat=)`;
-config: zoom `cut`, `shorts_safe_area.min_cover`, cut params `drop`; layout dump key `reach`
-(a Short only).
-
+- Caption reach (`_mark_reach`, a Short only): each caption mobject's `overlay_reach` is the box of
+  every caption of its beat(s), dumped in px, so one still catches a longer caption over a face.
+- Mid-beat stills (`rule(..., mid_beat=True)`): `_scene_findings` also runs them on mid-beat stills
+  (`stills` counts beat ends); in a Short `lint_project` renders `SHORTS_STILLS` (3) per beat and
+  reuses a dump with ≥ 2 (`_stills_current`).
 ## 102. A neon city, an implant's view, other timelines (Phase AA, Steps 251–254)
 
 Reference: docs/CONFIG.md "Isometric places" (**A city at night**), "Particles" (`glow`), "Echo
@@ -23968,1814 +22069,637 @@ by the whole video.
 
 ## 120. What three music films asked of the generator (Phase AL, Steps 341–351)
 
-Three music films were made with vidgen as plain projects outside this repository: "Parallel
-Space" (two versions; three.js `web` scenes, a 29-track score, a hand-written script that gave
-the page the spectrum, the drum hits and the notes) and "Escapement" (clockwork in three.js with
-hand-written depth of field and motion blur). Their authors reported limits, and the owner asked
-(2026-11-14) for all of them to be built. One step each:
-
-| Step | What | Section |
-|---|---|---|
-| 341 | Fix: a scene of an extension type that subclasses `Web` was not rendered again when its script changed; a module waiting for several fetches sometimes never became ready | §120.1, §120.2 |
-| 342 | `vidgen still`: single frames of a `web` scene's page without rendering it | §120.3 |
-| 343 | Synth instruments: brass (`trumpet`, `horn`, `low_brass`) and a drawbar `organ` for score files | §120.4 |
-| 344 | Synth instruments: bowed strings (`violins`, `violas`, `cellos`, `double_basses`; sustained, spiccato, tremolo, pizzicato) | §120.5 |
-| 345 | Synth instruments: orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`) and a `choir` | §120.6 |
-| 346 | Expressive notes in the score format: dynamic marks, hairpins, slurs with a glide, vibrato speed and delay, settings per note, an instrument per section, a range warning | §120.7 |
-| 347 | Built-in music data for `web` scenes: `music_data:` gives a page `ctx.music` | §120.8 |
-| 348 | Smaller intermediate files: `render.intermediate: compact`, `render.keep_intermediates: false`, the disk estimate and report of `vidgen render` | §120.9 |
-| 349 | Faster `web` rendering, measured first: a quicker PNG, the frames clip written beside the drawing, a progress line, the first frame's time limit | §120.10 |
-| 350 | Ready-made finishing for three.js `web` scenes: the module `vidgen/three-finish` (depth of field, motion blur, bloom, tone mapping, grade, vignette, grain, FXAA, studio and nebula bakers, surface finishes, soft shadows) | §120.11 |
-| 351 | Critical review with fixes, documents, an example (`examples/signal-fire`) | §120.12 |
-| 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16): the published film's source, its music data from `music_data` | §120.13 |
-
-Rules of the phase: the films' scores must synthesize to the same audio as before each step, and
-stored cache keys are not invalidated without a written reason.
+Features built for music films made with `web` scenes and score files: `Web` subclasses in the
+render cache (§120.1), page readiness (§120.2), `vidgen still` (§120.3), brass, organ, strings,
+percussion and choir instruments (§120.4–§120.6), expressive score notation (§120.7),
+`music_data:` (§120.8), compact intermediates (§120.9), faster `web` rendering (§120.10),
+`vidgen/three-finish` (§120.11). Invariant for all of them: an existing score synthesizes to the
+same audio, and stored cache keys are not invalidated without a written reason.
 
 ### 120.1 A scene type that subclasses `Web` is a `web` scene for the cache (Step 341)
 
-- **The report.** In "Escapement", after an edit to `extensions/escapement.js`, `vidgen render .`
-  reused the old scene clips; only `--force --scene ID` rendered them again. The project's twelve
-  scenes are of an extension type: `extensions/webcut.py` holds `@scene("web_cut") class
-  WebCut(Web): outro = 0.0`, and each scene has `params: {script: extensions/escapement.js, data:
-  {...}}`; the script fetches `./escapement_audio.json`.
-- **Reproduced** in a scratch project of that layout (two `web_cut` scenes and one `web` scene on
-  one script that imports `./helper.js` and fetches `./x_audio.json`): after an edit to the
-  script, to the imported file or to the fetched file, `vidgen render .` rendered the `web` scene
-  and reused both `web_cut` scenes, at every quality and with `--jobs 2`.
-- **Cause.** The render fingerprint added a scene's `web` part (§118.10: the script's SHA-256 and
-  every file the page loaded) only `if spec.type == "web"`. A scene of another type name had no
-  such part, so nothing in its fingerprint named the script: `extensions` in the fingerprint
-  digests the `*.py` files of the extension folders only, and `assets` only `assets/`. The scene's
-  render was therefore "current" and its worker never ran, so the clip's own check
-  (`make_web_clip`, which does compare the script and the loaded files) was never reached. Step
-  330's claim held for the type `web` and for no subclass of it.
-- **Fix.** `vidgen.web.entry.is_web_type(name)`: true for `web` and for a registered type whose
-  class has the built-in `vidgen.scenes.web.Web` among its bases (told from the class's `__mro__`
-  by module and name, so nothing is imported). `fingerprint_inputs` uses it, and so does
-  `render_project` for `--force` (which removed the clip records of `web` scenes only: a forced
-  `web_cut` scene was rendered again but showed its stored frames). A type the registry does not
-  know (no project session active) counts only when it is `web` itself; then the fingerprint of a
-  subclass scene lacks the part and differs from the stored one, so the scene is rendered again
-  rather than wrongly reused. Every caller of `scene_fingerprint` in vidgen runs inside a
+- `vidgen.web.entry.is_web_type(name)`: true for `web` and for a registered type whose class has
+  the built-in `vidgen.scenes.web.Web` among its bases (read from the class's `__mro__` by module
+  and name; nothing is imported). `fingerprint_inputs` uses it to add the scene's `web` part
+  (§118.10: the script's SHA-256 and every file the page loaded), and `render_project` uses it for
+  `--force` (removes the clip records of every web-type scene).
+- A type the registry does not know (no project session) counts only when it is `web` itself; the
+  subclass scene's fingerprint then lacks the part and differs from the stored one, so it is
+  rendered again rather than wrongly reused. Every caller of `scene_fingerprint` runs inside a
   project session.
-- **Not a web type:** an extension scene that does not subclass `Web` and calls
-  `vidgen.api.make_web_clip` itself. Its script is in no fingerprint; it should subclass `Web`, or
-  keep its page under `assets/` (size and time are in every scene's fingerprint).
-- **Stored renders.** The fingerprint of a scene of a `Web` subclass now has the `web` part, so
-  each such scene is rendered once more after this step (reason: the stored renders may be stale,
-  which was the fault). Its frames clip (`build/<quality>/web/<scene>.mkv`) has its own key, which
-  did not change: the frames are reused when the script and loaded files are as recorded, and
-  drawn again when not. Scenes of type `web` and of every other type keep the same inputs.
-- **Checked, and already right** for the type `web` (and now for subclasses): files the script
-  imports and fetches; a file asked for and not found that is created later; a file recorded only
-  by the first render; an edit seen at one quality and then at the others (final, `--preview`,
-  `--draft`); `--jobs 2`. Tests: `tests/test_web_extension_cache.py`.
+- Not a web type: an extension scene that does not subclass `Web` and calls
+  `vidgen.api.make_web_clip` itself; its script is in no fingerprint (`extensions` digests only the
+  `*.py` files of extension folders, `assets` only `assets/`). Such a scene should subclass `Web`
+  or keep its page under `assets/`.
+- The frames clip `build/<quality>/web/<scene>.mkv` has its own key (`make_web_clip` compares the
+  script and loaded files). Tests: `tests/test_web_extension_cache.py`.
 
 ### 120.2 Waiting for a page to become ready (Step 341)
 
-Found while reproducing §120.1. A `script:` module that awaited two fetches one after the other at
-its top level failed in about one run in three with `did not become ready within 30 s`.
-
-- **Cause.** `WebPage._open` waited with Playwright's `page.wait_for_function`. That looks once
-  and then looks again from inside the page, on `requestAnimationFrame` or on `setTimeout`. Both
-  are vidgen's clock (§118.8), which stands at 0 until frame 0, so the second look never came. A
-  module that had finished by the first look was fine (one fetch usually had); one still waiting
-  then was never seen to finish. Measured on a module with two awaited fetches, before: 6 of 14
-  opens failed with the default polling and 9 of 14 with `polling=50`; after: 0 of 14.
-- **Fix.** `WebPage._wait_until_ready` asks from Python (`page.evaluate`) every `READY_POLL_MS`
-  (20 ms) until `READY_TIMEOUT_MS`, and waits between two looks with `page.wait_for_timeout`,
-  which keeps Playwright answering the page's requests (`time.sleep` would not). The message of a
-  page that never becomes ready is unchanged up to its last part (`: not ready after 30000 ms`).
-- Frames, clip keys and the page's script are unchanged (`data/web/*.js` untouched).
+`WebPage._wait_until_ready` polls from Python (`page.evaluate`) every `READY_POLL_MS` (20 ms) up to
+`READY_TIMEOUT_MS`, sleeping with `page.wait_for_timeout` (keeps Playwright serving the page's
+requests; `time.sleep` would not). Not `page.wait_for_function`, because its repeated looks run on
+`requestAnimationFrame`/`setTimeout`, which are vidgen's clock (§118.8) and stand still before
+frame 0, so a module still awaiting fetches was never seen ready. The failure message ends
+`: not ready after 30000 ms`.
 
 ### 120.3 `vidgen still`: single frames of a `web` scene's page (Step 342)
 
-- **The report.** The films' authors had no way to see one full-size frame of a `web` scene at
-  an exact time without rendering its clip (Escapement: 2 s a frame, 480 frames a scene). Each
-  wrote a script that drove `vidgen.web.page.WebPage` itself, with a theme copied by hand, the
-  scene's `data:` typed again, several times in one browser session, several sizes and a contact
-  sheet.
-- **Existing commands looked at first.** `vidgen storyboard`, `vidgen lint` and `vidgen render
-  --frames` take stills from a scene's render (the whole clip is drawn; stills at beat ends).
-  `vidgen thumbnail --scene ID --at S` extracts a frame from the scene's rendered MP4 and writes
-  it as the video's thumbnail. None draws a frame without the render, so this is a new command;
-  it reuses `WebPage`, the scene class and `vidgen.sheets.load_font`.
 - **Command.** `vidgen still [PROJECT] --scene ID (--at SECONDS | --frame N | --count N)...
   [--size final|preview|draft|WxH] [--variant NAME] [--out FILE|DIR] [--sheet FILE [--columns N]]
-  [--exact] [--transparent] [--json]` (`cli.cmd_still`, `vidgen.web.still.make_web_stills`).
-- **Same page setup as the render.** `still.page_setup` builds the scene as the render worker
-  does: the project loaded for the quality (`Project.load(draft=)`), its extensions activated,
-  Manim configured by `render.worker.configure_manim` (inside `manim.tempconfig`, with a
-  temporary media folder), the scene's class instantiated, not rendered. The scene then says what
-  its page is drawn from: `Web.page_clip_args(box=None)`, the arguments of `make_web_clip` (page
-  size from the scene's own `_title()` and `_page_box()`, frame rate, frame count from
-  `clip_plan`, theme and beats from `web_page_inputs`, the shape). `Web._draw_view` uses the same
-  method, so a render and a still cannot differ in these. `make_web_stills` opens one `WebPage`
-  with them and calls `page.frame(n)`.
-- **Time.** `--at t` is seconds from the scene's start (the page's `t`); the frame is
-  `round(t * fps)`, the frame whose picture the render shows at that time. `--frame N` names it
-  directly. Allowed: 0 to `frames - 1` (the frames the render draws, its spare frames included);
-  outside is an error naming the range. Video time is not accepted (see "Not done").
-- **Size.** `final`, `preview`, `draft`: that render's format. `WxH`: the project's `format`
-  replaced by that size at the final frame rate before the extensions are activated, so the
-  theme's sizes, the shape and the page box follow it (`FormatConfig`'s rule holds: even numbers).
-- **Order and state.** Stills are drawn in the order asked. One page serves while each frame is
-  later than the page's; otherwise the page is closed and a new one opened (the clock cannot run
-  back); a frame asked twice is drawn once. Default: `page.frame(n)` straight from the page's
-  frame (all timers due run, one round of animation-frame callbacks, then `frame(t, ctx)`,
-  `data/web/runtime.js`). For a page whose picture is a function of the time (§118.15's
-  "alone: yes" rows) this is the render's frame. For one that keeps state ("alone: no": Motion,
-  lottie-web autoplay, GSAP's own ticker, a D3 force simulation, a counter, a canvas drawn over
-  itself) it is the picture without the frames between, and it depends on the stills drawn before
-  it on the same page. `--exact` calls `page.advance(k)` for every frame from the page's to
-  `n - 1` first (no screenshots, as `web_page_layouts` does, §118.12), which is what the render
-  does apart from the screenshots. The default is the fast one because the films' pages are
-  functions of the time and a stepped still costs every frame's drawing time (0.4 s a frame at
-  640x360 on Escapement); the guide says when `--exact` is needed.
-- **What is written.** PNG files: `--out FILE.png` (one still) or a folder, default
-  `<project>/exports/stills/`, named `<scene>_<seconds, 8 wide, 3 decimals>s.png`. The page's
-  RGBA laid over the theme's background colour (RGB), or the RGBA itself with `--transparent`.
-  `--sheet FILE`: a grid up to 1920 px wide (`still.contact_sheet`), each still scaled down to
-  its column (never enlarged) with `scene  t s  fN` under it; columns `ceil(sqrt(n))` up to 6, or
-  `--columns`. Nothing under `build/<quality>/`: no clip, no record, no fingerprint is read or
-  written, so no cache key is touched.
-- **Errors** (`VidgenError`): an unknown scene with the closest id and the list of web scenes; a
-  scene of another type, naming `vidgen storyboard --scene ID --per-beat N` (drawing other types
-  needs their render: not cheap, not built); a time or frame outside the scene; no `--scene`; no
-  time at all; a bad `--size` (did-you-mean for a quality's name); `--out FILE.png` with several
-  stills.
-- **Proof.** `tests/test_web_still.py::test_stills_equal_the_frames_of_the_rendered_page_clip`
-  renders a small project and compares stills with the frames of `build/<quality>/web/<scene>.mkv`
-  (FFV1, lossless, with alpha) with `np.array_equal`: a `Web` subclass at final and preview size,
-  a page in `region: body` under a title (over the background), and a page that counts its
-  frames (`--exact` equal to the clip; without it the documented other picture). On the film:
-  eight stills of `04_escapement` at 1280x720 (`--transparent`, frames 0 to 420) are identical to
-  the frames of the film's own `build/final/web/04_escapement.mkv`.
-- **Measured** on Escapement (three.js, depth of field and motion blur by repeated drawing; 2
-  cores): vidgen starts in about 3 s, the page is ready after 8.4 to 9.5 s, then 2.17 s per still
-  at 1280x720 (8 stills, 30 s in all), 0.52 s at 640x360 (`preview`), 0.26 s at 320x180;
-  `--exact` at 640x360: 6.2 s for frame 15 (16 frames). A render of that scene draws 480 frames.
-- **MCP.** The `still` tool follows the command (`at` and `frame` as lists, `sheet: true` writes
-  `contact_sheet.png` in the stills' folder) and returns the pictures, the sheet first, paged like
-  the storyboard's. Paging draws the stills again (nothing is cached).
-- **JSON.** `vidgen still --json`: `scene, type, entry, size, width, height, fps, frames, region,
-  exact, transparent, stills: [{path, frame, time, seconds}], sheet, pages, load_seconds, seconds`.
-- **Interfaces.** `vidgen.scenes.web.Web.page_clip_args` (new method, used by `_draw_view`);
-  `vidgen.web.still` (internal module); `vidgen.api` unchanged.
-- **Not done.** A time on the video's clock (`--at` without `--scene`); stills of other scene
-  types; values of `data:` overridden from the command line; with `--exact`, a WebGL canvas that
-  is never cleared and relies on every frame being shown may still differ (no screenshot is taken
-  of the stepped frames); a still with vidgen's title, overlays and captions. Windows and macOS
-  not tried.
+  [--exact] [--transparent] [--json]` (`cli.cmd_still`, `vidgen.web.still.make_web_stills`;
+  JSON fields: `docs/CONFIG.md`, "`vidgen still --json`"). Draws frames of a `web` scene's page
+  without rendering the scene.
+- **Same page setup as the render.** `still.page_setup` loads the project for the quality
+  (`Project.load(draft=)`), activates extensions, configures Manim with
+  `render.worker.configure_manim` (inside `manim.tempconfig`, temporary media folder) and
+  instantiates the scene class. `Web.page_clip_args(box=None)` returns the `make_web_clip`
+  arguments (page size from `_title()` and `_page_box()`, fps, frame count from `clip_plan`, theme
+  and beats from `web_page_inputs`, shape); `Web._draw_view` uses the same method, so a still and a
+  render cannot differ in these.
+- **Time and size.** `--at t` → frame `round(t * fps)` from the scene's start; `--frame N`; allowed
+  0 to `frames - 1` (spare frames included). `WxH` replaces the project's `format` size at the
+  final fps before extensions activate (even numbers required).
+- **Order and state.** Stills are drawn in the order asked on one page while frames move forward,
+  else a new page (the clock cannot run back); a repeated frame is drawn once. Default
+  `page.frame(n)` jumps straight there (exact for pages that are a function of time, §118.15);
+  `--exact` first calls `page.advance(k)` for every frame in between (no screenshots, as
+  `web_page_layouts`, §118.12), as the render does.
+- **Output.** PNGs to `--out FILE.png` (one still) or a folder, default `<project>/exports/stills/`,
+  named `<scene>_<seconds, 8 wide, 3 decimals>s.png`; RGBA over the theme background, or raw RGBA
+  with `--transparent`. `--sheet`: grid up to 1920 px wide (`still.contact_sheet`), stills only
+  scaled down, label `scene  t s  fN`, columns `ceil(sqrt(n))` up to 6 or `--columns`. Nothing under
+  `build/<quality>/` is read or written: no cache key is touched.
+- **Errors** (`VidgenError`): unknown scene (closest id, list of web scenes); non-web scene (names
+  `vidgen storyboard --scene ID --per-beat N`); time/frame outside the scene (names the range); no
+  `--scene`; no time; bad `--size` (did-you-mean); `--out FILE.png` with several stills.
+- **MCP** `still`: `at` and `frame` as lists, `sheet: true` writes `contact_sheet.png` in the
+  stills' folder; returns the pictures, sheet first, paged like the storyboard (paging redraws).
+- Stills equal the frames of the rendered `build/<quality>/web/<scene>.mkv` (`tests/test_web_still.py`).
+  Only `web` scenes; no title, overlays or captions in a still.
 
 ### 120.4 Brass and organ for score files (Step 343)
 
-- **The report.** "Parallel Space v6" was asked to replace bell sounds with "trumpets, organs,
-  violins or even drums". The score synthesizer (§93) had none, so the film built a trumpet from
-  `soft_lead` (a fixed saw-like spectrum behind a low-pass), brass and horn from `saw_pad`
-  (PADsynth saws with a slow attack) and an organ from the `glass` pad (three harmonics). Missing:
-  a spectrum that changes with the level, the attack of lips, body resonances, organ ranks.
-- **Four instruments** of kind `note`, in two new families of the catalogue (`brass`, `organ`,
-  between `leads` and `pads`): `trumpet`, `horn`, `low_brass`, `organ`. No samples, no SoundFont,
-  numpy only. Modules: `studio/additive.py` (wave tables), `studio/brass.py`, `studio/organ.py`;
-  registered in `studio/instruments.py`.
-- **Additive synthesis through wave tables** (`additive.py`). A note's harmonics (all at or under
-  16 kHz, the last 2 kHz faded: `HIGHEST_PARTIAL`) are summed once by an inverse FFT into one
-  period (`wavetables`; at least 128 samples per period of the highest harmonic, so linear
-  interpolation errs by under −70 dB), and the note reads the table along its phase
-  (`read_tables`). A note with 390 harmonics (E1) costs per sample what one with 3 does, vibrato
-  and pitch slides are a changing phase step, and a spectrum that changes over the note is a
-  cross-fade between a few tables (`row`). Nothing above the Nyquist frequency is ever made, so
-  there is nothing to alias. `remembered` keeps the last 48 notes of up to 2 s (an ostinato
-  repeats few notes many times).
-- **Brass** (`brass.py`), one model with four bodies (`TRUMPET`, `HORN`, `TROMBONE`, `TUBA`: the
-  bell's cutoff 1250 / 480 / 620 / 300 Hz, two or three fixed formants, roll-off above the cutoff
-  when soft and when loud, cents of scoop):
-  - *The spectrum follows the level.* `spectrum(body, Hz, brightness)`: harmonic `h` is weaker by
-    `h ** -(1.2 * (1 - b))` (soft playing: nearly a sine), a high-pass at the cutoff (the tube
-    radiates little below it), a roll-off above `cutoff * 2 ** (0.5 * (b - 0.5))` whose power
-    falls from about 4.5 (soft) to 1.5 (loud), and the formants. A note cross-fades between 8
-    such spectra along `b(t) = brightness * level(t) ** 1.6`: the upper harmonics arrive after
-    the fundamental in the attack, a long attack is a swell that opens, the release darkens. The
-    held part is normalised to RMS 1 whatever the pitch and brightness, so `brightness` changes
-    the tone, not the level.
-  - *The lips.* The pitch starts `scoop` cents flat (trumpet 28, horn 36, trombone 22, tuba 18)
-    and reaches the note with a time constant of 35 ms; an attack of 0.12 s or less is "tongued"
-    and overshoots by up to a quarter for a tenth of a second; breath noise around twice the
-    cutoff, strongest in the first 50 ms; two slow random pitch drifts of about 1 cent.
-  - *Vibrato* 5.3 Hz, nothing before 0.28 s, full after a further 0.45 s (short notes have none).
-    Default 9 cents on the trumpet, 0 on horn and low brass (orchestral horns and trombones play
-    straight).
-  - *Sections* (`players` > 1): each player `detune` cents apart (permuted) plus up to 1.5 cents
-    of its own, entering up to 28 ms late, spread left to right (stereo; a solo is mono).
-    Players a few cents apart drift in and out of step slowly, so their plain sum is for a second
-    at a time up to 6 dB louder or much quieter than the players together, by chance per pitch:
-    measured before the fix, four horns differed by 9 dB from note to note in the first 0.3 s.
-    `levelled` (in `additive.py` since Step 344) therefore brings the sum's power, averaged over whole periods (50 ms or more), to
-    the sum of the players' powers (a gain of at most 8 dB either way). Choosing the players'
-    starting phases instead was tried and did not help beyond the first 50 ms.
-  - `low_brass` is a trombone section (4 players by default) with `tuba`: the level of a tuba an
-    octave lower (in unison under 27 Hz). With `attack` 1 to 4 and `brightness` 1 it is the low
-    swell of film scores; `attack` about 0.2, `tuba: 1`, 8 players and a second or a fifth added
-    is the heavy low note of trailers.
-  - Settings: `attack` (0.01–4 s), `brightness` (0–1), `vibrato` (0–40 cents), `breath` (0–4),
-    `ring` (the release, 0.03–2 s), `players`, `detune` (0–25 cents); trumpet and horn `mute`
-    (0–1: lows thinned, a peak near 2.2 kHz); low brass `tuba` (0–1.5). Written ranges (shown by
-    `music patches`, not enforced): trumpet E3–C6, horn B1–F5, low brass E1–F4.
-- **Organ** (`organ.py`). Nine ranks at the drawbar footages 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5'
-  1 1/3' 1' (pitch ratios 0.5, 1.5, 1, 2, 3, 4, 5, 6, 8), each drawn 0 to 8 at 3 dB a step. A
-  rank above 6 kHz plays an octave lower (mixtures break back, a tonewheel organ folds), one under
-  27 Hz an octave higher; ranks that land on one pitch are one rank with their powers added.
-  - `registration` names the drawbars and the kind of pipe: `cathedral` (`608756045`, principals:
-    16' 8' 4' and mixtures, the default), `principal` (8' + 4'), `flute` (stopped flute: odd
-    harmonics), `reed` (many harmonics, a peak near 1.5 kHz), `drawbar` (`888000000`, sine ranks:
-    an electric organ), `full` (every bar out, sines). `drawbars` (nine digits in quotes,
-    `"00 8400 000"`) replaces the registration's bars and keeps its pipes.
-  - *Steady.* No decay; every pipe starts at the same point of its wave and the note is
-    normalised by the power of the partials as they add (ranks share partials: the 4' rank's
-    fundamental is the 8' rank's second harmonic), so a note has the same level and tone every
-    time, whatever the registration, plus 1 dB per octave towards the bass (measured: the same
-    loudness in LUFS from C1 to C7). An earlier version with two detuned pipes per rank beat by
-    3 to 9 dB inside a note; that is now the option `chorus` (a second pipe per rank 3 to 6 cents
-    away on the other side: a celeste). `detune` (default 0) puts the ranks a fraction of a cent
-    apart: slow shimmer, and the tone of a held note then drifts.
-  - *Speech.* A pipe reaches its level after `speech` periods (9 for principals, 7 flutes, 5
-    reeds; low pipes later; never under 10 ms, which is also the electric organ's), with a
-    "chiff": its octave (the stopped flute: its twelfth) sounding first, and 35 ms of wind noise.
-    The release is a raised cosine over `ring` (0.09 s). `click` (default 0) adds an electric
-    organ's key click.
-  - *Stereo.* A rank's pipe stands 0.2 to the left or right, alternating by semitone and by rank
-    (as pipes stand in a case), so a single note is near the middle and a chord is wide.
-- **Score format.** Settings were numbers only. `Setting` gained `choices` (names for the whole
-  numbers from 0: `registration: flute`, or `2`) and `read` (a setting with its own notation:
-  `drawbars`); `score_file._setting_value` reads them and reports an unknown name with the closest
-  one. Inside the score both are still numbers (`TrackPart.settings` is unchanged), so a section
-  can change them like any setting. An unquoted `drawbars: 008400000` is refused (YAML reads it
-  as another number). `Instrument` gained `seeded` (its `make` takes a seed text,
-  `studio:<score seed>:<track name>`: two tracks in unison are two players, while one track
-  plays the same note the same way every time) and `range`. `music patches --json` gained
-  `range` on these four instruments and `choices` on `registration`; other entries are unchanged.
-- **Levels.** One held note at default settings measures -16.4 LUFS (trumpet), -16.8 (horn),
-  -16.1 (low brass), -17.1 (organ), each note alone before the piece is brought to -28. The
-  existing instruments span -7.8 (`pad` chords) to -21 (`glass`, `sub`); `soft_lead` is -20.4,
-  piano chords -16, a `saw_pad` chord -10. The four sit at the level of piano chords: 3 to 4 dB
-  above `soft_lead` (brass carries more than a synth lead) and 6 dB under the saw pads, so a
-  score that replaces a `saw_pad` "brass" with `low_brass` raises it by about 6 dB. A chord is as
-  loud as one note (as for every `note` instrument), a section as loud as one player.
-- **Measured** (scratch scripts; tables in HANDOFF Step 343): attack to 90 % in 39 ms (trumpet
-  default), 14 ms (`attack: 0.02`), 258 ms (`attack: 0.3`); the eighth harmonic reaches half its
-  level 13 ms after the fundamental; spectral centroid at A4 from 655 Hz (`brightness: 0`) to
-  2059 Hz (1) at the same RMS; pitch 11 cents flat at 30 ms, within 1 cent at 100 ms; vibrato
-  under 1 cent before 0.3 s, ±10 cents after 1 s, 5.3 Hz; level across each range within 0.1 dB
-  RMS and 0.2 dB LUFS (solo and sections), the level inside a held note within 0.1 dB (organ,
-  solo brass) and 0.6 dB (sections); power between the harmonics at C6 and A6 under
-  −95 dB (no aliasing), no partial above 15.9 kHz; first sample 0, last under −140 dB; one note
-  costs 12 ms of CPU per second of sound (trumpet, horn), 37 ms (four trombones), 6 to 36 ms
-  (organ, by registration) against 7 ms for `soft_lead`.
-- **Existing scores are unchanged.** `_render_hits` passes the seed only to `seeded` instruments;
-  no existing instrument, default or cache key changed. Both film scores render to the same
-  bytes as on the code of Step 342 (SHA-256 in HANDOFF).
-- **Honest limits.** These are models, not recordings: no valve or slide noise, no slurs between
-  notes (each note has its own attack; Step 346 plans glide), no flutter-tongue, no falls; the
-  horn has no hand-stopping pitch change; the organ has no swell box, no tremulant and no
-  Leslie; a section's players do not differ in tone. Nobody has listened: the judgment is by
-  measurement and spectrograms, with demo files for the owner.
+- **Instruments** of kind `note`, catalogue families `brass` and `organ` (between `leads` and
+  `pads`): `trumpet`, `horn`, `low_brass` (trombone section with an optional `tuba` an octave
+  below), `organ`. Numpy only, no samples. Modules `studio/additive.py`, `studio/brass.py`,
+  `studio/organ.py`, registered in `studio/instruments.py`. Settings, ranges and uses:
+  `docs/COOKBOOK-MUSIC.md` (instrument table); the DSP constants live in the modules.
+- **Additive wave tables** (`additive.py`, shared by §120.5, §120.6, §121.4): harmonics up to
+  16 kHz (last 2 kHz faded, `HIGHEST_PARTIAL`) are summed by inverse FFT into one period
+  (`wavetables`, ≥ 128 samples per period of the highest harmonic) and read along the note's phase
+  (`read_tables`); vibrato and slides are a changing phase step, a changing spectrum a cross-fade
+  between table rows (`row`). Nothing above Nyquist is generated, so nothing aliases.
+  `remembered` caches the last 48 notes of up to 2 s. `levelled` brings a section's summed power
+  (over whole periods, ≥ 50 ms) to the sum of its players' powers (gain at most ±8 dB), because
+  detuned players drift in and out of phase.
+- **Brass**: one model with bodies `TRUMPET`, `HORN`, `TROMBONE`, `TUBA` (bell cutoff, formants,
+  scoop). `spectrum(body, Hz, brightness)`; a note cross-fades between 8 spectra along
+  `b(t) = brightness * level(t) ** 1.6`, so the tone opens with the level; the held part is
+  normalised to RMS 1, so `brightness` changes tone, not level. Lip scoop into the pitch, tongued
+  overshoot for attacks ≤ 0.12 s, breath noise, delayed vibrato (default 9 cents trumpet, 0 horn
+  and low brass). Sections (`players` > 1): players `detune` apart, entering up to 28 ms late,
+  spread left to right (a solo is mono), summed with `levelled`.
+- **Organ**: nine drawbar ranks (16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5' 1 1/3' 1', 0–8 at 3 dB a
+  step); ranks above 6 kHz fold an octave down, under 27 Hz up; ranks on one pitch merge.
+  `registration`: `cathedral` (default), `principal`, `flute`, `reed`, `drawbar`, `full`;
+  `drawbars` (nine digits, quoted, spaces allowed: `"00 8400 000"`) replaces the bars and keeps the
+  pipe kind. Steady: no decay, every pipe starts at the same phase and the note is normalised by
+  the power of the partials as they add, so level and tone repeat exactly whatever the
+  registration. Options `chorus` (celeste pipe), `detune` (default 0), `click` (default 0). Pipe
+  speech with a chiff and wind noise; ranks alternate left/right by semitone and rank.
+- **Score format.** `Setting` has `choices` (names for whole numbers from 0: `registration: flute`
+  or `2`) and `read` (own notation: `drawbars`); `score_file._setting_value` reads them and reports
+  an unknown name with the closest one. Inside the score both are numbers (`TrackPart.settings`),
+  so sections and marks can change them. An unquoted `drawbars: 008400000` is refused (YAML reads a
+  number). `Instrument` has `seeded` (its `make` takes a seed text `studio:<score seed>:<track
+  name>`: two tracks in unison are two players; one track plays a note the same way every time)
+  and `range` (written range, warned about, §120.7). `music patches --json` shows `range` and
+  `choices`.
+- **Levels.** A held note at defaults is about −16 to −17 LUFS before the piece is normalised (as
+  piano chords); a chord is as loud as one note, a section as loud as one player. This holds for
+  §120.5 and §120.6 instruments too.
+- **Cache.** `_render_hits` passes the seed only to `seeded` instruments; no existing instrument,
+  default or cache key changed.
 
 ### 120.5 Bowed strings for score files (Step 344)
 
-- **The report.** "Parallel Space v6" played its violins on the PADsynth `pad` note by note and
-  its short bow strokes on `soft_lead`. Its agent wrote: "single clean voices, not a section, may
-  read as a synth sequence rather than bowed strings", and "PADsynth pads fluctuate randomly in
-  level from note to note, so they are unusable for an even ostinato". Measured here on
-  sixteenths at 138 BPM: the `pad`'s notes differ by up to 8 dB, and the same note played again
-  by up to 4.3 dB (its wave is one long random loop, read from wherever the note falls).
-- **Four instruments** of kind `note` in a new catalogue family `strings` (between `organ` and
-  `pads`): `violins` (G3–C7, 6 players), `violas` (C3–E6, 5), `cellos` (C2–A5, 4),
-  `double_basses` (C1–G4, 3; not `basses`, which is the family of the synth basses). One model
-  (`studio/strings.py`), four bodies, and a setting `stroke` with the named values `sustain`,
-  `spiccato`, `tremolo`, `pizzicato` (a section of the piece can change it like any setting, so
-  one track bows a melody in one section and plays an ostinato in the next). `players: 1` is a
-  solo instrument (mono). The old `pizzicato` instrument is unchanged.
-- **The string.** `bowed(body, Hz, brightness)`: a bowed string moves like a sawtooth, harmonic
-  `h` at `1 / h`, for `brightness` 0.5. Towards 0 (the bow over the fingerboard, sul tasto) the
-  exponent grows to 2.1 and a corner falls from 3.2 kHz to 1 kHz (violin; lower for the larger
-  bodies); towards 1 (at the bridge, sul ponticello) the exponent falls to 0.3, the corner rises
-  and the fundamental thins (to 0.3 at 1). `plucked(...)`: a string pulled aside a sixth of the
-  way along (`|sin(pi h p)| / h`, a low-pass at about 2.4 kHz), nearer the bridge and harder for
-  more `brightness` and `accent`.
-- **The body** is what separates a string instrument from a saw wave behind a filter.
-  `response(body, Hz, player, mute)` is a curve in dB fixed in frequency: little under the air
-  resonance (violin 275 Hz, viola 225, cello 98, bass 60), three narrow air and plate
-  resonances (+4 to +5 dB), a broad "bridge hill" (2.7 kHz / 2.2 / 1.4 / 0.82, +5 to +7 dB), a dip
-  under it, a roll-off above 4.6 / 3.9 / 3.0 / 2.1 kHz, and 40 narrow resonances of ±5 dB
-  between them, drawn once per body **and per player** (every player of a section has another
-  piece of wood, the same one for every note). A harmonic's amplitude is the string's times the
-  body's at that harmonic's frequency, so every pitch has its own balance of harmonics.
-  `mute` (con sordino) takes the bridge hill away, adds a small hump under it and lowers the
-  highs by 9 dB.
-- **Vibrato moves the tone, not only the pitch.** A sustained note's wave tables are 5 rows: the
-  body sampled at 5 pitches across the vibrato's swing; the note reads between the rows along its
-  pitch. Each harmonic therefore rises and falls as it slides along the body's slopes (measured
-  at A4, 12 cents: 1 dB on the fundamental, 3.5 dB on harmonic 8, 5.4 dB on harmonic 10; without
-  vibrato 0.1 dB). The vibrato begins 0.16 s into a note and grows for 0.35 s (5.8 Hz for a
-  solo; each player of a section 5.2–6.4 Hz, 0.6–1.1 of the depth, its own delay and phase).
-- **The bow.** Rosin noise shaped by the body, in bursts once per period of the note, following
-  the players' level (3.5 % of the tone, twice that in a tremolo); a scratch of 12–24 ms where a
-  stroke begins when the `attack` is under 0.15 s (and always in a spiccato), with a short
-  overshoot; both scaled by `accent` (0–2) and `bow` (0–4); since Step 366 a held note's hiss
-  stays under the tone's own highs (§121.8). A sustained note starts and ends
-  with fewer upper harmonics (a cross-fade to a darker spectrum while its level is under the
-  full level); its release lasts `ring` seconds (0.25 by default), so notes that follow each
-  other without a rest overlap: the nearest thing to a legato until Step 346.
-- **Short strokes are made from time alone.** A spiccato's spectrum is a row of wave tables per
-  moment since the stroke began: the bite (brighter by `0.12 * accent`), the bow on the string
-  for `length` seconds (0.07; 0.15–0.25 is a staccato), then the string ringing on with every
-  harmonic dying at its own speed (the fundamental's time 55 ms for a violin at A4, longer for
-  lower notes and larger bodies, times `decay`; harmonic `h` faster by `1 + 0.12 (h - 1)`). A
-  pizzicato is the plucked spectrum ringing from the start (200 ms at A4 on a violin, 1.3 s at
-  E1 on a bass; harmonic `h` faster by `1 + 0.3 (h - 1)`), a pitch 10 cents sharp for 30 ms and
-  a thump of the body. Both ring until their steps end and are then damped over `ring`. Nothing
-  depends on chance at render time: the same pitch, length, settings and track give the same
-  samples (and `additive.remembered` makes each note of an ostinato once).
-- **A section that is even.** Each player is a few cents off (`detune`, 8), starts up to 30 ms
-  late in a sustained note, 6 ms in a spiccato, 12 ms in a pizzicato, and stands somewhere from
-  left to right. Three things keep the level steady:
-  1. A sustained note's slow swings are taken out by `additive.levelled` (moved there from
-     `brass.py`, unchanged), here on each side alone: without that the section leant up to 3 dB
-     to one side on some notes.
-  2. In a stroke of a tenth of a second the players' low harmonics stay as they began, adding
-     up at one pitch and cancelling at the next: the first version's notes were up to 2.5 dB
-     apart in loudness between a solo and a section at the same pitch. `_in_step` therefore
-     picks, per harmonic, of 16 random sets of the players' phases the one whose sum is nearest
-     the sum of the players' powers (`wavetables` gained an optional phase per harmonic), and
-     the energy of each side is then set to that of its players.
-  3. Every note is set to the same loudness, not the same RMS: `_loud` weighs the harmonics as
-     the loudness measure does (4 dB more above about 1.5 kHz), so a high violin note is not
-     louder than a low one.
-- **Tremolo.** The level of a held note follows fast bow strokes (`speed`, 13 a second): between
-  a floor and 1, the string ringing on between strokes (dips of 7 dB at `accent: 1`, 10 dB at 2),
-  the tone darker in the dips; each player of a section 10 % faster or slower and anywhere in
-  its stroke, so a section's dips are 4 to 5 dB and never in step: the tension bed of film
-  scores. As loud as the sustained note; a crescendo is a `volume` curve.
-- **Levels.** A held note measures −16.3 to −17.0 LUFS over every range, section or solo (brass:
-  −16.1 to −16.8). A spiccato ostinato in sixteenths is about 1 dB louder than held notes, a
-  pizzicato line 1 to 2 dB quieter.
-- **Measured** (scratch scripts; tables in HANDOFF Step 344): harmonic levels against the body
-  curve over 2 octaves correlate with r > 0.98 after each note's own offset; attack to 90 % in
-  21 ms (`attack: 0.03`), 73–80 ms (0.1), 370 ms (0.5); a section's spiccato reaches 90 % in 9–18 ms
-  (basses 21–24; a solo 6–9) and is 20 dB down after 120–260 ms; spiccato notes over each range within
-  1.0 dB (sd 0.2) in loudness, the same note identical; a section's level swings by 0.4–2 dB in
-  50 ms frames while single harmonics beat by 11–20 dB (solo: under 1 dB and 0.5–4 dB with
-  vibrato), the two sides correlate at 0.65–0.75; power between the harmonics at the top of each
-  range under −85 dB for a sustained note (−75 dB at C1), nothing above 16.3 kHz (−110 dB);
-  first sample 0, last under −160 dB; a section costs 50–65 ms of CPU per second of one
-  sustained note (solo 16–18; `soft_lead` 8–11), a fresh spiccato note 21–55 ms once, and 128
-  sixteenths render in 0.4–0.8 s.
-- **The old `pizzicato`** has five harmonics with fixed weights, the same decay at every pitch
-  (20 dB in 0.54 s from E1 to E6), no noise and no body; it stays as it is for existing scores.
-  The strings' pizzicato has 9 to 52 harmonics by pitch and rings 0.23 s (E6) to 1.9 s (E1).
-- **Existing scores are unchanged.** No existing instrument, default or cache key changed;
-  `brass.py` lost `_levelled` and `_smoothed` to `additive.py` (the same code). Both film scores
-  render to the same bytes as after Step 343 (SHA-256 in HANDOFF).
-- **Honest limits.** A model, not a recording, and nobody has listened. No slur or glide (each
-  note is bowed anew), no bow changes inside a long note, no open-string or position
-  differences, no harmonics, col legno or measured tremolo; every stroke of a pitch is the same
-  (even by design: a real section varies a little); an `accent:` pattern on the track changes a
-  stroke's level, not its bite (the bite is the setting `accent`; per-note loudness is
-  Step 346); the tone of the section is six instruments, not sixteen; notes outside the written
-  range are played without a warning.
+- **Instruments** of kind `note`, family `strings` (between `organ` and `pads`): `violins` (G3–C7,
+  6 players), `violas` (C3–E6, 5), `cellos` (C2–A5, 4), `double_basses` (C1–G4, 3; not `basses`,
+  the synth-bass family). One model (`studio/strings.py`), four bodies; setting `stroke` =
+  `sustain`, `spiccato`, `tremolo`, `pizzicato` (per section or per mark). `players: 1` is a mono
+  solo. The older `pizzicato` instrument is unchanged for existing scores.
+- **Model.** String spectrum `bowed(body, Hz, brightness)` (sawtooth at 0.5, sul tasto towards 0,
+  sul ponticello towards 1) or `plucked(...)`, times a body curve `response(body, Hz, player,
+  mute)`: fixed in frequency (air and plate resonances, bridge hill, roll-off, 40 narrow ±5 dB
+  resonances drawn once per body and per player), so every pitch has its own harmonic balance.
+  `mute` removes the bridge hill. A sustained note's tables are 5 rows across the vibrato swing, so
+  vibrato moves the tone too.
+- **Bow.** Rosin noise shaped by the body, scaled by `accent` (0–2) and `bow` (0–4), kept under the
+  tone's own highs (§121.8); a scratch at stroke start when `attack` < 0.15 s (always in spiccato).
+  Sustained notes start and end darker; release `ring` (0.25 s).
+- **Short strokes** are a table row per moment since the stroke began (spiccato: bite, `length`
+  0.07 s on the string, then each harmonic decaying at its own rate, times `decay`; pizzicato: the
+  plucked spectrum ringing). Both ring until their steps end, then are damped over `ring`.
+  `tremolo`: level follows bow strokes at `speed` (13/s), section players at different speeds and
+  phases; as loud as the sustained note.
+- **Determinism.** Nothing depends on chance at render time: same pitch, length, settings and
+  track give the same samples (`additive.remembered` makes each ostinato note once).
+- **Even section** (players `detune` (8) cents apart, staggered entries, spread left to right),
+  kept steady by: `additive.levelled` per stereo side; `_in_step`, which picks per harmonic the
+  best of 16 random sets of player phases (`wavetables` takes an optional phase per harmonic);
+  equal loudness per note, not RMS (`additive.loudness`, harmonics weighted as the loudness
+  measure).
+- **Cache.** No existing instrument, default or cache key changed.
 
 ### 120.6 Orchestral percussion and a choir for score files (Step 345)
 
-- **The report.** "The `kick` tops out at 160→70 Hz, so higher toms and frame drums cannot be
-  made." Both films built their taiko, tom and frame drum from the `kick` (one sine gliding
-  down, a click) and their deep hits from the `boom` (one sine); "Escapement" called a
-  `supersaw` pad its choir. Measured first, what the older instruments cover: the `riser` is a
-  band of noise 0.35 octaves wide sweeping up and cut off at its end (no partials, no ring);
-  `open_hat` lasts 90 ms at any setting; `gated_snare` 0.27 s, with no roll; there is no crash.
-  So a cymbal swell, a tam-tam and a snare roll were built too.
-- **Nine instruments** in two new families of the catalogue, `percussion` and `choir` (after
-  `strings`, before `pads`), numpy only: `studio/percussion.py`, `studio/choir.py`.
-  - Kind `note`, played by note name, with a written range: `timpani` (D2–A3), `toms`
-    (G1–C5), `choir` (E2–C6).
-  - Kind `drum`, played as drum steps, pitch as a setting: `taiko`, `bass_drum`, `frame_drum`,
-    `snare_drum`, `cymbal`, `tam_tam`. They are drum tracks because that is how the films wrote
-    them (`"X... .... ..x. x.x."`); timpani and toms are note tracks because a part moves
-    between drums.
-- **A struck head** (`struck`, a `Head`): a sum of decaying sines at the head's mode
-  frequencies, which are not a harmonic series.
-  - *Modes.* A plain membrane's are the zeros of the Bessel functions: 1, 1.594, 2.136, 2.296,
-    2.653, 2.918, ... (`MEMBRANE`, 16 of them: toms, taiko, bass drum, frame drum, snare drum). A
-    kettledrum's air and kettle move the modes with a line across the head to 1 : 1.504 : 1.99 :
-    2.44 : 2.91 : 3.36 ... of the note (`KETTLE`, after Rossing's measurements), which is why a
-    timpano has a pitch; its modes without such a line (0.85, 1.68, 2.09, 2.66 times the note:
-    `KETTLE_DULL`) are there for 0.1 s as the thump of the blow.
-  - *Levels and decay.* Mode `m` has the level `m ** -falls` and rings `m ** -dies` as long
-    as the lowest (per head); the lowest falls by 60 dB in `seconds * (110 / Hz) ** by_pitch`,
-    so low drums ring longer. A kettledrum's note radiates best and dies before its fifth and
-    octave (`lasting`: 1, 1.25, 1.15, 0.9), so in the tail the fifth is as strong as the note.
-  - *The mallet* (`mallet`, 0–1) is a low-pass on the blow (timpani 160 Hz to 3 kHz, taiko
-    500 Hz to 4.2 kHz) and a tilt of the mode levels (`m ** -(falls * (1.5 - mallet))`), plus
-    its own knock: noise for a few milliseconds, level `0.05 + mallet ** 1.5`. The modes start
-    with alternating signs (a blow off the centre does not start them all the same way), the
-    whole blow fades in over 0.4 of the low-pass's period: the first sample is exactly 0.
-  - *The blow stretches the head*: every mode starts `drop` semitones sharp and settles with
-    a time constant of `0.045 + 4 / Hz` s (toms: the setting `drop`, 1; taiko 1.5; timpani
-    0.1–0.18 by mallet).
-  - *The shell* of a tom or the barrel of a taiko: two short modes at fixed multiples.
-    `edge` (frame drum) weakens the low modes, strengthens the upper ones and shortens the ring.
-  - *Loudness.* A blow is set to RMS 1 over its first 0.15 s, and lower when its peak would
-    pass 3.6 times that (a very short or very hard blow is turned down, not the others up).
-- **Made once.** `struck` is remembered per head, pitch and settings (48 blows); a note or a
-  drum hit is that array cut to its length and, if cut before it has died, damped over 70 ms
-  (`ring` on timpani and toms: 3 s lets a timpano ring out, 0.15 s is a damped note). A `note`
-  instrument's `make` gets the track's seed: each track's drum has modes up to 0.5 % off the
-  model's (two timpani tracks in unison are two drums); a `drum` instrument has no seed and is
-  the same in every track.
-- **Rolls** (`stroke: roll`: timpani, toms, snare drum) are a train of blows through the
-  drum's own ring: a convolution of the blow with impulses `speed` times a second, each up to
-  6 % early or late, the two hands 12 % apart in force. On a pitched drum every blow falls on a
-  whole number of the note's periods after the first: the first version struck at any moment,
-  and blows against the head's motion took 9 dB out of the level from one 50 ms frame to the
-  next (now 2–3 dB). A roll has 0.7 of a blow's level (a snare roll 0.42: its single blow is
-  over in 0.1 s) and is steady: a crescendo is a `volume` curve.
-- **Ensembles** (`players`): each player's drum up to 3 % higher or lower, up to `apart`
-  seconds late, up to 1.5 dB off, spread from left to right; the sum's energy is set to one
-  drum's (the first version was up to 2.6 dB louder by chance).
-- **The snare drum** is a short head (0.35 of the level) and its wires: noise of 0.9 to
-  about 6 kHz that dies in 0.16 s (`snares`, 0 takes them off).
-- **Metal** (`clanged`, a `Metal`): the lowest modes one by one as sines (cymbal 36 from
-  310 Hz to 2.6 kHz, tam-tam 44 from 58 to 900 Hz; fixed per instrument, evenly spread with a
-  random offset, so they are no harmonic series), above them 14 bands of noise up to 14 kHz made
-  from random spectra, each band with its own decay (`seconds * (1000 / Hz) ** faster`: the
-  highs die first). The tam-tam's upper partials are weak at the blow and arrive over the
-  first second (`bloom`): measured, the share of power above 1.5 kHz rises from −21 dB at the
-  blow to −7 dB after 1 s. `stroke: swell` is a roll of soft blows (growing by 24 dB) plus one
-  of harder blows (by 39 dB) until the held steps end; its loudest 0.4 s has the level of a
-  single blow and lies at their end. Stereo.
-- **The choir** (`choir.py`) is formant synthesis on the wave tables of §120.4.
-  - *The voice*: harmonic `h` at `h ** -2` (soft) to `h ** -1` (full voice; `brightness`).
-  - *The vowel*: five resonators one after another (a cascade, as in Klatt's synthesiser),
-    `F ** 2 / sqrt((F ** 2 - f ** 2) ** 2 + (B f) ** 2)`, with the formant frequencies and
-    bandwidths of sung vowels for basses, tenors, altos and sopranos from the Csound manual's
-    table (after IRCAM's CHANT): `aah` a, `eeh` e, `ee` i, `oh` o, `ooh` u. `mm` is a low first
-    formant (240–300 Hz), broad weak ones above and a further low-pass at 700 Hz.
-  - *Formants stay while the pitch moves*: a note's tables are five rows, the formants
-    sampled at five pitches across the singer's vibrato and drift, read along the pitch.
-  - *High notes* (`formants`): when the note is above the first formant, the first formant is
-    the note and its bandwidth grows in proportion; the second stays at least a third above
-    it. Measured for sopranos: at C5 an `ooh`'s fundamental is the strongest partial by 42 dB;
-    from G5 up `ooh` and `aah` are both a fundamental with every other partial 38 dB or more
-    under it.
-  - *A section* (`singers`, 8): each singer's formants 0.96–1.04 of the table's (another
-    throat), `detune` and ±2 cents of tuning, a scoop of 10–35 cents into the note, a wander of
-    a few cents, a vibrato of 4.8–6.2 Hz at 0.5–1.2 of the depth beginning after 0.2–0.6 s, an
-    entry up to 70 ms late with 0.8–1.3 of the `attack`, a place from left to right (the kinds
-    of voice mixed). Each side's slow level swings are taken out by `additive.levelled`.
-  - *Who sings* (`section`): `mixed`, `men` and `women` share a note out among the kinds of
-    voice that reach it (comfortable: basses E2–G3, tenors D3–E4, altos A3–C5, sopranos E4–E6,
-    fading over 4 semitones outside; middle C: 4 tenors and 4 altos), the nearest kind when
-    none does.
-  - *Breath*: noise through the vowel's formants (three times as broad), 3 % of the tone, more
-    in the first 0.15 s, 0.3 of that in a hum. *Morph*: the same phases read from the second
-    vowel's tables, cross-faded over the middle 70 % of the held time.
-  - Every note is set to equal loudness (`additive.loudness`, moved there from `strings.py`).
-- **Levels** (before the piece is brought to −28 LUFS; the loudest 0.4 s of one blow): `taiko`
-  −13.9 LUFS, `bass_drum` −13.8, `timpani` −14.5 to −13.7 over C2–C4, `toms` −18.1 to −15.4
-  over G1–C5, `frame_drum` −17.4, `snare_drum` −17.5, `cymbal` −17.8, `tam_tam` −17.0; for
-  comparison `kick` −12.8, `boom` −13.9, the kick as ps6's taiko −11.0 (and played there at
-  +3 dB). The choir's held notes: −17.0 to −15.5 LUFS over every range and vowel (strings −17.0
-  to −16.3). The new drums have higher peaks than the old ones at the same loudness (taiko
-  +0.7 dB, kick −2.5 dB): they have an attack.
-- **Measured** (scratch scripts; tables in HANDOFF Step 345): timpani partials at 1.500, 1.989,
-  2.446, 2.918 times the note at D2, A2, F3 and A3 (theory 1.504, 1.99, 2.44, 2.91), the note
-  itself within 1 cent; the main mode 20 dB down after 1.10 s at C2 and 0.58 s at C4 (toms
-  0.48 s at G1 to 0.18 s at C5, taiko 0.84 s, bass drum 1.54 s, frame drum 0.26 s); a tom with
-  `drop: 3` is 2.4 semitones sharp in its first 40 ms and on the note after 0.2 s; mallet 0.1
-  to 0.9 raises a timpano's centroid in the first 50 ms from 117 to 225 Hz at the same loudness
-  (toms: 147 to 224 Hz, 3.6 dB lower at mallet 1); rolls at 8, 11 and 16 blows a second
-  measure 8.0, 11.2 and 16.0; ensembles within 0.4 dB of one drum, the two sides correlating
-  at 0.70–0.88; nothing above 16 kHz (−120 dB or lower), first sample 0; a blow costs 8–90 ms
-  once (eight taikos 0.3 s, a cymbal 0.7 s, a tam-tam 1.2 s) and nothing after; 256 sixteenths through the renderer
-  take 0.6–1.3 s of CPU (the `kick`: 0.6 s) and repeat sample for sample. Choir: formants
-  measured on rendered notes within 8 % of the table (most within 3 %; a first formant under
-  the notes measured cannot be seen); a section's level
-  swings by 1–2 dB in 50 ms frames (4.5 dB at G4, where three kinds of voice share the note)
-  while single harmonics cancel completely at moments; one singer's pitch is steady within
-  3 cents from 0.1 to 0.5 s and swings ±16–20 cents after 1 s at 5.6 Hz; attack to 90 % in
-  79 ms (`attack: 0.08`), 224 ms (0.25), 837 ms (1); power between the harmonics −95 dB without
-  breath, −31 dB with it; 8 singers cost 80 ms of CPU per second of one note.
-- **Existing scores are unchanged.** No existing instrument, default or cache key changed
-  (`strings.py` lost `_loud` to `additive.loudness`, the same code). Both film scores render
-  to the same bytes as after Step 344 (SHA-256 in HANDOFF).
-- **Honest limits.** Nobody has listened. The choir is a pad of vowels: no words, no
-  consonants, no slur between notes; one table of formants per kind of voice; apart from
-  breath nothing above about 5 kHz (the five-resonator model stops there), so it is darker than
-  a recorded choir; a single voice sounds synthetic. The drums: every blow at the same settings
-  is identical (asked for; a player's blows differ), a roll repeats one blow, soft and loud
-  differ only by `mallet` and volume, a taiko's attack takes 10 ms to half its peak (the
-  `kick`: 2 ms) with a crack 24 dB under the body in the first 50 ms, the cymbal's lowest
-  partials are steady lines for seconds where a real cymbal's wander, and the tam-tam's bloom
-  is an envelope, not the mode coupling that causes it. No rim shot, brushes, choke or
-  flams. A `drum` instrument cannot change pitch within a track's section.
+- **Instruments** in families `percussion` and `choir` (after `strings`, before `pads`), numpy only
+  (`studio/percussion.py`, `studio/choir.py`): kind `note` with a written range: `timpani`
+  (D2–A3), `toms` (G1–C5), `choir` (E2–C6); kind `drum` (drum steps, pitch a setting): `taiko`,
+  `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`. Settings: `docs/COOKBOOK-MUSIC.md`.
+- **Struck head** (`struck`, a `Head`): decaying sines at the head's modes (`MEMBRANE`: Bessel
+  zeros; `KETTLE`: the tuned kettledrum ratios 1 : 1.504 : 1.99 : …, plus `KETTLE_DULL` as the
+  blow's thump). Low drums ring longer; `mallet` (0–1) sets the blow's low-pass, the mode tilt and
+  a knock; every mode starts `drop` semitones sharp and settles; shells add two short modes;
+  `edge` (frame drum). The blow fades in, so the first sample is exactly 0; loudness is RMS 1 over
+  the first 0.15 s, lowered when the peak would exceed 3.6 times that.
+- **Made once.** `struck` is remembered per head, pitch and settings (48 blows); a hit is that array
+  cut to length and, if cut early, damped over 70 ms (`ring` on timpani and toms). A `note`
+  instrument gets the track seed (each track's drum up to 0.5 % off); a `drum` instrument has no
+  seed and is the same in every track.
+- **Rolls** (`stroke: roll`: timpani, toms, snare drum): the blow convolved with jittered impulses
+  `speed` per second; on a pitched drum each blow falls on a whole number of the note's periods
+  after the first (else blows against the head's motion cancel). Steady level (0.7 of a blow, snare
+  0.42); a crescendo is a hairpin or `volume` curve.
+- **Ensembles** (`players`): drums slightly off in pitch, time (up to `apart`) and level, spread
+  left to right; the sum's energy set to one drum's.
+- **Snare drum**: short head plus wires (`snares`; 0 removes them).
+- **Metal** (`clanged`, a `Metal`, cymbal and tam-tam): fixed inharmonic low modes as sines plus 14
+  noise bands up to 14 kHz, highs dying first; tam-tam `bloom`; `stroke: swell` = a growing roll
+  ending at a single blow's level when the held steps end. Stereo.
+- **Choir** (`choir.py`): formant synthesis on the §120.4 tables. Voice slope set by `brightness`;
+  five cascaded resonators (Klatt) with sung-vowel formants for basses, tenors, altos, sopranos
+  (Csound manual table after IRCAM CHANT): `vowel` `aah`, `eeh`, `ee`, `oh`, `ooh`, `mm` (hum).
+  Five rows across vibrato and drift, so formants stay while pitch moves. When the note is above
+  F1, F1 follows the note (`formants`). Section (`singers`, 8): each singer's own throat, tuning,
+  scoop, vibrato, entry and place; each side `additive.levelled`. `voices`: `mixed`, `men`,
+  `women` share a note among the voice kinds that reach it (basses E2–G3, tenors D3–E4, altos
+  A3–C5, sopranos E4–E6, fading over 4 semitones), the nearest kind when none does. Breath noise
+  through the vowel's formants; `morph`: the second vowel's tables cross-faded over the middle
+  70 % of the held time. Equal loudness per note (`additive.loudness`).
+- **Cache.** No existing instrument, default or cache key changed.
+- **Limits.** A `drum` instrument's pitch changes per section or per mark only; blows at the same
+  settings are identical and a roll repeats one blow.
 
 ### 120.7 Expressive notes in the score format (Step 346)
 
-- **The reports.** "No per-note velocity or crescendo within a note, no portamento, vibrato fixed
-  at 5 Hz." "One track cannot change instrument per section." And from Steps 343–345: "the
-  track's `accent:` pattern changes a stroke's level, not its bite", "a roll and the hit it leads
-  to are two tracks because `stroke` is a per-section setting", "a drum track's `pitch` is one
-  value per section", "a note outside the written range plays without a warning".
-- **The rule above all others**: a score that uses none of the new notation plays the same
-  samples as before. Every new setting has the old constant as its default, every new code path
-  is entered only by a mark, and the old path's arithmetic is not touched.
-- **The notation: marks in square brackets inside `steps`.** A mark stands before a step (a
-  note, a hit, a hold `-`, a rest) and holds one or more items separated by spaces:
-  `"[p] A4 - C5 - | [f stroke=spiccato] E5 E5 E5 E5"`. Everything a mark sets stays until
-  another mark changes it, as a dynamic in printed music does; when the pattern repeats it
-  starts again as written. Three kinds of item:
-  - *Dynamics*: `ppp pp p mp mf f ff fff` (−20, −15, −10, −5, 0, +4, +7, +10 dB against an
-    unmarked note, which is `mf`), or a number of dB with its sign (`[-6]`, `[+2.5]`).
-    `<` and `>` open a hairpin: the level moves in a straight line (in dB, over time) from this
-    step to the next dynamic mark, which says where it arrives: `"[p <] A4 - - - - - - - | [f] ."`
-    is a crescendo inside one held note, `"[pp <] C3 D3 E3 F3 | G3 A3 B3 C4 | [ff] D4"` one
-    over a phrase. Name and hairpin may be written together (`[p<]`). A mark may stand at the
-    very end of the steps to end a hairpin there. `fp` (also `ffp`, `fpp`, `mfp` …: a loud
-    name followed by a soft one) starts the note at the first level and drops to the second
-    within a quarter of a second; `sfz` starts 7 dB above the level in force and comes back.
-    A swell is two hairpins: `"[p <] A3 - - - [f >] - - - [p] ."`.
-  - *Settings*: `name=value` sets one of the instrument's settings from this step on
-    (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`); a named value may be
-    written alone when only one setting of the instrument has it (`[pizzicato]`, `[roll]`,
-    `[hit]`). `[default]` puts every setting back to the part's own. This is the one mechanism
-    for a strings line mixing strokes, a roll into a hit on one timpani track and a drum's
-    pitch per hit.
-  - Hairpins and `fp` need a dynamic mark with a level, a setting mark an instrument that has
-    the setting; every mistake names the mark, its place and the nearest known word.
-- **Slurs are parentheses**: `"(A4 - C5 - E5 - - -) . ."`. The notes after the first are not
-  attacked again: the phrase is one note whose pitch moves, with its vibrato, body and breath
-  going on. Each new pitch is reached by a glide of `glide` seconds (a setting of every
-  instrument that can slur; 0.06 by default: a clean legato; 0.15–0.4 is a portamento),
-  beginning before the new note's step and arriving just after it. Inside a slur only single
-  notes may stand (no chord, `+` or rest: an error), and of the settings only `glide` may
-  change. Instruments that slur: `trumpet`, `horn`, `low_brass`, the four strings (sustain
-  and tremolo), `choir`, `soft_lead`; on any other a slur is an error that lists them.
-  A glide between attacked notes is not offered.
-- **What a dynamic does.** It always changes the level. On an instrument with a response to
-  dynamics it also changes the tone (`Instrument.respond`, settings as played `dB` louder than
-  `mf`): brass `brightness` (the same curve its own attack follows), strings `brightness` and
-  `accent` (the bite), choir `brightness`, struck percussion `mallet` (and `drop` where the
-  head has one). The organ, the older instruments and the pads change level only. A level
-  that moves inside a note (a hairpin over a note of a quarter second or more, `fp`, `sfz`)
-  is a gain curve on the note and, for an instrument with a response, a cross-fade between
-  the note played at the softest and at the loudest level of the curve; both are the same
-  players in the same phases, so the cross-fade moves each harmonic's level and nothing
-  cancels. Shorter notes take the level at their start.
-- **`touch`** (a setting of the instruments with a response, 0 by default): how much an accent
-  or a soft note written the old way (`X`, `o`, `!`, `?`, the `accent:` groups) also changes
-  the tone: at 1 as a dynamic mark of the same level. It is 0 by default because existing
-  scores must not change.
-- **Vibrato**: `vibrato_speed` (Hz) and `vibrato_delay` (seconds before it begins) beside the
-  existing depth `vibrato`, on `trumpet`, `horn`, `low_brass`, the strings, `choir` and
-  `soft_lead`; the defaults are the constants used until now. In a section each player keeps
-  its own speed and delay around the setting. Per section through `settings:`, per note
-  through a mark.
-- **An instrument per section**: `sections: {lift: {instrument: horn}}` on a track. The
-  section's instrument must be of the track's sort (a drum for a drum, a pitched instrument
-  for a pitched one; a `play: chords` track stays with the pads); its settings start from the
-  new instrument's defaults (the track's `settings` belong to the track's instrument), the
-  rest of the part (steps, octave, volume, effects) is the track's.
-- **Range**: `vidgen music render`, `vidgen music check` and the studio's mix report the
-  notes outside an instrument's written range as a warning; they are played as before.
-- **What else reads the marks.** A duck with `follow: true` scales each dip by the dynamic at
-  the hit's start as well as by its accent. A slurred phrase is one event: one dip, one
-  `accent:` position. A pad note takes the dynamic at its start (no shape inside it). `vidgen
-  music render` names a section's instrument in its track line (`melody (horn; trumpet in
-  lift)`). The studio's step grid passes over marks and parentheses (it shows the steps, and
-  a cell's edit keeps the marks in the text); it does not show dynamics, hairpins or slurs.
-- **Cost.** A note at a whole-dB dynamic is one more entry in the note memory; a note whose
-  level moves is made twice. Many short hits under a long hairpin are the costly case (one
-  new blow per dB: 64 hits of a six-player taiko 5.1 s against 0.31 s plain).
-- **In the code.** `patterns.parse_steps` reads the marks and resolves the dynamics (each
-  `Step` gets the level at its start and end, `burst` for `fp` / `sfz`, `slur`, and its raw
-  setting items); `score_file` resolves the setting items against the instrument
-  (`Step.changes`); `render._events_and_last` gives every event its level segments and its
-  slurred notes; `render._render_hits` plays an event that carries none of this exactly as
-  before, and any other through `_expressive`. A slurred phrase is handed to the instrument
-  as `phrase` (`(start sample, semitones, glide samples)` per further note): one phase runs
-  through the phrase and each note's own wave tables are cross-faded on it
-  (`additive.phrase_tone`), the higher note's tables sounding during a glide so that no
-  harmonic passes 16 kHz. The note memory (`additive.remembered`) keys on the phrase; the
-  dynamics reach an instrument as settings, which it keys on already.
+Notation reference for users: `docs/COOKBOOK-MUSIC.md` (marks table). Contract:
+
+- **Rule above all**: a score using none of this notation plays the same samples. New settings
+  default to the old constants, new paths are entered only by a mark, the old path is untouched.
+- **Marks** `[...]` inside `steps` stand before a step (note, hit, hold `-`, rest); items separated
+  by spaces; an item holds until another mark changes it; a repeated pattern restarts as written.
+  - *Dynamics* `ppp pp p mp mf f ff fff` = −20, −15, −10, −5, 0, +4, +7, +10 dB (unmarked = `mf`),
+    or signed dB (`[-6]`). `<` / `>` open a hairpin, linear in dB over time to the next dynamic
+    mark (which gives the arrival level; may stand at the very end of the steps). `fp` (`ffp`,
+    `fpp`, `mfp`, …) drops to the second level within 0.25 s; `sfz` starts 7 dB above and returns.
+  - *Settings* `name=value` from this step on; a named value alone when only one setting has it
+    (`[pizzicato]`, `[roll]`); `[default]` restores the part's settings.
+  - Errors name the mark, its place and the nearest known word (hairpin/`fp` without a level, a
+    setting the instrument lacks).
+- **Slurs** `( ... )`: notes after the first are not re-attacked; each pitch is reached by a glide
+  of `glide` s (default 0.06) arriving just after its step. Inside: single notes only (chord, `+`
+  or rest is an error) and only `score_file.FREE_IN_SLUR` settings may change (`glide`; `syllable`,
+  `vowel` for `choir`, §121.4). Instruments that slur: `trumpet`, `horn`, `low_brass`, the four
+  strings (sustain, tremolo), `choir`, `soft_lead`; elsewhere an error listing them.
+- **A dynamic** always sets the level; with `Instrument.respond` (settings as played `dB` above
+  `mf`) also the tone: brass `brightness`, strings `brightness` and `accent`, choir `brightness`,
+  struck percussion `mallet` (and `drop`). Organ, older instruments and pads: level only. A level
+  moving inside a note ≥ 0.25 s (hairpin, `fp`, `sfz`) is a gain curve plus, with a response, a
+  cross-fade between the note at the curve's softest and loudest levels (same players and phases).
+  Shorter notes take the level at their start.
+- **`touch`** (default 0, so existing scores do not change): how much old-style accents (`X`, `o`,
+  `!`, `?`, `accent:` groups) also change the tone; 1 = as a dynamic of that level.
+- **Vibrato** `vibrato_speed` (Hz), `vibrato_delay` (s) beside `vibrato` on the instruments that
+  slur; defaults are the old constants.
+- **Instrument per section**: `sections: {lift: {instrument: horn}}`; must be of the track's sort
+  (drum/pitched; `play: chords` stays with pads); settings start from the new instrument's
+  defaults; steps, octave, volume, effects stay the track's.
+- **Range**: `vidgen music render`, `vidgen music check` and the studio mix warn about notes outside
+  an instrument's written range; they still play.
+- **Other readers.** A duck with `follow: true` scales each dip by the dynamic at the hit and its
+  accent; a slurred phrase is one event (one dip, one `accent:` position); a pad note takes the
+  dynamic at its start; `vidgen music render` names a section's instrument in its track line
+  (`melody (horn; trumpet in lift)`); the studio step grid skips marks and parentheses and keeps
+  them on edit.
+- **Code.** `patterns.parse_steps` reads marks and resolves dynamics (each `Step`: start and end
+  level, `burst` for `fp`/`sfz`, `slur`, raw setting items); `score_file` resolves settings
+  (`Step.changes`); `render._events_and_last` gives events level segments and slurred notes;
+  `render._render_hits` plays a plain event exactly as before, others through `_expressive`. A slur
+  reaches the instrument as `phrase` (`(start sample, semitones, glide samples)` per further note):
+  one phase through, each note's tables cross-faded (`additive.phrase_tone`), the higher note's
+  tables during a glide so no harmonic passes 16 kHz. `additive.remembered` keys on the phrase;
+  dynamics reach the instrument as settings, already in its key. A note whose level moves is made
+  twice.
 
 ### 120.8 Built-in music data for `web` scenes (Step 347)
 
-- **The report.** All three films gave their three.js pages the music through a hand-written
-  script run after every change to the score (`scripts/make_ps_audio.py` of "Parallel Space",
-  `scripts/make_audio.py` of "Escapement"): render the score to a WAV with `vidgen music
-  render`, measure it at 30 fps, read the score's tracks with `load_music_score`, write a
-  char-encoded JSON beside the script (ps6: 124 KB for 5,549 frames) that the page fetched; each
-  scene passed its place in the song by hand (`data: {t0: 41.6}`).
-- **The interface.** A `web` scene's param `music_data: false | true | {bands, tracks, t0}`
-  (`vidgen.web.music.MusicDataSettings`: `bands` 1–64, default 16; `tracks` a list of score
-  track names, default all; `t0` seconds). With it the page's `ctx` has `music`, built in the
-  page by vidgen's helper `data/web/music.js` from the data Python sends with `start(info)`. The
-  helper is a second init script, added only for such pages, which wraps
-  `window.__vidgen.start`: `runtime.js`, `clock.js` and `media.js` are unchanged, so
-  `engine_id()` and the clip keys of every other `web` scene stay as they were. Every function
-  takes an optional song time `T` (default `ctx.music.now()` = `t0 + performance.now() / 1000`,
-  vidgen's clock, so the frame drawn): `band(i)`, `bands()`, `level()`, `low()`, `onset()`;
-  `hits / notes / events(track?, T0?, T1?)`, `last(track)`, `sounding(track)`, `pulse(track,
-  decay)`, `section()`; `time(t)` maps scene time to song time. Naming follows the page's other
-  inputs (`ctx.theme`, `ctx.data`, `ctx.beats`); `T` is song time because the films wrote their
-  pictures as functions of the song time `T = t0 + t`.
-- **What is measured** (`analyse`). Decided: the music *the video plays*, not the score's own
-  render: `plan_music` + `plan_score` of `mix.py` on the planned timeline (`planned_timings`:
-  `VideoPlan`'s scene starts, durations and beats, in the shape of the join's timings), read
-  through `MusicTrack` (cue `start`, `section`, `loop`, `volume`, fades, the scenes' `music:`
-  levels, ducking, themes), so a page sees a fade or a quiet scene as it is heard; narration,
-  effects and ambience are left out. The mix is rounded as a 16-bit WAV holds it (`pcm16`) and
-  averaged to mono. Frame `f` of the whole video (plus 2 spare frames) is a 4096-sample Hann
-  window centred on sample `round(f * 48000 / fps)`; per frame: each band's mean power in dB
-  (`bands + 1` edges log-spaced 40 Hz–12 kHz; a band narrower than one FFT bin takes the bin
-  nearest its geometric centre: at 64 bands the lowest are), the power from 25 Hz to 14 kHz and
-  from 25 Hz to 150 Hz in dB, and the onset (the mean positive change of `log10(power + 1e-9)`
-  over 25 Hz–14 kHz since the frame before). Normalised over the frames where a cue plays and
-  the level is over −100 dB (`SILENT_DB`; digital silence is −120): a band 0 at its 20th and 1
-  at its 99.5th percentile, the level 0 at 36 dB under its 99.5th percentile, the low end 30 dB
-  under, the onset 1 at its 99.7th; then `released` (a value is at least `keep` of the one
-  before, mixed: 0.82, 0.9, 0.8, 0.7). These are the films' numbers; the silence rule is new
-  (the films had no silent frames: with all-silent music their formula gave a level of 1).
-- **Why 16-bit.** On the float mix the onset differed from the films' in most frames (mean
-  0.045, correlation 0.961 over ps6): a bin that is near silence in float has a log power that
-  jumps by tens of dB between frames, while in a 16-bit file the rounding noise holds it at about
-  −96 dB. Rounded as the WAV is, the onset matches (below).
-- **Score events** (`vidgen.studio.events.score_events`). Read the way `studio/render.py` plays
-  the score, with its own helpers (`_track_events`, `_Voicer`, `_Skipped`, `_slot_at`): holds,
-  notes tied into the next section, a loop's tail, accents (`ACCENT_GAIN`), chords voiced as
-  played (the voicer called in the renderer's order, slurred notes after their event), notes
-  outside 20 Hz–12 kHz left out, a section's own instrument. Per event: time, duration, pitches
-  (MIDI), instrument, dynamic at the start (with `burst`) and at the end, gain, the `stroke`
-  setting by name (`Setting.choices`) and `slur`. A slurred note (`_Event.slurred`) is its own
-  note with `slur: true`, from its step to the next slurred note or the event's end. `play:
-  chords` tracks give one note per chord held, merged as `_render_held_chords` merges them.
-  Nothing is synthesised (ps6's 29 tracks, 5,327 events: 0.6 s).
-- **Song time.** The cue playing at the scene's start (`music:` cues first, scene themes only
-  when there is none): `t0 = offset + (scene start − cue start)`, `offset` = the cue's `start`
-  plus its `section`'s start, taken modulo one pass for a looping piece (as `Source` does).
-  Through a loop's repeats song time counts on and the events are repeated for every pass the
-  cue plays (events before song time 0 are dropped). No cue at the scene's start: `t0` = the
-  scene's video time, `source` and `score` `null`. `music_data: {t0}` overrides it.
-- **Transfer.** The video's data (`video_music_data`) holds every frame; a page is sent its
-  scene's frames and `PAGE_MARGIN_SECONDS` = 5 s on each side (reading outside gives the edge
-  frame) and the score's events whole (a page counts hits from the start: "Escapement" does).
-  Series: one byte per value (0–255; the films used 64 levels), base64. Events per track as
-  columns of base64 typed arrays: start and duration in 48 kHz samples (`uint32`, exact), first
-  pitch (`uint8`), other pitches of chords as a sparse map, dynamics and gains (`float32`),
-  instrument, stroke, slur (`uint8`); a column with only default values is left out. ps6's
-  `05_heart` (28 s): 112 KB with all 29 tracks, 54 KB with the 17 tracks its script used (its
-  JSON: 124 KB). Decided against compressing: deflate gained 10–15 % on these bytes.
-- **Cache and keys.** `music_inputs` (cheap: no audio is read): the data version, vidgen's version
-  (a piece's render depends on it), the frame rate, every `music:` cue, `score:`, `soundfont`,
-  each scene's `music:` and beats' motifs, the files under `assets/music` and each cue's file
-  (score files by SHA-256, others by size and time), the planned timeline (scene starts,
-  durations, beat spans) and, when any music ducks, every narration MP3's size and time.
-  `music_data_key` adds the band count; the data is kept in
-  `build/music/music-data-<key>.json`. Rendering the music goes through `Source` with the join's
-  cache folder `build/music`, so a piece already rendered is read from `piece-<key>.npy` and one
-  not rendered yet is rendered and stored there (the join then reuses it). `render_project`
-  makes it in the parent process before the workers start (`prepare_music_data`), so two
-  workers never render the music at once; a worker (or `vidgen still`, lint) that finds no data
-  makes it itself. The render fingerprint's `web` part gets `music` (the key at the format's
-  frame rate) only for a scene with `music_data`; the clip inputs get `music: {data: SHA-256 of
-  what the page is sent, helper: SHA-256 of music.js}` only then. **No stored key changes**:
-  scenes without `music_data` have the same fingerprint and clip inputs as before (the
-  `vidgen_source` digest changes with every step). Old `music-data-*.json` files stay in
-  `build/music` like old piece renders.
-- **Checks.** `Web.validate_project`: `music_data` in a video without music (no cue, no theme)
-  is `music_data: the video plays no music; ...`; `tracks` naming a track the score lacks is a
-  `VidgenError` with did-you-mean; `tracks` where the scene's music is not a score file is an
-  error. In the page: an unknown track or band number throws, naming the ones there are.
-- **Equivalence with the films** (scratch: `/home/claude/work/scratch/al347/`; `tools/compare.py`).
-  Copies of ps6 and Escapement; their scores rendered once with `vidgen music render`'s code
-  (WAV SHA-256 equal to Step 346's), the films' own scripts run on the WAVs (ps6's output is
-  byte-identical to its shipped `ps_audio.json`; Escapement's shipped JSON is older than its
-  score and was made again), the samples given to each copy's music cache. ps6, 5,548 frames
-  at 30 fps, 16 bands: bands, level and low end within 0.016 of the film's (its quantisation
-  step is 1/63 = 0.016; mean 0.004), the onset too except in the last 0.73 s (frames
-  5526–5547: max 0.14), where the video's 1.5 s `fade_out` acts and the film's WAV had none;
-  Escapement the same (level, low end within 0.0099; onset off in the last 17 frames). Events:
-  every exported track of both films equal in count, time and length (1e-4 s), gains equal,
-  pitches equal (where the films wrote 0 for a chord degree, ours is the pitch played). Stills
-  (`vidgen still`, 1280x720) of a copy whose script reads `ctx.music` instead of the JSON (and
-  `ctx.music.t0` instead of `data.t0`): ps6 `05_heart` at 1, 9.5 and 20 s within 11 levels of
-  the original (PSNR 67–83 dB; the 64 levels of the films' JSON against 256); Escapement
-  `04_escapement` and `08_falter` at six times pixel-identical (its pictures read only events
-  and the mechanism's beats, which its copy builds from `ctx.music.events`).
-- **Public interface.** The `web` param `music_data` and the page's `ctx.music`. `vidgen.api`
-  gains three names, because built-in scenes import only `vidgen.api`
-  (`tests/test_builtin_scenes.py`): `WebMusicData` (= `vidgen.web.music.MusicDataSettings`),
-  `video_has_music(config)` and `web_scene_music(project, scene_id, fps, settings)` (what the
-  page is sent; pass it as `make_web_clip(..., music=)`).
-- **Measured.** The video's data: 4.7–5.4 s for a 3-minute film (FFT and percentiles; the
-  music read from the cache); a page's data for one scene: 0.6 s more (the score's events). A
-  scene without `music_data` costs nothing (one look at its params when the render starts).
-- **Not done.** No per-track audio analysis (the films did not ask; a track's events plus the
-  mix's bands served them). No measurement of the narration or effects. A cue starting inside a
-  scene gives that scene no song time (it reads the cue playing at its start). Ducking makes the
-  measurements dip under narration (as heard).
+- **Interface.** `web` param `music_data: false | true | {bands, tracks, t0}`
+  (`vidgen.web.music.MusicDataSettings`: `bands` 1–64, default 16; `tracks` default all; `t0`
+  seconds). The page's `ctx.music` is built by `data/web/music.js`, a second init script added only
+  for such pages, wrapping `window.__vidgen.start` (so `runtime.js`, `clock.js`, `media.js`,
+  `engine_id()` and other scenes' clip keys are unchanged). Functions take an optional song time
+  `T` (default `ctx.music.now()` = `t0 + performance.now() / 1000`): `band(i)`, `bands()`,
+  `level()`, `low()`, `onset()`, `hits / notes / events(track?, T0?, T1?)`, `last(track)`,
+  `sounding(track)`, `pulse(track, decay)`, `section()`, `time(t)` (scene → song time). Fields
+  camelCase in JS (`dynamicEnd`), snake_case in Python (`dynamic_end`). User guide:
+  `docs/COOKBOOK-MUSIC.md`.
+- **Measured** (`analyse`): the music the video plays (`plan_music` + `plan_score` of `mix.py` on
+  the planned timeline `planned_timings`, through `MusicTrack`: cue start, section, loop, volume,
+  fades, scene `music:` levels, ducking, themes), without narration, effects or ambience; rounded
+  to 16-bit (`pcm16`, so near-silent bins do not make the onset jump) and mono. Per frame (whole
+  video + 2 spare) a 4096-sample Hann window at `round(f * 48000 / fps)`: band powers (`bands + 1`
+  log-spaced edges 40 Hz–12 kHz), level 25 Hz–14 kHz, low end 25–150 Hz, onset (mean positive
+  change of `log10(power + 1e-9)`). Normalised over frames where a cue plays above `SILENT_DB`
+  (−100 dB): bands 20th → 99.5th percentile, level 36 dB and low end 30 dB under their 99.5th,
+  onset 1 at its 99.7th; then `released` (keep 0.82, 0.9, 0.8, 0.7).
+- **Events** (`vidgen.studio.events.score_events`): the score read as `studio/render.py` plays it,
+  with its helpers (`_track_events`, `_Voicer`, `_Skipped`, `_slot_at`): holds, ties, loop tails,
+  accents (`ACCENT_GAIN`), chords voiced as played, notes outside 20 Hz–12 kHz dropped, section
+  instruments. Per event: time, duration, MIDI pitches, instrument, start dynamic (with `burst`) and
+  end dynamic, gain, `stroke` by name, `slur` (a slurred note is its own note with `slur: true`).
+  `play: chords` tracks give one note per held chord (merged as `_render_held_chords`). Nothing is
+  synthesised.
+- **Song time.** From the cue playing at the scene's start (`music:` cues before scene themes):
+  `t0 = offset + (scene start − cue start)`, `offset` = cue `start` + its `section`'s start, modulo
+  one pass for a loop (as `Source`); events repeat per pass, those before 0 dropped. No cue: `t0` =
+  scene video time, `source` and `score` `null`. `music_data: {t0}` overrides.
+- **Transfer.** `video_music_data` holds every frame; a page gets its scene's frames ±
+  `PAGE_MARGIN_SECONDS` (5 s; outside reads the edge frame) and all events. Series: one byte per
+  value, base64. Events per track as base64 typed-array columns (start and duration in 48 kHz
+  samples `uint32`, first pitch `uint8`, chord pitches as a sparse map, dynamics and gains
+  `float32`, instrument, stroke, slur `uint8`); all-default columns omitted. Not compressed.
+- **Cache.** `music_inputs` (no audio read): data version, vidgen's version, fps, every `music:`
+  cue, `score:`, `soundfont`, each scene's `music:` and beat motifs, files under `assets/music` and
+  each cue's file (score files by SHA-256, others size and time), the planned timeline and, when
+  any music ducks, every narration MP3's size and time. `music_data_key` adds the band count; data
+  in `build/music/music-data-<key>.json`. Music renders through `Source` with cache `build/music`
+  (`piece-<key>.npy`, shared with the join). `render_project` makes the data in the parent before
+  workers start (`prepare_music_data`); a worker, `vidgen still` or lint that finds none makes it.
+  Only scenes with `music_data` get `music` in the fingerprint's `web` part and `music: {data,
+  helper}` (SHA-256 of what is sent and of `music.js`) in the clip inputs.
+- **Checks.** `Web.validate_project`: `music_data` with no music (`music_data: the video plays no
+  music; ...`), unknown `tracks` (did-you-mean), `tracks` when the scene's music is not a score
+  file: `VidgenError`. In the page, an unknown track or band throws, naming the valid ones.
+- **`vidgen.api`**: `WebMusicData` (= `MusicDataSettings`), `video_has_music(config)`,
+  `web_scene_music(project, scene_id, fps, settings)` (pass as `make_web_clip(..., music=)`);
+  exported because built-in scenes import only `vidgen.api`.
+- **Limits.** No per-track audio analysis; a cue starting inside a scene gives it no song time;
+  ducking makes the measurements dip under narration.
 
 ### 120.9 Smaller intermediate files (Step 348)
 
-- **The report.** "Parallel Space v6" and "Escapement" (3 minutes at 1280x720, 30 fps) kept 4.7
-  and 4.9 GB of "lossless scene clips"; on a disk with about 1 GB free the ps6 agent rendered
-  one or two scenes at a time (`--max-scenes 2`) and deleted `build/final/web/*.mkv` by hand
-  between runs.
-- **Measured first: what a render keeps** (Escapement's build folder, and a copy with two of
-  its `web_cut` scenes, 3 s each from inside the film, plus a `bullets` slide, in
-  `/home/claude/work/scratch/al348/`):
+User reference: `docs/CONFIG.md` "Intermediate files and disk (`render:`)".
 
-  | File | Format | Size | Needed again? |
-  |---|---|---|---|
-  | `web/<id>.mkv`, `three_d/<id>.mkv`: the **frames clip** a `web` / `3d` scene draws | FFV1 in Matroska, `bgra` (`3d`: `bgr0`), intra-only | WebGL film page: 26.2–28.3 MB/s at 720p30, 57.6 MB/s at 1080p30 (0.92–1.01 bytes per pixel and frame); a flat 2D page with text on a transparent background: 0.68 MB/s at 720p | only when the scene renders again for another reason than its page (title, timing, overlays, `--force`); the scene's render fingerprint reads the record beside it, not the clip |
-  | `web/<id>.json`, `.layout.json` | records | 4 KB | yes: fingerprint (files the page loaded), lint (page text) |
-  | `scenes/<id>.mp4`: the **scene clip** | H.264 `yuv420p` CRF 23 (Manim's encoder default; vidgen sets no options) | WebGL 720p 0.23–0.32 MB/s, 1080p 0.44 MB/s; the slide 0.04 MB/s | yes: the join copies it (stream copy); reused while the scene is current |
-  | `media/videos/<id>/partial/*.mp4` | Manim's partial movies | about the scene clip again | no (caching is off) |
-  | `padded/<id>.wav`, `padded/mix.wav` | PCM 48 kHz | 0.19 MB/s per scene, the mix again | rewritten by every join |
-  | `scenes/<id>.overlay.mov` | an alpha clip of moving overlays (only for a push / wipe) | small | by the join |
-  | `music/piece-*.npy` | the synthesized score | 141 MB for Escapement | yes (the score cache) |
-
-  So the 5 GB were the frames clips alone; the "scene clips" are already lossy and small, and
-  the joined video is a stream copy of them (checked: every decoded frame of the output equals
-  the scene clips' frames, MD5 per frame). Since a scene clip is CRF 23, the final picture is
-  already one lossy generation away from the page: against the lossless frames it measures
-  33.2–35.2 dB PSNR, SSIM 0.81–0.85 on the film's grainy frames.
-- **A smaller lossless setting: none for free.** On 90 frames of three Escapement scenes, PyAV
-  as the writer uses it: FFV1 as written (Golomb–Rice coder, level 1) 26.2–28.3 MB/s, 41–43 ms
-  per frame to encode, 34–42 ms to decode; level 3 with 4 slices the same size and time; the
-  range coder 9 % smaller (23.8 MB/s) but 50 % slower to encode and decode (62 / 64 ms), with
-  context model 1 10 % smaller at the same cost (at 1080p 52.5 MB/s against 57.6, 105 / 123 ms
-  against 62 / 71 ms); `bgr0` instead of `bgra` (no alpha plane) 1.7 % smaller; x264 lossless
-  (`libx264rgb -qp 0`) 43–49 MB/s, larger (the films' grain defeats inter prediction);
-  ProRes 4444 (not lossless) 39 MB/s. A 10 % gain for 50 % more coding time is not "free", so
-  the lossless clip stays exactly as it was: same codec and settings, the same coded packets
-  (checked on 20 film frames with alpha and on 10 noise frames with and without; the Matroska files' bytes differ between
-  any two writes because of their random UIDs, as before), the same cache keys.
-- **Opt-in compact frames: `render.intermediate: compact`** (`vidgen render --intermediate
-  compact`, MCP `render` `intermediate`). `vidgen.browser.frames_clip.write_frames_clip` (the
-  writer moved out of `browser/chromium.py`, where it was `write_ffv1_clip`) writes the picture as libx264 `yuv444p` CRF 12,
-  preset `veryfast` (4:4:4: no chroma subsampling on top of the scene clip's own), and, for
-  frames with alpha (every `web` clip), a lossless FFV1 `gray` alpha stream beside it in the
-  same Matroska file, titled `alpha`. `ClipReader` (`vidgen.clips`) reads such a file with a
-  second reader on that stream, at the same times, and puts its picture into the alpha channel,
-  so `ClipMobject` and everything above it are unchanged. A `3d` clip (opaque) is the picture
-  alone. Measured (same frames):
-
-  | | lossless FFV1 | compact |
-  |---|---|---|
-  | size, film WebGL page, 720p30 | 26.2–28.3 MB/s | 5.5–6.0 MB/s (4.6× smaller) |
-  | size, 1080p30 | 57.6 MB/s | 12.2 MB/s |
-  | size, flat 2D page with transparency, 720p | 0.68 MB/s | 0.35 MB/s (picture 0.05 + alpha 0.30) |
-  | alpha stream of an opaque page | — | 0.03 MB/s (720p), 0.06 (1080p) |
-  | encode / decode per 720p frame | 41–43 / 34–42 ms | 36–44 / 16–19 ms |
-  | frames clip vs the frames (PSNR, SSIM) | exact | 39.3–41.3 dB, 0.959–0.968 |
-  | scene clip vs the frames | 33.29 / 30.22 dB, SSIM 0.850 / 0.807 | 33.17 / 30.17 dB, SSIM 0.849 / 0.806 |
-  | scene clip vs the scene clip from lossless | — | 39.0 / 38.0 dB, SSIM 0.96 (the film); 47.6 dB, SSIM 0.9986 (flat page) |
-
-  (Scene clip rows: real renders of the copy's two film scenes, final and with `--intermediate
-  compact --force`; the frames compared are the lossless clip's. The same with `ffmpeg`
-  over 90 frames of three film scenes: final from lossless 33.21–35.18 dB, from compact CRF 12
-  32.97–35.10 dB, SSIM within ±0.002.) The trade-off: one more lossy generation before the scene
-  clip's CRF 23, which loses six to eight times more (in PSNR terms) than it does; the scene clip
-  made from compact frames differs from the one made from lossless frames by about what two CRF
-  23 encodes of the same picture differ by, and its distance to the page is 0.04–0.24 dB
-  larger. CRF 14–18 were measured too (4.4 to 2.2 MB/s, the final 0.1–0.3 dB further off); 12
-  was kept as the setting that is still "visually lossless" by the usual measure (SSIM 0.96+ on
-  grain, 52 dB PSNR on a flat page). Speed is equal (encoding the same, decoding twice as fast);
-  a frame of the film page costs about 1–2 s to draw, so neither matters.
-- **The cache.** The intermediate is not in the clip's key (so every existing clip, and the
-  layout readings keyed by it, stay valid). The record beside a compact clip says
-  `"intermediate": "compact"`; a record without it is lossless (all clips written before this
-  step). `clip_serves(stored, wanted)`: a lossless clip serves a render asking for either, a
-  compact one only `compact`; asking for lossless after a compact render draws the frames again
-  (`make_web_clip`, `make_3d_clip`). The scene's render fingerprint does not include the
-  setting: changing it does not render a current scene again (its scene clip is what the join
-  needs); to remake scenes from lossless frames after a compact render, use `--force`. The
-  command line's choice reaches each worker as `--intermediate` (the worker loads the config
-  from the file).
-- **Deleting what is no longer needed: `render.keep_intermediates: false`**
-  (`--clean-intermediates`, MCP `clean_intermediates`). After each scene renders (in the parent,
-  after `post_scene`), `disk.remove_frames_clips` deletes its frames clip (`web/<id>.mkv`,
-  `three_d/<id>.mkv`) and Manim's partial movies of that scene; after the join, every scene's
-  (clips left from earlier runs too). Kept: the records (the fingerprint still sees an edited
-  script or a fetched file: a test edits the script after a compact, cleaned render and the
-  scene renders again), the layout readings, the guide passes of `3d` scenes, the scene clips
-  and the joined video. The cost, honestly: a scene that renders again draws all its frames
-  again (for the film page 1–2 s a frame: 8 to 16 minutes for a 16-second scene at 720p), also
-  when only its title, timing or an overlay changed, with `--frames`, a frame thumbnail
-  without overlays (its own `_bare` folder) or `--guide-passes` on a reused `3d` scene. With
-  `--jobs N` at most N frames clips exist at once, so the peak is a scene or two, not the film.
-  This is what the ps6 agent did by hand, without `--max-scenes`.
-- **The disk, reported and checked.** Before the workers start, `vidgen render` estimates the
-  frames clips the scenes to render will write (`disk.expected_bytes`: scenes whose type draws
-  frames and whose clip is not kept already, at the full frame size, the scene's last rendered
-  length or its `duration` or its narration estimate, `BYTES_PER_PIXEL` 1.0 lossless / 0.22
-  compact: the film page's figures, an upper bound for flatter pages; with
-  `keep_intermediates: false` only the `jobs` largest) and logs a warning when the free disk
-  is smaller, naming compact, `--clean-intermediates` and `--max-scenes`. After the join it
-  prints `build:` with the build folder's size, the part in frames clips, the free disk and what
-  this run deleted (`--json`: `disk: {build, frames_clips, free, removed}` in bytes;
-  `RenderResult.disk`, `.removed`).
-- **Not done.** The scene clip's own quality (CRF 23, Manim's default) is untouched: it is not an
-  intermediate but the delivered picture (the join copies it); raising it would grow every
-  render and change every existing video. Lossless intermediates in fewer bytes would need a
-  codec PyAV does not ship or a slower FFV1 setting. The estimate does not know a page's
-  content, so flat pages are overestimated (by up to 40 times); the warning says "up to".
+- **Frames clips** `build/<quality>/web/<id>.mkv`, `three_d/<id>.mkv` (FFV1 in Matroska, `bgra`;
+  `3d`: `bgr0`; intra-only; about 1 byte per pixel and frame for a WebGL page) are the only large
+  intermediates; they are needed again only when the scene re-renders for a reason other than its
+  page. The scene clip `scenes/<id>.mp4` (H.264 `yuv420p` CRF 23, Manim's default, stream-copied
+  by the join) is the delivered picture and is not affected by these settings. The lossless
+  default (codec, settings, packets, keys) is unchanged: no cheaper lossless option exists in PyAV.
+- **`render.intermediate: compact`** (`--intermediate compact`, MCP `render` `intermediate`).
+  `vidgen.browser.frames_clip.write_frames_clip` writes libx264 `yuv444p` CRF 12 (`COMPACT_CRF`),
+  preset `veryfast` (`COMPACT_PRESET`), plus for frames with alpha a lossless FFV1 `gray` stream in
+  the same file titled `alpha` (`ALPHA_TITLE`). `ClipReader` (`vidgen.clips`) reads that stream
+  with a second reader into the alpha channel, so `ClipMobject` and above are unchanged. About
+  4.6× smaller; CRF 12 keeps it visually lossless (SSIM 0.96+ on grain).
+- **Cache.** The intermediate is not in the clip's key. A compact clip's record says
+  `"intermediate": "compact"` (no field = lossless). `clip_serves(stored, wanted)`: lossless serves
+  either, compact only `compact`; otherwise `make_web_clip` / `make_3d_clip` redraw. The scene
+  fingerprint excludes the setting (use `--force` to remake). Workers get it as `--intermediate`.
+- **`render.keep_intermediates: false`** (`--clean-intermediates`, MCP `clean_intermediates`).
+  After each scene (in the parent, after `post_scene`) `disk.remove_frames_clips` deletes its frames
+  clip and Manim partial movies; after the join, every scene's. Kept: records (the fingerprint still
+  sees edited scripts and fetched files), layout readings, `3d` guide passes, scene clips, the
+  video. A scene that renders again then redraws every frame (also for title/timing/overlay
+  changes, `--frames`, a bare frame thumbnail in `_bare`, `--guide-passes`).
+- **Disk.** Before workers start, `disk.expected_bytes` estimates the frames clips to write (scenes
+  that draw frames and lack a kept clip, full frame size, last rendered length or `duration` or
+  narration estimate, `BYTES_PER_PIXEL` 1.0 lossless / 0.22 compact, an upper bound; with
+  `keep_intermediates: false` only the `jobs` largest); a warning ("up to") when free disk is
+  smaller names compact, `--clean-intermediates` and `--max-scenes`. After the join `build:` reports
+  build size, frames-clip part, free disk, removed bytes (`--json`: `disk: {build, frames_clips,
+  free, removed}`; `RenderResult.disk`, `.removed`).
 
 ### 120.10 Faster `web` rendering, measured first (Step 349)
 
-The films' authors reported: about 1.35 s a frame at 720p for "Escapement" (2 h 10 min for 5,730
-frames), "about 0.36 s per frame is fixed screenshot overhead", `--jobs 2` no faster than one job
-on two cores, about 14 s of Python import per scene worker, no progress line while the frames are
-drawn, shaders compiled on the first screenshot rather than in `load` (the film draws one frame
-in `load` and reads a pixel back), and `performance.now()` frozen during a frame.
-
-**Where a frame's time goes.** Measured with `/home/claude/work/scratch/al349/tools/bench.py`
-(outside the repository): it opens a scene's page as `vidgen still` does and draws frames 0 to
-N−1 once per way of taking the picture, timing each stage, with the CPU seconds of every process
-from `/proc`. Pages: (a) a copy of Escapement with two 3 s `web_cut` scenes from inside the film
-(`cathedral` at song time 72 s, `climax1` at 140 s); (b) `examples/web`'s `cycle` page (HTML,
-CSS, SVG, CSS animations, `region: body`, 1172x522 at 1280x720) and a page of SVG moved by
-`frame(t)` with text (`flat2`: `region: body` with alpha, and full frame with `design_width: 800`
-and an opaque background). 2 cores, one command at a time; the machine's speed varies by up to
-20 % within minutes (§118.18), so A/B runs were taken in turn.
-
-| per frame (mean of frames 1–9; frame 0 apart) | Escapement 1280x720 | Escapement 640x360 | `cycle` 1172x522 | `cycle` 586x261 |
-|---|---|---|---|---|
-| the page's `frame(t, ctx)` (timers, animation frames, the hook; GL commands queued) | 10–13 ms | 9 ms | 3–4 ms | 3 ms |
-| GL work done (SwiftShader), timed by a 1-pixel `gl.readPixels` before the screenshot | 1,093 ms | — | — | — |
-| the screenshot after that: compositing, PNG encode, transfer | 348 ms | — | — | — |
-| the screenshot as vidgen took it (GL work + the above) | 1,454–1,498 ms | 455 ms | 34–36 ms | 19–24 ms |
-| the same with `optimizeForSpeed` (the PNG compressed quickly) | 1,152 ms | 387 ms | 20 ms | 12–13 ms |
-| PNG size (default / quick) | 1,283 / 1,624 kB | 347 / 436 kB | 31 / 46 kB | 14 / 18 kB |
-| Python: PNG decode (Pillow) | 23–31 ms | 7 ms | 5–6 ms | 2 ms |
-| Python: FFV1 encode into the frames clip | 30–36 ms | 9 ms | 8–9 ms | 3–4 ms |
-| a frame in all (default / quick PNG) | 1,553–1,629 / 1,243 ms | 503 / 447 ms | 51–58 / 34–38 ms | 33 / 20–21 ms |
-
-CPU while Escapement's frames are drawn (8 frames, 12.4 s): the GPU process (SwiftShader) 17.1 s
-(1.37 cores), the browser process 2.4 s (the PNG encoding: 0.30 s a frame, the "fixed overhead"
-the film saw), Python 0.8 s, Playwright's driver 0.5 s, the renderer 0.2 s. With the quick PNG the
-browser process drops to about 0.3 s. Fixed costs per scene: `import vidgen.render.worker` 0.4 s,
-`vidgen.scenes` (every scene type) 2.6 s; under the profiler a draft worker spent 4.3 s importing
-in all (the 14 s of §118.18 were measured in a slow phase under the profiler). Chromium's start,
-the page's load and Escapement's `load(ctx)` (textures baked, shaders warmed up) 7.7–9.2 s.
-
-**Tried, and the result.**
-
-| idea | result | taken |
-|---|---|---|
-| `Page.captureScreenshot` PNG with `optimizeForSpeed` | same pixels (PNG is lossless; checked frame by frame), 0.30 s less per 720p film frame, 40 % less per frame on the flat page | **yes** (default) |
-| the same call without Playwright (`page.screenshot` → CDP directly) | Playwright's own work around it is 1–2 ms | as part of the above |
-| no `clip` | same speed | no (Playwright's clip kept, see below) |
-| WebP at quality 100 | lossless here (same pixels, alpha kept), 975 kB, slower: 1,616 ms | no |
-| JPEG at quality 100 | no alpha (PSNR 17 dB with it), 1,180 ms | no |
-| the WebGL canvas read back (`gl.readPixels` of the whole canvas through `page.evaluate`, base64) | 1,270 ms, and wrong: the drawing buffer is cleared once composited (`preserveDrawingBuffer: false`, PSNR 8.5 dB), and HTML over the canvas (the film's title and end cards) is not in it | no |
-| `Page.startScreencast` | frames come when the compositor draws (6 for 10 frames advanced on the flat page, 11 on the film's), not tied to vidgen's frames, and still PNG or JPEG encoded | no |
-| `HeadlessExperimental.beginFrame` | refused: "only supported if BeginFrameControl is enabled", which needs a target Playwright does not create | no |
-| `--disable-gpu-compositing`; `--use-angle=swiftshader-webgl` | 1,130 / 1,157 ms (no change); flags are in the clip key, so a change would have drawn every clip again | no |
-| decoding and encoding in a thread while the next frame is drawn | same pixels in the same order; flat pages 302 frames 11 → 10 s and 21 → 17 s; the film's page 1.26 → 1.24 s a frame (noise) | **yes** |
-| `--jobs 2` (two scenes of the film copy, whole render) | before this step 291 s → 241 s; after it 241 s → 216 s: 10–17 % here, not "no faster" (each worker is slower, 1.7–2.1 s a frame, both together faster); the GPU process of one worker already uses 1.4 of the 2 cores | unchanged (`--jobs auto` decides by memory) |
-| two pages in one browser, or a scene's frames split over two workers | the second half would have to step from frame 0 for pages that keep state, and stepping still runs the GL work (0.39 s a frame at 640x360, §120.3): no gain on 2 cores | no |
-| lazy imports in the worker | at most the 2.6 s of `vidgen.scenes` a scene (about 30 s of a 12-scene film); the registry imports every built-in scene to know the types | no (left for later) |
-
-**What changed.** `WebPage.screenshot(n)` sends `Page.captureScreenshot` on vidgen's own CDP
-session with what Playwright's `page.screenshot(type="png")` sends — `Page.getLayoutMetrics`'
-visual viewport for the clip (its place, scale and size, the size rounded as Playwright's
-`enclosingIntSize`), `captureBeyondViewport: false` — and `optimizeForSpeed: true`; around it,
-carets are hidden in every frame of the page and shown again as Playwright does
-(`inPagePrepareForScreenshots`: without it a focused input's caret is in the picture; a test
-shows it). Two things differ from Playwright's call and are handled: the device scale of a
-`design_width` page is an emulation of Playwright's CDP session, not of vidgen's, so the clip's
-scale is the visual viewport's times the device scale (without it the picture came out 800x450
-for a 1280x720 frame); and the time limit is vidgen's own (`_TimeLimit`, 30 s, as Playwright's
-screenshot timeout was). `WebPage.pixels(png)` decodes; `frame(n)` = `advance` + `screenshot` +
-`pixels` as before (`vidgen still` uses it). `make_web_clip` draws in the main thread and hands
-each PNG to `FramesClipWriter` (`browser/frames_clip.py`): `write_frames_clip` in a thread, at
-most two frames waiting; an error of either side stops both and leaves no clip or `.partial`.
-
-**Pixels: identical.** (1) The same page state taken both ways, every frame (the new screenshot
-first, then Playwright's): Escapement 1280x720 30 of 30, 640x360 60 of 60; the SVG page with
-alpha in a body region 92 of 92 at both sizes; the SVG page with `design_width` 92 of 92 at both
-sizes; a page with a focused input, text and alpha, at scale 1 and with `design_width`
-(`tests/test_web_speed.py`). (2) Whole frames clips of a forced render against the code before
-this step: Escapement final both scenes 92 of 92, preview 92 of 92; the SVG page in a body region
-92 of 92 (final) and 302 of 302 (preview). The `design_width` SVG page gave 90–91 of 92 and 299 of
-302 — but two renders with the old code differ the same way (frames 27 and 60, at most 6 levels
-in at most 5 pixels): the old path is not repeatable at a device scale other than 1, which is
-not this step's change. The `cycle` page (CSS transitions and animations) is not repeatable
-either: two Playwright screenshots of one page state differ in 4 to 9 of 92 frames (compositor
-animations move between two screenshots), recorded in the tasklist. **Cache keys:** unchanged
-(no page file, flag or input changed; `engine_id` is the same; the first render after the change
-reused every frames clip).
-
-**Speed after it** (whole scene workers, 92 frames at 1280x720, the film's `cathedral`, in
-turn): before 164.6 s and 166.2 s, after 138.2, 134.9 and 131.1 s (−18 %); the frames themselves
-1.61 s → 1.24–1.30 s each. Preview (640x360): 56.5 s → 51.8 s. The flat SVG pages (302 frames):
-24.9 / 23.0 s → 19.2 / 19.0 s and 37.1 / 34.0 s → 27.9 / 27.2 s. For the whole film at the
-reported 1.35 s a frame this is about 1.05–1.1 s a frame: about 1 h 45 min instead of 2 h 10 min
-with `--jobs 1` (not rendered; the two-scene copy suggests `--jobs 2` saves about 10 % more).
-
-**Progress while frames are drawn.** `FrameProgress` (`web/clip.py`) logs on the
-`vidgen.progress` logger at most every `PROGRESS_SECONDS` (10 s): `web frames 30/92, 1.24 s a
-frame, about 1 min 17 s left` (the rate and the time left from the frames after the first, which
-compiles the shaders), and after the last frame a summary: `web frames 92/92 drawn in 1 min 54 s
-(the page ready in 8.0 s before), 1.24 s a frame (the page's frame(t, ctx) 0.02 s, drawing and
-the screenshot 1.22 s)`. The worker prints these as `progress: …` lines (`PROGRESS_PREFIX`);
-`vidgen render` shows them as `[1/12] 04_escapement: web frames …` (`pipeline.progress_lines`,
-`_run_worker(on_progress=)`; in live mode, one job on a terminal, the worker's own lines show).
-They go where the render's other lines go: stdout, stderr with `--json`, so the MCP `render`
-tool reports them as progress. A failed worker's output tail leaves them out. `3d` scenes have no
-progress line (not asked).
-
-**Warming up shaders.** Measured on the film copy without its warm-up (the `composer.render()`
-and the 1-pixel `readPixels` in `load` removed): the page was ready in 1.5 s instead of 8 s, and
-frame 0's `frame(t, ctx)` took 4.5 s (three.js compiles and links the programs there and waits
-for them), then 1.4 s a frame as before. So the trick only moves the time; what it protects
-against is the frame time limit (10 s), which a page with more shaders on a slower machine could
-reach in frame 0. Now the first frame a page draws may take `FIRST_FRAME_TIMEOUT_S`
-(= `LOAD_TIMEOUT_S`, 30 s), later ones `FRAME_TIMEOUT_S` (10 s): a page needs no warm-up. vidgen
-does not draw frame 0 twice (a page that keeps state would change). The guide says so.
-
-**`performance.now()` stays on vidgen's clock** (§118.8): libraries animate from it (three.js'
-`Clock`, tweens), so a real clock would make the pictures depend on the machine's speed. It is
-not given a real-time twin either: a page that drew with it would no longer give the same frames.
-What the film wanted to know — how long a frame takes and where — is now in the summary line
-(the page's hook against drawing and the screenshot); the split inside the GL work is not
-visible from the page (the GL work is done by the GPU process after the hook returns).
-
-**Not done.** The WebGL work itself (1.1 s of the film's 1.24 s) is the page's: fewer passes or
-draws, or a smaller bloom, are the author's levers; a faster software GL (lavapipe through
-Vulkan) would change pixels and depend on the machine. Lazy imports (2.6 s a scene). Two pages
-or split scenes (above). Windows and macOS not tried (the CDP call is the one Playwright makes on
-every platform).
+- **Screenshot.** `WebPage.screenshot(n)` sends `Page.captureScreenshot` on vidgen's own CDP
+  session with what Playwright's `page.screenshot(type="png")` sends (visual viewport from
+  `Page.getLayoutMetrics` for the clip, size rounded as `enclosingIntSize`;
+  `captureBeyondViewport: false`) plus `optimizeForSpeed: true` (faster PNG, same pixels). Carets
+  are hidden around each screenshot (`inPagePrepareForScreenshots`). The clip's scale is the
+  viewport's times the device scale (a `design_width` page's emulation is on Playwright's session);
+  the time limit is vidgen's `_TimeLimit` (30 s). `WebPage.pixels(png)` decodes; `frame(n)` =
+  `advance` + `screenshot` + `pixels`. Pixels equal Playwright's (`tests/test_web_speed.py`); cache
+  keys and `engine_id` unchanged. Nearly all of a WebGL frame's time is the page's GL work
+  (SwiftShader), which is the author's lever.
+- **Rejected** (do not redo): WebP (slower), JPEG (no alpha), WebGL canvas readback (buffer cleared
+  after compositing; HTML over it missing), `Page.startScreencast` (frames not tied to vidgen's),
+  `HeadlessExperimental.beginFrame` (needs BeginFrameControl), GL flags (no gain; flags are in the
+  clip key), splitting a scene over pages (stateful pages must step from frame 0).
+- **Pipelined writing.** `make_web_clip` draws in the main thread and hands PNGs to
+  `FramesClipWriter` (`browser/frames_clip.py`), which runs `write_frames_clip` in a thread with at
+  most two frames waiting; an error on either side stops both and leaves no clip or `.partial`.
+- **Progress.** `FrameProgress` (`browser/frames_clip.py`, re-exported by `web/clip.py`) logs on
+  `vidgen.progress` at most every `PROGRESS_SECONDS` (10 s): `web frames 30/92, 1.24 s a frame,
+  about 1 min 17 s left` (rate from frames after the first), then a summary splitting the page's
+  `frame(t, ctx)` from drawing and screenshot. Workers print `progress: …` (`PROGRESS_PREFIX`);
+  `vidgen render` shows `[1/12] <scene>: web frames …` (`pipeline.progress_lines`,
+  `_run_worker(on_progress=)`; in live mode the worker's own lines). To stdout, or stderr with
+  `--json` (MCP `render` reports them as progress); left out of a failed worker's output tail.
+- **First frame** may take `FIRST_FRAME_TIMEOUT_S` (= `LOAD_TIMEOUT_S`, 30 s), later frames
+  `FRAME_TIMEOUT_S` (10 s), so no shader warm-up is needed in `load`; frame 0 is never drawn twice.
+- **`performance.now()` stays on vidgen's clock** (§118.8), with no real-time twin: libraries
+  animate from it and a real clock would make pictures depend on machine speed.
 
 ### 120.11 Ready-made finishing for three.js `web` scenes: `vidgen/three-finish` (Step 350)
 
-**Why.** Both films wrote their finishing by hand. "Escapement" (`extensions/escapement.js`, about
-120 lines): a scene pass at 88 % size with a hand-written depth of field from the depth buffer
-(a 20-sample gather at half size, then a mix by the circle of confusion), `UnrealBloomPass` at a
-quarter size, a final pass (chromatic fringe, exposure, flash, vignette, the short ACES fit,
-saturation, lift, `pow(1/2.2)`, fade) and FXAA with grain seeded by the frame; motion blur by
-drawing the balance wheel's arms six times with transparent copies; a studio of soft boxes baked
-through PMREM; normal maps computed from height functions (Geneva stripes, perlage, graining,
-sunray). "Parallel Space" (`ps.js`): `UnrealBloomPass` at full size, one final pass (fringe,
-exposure, vignette, the ACES fit, saturation, a per-section grade, sRGB, grain), a nebula baked
-into a cube map. Their agents also reported that `PCFSoftShadowMap` is gone in the bundled
-three.js and that no depth-of-field pass ships among the add-ons.
-
-**What ships.** `src/vidgen/data/web/modules/three-finish.js` (about 640 lines, vidgen's own code
-under its MIT licence; its depth-of-field gather, FXAA, grain hash and soft-box shader follow what
-"Escapement" did, the nebula what "Parallel Space" did, both films being the owner's). Served
-from `/__vidgen__/modules/` (`web/loaded.py` `MODULES_FOLDER`, `VIDGEN_MODULES` = `{"vidgen/three-finish":
-"three-finish.js"}`; only listed files are served), named in the import map (`web/inputs.py`)
-as `vidgen/three-finish` — the first module of vidgen's own a page may import; the `vidgen/` prefix
-keeps such names apart from npm package names. Package data glob `data/web/modules/*`. It
-imports `three`, `three/addons/postprocessing/Pass.js` (`FullScreenQuad`) and
-`UnrealBloomPass.js` (both shipped since Step 334); no `Math.random`.
-
-**Cache keys.** The module is served like any file a page loads, so a page that imports it has
-`__vidgen__/modules/three-finish.js` with its SHA-256 in its loaded-files record (§118.10): the
-clip key and the render fingerprint follow the module, and its shaders are strings inside it. A
-page that does not import it: the import map gained one entry, but the import map is in no key
-(`engine_id` hashes `clock.js`, `media.js`, `runtime.js`, `canvas.html`, flags and versions), so
-no stored clip of any project is drawn again. `vidgen_source_digest` covers every `.js` under
-`data/web/` (changed, as with every step).
-
-**The chain** (`Finish.render(t)`): options resolved (functions of `t` called); the scene drawn
-into a half-float target with a depth texture at `renderScale` (three.js renders into a target
-in linear light: no tone mapping, no output conversion); with motion blur, `update(t_i)` and a
-drawing per sub-frame time `t_i = t + ((i + 0.5)/N − 0.5) × shutter/360/fps`, each added with
-weight 1/N (additive blending into a half-float target), the one nearest `t` drawn last (its
-depth is used), `update(t)` once more when no sample falls on `t`; options read again (so a
-focus that follows a moving camera is right); depth of field (gather at half or full size, mix
-into a frame-size target) or a copy when the scene was drawn smaller; `UnrealBloomPass` on that
-target in place; the grade pass (fringe, exposure × filter × white balance normalised to keep
-the luminance, flash, vignette in linear light; three.js' own `ACESFilmicToneMapping`,
-`AgXToneMapping`, `NeutralToneMapping` from `ShaderChunk.tonemapping_pars_fragment` with its
-exposure uniform made a constant, or the films' short fit; saturation; sRGB encoding; contrast,
-lift, gamma, gain on the encoded values; fade) into an 8-bit target; FXAA and grain to the
-canvas (the grade pass draws straight to the canvas when both are off). Every quad material has
-`toneMapped: false` and no colour-space chunk, so nothing is converted twice. Grain:
-`round(t × fps) % 4096` seeds two hashes of the pixel.
-
-**Checked** (scratch `/home/claude/work/scratch/al350/`, the example's page copied to `bench/`
-with a `plain` mode, `renderer.render` alone, and a `nofog` flag):
-
-- *One encoding*: with every effect off (tone mapping `none`, no bloom, vignette, grain, FXAA)
-  against `renderer.render` to the canvas, no fog: max 1 level, 0.3 % of pixels differ (the
-  half-float target's rounding). With the example's fog: up to 14 levels on the far table —
-  three.js mixes fog after `colorspace_fragment` when it draws to the canvas but in linear light
-  into a target; documented.
-- *Determinism*: `vidgen still` of the full example at 0.5 s and 5.5 s from two fresh pages:
-  identical PNGs; the test does the same at 160x90.
-- *Shutter 0*: `motionBlur: {samples: 6, shutter: 0}` against `motionBlur: false`: identical.
-- *Warm-up*: `compileAsync` polls with `setTimeout(…, 10)`, which never fires in `load` (the
-  clock stands at 0; §118.8), unless `KHR_parallel_shader_compile` reports everything ready at
-  once — so `warmUp` uses `renderer.compile` and one drawing plus a 1-pixel `readPixels`. On the
-  example: page ready 8.7 s and frame 0 3.0 s with it; 1.1 s and 8.5 s without (Step 349's
-  finding: it moves the time). Optional.
-
-**Cost per effect** (`tools/bench.py`: a fresh `WebPage` per configuration, as vidgen draws a
-scene, 1280x720, 30 fps, frames 2–9 averaged, advance + screenshot; 2 cores, SwiftShader; one
-run each, the machine's speed varies by about ±5 %, i.e. ±30 ms here):
-
-| what is drawn | ms a frame | the effect's cost |
-|---|---|---|
-| the scene with `renderer.render` (PBR, 5 spheres, 4 gears, a 2048 PCF shadow, fog) | 472 | — |
-| the chain, every effect off (scene target + grade pass) | 525–528 | +55 |
-| + tone mapping, grade, vignette (same pass) | 531 | +3 |
-| + FXAA (an 8-bit target and one more pass) | 539 | +11 |
-| + grain (the same pass as FXAA) | 539 | +12 |
-| + fringe 1 | 545 | +17 |
-| + bloom, `scale` 0.25 / 0.5 (default) / 1 | 531 / 556–592 / 654 | +4 / +29–67 / +126 |
-| + depth of field `low` / `medium` / `high` | 601 / 663 / 1131 | +73 / +136 / +604 |
-| + motion blur 2 / 4 / 6 samples | 912 / 1694 / 2576 | about +400 per sample (a scene drawing with its shadow map, plus a quad) |
-| `renderScale: 0.75` (chain off) | 362 | −31 % |
-| shadows: PCF radius 2 / PCF radius 6 / VSM radius 4, 8 blur samples (2048 map, chain off) | 525 / 528 / 1282 | VSM +757 |
-| the example as committed (everything, 6 samples) | 2955–3340 | — |
-| the same without `warmUp`: frame 0 | 8456 (with: 3010) | — |
-
-The finishing passes are cheap next to the scene; motion blur multiplies the scene's own cost
-(and its shadow map's) by the number of samples; `high` depth of field gathers at full size.
-
-**Depth of field**: `coc(z) = min(K |z − z_f| / z, maxBlur)` pixels, `K` from a thin lens:
-`(f² / (N (z_f − f))) / 2 / filmHeight × height` with `f` = `camera.getFocalLength()` (mm, from
-`fov` and `filmGauge`), `filmHeight` = `camera.getFilmHeight()`, `z_f` in mm through `unit` —
-the radius of the blur far behind the focus (the far limit of the thin-lens formula, which is also
-what "Escapement"'s `aperture` meant). `blur` gives `K` directly (pixels at 720p, scaled by the
-frame height). A sample counts where its own circle reaches the pixel; a nearer sample's circle
-counts in full (foreground bleeds over), a farther one only up to the pixel's own circle + 1
-(a blurred background does not bleed over a sharp edge); colours are capped at 24 before
-gathering (a tiny very bright highlight then shows the spiral of samples, as on the example's
-front sphere; a smaller cap would dull bokeh). Orthographic cameras: `blur` only.
-
-**Soft shadows.** three.js 0.186: `PCFSoftShadowMap` is mapped to `PCFShadowMap` with a warning;
-`PCFShadowMap` samples five hardware-compared taps on a Vogel disc of `shadow.radius` texels,
-rotated per pixel by interleaved gradient noise (deterministic); `VSMShadowMap` blurs the map
-(`blurSamples`). Stills of the example (`sheet_shadows*.png`): PCF radius 1–3 soft and clean,
-6 wider and faint with a fine dither (masked by the grain), VSM 4 and 10 smooth; VSM cost 0.76 s a
-frame more at 2048. `softShadows()` sets either; the recommendation is PCF, radius 2–4.
-
-**The film effect reproduced** (scratch `esc/`: a copy of three "Escapement" scenes,
-`01_winding`, `04_escapement`, `05_cathedral`, and the same scenes on `escapement_fin.js`, the
-film's script with its composer, scene pass, final pass, FXAA pass, finish function and PMREM
-code replaced by `Finish` options (`renderScale` 0.88, `aces-narkowicz`, `encoding: "gamma2.2"`,
-bloom at 0.25, `dof.blur` = the film's `aperture`, `maxBlur` = `maxR`, `filter` = its `gain`,
-`lift` its lift raised to 1/2.2, `fringe` = 0.26 × its `ca`, vignette inner 0.25 / outer 1.05) and
-`makeEnv` by `studioEnvironment` with the film's own boxes and `up: [0, 0, 1]`: 1,222 lines
-→ 1,096). `vidgen still` at 3 s and 10 s, 1280x720: PSNR 34.4 / 32.0 dB (`01_winding`), 29.1 /
-29.0 dB (`04_escapement`), 29.1 / 28.4 dB (`05_cathedral`); after a 5x5 box blur of both (the
-grain's seed is song time in the film, scene time here) 30.3–34.5 dB. Side by side
-(`esc_*.png`) the pictures match in framing, focus, bloom and colour; what differs is the shape of
-the vignette (the film's is an odd ellipse, stronger at the left and right edges), the fringe's
-falloff, and the lift (the film's lifted in linear light before the encoding, the module lifts
-the encoded picture; matching it at black over-lifts the mid-tones by a few levels). Without
-`encoding: "gamma2.2"` (sRGB, the lift converted to sRGB) at 3 s: `01_winding` 30.0 dB (its dark
-navy background is mostly lift, which sRGB's linear toe keeps darker), `04_escapement` 29.3,
-`05_cathedral` 28.0; with the film's lift values passed unconverted, 26.1–27.9 dB.
-
-**Not done.** A cheaper per-object motion blur (the film's transparent copies of one part) — it
-needs the page's own geometry and sorting, so it stays a page technique; SMAA (not shipped among
-the add-ons; FXAA is vidgen's own); a transparent output (the composer's alpha is not meaningful
-after bloom, §118.14); MSAA of the scene target; resizing after construction.
+- **Module** `src/vidgen/data/web/modules/three-finish.js` (MIT). Served from `/__vidgen__/modules/`
+  (`web/loaded.py` `MODULES_FOLDER`; `VIDGEN_MODULES` maps import name → file, only listed files
+  served), on the import map (`web/inputs.py`); the `vidgen/` prefix keeps names apart from npm.
+  Package data glob `data/web/modules/*`. Imports `three`, `three/addons/postprocessing/Pass.js`
+  (`FullScreenQuad`), `UnrealBloomPass.js`; no `Math.random`. Exports `Finish`, `softShadows`,
+  `studioEnvironment`, `nebulaSky`, `surfaceFinish` and helpers. User reference:
+  `docs/CONFIG.md#web` ("Finishing three.js scenes"), `docs/COOKBOOK-3D.md`,
+  `examples/three-finish`.
+- **Cache keys.** An importing page records `__vidgen__/modules/three-finish.js` with its SHA-256
+  among loaded files (§118.10), so its keys follow the module. The import map is in no key
+  (`engine_id` hashes `clock.js`, `media.js`, `runtime.js`, `canvas.html`, flags, versions).
+- **Chain** (`Finish.render(t)`): options resolved (functions of `t` called); scene into a
+  half-float target with depth at `renderScale` (linear light); motion blur draws `update(t_i)` at
+  `t_i = t + ((i + 0.5)/N − 0.5) × shutter/360/fps` with weight 1/N, nearest-to-`t` last (its depth
+  used), `update(t)` again if no sample falls on `t`; options re-read; depth of field or a copy;
+  `UnrealBloomPass` in place; grade pass (fringe, exposure × filter × luminance-normalised white
+  balance, flash, vignette in linear light; three.js ACES/AgX/Neutral tone mapping with exposure
+  as a constant, or the short ACES fit; saturation; sRGB; contrast, lift, gamma, gain on encoded
+  values; fade) into 8-bit; FXAA and grain to the canvas (grade straight to canvas when both off).
+  Quad materials are `toneMapped: false` without colour-space chunks (nothing converted twice).
+  Grain seed `round(t × fps) % 4096`. All effects off equals `renderer.render` within half-float
+  rounding, except fog (three.js mixes it after encoding on the canvas, in linear light into a
+  target).
+- **`warmUp`** (optional): `renderer.compile` plus one drawing and a 1-pixel `readPixels`; not
+  `compileAsync`, whose `setTimeout` polling never fires in `load` (§118.8).
+- **Depth of field.** `coc(z) = min(K |z − z_f| / z, maxBlur)` px with thin-lens
+  `K = (f² / (N (z_f − f))) / 2 / filmHeight × height` (`camera.getFocalLength()`,
+  `camera.getFilmHeight()`, `z_f` in mm via `unit`), or `blur` = `K` directly (px at 720p, scaled).
+  Nearer samples bleed fully, farther ones only up to the pixel's own circle + 1; colours capped at
+  24 before gathering. Orthographic cameras: `blur` only.
+- **Soft shadows.** three.js 0.186 maps `PCFSoftShadowMap` to `PCFShadowMap` (five taps on a Vogel
+  disc of `shadow.radius`, rotated by interleaved gradient noise: deterministic); `VSMShadowMap`
+  blurs the map. `softShadows()` sets either; PCF radius 2–4 recommended (VSM much slower).
+- **Cost.** Finishing passes are cheap; motion blur multiplies the scene's cost by its samples.
+- **Limits.** No per-object motion blur, SMAA, transparent output (§118.14), MSAA of the scene
+  target, or resizing after construction.
 
 ### 120.12 Review of Steps 341–350, documents, an example (Step 351)
 
-Each step's diff was read again (`git show` of 01c7d64 … 857c33c) for faults, edge cases, names
-that differ between steps, Windows hazards, cache-key gaps, determinism and docs that contradict
-the code. What was found and what was decided:
-
-**Fixed.**
-
-- *The guide's web-topic test had failed since Step 347* (`tests/test_guide.py::
-  test_the_web_topics_code_runs_in_chromium`, `slow`). Cause: Step 347's code block in "Pictures
-  that follow the music" began with `export function frame` instead of a comment naming its file
-  (the test writes every block to the file its first line names), its YAML block is a mapping
-  (`music:` + `scenes:`) where the test expected a list of scenes, and the page needs `ctx.music`,
-  which the test did not give. The block now starts `// extensions/space.js` (as the YAML names
-  it); the test reads mapping blocks and gives a page whose scene has `music_data` the data of a
-  tiny score project (the piece's render seeded with silence, so nothing is synthesised). The
-  block is drawn in Chromium again (it was never run before).
-- *`test_the_page_is_given_theme_data_beats_and_three` was flaky* (failed one to two runs in three
-  since Step 340): its frame at the start of a CSS transition is sometimes one step into the fade
-  (red 238 instead of 248), the compositor's non-repeatable timing measured in §120.10. The test
-  now allows that one frame up to a step (225–248) and still checks the frames before it and the
-  end exactly; 6 of 6 runs passed.
-- *Named settings in `vidgen studio`* (`registration`, `stroke`, `vowel`, `voices`, `morph`) were
-  number sliders. The inspector (`studio_app/static/inspector.js`, `choiceHtml`) now shows a
-  setting that has `choices` in the catalogue as a list of its names; a choice writes the name
-  (`stroke: spiccato`), a number in the score is shown as its name, reset works as for sliders.
-  Test: `tests/test_studio_ui.py::test_a_setting_with_named_values_is_a_list_of_its_names`.
-  `drawbars` stays a number slider (left).
-- *`3d` scenes reuse Step 349's writer and progress line.* Their page reads its own canvas
-  (`toDataURL`), so Step 349's screenshot does not apply; what applies is the rest:
-  `three_d.browser.write_clip` now puts each frame's PNG (`PageRenderer.png`) into
-  `FramesClipWriter`, which decodes it (`PageRenderer.pixels`, the same `png_pixels` as before)
-  and encodes it in its thread while the next frame is drawn, and `FrameProgress(what="3d
-  frames")` logs `3d frames 30/90, …` lines and a summary (no split: the page draws and reads
-  in one call). `FrameProgress`, `PROGRESS_SECONDS`, `duration_text`, `seconds_text` moved from
-  `web/clip.py` to `browser/frames_clip.py` (still importable from `web.clip`). Pixel identity:
-  `tests/test_scene_3d.py::test_the_clip_holds_the_pages_frames_and_reports_progress` compares
-  every frame of the written clip with `PageRenderer.frame(n)` drawn one by one (equal), which is
-  what the old `write_clip` wrote. No key changed (the clip's key is the description and the
-  engine).
-- *Docs*: `docs/COOKBOOK-MUSIC.md` section 13, one table of every score instrument (family, kind,
-  written range or default octave, settings to reach for first, typical use) and contents for
-  sections 8–13; cross-links between cookbook section 12 and `docs/COOKBOOK-3D.md` section 8; the
-  README's feature list (the orchestra, expressive notes, `music_data`, `vidgen/three-finish`,
-  `vidgen still`, progress, intermediates) and example list; CONFIG (studio, `3d` progress);
-  the guide (pointers to the table and the example); CHANGELOG (the phase in one place).
-
-**Checked and right.** Instrument, setting and value names agree between the catalogue, CONFIG,
-the guide and the cookbooks (`double_basses`, `low_brass`, `tam_tam`, `stroke`, `vowel`,
-`voices`, `morph`, `registration`); the page API is `ctx.music.*` everywhere (JavaScript fields
-in camelCase: `dynamicEnd`; Python's events: `dynamic_end`); the module is `vidgen/three-finish`
-in code, import map, guide and cookbook; the CLI flags (`--intermediate`, `--clean-intermediates`
-for `keep_intermediates: false`, `still --at/--frame/--count`) match their docs. Errors seen
-while writing the example named the place and the fix (a slur over one note; an unknown track
-in `music_data.tracks` names the score's tracks). Windows: frames clips and stills are written
-through `.partial` files and `os.replace` with a message when the target is open elsewhere;
-deleting intermediates keeps a clip that cannot be deleted with a warning. Determinism: two
-fresh pages of the example give byte-identical stills (`fire` at 3 s, checked);
-`music.js` uses no clock but vidgen's.
-
-**Left** (in the tasklist): `vidgen still` keeps every drawn frame and the sheet's tiles in memory
-at full size; `load_music_score` refuses a `str` path with an `AttributeError` (the score loader
-was left untouched in this step, so the films' audio needs no new proof); `ctx.music.sounding`
-looks at every earlier event of its track per call and the functions without a track sort all
-events per call; the choir's range warning uses E2–C6 whatever `voices` says; `drawbars` is a
-number slider; `3d` guide passes draw without the writer thread; nothing of the phase was tried
-on Windows or macOS.
-
-**The example**, `examples/signal-fire` ("Signal Fire", 27 s, 1280x720 at 30 fps, no narration):
-an original cue in C minor at 90 BPM (`assets/music/signal_fire.yaml`, 9 bars = 24 s and the last
-chord's ring) for solo violin (slurred, a glide up a sixth, late vibrato), violins, cellos (tremolo,
-spiccato and sustain marked on one track), double basses, four horns (`[fp <]`), trumpet (a
-slurred melody under a hairpin to `fff`), low brass (a swell into the hit), choir (`mm` morphing
-to `ooh`, then `aah`), timpani (a roll growing into the hit on the same track), taikos, bass drum,
-snare roll, cymbal swell and crash, tam-tam; the end in C major. Three `web_cut` scenes (8, 8,
-11 s; the extension type of §120.1) on one script (`extensions/signal_fire.js`) with
-`music_data: {tracks: [...]}` (ten tracks); vidgen works out `t0` (0, 8, 16). The page: embers on
-the violin's and the cellos' notes, the sky on the choir, a ring of light on the timpani (a roll as
-bright as its hairpin has grown, from `dynamic` → `dynamicEnd`), the stones and shock rings on the
-taikos, a beam whose height is the trumpet's pitch (gliding on slurred notes), a flash
-(`Finish`'s `flash`) on the crash and the gong; the camera follows song time, never a hit.
-Finished with bloom (threshold 1.2: at 1 the fire and the rings veiled the whole frame, seen in
-stills), ACES, a grade from cool to warm, vignette, grain, FXAA and depth of field on the brazier.
-Measured: the score renders in 49 s; `vidgen music check`: −27.9 LUFS, key C minor (0.93), no
-range warning, "unsteady" (32 dB from the quiet start to the hit: right for a cue without
-narration); the page 0.45 s a frame at 1280x720 (0.72 s a still with the page's setup); the final
-render about 8 min, 568 MB of frames clips. Looked at: stills at ten moments (four rounds of
-changes to the light), frames of the MP4 at ten moments, and spectrograms of the WAV and of the
-MP4's sound (the glide at 2.7 s, the spiccato grid from 8 s, the hit at 16 s, the trumpet's slides,
-the C major end at 21.3 s). Test: `tests/test_signal_fire_example.py` (validates; the score's
-instruments, slurs, strokes and growing roll; the page's tracks exist). Nobody has listened.
+- **Studio inspector** (`studio_app/static/inspector.js`, `choiceHtml`): a setting with `choices` is
+  a list of its names; a choice writes the name, a number in the score shows as its name.
+  `drawbars` is a number slider.
+- **`3d` scenes share the writer and progress line**: `three_d.browser.write_clip` passes PNGs
+  (`PageRenderer.png`) to `FramesClipWriter` (decoded by `PageRenderer.pixels`); `FrameProgress(
+  what="3d frames")` logs `3d frames …` (no split). `FrameProgress`, `PROGRESS_SECONDS`,
+  `duration_text`, `seconds_text` live in `browser/frames_clip.py` (also importable from
+  `web.clip`). The `3d` clip key is the description and the engine.
+- **Windows**: frames clips and stills are written through `.partial` files and `os.replace`, with a
+  message when the target is open elsewhere; a clip that cannot be deleted is kept with a warning.
+- **Example** `examples/signal-fire`: an orchestral cue using §120.4–§120.7, three `web_cut` scenes
+  (§120.1) with `music_data: {tracks: [...]}` and `vidgen/three-finish`
+  (`tests/test_signal_fire_example.py`). The instrument table is in `docs/COOKBOOK-MUSIC.md`.
 
 ### 120.13 "Escapement" as an example (Step 352)
 
-The owner asked for the published film as an example, source only. `examples/escapement` holds
-`video.yaml`, the score (unchanged, byte for byte), `extensions/escapement.js`,
-`extensions/webcut.py`, a README and a `.gitignore`; no audio, video, stills, `build/` or
-`output/`.
-
-- **Music data: `music_data` replaced the film's exporter.** The film's `scripts/make_audio.py`
-  wrote `extensions/escapement_audio.json` (level, low end and onset per frame; the score's hits,
-  notes and the mechanism's beats); the page fetched it and took its song time from `data.t0`.
-  The example's scenes have `music_data: {tracks: [16 tracks]}` (one YAML anchor) and the page
-  builds the same arrays from `ctx.music.events` (`fromMusic`); `t0` is `ctx.music.t0`; the
-  mechanism's beats are made in the page from three named constants (`START_BAR`, `FALTER`,
-  `SILENT_BAR`), as the exporter made them. The page never read the level, low end or onset, so
-  they are left out. One difference had to be kept: the exporter rounded event times to a
-  thousandth of a sixteenth note, which moves the triplet strokes of the `three` track by 42 µs
-  (32 of its 48 strokes); with exact times `06_threefour` and `09_build` differed in a few pixels
-  near the hammers (PSNR 72.7–100.5 dB, at most 22 levels on 0.002 % of the pixels). The page
-  rounds the same way (`grid`), and stills of all twelve scenes at four times each (48 stills,
-  1280x720, `vidgen still`) are pixel-identical to the film's. The exporter wrote pitch 0 for
-  chord-degree notes (`twinkle`, `pend`), `ctx.music` the played pitch; the page does not draw
-  those pitches.
-- **Finishing: the film's own.** Step 350's port of three scenes to `vidgen/three-finish` came
-  within 28–34 dB PSNR, a visible change of the art, so the example keeps the film's composer,
-  passes and baked studio; the README names the module as an alternative.
-- **`webcut.py` kept**: vidgen has no setting for a `web` scene without its fade-out (`outro` is a
-  class attribute), so the four-line subclass stays, as in `examples/signal-fire`.
-- **`PLAN.md` folded into the README** ("How it was planned": the grid, the colour script, the
-  order of work); its tables were already in the README.
-- **Render cost** (2 cores, no GPU, after Step 349): 4 s of `05_cathedral` 1.23 s a frame, 4 s of
-  `10_climax1` 0.89 s a frame, about 20 s a scene besides; 5,730 frames: about 1 h 30 min to 2 h.
-  Lossless frames clips 218 MB for the 8 s, about 5 GB for the film.
-- **Test** (`tests/test_escapement_example.py`, validate only): the file list, the `.gitignore`,
-  validation, the scenes' song starts on bar lines, the score's SHA-256 (line ends normalised),
-  no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
-  track it is given exists.
+`examples/escapement` (source only: `video.yaml`, the score, `extensions/escapement.js`,
+`extensions/webcut.py`, README, `.gitignore`; no audio, video, stills, `build/` or `output/`).
+Scenes use `music_data: {tracks: [...]}` (one YAML anchor); the page builds its arrays from
+`ctx.music.events` (`fromMusic`), takes `t0` from `ctx.music.t0`, rounds event times to a
+thousandth of a sixteenth (`grid`) to match the film's pixels, and keeps its own finishing (not
+`vidgen/three-finish`). `webcut.py` stays because a `web` scene's fade-out (`outro`) is a class
+attribute with no setting. Test: `tests/test_escapement_example.py` (validate only: file list,
+validation, scene starts on bar lines, the score's SHA-256 with line ends normalised, no range
+warnings, event counts, the page reads only `ctx.music` tracks that exist).
 
 ## 121. Music-video tools (Phase AM, Steps 358–366)
 
-Three music films were made as `web` scenes and are now examples (`examples/parallel-space`,
-`examples/escapement`, `examples/signal-fire`; with `examples/three-finish`). Each rebuilt the
-same things by hand. The owner chose four features (2026-11-16), one step each, and a review:
-
-| Step | What | Section |
-|---|---|---|
-| 358 | A library of three.js building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`); the examples ported to it, their copies deleted | §121.1 |
-| 359 | A storyboard from the music: `vidgen music plan` (cut points, a colour per section, the events each scene reacts to, a draft project of `web_cut` scenes with starter pages) | §121.2 |
-| 360 | A "watch it" motion check: `vidgen motion check` (blank frames, flashes, flicker, popping, strobing, frozen stretches, jumps at cuts; a contact strip per finding) | §121.3 |
-| 361 | More choir: syllables, a soloist, a whispered texture, a syllable per note | §121.4 |
-| 362 | Critical review with fixes; docs | §121.5 |
-| 363 | The owner heard a "sht" at every `d`: its burst made soft | §121.6 |
-| 364 | Escapement's opening title and end card for every film: `vidgen/title-cards`, COOKBOOK-3D section 12 | §121.7 |
-| 366 | The owner heard a breathy "fo" in Parallel Space's `swell` (soft, slow viola notes): the strings' rosin hiss kept under the tone's highs | §121.8 |
-
-Rules of the phase: the films must look the same (stills compared before and after) and their
-scores synthesize to the same audio; nothing is rendered that a still or a test can show.
+Tools for music videos made of `web` scenes (examples `examples/parallel-space`,
+`examples/escapement`, `examples/signal-fire`, `examples/three-finish`): page libraries
+`vidgen/music-time` and `vidgen/three-kit` (§121.1), `vidgen music plan` (§121.2), `vidgen motion
+check` (§121.3), choir syllables, soloist and whisper (§121.4, §121.6), `vidgen/title-cards`
+(§121.7), quieter string bow noise (§121.8). Invariants: existing examples look the same and
+existing scores synthesize to the same audio, except held string notes, whose bow hiss §121.8 lowered.
 
 ### 121.1 Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit` (Step 358)
 
-**What the films shared.** Read side by side, the four example scripts repeated: easing and
-clamping (`clamp`, `mix`, a cubic and a quintic ease: all four), a sine hash (Parallel Space,
-Escapement), a seeded generator (Parallel Space), the score's hits and notes as sorted arrays
-with a binary search and a drum envelope (Parallel Space, Escapement: identical functions), a
-track's level through its hairpins (Signal Fire), keyframed camera moves (Escapement), a soft
-round dot texture (Escapement's dust, Signal Fire's embers: the same canvas gradient with other
-stops). Parallel Space alone held the light-on-black kit the owner listed (glowing strokes,
-crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, ribbons, spectrum rays,
-tunnels, corridor, rings, swarms), written as reusable functions with one film's globals.
-
-**Two modules, on the import map beside `vidgen/three-finish`** (`web/loaded.py`
-`VIDGEN_MODULES`; files in `data/web/modules/`, already package data):
-
-- `vidgen/music-time` (117 lines, plain JavaScript, no imports): shaping (`clamp`, `mix`,
-  `smoothstep`, `smootherstep`, `easeOutCubic`, `dbToGain`), seeded numbers (`rng` = mulberry32,
-  `hash`), moves (`keyframes`, `glide`), bars (`barClock`, `count`), the score's events as arrays
-  (`trackArrays(ctx.music, {hits, notes, grid})` → `{t, g}` / `{t, d, p}` `Float32Array`s;
-  `lastIndex`) and reactions (`hitEnvelope`, `hitCount`, `hitAge`, `noteAt`, `noteEnvelope`,
-  `noteLevel`, `melody` on arrays; `eventLevel`, `signalLevel` on `ctx.music`'s events). Separate
-  from three.js so it can serve a Canvas or SVG page, and so its functions run in Node in tests.
-- `vidgen/three-kit` (609 lines; imports `three` and `vidgen/music-time`): `setStage`, `Glow`,
-  colours, polyhedra and crystals, `SkyDome`, portals, the tesseract, star fields and shells,
-  flares, shock rings, glints, ribbons, spectrum rays, tunnels, the lattice, the ring structure,
-  crystal fields and swarms, dust, `aimCamera` (CONFIG `web` lists every name).
-
-Decisions:
-
-- **The code moved, not rewritten.** Each function keeps its film's arithmetic and GLSL
-  (whitespace included), so the films' pictures stay identical; the renames are only of names
-  (`sstep` → `smoothstep`, `makeStars` → `makeStarField`, `env(name)` → `hitEnvelope(track)`).
-- **A stage, set once.** The kit's builders need the scene to add to, the renderer to bake a sky,
-  the camera that flares and rings face, and the frame's size for line widths (shared uniforms
-  `uRes`, `uK = height / 720`). `setStage({renderer, scene, camera, width, height})` sets them
-  for the page (one page = one module instance); a builder called before it throws a named error.
-- **`make…` / `update…` pairs** (`makeStarField` / `updateStarField`): a builder runs in `load`, its
-  update in `frame` from song time, keeping no state between frames. `make` avoids a page's
-  natural variable names (`const flare = flare(…)` was the first bug of the port).
-- **Arrays for the reactions.** Envelopes read `{t, g}` / `{t, d, p}` arrays, not `ctx.music`'s
-  event objects: both films drew from such arrays, a binary search over a `Float32Array` is cheap
-  per frame, and the arrays round as the films' exporters did (`grid`: times to 1/1000 of a
-  sixteenth, which Escapement's hammers need to stay identical, §120.13). `signalLevel` and
-  `eventLevel` read event objects because they need the dynamics.
-- **Callbacks where a film read its own data**: the spectrum, fields and swarms take `band(b)`,
-  the tunnel `look(index, time)` → `[colour, gain, sides]`, so they work with `ctx.music.band` or
-  anything else.
-- **Left in the films** (moving them would change a picture or serve one film only): Parallel
-  Space's composer and grade pass, its sun, mirror corridor, fold, title cards and clock dials;
-  Escapement's watch, studio (its own soft boxes; three-finish's `studioEnvironment` differs),
-  finishing chain, `setCam` (it rolls with `rotateZ`, not the up vector), glint sprites;
-  Signal Fire's sky dome, stones and its own hash (`sin(n·127.1 + 311.7)`, not
-  `sin(i·127.1 + k·311.7 + 0.5)`: it would move every stone); the still life's gears.
-- **Not built** from the owner's list, for want of a film that uses it: a sections → colour script
-  helper and orbit / fly-through camera paths beyond `keyframes`, `glide` and `aimCamera` (Step
-  359's storyboard writes pages that will use them; that step adds them with a user). Studio
-  environments exist already (`studioEnvironment` in `vidgen/three-finish`).
-- **Cache keys.** No existing key moves for pages that do not import the modules (the import map
-  is in no key). A page that imports them has them in its loaded-files record, so in its clip key
-  and fingerprint: the four examples' scenes render again once (their scripts changed anyway).
-
-**The examples ported**, proved with `vidgen still` before (HEAD 274177f) and after, 640x360 at
-three times per scene and 1280x720 at one or two (89 stills; `/home/claude/work/scratch/am358/`):
-
-| example | script lines before → after | removed besides | stills |
-|---|---|---|---|
-| `parallel-space` | `ps.js` 1,313 → 799 | `scripts/make_ps_audio.py` (190 lines), `extensions/ps_audio.json` (124 KB); dead `flux`, `lowE`, `gateEnv`, `boomFlash` | 36 of 36 identical on the kit with the old data file; then with `music_data`, see below |
-| `escapement` | `escapement.js` 1,238 → 1,187 | — | 38 of 38 identical |
-| `signal-fire` | `signal_fire.js` 220 → 200 | — | 11 of 11 identical |
-| `three-finish` | `still_life.js` 114 → 114 (its ease replaced by an import) | — | 4 of 4 identical |
-
-**Parallel Space reads `ctx.music`.** Its `music_data` sends 16 tracks (`trumpet` and `violins`
-gathered as the film's `call`); `trackArrays` with `grid: S16` gives every hit time and gain and
-every note time and length equal to `ps_audio.json`'s (checked as float32 for all 15 arrays:
-1,023 hits, 609 notes). Pitches differ only for 15 chord-degree notes of `call` in the coda
-(the file wrote 0), which the coda places by time, not pitch. The level and the 16 bands are
-measured from the video's mix with 256 steps (the file: from the score's WAV, 64 steps), so the
-stills differ slightly: 6 of 36 identical (the dawn and the coda read no bands), the rest 53.5–85
-dB PSNR, mostly one or two levels; the most at the tips of the sun's spectrum rays (up to 89
-levels on a few pixels, `07_drop1` at 1.5 s). Side by side (before | after | difference × 10):
-`side2/ps/`. That is above the phase's 45 dB bar, so the script and the JSON were deleted.
+- **Modules** on the import map beside `vidgen/three-finish` (`web/loaded.py` `VIDGEN_MODULES`;
+  files in `data/web/modules/`). Every exported name: `docs/CONFIG.md#web`.
+  - `vidgen/music-time`: plain JavaScript, no imports (so it serves Canvas/SVG pages and runs in
+    Node in tests): shaping (`clamp`, `mix`, `smoothstep`, `smootherstep`, `easeOutCubic`,
+    `dbToGain`), seeded numbers (`rng` = mulberry32, `hash`), moves (`keyframes`, `glide`,
+    `orbit`, `pathPoint`, `flyThrough`: a Catmull-Rom path through every point, ends continued),
+    bars (`barClock`, `count`), `colourScript(stops, glide)`, events as arrays
+    (`trackArrays(ctx.music, {hits, notes, grid})` → `{t, g}` / `{t, d, p}` `Float32Array`s;
+    `lastIndex`), reactions (`hitEnvelope`, `hitCount`, `hitAge`, `noteAt`, `noteEnvelope`,
+    `noteLevel`, `melody` on arrays; `eventLevel`, `signalLevel` on `ctx.music` events, as they
+    need dynamics), `reactions(ctx.music, react, {drops})`.
+  - `vidgen/three-kit` (imports `three` and `vidgen/music-time`): `setStage`, `Glow`, colours,
+    polyhedra and crystals, `SkyDome`, portals, tesseract, star fields and shells, flares, shock
+    rings, glints, ribbons, spectrum rays, tunnels, lattice, ring structure, crystal fields and
+    swarms, dust, `aimCamera`.
+- **Code moved from the films, not rewritten**: each function keeps its arithmetic and GLSL, so
+  the examples' pictures stay identical.
+- **`setStage({renderer, scene, camera, width, height})`** once per page (one module instance per
+  page) sets what builders need (shared uniforms `uRes`, `uK = height / 720`); a builder called
+  before it throws a named error.
+- **`make…` / `update…` pairs** (`makeStarField` / `updateStarField`): build in `load`, update in
+  `frame` from song time, no state between frames.
+- **Arrays for reactions**: binary search over a `Float32Array` per frame; `grid` rounds times to
+  1/1000 of a sixteenth (§120.13).
+- **Callbacks** where data varies: spectrum, fields and swarms take `band(b)`, the tunnel
+  `look(index, time)` → `[colour, gain, sides]`.
+- **Cache keys.** The import map is in no key; a page importing a module has it in its
+  loaded-files record (clip key and fingerprint).
 
 ### 121.2 A storyboard from the music: `vidgen music plan` (Step 359)
 
-**The name.** `vidgen plan` already drafts a project from an outline, `vidgen storyboard` draws
-contact sheets of a rendered project; the new command is a music tool that reads a score file and
-drafts a project, so it is `vidgen music plan SCORE` beside `music render`, `check` and
-`template`, with their `--out`, `--force` and `--json` (the brief's `--write DIR` is `--out DIR`,
-as `music template --out` writes its file). Without `--out` it only prints.
-
-**Reading the score, not the sound.** The plan runs on `vidgen.studio.events.score_events`
-(Step 347): every note and hit with its track, instrument, time, length and pitch, as the renderer
-plays them. Nothing is synthesized, so a plan takes milliseconds (Parallel Space: 0.2 s with the
-import). Per bar it keeps the tracks that sound, how many events start per track, and the chord;
-its **energy** is half a point per sounding track plus up to half a point per track for its
-onsets (8 or more a bar: the half point), scaled to the busiest bar. Counting tracks and capping
-onsets keeps a hi-hat's 16 hits a bar from outweighing an orchestra coming in.
-
-**Roles** (`intro`, `verse`, `build`, `drop`, `climax`, `breakdown`, `outro`) come from the
-section's name when a word of it says so (split on `_` and digits: `heart2`, `verse_b`), else
-from energy against the piece and the neighbours (CONFIG lists the thresholds). Names win because
-the author named the form; the words are generic (`dawn`, `coda`, `bridge`), not the films'
-own (`winding`, `orrery`), so the films test the energy rules too.
-
-**Cuts.** A scene per section, then: a section longer than `--max-scene` (16 s) is split on a
-phrase line (every 4 bars from the section's start) chosen by a change score — the Jaccard
-distance between the tracks sounding in the phrases before and after, +0.25 when the progression
-starts again there, +0.5 × the energy step, +0.2 after a bar with few onsets — plus a pull to the
-middle; recursively. A 16-bar-or-longer section that fits is still split (into parts of 8 bars or
-more) when the change score reaches 0.45: "a 16-bar section into 2 × 8 when the material
-changes", and never an 8-bar section into two 4-bar flashes. A section under `--min-scene` (5 s)
-joins the scene before (the films' `end` bars ride on their coda). 16 s is the films' own
-longest scene but two (Escapement's 8 bars at 120 BPM; Parallel Space kept two 16-bar scenes of
-27.7 s, which the plan splits).
-
-**Durations on bar lines in whole frames.** A scene's frames are `round(end · fps) −
-round(start · fps)`, so the plan's frame count for each bar line is the rounded song time and no
-rounding error accumulates (Tidewater's 2.222 s bars give 267, 266, 267 frames); the scene plan
-(`VideoPlan`) rounds `duration · fps` back to the same count, and `ctx.music.t0` is within half a
-frame of the bar line. The last scene of a one-pass score holds 3 s for the last chord (the films
-used 3 to 4.6 s); a loop gets none.
-
-**Moments** are listed, not cut on: a cut on every drop would cut mid-phrase. The starter pages
-flash on the drops (`drop(T)` into three-finish's `flash`).
-
-**Colour script.** A role's hue, saturation and lightness (intro 205°, verse 185°, build 280°,
-drop 325°, climax 32°, breakdown 250°, outro 220° pale), scaled by the scene's energy (saturation
-×0.75–1, lightness ×0.88–1) and turned 8° towards 230° (blue) in minor, dorian and phrygian keys,
-towards 45° (gold) in the others. `accent` is the hue + 160° (glints and rings stand out),
-`deep` a near-black of the hue (the sky). Written as `#rrggbb` per scene and, once, as the whole
-script with a YAML anchor, so a page that spans two sections (a coda with its end) can follow it.
-
-**Reactions** by instrument: the brief's mapping (kick → brightness, melody → glints, pads →
-glow) plus accents → rings. A track's reaction comes from the instrument it plays in that scene
-(a section can change it, §120.7); hats, ticks, noise and risers are left out as too dense or not
-a line. Limits per scene: two pulses, one ring, two glints, one glow; `music_data.tracks` lists
-just those, keeping the page's data small.
-
-**The draft.** `video.yaml` (header with the form, `transition: cut`, the music cue as the films
-write it), `extensions/web_cut.py` and a page per scene. The `web` scene has no option to drop
-its 0.5 s fade-out (`outro` is a class attribute), so the draft writes the same five-line
-extension the three films carry rather than adding a param in this step. The score is copied to
-`assets/music/` (a cue's source must be under the project) unless it is in the folder already.
-The draft is validated before the command returns (exit 1 with the problems).
-
-**Starter pages** (`data/web/starters/*.js`, 48–53 lines each, copied verbatim; everything
-scene-specific is in `ctx.data`): one look per role from the kit, so consecutive sections look
-different and two scenes of one role differ by seed, turning direction and colour. Library
-additions they needed (the two Step 358 left for this step), in `vidgen/music-time` (plain
-numbers, testable in Node): `orbit(T, …)` and `pathPoint` / `flyThrough(points, u, ahead)` (a
-Catmull-Rom path through every point, its ends continued) for the camera, `colourScript(stops,
-glide)` for the colour script, and `reactions(ctx.music, react, {drops})` for the four reactions
-and the drop flash. The first looks were too bright at 320x180 (three-finish's bloom on a 80-px
-buffer over 26 crystals' edges and 96 rays): the starters use bloom 0.5 / radius 0.35 /
-threshold 1.0 at half scale, and the climax's rays and flare were toned down; stills at 480x270:
-`/home/claude/work/scratch/am359/looks_sheet.png`.
-
-**The three film scores against their real cuts** (bars from 1; `|` a cut):
-
-| film | real scenes (first bar, length) | the plan | role / look per planned scene |
-|---|---|---|---|
-| Signal Fire (90 BPM, 2.667 s bars) | embers 1 (8 s) \| gather 4 (8 s) \| fire 7 (11 s) | the same: 1 \| 4 \| 7 (`end`, 1 bar, joined; 3 s tail) | intro/drift, drop/swarm, climax/rings |
-| Escapement (120 BPM, 2 s bars) | winding 1 \| dial 9 \| through 17 \| escapement 25 \| cathedral 33 \| threefour 41 \| orrery 49 \| falter 57 (8 s) \| build 61 \| climax1 69 \| climax2 77 \| coda 85 (23 s) | the same 12 cuts: movement, cathedral and climax split 8 \| 8 (over 16 s), orrery 8 \| 4 (the falter: its change score is highest at bar 57), `end` joined to the coda (20 s + 3 s) | intro/drift, verse/orbit, build/tunnel ×2, drop/swarm ×2, breakdown/dust ×2, build/tunnel, climax/rings ×2, outro/ribbon |
-| Parallel Space (138.46 BPM, 1.733 s bars) | dawn 1 \| pulse 9 (16 bars) \| groove1 25 \| groove2 33 \| heart 41 (16 bars: heart + heart2) \| build 57 \| drop1 65 \| drop2 73 \| climax 81 \| afterglow 89 \| coda 97 (18.47 s) | 13 scenes: every real cut and two more, at bar 17 (the 16-bar `pulse` is 27.7 s) and 49 (`heart2` is its own section); coda 16.87 s (3 s tail, the film 4.6 s) | intro/drift, build/tunnel ×2, verse/orbit ×2, breakdown/dust, build/tunnel ×2, drop/swarm ×2, climax/rings, breakdown/dust, outro/ribbon |
-
-Roles that differ from the films' intent: Parallel Space's `pulse` is a build by energy (rising
-into the fuller `groove`), its `heart2` a build (a riser, `groove`-level energy after the sparse
-`heart`); Escapement's `cathedral` a drop and `orrery` a breakdown; Signal Fire's `gather` a drop
-(the brass and taikos come in). They are what the notes say; the author keeps or renames.
-
-**Tests** (`tests/test_music_video_plan.py`): roles, cuts, frames, splits for length and for
-material, joins, moments, reactions and colours on a small synthetic score; the starters' imports;
-the printout and `--json`; user errors; a written draft validated (no render); the three films'
-plans against their `video.yaml` cuts; one `slow` test drawing one still of a drafted page at
-160x90. `tests/test_web_music_video_kit.py` tests the four music-time additions in Node.
+- **Command** `vidgen music plan SCORE [--out DIR] [--force] [--json] [--max-scene S]
+  [--min-scene S] ...` (`--style` and other flags: CONFIG) beside `music render`, `check`, `template`;
+  without `--out` it only prints. User
+  docs: `docs/CONFIG.md` "A music video from a score (`vidgen music plan`)".
+- **Reads the score, not the sound** (`score_events`, §120.8). Per bar: sounding tracks, onsets per
+  track, chord. Energy = 0.5 per sounding track + up to 0.5 per track for onsets (8+ a bar = 0.5),
+  scaled to the busiest bar (a hi-hat cannot outweigh an orchestra).
+- **Roles** (`intro`, `verse`, `build`, `drop`, `climax`, `breakdown`, `outro`): from a word of the
+  section name (split on `_` and digits) when it names one, else from energy against the piece and
+  neighbours (thresholds in CONFIG). Names win: the author named the form.
+- **Cuts.** A scene per section; one longer than `--max-scene` (16 s) is split recursively on a
+  4-bar phrase line by a change score (Jaccard distance of sounding tracks, +0.25 where the
+  progression restarts, +0.5 × energy step, +0.2 after a sparse bar) plus a pull to the middle; a
+  fitting section of 16+ bars is split (parts ≥ 8 bars) when the score reaches 0.45; 8-bar sections
+  never. Under `--min-scene` (5 s) joins the scene before. Drops are listed as moments, not cut on.
+- **Frames on bar lines**: a scene's frames are `round(end · fps) − round(start · fps)` (no drift);
+  `VideoPlan` rounds `duration · fps` back to the same count. A one-pass score's last scene holds
+  3 s for the last chord; a loop none.
+- **Colour script**: per role a hue (intro 205°, verse 185°, build 280°, drop 325°, climax 32°,
+  breakdown 250°, outro 220° pale), saturation and lightness scaled by energy, turned 8° towards
+  230° in minor/dorian/phrygian keys, else towards 45°; `accent` = hue + 160°, `deep` a near-black.
+  `#rrggbb` per scene and the whole script once under a YAML anchor.
+- **Reactions** by the instrument a track plays in the scene: kick → pulse, melody → glints, pads →
+  glow, accents → rings (hats, ticks, noise, risers left out); at most two pulses, one ring, two
+  glints, one glow per scene; `music_data.tracks` lists only those.
+- **Draft** (`--out`): `video.yaml` (`transition: cut`, the music cue), `extensions/web_cut.py` (a
+  `Web` subclass with `outro = 0`), a page per scene from `data/web/starters/*.js` (copied verbatim,
+  one look per role from the kit, everything scene-specific in `ctx.data`); the score copied to
+  `assets/music/` unless already there. Validated before return (exit 1 with the problems).
+- **Determinism**: seeds from the scene id (sum of character codes, not Python's salted `hash()`).
+- Tests: `tests/test_music_video_plan.py`, `tests/test_web_music_video_kit.py` (Node).
 
 ### 121.3 A "watch it" motion check: `vidgen motion check` (Step 360)
 
-**The name.** `vidgen lint` checks stills it renders itself; `vidgen audio check FILE|PROJECT`
-measures a rendered file. The new check reads a rendered video, so it follows `audio check`:
-`vidgen motion check FILE|PROJECT` (a group with one action, room for more), with `audio
-check`'s `--variant`, `--preview` / `--draft`, `--output-dir` and `--json`, and `lint`'s
-`--fail-on`. It never renders: a project with no render gets the `vidgen render` command to run.
-
-**What is watched.** A file; a project's rendered video, with its scenes from the render's
-`timings.json` (start and duration per scene, so a crossfade's frames belong to the scene that
-starts in it); or, when that is missing or with `--source scenes`, the scene clips of
-`build/<quality>/scenes/` one after the other (each clip a scene; the comparisons across a clip's
-start see a cut). The clips miss what the join adds (transitions, overlays) but exist before the
-join, and after a `--scene` re-render.
-
-**One decode, small numbers.** ffmpeg scales to 160 px wide with the area filter and pipes raw
-RGB (no PyAV decode loop: ffmpeg's decoder threads and scaler run beside Python). Per frame: luma
-mean and standard deviation (Rec. 709), RGB means, a 16-bin luma histogram, 10 x 10 px block
-means, and each block's mean absolute change from 1, 2 and 3 frames before (three frames kept);
-the frame is then dropped. Blocks are float16: about 1 KB a frame, 6 MB for the 3-minute films,
-110 MB for an hour at 30 fps. The strips decode again only the frames they show (ffmpeg seeks 1 s
-before the first and selects by frame number: exact frames, checked by a test).
-
-**The checks and why each looks the way it does** (thresholds and defaults: CONFIG "Motion check"):
-
-- **Blank** = luma spread under 3/255 (black, white, a flat colour). What makes it a fault is how
-  it starts or ends: the v7 bug went from a bright frame to black in one frame. A fade into black
-  is a choice (info when long), a cut to black is a choice (info), a video that starts or ends on
-  black is normal (not reported).
-- **Flash / drop-out**: one or two frames whose luma steps away by `flash` and comes back. A
-  kick's light pulse rises in one frame and decays over several, so it does not come back within
-  two frames and is not a flash; the films' `hitEnvelope` pulses pass unreported.
-- **Flicker**: direction reversals of the luma (frame or block) on 60 % of a 12-frame window; a
-  pulse every beat reverses at most twice per beat (a beat is 13 frames at 138 BPM), flicker every
-  frame. Local flicker whose region keeps its brightness while its blocks swap light and dark is
-  left to strobe.
-- **Beat-locked or not.** Music films pulse on purpose. In a project, the hits and note starts of
-  the score files its `music:` cues play are placed in video time with `score_events` (Step 347:
-  no synthesis), with the cue's `start`, `section` and loop; a flash, pop or flicker that starts on
-  them (½ frame before to 1.5 frames after, the frame a page's reaction to an event first shows)
-  is info. Notes count, not only drums: the films react to melodies too (Parallel Space's
-  `05_heart` dips its light on `hook` notes, some of them slurred). Pads and chords are left out
-  (held, they would mark most frames).
-- **Pop**: blocks that change by 0.12 and are back within 35 % of the change one or two frames
-  later, while the ring of blocks around them stays still. The ring is what separates a pop from
-  motion: an object that moves leaves the block it was in, so a neighbour changes too. A one-block
-  pop (80 px at 1280) is info: on the films they were all glints on gears and crystals.
-- **Strobe**: blocks whose change from the frame before is large while the frame two back is
-  almost the same, on half of a second's frames: the period-2 aliasing of a pattern moving half
-  its repeat a frame. Aliasing near a whole repeat a frame looks like a slow or reversed turn and
-  cannot be told from intended slow motion without the scene's own speed, so it is not found.
-- **Frozen**: mean change under 0.0015 for 1.5 s inside a scene (split at cuts); info, since a
-  title can be held. At 160 px thin text fading in counts as no change (Escapement's opening).
-- **Cut jump**: a luma step of 0.2 or a histogram distance of 0.8 across a scene start; info (a
-  cut from a dark build into a bright drop is often the point). A cut to or from a blank frame is
-  left to `blank`.
-
-Findings of one kind within 0.5 s merge (a burst of pops is one line). The checks run in an order
-that keeps one cause one finding: blank, flash, flicker, strobe, pop (a pop is not looked for
-inside a flash, flicker, strobe or within two frames of a cut). Step 369 adds the checks of dark
-pictures (star fields are not blank; clipped, shimmer, banding, empty, lost): §122.5.
-
-**Output.** Text (a line per finding, errors first), `--json` (`motion` document), and a contact
-strip per finding: two frames before, the finding's frames (first two and last two of a long one)
-framed in red, two after, 240 px each, a yellow box where a pop or strobe is. Old strips in the
-folder are replaced. Exit 1 at `--fail-on` (default `error`). MCP `motion_check` defaults
-`fail_on` to `never`, because the server returns pictures only with `ok` true.
-
-**The finished films** (read-only; 1280x720, 30 fps; about 25 s each on 2 cores, peak memory 139 MB):
-
-| film | errors | warnings | info |
-|---|---|---|---|
-| Parallel Space v7 (`ps7/output/parallel_space_v7.mp4`) | 0 (the NaN black frames were fixed) | 1: a one-frame flash in `06_build` at 104.93 s, two frames after a hit (a tunnel ring passing the camera) | 21: 7 cut jumps, 11 flashes / dips on hits and notes (5 one-frame dips on `hook` notes in `05_heart`), 1 one-block glint, 2 held frames in the coda |
-| Escapement (`escapement/output/escapement.mp4`) | 0 | 0 | 17: 7 cut jumps, 6 one-block glints (2 on hits), 4 still stretches (the opening while the title fades in, the ending) |
-
-Tuning on them: the first run gave Parallel Space 7 warnings and Escapement 4. The `05_heart` dips
-fall on `hook` notes, some slurred: note starts (slurred too) joined the drum hits. The one-block
-pops were specular glints: `pop_blocks` 2 made them info. The scene clips of Parallel Space
-(`--source scenes`) give the same findings a frame later at the cuts (the clips' rounding).
-
-**Tests** (`tests/test_motion_check.py`): the checks on synthetic numpy frames (80 x 40, no
-ffmpeg): clean motion, black frames inside / at a cut / at the ends, a fade to black, flashes and
-drop-outs with and without a hit, flicker vs beat-locked flicker vs decaying kick pulses, local
-flicker, pops of one and two frames, a small pop, a moving square that is not a pop, a strobing
-wheel, a frozen stretch split by a cut, a cut jump; threshold names; the score's events in video
-time (tidewater looped from 50 s); the command on an encoded clip with its strip's frames
-checked; a slow test with a project's scene clips and its rendered video. `test_mcp.py` gains a
-slow `motion_check` call.
+- **Command** `vidgen motion check FILE|PROJECT [--variant] [--preview|--draft] [--output-dir]
+  [--source scenes] [--threshold NAME=VALUE] [--fail-on] [--json] ...` (full flags: CONFIG); never renders (a project without a
+  render gets the `vidgen render` command to run). Thresholds and defaults:
+  `docs/CONFIG.md#motion-check-vidgen-motion-check`.
+- **Input**: a file; a project's video with scenes from `timings.json` (a crossfade belongs to the
+  scene starting in it); or, when missing or with `--source scenes`, the clips of
+  `build/<quality>/scenes/` in order.
+- **One decode**: ffmpeg scales to 160 px wide (area) and pipes raw RGB; stderr goes to a temporary
+  file. Per frame: luma mean and spread (Rec. 709), RGB means, 16-bin luma histogram, 10 x 10 px
+  block means (float16) and their change from 1, 2, 3 frames before. Strips re-decode only their
+  frames (seek, select by frame number: exact).
+- **Checks** (one cause, one finding; order blank, flash, flicker, strobe, pop; same-kind findings
+  within 0.5 s merge):
+  - **blank** (luma spread < 3/255): a one-frame cut into it is the fault; fades/cuts to black are
+    info; start or end on black unreported. **flash**: one or two frames away by `flash` and back
+    (a decaying kick pulse is not one). **flicker**: luma reversals on 60 % of a 12-frame window.
+  - **Beat-locked**: hits and note starts of the project's score cues (`score_events`, with cue
+    `start`, `section`, loop; pads and chords left out) make a flash, pop or flicker starting ½
+    frame before to 1.5 frames after one info.
+  - **pop**: blocks changing by 0.12 and back within 35 % in one or two frames while the ring around
+    stays still (motion moves a neighbour too); one block is info (`pop_blocks` 2); none inside a
+    flash, flicker, strobe or within two frames of a cut. **strobe**: period-2 aliasing on half a
+    second's frames. **frozen**: change < 0.0015 for 1.5 s inside a scene (info). **cut jump**: luma
+    step 0.2 or histogram distance 0.8 at a scene start (info). Dark-picture checks: §122.5.
+- **Output**: text (errors first), `--json` (`motion` document), a contact strip per finding (two
+  frames before, the finding's frames framed red, two after, 240 px each, a yellow box at a pop or
+  strobe; old strips replaced). Exit 1 at `--fail-on` (default `error`). MCP `motion_check`
+  defaults `fail_on` to `never`, because the server returns pictures only with `ok` true.
+- Tests: `tests/test_motion_check.py`.
 
 ### 121.4 More choir: syllables, a soloist, a whisper (Step 361)
 
-**The rule above all others.** The owner called the choir demo of Steps 345–346 "a true piece of
-art", so its sound may not move. The four new settings default to the old behaviour, and a note
-that uses none of them (`syllable: vowel`, `soloist: false`, `whisper: 0`, no slurred note naming
-a syllable or vowel) is made by Step 345's function itself (`choir.held_vowels`, the old
-`choir_note` renamed, not one line of arithmetic changed). The new path is a separate module
-(`studio/singing.py`), entered by `singing.choir_note` (the instrument's maker, remembered as
-before). Proved: the two film scores and the nine choir demo scores of Steps 345–346 render to
-the same bytes on the starting commit and after this step (HANDOFF Step 361).
+User reference (settings `syllable`, `turn`, `soloist`, `whisper`, marks, consonant timings):
+`docs/CONFIG.md` "Syllables, a soloist, a whisper".
 
-**Still synthesis, still no words.** The choir sings syllables of one soft consonant and one or
-two vowels; nothing is sampled, nothing spells a language.
-
-- **The mouth is a line of keys.** A key is a mouth shape at a sample: five formants (the
-  vowel table of §120.6, or a consonant's), optionally an antiformant and a low-pass, and the
-  voice's level there. Between two keys each sample is a cross-fade of the two keys' wave
-  tables, read on the singer's one phase (as `additive.phrase_tone` joins slurred notes), so a
-  move of the formants is a series of shapes 6 to 25 ms apart (`_STEPS` = 6 per move, a raised
-  cosine in time, formants in a straight line in Hz). A held vowel's key is read across the
-  singer's pitch swing (five rows, as before: vibrato carries harmonics across the formants);
-  the short keys of a consonant or a glide have one row. Each key is set to equal loudness
-  (`additive.loudness`), and the level is a curve through the keys.
-- **Consonants** (figures for a bass, scaled for the other voices by 1.06 / 1.14 / 1.2 and by the
-  singer's throat; the first formant follows a high note as in §120.6):
-
-  | | hold | level | during the hold | the move into the vowel |
-  |---|---|---|---|---|
-  | `l` | 50 ms | −6 dB | F1 330, F2 1150, F3 2650 Hz (narrow) | 60 ms from 330 / 1200 / 2650 |
-  | `m` | 70 ms | −9 dB | a nasal murmur: 270, 1350, 2250 Hz; antiformant 950 Hz; low-pass 1 kHz | 45 ms from 300 / 1000 / 2300 (bilabial: F2 low) |
-  | `n` | 60 ms | −9 dB | 270, 1250, 2450 Hz; antiformant 1.8 kHz; low-pass 1.3 kHz | 45 ms from 300 / 1700 / 2600 (alveolar: F2 high) |
-  | `d` | 35 ms | −23 dB | a closure: a voice bar (200 Hz, low-pass 350 Hz) | a soft burst (noise around 2.4 kHz, 0.25 octave, little above 3.4 kHz, 1.5 ms rise, 3 ms decay; Step 363, §121.6), the voice back at −7 dB 2 ms later, then 40 ms from 250 / 1700 / 2650 |
-
-  A consonant begins its note at the step (12 ms entry; `attack` shapes only syllables
-  without one), so the vowel arrives 80–120 ms after the step. A section's singers enter
-  within 40 % of their usual spread on a consonant (at most 28 ms instead of 70).
-- **Two vowels** (`ah-oh`, `oo-ah`, `oh-ah`, `ah-ee`, and `mm-ah`, `mm-oh`, `mm-oo`: the hum of
-  §120.6 opening) glide over 0.15 s (at most 40 % of the note) centred at `turn` (0.5) of the
-  note. `morph` keeps its meaning for `syllable: vowel` (in the new path it is the same move as
-  keys) and is not sung with a syllable.
-- **Slurs.** A slurred phrase is one note (§120.7): its first note sings the syllable, the others
-  go on with its vowel. A note inside a slur whose own mark names a syllable or a vowel (or
-  `[default]`) carries `(syllable, vowel)` as a fourth item of its `Phrase` entry
-  (`render._sung`); the mouth then closes into its consonant (25 ms) or glides to its vowel
-  around its step. So `syllable` and `vowel` may change inside a slur (`score_file.FREE_IN_SLUR`
-  beside `glide`); every other setting still may not. Other instruments' phrases keep three items.
-- **The soloist** (`soloist: true`, read by `read_yes_no`: true/false, yes/no, on/off, 1/0): one
-  singer (mono; `singers` ignored), `brightness` + 0.15, the singer's formant (a resonance
-  added to the harmonics: 2.7 / 2.9 kHz, +9 dB for basses / tenors; 3.1 / 3.3 kHz, +6 dB for altos
-  / sopranos; 500–600 Hz wide), its vibrato 1.7 times `vibrato` with the depth breathing ±12 %,
-  beginning at 1.6 times `vibrato_delay` and growing over 0.6 s, a scoop of 35–55 cents up into
-  each attacked note (80 ms), and 1.6 times the breath. The choice of a setting over a `voices`
-  value: `voices` says who sings a note, the soloist is how many and how; `soloist` combines
-  with every `voices` value.
-- **Breath and whisper** in the new path come from one noise through a filter that follows the
-  keys (short-time Fourier transform, Hann frames of 1024 at a hop of 256; per frame the keys'
-  responses cross-faded): breath as in §120.6 (formants three times as broad, little under
-  900 Hz, more in the first 0.15 s, 0.3 of it through closed lips), whisper through the same
-  formants half as broad again from 250 Hz up. `whisper` w sets the tone to cos(πw/2) and the
-  whisper noise to 0.8 sin(πw/2) of the voice's level (power-follows as for breath, measured on
-  the voice before it is turned down), so the loudness stays within 1 dB from 0 to 1. A `d`
-  keeps its burst when whispered.
-- **Measured** (scratch scripts `/home/claude/work/scratch/am361/tools/`, tables
-  `measure-1.txt` … `measure-4.txt`; one voice, vibrato 0, unless said):
-  - Formant moves (tenor D3, 25 ms frames): `la` F1 207 Hz in the hold, 410 at 80 ms, 589 at
-    100 ms, 612 from 120 ms (aah); `na` F2 1175 Hz (murmur), 1769 at the release (60 ms), 1561 at
-    80, 1002 at 100; `ma` F2 1448 (murmur), 1005 at 80 ms, F1 211 → 555 → 606 at 80 / 100 / 120 ms;
-    `da` −41 dB (closure) at 20 ms, F2 2276 at 40 ms, 1216 at 60, 997 at 80; sopranos at D4 the
-    same with F1 on the note. Levels in the hold: `l` 5.7 dB, `m` / `n` 8.7 dB under the vowel.
-  - Antiformant (murmur 15–45 ms against the same note with the zero taken out): `m` −13.9 to
-    −14.8 dB at 950–1083 Hz, `n` −17.3 to −18.1 dB at 1.8–2.05 kHz (basses, tenors, altos);
-    10–19 dB under the harmonics two either side; in the vowel 0.0 dB.
-  - Vowel glides (F1 or F2, 10–90 %): `ah-oh` 0.960–1.050 s for a turn at 1.00 s (set 0.15 s,
-    raised cosine), `oo-ah` 0.955–1.030, `mm-ah` 0.945–1.040, `ah-ee` F2 0.970–1.060, `ah-oh`
-    turn 0.25 0.445–0.555; level before and after within 0.7 dB.
-  - Soloist (tenor A3, defaults): vibrato 5.49 Hz, depth 29.7 cents (one choir voice 16.0), half
-    its depth reached from 0.75 s (one voice 0.45 s); first 30 ms −30 cents (one voice −10);
-    with `vibrato: 25, vibrato_speed: 6` 6.01 Hz, 46 cents. Power in 2–4 kHz against all:
-    tenors −17.6 dB (one voice −26.3, section −27.9), basses −14.1 (−21.8), altos −34.3
-    (−39.5), sopranos −34.2 (−38.1). Breath between the harmonics −26.8 dB (one voice −30.8).
-  - Whisper (C4 aah, 8 singers): power between the harmonics against on them −23.0 / −11.5 /
-    −4.6 / +2.1 / +9.2 dB for 0 / 0.25 / 0.5 / 0.75 / 1 (+9 is pure noise for this measure);
-    loudness −16.1 → −17.0 LUFS; the soloist −15.8 → −16.8.
-  - Levels through the renderer (C4, one track): section `aah` −16.8 LUFS, `la` −16.8, `na`
-    −16.8, `da` −16.9, `ah-oh` −16.6, soloist −16.5, whispered −17.4; men C3 −16.6, soloist
-    −16.9.
-  - Clicks: power above 8 kHz in 1 ms frames at most −86 dB under the note's loudest
-    millisecond for `l`, `m`, `n`, glides and slurred syllables (the held vowel −132 dB; the
-    model has nothing there); the `d` burst −35 to −46 dB, as meant (too loud: heard as "sht",
-    made soft in Step 363, §121.6). First sample 0, last under 1e-8.
-  - CPU (2 s note, C3, 8 singers): held vowel 77 ms per second of sound, `la` 82, `da` 85,
-    `ah-oh` 95, whisper 0.5 85, `la` whispered 90, 16 singers `la` 139; soloist 14 (one voice
-    13).
-- **Honest limits.** Nobody has listened. The consonant figures are textbook values for speech,
-  held a little longer; a real singer's `d` also has a voiced closure of varying length and a
-  real `l` a lateral antiformant (left out). A consonant starts on the step instead of before
-  it, so syllables sound a little late in fast lines. Keys cross-fade wave tables, which moves
-  each harmonic's level but is not a resonance sweeping continuously (steps of 6–25 ms, finer
-  than the 25 ms frames that measured them). The soloist is still one synthetic voice: brighter
-  and more alive, not a recorded singer. A whispered `m` or `n` is a quiet noise only.
+- **Rule above all.** The new settings default to the old behaviour, and a note using none of them
+  (`syllable: vowel`, `soloist: false`, `whisper: 0`, no slurred note naming a syllable or vowel)
+  is made by `choir.held_vowels` (the §120.6 function, arithmetic unchanged), so existing choir
+  scores render to the same bytes. The new path is `studio/singing.py`, entered by
+  `singing.choir_note` (the instrument's maker, remembered as before). Synthesis only, no words:
+  one soft consonant (`l`, `m`, `n`, `d`) and one or two vowels per syllable.
+- **The mouth is a line of keys.** A key is a mouth shape at a sample: five formants (the §120.6
+  vowel table or a consonant's), optionally an antiformant (`m`, `n`) and a low-pass, and the
+  voice's level. Between keys each sample cross-fades the two keys' wave tables on the singer's one
+  phase (as `additive.phrase_tone`); a move is `_STEPS` = 6 shapes. A held vowel's key has five rows
+  across the pitch swing; consonant and glide keys one row. Each key at equal loudness.
+- **Consonants** begin the note at the step (`attack` then shapes nothing), so the vowel arrives
+  80–120 ms after it; section singers enter closer together (at most 28 ms apart instead of 70).
+- **Two vowels** (`ah-oh`, `oo-ah`, `oh-ah`, `ah-ee`, `mm-ah`, `mm-oh`, `mm-oo`) glide over 0.15 s
+  (at most 40 % of the note) centred at `turn` (0.5). `morph` applies only to `syllable: vowel`; with
+  a syllable it is a documented no-op, not an error (a later mark may switch to a syllable).
+- **Slurs.** The first note sings the syllable, the others continue its vowel. A slurred note whose
+  mark names a syllable or vowel (or `[default]`) carries `(syllable, vowel)` as a fourth item of
+  its `Phrase` entry (`render._sung`). `score_file.FREE_IN_SLUR` = `glide`, `syllable`, `vowel`;
+  other instruments' phrase entries keep three items.
+- **Soloist** (`soloist`, read by `read_yes_no`: true/false, yes/no, on/off, 1/0): one mono singer
+  (`singers` ignored), brighter, with a singer's formant, wider and later vibrato, a scoop and more
+  breath. A setting, not a `voices` value: `voices` says who sings, `soloist` how many and how; it
+  combines with every `voices` value.
+- **Breath and whisper**: one noise through a filter following the keys (STFT, Hann 1024, hop
+  256). `whisper` w sets the tone to cos(πw/2) and the whisper noise to 0.8 sin(πw/2) of the
+  voice's level, so loudness stays within 1 dB from 0 to 1. A whispered `d` keeps its burst.
 
 ### 121.5 Review of Steps 358–361 (Step 362)
 
-Fixed:
+Behaviours fixed here and now part of the contract:
 
-- **`melody` dimmed the light on every legato note.** `vidgen/music-time`'s `melody(track, T)`
-  restarted each note's level at 0 with a 0.05 s attack, so a frame that fell just after a note
-  start of a line held without a gap was up to 25 % darker than its neighbours (the one-frame
-  dips `vidgen motion check` listed on the `hook` notes of Parallel Space's `05_heart`; luma
-  0.54 → 0.41 → 0.50 in a 320x180 still at 11.23 / 11.27 / 11.30 s). The attack now rises from the
-  level the note before has at the new note's start (held: 1; released: its 0.45 s decay); a
-  first note, or one after a long rest, rises from 0 or nearly so as before. Only frames within
-  0.05 s of a note start change (and the ribbon `updateRibbon`, which samples the melody over
-  9 s, loses its darker gap at each note: 38–40 dB PSNR elsewhere in `05_heart`). After: the
-  same frames read 0.552 / 0.552 / 0.554, and 12.93–13.07 s (two dips before: 0.465, 0.561)
-  0.612–0.618. `noteLevel` keeps starting each note from 0 (a swell per note, as the films use
-  it). Escapement, Signal Fire and Three Finish do not call `melody`.
-- **The range warning crashed on a note above MIDI 127 of an instrument without a written
-  range** (`studio/render.py` `range_warnings`: `assert written is not None`): a `bell` at
-  `octave: 8, transpose: 36` stopped `render_music_score(score, warnings)`. Only instruments with
-  a written range are checked now (the 20 Hz–12 kHz limit still reports the others). This was
-  the cause of the five slow `tests/test_studio_stems.py` failures since Step 346; they pass. No
-  sample changes (the function builds strings); the Escapement score renders to `271de0c6…4dc8`
-  as before.
-- **`vidgen motion check` could hang on a damaged file**: ffmpeg's stderr went to a pipe that
-  was read only after the frames, so more than a pipe's worth of decode errors (4 KB on Windows)
-  would block both programs. It goes to a temporary file now.
-- **No MCP tool for `vidgen music plan`**: `music_plan` (`score` given as `music_render`'s,
-  `out`, `force`, `max_scene`, `min_scene`) runs the command and returns its document.
-- **Docs**: the guide's `music_data` example asked `tidewater` for a `hook` track it does not
-  have (now `melody`); `web/music.py`'s docstring named the deleted `make_ps_audio.py`;
-  `morph` is ignored with a syllable (now said in the setting's own description, as CONFIG
-  already said); the README's Features list has a "Music videos" item naming the kit, the plan,
-  the motion check and the choir's syllables, soloist and whisper; the install sections and
-  Features no longer say what does not need installing; CHANGELOG lines that only said the
-  instruments were "measured, not listened to" are gone; COOKBOOK-3D section 9 says Parallel
-  Space's stills are 53.5 dB+ (not identical) after its move to `music_data`, COOKBOOK-MUSIC
-  section 12 points to COOKBOOK-3D section 11.
-
-Looked at and left:
-
-- `morph` with a syllable stays a documented no-op rather than an error: a track may set
-  `morph` and a note mark switch to a syllable later; an error there would need cross-setting
-  checks per note that the score reader does not have.
-- Cache keys: `vidgen/music-time` and `vidgen/three-kit` are served files recorded in a page's
-  loaded files (three-kit imports music-time, so both are recorded), as `vidgen/three-finish`
-  is; a page that imports neither keeps its key. This step's `music-time.js` change re-keys the
-  examples' scenes once.
-- Determinism: the plan's seeds come from the scene id (a sum of character codes, not Python's
-  salted `hash()`); the starters and the kit draw seeded numbers only (`rng`, `hash`).
+- **`melody`** (`vidgen/music-time`): a note's attack rises from the level the previous note has
+  at the new note's start (held: 1; released: its 0.45 s decay), so legato lines do not dip; a
+  first note or one after a long rest rises from about 0. `noteLevel` still starts each note from 0.
+- **Range warnings** (`studio/render.py` `range_warnings`) check only instruments with a written
+  range; the 20 Hz–12 kHz limit reports the others.
+- **`vidgen motion check`** sends ffmpeg's stderr to a temporary file, not a pipe (a full pipe
+  would block both programs).
+- **MCP `music_plan`** (`score` as in `music_render`, `out`, `force`, `max_scene`, `min_scene`)
+  runs `vidgen music plan` and returns its document.
+- **Determinism.** The plan's seeds come from the scene id (sum of character codes, not Python's
+  salted `hash()`); starters and the kit use only seeded numbers (`rng`, `hash`).
+- **Cache keys.** `vidgen/music-time` and `vidgen/three-kit` are recorded in a page's loaded files
+  (three-kit imports music-time, so both are); a page importing neither keeps its key.
 
 ### 121.6 The `d` without its "sht" (Step 363)
 
-**Heard.** The owner, listening to Step 361's demos: "a sound that resembles 'sht'" at 2, 4.5
-and 12.5 s of `demo_syllables` and in the other demos. Those are the `da`, `de` and the tenors'
-`da`; a search of every demo WAV for sudden 5–12 kHz energy finds a jump of +40 to +59 dB at each
-`d` (eight in `demo_syllables`, two in `demo_men`, three in `demo_whisper`, four smaller ones,
-+19 to +24 dB, under the cellos of `demo_cue`) and nothing else that is not a note (the
-`demo_soloist` hits are harmonics gliding; it has no `d`). The WAVs have it, so the AAC encoder
-does not make it. Step 345–346's choir demos have none: the old held-vowel path has no
-consonants.
-
-**Cause.** The `d`'s burst (`singing._singer`): white noise around 3.8 kHz, 0.45 octave wide
-(standard deviation) with nothing to stop it below 16 kHz, at 0.35 of the voice. A voice of this
-model has almost nothing above 3.5–4 kHz, so the burst
-stood alone up to 12 kHz: 22–26 dB under the note's loudest 10 ms above 5 kHz (a `la` −91 dB),
-+45 to +59 dB over the voice above 4.5 kHz at that moment. Each of a section's singers bursts on
-its own (within 28 ms of each other), so eight bursts made a 30–40 ms hiss, and the hall's
-reverb carried it on for a second: "sh", then the voice cut back in after the closure: "t".
-Confirmed by the same phrase with only the burst taken out (the same random numbers drawn): the
-two renders differ only at the `d`s, and with no burst the 5–12 kHz level at the `d` falls to the
-vowel's.
-
-**Fix.** The burst lies inside the voice: noise around 2.4 kHz (× 1.06 / 1.14 / 1.2 for tenors,
-altos, sopranos, and the singer's throat), 0.25 octave, a low-pass at 3.4 kHz (scaled the same),
-a rise of 1.5 ms instead of 0.5 and a decay of 3 ms instead of 4, at 0.1 of the voice instead of
-0.35. The closure, the voice's return and the formants' move from the alveolar locus (F2 from
-1.7 kHz) are unchanged: the `d` is heard from those, as a voiced stop is. The burst draws the
-same random numbers as before, so every note without a `d` is the same to the sample
-(`demo_soloist` renders to the same bytes as in Step 361), and a plain choir note never reaches
-this code (Escapement's score and the nine choir demo scores of Steps 345–346 render to the same
-bytes on 2c758af and after).
-
-**Measured** (scratch `/home/claude/work/scratch/am363/`, `measure-demos.txt`):
-
-- One note per voice (8 singers, defaults, 0.25 s + ring): loudest 10 ms above 5 kHz against the
-  note's loudest 10 ms, before → after: `da` basses −24.6 → −71.1 dB, tenors −23.7 → −77.5,
-  altos −22.7 → −74.8, sopranos −24.3 → −71.3 (`la` −91.1 / −91.6 / −80.6 / −70.9; what is left
-  at the `d` comes from the voice's 2 ms return, not the burst). Whispered sopranos: `da` −24.2 →
-  −55.1, the whisper itself (`la`) −55.0.
-- The burst alone (a render minus the same without it), in the 10 ms around its peak, against
-  the voice there: above 4.5 kHz +45 to +59 dB → −1 to −23 dB; 1.5–4.5 kHz +7 to +22 dB → −10 to
-  +7 dB (a soft tick within the voice's own band); 29–34 dB under the vowel in all.
-- The demos, at each `d`: the jump of 5–12 kHz in 5 ms frames against the 250 ms before, +40 to
-  +59 dB → +3.7 to +10 dB (`demo_cue`: +19 to +24 → +3 to +6); 5–12 kHz against the whole band in
-  the same frame −16 to −27 dB → −68 to −73 dB (whispered −50 to −66, the whisper's own noise;
-  `demo_cue` −43 to −47, its cellos and timpani). Spectrograms: `png/before_after.png`.
-- Test: `tests/test_studio_singing.py::test_a_d_opens_softly_without_a_hiss_above_the_voice`
-  (basses and sopranos; `la`, `da`, `de` under −50 dB above 5 kHz, a whispered `da` no louder
-  there than a whispered `la`); it fails on the Step 361 burst (−24.6 dB).
+The `d` burst (`singing._singer`) lies inside the voice's band: noise around 2.4 kHz (× 1.06 /
+1.14 / 1.2 for tenors, altos, sopranos and the singer's throat), 0.25 octave, low-pass 3.4 kHz
+(scaled the same), 1.5 ms rise, 3 ms decay, at 0.1 of the voice. Reason: this voice model has
+almost nothing above 3.5–4 kHz, so a broadband burst stood alone and, summed over a section and
+the reverb, was heard as "sht". The closure, the voice's return and the formant move from the
+alveolar locus (F2 from 1.7 kHz) carry the `d`. The burst draws the same random numbers as
+before, so every note without a `d` is sample-identical, and plain choir notes never reach this
+code. Test: `tests/test_studio_singing.py` (`la`, `da`, `de` under −50 dB above 5 kHz).
 
 ### 121.7 Opening titles and end cards for films: `vidgen/title-cards` (Step 364)
 
-**Why.** The owner finds Escapement's opening (`01_winding`: "ESCAPEMENT", a rule and a subtitle
-in the left third, the watch on the right) and its end card (`12_coda`: the same type on the
-right, the watch on the left, "made with schu-video-generator", the link and two italic lines)
-very professional and wants that feeling available to every film.
-
-**What Escapement does** (`examples/escapement/extensions/escapement.js`, `makeText` and the two
-modes): HTML `<div>`s over the WebGL canvas, sized in `vw`/`vh`: title 3.9vw (end 2.7vw) in the
-theme's serif, weight 500, letter spacing 0.26em (end 0.3em) with a soft coloured `text-shadow`;
-a 1 px rule 9vw long, a gradient from gold `#d9b46a` to nothing; the subtitle 1.15vw in the theme's
-body font, upper case, spacing 0.42em, grey-blue (end warm grey); the end card's link in the
-monospace and two italic serif lines. The opening fades in over bars 1.2–2.2 and out over bars
-6.2–7.2 of an 8-bar, 16 s scene, while the spacing opens 0.26 → 0.29em; the end card fades in
-over bars 4–5.4 of the coda and goes with the picture's fade. Card `display: none` while hidden.
-
-**The module** (`data/web/modules/title-cards.js`, 230 lines, no imports, on the import map as
-`vidgen/title-cards` beside the three music-video modules; HTML and CSS, so it serves any `web`
-page, three.js or not): `titleCard(ctx, options)` and `endCard(ctx, options)` are async (they
-wait for the fonts, then measure), return `{element, options, layout, update(t)}`; `update(t)`
-sets the opacity (`cardAlpha`: smoothstep in over `fadeIn` from `start`, hold, smoothstep out;
-`hold: Infinity` holds to the end) and the spacing (`cardSettle`: from the fade in to the end of
-the fade out, or 8 s when held) and returns the opacity. Pure helpers `cardOptions`, `cardAlpha`,
-`cardSettle`, `cardLayout` are exported for tests (Node) and pages.
-
-Decisions:
-
-- **Escapement's numbers are the defaults**, translated from `vw`/`vh` to a unit `k` and a flex
-  column with gaps measured from its stills: title → rule 0.75 × the title's size, rule →
-  subtitle 1.7k, then 1.65k, the end card's lines 4.1k below with line height 1.65. The opening's
-  cool colours and the end card's warm ones are both kept (title / end defaults). Default timing:
-  2 + 2 + 8 + 2 s (in by 4 s, gone by 14 s of a 16 s opening); end card 1 s, 2.5 s fade, held. A
-  still of a test page at 640x360 puts the title, rule and subtitle within 3 px of Escapement's.
-- **The size unit.** `k` = 1 % of the width of a 16:9 frame, or of the height × 16/9 when the frame
-  is wider (21:9 does not grow the type), and 1.7 % of the width in a portrait frame (1.45 %
-  looked too small at 360x640). A line wider than its block is set smaller once, measured after the
-  fonts load (with the spacing at its widest), so a long title fits; italic lines wrap instead.
-- **Placement.** Landscape `left`: x 5.5 %, block 40 % wide, centred at 46 % of the height (the
-  opening's); `right`: x 51 %, 43.5 % wide, 45 % (the end card's). A portrait frame has no third
-  beside a subject, so `left` / `right` go to the lower part (centre at 64 %: above where Shorts
-  put their own text), aligned by `align`; `top` centres at 24 %. Margins 8 % of the width in
-  portrait, 5.5 % in landscape.
-- **The shade.** Not in Escapement (its studio is black there) but asked for: a linear gradient
-  from the block's edge of the frame, `shade` (0.45) black at the edge, 55 % of it at 32 %, none
-  at 62 % (55 % for top / bottom), fading with the card. On a flat near-black picture it shows
-  one-level 8-bit steps (measured: 2 → 5 over 400 px); grain hides them.
-- **Lint.** The cards are page text with `data-vidgen-id` `title-card` / `end-card`, so lint
-  checks them, with `data-vidgen-lint="off:min_font"`: a 1.15k subtitle has a cap height near 1.4 %
-  of the short side, under `min_font`'s 1.8 % error on purpose (Escapement opted out of every
-  rule). Hidden cards are `display: none`, so lint skips them.
-- **No link rule in the docs.** The cookbook says no web address belongs in the opening; where a
-  project link goes on an end card is left to the examples (owner's rule). `endCard` has a neutral
-  `link` line.
-- **Examples unchanged** in this step (Parallel Space v8 will use the module next); Escapement
-  keeps its own `makeText`.
-
-**Proof** (scratch `/home/claude/work/scratch/am364/`): `vidgen still` of Escapement `01_winding`
-at 8 s and `12_coda` at 14 s (640x360, `stills_esc/`), and of a test page (`demo/`, a lit
-torus knot) with `titleCard` at 7 s (640x360) and `endCard` at 9 s (360x640, portrait), in
-`demo/stills/`. Tests: `tests/test_web_title_cards.py` (served by name, no imports; options with
-did-you-mean; timing and layout in 16:9, 21:9 and 9:16 in Node; the docs; one slow Chromium test
-drawing a page with both cards twice at 320x180 and 180x320: same pixels, nothing before the
-title, the title in the left half, the end card later).
+- **Module** `data/web/modules/title-cards.js` (no imports; on the import map as
+  `vidgen/title-cards`; HTML and CSS, so it serves any `web` page, three.js or not).
+  `titleCard(ctx, options)` and `endCard(ctx, options)` are async (wait for fonts, then measure)
+  and return `{element, options, layout, update(t)}`; `update(t)` sets opacity (`cardAlpha`:
+  smoothstep in over `fadeIn` from `start`, hold, smoothstep out; `hold: Infinity` holds to the
+  end) and letter spacing (`cardSettle`: from fade-in to end of fade-out, or 8 s when held) and
+  returns the opacity. Exported pure helpers `cardOptions` (did-you-mean on unknown options),
+  `cardAlpha`, `cardSettle`, `cardLayout`, and `TITLE_DEFAULTS`, `END_DEFAULTS`. Options:
+  `docs/CONFIG.md#web` ("Opening titles and end cards").
+- **Defaults** follow Escapement's cards in a unit `k`: title → rule 0.75 × title size, rule →
+  subtitle 1.7k, then 1.65k; end card lines 4.1k below, line height 1.65; title defaults cool,
+  end defaults warm. Timing: 2 + 2 + 8 + 2 s (start, fade in, hold, fade out); end card 1 s, 2.5 s
+  fade, held.
+- **Size unit.** `k` = 1 % of the width of a 16:9 frame, or of height × 16/9 when wider (21:9 does
+  not grow the type), and 1.7 % of the width in portrait. A line wider than its block is set
+  smaller once, measured after fonts load at the widest spacing; italic lines wrap instead.
+- **Placement.** Landscape `left`: x 5.5 %, block 40 % wide, centred at 46 % of the height;
+  `right`: x 51 %, 43.5 % wide, at 45 %. Portrait: `left`/`right` go to the lower part (centre
+  64 %), aligned by `align`; `top` centres at 24 %. Margins 8 % of the width in portrait, 5.5 % in
+  landscape.
+- **Shade.** A linear gradient from the block's edge: `shade` (0.45) black at the edge, 55 % of it
+  at 32 %, none at 62 % (55 % for top / bottom), fading with the card.
+- **Lint.** Cards are page text with `data-vidgen-id` `title-card` / `end-card` and
+  `data-vidgen-lint="off:min_font"` (the subtitle is deliberately under `min_font`); hidden cards
+  are `display: none`, so lint skips them.
+- `endCard` has a neutral `link` line; what link goes there is the project's choice.
+- Tests: `tests/test_web_title_cards.py`.
 
 ### 121.8 The strings without the "fo" of a slow, soft note (Step 366)
 
-**Why.** Listening to Parallel Space the owner heard a breathy sound, "like an air instrument",
-that went only when the track `swell` was silenced (v8 silenced it in heart / heart2): single
-viola notes in octave 3, `attack: 0.6, brightness: 0.25, ring: 1.2`, 5 players, in a hall.
-
-**Measured** (a note with `bow: 1` minus the same note with `bow: 0`, 25 ms frames; scripts in
-`/home/claude/work/scratch/am366/tools/`): the rosin hiss (§120.5: 3.5 % of the tone, shaped by
-the body from half the bridge hill to 12 kHz) followed the tone's level, so as a whole it stood
-30 dB under the tone, as in every note. But a dark tone has little above 4 kHz, and a note that
-swells in or dies away is darker still (the cross-fade to the spectrum 0.3 darker): there the
-hiss stood alone. In the `swell` note it was above 4 kHz 8 dB over the tone at the median frame
-and up to 25 dB over it while swelling in and dying away (35 dB at `brightness: 0`, 42 dB for
-basses at 0.3): a breath with the note's envelope, drawn out by the hall's reverb, and in a
-section it came 25 ms before the tone. One player or five: the same (+24 / +25 dB);
-`brightness: 0.5` with the same slow attack: +9 dB at the ends, under the tone while held. A
-real bowed string's noise is well under its harmonics, mostly at the bow change, and lower
-against the tone at softer, darker (sul tasto) bowing; the model did the opposite.
-
-**Fix** (`strings.py` `_rosin_room`, applied in `_bow_noise` to held and tremolo notes; the
-held player also returns `bitten`, its share of the full tone per sample, a section's the
-players' mean): in each octave band of the hiss (from half the bridge hill up to 12 kHz) the
-hiss may stand out of the tone no more than it does in an ordinary note (`brightness` 0.5, or
-the note's own if brighter) at full bow. The limit is worked out from the note's spectra (its
-own and its darker one, mixed as `bitten` says, on a grid of 21 steps): one small table per
-note. The scratch at a bitten start, the spiccato and the pizzicato are not touched.
-
-| `swell` note (violas F#3, 5 players) | before | after |
-|---|---|---|
-| hiss above 4 kHz against the tone, worst frame / median | +25 / +8 dB | −7 / −15 dB |
-| hiss against the tone, whole note | −30.5 dB | −52 dB |
-| its first 150 ms | −32 dB | −62 dB |
-| the hiss comes within 20 dB of its peak | 25 ms before the tone | 100 ms after it |
-
-**What else changes.** An ordinary or bright note (`brightness` 0.5 or more) is the same while
-held at full bow; only its slow attack and its release, darker, lose a little hiss (about 1 dB
-of the noise's energy, 40–60 dB under the music). Spiccato and pizzicato: the same samples.
-Soft dynamics (which lower `brightness`) and `brightness` under 0.5 have far less hiss: the
-Step 344 demos' "soft" 4–9 dB less above 2.5 kHz, "tasto" up to 22 dB. So every score that
-holds string notes changes a little: of the examples, `parallel-space` (v8: the `swell` still
-plays in dawn and coda; the WAV `06d2f7b4…` → `c00ba876…`) and `signal-fire` (`7a840620…` →
-`2622bd8f…`), by −51 and −48 dB of the piece; `escapement` has no strings and stays
-byte-identical (`271de0c6…4dc8`, rendered after the change). No test holds an audio hash of
-those scores (theirs hash the score file, unchanged). Tests: `tests/test_studio_strings.py`
-`test_a_slow_soft_swell_has_no_breath_above_its_tone` (fails on the old hiss) and
-`test_an_ordinary_note_keeps_its_rosin_at_full_bow`.
-
+`strings.py` `_rosin_room`, applied in `_bow_noise` to held and tremolo notes (the held player
+also returns `bitten`, its share of the full tone per sample; a section's is the players' mean):
+in each octave band of the hiss (from half the bridge hill up to 12 kHz) the hiss may stand out of
+the tone no more than it does in an ordinary note (`brightness` 0.5, or the note's own if
+brighter) at full bow. The limit comes from the note's own and darker spectra mixed as `bitten`
+says, on a grid of 21 steps (one small table per note). Reason: a dark or swelling note has little
+above 4 kHz, so a hiss that only followed the level stood alone there (heard as breath). An
+ordinary or bright note at full bow is unchanged; spiccato, pizzicato and the scratch at a bitten
+start are untouched; scores with soft or dark held string notes have less hiss. Tests:
+`tests/test_studio_strings.py`.
 ## 122. Space scenes (Phase AN, Steps 367–378)
 
 The owner wants agents to make space scenes easily (2026-11-17): three.js `web` scenes built from
