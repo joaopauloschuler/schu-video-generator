@@ -3404,7 +3404,7 @@ dark grey, with `<scene>.mask-colors.json`), same frames and camera, beside the 
 them: `guide_passes: depth`, `depth,mask` or `[depth, mask]`, as `--guide-passes` takes them.
 A beat's `generated_shot` on a `3d` scene can send one as its guide video (`guide: depth |
 outline | mask`; `true` = the normal 3D view): `vidgen generate inputs --guide` draws it and cuts
-`guide.<pass>.mp4` (see the generated video shots below and `docs/COOKBOOK-GENERATED-VIDEO.md` §6).
+`guide.<pass>.mp4` (see the generated video shots below and `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` §6).
 
 **Lint.** `three_d_off_frame` (an object the beat is about is mostly outside the frame) and
 `three_d_hidden` (mostly behind a nearer one); look at `vidgen storyboard --per-beat 3` for the
@@ -5621,7 +5621,7 @@ scenes:
   of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
   schu-video-generator's captions. No SVG model has a ZDR endpoint (2026-10-08).
 - **Generated video shots** (a beat's `generated_shot: {kind: talking | action | establishing,
-  model, prompt, setting, ...}`; `docs/COOKBOOK-GENERATED-VIDEO.md`; `docs/COOKBOOK-DIRECTING-YOUR-AI.md` has the workflow as instructions a person gives an AI): a video model on OpenRouter
+  model, prompt, setting, ...}`; `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md`; `docs/COOKBOOK-DIRECTING-YOUR-AI.md` has the workflow as instructions a person gives an AI): a video model on OpenRouter
   makes the beat's picture; schu-video-generator keeps the timing, voices, captions, overlays and
   music (by default the model's own sound is not used; see **A model's own sound** below). Expensive (about $0.03-0.60 per second), so: a few
   shots that need real footage, the lowest resolution, 4-5 s. The order: `vidgen generate plan`

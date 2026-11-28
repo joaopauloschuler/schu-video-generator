@@ -2780,7 +2780,7 @@ Selected shots can be made by generative video models through OpenRouter's video
 AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; by
 default the model's own sound is not used (the job is sent with `generate_audio: false`; see
 `sound` below for the model's own sound). Generation costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
-The workflow, cost control and privacy: [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md).
+The workflow, cost control and privacy: [COOKBOOK-3D-SCENE-TO-SEEDANCE.md](COOKBOOK-3D-SCENE-TO-SEEDANCE.md).
 
 ```yaml
 videogen:
@@ -3002,7 +3002,7 @@ scenes:
   render's first frame. The prompt says what the guide is ("The guide video is a depth map
   ..."); a mask guide also lists the stand-ins' colours by name (up to four stand-ins). The pass
   is part of the request, so changing it is a new clip (never the cached one). Walkthrough:
-  [COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
+  [COOKBOOK-3D-SCENE-TO-SEEDANCE.md, From a 3D scene to a generated clip](COOKBOOK-3D-SCENE-TO-SEEDANCE.md#6-from-a-3d-scene-to-a-generated-clip).
 - **The finished render and the film's sound** (DESIGN.md §113.18): `guide: final` (any scene
   type) sends the part of the beat from the scene's **finished** render instead of the draft:
   `guide.final.mp4`, the video's own size and frame rate, the scene's full look (a `space` scene's

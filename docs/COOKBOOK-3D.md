@@ -104,7 +104,7 @@ footage by a video model that follows the 3D layout: give the beat a `generated_
 `guide: depth` (or `outline`, `mask`; `guide: true` sends the normal 3D view).
 `vidgen generate inputs --guide` draws the pass and converts the beat's part to MP4 for the
 model. The walkthrough, which pass to choose and the limits:
-[COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
+[COOKBOOK-3D-SCENE-TO-SEEDANCE.md, From a 3D scene to a generated clip](COOKBOOK-3D-SCENE-TO-SEEDANCE.md#6-from-a-3d-scene-to-a-generated-clip).
 
 ## 6. Checking
 

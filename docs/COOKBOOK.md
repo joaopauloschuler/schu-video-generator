@@ -27,7 +27,7 @@ only — audiobooks and podcasts (loudness targets, formats, pacing, voices) —
 [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md); for dramatized audiobooks (voices in rooms, score, sound
 design, files per chapter), see [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md); for shots made
 by video models (talking close-ups, acting, establishing shots; cost control, privacy, takes), see
-[COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); for directing an AI agent through such a film, as copyable instructions for a person and, in its first section, what an AI does with short prompts, see
+[COOKBOOK-3D-SCENE-TO-SEEDANCE.md](COOKBOOK-3D-SCENE-TO-SEEDANCE.md); for directing an AI agent through such a film, as copyable instructions for a person and, in its first section, what an AI does with short prompts, see
 [COOKBOOK-DIRECTING-YOUR-AI.md](COOKBOOK-DIRECTING-YOUR-AI.md); for simple 3D scenes (shapes, stand-ins,
 camera moves on words, guide passes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos with `vidgen/three-kit` and `vidgen/music-time`, from a score to a music video with `vidgen music plan`, checking a music video's motion with `vidgen motion check`, opening titles and end cards for films with `vidgen/title-cards`), see [COOKBOOK-3D.md](COOKBOOK-3D.md) (titles and end cards: [section 12](COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films)).
 

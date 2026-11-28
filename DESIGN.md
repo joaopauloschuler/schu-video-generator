@@ -22099,7 +22099,7 @@ Closes the gap between §114.14 (guide passes, "for video-to-video later") and g
   shares one colour sample per 2x2 block) differ more, up to ~90 levels; snapping each pixel to
   the nearest table colour gave the lossless mask back (100 % of pixels) at that size. The `.mkv`
   stays exact.
-- **Docs**: `docs/COOKBOOK-GENERATED-VIDEO.md` §6 "From a 3D scene to a generated clip" (sections
+- **Docs**: `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` §6 "From a 3D scene to a generated clip" (sections
   after it renumbered 7–9), linked from `docs/COOKBOOK-3D.md` §5; `examples/3d-to-video`
   (YAML only); CONFIG; the guide.
 - **Tests** `tests/test_videogen_3d_guide.py` (16, one render): the values and their sources,
@@ -23346,7 +23346,7 @@ with `vidgen generate host-test`.
 - **MCP**: `generate_host_test` (`keep` 0-300 s; read-only, open-world; JSON mode, so the URL
   with its secret is never in the answer); `generate_plan` / `generate_run` run the CLI and so
   follow the setting.
-- **Docs**: `docs/COOKBOOK-GENERATED-VIDEO.md` §5 "Sharing voice and video inputs safely" (what is
+- **Docs**: `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` §5 "Sharing voice and video inputs safely" (what is
   shared, for how long, what the ledger records, "Test on Windows": winget, `host-test`, a dry
   `plan`, one paid talking shot); CONFIG (setting, quick tunnel bullet, plan JSON, MCP); the
   guide / AGENTS.md (the key and to ask the user before turning it on).

@@ -13,7 +13,7 @@ generated from code, free to use.** [Listen](docs/music/README.md) ·
 - **[2D cartoon](docs/gallery/README.md#2d-cartoons):** characters that walk, talk and act on a stage.
 - **[Isometric cartoon](docs/gallery/README.md#isometric-cartoons):** the same characters in a village or a room seen from above at an angle, with rain, snow and time of day.
 - **[Web scenes](docs/gallery/web/README.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
-- **[Video-model scenes](docs/COOKBOOK-GENERATED-VIDEO.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
+- **[Video-model scenes](docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
 
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
 an MCP client) uses to produce narrated, animated videos (explainers, cartoon stories, Shorts) and slide decks. Its main users are AI agents, not people
@@ -670,7 +670,7 @@ my_video/
   loudness presets and targets, formats, pacing, voices, checking a file;
   [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
   casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
-  [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
+  [docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md](docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md) — shots made by video models
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
   [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera

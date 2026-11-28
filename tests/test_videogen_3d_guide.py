@@ -216,7 +216,7 @@ def test_cookbook_example_validates_and_matches_the_example(tmp_path: Path) -> N
     from vidgen.cli import validate_all
 
     root = Path(__file__).resolve().parents[1]
-    text = (root / "docs" / "COOKBOOK-GENERATED-VIDEO.md").read_text(encoding="utf-8")
+    text = (root / "docs" / "COOKBOOK-3D-SCENE-TO-SEEDANCE.md").read_text(encoding="utf-8")
     section = text.split("## 6. From a 3D scene to a generated clip", 1)[1].split("\n## 7.", 1)[0]
     block = re.findall(r"```yaml\n(.*?)```", section, flags=re.S)[0]
     assert block in (root / "examples" / "3d-to-video" / "video.yaml").read_text(encoding="utf-8")
@@ -226,4 +226,4 @@ def test_cookbook_example_validates_and_matches_the_example(tmp_path: Path) -> N
     assert not problems, problems
     (shot,) = project_shots(project, CATALOG)
     assert shot.spec.guide_source == "depth" and shot.first_frame_in == "guide" and shot.inputs[-1].path.name == "guide.depth.opening.mp4"
-    assert "COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip" in (root / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")
+    assert "COOKBOOK-3D-SCENE-TO-SEEDANCE.md#6-from-a-3d-scene-to-a-generated-clip" in (root / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")

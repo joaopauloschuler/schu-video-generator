@@ -29075,3 +29075,18 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
 - **How to test**: `PYTHONPATH=src python -m pytest -q tests/test_videogen_subjects.py tests/test_videogen_canny_restyle.py
   tests/test_videogen_sheet.py tests/test_videogen_comfyui.py tests/test_guide.py tests/test_docs.py tests/test_config.py`
   (264 passed, 21 s); `-m slow tests/test_videogen_subjects.py` (6 passed, 11 s).
+
+## Step 438 — the generated video cookbook renamed to COOKBOOK-3D-SCENE-TO-SEEDANCE.md
+- **Built**: `git mv docs/COOKBOOK-GENERATED-VIDEO.md docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md`; the content and its
+  title ("Cookbook: generated video shots") are unchanged. Every live link and mention now names the new file;
+  anchors (`#3-privacy-zero-data-retention`, `#5-...`, `#6-from-a-3d-scene-to-a-generated-clip`, `#8-in-the-film`)
+  are unchanged.
+- **Files**: `README.md`, `docs/{CONFIG,COOKBOOK,COOKBOOK-3D,COOKBOOK-DIRECTING-YOUR-AI}.md`, guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (identical), `DESIGN.md` (two "Docs" lines),
+  `examples/3d-to-video/video.yaml` (header comment), `tests/test_docs.py`, `tests/test_videogen_3d_guide.py`,
+  `tasklist.md`, `HANDOFF.md`. No Python source, packaging file or tool named the file.
+- **Left with the old name on purpose**: past HANDOFF sections, CHANGELOG entries and ticked tasklist lines
+  (records of what existed then). No test reads them for links.
+- **Interfaces**: none changed.
+- **Test**: `tests/test_guide.py`, `tests/test_docs.py::test_generated_video_cookbook_is_valid_and_linked`,
+  `tests/test_videogen_3d_guide.py::test_cookbook_example_validates_and_matches_the_example` (101 passed).
