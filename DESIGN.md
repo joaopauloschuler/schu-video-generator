@@ -622,1867 +622,604 @@ Rules:
 - ffmpeg is required on PATH for render tests; they skip with a clear reason if it is missing.
 ## 10. Refinements (Step 7, independent review)
 
-- **Audio length** (`scene.audio_duration`) = decoded samples / sample rate. The container
-  duration depends on the PyAV/FFmpeg version: PyAV 13 (what Manim 0.19 pins, i.e. every
-  Python 3.10 install) includes MP3 encoder padding, ~25–50 ms more per beat than PyAV 14+.
-  Decoding gives identical timings everywhere (kphi3: unchanged with PyAV 19).
-- **Dependencies**: `manim>=0.19` (the `code` scene uses the 0.19 `Code` API). Tested with
-  Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13; Manim 0.22
-  (Step 64) also passes (its `SceneFileWriter.write_frame` takes the count as keyword-only
-  `repeat` instead of `num_frames`; `renderer.add_frame(frame, num_frames)`, which schu-video-generator
-  wraps, is unchanged).
-- **Config**: `format`/`preview` `width` and `height` must be even (Manim's H.264 writer
-  crashed with a segfault on odd sizes). Config files may start with a UTF-8 BOM (Windows
-  Notepad) and use CRLF line endings.
-- **Files on Windows** (`vidgen.fileio`): every output that may be open in another program is
-  written to a temporary file and moved with `replace_file`, which retries for ~1.5 s
-  (virus scanners) and then raises `VidgenError("cannot write X (...); is it open in another
-  program...")`. Used for the final MP4 (the joined video is kept as `<name>.partial.mp4`),
-  SRT, timings JSON, TTS MP3/hash files; the worker deletes a scene's old render with
-  `remove_file` (same error). The CLI reconfigures stdout/stderr with
-  `errors="backslashreplace"`, so a console with a legacy code page never crashes on a title
-  or path; a closed pipe (`vidgen list-scenes | more`) ends quietly.
-- **API key**: render worker processes get the environment without `ELEVENLABS_API_KEY` (scene
-  code never needs it).
-- **Extensions**: `beat_count` is validated when the class is registered (`VidgenError` naming
-  the type); `SystemExit` raised while importing an extension is reported like any import error;
-  an exception in (or a non-list returned by) `validate_project` is reported by `vidgen
-  validate` as `scenes[i]: validate_project of scene type 'x' (<file>) failed: ...` and the
-  other scenes are still checked; `register_theme_defaults(sizes=...)` requires positive
-  numbers; bare `@scene` / `@hook` (no parentheses) raise a message showing the right form;
-  hook tracebacks start at the hook. `render` also checks beat counts before starting workers.
-- **CLI**: `vidgen list-scenes` prints the fields of nested `SceneParams` models indented
-  under their field. `vidgen init` creates `assets/`, `extensions/` and a `.gitignore`
-  (template files cannot start with a dot, because setuptools does not package dot files: the
-  template stores `gitignore` and `init` renames it).
+- **Audio length** (`scene.audio_duration`) = decoded samples / sample rate, not the container
+  duration (PyAV versions differ on MP3 encoder padding).
+- **Dependencies**: `manim>=0.19`; vidgen wraps `renderer.add_frame(frame, num_frames)`.
+- **Config**: `format`/`preview` `width`/`height` must be even (Manim's H.264 writer crashes on
+  odd sizes); a UTF-8 BOM and CRLF are accepted.
+- **Windows files** (`vidgen.fileio`): outputs that may be open elsewhere (final MP4, kept as
+  `<name>.partial.mp4` until moved; SRT; timings; TTS MP3/hash) are written to a temp file and
+  moved with `replace_file` (retries ~1.5 s, then `VidgenError("cannot write X ...; is it open in
+  another program...")`); deletes use `remove_file`. The CLI sets `errors="backslashreplace"` on
+  stdout/stderr; a closed pipe ends quietly.
+- **Workers** get the environment without `ELEVENLABS_API_KEY`.
+- **Extensions**: `beat_count` checked at registration and before `render` starts workers; a
+  failing `validate_project` is reported as `scenes[i]: validate_project of scene type 'x'
+  (<file>) failed: ...` and the other scenes are still checked; bare `@scene`/`@hook` raise a
+  message showing the right form.
+- **`vidgen init`** creates `assets/`, `extensions/`, `.gitignore` (stored as `gitignore` because
+  setuptools does not package dot files).
 
 ## 11. Refinements (Step 8, JSON output)
 
-- **`--json`** on `validate`, `list-scenes` and `render` (`vidgen.cli.JSON_COMMANDS`): stdout
-  holds exactly one JSON document (`vidgen.jsonout.dumps`: indented, `ensure_ascii=True`, so a
-  legacy console code page cannot corrupt it); everything the command prints meanwhile is
-  redirected to stderr (`contextlib.redirect_stdout`), and vidgen log warnings are both printed
-  on stderr and collected into the document. Exit code 0 iff `ok`; 1 for errors; 2 for usage
-  errors. Without `--json` the human output is unchanged.
-- **Shapes** (`vidgen/jsonout.py`, reference: docs/CONFIG.md "JSON output"): envelope `{version,
-  vidgen, command, ok, warnings: [{scene, message}], ..., error?: {kind, message, problems,
-  details}}`. `version` is `jsonout.SCHEMA_VERSION` (1): keys may be added within a version;
-  removing/renaming a key or changing a value's type bumps it. `error.kind`: `usage` (argparse
-  error, `command` may be `null`), `error` (`VidgenError`), `internal` (any other exception;
-  `details.traceback`). Paths are absolute, times are seconds.
-- **Structured problems**: `vidgen.errors.Problem(location, message, variant=None, file=None)` (`file`: Step 101, §69.35)
-  (`str()` = the human line, `to_json()`), and `VidgenError(message, *, problems=(),
-  details=None)` (both optional; existing calls unchanged). `config.validation_problems(err,
-  prefix)` (`validation_error_lines` now derives from it); `parse_config` and
-  `Project.load` (variant problems carry the variant) attach problems to their error.
-  `cli.project_problems(project) -> list[Problem]`; `cli.check_project` keeps returning the
-  same strings. A `validate_project` message `"<param>: <text>"` gets location
-  `scenes[i].params.<param>`; other messages get `scenes[i].params`, and their human line is now
-  `scenes[i].params: <message>` (was `scenes[i].params.<message>`, which read like a param
-  name). `cli.validate_all(project, keep_going=False)`; with `--json`, a variant whose config
-  does not load is reported as problems and the other variants are still checked (the human
-  command still stops at it).
-- **Render**: `RenderResult` gained `timings` (the combined timings), `render_seconds`
-  (`{scene_id: wall seconds}` for scenes rendered in this run) and `warnings`
-  (`[(scene_id, message)]` printed by workers, also collected when progress is shown live).
-  Render failures raise `VidgenError(..., details={"failed": [{scene, exit_code,
-  output_tail}], "rendered": [ids]})`.
-- **Param docs**: `SceneParams` sets pydantic's `use_attribute_docstrings=True` (requires
-  `pydantic>=2.7`), so a docstring under a field becomes its `description`, shown as `doc` by
-  `list-scenes --json`; every built-in param has one. The scene type's `doc` is its class
-  docstring, else its module's. The listing helpers moved from `cli.py` to
-  `vidgen/describe.py` (`type_name`, `nested_models`, `describe_params`, `params_json`,
-  `scene_type_json`).
-- **Usage errors**: the CLI parser raises `cli.UsageError` instead of exiting; `main` prints
-  argparse's usual `usage:` + `prog: error:` lines and returns 2 (so `main()` returns 2 rather
-  than raising `SystemExit(2)`); `--help`/`--version` still exit through argparse.
+- **`--json`** (`cli.JSON_COMMANDS`): stdout holds exactly one document (`jsonout.dumps`,
+  indented, ASCII); other output goes to stderr; log warnings also go into `warnings`. Exit 0 iff
+  `ok`, 1 error, 2 usage. Shapes: docs/CONFIG.md "JSON output". `jsonout.SCHEMA_VERSION` (1):
+  keys may be added within a version; removing/renaming a key or changing a type bumps it.
+  `error.kind`: `usage`, `error` (`VidgenError`), `internal` (`details.traceback`).
+- **Problems**: `errors.Problem(location, message, variant=None, file=None)` and
+  `VidgenError(message, *, problems=(), details=None)`; `config.validation_problems(err,
+  prefix)`; `cli.project_problems(project) -> list[Problem]`. A `validate_project` message
+  `"<param>: <text>"` is located at `scenes[i].params.<param>`, others at `scenes[i].params`.
+  `cli.validate_all(project, keep_going=False)`: with `--json` every variant is checked.
+- **Render**: `RenderResult.timings`, `render_seconds`, `warnings`; failures raise
+  `VidgenError(..., details={"failed": [{scene, exit_code, output_tail}], "rendered": [ids]})`.
+- **Param docs**: `SceneParams` uses `use_attribute_docstrings=True` (`pydantic>=2.7`); every
+  built-in param has a docstring. A type's doc is its class docstring, else its module's. Helpers:
+  `vidgen/describe.py`.
+- **Usage errors**: the parser raises `cli.UsageError`; `main` returns 2 (no `SystemExit`).
 
 ## 12. Refinements (Step 9, JSON Schema export)
 
-- **`vidgen schema [PROJECT] [--scene TYPE | --all] [--json]`** (`vidgen/schema.py`; reference:
-  docs/CONFIG.md "JSON Schema"). Default: the schema of the whole `video.yaml`
-  (`schema.config_schema(entries, themes)`); `--scene TYPE`: one type's params
-  (`params_schema`, unknown type → `VidgenError` with the did-you-mean message); `--all`: one
-  `scenes[]` item with every type's params (`scene_schema`). Draft 2020-12, generated from the
-  pydantic models (`model_json_schema`, validation mode) and post-processed. Output is
-  `jsonout.dumps` (indented, ASCII) on stdout; extension output during loading goes to stderr.
-  With `--json` (now in `cli.JSON_COMMANDS`) the envelope holds `project` and `schema`.
-- **Scene types** come from `cli.scene_types_session(path, lenient)` (also used by
-  `list-scenes`): without a PROJECT and no config file in the current directory, built-ins
-  only. `lenient=True` (schema): if the config does not load, `schema.lenient_project` loads
-  the project from a placeholder config keeping the file's `extensions` and `theme` (each only
-  if valid) and logs a warning; a missing project is still an error.
-- **Per-type params**: `$defs/SceneConfig` gets `type: {enum: [registered names]}` and an
-  `allOf` of `if {type: const NAME} then {params: $ref #/$defs/scene.NAME}` (plus `required:
-  [params]` when the model has required fields, and `beats` `minItems`/`maxItems`/required from
-  `beat_count`); a type without `Params` gets `{type: object}`. Nested models of a type are
-  `$defs/scene.NAME.Model` (no collisions between types). Also encoded: the silent-scene rule
-  (`if beats non-empty then duration null else duration required`), beat `id` optional/null,
-  `variants` bodies (the top-level properties without `variants`, none required,
-  `additionalProperties: false`), and `dict[Identifier, X]` as `propertyNames` +
-  `additionalProperties` (pydantic's `patternProperties` alone let other keys through);
-  `minLength`/`maxLength` pydantic puts on an `anyOf` (a union field's `min_length`) move to
-  each branch as `minItems`/`minProperties`/`minLength` by the branch's type.
-- **Theme tokens**: `ThemeToken` adds `"x-vidgen-theme": "color"|"size"` to the field's JSON
-  Schema (`__get_pydantic_json_schema__`); the export replaces such a node's type by `anyOf`
-  [hex pattern | positive number, `enum` of token names]. Token names are the union of the
-  active theme (defaults + `register_theme_defaults` + `theme.*`) and every loadable variant's
-  theme (`schema.project_themes`).
-- **Config models**: `_Strict` uses `use_attribute_docstrings=True` and every config field has a
-  one-line docstring (the schema's `description`); `FormatConfig.width/height` carry
-  `multipleOf: 2` (`json_schema_extra`; the check stays the `_even` validator, same message);
-  `config.Size` has an explicit `WithJsonSchema` (pydantic emitted a non-standard `gt` for the
-  `int | float` union). Validation behaviour and messages are unchanged.
-- **Not in the schema** (only `vidgen validate`): unique ids, referenced files,
-  `validate_project`, Python validators. Values pydantic coerces (`"30"` for an int) pass
-  `vidgen validate` but not the schema.
-- `describe._doc` is now public as `describe.scene_doc(entry)`. `jsonschema` is a dev
-  dependency (tests only).
+- **`vidgen schema`** (`vidgen/schema.py`: `config_schema(entries, themes)`, `params_schema`,
+  `scene_schema`; user reference docs/CONFIG.md "JSON Schema"): Draft 2020-12 from the pydantic
+  models (validation mode), post-processed. With a config that fails to load,
+  `schema.lenient_project` keeps its valid `extensions` and `theme` and warns.
+- **Encoded**: per-type `if {type: const NAME} then {params: $ref #/$defs/scene.NAME}` (nested
+  models `scene.NAME.Model`, `beats` counts from `beat_count`), the silent-scene rule, `variants`
+  bodies, `dict[Identifier, X]` as `propertyNames`. `ThemeToken` adds `"x-vidgen-theme":
+  "color"|"size"|"icon"`, exported as an `anyOf` with an `enum` of the token names of the active
+  and every variant's theme (`schema.project_themes`). Every config field has a one-line
+  docstring.
+- **Only `vidgen validate` checks** unique ids, referenced files, `validate_project` and Python
+  validators; coerced values (`"30"` for an int) pass validate but not the schema.
 
 ## 13. Refinements (Step 10, frame capture)
 
-- **Option**: `vidgen render --frames` (one still per beat, its last frame) or
-  `--frames-per-beat N` (N evenly spaced stills per beat; implies `--frames`; N >= 1);
-  `render_project(..., frames=N)` (0 = off, the default); worker flag `--frames N`. Off by
-  default. Reference: docs/CONFIG.md "Frame stills".
-- **Where stills are taken** (`vidgen.capture`): a `FrameCapture(per_beat, listeners)` is
-  passed to the scene (`NarratedScene(..., capture=None)`, keyword-only, available as
-  `self.capture`) and wraps `scene.renderer.add_frame`, the single point where Manim's Cairo
-  renderer hands every frame (`num_frames` copies for a frozen wait) to the file writer. It
-  counts frames written (skipped animations are not written and not counted), so a still's
-  `frame` is its 0-based index in the scene's video and `time = frame / fps`. The wrapper calls
-  the original unchanged and only reads the array (Manim passes a fresh copy), so frames,
-  `renderer.time` and the beat log are identical to a render without capture (tested:
-  identical per-scene timings and frame counts). `narrate()` calls `begin_segment(beat_id,
-  round((d + pad) * fps), include_end=False)` on entry and `end_segment(beat_id)` after its
-  wait: still `k < N` is planned on entry on the last frame before `k/N` of the beat
-  (`capture.plan_targets`) and taken when that frame is written; still `N` is the last frame
-  written when the beat ends (exact even if the beat's animations overran `d + pad`). A
-  silent scene is one segment (`beat_id = None`) of `duration - outro` (at least one frame),
-  planned with its end at construction; `tear_down` calls `finish()`, which takes planned
-  stills never reached from the last frame. Stills of a short beat that fall on the same frame
-  are merged (highest `k` kept).
-- **Listeners** (the seam for Step 12 layout introspection): `capture.listeners` is a list of
-  `CaptureListener = Callable[[NarratedScene, CapturedFrame], None]`, called at the moment the
-  captured frame is written (mid-beat: inside `add_frame`, after Manim updated the mobjects to
-  that frame; end of beat: right after the beat's wait), so `scene.mobjects`, the camera and
-  `renderer` are in the state of that frame. `CapturedFrame(scene_id, beat_id, k, n, frame,
-  time, pixels)` (`pixels`: H x W x 4 RGBA uint8). `StillWriter(folder)` is the listener that
-  writes `<beat>-<k>.png` (`<scene>-<k>.png` for silent scenes; RGB PNG via Pillow, atomic)
-  and builds the scene index.
-- **Why from the renderer, not by decoding the MP4**: exact pixels and exact frame index (no
-  H.264 loss, no seeking/rounding of times), no second pass over the video, works the same for
-  every Manim/PyAV version, and it gives listeners the live scene state at the same moment
-  (decoding the video afterwards could not). Cost: PNG encoding during the render (~ms per
-  still at preview size).
-- **Files** (`worker.scene_frames_dir`): `<render_dir>/frames/<scene>/` with the PNGs and
-  `index.json` = `{scene, per_beat, width, height, fps, frames: [{beat, k, n, frame, time,
-  path}]}` (time from scene start, path relative to the folder); the parent writes
-  `frames/index.json` after joining (`pipeline.write_frames_index`) = `{title, variant,
-  preview, format, per_beat, vidgen, scenes: [{id, start, duration, frames}]}` with `time` in
-  the video, `scene_time` and `path` relative to `frames/`. The per-scene timings' `render`
-  block records `frames` (stills per beat, 0 = none).
-- **Staleness**: the worker deletes the scene's stills folder before every render (so stills
-  always match the scene's current render; `worker.remove_tree`, a locked file is a
-  `VidgenError`), and `render_project` deletes `frames/index.json` before rendering. With
-  frames requested, `_usable_render` also requires the render's `frames` to equal the count
-  and its index to exist, so `--scene ID --frames` renders other scenes again when they have no
-  such stills. A scene a `pre_render` hook kept from rendering without matching stills gets an
-  empty list in the combined index and a warning.
-- **Outputs**: `RenderResult.frames_index` (`Path | None`); `vidgen render` prints `frames:
-  <index>`; `render --json` `outputs.frames` (path or `null`; key added within version 1).
+- **Option**: `render --frames` / `--frames-per-beat N`; `render_project(..., frames=N)` (0 = off);
+  worker `--frames N`. Files and index format: docs/CONFIG.md "Frame stills".
+- **Mechanism** (`vidgen.capture`): `FrameCapture(per_beat, listeners, motion=None)`, passed as
+  `NarratedScene(..., capture=None)`, wraps `scene.renderer.add_frame` and counts frames written,
+  so a still's `frame` is its index in the scene video. It only reads the array: frames,
+  `renderer.time` and the beat log must stay identical to a render without capture. `narrate()`
+  calls `begin_segment(beat_id, round((d + pad) * fps), include_end=False)` / `end_segment`:
+  still `k < N` is the last frame before `k/N` of the beat, still `N` its last frame; a silent
+  scene is one segment (`beat_id = None`); `tear_down` calls `finish()`. Taken from the renderer,
+  not by decoding the MP4: exact pixels on every Manim/PyAV version, and listeners see the live
+  scene.
+- **Listeners**: `CaptureListener = Callable[[NarratedScene, CapturedFrame], None]`, called when
+  the frame is written; `CapturedFrame(scene_id, beat_id, k, n, frame, time, pixels)`.
+  `StillWriter(folder)` writes `<beat>-<k>.png` (`<scene>-<k>.png` when silent) and `index.json`.
+- **Files and staleness**: `worker.scene_frames_dir` = `<render_dir>/frames/<scene>/`;
+  `pipeline.write_frames_index` writes `frames/index.json` after joining; timings record
+  `render.frames`. The worker deletes the scene's stills before rendering and `render_project`
+  deletes `frames/index.json`; with frames requested `_usable_render` needs equal `render.frames`
+  and the index. `RenderResult.frames_index`.
 
 ## 14. Refinements (Step 11, storyboard)
 
-- **`vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview |
-  --final] [--width PX] [--jobs N] [--force] [--json]`** (`vidgen/storyboard.py`
-  `make_storyboard(project, *, preview=True, scenes=None, per_beat=1, width=1280, jobs=1,
-  force=False) -> StoryboardResult`; reference: docs/CONFIG.md "Storyboard"). Preview format by
-  default. Writes `<render_dir>/storyboard/video-<p>.png` (whole video; not with `--scene`) and
-  `storyboard/scenes/<scene>-<p>.png`, `p` = page 1, 2, ... The folder is cleared first (with
-  `--scene`: the video pages and those scenes' pages), so no stale sheet survives.
-- **Built on Step 10's stills**: for each selected scene, `storyboard.stills_current(project,
-  preview, scene_id, per_beat)` checks the scene's timings (format, `render.frames ==
-  per_beat`, `render.fingerprint`), its `frames/<scene>/index.json` and PNGs. Scenes that fail
-  (or all selected with `force`) are rendered by `pipeline.render_scenes(project, preview, ids,
-  jobs, frames)`: the same workers as `render_project` (`_render_scenes`, renamed result type
-  `SceneRuns`), with audio, dispatching `post_scene` but not `pre_render`/`post_render`, no join;
-  it removes the combined `frames/index.json` when it renders anything. Stills are then read
-  from the per-scene indexes and timings (beat texts); a still's video time uses scene starts
-  summed from the per-scene timings' durations (`null` if a scene has no render at the format).
-- **Fingerprint** (`vidgen/render/fingerprint.py`, `scene_fingerprint(project, scene_id)`): a
-  SHA-256 over the scene's config entry, the config minus `scenes`/`variants`/`lint` (Step 13; the entry without `lint_ignore` and, Step 39, `chapter`) (with the variant
-  applied), the beats' MP3 size+mtime, the contents of the `.py` files of the extension folders,
-  size+mtime of the files under `<root>/assets`, the schu-video-generator version and a digest of vidgen's own
-  source except `NOT_RENDER_INPUTS` (CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg,
-  subtitles, tts: modules that cannot change pixels or timing; new modules count by default).
-  The worker computes it before rendering and stores it as `render.fingerprint` in the scene's
-  timings (key added; older renders have none and count as stale). Since Step 60 `vidgen render`
-  uses it too (§63: renders only stale scenes; `--force` all).
-- **Sheet layout** (`vidgen/sheets.py`, `compose_pages(title, subtitle, scenes, frame_size, *,
-  width, detail, video_times, max_height) -> list[SheetPage]`): white page, a title line and a
-  line saying what stills/times mean; per scene a grey header band `N/M  id · type ·
-  start–end (duration)` (details dropped when narrow); stills of a beat side by side (a
-  *block*), each labelled `beat @ time` (`k/n @ time` with several per beat, the beat id then
-  prefixes the narration), the narration wrapped under the block (4 lines on video sheets, 6 on
-  scene sheets, `…` when cut). Columns: 16:9 → 4 (scene sheets 2), ~square → 5 (3), 9:16 → 5
-  (4); with N stills per beat the multiple of N nearest to that (≤ 8). Scenes that fit in the
-  rest of a row share it. Pages are `width` px wide (640–2000, default 1280; font sizes scale
-  with it) and at most about `1.25 x width` high, balanced so the last page is not nearly
-  empty; a scene continued on a new page repeats its header marked `(continued)`. Fonts: Inter,
-  else DejaVu Sans / Arial / Liberation Sans / Helvetica, else Pillow's built-in font.
-- **Why these sizes**: an AI agent sees the PNG through an image tool that downsizes large
-  images (around 1.2 megapixels / 1568 px long edge); at 1280 px wide the 19 px labels and
-  narration stay readable after that, which one huge image of the whole video would not.
-- **JSON** (`jsonout.storyboard_document`, `storyboard` in `cli.JSON_COMMANDS`): `project,
-  variant, preview, per_beat, format, folder, rendered, reused, elapsed, sheets: [{kind
-  (video|scene), scene, page, pages, path, width, height, frames: [{scene, beat, k, n, time,
-  scene_time, path}]}]` (`mid`, Step 83: the actions a mid-action still shows, else null; §69.16).
+- **`vidgen storyboard`** (`vidgen/storyboard.py`, `make_storyboard(project, *, preview=True,
+  scenes=None, per_beat=1, width=1280, jobs=1, force=False) -> StoryboardResult`; options, JSON:
+  docs/CONFIG.md "Storyboard"): `<render_dir>/storyboard/video-<p>.png` and
+  `storyboard/scenes/<scene>-<p>.png`; its folder (or those pages) is cleared first.
+- **Reuse**: `storyboard.stills_current(project, preview, scene_id, per_beat)` checks timings
+  (format, `render.frames`, `render.fingerprint`), the stills, the layout file (§15) and the
+  activity file (§17); `per_beat=None` accepts any count. Other scenes are rendered by
+  `pipeline.render_scenes(project, preview, ids, jobs, frames)` (the render workers with audio and
+  `post_scene`; no `pre_render`/`post_render`, no join).
+- **Fingerprint** (`vidgen/render/fingerprint.py`, `scene_fingerprint(project, scene_id)`):
+  SHA-256 over the scene entry (without `lint_ignore`, `chapter`), the config minus
+  `scenes`/`variants`/`lint` (variant applied; plus `lint.rules.min_font.min_size` as `readable`,
+  §18), beat MP3 size+mtime, contents of extension `.py` files, size+mtime of files under
+  `<root>/assets`, the vidgen version and `vidgen_source_digest` (vidgen's source and bundled
+  data such as fonts and icons, except `NOT_RENDER_INPUTS`: modules that cannot change pixels or
+  timing, e.g. CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg, subtitles, tts, lint; new
+  modules count by default). Stored as `render.fingerprint`; none = stale. `vidgen render` uses it
+  (§63).
+- **Sheets** (`vidgen/sheets.py`, `compose_pages(...) -> list[SheetPage]`): default 1280 px wide
+  (640–2000) because agents' image tools downsize to ~1568 px and the labels must stay readable.
 
 ## 15. Refinements (Step 12, layout introspection)
 
-- **What**: whenever stills are captured (worker `--frames N`, so `render --frames`,
-  `--frames-per-beat` and `storyboard`), `vidgen.introspect.LayoutRecorder` — a second
-  `FrameCapture` listener next to `StillWriter` — describes the same frames as data and the
-  worker writes `<render_dir>/layout/<scene>.json` (`worker.scene_layout_path`). Not behind a
-  separate flag: it costs ~50 ms per 1080p still (measured on kphi3; negligible next to the
-  render), and stills and layout then always come from the same render. It is the input of
-  Step 13's `vidgen lint` (§16). Reference: docs/CONFIG.md "Layout dump".
-- **Format** (`LAYOUT_VERSION = 1`): `{version, scene, type, width, height, fps, per_beat,
-  px_per_unit, background, safe_area: [x0, y0, x1, y1], frames: [{beat, k, n, frame, time,
-  still, camera: {center, width, height}, objects}]}`; frames carry the stills index keys and
-  `still` (`../frames/<scene>/<file>`, relative to the layout file; `capture.still_name`).
-  Objects: `{id, kind, class, path, name, bbox, opacity, z, order, parts}` plus, for text kinds
-  (`text|code|math|number`), `{text, font_px, color, colors, backdrop}` and otherwise
-  (`shape|group|image|icon`) `{fill: {color, opacity}|null, stroke: {color, opacity,
-  width_px}|null}`; kind `icon` (Step 19, §22) also has `icon` (the name). Pixels: output frame, origin top-left, y down, frame `[0,W] x [0,H]`,
-  1 decimal. Colours `#RRGGBB`.
-- **Measuring**: points go through the scene's own `camera.points_to_subpixel_coords`, so a
-  `MovingCamera` frame (zoom/pan) is honoured. VMobject curves are sampled at 5 parameters per
-  cubic (anchors+handles would overstate round glyphs); visible strokes widen the box by half
-  their width (`stroke_width * camera.cairo_line_width_multiple` units). Images: their corner
-  points, opacity = max alpha of the pixel array. Visibility per drawn leaf: max of fill alpha
-  and (if `stroke_width > 0`) stroke alpha; leaves at 0 are ignored, objects without a visible
-  leaf are not listed (fade-ins show as fractional `opacity`).
-- **Grouping** (walk of `scene.mobjects`): text mobjects (`Text`, `MarkupText`, `Paragraph`,
-  `SingleStringMathTex` = `Tex`/`MathTex`, `DecimalNumber`) are one object; inside a `Code`,
-  paragraphs are kind `code` (Manim's invisible alignment suffix ` pA<n>` removed from `text`)
-  and the background is a shape; a group whose family has no text or image is one `group`
-  object (fill/stroke of its largest part); other groups are walked into; a group drawing
-  points itself also yields a `shape`. Each mobject is visited once.
-- **Identity**: `id` = `m<N>` per Python object for the whole scene (the recorder keeps the
-  objects alive so `id()` is never reused); `path` = parent chain of `Class[index]` segments,
-  replaced by the name where the scene named a mobject (a public attribute of the scene, or a
-  `Mobject.name` other than the class name).
-- **Sizes and colours**: `font_px` = 75th percentile of the visible glyph heights (outline,
-  output px): ≈ cap height for mixed case, x-height for all-lowercase-without-ascenders text;
-  robust to punctuation and to one large glyph, and works the same for Tex. `backdrop` = the
-  most common exact colour inside the text box in the captured frame, after dropping pixels
-  within RGB distance 60 of the text's own colours (unless that leaves < 5 %; boxes are
-  subsampled to ≤ 40 000 pixels; colours are grouped in 5-bit bins first so anti-aliasing does
-  not split the vote). `order` = position of the object's top-most part in Manim's draw order
-  (`extract_mobject_family_members` with z-index).
-- **Staleness/reuse**: the worker deletes the layout file before every render (like the stills);
-  `pipeline._usable_render` with frames requested also requires it; `frames/index.json` scene
-  entries gain `layout` (`../layout/<id>.json` or `null`). `introspect.py` counts in the scene
-  fingerprint (it changes the layout output).
-- **Limits**: `text` is the string the mobject was built with (Manim's `become`/`Transform`
-  keep it; the built-in `bar_chart` counter now updates it); during
-  `TransformMatchingShapes`/`TransformMatchingTex` loose glyphs are shapes; while Manim's Cairo
-  renderer animates, moving mobjects are drawn over static ones regardless of z-index, which
-  `order` does not model; 3D cameras are only as right as `transform_points_pre_display`.
+- **What**: whenever stills are captured, `vidgen.introspect.LayoutRecorder` (a second capture
+  listener) writes `<render_dir>/layout/<scene>.json` (`worker.scene_layout_path`) for the same
+  frames; no flag, so stills and layout always come from one render. Format (`LAYOUT_VERSION =
+  1`, additive keys only): docs/CONFIG.md "Layout dump". Deleted before each render;
+  `introspect.py` counts in the fingerprint.
+- **Measuring**: points via the camera's `points_to_subpixel_coords` (zoom honoured); curves
+  sampled at 5 parameters per cubic; strokes widen boxes by half their width; objects without a
+  visible leaf are omitted. Text mobjects (`Text`, `MarkupText`, `Paragraph`,
+  `SingleStringMathTex`, `DecimalNumber`) are one object; `Code` paragraphs are kind `code`; a
+  group without text/image is one `group`. `id` = `m<N>` per Python object (kept alive so `id()`
+  is not reused); `path` = `Class[index]` chain or a scene attribute / `Mobject.name`. `font_px`
+  = 75th percentile of glyph heights; `backdrop` = most common colour in the text box excluding
+  the text's colours; `order` = draw order.
+- **Limits**: `text` is the build string (kept by `Transform`; scenes that count set
+  `original_text`); Cairo draws moving mobjects over static ones regardless of z-index.
 
 ## 16. Refinements (Step 13, `vidgen lint` layout rules)
 
-- **Command**: `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME]
-  [--preview | --final] [--fail-on error|warning|info|never] [--jobs N] [--force] [--json]`
-  (`vidgen.lint.lint_project(project, *, preview=True, scenes=None, rules=None, fail_on=None,
-  jobs=1, force=False) -> LintResult`; reference: docs/CONFIG.md "Lint"). Exit code 1 iff a
-  finding is at least as severe as `fail_on` (`--fail-on`, else `lint.fail_on`, default
-  `error`); with `--json` that document has `ok: false` and `error.kind` `error` (`details:
-  {fail_on, counts}`) and still lists every finding.
-- **Input**: the layout dumps (§15) of the **beat-end stills** (`k == n`) only: mid-beat stills
-  show fades and motion in progress, which would be noise. Stills are reused when
-  `storyboard.stills_current(project, preview, scene, per_beat=None)` holds (now: any stills
-  count, and the layout file must exist); other scenes are rendered with one still per beat
-  by `pipeline.render_scenes` (as the storyboard does). Objects below `lint.min_opacity`
-  (0.1) are dropped first (the end of a fade).
+- **Command**: `vidgen lint` (`vidgen.lint.lint_project(project, *, preview=True, scenes=None,
+  rules=None, fail_on=None, jobs=1, force=False) -> LintResult`; options, rules, thresholds, JSON:
+  docs/CONFIG.md "Lint"). Exit 1 iff a finding is at least as severe as `fail_on` (default
+  `error`).
+- **Input**: layout dumps of **beat-end stills** (`k == n`) only; missing ones rendered one per
+  beat. Objects below `lint.min_opacity` (0.1) dropped. Sizes are fractions of the frame's
+  **shorter side**, so 9:16 is judged like landscape.
 - **Framework** (`vidgen/lint/rules.py`): `@rule(name, scope="still", default=severity)`
   registers `check(context, settings) -> Iterable[Issue]` in `RULES`; `name` must be in
-  `config.LINT_RULES`, whose order is `RULES`' order, and `config.LintRules` has one settings
-  model per rule (subclass of `RuleConfig`: `severity: error|warning|info|off|None`); a test
+  `config.LINT_RULES` (same order) with one `RuleConfig` model in `config.LintRules`; a test
   keeps the three in sync. `Issue(message, bbox, objects=(), severity=None, value=None,
-  limit=None, group=None)`. Scope `still` gets a `StillContext(layout, frame, objects, still)`
-  (`width`, `height`, `short_side`, `region(box)` = the still's RGB pixels, read lazily).
-  Step 14's timing rules use scope `scene` (§17); findings, config, ignores and report are
-  shared.
-- **Severity** of a finding: the rule's configured `severity`, else the issue's own (rules
-  escalate: `off_frame` error for text / warning otherwise, `min_font` error below
-  `error_size`), else the rule's default. `off` skips the rule.
-- **Merging** (one problem, one line): findings of a scene with the same rule, severity and
-  object ids are merged across beats (`beats` lists them, the first gives `beat`, `time`,
-  `still`); then findings first seen at the same still with the same rule, severity and
-  `group` (default: the object's parent path, e.g. an axis' tick labels; `contrast` groups by
-  colour, backdrop and opacity) become one finding with the others in `similar` and `also N
-  more like it (...)` in the message. Order: scenes in config order, then scene time,
-  severity, rule order.
-- **Sizes** are fractions of the frame's **shorter side** (`StillContext.short_side`), not the
-  height: equal for landscape, and for 9:16 the height would make the same text count 1.78x
-  smaller, although a phone shows either orientation with its shorter side across the screen.
-- **Rules** (thresholds in `config.LintRules`, defaults documented in docs/CONFIG.md):
-  `off_frame` (bbox beyond the frame by > `tolerance` 0.004; wholly outside objects skipped;
-  non-text objects spanning an axis edge to edge are intentional bleeds on that axis: cover
-  images, Ken Burns, backgrounds, bands), `safe_area` (text only, inside the frame but past
-  the layout's `safe_area` by > `tolerance` 0.01), `text_overlap` (intersection ≥
-  `min_overlap` 0.1 of the smaller box; identical text with IoU > 0.9 skipped), `covered_text`
-  (a non-text object drawn later (`order`) whose fill/stroke colour, blended at its opacity
-  over the text's backdrop, shows in ≥ `min_covered` 0.02 of the middle of the text's box,
-  counted on the still's pixels, excluding pixels of the text's own colours; skipped: the
-  text's ancestors, shapes below opacity 0.3, shapes whose colour is within RGB distance 40
-  of the text or backdrop colour (a strike-through); images: their box), `min_font` (cap
-  height < `min_size` 0.025 → warning, < `error_size` 0.018 → error; cap height =
-  `font_px * 0.73 / p75(per-character em heights)` with x-height letters 0.55, descender
-  letters 0.76, punctuation 0.15, others 0.73, so all-lowercase text is not penalised; math
-  uses `font_px`; text without a letter or digit skipped), `contrast` (WCAG 2 ratio of each
-  text colour blended at the text's opacity over `backdrop`, worst colour counts; needs
-  `min_ratio` 4.5, `large_ratio` 3 when the cap height ≥ `large_size` 0.045, `dimmed_ratio`
-  2 when opacity < 0.95 (de-emphasised on purpose); a `code` object of only digits (line
-  numbers) skipped), `max_words` (> `max_words` 40 tokens with a letter in `text` objects; code,
-  math and numbers do not count; `object` null, `bbox` the union).
-- **Config**: `VideoConfig.lint: LintConfig` (`fail_on`, `min_opacity`, `rules`) and
-  `SceneConfig.lint_ignore: list[RuleName | "all" | LintIgnore]` (`LintIgnore(rule, object,
-  beat)`; `beat` must be a beat of the scene; `SceneConfig.lint_ignores()` normalises).
-  `object` is matched with `*`/`?` wildcards only (brackets literal, so paths like
-  `VGroup[2]/*` work) against the object's name, path and text (either object of a pair).
-  Both are excluded from the render fingerprint (`fingerprint.scene_fingerprint`), and the
-  `lint` package is in `NOT_RENDER_INPUTS`.
-- **Output**: `Finding.to_json()` = `{scene, beat, time, scene_time, rule, severity, object,
-  other, similar, bbox, message, value, limit, beats, still}` (objects as `{id, kind, class,
-  name, path, text, bbox}`); `jsonout.lint_document` adds `{project, variant, preview,
-  format, fail_on, rules, scenes, stills, rendered, reused, elapsed, counts, ignored,
-  findings}` to the envelope. Human report (`lint.report_lines`): a header, findings grouped
-  by scene (`severity rule beat @ t (+N more beats): message` + `still: <path>` relative to
-  the current folder), a count line and `failed: ...` when failing.
-- **Limits**: only beat-end stills; boxes are rectangles (rotated text, curves); `opacity` is
-  the max over an object's parts, so per-line dimming inside one `Paragraph`/`Code` is not
-  seen; `text` may be stale after `Transform` (§15), so messages can quote the old string
-  (the still and `bbox` are right); `backdrop` is the most common colour, approximate over
-  busy images.
+  limit=None, group=None)`; scope `still` gets `StillContext(layout, frame, objects, still)`.
+  Severity: configured, else the issue's own, else the rule default; `off` skips. Findings merge
+  across beats (same rule/severity/objects) and within a still (same `group` or object `text`).
+- **Config**: `VideoConfig.lint: LintConfig` (`fail_on`, `min_opacity`, `rules`);
+  `SceneConfig.lint_ignore: list[RuleName | "all" | LintIgnore(rule, object, beat)]` (`object`
+  matches name/path/text/icon name with `*`/`?` only). Both are outside the fingerprint.
 
 ## 17. Refinements (Step 14, timing lint)
 
-- **Rules** (`vidgen/lint/timing_rules.py`, scope `scene`, all default `warning`):
-  `narration_speed`, `dead_air`, `animation_overrun`, `rushed_animation` (Step 100 adds
-  `talked_over`, §69.34); settings models
-  `NarrationSpeedRule`, `DeadAirRule`, `AnimationOverrunRule`, `RushedAnimationRule` in
-  `config.LintRules` (names added to `LINT_RULES`/`RuleName`); defaults and the rule table in
-  docs/CONFIG.md "Lint". Same command, report, JSON, `lint:` config and `lint_ignore` as §16.
-- **Framework**: `Scope = "still" | "scene"`. A `scene` rule gets `SceneContext(scene_id,
-  activity, audio_dir)` (`fps`, `beats`, `beat_at(t)`: the beat whose start ≤ t, pad
-  included) once per scene and yields `Issue`s with the new fields `beat` (`None` in a silent
-  scene) and `time` (scene seconds). The runner (`run._timing_findings`) makes one finding per
-  issue (`still` = the beat-end still of `beat`, `bbox` and `object` null); issues sharing a
-  `group` become one finding with all their `beats`. `Finding.still` may be `None` (report and
-  JSON handle it). Human report: rule column widened to 17 characters.
-- **Input: the activity file** (`vidgen/activity.py`, `ACTIVITY_VERSION = 1`,
-  `worker.scene_activity_path` = `<render_dir>/activity/<scene>.json`), written by the worker
-  whenever stills are captured, deleted before every render like the stills and layout;
-  `storyboard.stills_current` and `pipeline._usable_render` (with frames) require it, so
-  renders from before Step 14 count as stale; `frames/index.json` scenes gain `activity`.
-  Content: `{version, scene, type, fps, frames, duration, pad, silent: {duration, busy} |
-  null, beats: [{id, start, end, busy, source: audio|estimate, text, window?, overlap?,
-  interrupt?}], plays: [{start, end,
-  beat, animations, wait, requested}], motion: {step, grid, level, changes: [[frame,
-  fraction]]}}` (docs/CONFIG.md "Activity file").
-- **Play log** (`NarratedScene.play` overrides Manim's to append a `PlayRecord`; Manim's `wait`
-  goes through `play`, so waits are recorded with `wait: true`). `narrate()` sets the current
-  beat for the log and stores `beat_busy[id]` = time its body took before the wait up to
-  `d + pad`; `tear_down` stores `silent_busy` before holding a silent scene. `play_steps` marks
-  the plays it shortened with `requested = cap`. Recording never changes frames or timing.
-- **Motion signal — why from the renderer**: `MotionTrack` is fed by `FrameCapture._observe`
-  (`FrameCapture(per_beat, listeners, motion=None)`), which already sees every frame Manim
-  writes, with `num_frames` for frozen waits. Each written frame is sampled on a grid (every
-  `step = ceil(short side / 180)`-th pixel: 3 at 480p, 6 at 1080p) and compared with the
-  previous one; `fraction` = share of sample points with a channel moved by > 6 (0-255);
-  only changed frames are stored. ~1.3 ms per written frame (a frozen wait is one), a few
-  percent of a preview render. Decoding the scene MP4 with ffmpeg/PyAV afterwards would be a
-  second pass, add codec noise (every frame "changes" slightly, needing a fuzzy threshold) and
-  could not run without the MP4; the renderer's frames are exact (a static frame is
-  bit-identical), so a tiny threshold works. Only recorded with stills (`--frames`,
-  storyboard, lint), which is when lint needs it.
-- **`narration_speed`**: spoken words (`timing_rules.spoken_words`: hyphens/dashes/slashes
-  split words; digit runs `min(len, 3)` words, `+1` per decimal separator and symbol, `+1` for
-  letters next to digits; 2-5 letter all-caps acronyms half a word per letter) per second of
-  speech: with an MP3, its length minus leading/trailing silence (10 ms envelope below -40 dB
-  of the peak; `speech_bounds`, cached by path+mtime); without audio, the estimated `d`, so
-  the rate only deviates where spoken words differ from `len(text.split())` or the configured
-  `words_per_second` is itself outside the range: those findings are `info`, grouped into one
-  per scene. Beats under `min_words` (5) spoken words are skipped.
-- **`dead_air`**: static runs between changed frames (`fraction >= min_change`, default 0.0002
-  ≈ 9 sample points, which ignores the near-zero first/last frames of eased animations), the
-  tail to the scene end included, longer than `max_seconds` (6). Applies to narrated and
-  silent scenes alike (a silent card held still longer than 6 s is reported); the beat is
-  where the run starts.
-- **`animation_overrun`**: `busy - (d + pad) > tolerance` (0.1 s); the message lists the
-  non-wait plays of the beat ending after the narration end. Silent scenes: `silent.busy >
-  duration + tolerance`. `time` = narration end (or `duration`).
-- **`rushed_animation`**: plays with `requested` set whose run time is below `min_run_time`
-  (0.5 s), one finding per beat. Plays a scene shortens itself (e.g. `run_time=d / 5`) are not
-  seen: only `play_steps` says what it wanted.
+- **Rules** (`vidgen/lint/timing_rules.py`, scope `scene`): `narration_speed`, `dead_air`,
+  `animation_overrun`, `rushed_animation`, `talked_over` (§69.34); thresholds: docs/CONFIG.md
+  "Lint". They get `SceneContext(scene_id, activity, audio_dir)` and yield issues with `beat`
+  and `time`; `run._timing_findings` turns them into findings (`still` may be `None`).
+- **Activity file** (`vidgen/activity.py`, `ACTIVITY_VERSION = 1`, `worker.scene_activity_path` =
+  `<render_dir>/activity/<scene>.json`; format: docs/CONFIG.md "Activity file"): written with the
+  stills, deleted before each render, required for reuse.
+- **Play log**: `NarratedScene.play` appends a `PlayRecord` (waits recorded `wait: true`);
+  `narrate()` stores `beat_busy[id]`; `play_steps` marks shortened plays with `requested`.
+  Recording never changes frames or timing.
+- **Motion** (`MotionTrack`, fed by `FrameCapture._observe`): each written frame is sampled every
+  `ceil(short side / 180)` px and compared with the previous; only changes are stored. From the
+  renderer because its static frames are bit-identical (codec noise would need a fuzzy threshold).
+- **Logic**: `narration_speed` counts `timing_rules.spoken_words` per second of speech
+  (`speech_bounds` trims silence below -40 dB; without audio, findings are `info`).
+  `animation_overrun`: `busy - (d + pad) > tolerance`. `rushed_animation` sees only plays
+  `play_steps` shortened.
 
 ## 18. Refinements (Step 15, layout regions)
 
-- **Module** `vidgen/regions.py`, exported by `vidgen.api`; reference: docs/EXTENDING.md
-  "Layout regions". `Region(x0, y0, x1, y1)` (frozen dataclass, Manim units, y up; negative
-  sizes are a `VidgenError`): `width`, `height`, `center`, `orientation`, `point(align)`,
-  `contains(mob, tolerance)`, `inset(x, y)`, `below(mob_or_y, gap)` / `above(...)` (clamped,
-  may have zero height), `rows(n | weights, gap)` (top to bottom), `columns(...)` (left to
-  right), `split(...)` (columns, or rows when the **active frame** is portrait), `grid(rows,
-  cols, gap, gap_y)` (row-major cells), `to_rectangle()`. Default gap `GAP = 0.3` units.
-- **Frame and safe area**: `frame_region()` from `config.frame_width/height` (shorter side 8,
-  §5.2); `safe_area(margin_x=MARGIN_X, margin_y=MARGIN_Y)` (0.6 / 0.5). Single source of truth:
-  `NarratedScene.margin_x/margin_y` default to those constants, `NarratedScene.safe_area` is
-  `regions.safe_area(self.margin_x, self.margin_y)` (`safe_width`/`safe_height` derive from
-  it), and the layout dump's `safe_area` (§15), which lint's `safe_area` rule reads, is built
-  from the same function (`introspect.LayoutRecorder.document`), so values are unchanged.
-- **Orientation**: `orientation(w, h)` = `landscape` if w > 1.2 h, `portrait` if h > 1.2 w,
-  else `square`.
-- **Named regions** (`region(name, area=None, gap=GAP)`; `NarratedScene.region(name)` uses the
-  scene's safe area): `full`; `header` (top band, height share of the area 0.16 landscape /
-  0.15 square / 0.12 portrait); `caption` (bottom band 0.12 / 0.11 / 0.09); `body` (below the
-  header, gap apart); `hero` (between header and caption); `top` / `bottom` (halves);
-  `left` / `right` (`area.split(2)`: halves side by side, **but the upper/lower half in
-  portrait**, so a two-column layout written for 16:9 becomes two rows in 9:16; literal halves:
-  `area.columns(2)`); `center` (centered box, shares of width x height 0.72 x 0.72 / 0.86 x
-  0.72 / 1.0 x 0.6). Unknown names → `VidgenError` listing `REGION_NAMES`.
-  `grid(rows, cols, area="full", gap, gap_y)` takes a name or a Region.
-- **`place(mob, area, fit="contain", align="center", *, max_scale=None, buff=0.0)`**: `contain`
-  scales up or down to fit both sides, `width`/`height` match one side (the other may
-  overflow), `none` keeps the size; zero-size sides are ignored; `max_scale` caps the factor
-  (`1.0`: shrink only). `align` is one of `ALIGNMENTS` (`center, top, bottom, left, right,
-  top_left, top_right, bottom_left, bottom_right`; spaces/hyphens accepted) or a Manim
-  direction (`UL`, only its signs count): the mobject's matching edge/corner goes on the
-  region's (`move_to(point, aligned_edge=...)`). Unknown fit/align → `VidgenError`.
-- **Readable size**: `readable_size(font=None, *, fraction=None, margin=1.05)` = the font size
-  (points) whose capital `H` is `fraction` of the frame's shorter side, times `margin`.
-  `fraction` defaults to `min_text_fraction()`: the active project's
-  `lint.rules.min_font.min_size` (default `MIN_TEXT_FRACTION = 0.025`), so layout and lint
-  share the threshold; that one lint value is therefore part of the render fingerprint (key
-  `readable`), while other lint settings still are not. Inter and the default `Monospace`
-  (JetBrains Mono NL since Step 18) measure ≈ 0.0101 units of cap height per point → ≈ 20.8 pt at any resolution (theme `small`
-  20 is below it, `caption` 24 above, matching what lint reports).
-- **`readable_text(text, area, *, size="body", min_size=None, theme=None, **fit_text_kwargs)`**:
-  `fit_text` into the region starting at `max(size, floor)` with `min_size = floor =
-  max(readable_size(), min_size)`, so long text wraps instead of shrinking; if it still does
-  not fit the height it is scaled down (as `fit_text` does) and a warning is logged on
-  `vidgen.regions` (shown as `warning:` by the worker). Not positioned. Built on
-  `layout.fit_text_sized` (new, internal: `fit_text` returning the final font size after any
-  scaling; `fit_text` delegates to it, behaviour unchanged).
-- **Built-ins on regions**: `bullets` — heading fitted into and centered in `header`, list
-  centered in `safe_area.below(heading)`; in portrait the heading is `portrait_growth` (1.3,
-  class attribute) larger, a short list (≤ 5 items, rows < 75 % of the space) grows up to 1.3x
-  and rows are spaced 0.8 x the line pitch (0.55 in landscape). `code` — title in `header`,
-  listing scaled into the rest (up to 1.5x, as before); new param `wrap: bool = True`: while
-  the listing is width-bound and would end below `max(size, readable_size(font))`, long lines
-  are wrapped (`scenes/code.py`: `lex_code` lexes the whole text with Pygments into runs per
-  line, `wrap_runs(rows, columns)` breaks the run stream after the last space or `,`/`;`
-  outside a string literal if past half the line, else after an opening bracket (not in a
-  string or comment), else a space inside a string, else after `/ - . _` inside a word, else
-  hard; continuation lines indented 4 more and keeping their tokens' types; never narrower
-  than `MIN_COLUMNS` 20) and the listing rebuilt. Manim's `Code` gets the wrapped text as
-  `language="text"` and `paint_code` colours its glyphs from the runs (Manim would lex each
-  wrapped piece as a separate line: an apostrophe in a `//` comment then opened a string). Wrapped listings number original lines only (continuation numbers
-  replaced by empty groups; the dumped `text` of the number column is still Manim's string)
-  and highlights map original lines to all their wrapped lines. Landscape output of both is
-  unchanged except the title/heading now centered in `header` (a few px lower).
+- **Module** `vidgen/regions.py`, exported by `vidgen.api`; user reference docs/EXTENDING.md
+  "Layout regions" (region names and shares, `place`, `readable_text`). `Region(x0, y0, x1, y1)`
+  (frozen, Manim units, y up; negative size → `VidgenError`) with `rows`, `columns`, `split`
+  (rows when the active frame is portrait), `grid`, `inset`, `below`/`above`. `GAP = 0.3`.
+- **Safe area**: `safe_area(margin_x=MARGIN_X, margin_y=MARGIN_Y)` (0.6 / 0.5) is the single
+  source for `NarratedScene.safe_area` and the layout dump's `safe_area`.
+- **Orientation** (`scales.frame_orientation`): `landscape` if w > 1.2 h, `portrait` if h > 1.2 w,
+  else `square`. Unknown region names, fits or alignments → `VidgenError`.
+- **`readable_size(font=None, *, fraction=None, margin=1.05)`**: font size whose `H` is `fraction`
+  of the shorter side; `fraction` defaults to `min_text_fraction()` = the project's
+  `lint.rules.min_font.min_size` (`MIN_TEXT_FRACTION = 0.025`), so layout and lint share the
+  threshold, which is therefore in the fingerprint (key `readable`).
+  `readable_text(text, area, *, size="body", min_size=None, theme=None, **fit_text_kwargs)` wraps
+  rather than shrinking below that floor and logs a warning on `vidgen.regions` when it must
+  scale; built on internal `layout.fit_text_sized`.
+- **`code` wrapping** (`wrap: bool = True`): `lex_code` lexes the whole text with Pygments into
+  runs and `wrap_runs(rows, columns)` breaks them (never below `MIN_COLUMNS` 20); Manim's `Code`
+  gets the wrapped text as `language="text"` and `paint_code` colours glyphs from the runs,
+  because lexing each wrapped piece separately breaks strings and comments. Only original lines
+  are numbered.
 
 ## 19. Refinements (Step 16, theme presets)
 
-- **Config**: `ThemeConfig` gains `preset: Identifier | None` and `code_style: str | None`
-  (a Pygments style, checked against the installed styles); `background` and `font` now default
-  to `None` (= "not written"), so a preset can supply them. Variants deep-merge as before, so a
-  variant `theme: {preset: NAME}` switches the preset while base `theme:` values still apply
-  (and still win). Reference: docs/CONFIG.md "Theme presets".
-- **Precedence** (highest first, `Theme` in `theme.py`): `video.yaml` `theme.*` > the preset
-  (`preset_chain()`: the preset, below it its `base`, recursively) > `register_theme_defaults`
-  > built-in defaults. For `colors`/`sizes` the layers merge per token; `background`, `font`,
-  `code_style` and `palette` take the highest layer that sets them. Without `theme.preset` the
-  preset layer is empty, so output is unchanged for existing projects (the built-in defaults are
-  the `dark_tech` values). Rationale: a preset is an explicit choice in the config, so it beats
-  defaults an extension registered in code, but never a value written in the config.
-- **Presets** (`vidgen/presets.py`, `ThemePreset` frozen dataclass: `name, description, base,
-  background, font, code_style, colors, palette, sizes, origin`; `None`/empty = not set):
-  `BUILTIN_PRESETS` = `dark_tech` (= the defaults), `light_academic` (off-white `#F8F7F3`,
-  near-black text, ink accents, white `surface`, `code_style: xcode`), `high_contrast` (black,
-  white text, saturated accents ≥ 7:1, `caption` 26 / `small` 24). Values: docs/CONFIG.md table
-  (a test keeps it in sync). `DEFAULT_*` constants moved here (`vidgen.theme` re-exports them).
-- **Default `dim` changed** from `#6B7280` (3.91:1 on `#0E1116`, below WCAG AA; every dim
-  caption was a lint `contrast` warning) to `#838B98` (5.5:1 on the background, 5.0:1 on
-  `surface`): a visible change, dim text is slightly lighter.
-- **Project presets**: `vidgen.api.register_theme_preset(name, *, base, background, font,
-  colors, palette, sizes, code_style, description)` → `presets.make_preset` (validates names,
-  hex colours, positive sizes, Pygments style) → `Theme.add_preset` (error on a built-in name,
-  a duplicate, or an unknown `base`). Stored on the active `Theme`, so they are per project like
-  `register_theme_defaults` (every `activate` builds a fresh Theme). Presets are looked up when
-  a value is read; an unknown name raises `VidgenError("unknown theme preset ...; known
-  presets: ...")`. `Theme.derive(config)` builds a variant's theme sharing the registered
-  defaults and presets (used by `schema.project_themes`).
-- **Validation/schema**: `vidgen validate` reports an unknown preset as `theme.preset: ...`
-  (and skips the scene checks, which all need the theme); `vidgen schema` gives `preset` an
-  `enum` of the built-in and project presets (`schema.theme_presets`) and `code_style` an
-  `enum` of the installed Pygments styles.
-- **Contrast check** (`vidgen/lint/color.py`): `theme_contrast(theme, *, text_ratio=4.5,
-  graphic_ratio=3.0) -> list[ContrastCheck(subject, color, against, against_color, ratio,
-  minimum)]` (`.ok`): `text`/`dim` on the background and on `surface` need 4.5:1 (WCAG AA
-  text), the accent tokens (`accent, highlight, primary, secondary, tertiary`) and the palette
-  3:1 on the background (WCAG 1.4.11 graphical objects / large text). Tests run it on every
-  built-in preset. `hex_rgb` now accepts `#RGB` and `#RRGGBBAA` (alpha ignored).
-- **Built-ins on light backgrounds**: no built-in hard-codes white/black; colours come from
-  theme tokens and the image caption band from `theme.background`. Changed: `code` `style`
-  defaults to `None` = `theme.code_style` (a dark style on a white window was unreadable);
-  `bullets` dims earlier items to `dimmed_opacity = 0.45` (was 0.4: a dimmed `primary` marker
-  on `light_academic` was 1.9:1, under lint's 2:1 for de-emphasised text).
+- **Config**: `ThemeConfig.preset`, `code_style` (installed Pygments style); `background`/`font`
+  default `None` (= not written) so a preset can supply them. User reference: docs/CONFIG.md
+  "Theme presets".
+- **Precedence** (`Theme` in `theme.py`): `video.yaml` `theme.*` > preset chain (`preset_chain()`:
+  preset, then its `base`, recursively) > `register_theme_defaults` > built-in defaults (the
+  `dark_tech` values). `colors`/`sizes` merge per token; `background`, `font`, `code_style`,
+  `palette` take the highest layer that sets them. A preset beats code defaults because it is an
+  explicit config choice, but never a written config value.
+- **Presets** (`vidgen/presets.py`, frozen `ThemePreset`; `None`/empty = unset; `DEFAULT_*`
+  constants, re-exported by `vidgen.theme`): `BUILTIN_PRESETS` = `dark_tech`, `light_academic`,
+  `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`, `bold_neon`, built via
+  `make_preset` (validated at import); values in docs/CONFIG.md (a test keeps the table in sync).
+- **Project presets**: `vidgen.api.register_theme_preset(name, *, base, background, font, colors,
+  palette, sizes, code_style, description, scale, fonts, font_serif, font_mono)` → `make_preset` →
+  `Theme.add_preset` (error on a built-in name, duplicate, unknown `base`); per project, on the
+  active `Theme`. Unknown preset → `VidgenError("unknown theme preset ...; known presets: ...")`;
+  `vidgen validate` reports it as `theme.preset: ...` and skips the scene checks.
+  `Theme.derive(config, fmt=None)` builds a variant's theme sharing registered defaults and presets.
+- **Contrast** (`vidgen/lint/color.py`): `theme_contrast(theme, *, text_ratio=4.5,
+  graphic_ratio=3.0) -> list[ContrastCheck]`: `text`/`dim` on background and `surface` 4.5:1;
+  accents and palette 3:1. Tests run it on every built-in preset. `vidgen validate` and `vidgen
+  lint` log failures as `warning: theme contrast: ...`, never failures. No built-in hard-codes
+  white or black; `code` `style` defaults to `theme.code_style`.
 
 ## 20. Refinements (Step 17, more presets and type scales)
 
-- **Type scales** (`vidgen/scales.py`, manim-free): `TYPE_SCALES` `compact` (48/36/32/28/22/20
-  for title/subtitle/heading/body/caption/small), `standard` (56/42/36/32/24/20 = the built-in
-  `DEFAULT_SIZES`), `large` (66/50/44/38/30/26); `auto` = `AUTO_SCALES[orientation]` (`large`
-  for portrait, `standard` for landscape/square). `frame_orientation(w, h)` is the classifier
-  (`regions.orientation` now delegates to it). No scale goes below `small` 20 (the lint
-  `min_font` floor is ≈ 19.8 pt).
-- **Config**: `ThemeConfig.scale: Literal["compact", "standard", "large", "auto"] | None`;
-  presets gain `scale` and `fonts` (`ThemePreset`, `make_preset`, `register_theme_preset`).
-- **Theme orientation**: `Theme(config, *, orientation="landscape")`, `Theme.for_format(config,
-  fmt)` (used by `runtime.set_context` and `NarratedScene` with the project's **final**
-  `format`, so preview and final render share sizes), `derive(config, fmt=None)` (variants:
-  `schema.project_themes` passes the variant's format). `Theme.scale_setting` (as chosen),
-  `Theme.scale` (resolved).
-- **Size precedence**: a scale is shorthand for the six sizes at the level where it is chosen.
-  `Theme.sizes` = base, then registered extension sizes, then per preset in the chain (lowest
-  first) its scale's sizes then its `sizes`, then the config's scale's sizes, then the config's
-  `sizes`. The base is `DEFAULT_SIZES` when any level chooses a scale, else the `auto` scale for
-  the orientation — so with no scale anywhere, extension defaults still override the built-in
-  sizes (as in Step 16), while a chosen scale overrides them for the six scale tokens (like a
-  preset's colours override extension colour defaults). **Visible change**: portrait projects
-  that choose no scale get `large` sizes (was standard); landscape output is unchanged.
-  Built-in scenes fit text into regions, so larger sizes wrap/shrink rather than overflow
-  (checked: storyboard + lint of examples/minimal `--variant vertical`, render test at 9:16).
-- **Font roles hook**: `ThemePreset.fonts` (role → family, roles are identifiers);
-  `Theme.fonts` merges the chain, `Theme.font_for(role)` = `video.yaml` `font` if written, else
-  the chain's family for the role, else `Theme.font`. No built-in preset sets roles and no
-  built-in scene reads them yet (Step 18 bundles serif/mono fonts and wires them; §21 changes
-  the precedence: a config `font` no longer overrides roles).
-- **Presets**: `BUILTIN_PRESETS` (built through `make_preset`, so validated at import) adds
-  `warm_editorial` (cream `#F6F0E4`, espresso text, petrol/terracotta, Pygments `default`),
-  `brand_neutral` (grey `#F4F5F7` with white `surface`, graphite text, one blue, `xcode`),
-  `soft_pastel` (dusky plum `#252238`, pastel accents, `zenburn`) and `bold_neon`
-  (violet-black `#0B0614`, cyan/magenta/yellow, `monokai`, scale `large`). Every built-in preset
-  sets a `scale` (`auto`, `high_contrast` and `bold_neon` `large`) and no `sizes`;
-  `high_contrast` dropped its `caption: 26, small: 24` for `large`. Values: docs/CONFIG.md table
-  (test keeps it in sync). Code styles were chosen so every Python token colour reaches 4.5:1
-  on the preset's `surface`.
-- **Palettes**: 4–6 ordered colours; every built-in palette colour reaches 4.5:1 on its
-  background (charts draw series labels in palette colours; the first draft of the light
-  presets got lint `contrast` warnings on line-chart labels at 3.9:1). Colour-blind check
-  `vidgen.lint.color.palette_distinctness(palette) -> {vision: min CIEDE2000}` for `normal` and
-  simulated `protanopia`/`deuteranopia`/`tritanopia` (Machado et al. 2009 full-severity
-  matrices on linear RGB; `simulate_cvd`, `lab`, `delta_e` = CIEDE2000). Built-in presets
-  except `dark_tech` reach ≥ 7.5 under all four (tested); `light_academic` and `high_contrast`
-  changed their third colour to reach it (deuteranopia 2.5 → 11.9 and 0.4 → 8.8); `dark_tech`
-  keeps the historical default palette (deuteranopia 4.7) so default output does not change.
-- **`vidgen list-themes [PROJECT] [--swatches PNG] [--json]`** (`themelist.py`, not a render
-  input): per preset (built-in then project) `preset_entry`: values resolved in the project
-  (`Theme.derive(ThemeConfig(preset=name))`, so registered defaults and the project's
-  orientation apply), `theme_contrast` summary and `palette_distinctness`; plus the type scales.
-  JSON: Step 8 envelope, command `list-themes`, documented in docs/CONFIG.md. `--swatches`
-  draws one 1280x190 row per preset with Pillow (name/description in its text colours, accent
-  chips, `surface` panel, palette bars).
-- **`vidgen validate`** logs `theme_contrast` failures of the project's theme (and of each
-  variant's, prefixed `[variant]`, unless equal to the base's) as warnings: stderr
-  `warning: theme contrast: ...`, JSON `warnings`; they never fail validation.
+- **Type scales** (`vidgen/scales.py`, manim-free): `TYPE_SCALES` `compact`, `standard` (=
+  `DEFAULT_SIZES`), `large`; `auto` = `AUTO_SCALES[orientation]` (`large` portrait, else
+  `standard`); none goes below `small` 20. `ThemeConfig.scale` / preset `scale`.
+- **Orientation**: `Theme.for_format(config, fmt)` is used with the project's **final** `format`,
+  so preview and final share sizes.
+- **Size precedence**: base, registered extension sizes, each preset in the chain (lowest first)
+  its scale then its `sizes`, the config's scale, the config's `sizes`. Base = `DEFAULT_SIZES`
+  when any level chooses a scale, else the `auto` scale for the orientation.
+- **Palettes**: 4–6 colours, each ≥ 4.5:1 on its background (charts draw labels in them).
+  `lint.color.palette_distinctness(palette) -> {vision: min CIEDE2000}` for normal and simulated
+  protanopia/deuteranopia/tritanopia; built-in presets except `dark_tech` reach ≥ 7.5 (tested);
+  `dark_tech` keeps the default palette so default output does not change.
+- **`vidgen list-themes`** (`themelist.py`, not a render input; JSON in docs/CONFIG.md
+  "`vidgen list-themes`"); `--swatches`/`--sheet` PNG.
 
 ## 21. Refinements (Step 18, bundled fonts)
 
-- **Bundled families** (package data `src/vidgen/data/fonts/<Family>/`, each with its `OFL.txt`;
-  `THIRD_PARTY_NOTICES.md` lists sources, versions and sizes; `pyproject` package-data
-  `data/fonts/**/*`): Inter 4.001 (`Inter`: Regular, Bold, Italic), Source Serif 4 4.005
-  (`Source Serif 4`: Regular, Bold, Italic), JetBrains Mono NL 2.242 (`JetBrains Mono NL`:
-  Regular, Bold; the no-ligature variant, so code shows the typed characters). ~2.0 MB of TTF,
-  ~1.1 MB in the wheel. All SIL OFL 1.1, unmodified (Inter/JetBrains Mono decompressed from
-  WOFF2, lossless).
-- **Registration** (`vidgen/fonts.py`): `register_bundled_fonts()` calls
-  `manimpango.register_font` for every file (Linux: fontconfig app font; Windows:
-  `AddFontResourceEx` private; macOS: CoreText), once per process, and clears Manim's cached
-  `Text.font_list` so its missing-font warning knows them. Pango reads registered fonts when it
-  builds its font map (the first text laid out), so registration must precede any text:
-  `vidgen.helpers` and `vidgen.regions` call it at import (every vidgen text path imports one
-  of them; extensions import them through `vidgen.api`), and the worker calls it first in
-  `render_scene`. A file that fails to register is a logged warning (text then uses an
-  installed font of that name or Pango's fallback), never an error. A family that is also
-  installed system-wide is found twice by fontconfig; either copy renders it (same font).
-  Pillow contact sheets and `list-themes --swatches` also prefer the bundled Inter files.
-- **Theme tokens**: `font` (sans; default Inter), `font_serif` (default Source Serif 4) and
-  `font_mono` (default JetBrains Mono NL), each with the usual precedence (config > preset chain
-  > default; `ThemeConfig`, `ThemePreset`, `make_preset`, `register_theme_preset` gain
-  `font_serif`/`font_mono`). Config `theme.fonts: {role: token-or-family}` (new, merged per role
-  over the preset chain's `fonts`).
-- **Font roles** (`Theme.font_for(role)`): setting = config `fonts[role]` > preset chain
-  `fonts[role]` > `fonts.ROLE_DEFAULTS` (`code` → `mono`, `quote_mark` → `serif`) > `sans`;
-  the tokens `sans`/`serif`/`mono` (`fonts.FONT_TOKENS`) resolve to `font`/`font_serif`/
-  `font_mono`, any other value is a family name. **Changed from §20**: a `font` written in
-  `video.yaml` is the sans family only and no longer overrides every role (otherwise a config
-  `font: Inter`, as in examples/minimal, would silently cancel a preset's serif headings, and
-  code listings would lose their mono font). `Theme.fonts` = the roles set by presets + config
-  (without defaults).
-- **Built-in scenes**: role `heading` for the `title` title, `bullets` heading, `bar_chart` /
-  `line_chart` / `code` titles and the `end_card` title; `quote` for the quote text;
-  `quote_mark` for its mark (param `mark_font` default `None` = the role; was
-  `"Georgia,DejaVu Serif,serif"`); `code` for listings and line numbers (param `font` default
-  `None` = the role; was `"Monospace"`, which on Windows was not a monospace font). All other
-  text: `body` = theme `font`. `fit_text`/`fit_text_sized` gain `font=None` (default the theme
-  font); `readable_text` measures its floor with the `font` it is given.
-- **Presets**: `light_academic` `fonts: {heading: serif}`, `warm_editorial` `{heading: serif,
-  quote: serif}`; every other preset keeps all-sans text. Source Serif 4 has a smaller cap
-  height per point (0.0093 vs Inter 0.0101 units), so serif headings look ~8 % smaller at the
-  same size token; headings are far above the `min_font` floor, so sizes were left alone.
-- **Fingerprint**: the bundled font files are part of `vidgen_source_digest` (a font update
-  re-renders storyboards).
-- `vidgen list-themes`: entries gain `font_serif`, `font_mono` and `font_roles` (the family of
-  every built-in role); the swatch panel draws "Aa Heading" in the preset's heading family when
-  it is bundled.
+- **Bundled** (`src/vidgen/data/fonts/<Family>/` with `OFL.txt`; `THIRD_PARTY_NOTICES.md`):
+  `Inter`, `Source Serif 4`, `JetBrains Mono NL` (no ligatures, so code shows the typed
+  characters); unmodified.
+- **Registration** (`fonts.register_bundled_fonts()`): `manimpango.register_font` per file, once
+  per process, then clears Manim's `Text.font_list`. Pango reads fonts when it lays out the first
+  text, so registration must come first: `vidgen.helpers` and `vidgen.regions` call it at import,
+  the worker first in `render_scene`. A failure is a warning, never an error.
+- **Tokens**: `font` (sans, Inter), `font_serif`, `font_mono`; `theme.fonts: {role:
+  token-or-family}`.
+- **Roles** (`Theme.font_for(role)`): config `fonts[role]` > preset chain `fonts[role]` >
+  `fonts.ROLE_DEFAULTS` (`code` → `mono`, `quote_mark` → `serif`) > `sans`; `sans`/`serif`/`mono`
+  (`fonts.FONT_TOKENS`) name the tokens. A config `font` is the sans family only and does not
+  override roles (else `font: Inter` would cancel a preset's serif headings and mono code).
+  Built-ins use `heading` for titles/headings, `quote`, `quote_mark`, `code`; other text `body`.
 
 ## 22. Refinements (Step 19, icons: mechanism + seed set)
 
-- **Vendored set** (package data `src/vidgen/data/icons/`, `pyproject` `data/icons/**/*`):
-  `lucide/<name>.svg` (unmodified files of npm `lucide-static` 1.52.0), `lucide/LICENSE` (ISC +
-  the MIT notice of the Feather-derived icons) and `manifest.json` = `{version: 1, sources:
-  {lucide: {package, version, license, license_file, homepage}}, icons: [{name, category, tags,
-  source}]}` (sorted by name; tags = Lucide's `tags.json` + `extra_tags`). Seed set: 40 icons,
-  5 in each of the 8 categories `icons.CATEGORIES` (`tech, data, science, business, people,
-  ui, nature, education`; `ui` = arrows and interface), listed in `tools/icon_set.json`.
-  `tools/vendor_icons.py` (not shipped) re-creates the folder from that list (`npm pack`, or
-  `--package-dir`), checks names/categories/version, removes unlisted SVGs; Step 20 extended the
-  list to 200 (§23). `THIRD_PARTY_NOTICES.md` records the source.
-- **Registry** (`vidgen/icons.py`, manim-free): `IconInfo(name, path, category, tags, source,
-  origin, overrides)`; `builtin_icons()`, `builtin_sources()`, `project_icons(root)` (every
-  `<root>/assets/icons/*.svg`, names `[A-Za-z0-9][A-Za-z0-9_-]*`, optional `icons.json` `{icons:
-  [{name, category, tags}]}`, category default `project`; cached per folder by file
-  names/sizes/mtimes), `available_icons(root=None)` (built-ins, then project icons replacing by
-  name; sorted), `active_icons()` (the runtime project's), `search_icons(icons, text,
-  category)` (every word of `text` must be in the name, a tag, or equal the category; ranked
-  exact name < name prefix < in name < exact tag < in tag < category, then by name; Step 22
-  ranks whole words before substrings, §25),
-  `find_icon(name)` / `unknown_icon_message` (difflib close names + icons whose tags match,
-  pointing at `vidgen list-icons --search`). Project icon problems are `VidgenError`s;
-  `vidgen validate` reports them as `assets/icons: ...`.
+- **Vendored set** (`src/vidgen/data/icons/`): `lucide/<name>.svg` (unmodified `lucide-static`),
+  `lucide/LICENSE`, `manifest.json` (`{version: 1, sources, icons: [{name, category, tags,
+  aliases, source}]}`, sorted). `icons.CATEGORIES`: `tech, data, science, business, people, ui,
+  nature, education`. List: `tools/icon_set.json`; `tools/vendor_icons.py` (not shipped)
+  re-creates the folder (§23).
+- **Registry** (`vidgen/icons.py`, manim-free): `IconInfo`, `builtin_icons()`,
+  `project_icons(root)` (`<root>/assets/icons/*.svg`, names `[A-Za-z0-9][A-Za-z0-9_-]*`, optional
+  `icons.json`, category default `project`), `available_icons(root=None)` (project icons replace
+  built-ins by name), `active_icons()`, `search_icons(icons, text, category)` (ranking §25),
+  `find_icon(name)`, `unknown_icon_message`. Project icon problems are `VidgenError`s, reported as
+  `assets/icons: ...`.
 - **Mobject** (`vidgen/icon_mobject.py`): `icon(name, size="body", color="text",
-  stroke_width=None, *, height=None, theme=None) -> Icon`; `build_icon(info, height, color,
-  stroke_width, current=)`. The SVG is pre-processed into a per-process temporary folder
-  (Manim's `SVGMobject` writes `<stem>_.svg` next to the file it parses, which would race
-  between parallel workers and fail in a read-only install): an invisible `<rect>` spanning the
-  `viewBox` is inserted first, `currentColor` becomes a marker colour (Manim reads it as black)
-  and `stroke="none"` a zero stroke width (Manim draws it as a white stroke). Then: the rect is
-  the `Icon`'s `box` (submobject 0, opacity 0: layout, `place()` and alignment use the design
-  box; the layout dump ignores it as invisible), every visible fill/stroke gets `color` (or,
-  with `color=None`, only the marker-coloured paint gets the theme `text` colour), each SVG
-  stroke width `w` (viewBox units) becomes Manim `w * height / viewBox_height / 0.01` (Cairo
-  draws `stroke_width * 0.01` frame units, so the result is resolution independent),
-  `stroke-linecap`/`-linejoin` of the root map to `cap_style`/`joint_type`. **Sizes**: a
-  size token or number is points as for text; box height = `points * ICON_UNITS_PER_POINT`
-  (0.0208 = 1.5 em of Inter: a `body` icon draws ~1.7x the cap height of body text, the ratio
-  of 24 px icons to 16 px text in UI kits); `height` is Manim units. `Icon.scale(f,
-  scale_stroke=True)` scales strokes by default (Manim's default is False), so `place()`,
-  `animate.scale` and `GrowFromCenter` keep proportions. `icon_name`, `icon_origin`.
-- **Params**: `vidgen.scene.IconName` = `Annotated[str, AfterValidator, ThemeToken("icon")]`:
-  syntax always; with a theme in the validation context (validate, scene construction) the name
-  must be in `active_icons()`. `ThemeToken.kind` may now be `icon`: `list-scenes` prints type
-  `icon`; the schema export turns `x-vidgen-theme: icon` into `enum` of the active project's
-  icon names (`schema.theme_tokens()["icon"]`; built-ins if the project's icon folder is broken).
-- **Layout dump / lint**: an `Icon` is one object, kind `icon`, `class` `Icon`, `icon` = its name,
-  `fill`/`stroke` of its largest part, `bbox` of its drawn parts. Lint treats icons like other
-  non-text objects (`covered_text` when drawn over text, `off_frame`); `describe()` prints
-  `icon 'cpu'`; findings' objects gain the key `icon` (`null` for other kinds; added within JSON
-  version 1); `lint_ignore` `object` patterns also match the icon name.
-- **`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]`**
-  (`iconlist.py`, not a render input): project root from `find_config_file` without loading the
-  config (works while `video.yaml` is broken; no PROJECT and no config in the current folder:
-  built-ins); unknown category → `VidgenError` listing them. `--sheet`: 1280 px wide pages, 8
-  icons per row (150 px cells, 64 px icon box), name + category under each, at most ~1.25 x
-  width high (`<stem>-2.png`... for more; stale extra pages removed); icons drawn by
-  `build_icon` through Manim's Cairo `Camera` in one capture per page (same pixels as a render).
-  JSON (Step 8 envelope, command `list-icons`): `project, search, category, sources,
-  categories [{name, description, count}], count, icons [IconInfo.to_json()], sheets`.
-- **Fingerprint**: `icons.py`/`icon_mobject.py` count as vidgen source; the vendored SVGs and
-  manifest are part of `vidgen_source_digest`; project icons are under `assets/` (already
-  tracked by size+mtime).
+  stroke_width=None, *, height=None, theme=None) -> Icon`, `build_icon`. The SVG is pre-processed
+  into a per-process temp folder (Manim's `SVGMobject` writes `<stem>_.svg` beside its input:
+  races between workers, fails read-only): an invisible `<rect>` over the `viewBox` becomes the
+  `Icon`'s layout `box` (submobject 0), `currentColor` a marker colour, `stroke="none"` zero
+  width; strokes scale with the height (resolution independent). Box height = points x
+  `ICON_UNITS_PER_POINT` (0.0208). `Icon.scale(f, scale_stroke=True)`; `scale_icon_strokes` (§24).
+- **Params**: `vidgen.scene.IconName` (`ThemeToken("icon")`): with a theme in the validation
+  context the name or alias must be in `active_icons()`; schema `enum` of names and aliases.
+  Layout dump kind `icon` with `icon` = name.
+- **`vidgen list-icons`** (`iconlist.py`, not a render input; finds the project root without
+  loading the config; JSON in docs/CONFIG.md "`vidgen list-icons`"). Icon modules and vendored
+  files are in `vidgen_source_digest`.
 
 ## 23. Refinements (Step 20, icons: curated expansion)
 
-- **Set**: 200 Lucide icons, 25 per category, chosen for explainer videos (concepts scripts name:
-  hardware/networks/security/AI, chart types/tables/statistics, lab/space/medicine/maths,
-  money/growth/commerce/industry, persons/communication/emotions/health, arrows and status
-  symbols, weather/plants/animals/landscape, books/school/writing/arts); near-duplicates and
-  brand marks left out. Lucide 1.52's current names are listed (e.g. `building-complex`,
-  `face-slightly-smiling`, `book-bookmark`, `waves-horizontal`); the old ones are aliases.
-- **Tags**: Lucide's `tags.json` + `extra_tags` with the words an explainer script uses for the
-  concept (`banknote`: cash, bill, finance; `trending-up`: growth, profit; `shield-check`:
-  security, trust; `gauge`: performance, speed, kpi). Every icon has >= 3 distinct tags.
-- **Aliases** (manifest entry key `aliases: [str]`, sorted; always present): (1) Lucide keeps
-  renamed icons' old names as copies of the new file, so the tool makes every package file that
-  has no `tags.json` entry and draws exactly like one vendored icon (comment and `class`
-  ignored) an alias of it (`home` → `house`, `pie-chart` → `chart-pie`; an old name drawing like
-  two vendored icons is skipped); (2) curated `aliases` in `tools/icon_set.json`
-  (`{alias: icon}`): synonyms (`idea`, `ai`, `warning`, `money`, ...) and `bar-chart` →
-  `chart-column` (Lucide's `bar-chart` is the axis-less `chart-no-axes-column-increasing`,
-  which is not vendored). The tool rejects: a curated alias that is a current Lucide name or
-  conflicts with an upstream alias of a vendored icon, an alias of an unlisted icon, and an old
-  (alias) name listed as an icon.
-- **Resolution** (`vidgen/icons.py`): `IconInfo.aliases`; `builtin_aliases()` (`{alias: name}`);
-  `resolve_icon(name, icons)` (name first, then an alias of an icon in `icons`; an alias never
-  shadows an icon name); `icon_names(icons)` (names + aliases, sorted). `find_icon` (so `icon()`),
-  the `IconName` validator and the schema `enum` accept aliases; `Icon.icon_name` (layout dump,
-  lint) is the resolved icon's name. A project icon replacing a built-in keeps its aliases; a
-  project icon named like an alias takes the name over (`available_icons` drops it from the
-  built-in's aliases). Search: an exact alias scores like a name prefix (1), part of an alias
-  like part of a name (2). `unknown_icon_message` also matches aliases, suggesting the icon
-  they stand for.
-- **Listing**: `list-icons` text lines show `(alias: ...)`; JSON icon entries gain `aliases`
-  (additive, envelope version 1).
-- **Catalogue**: `docs/ICONS.md` = `iconlist.catalogue_markdown(manifest)` (per category: name,
-  aliases, first 8 tags), written by `tools/vendor_icons.py` (`--docs`); a test keeps it equal to
-  the shipped manifest.
-- **Rendering check**: every icon was compared with a reference rasteriser (cairosvg, not a
-  dependency) at 192 px: overlap of inked pixels >= 0.97 for all 200 (arcs, spirals, filled
-  dots), so the loader needed no change; tests build all 200 (box, colours, extent) and render
-  six with arcs/fills at 96 px.
+- **Set**: 200 Lucide icons, 25 per category, each with ≥ 3 distinct tags; no brand marks.
+- **Aliases**: Lucide's old names whose file draws exactly like one vendored icon, plus curated
+  `{alias: icon}` in `tools/icon_set.json`; the tool rejects aliases that are current Lucide names,
+  conflict, point at unlisted icons, or old names listed as icons.
+- **Resolution**: `resolve_icon(name, icons)` (name first, then alias; an alias never shadows a
+  name), `builtin_aliases()`, `icon_names(icons)`; a project icon replacing a built-in keeps its
+  aliases.
+- **Catalogue**: `docs/ICONS.md` = `iconlist.catalogue_markdown(manifest)` (`vendor_icons.py
+  --docs`); a test keeps it equal to the manifest.
 
 ## 24. Refinements (Step 21, icons in built-in scenes)
 
 - **`grid_shape(n, aspect=None, *, cell_aspect=1.0, max_cols=None) -> (rows, cols)`**
-  (`vidgen/regions.py`, exported by `vidgen.api`): `aspect` = width / height as a number, a
-  region name or a `Region` (default: the safe area). Every column count without an empty row
-  is scored by the cell size it allows at `cell_aspect` (`min(aspect / cols / cell_aspect, 1 /
-  rows)`); among shapes within 3 % of the best, fewest empty cells, then fewest rows. `n < 1`,
-  non-positive `aspect`/`cell_aspect` → `VidgenError`.
-- **Icons scaled with their group**: `vidgen.icon_mobject.scale_icon_strokes(mob, factor)`
-  multiplies the stroke widths of the `Icon`s inside a scaled group (not of `mob` itself when it
-  is an `Icon`, whose `scale` already does it). `shrink_to_fit` and `place` call it, so icons
-  in a list or card keep their proportions when the layout shrinks it. Only icons are affected
-  (other mobjects keep Manim's behaviour), so existing output is unchanged.
-- **`bullets`**: `items: list[BulletItem]`; `BulletItem(text: str (min 1), icon: IconName |
-  None = None)` accepts a plain string (`model_validator(mode="before")` → `{text}`), so old
-  configs are unchanged; its JSON Schema is `anyOf: [string (minLength 1), object]`
-  (`__get_pydantic_json_schema__`), so the exported schema accepts both forms. Layout per row
-  `VGroup(marker?, icon?, text)` (text last): without icons exactly as before. With icons, the
-  icons (size = item size x `icon_scale` 0.95 points, box 1.5 em) form a column left of the
-  text, centred on the cap height of the first line; numbers stand right-aligned left of that
-  column; an item without an icon shows its marker centred in the column (unless numbered).
-  Icons use `marker_color`. `dim_previous` now uses `fade(1 - dimmed_opacity)` once per row
-  (multiplies each part's opacity) instead of `set_opacity`, which would have made an icon's
-  invisible box and unfilled paths visible; for text the result is identical.
-- **`title`**: `icon: IconName | None`, `icon_color` (`primary`), `icon_position: above | left`
-  (`left` falls back to `above` in portrait). The icon is `icon_height` (1.25) units; above, it
-  is stacked over kicker/title/subtitle and the title gets 36 % (was 42 %) of the safe height;
-  left, the text width shrinks by the icon and `icon_gap` (0.5) and the icon is scaled to at
-  most 1.1x the text block's height. Revealed first in beat 1 (`FadeIn(scale=0.6)`).
-- **`end_card`**: `icon: IconName | None`, `icon_color` (`primary`), `icon_height` 1.1 units,
-  between logo and title; an icon alone satisfies "at least one of title, lines, logo, icon".
-- **`icon_grid`** (`scenes/icon_grid.py`): params in docs/CONFIG.md. Layout: heading in
-  `header` (portrait x1.3 like `bullets`), grid in the safe area below it. Shape: `columns` if
-  given, else `grid_shape` for each of `cell_aspects` (0.7, 0.9, 1.2, 1.6, 2.2) and each
-  distinct shape is planned (`_plan`): column width `min((W - gaps) / cols, 4.2)`; labels and
-  sublabels built at one size each, reduced by 10 % steps (not below `readable_size()`) until
-  the tallest label block takes ≤ 45 % of a row and the widest word fits the column; icon (or
-  disc) height `min(0.6 cell width, 0.85 (row - labels - 0.2), 1.9)`, at least 0.5. Score:
-  `(fits, icon_h * min(1, label_size / size)^2)`, so a shape that keeps text at its size and
-  icons large wins; if nothing fits, the best one is used and the grid is shrunk as a whole.
-  Rows are spread over spare height (≤ 1 unit extra per gap), a short last row is centred,
-  labels/sublabels are placed by baseline. Cells (`VGroup(visual, label, sublabel?)`, visual
-  = `VGroup(disc, icon)` with `badge`, else `VGroup(icon)`) are added to the scene whole before
-  their entrance (a part's introducing animation would otherwise add it alone and dissolve the
-  cell); entrance `GrowFromCenter(disc)`, `FadeIn(icon, scale=0.6)`, labels `FadeIn(shift=UP)`,
-  lagged. Steps: per item, per `groups` entry, or all; `highlight` adds a last step: other
-  cells `fade` to `dimmed_opacity` 0.55 (0.45 left a `dim` sublabel at 1.93:1 on the light
-  presets, under lint's 2:1 for dimmed text), the chosen visual is transformed into a 1.15x
-  copy in `highlight_color`. `groups`/`highlight` items are 0-based indices (as `bar_chart`'s
-  `highlight`) or labels; groups must list every item once.
+  (`regions.py`, in `vidgen.api`): best cell size, then fewest empty cells, then fewest rows.
+- **`icon_mobject.scale_icon_strokes(mob, factor)`**: `shrink_to_fit` and `place` call it so icons
+  in a scaled group keep their proportions.
+- **`bullets`** `items: list[BulletItem]` (`BulletItem(text, icon)`, a string accepted via
+  `also_accepts`); `title` and `end_card` `icon` (an icon alone satisfies `end_card`'s "at least
+  one of title, lines, logo, icon"); **`icon_grid`** (`scenes/icon_grid.py`). Keys:
+  docs/CONFIG.md#bullets, #title, #icon_grid. Cells are added whole before their entrance (else an
+  introducing animation would add a part alone); `icon_grid` `groups` list every item once.
 
 ## 25. Refinements (Step 22, review 1)
 
-- **Font roles in the text helpers**: `T`, `MT`, `NarratedScene.text`/`markup`
-  (`helpers.styled`), `fit_text`/`fit_text_sized` and `readable_text` take a keyword `role=None`:
-  the family is `font` if given, else `theme.font_for(role)`, else `theme.font`. Additive;
-  `readable_text` measures its floor with that family.
-- **`region(name, area=None, gap)`**: `area` may also be a region name (`region("left",
-  "body")`), like `grid` and `place`.
+- **Font roles in text helpers**: `T`, `MT`, `NarratedScene.text`/`markup`, `fit_text`,
+  `fit_text_sized`, `readable_text` take `role=None` (family = `font`, else
+  `theme.font_for(role)`, else `theme.font`).
 - **`SceneParams.also_accepts: ClassVar[tuple[type, ...]] = ()`**: other input types a nested
-  model is built from (`BulletItem.also_accepts = (str,)`); `describe.type_name` prints them
-  before the model (`list[str | BulletItem]` in `list-scenes` and its JSON `type`).
-- **`register_theme_defaults`** (`Theme.add_defaults`) rejects token names that are not
-  identifiers (`video.yaml` could never override them) and colours that are not `#RGB`,
-  `#RRGGBB`, `#RRGGBBAA` (was: any string starting with `#`).
-- **Icon search** (`icons._score`): 0 exact name, 1 name prefix or exact alias, 2 a whole word of
-  the name or an alias (split at spaces, `-`, `/`, `.`, `_`), 3 exact tag, 4 a whole word of a
-  tag, 5 part of the name or an alias, 6 part of a tag, 7 the category. Whole words now rank
-  above substrings (`ai`: `brain-circuit`, `bot` before `rain`, `mail`).
-- **Lint**: `vidgen lint` logs `theme_contrast` failures of the project's theme like `vidgen
-  validate` (`warning: theme contrast: ...`; JSON `warnings`), unless `--rule` excludes
-  `contrast` or `lint.rules.contrast.severity` is `off`; they are not findings. Findings
-  merging (`run._group_similar`) also merges findings of one still with the same rule,
-  severity and object `text` (a label repeated in copies of a component, e.g. two decoder
-  boxes' "Attention"), besides the parent-path group.
-- **Built-ins on regions / 9:16**: `quote` (`portrait_growth` 1.25 for the text, mark and
-  author; `place(card, safe_area, max_scale=1)`), `equation` (`portrait_growth` 1.25 for the
-  formulas, positions from the safe area; new param `caption_size`), `image` (with `fit: cover`
-  the caption is placed at the bottom of the `caption` region, i.e. on the safe area's bottom
-  edge, and the band runs from the frame's edge to 0.3 above it: it was 12 px into the margin),
-  `bar_chart`/`line_chart` (new params `caption_size` = `caption` (was the fixed `small`, below
-  lint's `min_font`) and `caption_color` = `dim`; caption fitted to 15 % of the safe height).
-  16:9 output is unchanged except the chart captions (24 instead of 20 pt) and the cover-image
-  caption (0.2 units higher). `title`, `end_card`, `text_card` and the chart bodies were left
-  as they are: their 9:16 sheets read well since the Step 17 `auto` scale; charts move to shared
-  helpers in Step 30.
-- **CLI**: `list-themes --sheet PNG` is an alias of `--swatches` (as `list-icons --sheet`).
-  Checked: every command with `--json` (validate, list-scenes, list-themes, list-icons, schema,
-  render, storyboard, lint) answers errors with the envelope, `ok: false`, exit 1 (usage: 2).
-- **Tests**: marker `slow` on the 18 slowest render tests (several seconds each); `pytest -m
-  "not slow"` is the quick run, `-m "not render"` the fastest; the default runs everything.
+  model is built from; `describe.type_name` prints them (`list[str | BulletItem]`).
+- **`register_theme_defaults`** rejects non-identifier token names and colours other than `#RGB`,
+  `#RRGGBB`, `#RRGGBBAA`.
+- **Icon search** (`icons._score`): 0 exact name, 1 name prefix or exact alias, 2 whole word of
+  name/alias, 3 exact tag, 4 whole word of a tag, 5 part of name/alias, 6 part of a tag, 7 category.
+- **`--json` errors**: every `--json` command answers errors with the envelope, `ok: false`, exit
+  1 (usage 2).
 
 ## 26. Refinements (Step 23, per-beat actions)
 
-- **Config** (`config.ActionConfig`, `BeatConfig.actions: list[ActionConfig] = []`; reference:
-  docs/CONFIG.md "Beat actions"). Canonical form `{action: NAME, target, at, until, run_time,
-  ...options}`: `action` an identifier; `target` a name or pattern (`*`/`?`, brackets literal)
-  or a non-empty list of them; `at` in [0, 1) of the beat's narration (default 0); `until` a
-  later beat of the same scene (checked by `SceneConfig`); `run_time` > 0 (default the action
-  type's). Every other key is an option of the action (`extra="allow"`, `ActionConfig.options`;
-  `ACTION_KEYS` are reserved). **One shorthand**: `{NAME: TARGET, ...options}`; `NAME` is the
-  first key that is not one of `ACTION_KEYS` (a wrap validator rewrites it to the canonical
-  form and keeps the raw mapping); `ActionConfig.resolved(known)` re-picks the key when that
-  one is not a registered action but exactly one other key is (keys sorted by a tool such as
-  `yaml.safe_dump`). `target` next to a shorthand is an error. Actions are part of the scene's
-  config entry, so they count in the render fingerprint, not in the TTS hash.
-- **Registry** (`vidgen.registry`): action types live next to scene types, with the same two
-  layers and collision rules (`ActionType(name, cls, origin, overrides)`, `register_action`,
-  decorator `action(name, *, override=False)`, `find_action`, `action_names`, `all_actions`,
-  `unknown_action_message`; both kinds go through `_add`). `reset/snapshot/restore/isolated`
-  cover both layers (`Snapshot` is now a pair). Built-in actions: `src/vidgen/scenes/actions.py`
-  (only `from vidgen.api import *`, imported by `vidgen.scenes`).
-- **Action class** (`vidgen.actions.Action`, exported): `Options` (an `ActionOptions` pydantic
-  model, `extra="forbid"`, theme tokens checked with the theme in the context; field names may
-  not be `ACTION_KEYS`), class attributes `run_time` (0.6), `reversible` (`until` allowed;
-  requires `revert`), `needs_visible` (True: hidden targets are revealed first),
-  `needs_target` (True). One instance per use (`__init__(options, config)`), so `apply(scene,
-  targets) -> list[Animation]` can keep what `revert(scene, targets)` needs.
-  `check_action_class` validates at registration.
-- **Targets** (`vidgen.actions.Target(names, mobject, entrance)`, exported). A scene type
-  declares `target_patterns` (doc forms, e.g. `("heading", "item<N>", "item:<text>")`) and
-  classmethod `target_names(params)` (every concrete name, for validation without rendering);
-  `construct()` registers them with `self.target(names, mobject, entrance=None)` (names match
-  `TARGET_NAME`: `word`, `word3`, `kind:any label`; a name may repeat, a pattern selects every
-  match). `self.on_screen_parts(t)` = the largest parts of the target that are in the scene's
-  family (a group target such as a bar + its labels is never added itself; animating the group
-  would make Manim add it and draw its parts twice); `is_shown` = any such part; `entrance(t)`
-  = the target's entrance animations, or `[]` when shown. Built-ins build their own reveal
-  steps from `entrance()`, which is how **a target revealed early by an action is not revealed
-  again by the scene's step** (decision: `reveal` of a shown target is a no-op, not an error —
-  whether it is shown depends on timing a static check cannot see). `bullets`: `heading`,
-  `item<N>`, `item:<text>` (the row); `bar_chart`: `title`, `bar<N>`, `bar:<label>` (bar +
-  value label + category label; title and caption are no longer one `head` group, visually
-  identical).
-- **Validation** (`actions.scene_actions(type, cls, spec, params, theme) -> (uses, problems)`,
-  locations relative to the scene): unknown action (did-you-mean + known list), options
-  (pydantic problems at `...actions[k].<option>`), `until` on a non-reversible action, missing
-  target, unknown target (difflib suggestions, up to 14 names, the forms, wildcard hint; a type
-  without targets names the types that have some). `vidgen validate` reports them as
-  `scenes[i].beats[j].actions[k].<key>` (action names and options are checked even when the
-  params are invalid; targets need valid params). `plan_actions` raises one `VidgenError`
-  with all problems; it runs in `pipeline._check_scenes` (before any worker) and in
-  `NarratedScene.__init__`.
-- **Timing** (`actions.ActionRunner`, created by the scene when it has actions). `narrate()`
-  calls `start_beat(id, d, pad)`: due frame = beat start + `round(at * d * fps)`; reverts of
-  applied uses with `until == id` are due at the start, before the beat's own actions. Actions
-  run **inside waits only**: `wait_seconds` and an overridden `wait` (plain Manim waits in
-  extension code) hand the wait to `ActionRunner.wait(frames)`, which waits to the due frame,
-  plays the due actions and waits the rest (`_wait_frames` is the old frame-exact wait). So an
-  action never shares a `play` with the scene's own animation of the same mobjects; with `at:
-  0` it follows the beat's entrance step. Run time = the configured/default run time, scaled
-  down so all phases end by the beat's end (`d + pad`), quantised to whole frames; shortened
-  plays carry `requested` (lint `rushed_animation`). Phases: entrances of hidden targets
-  (`reveal_time` 0.6 s) for `needs_visible` actions, then batches of due actions whose target
-  families do not overlap (actions on one target play one after the other). `end_beat()` (after
-  the final wait of `narrate`) applies what found no time without frames (`_apply_now`:
-  begin + finish) and logs a warning. `play_steps` now ends slot *k* at `start + (k+1)·slot`
-  (absolute), so an action that lengthened a slot's wait is absorbed by later waits (no
-  change without actions beyond frame rounding; every built-in's timing test still holds).
-- **Built-in actions**: `reveal` (run time 0.8, `needs_visible` False: the targets' entrances).
-  `dim` (`opacity` 0.45 relative to the current, reversible). `highlight` (`color` =
-  `highlight` token, `style` `color` | `box` | `underline` | `flash` or a list; `flash` and
-  `color` cannot combine; reversible: colours restored, box/underline faded out).
-  Colour/opacity changes use `Repaint`, an animation of the fill/stroke RGBA arrays of every
-  `VMobject` in each on-screen part (points untouched); revert restores only the channels the
-  action changed (RGB for highlight, alpha for dim) from the arrays saved at `apply`, so the two
-  combine and undo independently. Box: `SurroundingRectangle(buff 0.12, corner_radius 0.1,
-  stroke 4)`; underline: `Underline(buff 0.08, stroke 4)`. A first `pulse` style (Indicate-like
-  scaling about the target) was dropped: a bar scaled about its group's centre crossed the axis.
-- **Listing / schema**: `list-scenes` prints `targets:` per type and an `actions` section;
-  `--json` adds `targets` to scene types and a top-level `actions` list (`describe.
-  action_type_json`; keys added within version 1). `vidgen schema`: `BeatConfig.actions.items`
-  = `anyOf` [`ActionConfig` (`action` enum, per-action `if`/`then` with the options and
-  `additionalProperties: false`), `ActionShorthand` (`anyOf` one object per action: `required:
-  [NAME]`, its options, `additionalProperties: false`)]; options under `$defs/action.NAME`
-  (theme tokens as for params). Targets and `until` are left to `vidgen validate`.
-- **Limits / for Step 24**: only `bullets` and `bar_chart` have targets; `dim`/`highlight`
-  recolour vectorized mobjects only (images keep their pixels); `dim` compounds with a scene's
-  own dimming (`bullets` `dim_previous`); `highlight` keeps the target's current opacity (a
-  dimmed item is highlighted dimmed). Step 24 adds `zoom`/`transform` and targets for the
-  other built-ins on this framework.
+- **Config** (`config.ActionConfig`, `BeatConfig.actions`; user reference docs/CONFIG.md "Beat
+  actions"): canonical `{action, target, at, until, run_time, ...options}` (`target` name, pattern
+  with `*`/`?` or list; `at` in [0, 1); `until` a later beat of the scene). Other keys are options
+  (`ActionConfig.options`; `ACTION_KEYS` reserved). Shorthand `{NAME: TARGET, ...options}`: `NAME`
+  = first non-`ACTION_KEYS` key; `ActionConfig.resolved(known)` re-picks when exactly one other key
+  is an action (key-sorting tools). Actions count in the render fingerprint, not the TTS hash.
+- **Registry** (`vidgen.registry`): action types beside scene types with the same two layers and
+  collision rules (`register_action`, decorator `action(name, *, override=False)`, `find_action`,
+  `action_names`, `all_actions`); `reset/snapshot/restore/isolated` cover both. Built-ins in
+  `src/vidgen/scenes/actions.py` (only `from vidgen.api import *`).
+- **`vidgen.actions.Action`** (exported): `Options` (`ActionOptions`, `extra="forbid"`), class
+  attributes `run_time` (0.6), `reversible` (allows `until`, needs `revert`), `needs_visible`
+  (hidden targets revealed first), `needs_target`, `temporary`, `moves_camera`, `target_options`
+  (§27). One instance per use, so `apply(scene, targets) -> list[Animation]` can keep what
+  `revert(scene, targets)` needs. `check_action_class` validates at registration.
+- **Targets** (`vidgen.actions.Target(names, mobject, entrance)`, exported): a scene type declares
+  `target_patterns` and classmethod `target_names(params)` (every name, for validation without
+  rendering); `construct()` registers with `self.target(names, mobject, entrance=None)`.
+  `on_screen_parts(t)` = the target's largest parts in the scene's family (a group target is never
+  added itself, else Manim draws its parts twice); `entrance(t)` = `[]` when shown. Built-ins build
+  their steps from `entrance()`, so a target an action revealed early is not revealed again;
+  `reveal` of a shown target is a no-op, not an error (timing decides).
+- **Validation** (`actions.scene_actions(...) -> (uses, problems)`): unknown action, options,
+  `until` on a non-reversible action, missing/unknown targets, at
+  `scenes[i].beats[j].actions[k].<key>`. `plan_actions` raises one `VidgenError`; it runs in
+  `pipeline._check_scenes` (before workers) and `NarratedScene.__init__`.
+- **Timing** (`actions.ActionRunner`): due frame = beat start + `round(at * d * fps)`; `until`
+  reverts are due at the beat start, first. Actions run **inside waits only**
+  (`ActionRunner.wait(frames)`), so an action never shares a `play` with the scene's own
+  animation. Run times shrink so all phases end by `d + pad` (shortened plays carry `requested`);
+  phases: entrances of hidden targets, then batches with disjoint target families. `end_beat()`
+  applies what found no time and warns. `play_steps` ends slot *k* at the absolute `start +
+  (k+1)·slot`.
+- **Built-in actions**: `reveal`, `dim` (`opacity` 0.45, §27), `highlight` (`style`
+  `color|box|underline|flash|fill` or a list; `flash` and `color` exclusive). Colour/opacity
+  changes use `Repaint` (fill/stroke RGBA arrays, points untouched); revert restores only the
+  channels the action changed (RGB for highlight, alpha for dim), so the two combine and undo
+  independently. Listing/schema: `list-scenes` shows targets and actions; schema
+  `BeatConfig.actions.items` = `anyOf` [`ActionConfig`, `ActionShorthand`], options under
+  `$defs/action.NAME`; targets and `until` are left to validate.
 
 ## 27. Refinements (Step 24, zoom, transform, targets everywhere)
 
-- **Camera.** `NarratedScene` subclasses Manim's `MovingCameraScene` (was `Scene`). The camera
-  frame starts on the whole frame (`config.frame_width` x `frame_height`, aspect kept for 9:16),
-  so scenes that never move it render pixel-identically (whole suite and every example
-  unchanged). `NarratedScene.play` removes the frame from `self.mobjects` after a play that
-  added it (Manim adds the animated mobject; the frame is never drawn), unless it has updaters
-  (an extension's follow-cam). The layout dump already measured with the scene's camera
-  (`camera.center/width/height`, §15); it gains `camera.zoom` (= `config.frame_width /
-  camera.frame_width`, added within layout version 1). `lint.StillContext.zoomed` (zoom >
-  1.001): `off_frame` and `safe_area` skip zoomed stills (cutting the scene off is the point).
-  **For Step 38 (overlays):** anything drawn as a mobject in the scene moves with the camera; a
-  screen-fixed overlay must either follow `camera.frame` (an updater scaling/moving it with
-  the frame) or be composited outside Manim (ffmpeg), which also keeps it out of scene renders.
-  (Step 38 composites in the renderer's `add_frame` instead, §41.)
-- **Framework additions** (`vidgen.actions`): `Action.temporary` (requires `reversible`): the
-  runner schedules `revert` itself, due `run_time` before the end of the *return beat* — the
-  use's own beat, or with `until: B` the beat before `B` — so the effect is over when the next
-  beat (resp. `B`) starts; at `until` beats it is not undone again. `Action.moves_camera`: two
-  such uses never share a batch (the camera frame counts as a shared mobject).
-  `Action.target_options`: option names whose values are target names (str or list):
-  `scene_actions` checks them like `target` (problems at `...actions[k].<option>`);
-  `check_action_class` requires them to be `Options` fields. Ordering on one frame: `until`
-  undoings, then the beat's actions, then temporary undoings (`_rank`). Budget: when actions
-  run, the time of temporary undoings still pending in the beat is reserved, and both are
-  shortened by one factor when the beat is short (`factor = remaining / (phases + reserved)`).
-  An undo of a use that was never applied is skipped. `resolve_targets(scene, pattern)`: a
-  plain name shared by several targets selects the ones on screen, else the first (patterns
-  select all) — used for equation terms registered once per step.
-- **Full opacity** (`Target.rest`, a dict `id(member) -> (fill, stroke)` filled at
-  registration, shared by a scene's targets via `NarratedScene._rest`; `rest_opacity(member)`
-  falls back to 1/0 for members created later, e.g. a value label rebuilt by `become`). Scenes
-  register targets right after layout, before any opacity changes of their own.
-- **`dim`** now means "at most `opacity` x full opacity": each member's alpha array is scaled
-  so its maximum is `<= full x opacity` (ratios kept, so gradients and transparent pixels
-  survive); nothing that is already dimmer changes, so dimming never compounds. Exposed to
-  built-ins as `scenes.actions.dim_to(target, part, factor)`; `bullets` `dim_previous` and
-  `icon_grid`'s highlight step use it (same values as their former relative `fade`).
-- **`highlight`**: `style: color` also raises alpha to full (a dimmed target is highlighted at
-  full opacity); revert restores RGB and sets alpha to min(current, saved) (undoes the raise,
-  keeps dimming that happened since). Box around `Target.outline` (default the mobject);
-  `bar_chart` gives each bar an outline = bar + final value label, stopping `outline_gap`
-  (0.15) short of the axis, so the box (buff 0.12) stands on the axis instead of crossing it.
-- **Images**: `Repaint` also animates the `pixel_array` of `ImageMobject` members
-  (`paint_image(member, rgba float array)`): `dim` scales the alpha channel, `highlight` tints
-  RGB 30% towards the colour (`image_tint`); `_Memory` saves pixel arrays for undo.
-- **`zoom`** (`run_time` 1.0, reversible, temporary, moves_camera; options `scale` (> 1, <= 8)
-  and `padding` (0.15, share of the view on each side)). The view: the union box of the
-  targets' on-screen parts; magnification `min(max_scale=3, (1-2p) x frame/box)` per axis, or
-  `scale`; centre clamped so the view stays inside the frame. Magnification <= 1.01 → no move
-  and a warning (the targets fill the frame). Revert: back to the whole frame (no-op when home).
-  Animation `MoveCamera(scene, width, center)` (a `Transform` of the frame; its name shows in
-  the play log / activity file).
-- **`transform`** (`run_time` 1.0, not reversible; options `into` (required; `target_options`)
-  and `style` `auto|replace|shapes|tex|fade`). The source's on-screen parts are removed and a
-  copy added (so the originals stay intact, and a group target never added whole is not drawn
-  twice), then morphed into `into` (its hidden matches); `auto` = `TransformMatchingShapes` when
-  both sides are text/formulas only, else `ReplacementTransform`; non-vector sides use
-  `FadeTransform`; `tex` without two `MathTex` falls back to shapes (warning). `into` already on
-  screen: the sources fade out towards it (warning). **Decision: `into` must be a target**, not a
-  text literal: a literal has no place, size or style in the scene's layout; scenes that need
-  alternatives provide them as targets (equation steps). Scene steps that would animate a
-  transformed-away target skip it (`bar_chart`/`icon_grid` highlight steps, `bullets`
-  `dim_previous` via `on_screen_parts`).
-- **Targets of every built-in** (table in docs/CONFIG.md "Beat actions", kept in sync with
-  `target_patterns` by `tests/test_actions_coverage.py`): `title` (`icon`, `kicker`, `title`,
-  `subtitle`, `authors`), `text_card` (`text`), `quote` (`mark`, `quote`, `author`, `source`),
-  `equation` (`step<N>`, `caption`, `term:<tex>`; new param `terms`: substrings isolated with
-  `MathTex(substrings_to_isolate=...)`, each must occur in a step; a term target per step that
-  contains it (`get_part_by_tex`, first occurrence; works with Manim 0.19 and 0.21), entrance
-  `[]`), `code` (`title`, `listing`, `line<N>` = physical lines + numbers of original line N,
-  `lines:<a-b>` for every a < b; `target_names` counts a `path` file's lines through
-  `current_project()`, none without a project context), `image` (`image`, `caption` = the text,
-  entrance fades the caption group), `line_chart` (`title`, `axes`, `series<N>`,
-  `series:<name>`, `point:<name>@<x>` with `x` as its tick label; without dots a point is a
-  separate dot that its entrance fades in), `end_card` (`logo`, `icon`, `title`, `line<N>`),
-  `icon_grid` (`heading`, `item<N>`, `item:<label>`). Every built-in builds its steps from
-  `self.entrance()`; `equation` steps morph from whichever step is on screen, and a step is
-  skipped once a later one is shown.
-- **Listing**: `list-scenes` shows `, undone by the beat's end` for temporary actions;
-  `--json` actions gain `temporary` and `target_options` (within version 1). `vidgen schema`
-  adds required options (`into`) to both action forms.
+- **Camera**: `NarratedScene` subclasses `MovingCameraScene`; scenes that never move the frame are
+  pixel-identical to a plain `Scene`. `play` removes the camera frame from `self.mobjects` after a
+  play that added it, unless it has updaters. Layout dump `camera.zoom`; zoomed stills (> 1.001)
+  skip `off_frame`/`safe_area`. Screen-fixed overlays are composited in `add_frame` (§41).
+- **Framework**: `temporary` (needs `reversible`): revert due `run_time` before the end of the
+  return beat (the use's beat, or the beat before `until`). `moves_camera`: never two in a batch.
+  `target_options`: option names holding targets, checked like `target`. Same-frame order:
+  `until` undoings, beat actions, temporary undoings (`_rank`). An undo of a never-applied use is
+  skipped. `resolve_targets(scene, pattern)`: a plain name shared by several targets selects the
+  ones on screen, else the first.
+- **Full opacity**: `Target.rest` (at registration; `rest_opacity(member)` falls back to 1/0), so
+  scenes register targets right after layout. **`dim`** = at most `opacity` x full opacity (ratios
+  kept; never compounds); `scenes.actions.dim_to(target, part, factor)` serves built-ins.
+  **`highlight` `color`** raises alpha to full; revert restores RGB and alpha min(current, saved).
+  Box around `Target.outline`. `Repaint` also animates `ImageMobject.pixel_array` (`paint_image`).
+- **`zoom`** (reversible, temporary, `moves_camera`; `scale` (> 1, ≤ 8), `padding` (0.15)):
+  magnification ≤ `max_scale` 3 by default, centre clamped inside the frame, ≤ 1.01 → no move and
+  a warning; `MoveCamera(scene, width, center)`.
+- **`transform`** (`into` required, a target, not a literal, because a literal has no place or
+  style in the layout; `style auto|replace|shapes|tex|fade`): the source's on-screen parts are
+  swapped for a copy that morphs into `into`. Scene steps skip transformed-away targets.
+- **Targets of every built-in**: table in docs/CONFIG.md "Beat actions", kept in sync with
+  `target_patterns` by `tests/test_actions_coverage.py`. `equation` `terms` use
+  `MathTex(substrings_to_isolate=...)` (each must occur in a step).
 
 ## 28. Refinements (Step 25, `stat` and `chapter`)
 
-- **`stat`** (`scenes/stat.py`; reference docs/CONFIG.md): params `value`, `label`, `context`,
-  `prefix`/`suffix` (number size), `unit` (`unit_ratio` 0.42 of it, on the number's baseline:
-  median glyph bottom), `decimals` (default `needed_decimals([value, comparison.value])`, up to
-  2), `thousands` (`,`), `decimal_mark` (`.`), `count`, `count_from`, `comparison`, `icon`,
-  colours (`color` `primary`; `good_color` `tertiary`, `bad_color` `accent`, `neutral_color`
-  `dim`: in every built-in preset `tertiary` is the green and `accent` the red), sizes (number
-  `value_scale` 3.0 x `title`). `format_number(value, decimals, thousands, decimal_mark)`
-  (module function, typographic minus, no "minus zero"). `StatComparison` (nested, `also_accepts
-  = (float,)`: a plain number is `{value: N}`; JSON Schema `anyOf` number | object like
-  `BulletItem`): `value`, `label`, `kind: versus | before` (`before` = before → after: the count
-  starts at the old value), `word` (default `vs`/`from`, translatable), `delta: difference |
-  percent | none`, `better: higher | lower | neither`. The change chip (`Stat.change() -> (text,
-  colour token, direction)`) is an arrow (a filled `Triangle`, none for no change) + the signed
-  delta in a pill filled with the theme's `surface` and stroked in the colour: a tint of the
-  colour behind the delta cost it contrast on light presets (lint `contrast` 4.0:1 on
-  `light_academic`), the surface keeps every preset's text ≥ 4.5:1.
-- **Count**: the layout is built with the final value (the number's font size is chosen so the
-  wider of start/end fits 92 % of the safe width and 42 % of its height, then the card is
-  `place`d with `max_scale=1` and the size scaled with it, so the count never changes size).
-  Targets are registered at that full look; then the number line shows the start value. Its
-  entrance is one `UpdateFromAlphaFunc` (linear) that rebuilds the line each frame
-  (`ease_out_cubic` value, fade over the first `fade_share` 25 %, rising 0.15 units into place),
-  keeping the final line's top edge and centre x (digits have one height, so nothing jumps);
-  `become` + `original_text` as in `bar_chart` so the layout dump sees the shown string.
-- **`chapter`** (`scenes/chapter.py`): `title` (required; **the chapter's name** — Step 39's
-  indicator and Step 49's chapter list read `params.title` of `chapter` scenes, `number_text()`
-  for the number), `number: int | str` (`number_format` `{:02d}` for ints, checked by formatting
-  7), `subtitle`, `icon`, `rule`, colours, sizes (number 2.4 x `title` for ints, 1.6 x for text).
-  Layout: landscape with a number or icon → `VGroup(left column (icon over number), vertical
-  rule, left-aligned title block)`; else stacked and centred (icon, number, short rule
-  `rule_length` 1.6, title, subtitle). Entrance: rule `Create` (vertical, drawn downwards) /
-  `GrowFromCenter`, number/icon slide in from the left (from above when stacked), title from
-  the right (from below), subtitle rises; lagged 0.25. Steps: with ≥ 2 beats `[head,
-  subtitle]`, else one step (silent or one beat: the subtitle belongs with the title; two
-  steps in one short silent card would rush both).
-- Both: Step 15 regions (`safe_area`, `place`), theme tokens and font roles only (numbers and
-  chapter titles use the `heading` role), targets per Step 23/24 and the table in CONFIG.md,
-  `outro` 0.5, `reveal()` with `fraction` 0.75 (caps 2.0 / 1.6).
+- **`stat`** (`scenes/stat.py`; keys docs/CONFIG.md#stat): `format_number(value, decimals,
+  thousands, decimal_mark)` (typographic minus, no "minus zero"); `StatComparison` accepts a plain
+  number. The change chip's pill is filled with `surface` (a colour tint failed contrast on light
+  presets). The count-up lays out at the final value, then rebuilds the line each frame (`become`
+  + `original_text`, so the layout dump sees the shown string).
+- **`chapter`** (`scenes/chapter.py`; keys docs/CONFIG.md#chapter): `params.title` is **the
+  chapter's name** (read by §42 and §52), `number_text()` the number.
 
 ## 29. Refinements (Step 26, `comparison` and `table`)
 
-- **Target names may be dotted** (`actions.TARGET_NAME`: `word(.part)*(:label)?`), for parts of
-  parts: `col2.item3`, `cell2.4`. Patterns (`cell1.*`) work as before.
-- **`highlight` style `fill`**: a `SurroundingRectangle` of the target's outline (`box_buff`
-  0.12, corner 0.1, no stroke) filled with the colour at `fill_opacity` 0.22 (below lint's
-  0.3 cover threshold; text over it keeps its contrast), faded in by a `Transform` of its
-  opacity (not `FadeIn`, an introducer that would move it to the top). It is inserted into
-  `scene.mobjects` just before the target's first part when the parts were added on their own,
-  else just after the group holding them (then it is a faint overlay), with the parts' lowest
-  `z_index`; scenes put backdrops (table stripes, comparison cards) at `z_index` -1 so the plate
-  lies between backdrop and text. Undone (`until`) like `box`.
-- **`comparison`** (`scenes/comparison.py`; reference docs/CONFIG.md): `columns` (2–3
-  `ComparisonColumn`: `heading`, `icon`, `tone: positive | negative | neutral`, `points` ≤ 8 of
-  `ComparisonPoint`, a string or `{text, icon}` like `BulletItem`), `heading`, `verdict`,
-  `reveal: columns | rows | all`, `markers` (check / x icons, or a dot for neutral), `cards`,
-  `vs` badge, tone colours `tertiary`/`accent`/`primary` (as `stat`'s good/bad). Layout: heading
-  in `header` (1.3x in portrait), verdict at the bottom of the body, `Region.split(n)` for the
-  card slots (columns in landscape, rows in portrait), cards of one size (tallest column).
-  One text size for every column: from `size` down (x ≤ 0.95 per try) to `readable_size()`;
-  still too tall → scaled about the top-left corner and a warning. Rules line up across
-  columns side by side; with `reveal: rows` the *m*-th points too. Targets: a column is
-  `VGroup(head, rule, points)` (the card is outside, so `color` does not paint it; `outline` =
-  the card inset by the box buff); a point's entrance brings its column's card and heading
-  first. Steps through `_column_entrance` (frame, then points not on screen), so early
-  reveals are never repeated.
-- **`table`** (`scenes/table.py`): `rows` (≤ 30, cells `str | int | float`; bool/null rejected
-  with a hint), `header` (≤ 8 columns), `title`, `caption`, `align` (`auto` = numbers right),
-  `number_format` (str or per column; default `auto_format` of the column, so a column shares
-  its decimals), `reveal: per_beat | all`, `zebra`, colours, sizes. `Params.texts()` gives the
-  cells as shown (also used for `row:<first cell>`). **Fitting** (`_fit`): sizes `size` x
-  (1, .92, .85, .78, .72, .66, .6) and the readable minimum; at each, `_widths` gives natural
-  widths (one line, cell padding 0.75 cap each side) or water-fills the area width (columns
-  needing less than a fair share keep their natural width, columns whose floor — longest
-  header word, body cells > 16 characters by word, shorter cells and numbers whole — exceeds
-  the share get the floor); the first size whose widths fit and whose height fits wins.
-  Nothing fits → built at the readable size, scaled to the area, warning "split it into
-  smaller tables or drop columns" (lint `min_font` reports it too). A narrow landscape table
-  spreads its columns up to 1.25x (at most 80 % of the width). Rows: cells positioned by first
-  baseline; header rule `header_color`, stripes every other row (`z_index` -1), end rule
-  `rule_color` drawn with the last row. Every cell text is added on its own (so a `fill` plate
-  sits just under a row's / column's cells); invisible row/column/cell rectangles (inset by the
-  box buff) are the targets' outlines.
+- **Dotted target names** (`actions.TARGET_NAME`: `word(.part)*(:label)?`): `col2.item3`, `cell2.4`.
+- **`highlight` style `fill`**: a plate at `fill_opacity` 0.22 (below lint's 0.3 cover threshold),
+  faded in by a `Transform` (`FadeIn` would move it to the top), inserted in `scene.mobjects`
+  just before the target's first part; scenes put backdrops at `z_index` -1 so the plate lies
+  between backdrop and text.
+- **`comparison`**, **`table`** (`scenes/comparison.py`, `scenes/table.py`; keys
+  docs/CONFIG.md#comparison, #table): one text size per scene, down to `readable_size()`, else
+  scaled with a warning. `table` rejects bool/null cells; `Params.texts()` = cells as shown (also
+  for `row:<first cell>`); every cell text is added on its own and invisible row/column/cell
+  rectangles are the targets' outlines.
 
 ## 30. Refinements (Step 27, `timeline`)
 
 - **`measure_text(text, max_width, *, size, weight, slant, line_spacing, balance, theme, font,
-  role) -> TextMeasure(lines, width, height, fits)`** (`vidgen.layout`, exported): how
-  `fit_text` would wrap the text, estimated from the cached word widths (`_Metrics`) without
-  building a `Paragraph`; `fits` is false when a word is wider than `max_width` (`fit_text`
-  would scale the block down). Estimates run a few percent short of the built text (Pango
-  kerning; `fit_text` re-wraps narrower when a built line comes out too wide), so planners
-  measure at ~0.97 of the width and check the built result. Reason: building a `Paragraph`
-  costs 0.1–0.3 s for a long text; the timeline's size search over two layouts took 90 s for
-  10 long events when it built every candidate, 5 s with `measure_text`.
-- **`fit_text(..., balance=False)`** (also `fit_text_sized`, `measure_text`): wrapped text is
-  re-wrapped at the narrowest width (down to half of `max_width`, binary search on the
-  metrics) that keeps its number of lines, so a two-line title has no lone last word.
-  Additive; off by default (existing scenes unchanged).
-- **`timeline`** (`scenes/timeline.py`; reference docs/CONFIG.md): `events` (2–10
-  `TimelineEvent`: `date: str | int | float` — a YAML date object becomes its ISO string, bool
-  rejected — `title`, `text`, `icon`, `at`), `heading`, `orientation: auto | horizontal |
-  vertical` (`auto`: horizontal unless the frame is portrait), `sides: auto | alternate | one`,
-  `spacing: even | proportional`, `reveal: per_beat | all`, `highlight` and `now` (event refs:
-  an int in range is a 0-based index, else the date as shown, else the title; ambiguous →
-  error), `now_label`, colours, sizes. `date_position()` parses numbers, years, `YYYY-MM` and
-  `YYYY-MM-DD` (fraction of the year); proportional spacing needs a position for every event in
-  non-decreasing order (validation errors otherwise).
-- **Geometry** in axis coordinates (`along`, `across`; `_point`): events at `pad + q·usable` with
-  `pad` = half an even gap at both ends; proportional `q` is blended towards even (`w` in steps
-  of 0.05) until neighbours keep `min_gap_share` (0.45) of the even gap and the markers do not
-  touch. Each event's text (a "card": date row, title, detail) may use the stretch along the
-  axis up to halfway to the neighbouring events *on the same side* (less `card_gap`) or the
-  body's end; across it, the room from the stem (`stem` 0.3 beyond the marker) to the body's
-  edge. Horizontal: card width = that stretch (≤ `max_card_width` 5.2), centred over the
-  marker and pushed inwards at the ends; vertical: card width = the side's room (≤ 5.6), card
-  height ≤ the stretch, text aligned towards the axis, the date's line level with the marker
-  where there is room. Everything is centred across the axis at the end.
-- **Fitting** (`_plan` per side mode): one factor for all events; date/title/detail sizes are
-  `max(min(size, floor), size·factor)` (floor = `readable_size()`, the heading role's for
-  titles). Factor 1, then 1.2 (`growth`) if that adds no wrapped lines, else reduced (×0.75–0.93
-  per try) to the factor where every size is at its floor. Measured with `measure_text`
-  (balanced, at 0.97 width); the built cards (`fit_text(balance=True)`) are scaled down alike if
-  one is still taller than its room. Not fitting at the floor → `fits` false → the warning
-  "split it into two timelines (or shorten titles and texts)" (lint `min_font` reports it too).
-  `sides: auto` builds both plans and keeps the better by (fits, factor up to 1, fewer lines,
-  factor): growth never decides the layout; typically alternating in 16:9, one column right of
-  the axis in 9:16 for ≤ 6 events, alternating for more.
-- **Drawing**: track (`axis_color`, 0.55 opacity, tip) from half a gap (≤ 0.7) before the first
-  event to as far past the last; markers (`icon_radius` 0.3 disc on the background colour,
-  outlined, with the icon or a small dot, when any event has an icon; else a filled 0.12 dot);
-  stems; one progress segment per event (`progress_color`, from the previous marker's edge or
-  the track start to its marker's edge; `DashedLine` after `now`); `now` → a ring in
-  `now_color` and a tag (pill on `surface`, outlined in `now_color`, as `stat`'s chip for
-  contrast) after the date; events after `now` have hollow markers.
-- **Steps / targets**: steps `[event 1 (with heading and axis), event 2, ...]` (`all`: one
-  step), then the `highlight` step (others `dim_to` 0.55; the chosen marker ×1.2 and its title
-  in `highlight_color`). `_reveal(indices)` builds one `Succession`: the axis if not shown,
-  then per event not shown the missing segments up to it and its marker/stem/card — so an
-  early `reveal` of event 3 grows the line through event 2's position without showing event 2,
-  and the scene's own steps never repeat an entrance. Targets `heading`, `axis` (the track),
-  `event<N>` / `event:<date>` (marker + stem + card; segments are not part of a target).
-
+  role) -> TextMeasure(lines, width, height, fits)`** (`vidgen.layout`, exported): how `fit_text`
+  would wrap, from cached word widths without building a `Paragraph` (0.1–0.3 s each). Estimates
+  run a few percent short, so planners measure at ~0.97 of the width and check the built result.
+- **`fit_text(..., balance=False)`** (also `fit_text_sized`, `measure_text`): re-wraps at the
+  narrowest width keeping the line count.
+- **`timeline`** (`scenes/timeline.py`; keys docs/CONFIG.md#timeline): a YAML date becomes its ISO
+  string; event refs = 0-based index, else date as shown, else title (ambiguous → error);
+  `date_position()` parses numbers, years, `YYYY-MM`, `YYYY-MM-DD`; proportional spacing needs
+  non-decreasing positions. Layout candidates are compared by fit first, so growth never decides
+  the layout (also in `diagram`, `process`). `_reveal` brings hidden predecessors' segments, so an
+  early `reveal` never makes the scene repeat an entrance.
 
 ## 31. Refinements (Step 28, graph layout and `diagram`)
 
-- **`vidgen.graph`** (manim-free; exported by `vidgen.api`): `layered_layout(nodes, edges, *,
+- **`vidgen.graph`** (manim-free; in `vidgen.api`): `layered_layout(nodes, edges, *,
   direction="LR"|"TB", layer_gap=1.0, node_gap=0.5, routing="straight"|"orthogonal",
-  port_spacing=0.2, port_spread=0.6, label_margin=0.15, sweeps=12) -> GraphLayout(nodes:
-  {id: NodePlace(x, y, width, height, layer, order)}, edges: [EdgeRoute(source, target, points,
-  reversed, label_at)], layers, width, height, direction, crossings, reversed_edges)`. Nodes
-  are ids or `GraphNode(id, width, height, shape)` (`box`/`ellipse`/`diamond`/`stadium`: the
-  outline ports are clipped to); edges `(source, target)` or `GraphEdge(source, target,
-  label=(w, h))`. Result centred on the origin, y up, in the nodes' units. Unknown ids, duplicate
-  ids, self-loops, unknown direction/routing/shape → `VidgenError`.
-- **Phases.** (1) Cycles: depth-first search in input order; back edges are laid out reversed
-  and their routes reversed again (`EdgeRoute.reversed`). (2) Layers: longest path from the
-  sources, then each source with successors moves to just before its nearest successor;
-  edges spanning *k* layers get *k − 1* dummy items. (3) Order: from two starts (input order and
-  its reverse; later layers by first predecessor), barycenter sweeps alternately down and up
-  (ties keep the current order) with adjacent-swap transposition, best order kept; phases 1–3
-  depend on the topology only and are cached (`_topology`, `lru_cache`), because the scene lays
-  out one graph at many sizes. (4) Coordinates: a layer's centre line is spaced by the deepest
-  item of the neighbouring layers plus the gap (`layer_gap`, or label extent + 2 `label_margin`
-  for a labelled edge leaving its source through that gap); across, items are packed with
-  `node_gap` (half next to a dummy), then 10 passes (alternately towards predecessors and
-  successors, ending with successors so parents sit centred over their children) set each
-  layer to the weighted least-squares fit of the neighbours' mean under the separation
-  constraints (pool adjacent violators; dummies weigh 2x so long edges run straight).
-  (5) Routes: ports on the facing sides, ordered by the cross position of the edge's next point
-  and spaced `port_spacing` apart within `port_spread` of the side, clipped to the shape;
-  `straight` = polyline through the dummies; `orthogonal` adds per gap a run in a lane of its
-  own (lanes assigned greedily, downward runs before upward ones, so nested runs do not
-  cross). Label anchor: the first segment from the real source at the middle of its gap (for
-  orthogonal routes the nearest point of the route to it). `crossings` counts crossings of the
-  dummy graph between neighbouring layers.
-- **`diagram`** (`scenes/diagram.py`; reference docs/CONFIG.md; registered again as
-  **`flowchart`**: `scene("flowchart")(Diagram)` — the same class under a second name, so
-  `list-scenes`, the schema and `validate` treat it as a type of its own; the docs test points
-  a second name's CONFIG.md section to the first). Params: `nodes` (1–30 `DiagramNode`: a string
-  is `{id}`; `id` letters/digits/spaces/`_.-`, `label`, `shape` box | round | pill | circle |
-  diamond | cylinder, `icon`, `color`), `edges` (≤ 60 `DiagramEdge`: `{from, to, label, style:
-  solid | dashed, color}`, `from` is the alias of the field `source`; strings `"a -> b"`, `"a ->
-  b: label"`, `"a --> b"` dashed, chains `"a -> b -> c"` expanded by a before-validator of
-  `edges`; JSON Schema `anyOf` string (`pattern: "->"`) | object), `heading`, `direction`
-  auto | LR | TB, `routing` curved | straight | orthogonal, `reveal` nodes | layers | all,
-  `steps` (per step a ref or a list of refs; a ref is a node id or `a->b`, spaces around `->`
-  ignored), `highlight` (refs), `shape`, colours, `size`/`edge_label_size`/`heading_size`.
-  Validation (model validator): duplicate ids, unknown nodes in edges (`difflib` suggestions +
-  the node list), self-loops, duplicate edges, unknown or repeated refs in `steps`, unknown
-  refs in `highlight`. `describe` now shows a field's alias (`from`) in `list-scenes` and its
-  JSON `name` (no other built-in uses aliases).
-- **Fitting.** Per direction option (`auto`: the frame's orientation first; the other one is
-  kept only if its text is `direction_bias` 1.1x larger) and per label wrap width (`wraps` 3.2,
-  2.3, 1.7, 4.4 units at 32 pt, scaled with the size), the size factor goes from `growth` 1.3,
-  1.15, 1, then x0.9 down to where label and edge-label sizes both sit at their floor
-  (`readable_size() x floor_margin` 1.05: lint measures short lowercase labels a little small);
-  the first factor whose `layered_layout` fits the body wins. The plan key is (fits, factor
-  capped at 1 x bias, factor x bias): growth never decides the layout. Then `_spread` widens the
-  gaps (layer factor 1.8 → 1, node factor 1.4x that) while it still fits. Node boxes come
-  from `measure_text` (content + padding 0.32 / 0.2 x size/32 units; circle = diagonal; diamond:
-  half-diagonals `a = x + 1.5 y`, `b = a / 1.5`; pill: + 0.35 h; cylinder: + two rims);
-  icons stand above the label in LR layouts, circles and diamonds, else left of it. Nothing
-  fits at the floor → scaled down whole and the warning "split it into smaller diagrams (or
-  shorten labels)".
-- **Drawing.** A node is `VGroup(shape, icon?, label)` (z 1): the shape filled with its colour
-  at `fill_opacity` 0.1 (a tint: `highlight` style `color` then paints a highlight tint under a
-  highlight-coloured label that keeps 4.5:1 on light presets; 0.14 did not) and stroked at 3.
-  Cylinder: a closed body path (top arc, side, bottom arc, side) + the front rim arc without
-  fill. An edge is `VGroup(line, tip, label?)`; `curved` lines are cubic Béziers between the
-  route points with handles along the main axis (S-curves; the arrowhead points along the
-  axis into the node), `straight`/`orthogonal` polylines; the line stops 0.9 tip-lengths before
-  the route's end and a filled triangle tip ends on the outline; `dashed` = `DashedVMobject`.
-  An edge label sits on a pill of the background colour (z 2, not part of the target, so
-  colour highlights do not paint it) at the route's label anchor.
-- **Steps.** Groups per step: `steps` (+ one step with the nodes no step names), else per
-  `reveal` in layout order (layer, then order). A step plays in waves (`_reveal`): nodes no
-  pending edge leads to, then edges whose source is on screen (`Create`, linear; dashes one
-  after another; then tip and label), then the nodes they reach, … (a cycle inside a step starts
-  at its first node). Edges between nodes on screen come along unless a later step names them;
-  a named edge brings its ends. `highlight` adds a last step: listed nodes (outline stroke
-  1.5x, tint 1.6x, icon in `highlight_color`; labels unchanged) and edges (listed, or between
-  consecutive listed nodes; line 1.6x wider) recoloured, every other node/edge `dim_to`
-  `dimmed_opacity` 0.55. `reveal(fraction=0.75, cap=1.6)`, `outro` 0.5.
-- **Targets.** `heading`, `node<N>`/`node:<id>` (outline = the shape, so a `box` frames it),
-  `edge:<from>-><to>` (line, tip, label; its entrance as a target brings its hidden ends first).
-
+  port_spacing=0.2, port_spread=0.6, label_margin=0.15, sweeps=12) -> GraphLayout(nodes: {id:
+  NodePlace(x, y, width, height, layer, order)}, edges: [EdgeRoute(source, target, points,
+  reversed, label_at)], layers, width, height, direction, crossings, reversed_edges)`. Nodes: ids
+  or `GraphNode(id, width, height, shape)` (`box`/`ellipse`/`diamond`/`stadium`); edges
+  `(source, target)` or `GraphEdge(source, target, label=(w, h))`. Centred on the origin, y up.
+  Unknown/duplicate ids, self-loops, unknown options → `VidgenError`. Deterministic.
+- **Phases** (Sugiyama): DFS cycle breaking in input order (back edges reversed), longest-path
+  layers with dummies, barycenter sweeps with transposition, least-squares coordinates, ports on
+  facing sides (`orthogonal`: one lane per run). The topology phases are cached (`_topology`,
+  `lru_cache`) because scenes lay out one graph at many sizes.
+- **`diagram`** (`scenes/diagram.py`; keys docs/CONFIG.md#diagram), registered again as
+  **`flowchart`** (`scene("flowchart")(Diagram)`: same class, its own type for listing, schema and
+  validate). Edge strings (`"a -> b"`, `"a -> b: label"`, `"a --> b"`, chains) expanded by a
+  before-validator; `from` is the alias of field `source` (`describe` shows aliases). Validation:
+  duplicate ids, unknown nodes, self-loops, duplicate edges, bad `steps`/`highlight` refs. Steps
+  reveal in waves (sources, edges, reached nodes); a named edge brings its ends.
 
 ## 32. Refinements (Step 29, `process` and `network`)
 
-- **Network helpers** (`helpers.py`, exported; kphi3 renders unchanged): `column(n, x, gap, y0,
-  r, color, *, horizontal=False, skip=None)` — `horizontal` lays the dots out left to right along
-  `y0` centred on `x`; `skip=k` spreads `n` dots over `n + 1` slots leaving slot `k` empty (an
-  ellipsis). `edges(a, b, pairs, color, width, opacity, *, colors=None, shorten=0.0)` — one
-  colour per pair, lines trimmed by `shorten` at both ends (from the rim of dots).
-  `grouped_pairs(n, groups, m=None)` — blocks from `group_bounds(n, groups)` (near-equal,
-  `round(g * n / groups)`; identical to the old `n // groups` blocks when `groups` divides `n`),
-  block `g` of the first layer to block `g` of the second (`m` units). `sparse_pairs(n, m, ratio,
-  seed=0)` — each pair kept with probability `ratio` (numpy `default_rng(seed)`), then any unit
-  of either layer left without a pair gets one; sorted, reproducible.
-- **`process`** (`scenes/process.py`; reference docs/CONFIG.md): `stages` (2–8 `ProcessStage`:
-  a string is `{label}`; `label` unique, `icon`, `text`), `heading`, `layout: auto | row | snake |
-  column`, `reveal: per_beat | all`, `loop` (+ `loop_label`), `input`, `output`, `token`,
-  `token_icon`, `token_label`, colours (`stage_color`, `active_color`, `token_color`, ...) and
-  sizes (`size`, `text_size`, `io_size`, `heading_size`). `auto`: `column` in portrait; else
-  `row`, or `snake` (two rows, the second right to left, joined by a turn on the right) for ≥ 4
-  stages when its text is `layout_bias` (1.1x) larger — growth never decides; when no layout
-  fits, the one that needs the least scaling down.
-  **Planning** (`_fit`/`_geometry`): one size factor for label/detail/io sizes (up to `growth`
-  1.2 without more lines, down to the factor where every size sits at `readable_size()`),
-  measured with `measure_text`; card width = the room left after the io labels (which stand
-  above their arrows: lead = max(gap, label width + 0.3)) and gaps (`gap` = max(0.7, token
-  diameter + 0.45)), capped at 3.4 (6.0 in a column), never narrower than the longest word;
-  height = the tallest content + padding, at least half the width in rows when there is room
-  (`card_aspect`), +0.5 u of air in a column; room before the first stage for the token's halo
-  (1.7 r) and for its tag centred over the start; bands for the token tag (above rows, a lane left of
-  a column), the loop (below a row, a lane right of a column, below and left of a snake). Not
-  fitting → warning "shorten the labels and texts (or split the process into two scenes)" and
-  the drawing (with the token's paths) is scaled into the body.
-  **Drawing**: cards = surface-filled rounded boxes (z 2; content z 3, so a box animated on its
-  own does not cover its text) with icon above the text (rows) or left of it (column);
-  connectors and the loop are rounded polylines (`rounded_path`, corners as quadratic arcs) with
-  a filled tip; the token (z 1: under the cards, over the connectors) is a dot with a halo or an
-  icon in a disc; it waits in front of a stage on the incoming connector's tip
-  (`rests[i]`); its path to the next stage runs from there through the stage's centre (hidden
-  behind the card) and along the connector (`paths[i]`). The tag (pill, z 4) follows the token
-  on the same path shifted by a fixed offset (no updaters); it fades while the token loops.
-  **Steps** (`_arrive(i)`): previous stage back to `stage_color`, then the token moves while the
-  connector it rides grows (if not shown), then the stage appears already active (or, if shown,
-  turns active: outline `active_color` at 2x width, icon recoloured); `input` and heading come
-  with step 1, `output` after the last stage arrives; `loop` adds step n (token along the loop to
-  below/beside stage 1, which becomes active again). `reveal: all`: everything in step 1, later
-  steps only move the token. `reveal(fraction=0.75, cap=1.6)`.
-  **Targets**: `heading`, `input`, `stage<N>`, `stage:<label>` (outline = the box),
-  `connector<N>`, `loop`, `output`, `token` (token + tag). An early `reveal` of a stage shows the
-  card only; its step still moves the token there.
-- **`network`** (`scenes/network.py`): `layers` (2–8 `NetLayer`: an int is `{size}`; `label`,
-  `show`, `connect`, `color`), `heading`, `connect` (`Connection`: `{type: dense | sparse |
-  grouped | one_to_one | none, ratio, groups}`, or a string `dense`, `sparse:0.3`, `grouped 3`;
-  JSON Schema `anyOf` string | object; default `"dense"`), `direction: auto | LR | TB`,
-  `max_neurons` 8, `show` 6, `counts: auto | all | none`, `count_format` `{n:,}`, `reveal:
-  layers | all`, `passes` 1 (0–4), `highlight` (`"L.i"` refs, 1-based, units as drawn),
-  `max_edges` 64, colours, `group_colors`, `edge_opacity`, sizes. Validation: unique labels, no
-  `connect` on the first layer, `count_format` formats `n`, highlight refs in range.
-  **Layout**: LR — layers `min(3.4, width / n)` apart, captions (bold label, dim count) in a band
-  below; TB (portrait) — rows `min(3.0, height / n)` apart, captions right-aligned in a column
-  left of the rows. Unit gap = `min(0.85, room / slots)` (slots = the most drawn units + 1 for an
-  ellipsis), radius 0.3 x gap within 0.07–0.22; a truncated layer is `column(..., skip=(m+1)//2)`
-  with three small dots in the hole. Edges between drawn units via `Connection.pairs` (sparse
-  seeded by the layer index), thinned to `max_edges` (`_thin`: a reproducible sample plus one
-  pair per unit that lost all), opacity `clip(2.4 / sqrt(count), 0.2, 0.75)`, width from the
-  radius, trimmed to the rims; grouped edges coloured per block with `palette_color`.
-  **Steps**: layer k = its incoming edges grow (`Create`, lag) then its units grow one by one with
-  the ellipsis and caption; a pass = `LaggedStart` (lag 0.62) of: layer 1 `Indicate` in
-  `pulse_color`, then per pair `ShowPassingFlash` copies of the edges and the next layer's
-  `Indicate`; highlight = listed units filled `highlight_color` and ×1.3, edges between
-  consecutive listed units in neighbouring layers recoloured ×2 width (a missing one drawn), the
-  other units, ellipses and edges `dim_to` 0.3. `reveal(fraction=0.75, cap=1.8)`.
-  **Targets**: `heading`, `layer<N>` / `layer:<label>` (units, ellipsis, caption), `edges<N>`
-  (when the pair has edges), `neuron<L>.<i>` (one dot).
-
+- **Network helpers** (`helpers.py`, exported): `column(n, x, gap, y0, r, color, *,
+  horizontal=False, skip=None)`, `edges(a, b, pairs, color, width, opacity, *, colors=None,
+  shorten=0.0)`, `grouped_pairs(n, groups, m=None)` (`group_bounds`), `sparse_pairs(n, m, ratio,
+  seed=0)` (seeded, every unit keeps ≥ 1 pair; reproducible).
+- **`process`**, **`network`** (`scenes/process.py`, `scenes/network.py`; keys
+  docs/CONFIG.md#process, #network): `process` z order cards 2, content 3, token 1, tag 4 (follows
+  the token on an offset path, no updaters); an early `reveal` of a stage shows the card only.
+  `network` `Connection` accepts a string (`dense`, `sparse:0.3`, `grouped 3`) or object; sparse
+  pairs are seeded by the layer index and thinned to `max_edges` reproducibly.
 
 ## 33. Refinements (Step 30, chart helpers, `scatter` and `histogram`)
 
-- **`vidgen/charts.py`** (exported by `vidgen.api`; reference docs/EXTENDING.md "Charts").
-  Numbers: `axis_ticks(lo, hi, max_ticks=6, *, log=False)` (= `nice_ticks`, or powers of ten:
-  1-2-5 steps within two decades, every k-th decade beyond `max_ticks`; `log` needs `lo > 0`);
-  `short_number(v, decimals=None)` (`k`/`M`/`B`/`T`); `tick_texts(ticks, fmt=None, unit="", *,
-  log=False)` (`fmt` if given; log: `short_number`; else one shared decimals count
-  (`auto_format`), suffixed from 10 000 on, `0` stays `0`). `LinearFit(slope, intercept, r2)`
-  (callable, `equation(digits=3)` with typographic minus) from `linear_fit(xs, ys)` (`np.polyfit`;
-  r² 1 for constant y; < 2 distinct x → `VidgenError`).
-- **Axes.** `ChartAxis(lo, hi, ticks, labels, log=False, title="")` (frozen; `fraction(v)`,
-  `contains(v)`); `value_axis(values, *, lo, hi, max_ticks, log, fmt, unit, title,
-  include_zero)`: domain = data extended to the outer ticks, unless `lo`/`hi` fix an end (then
-  ticks outside are dropped) — the old `line_chart` rule. `chart_axes(area, x, y, *, size,
-  color, axis_color, grid="y"|"x"|"both"|"none", lines="x"|"xy", right, top, theme) ->
-  ChartAxes(plot, x, y, label_size)` with `x_pos`/`y_pos`/`point`/`inside`, `group` and parts
-  `lines`, `grid`, `x_labels`, `y_labels`, `x_title`, `y_title`. Layout: y tick labels right-
-  aligned left of the plot (gap 0.45 cap + 0.05), y title above them left-aligned at the
-  area's top (below `top`), x labels below, x title under them centred (clamped to the area);
-  the plot's right end moves in by half the last x label when a tick sits at the end. Label
-  thinning `_stride`: the smallest k such that every k-th label clears its neighbour (x: 0.35
-  cap + 0.15; y: 0.9 cap), plus the last label when it has room. Gridlines: dashed, stroke 1,
-  opacity 0.4, at the *labelled* ticks (not on the axis line). Sizes: `chart_label_size(size)`
-  = `max(theme.size(size), readable_size())`.
-- **Legend.** `chart_legend(entries, max_width, *, size, color, stack, theme)` (entries `(name,
-  colour, swatch)`, swatch `line` | `box` | a marker; rows wrapped to `max_width`, `stack` one
-  per row; scaled down only if one entry is wider). `legend_spot(size, plot, points, *, pad=0.15,
-  corners=(top_right, top_left, bottom_right, bottom_left))`: the first corner whose box (pad
-  inside the plot, pad of air) contains no frame point. `auto_legend(...)`: one row, else
-  stacked, in a free corner on a framed panel (`RoundedRectangle`, background fill 0.85, `dim`
-  stroke 1 at 0.5; `LEGEND_BUFF` 0.15; `z_index` 1, so gridlines drawn later never cover it —
-  lint `covered_text` found exactly that in 9:16) → `(legend, centre)`; no free corner →
-  `(row legend, None)` and the caller reserves `top` room and puts it above the plot.
-  `sample_path(points, step=0.1)` samples polylines for it. `chart_marker(kind, radius,
-  colour)`: `CHART_MARKERS` circle / square (side 1.7 r) / triangle (height 1.95 r) / diamond
-  (side 1.6 r, rotated), similar visual weight.
-- **Title and caption.** `chart_title(text, *, size="heading", color, growth=None, area)`: bold,
-  `heading` role, `balance=True`, fitted into and centred in `region("header")`, x
-  `PORTRAIT_TITLE_GROWTH` 1.3 in portrait (as `bullets`). `chart_caption(text, area, *, size,
-  color)`: `fit_text` to the area width, ≤ 15 % of its height, at its bottom.
-- **`bar_chart` / `line_chart` refactored** (Step 22 findings): title via `chart_title` (was the
-  top of the safe area, 18 % high: in 16:9 now a few px lower, centred in the header band; in
-  9:16 1.3x larger); caption via `chart_caption`. New params (additive): `title_size`,
-  `title_color`, `label_size` (both), `value_size` (`bar_chart`). `bar_chart`: category labels at
-  `label_size` (`caption`, was `caption`/`small` by count) with the readable floor as `min_size`;
-  value labels: `_value_style` tries the wanted size (`value_size`, default `body`/`caption` as
-  before) and 0.9x on one line, then with a word unit (leading space) under the number
-  (`unit_ratio` 0.8), then 0.8x, then 0.7x/0.6x, then the floor; nothing fits → in portrait with
-  `horizontal` unset the bars turn horizontal (as before also for > 5 bars), else the labels are
-  scaled to the slot as before. Horizontal slots are 1.1 (landscape) / 1.5 (portrait) units, at
-  least the tallest label + 0.3, bars up to 0.9 thick. The count-up rebuilds a one- or two-line
-  label (`become` + `original_text` per `Text`). `line_chart` on `value_axis` + `chart_axes`:
-  ticks label with the decimals the *ticks* need (`2.4` instead of `2.40`; `value_format` still
-  applies to both), x labels thinned by width instead of "at most 7 (4 in portrait)", tick /
-  axis / end labels and legend at `label_size` (`caption`, was `small` for ticks), legend via
-  `auto_legend` (inside the plot when a corner is free, else above, as before). 16:9 output:
-  same structure; ticks and axis titles 24 instead of 20 pt, title ~0.1 unit lower.
-- **`scatter`** (`scenes/scatter.py`; reference docs/CONFIG.md): `ScatterPoint` (`also_accepts
-  = (list,)`: `[x, y]` / `[x, y, label]`; JSON Schema `anyOf` array (prefixItems) | object;
-  `label`, `group`), `ScatterSeries` (`name`, `points`, `color`, `marker` auto → `CHART_MARKERS`
-  by position); `series` dict or list; axes `x_/y_ min/max/log/format/unit/label`; `trend: none |
-  each | all` + `trend_label: none | equation | r2 | both` + `trend_color`; `reveal: series |
-  groups | all`; `show_labels: all | highlight | none`; `highlight` refs (`<series>@<N>`,
-  `<series>@<label>`, a unique label; `Params.point_ref`); `legend` (default > 1 series);
-  `point_radius` (default 0.11 / 0.085 / 0.065 / 0.05 for ≤ 20 / 60 / 150 / more points).
-  Validation: unique series names and labels per series, positive values and bounds on log
-  axes, points inside explicit bounds (no silent clipping), trend only on linear axes with ≥ 2
-  distinct x per fit, `trend_label` needs a trend, `groups` needs a group.
-  **Layout**: x ticks ≤ 7 (4 in portrait), y ≤ 6 (8 in portrait), grid both, both axis lines;
-  legend via `auto_legend` avoiding markers and trend samples. Markers (z 2) get a 1.2 stroke in
-  the background colour (overlaps stay apart); trend lines (z 1) run over the fitted points' x
-  range, cut where they leave the y domain. Point labels (z 3, a background-colour outline as
-  a halo) try right, left, above, below, then diagonals, scored 4·outside the plot + 2·overlap
-  of labels/legend + markers covered + 2·trend lines crossed; trend labels are placed after
-  them: beside the line's end (away from the line), then on the normal at 6 places along it
-  (offset by the label's extent along the normal, so no slope makes them cross), scored 5·lines
-  crossed + points covered + 3·boxes; both clamped to the plot. **Steps**: per group a
-  `LaggedStart` (lag `min(0.25, 2/n)`) of point pops (`GrowFromCenter`, then the label) sorted
-  by x; then the trend (`Create`, linear, then its text); then the highlight (rings 1.9 r in
-  `highlight_color`, labels with `show_labels: highlight`, the rest `dim_to` 0.35).
-  `reveal(fraction=0.8, cap=2.0)`. Targets per the table; a label that is a number another
-  point has as its index names nothing (the index wins).
-- **`histogram`** (`scenes/histogram.py`): `values` with `bins` (int: equal bins via
-  `np.linspace`; rule `auto` | `sturges` | `sqrt` | `fd`: numpy's bin count, width rounded by
-  `nice_width` (nearest of 1, 2, 2.5, 5 x 10^k on a log scale), edges `aligned_edges` on its
-  multiples), `bin_width` (aligned, or from `bin_range[0]`), `bin_range`; or `counts` +
-  `edges`; `MAX_BINS` 60. `compare` (`HistogramCompare`: `name`, `values` | `counts`, `color`
-  `secondary`) binned on the same edges. `percent` (each distribution's own total). `mean` /
-  `median`: exact from values; from counts the mean of bin middles and the median interpolated
-  in its bin. `highlight`: 0-based indices or range labels. Range labels (`bin:<range>`) are
-  `tick_texts(edges, x_format)` joined with `-` (`10-20`, `0-10k`).
-  **Layout**: x ticks at the edges when the bins are round (equal nice widths, edges on their
-  multiples, or `x_format` given), else round ticks inside; y from 0 (`include_zero`), unit `%`
-  with `percent`. Bars inset by `min(0.03, 8 %)` per side. `compare` = a `Polygon` fill at 0.1
-  under its step outline (stroke 4). Marker labels (bold, in the marker colour) stand above the y
-  title, the second one a line higher if they would touch; room for them is reserved with
-  `chart_axes(top=)`; the dashed line runs from the axis up to its label. Legend (with
-  `compare`: `name` or `data` as a box, the compare name as a line) via `auto_legend` avoiding the
-  outlines and verticals through every bar. **Steps**: bars grow (`ReplacementTransform` of a
-  flattened copy, `LaggedStart` lag `min(0.15, 2/n)`), compare, mean, median, highlight (chosen
-  bars filled `highlight_color`, others `dim_to` 0.35) — each its own step.
-
+- **`vidgen/charts.py`** (in `vidgen.api`; user reference docs/EXTENDING.md "Charts"):
+  `axis_ticks`, `short_number`, `tick_texts`, `linear_fit -> LinearFit` (< 2 distinct x →
+  `VidgenError`), `ChartAxis`, `value_axis` (domain = data extended to the outer ticks unless
+  `lo`/`hi` fix an end), `chart_axes -> ChartAxes`, `chart_label_size(size)` (≥ `readable_size()`),
+  `chart_legend`, `legend_spot`, `auto_legend` (panel at `z_index` 1 so gridlines never cover
+  it), `sample_path`, `chart_marker` (`CHART_MARKERS`), `chart_title` (heading role, in
+  `region("header")`, `PORTRAIT_TITLE_GROWTH` 1.3), `chart_caption`. `bar_chart`, `line_chart`
+  and every later chart use them.
+- **`scatter`**, **`histogram`** (`scenes/scatter.py`, `scenes/histogram.py`; keys
+  docs/CONFIG.md#scatter, #histogram): `ScatterPoint` accepts `[x, y]`/`[x, y, label]`; validation
+  rejects points outside explicit bounds (no silent clipping), non-positive values on log axes,
+  trends on log axes or with < 2 distinct x; an index wins over a numeric label. `histogram`
+  rules use numpy's bin count with `nice_width` and `aligned_edges`; `MAX_BINS` 60; `compare`
+  shares the edges; range labels (`bin:<range>`) = `tick_texts(edges, x_format)` joined with `-`.
 
 ## 34. Refinements (Step 31, `pie` / donut and `heatmap`)
 
-- **Colour helpers** (`vidgen/charts.py`, exported). `mix_colors(a, b, t)`: `a` at opacity `t`
-  over `b` in sRGB (what alpha blending shows), `#RRGGBB`. `text_color_on(fill, min_ratio=4.5)`:
-  the theme's `text` or `background`, whichever contrasts more with `fill`; below `min_ratio`
-  white or black (the better one; the worst case over all fills is ≈ 4.58:1). `ColorScale(lo,
-  hi, stops, kind, center)` (frozen): `fraction(v)` (clamped; diverging: 0.5 at `center`, each
-  side scaled to its own end), `at(f)` (OKLab interpolation between `(fraction, hex)` stops —
-  Ottosson's matrices, sRGB gamma via `lint.color`), `__call__(v)`. `color_scale(values, kind,
-  color, low_color, high_color, center, lo, hi)`: sequential stops `mix(color, background, 0.14)`
-  → `color` (lightness monotone, "more = more contrast with the background" on light and dark
-  presets); diverging `low_color` → `mix(text, background, 0.1)` → `high_color`, domain `center ±
-  max distance` unless `lo`/`hi` are given (then `center` must lie inside: `VidgenError`).
-  `color_bar(scale, length, vertical, thickness=0.26, size, color, title, max_ticks=5, fmt,
-  unit)`: 48 opaque segments + a faint frame, ticks from `axis_ticks` inside the domain with
-  `tick_texts` labels (right of a vertical bar, below a horizontal one; thinned with `_stride`),
-  optional title above; `VGroup(bar, ticks, labels[, title])` centred at the origin.
-- **`pie`** (`scenes/pie.py`; reference docs/CONFIG.md). `Params.slices()` → `PieSlice(label,
-  value, color, other)` after `sort` and grouping (`other_below` %, `max_slices`; grouping only
-  when ≥ 2 slices qualify; the group is last, `other_color`). Colours: own / one colour / the
-  palette in order, past its length lighter shades (`mix(base, background, max(0.4, 1 - 0.3k))`),
-  the last slice never equal to the first. Angles from `start_angle` (90 = top), clockwise by
-  default; wedges are `AnnularSector`s (inner radius 0 for a pie) with a 2 px background-coloured
-  edge. **Layout** (`_plan`): for label sizes from `label_size` down to the readable floor
-  (x `floor_margin` 1.05), modes `sides` then `keys` (`legend` alone when `uses_legend()`:
-  `legend` or > 6 slices — static, so `target_names` knows it). In each mode up to four rounds:
-  labels that fit inside their slice (box corners and edge midpoints inside the annular sector,
-  6 % margins; spots at 0.6 / 0.5 / 0.68 / 0.4 r for a pie, mid-ring for a donut; wrap widths
-  1.2 / 0.8 / 0.5 r) go inside, the rest outside; `sides`: columns at `r(1 + explode) + ELBOW
-  (0.2) + LEAD (0.5)` left/right, room reserved per side only for the sides that have labels,
-  labels stacked top-down near their elbow height (`_stack`: `gap` 0.12, pushed back up from the
-  bottom; the smallest slices' labels dropped if a side cannot hold them), leader = rim → radial
-  elbow → label; `keys`: `chart_legend` swatches + "name value", wrapped rows below the pie in
-  9:16 (≤ 60 % of the body, else dropped), stacked beside it in 16:9 (wrapped rows if taller
-  than the body), pie and key centred together. The first layout with nothing dropped and
-  radius ≥ 0.3 x the body's shorter side wins; else the one dropping fewest (warning). Inside
-  labels use `text_color_on(slice colour)`. Donut centre: `center_text()` (the total via
-  `value_format`/`unit`) bold in the heading role, fitted to 0.78 x the hole's diameter, plus
-  `center_label` in `dim`. **Steps**: wedges grow by `UpdateFromAlphaFunc` rebuilding the
-  sector (invisible at alpha 0, the original at 1); `all` = one continuous sweep (each wedge's
-  rate is its share of `smooth` over the first 70 %), labels / leaders after 65 %; `per_beat`
-  sweeps over 0–65 % and the label over 55–100 % (`window(a, b)` rate functions). Highlight step:
-  the wedge (and an inside label) shifts by `explode x r` along its middle, an outside leader's
-  first corner follows (`Transform` to the moved polyline), other wedges `dim_to` 0.3, their side
-  labels / leaders / keys 0.45, inside labels recoloured with `recolor` to
-  `text_color_on(mix(colour, background, 0.3))` at 0.7. `reveal(fraction=0.75, cap=2.0)`.
-  **Targets**: `slice<N>` / `slice:<label>` = wedge + label (+ leader), outline the wedge;
-  `center`; `legend` = the key (entrance: every slice's entrance).
-- **`heatmap`** (`scenes/heatmap.py`). Params `values` (rectangular, `null` allowed, ≤ 40 x 40),
-  `rows`/`columns` (unique), `scale` (`auto` = diverging when values lie on both sides of
-  `center`), colours, `scale_min/max`, `show_values`, `legend`, `legend_label`, `reveal: all |
-  rows`, `highlight` refs (the target names `cell<R>.<C>` / `row<N>` / `row:` / `col<N>` /
-  `col:`; `Params.cells_of`). **Layout**: the colour bar (vertical right of the grid in 16:9,
-  horizontal below it in 9:16; rebuilt as long as 0.9 x the grid height, 2.4–4.5 units / 0.8 x
-  the grid width, 3–5 units), row labels right-aligned (≤ 25 % / 30 % of the width), column
-  labels wrapped to the cell width at one size from `label_size` down to the floor (else a
-  warning, scaled), cells `min(width / cols, MAX_CELL 2.2)`, height ≤ width ≤ 2.5 x height, the
-  whole block centred; gap between cells `min(0.05, 0.06 x side)`; cells smaller than `MIN_CELL`
-  (0.3) → warning "split the matrix". Cells are opaque (`surface` + faint outline for null);
-  values at the largest size from `value_size` down to the floor at which the four longest
-  strings fit (`cell - 0.12` wide, `- 0.1` high), else hidden (warning with `show_values:
-  true`), each in `text_color_on(cell colour)`. **Steps**: `all` = labels, legend, and cells
-  popping in (`FadeIn(scale=0.6)`) in a diagonal wave (window by `(r + c)`); `rows` = row k's
-  label and cells left to right (column labels, legend, title with row 1). Highlight step:
-  `highlight_color` outlines (stroke 4, z 2) round each ref's cells; other cells `dim_to` 0.3,
-  their values recoloured for the dimmed cell at 0.7. `reveal(fraction=0.75, cap=1.6)`.
-  **Targets**: `cell<R>.<C>` (rect + value, outline the rect), `row<N>`/`row:<label>` and
-  `col<N>`/`col:<label>` (label + cells; outline a band over the cells; entrance: the hidden
-  cells one by one), `legend`, `title`.
+- **Colour helpers** (`charts.py`, exported): `mix_colors(a, b, t)`, `text_color_on(fill,
+  min_ratio=4.5)`, `ColorScale` (OKLab interpolation), `color_scale(...)` (`center` outside given
+  `lo`/`hi` → `VidgenError`), `color_bar(...)`.
+- **`pie`**, **`heatmap`** (`scenes/pie.py`, `scenes/heatmap.py`; keys docs/CONFIG.md#pie,
+  #heatmap): `pie` `uses_legend()` is static (`legend` or > 6 slices) so `target_names` knows it;
+  the last slice's colour never equals the first; layouts that drop labels warn. `heatmap` ≤
+  40 x 40, `scale: auto` diverging when values lie on both sides of `center`, cells below
+  `MIN_CELL` 0.3 warn "split the matrix"; values hidden when they do not fit (warning with
+  `show_values: true`).
 
 ## 35. Refinements (Step 32, `code_walkthrough`)
 
-- **`code_walkthrough`** (`scenes/code_walkthrough.py`; reference docs/CONFIG.md). Params `code` |
-  `path`, `language`, `excerpt` (`"a-b"`, numbers kept), `title`, `steps`, `visible`,
-  `line_numbers`, `style`, `font`, `size`, `wrap`, `highlight_color`, `note_position`
-  (`auto | side | bottom`), `note_size`, `note_color`, `focus_scale`, `scrollbar`. **Per-beat
-  data** is a params list aligned with the beats (as `code.highlight`, `diagram.steps`): `steps[i]`
-  = `WalkStep {lines, note, focus}` or a bare line spec (`also_accepts = (str, int, list)`; JSON
-  Schema `anyOf` string | integer | array | object). Steps go through `reveal(fraction=0.6,
-  cap=1.0)` like every built-in.
-- **Line specs** (`parse_lines` syntax, `resolve_lines(spec, source, first)`): items `N`, `N-M`,
-  `/regex/`, and ranges mixing both (`/def f/-/return/`: the end is the first match at or after
-  the start), comma-separated (commas inside `/.../` belong to the expression), or a list; `all`
-  clears the highlight; `None` keeps the view. Checked at params validation for inline code and
-  by `validate_project` for a `path` (problems prefixed `steps[k].lines`).
-- **Sizing** (`_fit`, analytic, no trial builds: a listing costs ~0.1 s per line): `size` if
-  the longest line fits the window width, else smaller down to `max(readable x 1.05, size giving
-  TARGET_COLUMNS)`, else wrapped (`code.wrap_runs` on the whole file's `lex_code` runs, so an
-  excerpt starting inside a comment keeps its colour) at that size. A note replacing another
-  fades in during the second half of the change, after the old one has faded out in the first
-  half (they share the bottom bar). Notes: `side` (16:9 / square,
-  when the code fits beside a column of `0.3 x body` (3.4–4.8 units) without wrapping) or
-  `bottom` (bar as tall as the tallest note; always in portrait). The window holds `visible` /
-  as many rows as fit; window chrome (title bar with three theme-coloured dots, padding, scroll
-  indicator) is drawn by the scene, not by `Code`.
-- **Scrolling model.** The `Code` (background removed) stays in the scene as one mobject; rows
-  out of view are taken out of its two `Paragraph`s' submobjects (`_include`), so they are not
-  drawn, `is_shown(line<N>)` is false for them, and the layout dump still sees a `Code` (kind
-  `code`, line numbers exempt from contrast); `lines_text.original_text` is set to the shown rows
-  so lint sizes the text by its real characters. `_ViewChange` (an `Animation` without a
-  starting copy) interpolates offset, per-row emphasis (1 / `DIMMED` 0.35 / 0 around a focus) x
-  edge fade (`FADE` 0.75 rows beyond the window), band shapes (cut at the window's edges) and the
-  scroll thumb; rows that can show are positioned lazily (`_place_row`), the others never move.
-  Offsets: a selection already in view (with a line of context) stays; else it is centred (its
-  start when longer than the window). The band's opacity is `BAND` 0.12, lowered (0.1 … 0.05)
-  until every syntax colour keeps `min(4.5, its ratio on the window)` on it (light themes); a bar
-  in the highlight colour marks the band's left edge.
-- **Notes and focus.** Side notes sit level with the step's highlighted rows (pointer line + dot
-  from the window edge); bottom notes in the bar. `focus` moves the camera (`MoveCamera` from
-  `scenes/actions.py`) onto the selected rows' ink (numbers excluded), magnification `min(limit,
-  0.84 fw / w, (0.84 fh - card) / h)`, hides the other rows and shows the note as a card under
-  them built at `1 / magnification` (reads at its normal size); a view top inside the title moves
-  below it (or above it); magnification < 1.05 → no focus, warning. The next view without focus
-  moves the camera home.
-- **Targets**: `title`, `listing` (chrome + `Code`), `line<N>` (file numbers; all wrapped
-  pieces), `lines:<a-b>` (all ranges up to `ALL_RANGES_UP_TO` 40 lines, else the steps' runs),
-  `note<N>` (step N's note or focus card). Entrances: a hidden line scrolls into view (`_bring`;
-  leaves a focus), a note plays its step's view, `listing` the first step.
-- **`code` changes** (Step 22 routed issue): wrapping targets `max(readable, min(size, size giving
-  TARGET_COLUMNS 32 columns))` instead of `max(size, readable)`, so a 9:16 listing at the `large`
-  scale wraps at ~32 columns, not ~25 (16:9 unchanged: `caption` already gives > 32 columns).
-  New module helpers shared with `code_walkthrough`: `mono_metrics(font)` (advance and line pitch
-  per point), `size_for_columns`, `text_canvas` (see below), `renumber`, `line_centers`,
-  `line_runs`, `style_names` (were private methods / functions).
-- **Manim text canvas** (found here, affects any long text): Manim renders `Text` with Pango on a
-  canvas of the *output's pixel size* and fails the glyph check ("rendered fewer glyph(s)...") when
-  text runs off it: ~60 lines of 24 pt code at 854x480, 9 at 160x90. `code.text_canvas(lines,
-  size)` enlarges `config.pixel_width/height` while a listing is built (restored after; the SVG
-  cache key does not include the canvas, so a clipped SVG cached by an earlier failure must be
-  deleted with `build/`).
-
+- **`code_walkthrough`** (`scenes/code_walkthrough.py`; keys docs/CONFIG.md#code_walkthrough):
+  `steps` aligned with the beats (`WalkStep` or a bare line spec).
+- **Line specs** (`parse_lines`, `resolve_lines(spec, source, first)`): `N`, `N-M`, `/regex/`,
+  mixed ranges (end = first match at or after the start), commas (inside `/.../` they belong to it)
+  or a list; `all` clears, `None` keeps the view. Checked at params validation for inline code, by
+  `validate_project` for a `path`.
+- **Scrolling**: the `Code` stays one mobject; rows out of view are taken out of its two
+  `Paragraph`s (`_include`), so they are not drawn, `is_shown(line<N>)` is false and the layout
+  dump still sees one `Code` (`original_text` = shown rows). Sizing is analytic (`_fit`) because a
+  listing costs ~0.1 s per line. Focus moves the camera (`MoveCamera`).
+- **`code` helpers** shared with it: `mono_metrics`, `size_for_columns`, `text_canvas`,
+  `renumber`, `line_centers`, `line_runs`, `style_names`; `code` wraps at `max(readable, min(size,
+  size giving TARGET_COLUMNS 32))`.
+- **Manim text canvas**: Manim renders `Text` on a canvas of the output's pixel size and fails the
+  glyph check ("rendered fewer glyph(s)...") when text runs off it; `code.text_canvas(lines, size)`
+  enlarges `config.pixel_width/height` while a listing is built. The SVG cache key ignores the
+  canvas, so an SVG clipped by an earlier failure must be deleted with `build/`.
 
 ## 36. Refinements (Step 33, `equation_derivation`)
 
-- **`equation_derivation`** (`scenes/equation_derivation.py`; reference docs/CONFIG.md). Params
-  `steps` (≥ 1; `DerivationStep {tex, note, match, transition}` or a string, `also_accepts =
-  (str,)`, JSON Schema `anyOf` string | object), `title`, `mode` (`history | replace`), `keep`,
-  `align_at` (`"="`), `colors` (TeX → colour), `terms`, `result` (`box | highlight | none`),
-  `result_color`, `size` (80; 1.25x `portrait_growth`), `color`, `dim_opacity`, `note_position`
-  (`auto | side | bottom`), `note_size`, `note_color`, `note_mark_color`. Per-beat data is the
-  params list aligned with the beats (as `code_walkthrough.steps`); steps go through
-  `reveal(fraction=0.6, cap=1.6)` like `equation`.
-- **Part isolation without Manim's substring splitting.** Manim's `substrings_to_isolate` splits
-  raw substrings (`x` out of `\exp`, breaking the TeX) and `{{ }}` main parts become top-level
-  `MathTexPart`s whose boundaries may cut TeX groups. Instead the scene tokenises the TeX
-  (control words, control symbols, characters), finds parts as whole-token runs (spaces ignored;
-  the key of a part is its tokens joined by spaces) and wraps each occurrence in its own dvisvgm
-  group (`\special{dvisvgm:raw <g id='vgpartNNN'>}` … `</g>`), which Manim's SVG parser exposes in
-  `id_to_vgroup_dict`. `{{ … }}` (split with Manim's own `MathTex._split_double_braces`, so the
-  notation means the same as in Manim) becomes such a group too, parts inside it nest. Braces are
-  added where TeX takes one argument (after `^`, `_`, `\vec`, `\frac`, … : `{\special…x\special…}`);
-  a token after `\left`/`\right`/`\big…` is never wrapped. One compile per step (two more at most
-  when it is broken into lines). `tex_string` is reset to the step as written (lint, layout dump).
-- **Morph** (`morph(source, target, style)`): `auto` pairs parts with the same key (occurrences in
-  order, bigger parts first, glyphs used once) → `Transform` per pair; the remaining glyphs go
-  through `TransformMatchingShapes` (identical shapes move, others fade). `shapes`: one
-  `TransformMatchingShapes`; `fade`: cross-fade. The source is always a *copy* of the step on
-  screen; `SwapAtEnd` (an `AnimationGroup`) removes `hide` at setup and, at clean-up, every mobject its
-  animations used, then adds the target formula whole — so the scene holds whole `MathTex`es
-  between beats (targets, lint) and the source step stays intact for later actions.
-- **History.** Each step has an archived copy (dimmed at hand-over: `dim_opacity`, raised by
-  `readable_opacity` until every formula / note colour keeps 2.3:1 with the background — lint's
-  dimmed 2:1 plus margin). When a step arrives, the live previous step hands over to its archived
-  copy (moved up a row), so `term:` targets (registered on the live formula's parts) mean the
-  current step only, while `step<N>` (registered on `VGroup(live, archived)`) is the line either
-  way. The block is re-centred as it grows; the oldest rows fade out upwards beyond `rows`.
-- **Layout** (`_layout`). Notes beside (16:9; column 0.3 × body, 3.0–4.6 units) or in a band below
-  (portrait, or `note_position: bottom`; the band sits right under the tallest block, both centred).
-  All steps share one scale: ≤ 1, fitting the width (aligned steps: left and right reach from the
-  alignment point; others centred) and the tallest run of `rows` rows, where a side note taller
-  than its formula sets its row's height. A step whose width alone would set it below `COMFORT`
-  (1.5) x the readable size is rebuilt with `\\ &` before its top-level relations (`break_lines`:
-  all but the first, then all), kept when it gets larger. `rows` (history, `keep` unset) drops
-  while the height would push the scale below the readable size. Below it anyway: a warning.
-  The readable size for math is lint's: the 75th percentile of glyph heights vs the cap height of
-  `readable_size()`.
-- **Errors.** `brace_problem` / unclosed or empty `{{ }}` / parts not in any step / `match` not in
-  both steps → params errors (`vidgen validate`). LaTeX errors → `VidgenError` "step N does not
-  compile: <TeX message> (at: <context>)" read from the `.log` Manim names
-  (`tex_error_excerpt`, dvisvgm markers removed).
-- **Targets**: `title`, `step<N>`, `note<N>` (entrance plays the step), `result` (last step + box;
-  entrance: the step, or just the box), `term:<tex>` (parts of `terms`, `colors`, `match`, `{{ }}`).
-  A `transform` jump to the last step leaves the result's box to the last step's own beat.
-
+- **`equation_derivation`** (`scenes/equation_derivation.py`; keys
+  docs/CONFIG.md#equation_derivation): `steps` aligned with the beats.
+- **Part isolation** without Manim's `substrings_to_isolate` (which splits raw substrings, e.g.
+  `x` out of `\exp`): the TeX is tokenised, parts are whole-token runs, and each occurrence is
+  wrapped in a dvisvgm group (`\special{dvisvgm:raw <g id='vgpartNNN'>}` … `</g>`) read from
+  `id_to_vgroup_dict`; `{{ … }}` (split with `MathTex._split_double_braces`) too. A token after
+  `\left`/`\right`/`\big…` is never wrapped. `tex_string` is reset to the step as written.
+- **Morph** (`morph(source, target, style)`): the source is a copy; `SwapAtEnd` adds the target
+  formula whole, so between beats the scene holds whole `MathTex`es. `term:` targets mean the live
+  step, `step<N>` the line (live or archived).
+- **Errors**: brace problems, empty `{{ }}`, unused parts, `match` not in both steps → params
+  errors; LaTeX errors → `VidgenError` "step N does not compile: <TeX message> (at: <context>)"
+  (`tex_error_excerpt`).
 
 ## 37. Refinements (Step 34, `screenshot` and callouts)
 
-- **Callout helpers** (`vidgen/callouts.py`, exported by `vidgen.api`; reused by Step 41's callout
-  overlay). An *area* is a mobject (its bounding box), a `Region`, or `[x, y]` / `[x, y, w, h]`
-  (top-left corner + size, y downwards) relative to `within` (mobject or region; default the
-  frame) in fractions or, `units="px"`, pixels of an `ImageMobject`'s `pixel_array` (or of
-  `pixels=(w, h)`); `callout_area` turns any of them into a `Region` (a point has size 0). The
-  helpers `callout_box`, `callout_circle`, `callout_arrow`, `callout_magnifier` (needs `image=`),
-  `callout_spotlight` share the signature `(area, label="", *, within, units, color, label_size,
-  side, bounds, avoid, scale, theme, ...)`; `callout(kind, area, label, **options)` dispatches by
-  name (`CALLOUT_KINDS`). Names carry the `callout_` prefix like the `chart_*` helpers: bare `box`,
-  `circle`, `arrow` would shadow common local names in `from vidgen.api import *` code.
-- **`Callout(Group)`**: `kind`, `area` (Region), `mark`, `tag` (label or `None`), `steps` (parts in
-  drawing order: a magnifier's source frame, connector lines, inset); `extent(pad)` (mark + tag; a
-  spotlight only by its hole and tag) feeds the next callout's `avoid`; `draw(start=0)` returns
-  one animation per part with staggered rate functions inside a single run time (no
-  `AnimationGroup`, which would leave its own `Group` in `scene.mobjects`): mark then tag, an
-  arrow's label before its `GrowArrow`; `start` delays them (while earlier callouts leave).
-- **Labels** (`callout_label`): `readable_text` (bold, `label_size`, never below the readable
-  size; wrapped at 0.3 x frame width, 0.6 in portrait) on a `RoundedRectangle` plate filled with
-  the callout colour; the text colour is `text_color_on(plate)` (≥ 4.5:1, lint's contrast); the
-  plate is drawn first, so lint reads it as the text's backdrop.
-- **Placement** (`label_spot`, `tag_spot`): candidates in eight directions (arrows, insets) at
-  several gaps, or on a mark's edge (tags: above at its left / right end, below, beside; inside
-  its top-left corner as a last resort); each is moved inside `bounds` and scored by overlap with
-  the anchor (x10), with `avoid` (x4), the shift, a preference order, being nearer than 0.7 x the
-  first gap (x6: arrows keep a visible length) and overlap with `prefer_off` (x0.8: the
-  screenshot's picture, so labels and insets go to free background when there is room).
-- **Arrow**: straight `Arrow` (tip 0.22) or `CurvedArrow` (±45°, bulging towards the bounds'
-  centre), from the label plate's edge to where the ray from the area's centre leaves it (a
-  point: the point). **Circle**: an ellipse through the area's corners (x√2 + padding; flat
-  areas get a minimum height). **Spotlight**: `Cutout(rectangle, rounded hole)` filled with the
-  theme background at 0.62 over `cover`/`within`. **Magnifier**: the inset size is `zoom` x the
-  area, limited by the room above / below (full bounds width) or beside (full height) the area,
-  whichever allows more (that axis is then the only one tried); the pixels are cut from the
-  image's `pixel_array` (or `source`) by the area's fractions and resampled (Lanczos) to the
-  output resolution / `scale`; connectors are the convex-hull edges joining a corner of the
-  source frame to a corner of the inset (`connector_lines`).
-- **`screenshot`** (`scenes/screenshot.py`; reference docs/CONFIG.md). Params `path`, `title`,
-  `steps` (`ScreenshotStep {callouts, focus, previous}`, a list of callouts or one callout;
-  `CalloutSpec {kind, area, label, color, side, curved, zoom}` or the shorthand `{KIND: area,
-  ...}`; JSON Schema `anyOf` for both), `frame` (`none | browser | window | phone`), `url`, `units`
-  (`fraction | px`), `color`, `label_size`, `previous` (`fade | dim | keep`), `focus_scale`.
-  Fractions are checked by the params model, pixels by `validate_project` (image size).
-- **Layout**: the picture (and its frame: bar 0.065 x width, 0.4–0.6 units, taller for a
-  readable `url`; phone bezels 5 % / 12 % / 10 % of the width) is fitted into the body (below the
-  title) inset by 0.25 x 0.1 units in landscape, 10 % of the height in portrait. Labels' bounds are
-  the body; the title bar is in every step's `avoid`.
-- **Steps**: per-beat data is the params list aligned with beats, like Steps 32/33. Beat 1 plays
-  the picture's entrance then step 1 (`play_steps` with two slots); `fraction=0.6, cap=1.5`. A
-  step = earlier callouts leave (fade, or `dim`: box / circle / arrow / magnifier source frame to
-  0.35 opacity, the rest fades) + the camera move + its callouts' `draw(start=0.4)`. Callouts are
-  built once, before the first beat, step by step with `avoid` = title bar + kept callouts + the
-  step's areas + the callouts placed so far; spotlights first (z-index 1, other callouts 2).
-- **Focus**: the camera (`MoveCamera`) frames the union of the step's areas so it takes at most
-  half of the view each way (≤ `focus_scale` / the step's number); the step's callouts are built
-  with `scale = 1 / magnification` and `bounds` = the zoomed view's safe area (∩ body), so they
-  read at normal size. Callouts built for another camera always leave when it changes (kept
-  ones would be enlarged or tiny).
-- **Targets**: `title`, `image` (picture + frame), `callout<N>` / `callout:<label>` (numbered in
-  written order; entrance: `draw()`, or the step for a focus step not yet zoomed), `step<N>`
-  (entrance: the step). A step whose callouts are all on screen (an early `reveal`) is skipped.
+- **Callout helpers** (`vidgen/callouts.py`, in `vidgen.api`; also used by the callout action
+  §44): an area is a mobject, `Region`, or `[x, y]`/`[x, y, w, h]` (top-left, y down) in fractions
+  of `within` or (`units="px"`) image pixels; `callout_area`. `callout_box`, `callout_circle`,
+  `callout_arrow`, `callout_magnifier`, `callout_spotlight` share `(area, label="", *, within,
+  units, color, label_size, side, bounds, avoid, scale, theme, ...)`; `callout(kind, ...)`
+  dispatches (`CALLOUT_KINDS`). The `callout_` prefix avoids shadowing `box`/`circle`/`arrow` under
+  `from vidgen.api import *`. `Callout(Group)` with `extent(pad)` (feeds `avoid`) and
+  `draw(start=0)` (one animation per part; no `AnimationGroup`, which would leave its `Group` in
+  `scene.mobjects`). Label plates are drawn first so lint reads them as the backdrop.
+- **`screenshot`** (`scenes/screenshot.py`; keys docs/CONFIG.md#screenshot): `steps` aligned with
+  beats; fractions are checked by the params model, pixels by `validate_project`. Callouts are
+  built once before the first beat; callouts built for another camera always leave when it
+  changes. A step whose callouts are all shown is skipped.
 
 ## 38. Refinements (Step 35, `video_clip`)
 
-- **Approach: frames decoded inside Manim, not composited by ffmpeg afterwards.** Compositing a
-  clip into the rendered scene with ffmpeg would be faster, but stills (§13), the layout dump
-  (§15), lint (§16, §17), callouts, camera moves and beat actions would never see it. Instead the
-  clip is a mobject drawn by the camera on every frame, so everything that works on an image works
-  on a clip. Cost: a full-bleed 854x480 preview renders at ~0.6 s per second of video (Manim's
-  image drawing and encoding dominate; decoding and scaling a frame takes ~2 ms).
-- **`ClipMobject(ImageMobject)`** (`vidgen/clips.py`, exported by `vidgen.api`). Its picture is the
-  frame at the scene's clock: `play(scene, at=None)` ties a shared `_Playback` (reader, timing,
-  crop, decode size, clock) to `scene.renderer.time`; `get_pixel_array()` (what the camera draws)
-  asks the reader for the frame at `timing.source_time(now - start)`. A time-based no-op updater
-  makes Manim treat it as moving (redrawn every frame; waits are not frozen), so it plays through
-  `play` and `wait` alike. `Mobject.copy` (deepcopy) shares the playback (`_Playback.__deepcopy__`
-  returns itself), so the copies `FadeIn` / `Transform` make show the same moving picture.
-- **Modulation.** Manim's animations and schu-video-generator's `dim` / `highlight` actions change an image's
-  `pixel_array`. For a clip that array is a 1 x 2 *modulation* — a black and a white RGBA pixel —
-  and every frame is mapped through it affinely (`out = black + frame * (white - black) / 255`,
-  all four channels). Interpolations (`FadeIn`), alpha scaling (`dim`, `set_opacity`) and tints
-  (`highlight`: `p (1 - t) + c t`) are affine per pixel, so they act on the moving picture exactly
-  as on a still. The composed frame is cached per (reader, frame serial, modulation).
-- **Decoding** (`ClipReader`): PyAV, sequential; the frame showing at `t` is the last whose time
-  is ≤ `t` + 2 ms (container time stamps are rounded, WebM to 1 ms); going back (a loop) or more
-  than 2 s ahead seeks to the key frame before `t`. Only the current frame (and its converted
-  picture) is held. Conversion is FFmpeg's scaler (`VideoFrame.to_ndarray(width, height,
-  format="rgba")`) to the decode size of the whole picture, then the crop is sliced out.
-  A file with a second video stream titled `alpha` (a compact frames clip, §120.9) is read by
-  a second reader on that stream at the same times, its `gray` picture becoming the alpha channel.
-  `set_resolution(scale)` sets the decode size: the size shown × `scale` (focus / zoom), as far as
-  the clip has pixels inside the crop, and never less than the size shown — so at magnification 1
-  the decoded frame has exactly the on-screen size and the camera copies it pixel for pixel:
-  `resampling_algorithm` is a property returning `NEAREST` then (PIL perspective transform ~3 ms
-  vs ~50 ms bicubic at 854x480), else `BILINEAR`.
-- **Timing** (`ClipTiming(start, end, speed, loop)`): `source_time(played) = start + played ×
-  speed`, modulo the span with `loop` (played time rounded to µs, so frame times summed from
-  1/fps wrap exactly), clamped to `end - 5 ms` (`END_GAP`) otherwise — the frame at `end` is never
-  shown, the last one before it holds. `fit_speed(span, window, low, high)` clamps
-  `span / window`. In the scene the clip starts at scene time 0 (it fades in playing); the window
-  is the narration (Σ beat `d + pad`) or a silent scene's `duration - outro`; `fit_duration`
-  speeds one pass to the window within `fit_range`. The scene's length is never changed by the
-  clip (the §5 contract): a longer clip is cut by the fade-out (log info), a shorter one holds its
-  last frame (warning above 2 s; `dead_air` above 6 s) unless it loops.
-- **Sound** (`clip_audio`): one ffmpeg call writes the clip's sound as it plays — `atrim` to the
-  span, 48 kHz stereo, an `atempo` chain for the speed (each factor 0.5–2; pitch kept), padded /
-  cut to exactly one pass in samples (so loops stay in step with the picture), `volume`, `aloop`
-  when looping, `apad` + `atrim` to the scene's length, `afade` over the outro — into a temporary
-  WAV that `NarratedScene.add_sound` mixes at scene time 0 (Manim's pydub mix: sounds are summed;
-  narration MP3s are added at their beats). The pipeline pads that mix to the video length as for
-  any scene (§5.2, Step 4). Default volume 0.25 under narration, 1 in a silent scene; no ducking
-  (Step 45). `--no-audio` renders skip it.
-- **`video_clip`** (`scenes/video_clip.py`, a subclass of `screenshot`'s scene class: steps,
-  callouts, focus, `previous`, frames and targets are shared; `screenshot` gained `picture_name`,
-  `_spec_area()` (an area and its units), `_layout(body, fill=)` (cover: the picture takes the
-  room's aspect) and `_picture_entrance()` for it). Params add `caption`, `caption_size`,
-  `caption_color`, `region` (`body | full | hero | left | right | top | bottom | center | bleed`),
-  `fit`, `trim`, `speed`, `fit_duration`, `fit_range`, `loop`, `volume`, `mute`; `magnifier`
-  callouts are rejected (a still inset of a moving picture), `frame` with `bleed` too. Callout
-  areas are written on the clip's whole picture and moved into the `cover` crop (warning when
-  outside it). `bleed` puts title and caption on `surface` plates (z-index 3, over callouts).
-- **Targets**: `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>`.
-- Known limits: rotation metadata is ignored; variable-frame-rate files show the frame whose
-  time stamp precedes the scene time (correct, but uneven if the file is); a file without a
-  stated length is measured from its packets.
+- **Frames decoded inside Manim, not composited by ffmpeg**, so stills, layout dump, lint,
+  callouts, camera moves and actions see the clip like any image.
+- **`ClipMobject(ImageMobject)`** (`vidgen/clips.py`, in `vidgen.api`): `play(scene, at=None)`
+  ties a shared `_Playback` to `scene.renderer.time`; `get_pixel_array()` returns the frame at
+  `timing.source_time(now - start)`; a time-based no-op updater makes Manim redraw it every frame.
+  `_Playback.__deepcopy__` returns itself, so copies show the same moving picture.
+- **Modulation**: a clip's `pixel_array` is a 1 x 2 black/white RGBA pair and each frame maps
+  affinely through it, so interpolations, `dim` and `highlight` act on the moving picture exactly
+  as on a still.
+- **Decoding** (`ClipReader`, PyAV, sequential; seeks only backwards or > 2 s ahead): the frame at
+  `t` is the last with time ≤ `t` + 2 ms. A second video stream titled `alpha` (§120.9) supplies
+  the alpha channel. At magnification 1 the decode size equals the shown size and
+  `resampling_algorithm` is `NEAREST`.
+- **Timing** (`ClipTiming(start, end, speed, loop)`, `fit_speed`): clamped to `end - END_GAP`
+  (5 ms) without `loop`. **The clip never changes the scene's length** (§5): longer clips are cut
+  by the fade-out, shorter ones hold their last frame (warning above 2 s) unless they loop.
+- **Sound** (`clip_audio`): one ffmpeg call writes exactly the played sound (`atempo` chain,
+  loops in sample step, padded to the scene length, faded over the outro) to a temp WAV mixed by
+  `add_sound` at time 0; volume `UNDER_NARRATION` 0.25 with beats, 1 when silent; skipped with
+  `--no-audio`.
+- **`video_clip`** (`scenes/video_clip.py`; keys docs/CONFIG.md#video_clip): a subclass of the
+  `screenshot` scene; `magnifier` callouts and `frame` with `bleed` are rejected. Limits: rotation
+  metadata ignored; variable frame rate shows the frame preceding the scene time.
 
 ## 39. Refinements (Step 36, `map`)
 
-- **Data** (`src/vidgen/data/geo/world-110m.json`, 132 KB, package data). Natural Earth 1:110m
-  Cultural Vectors, Admin 0 – Countries (public domain), via the npm package `world-atlas` 2.0.2
-  (`countries-110m.json`, TopoJSON, ISC) whose ids are ISO 3166-1 numeric codes; alpha-2 /
-  alpha-3 codes and English names / aliases from `i18n-iso-countries` 7.14.0 (MIT).
-  `tools/make_world_map.py` (maintainer script, `npm pack` of both pinned versions, or
-  `--world-atlas DIR --iso DIR`) decodes the topology (delta-encoded quantized arcs), cuts rings
-  that cross the antimeridian at ±180° (d3's spherical topology has jumps there; a ring round
-  the pole — Antarctica — is closed along its edge), orients outer rings counter-clockwise and
-  holes clockwise (so Cairo's non-zero fill leaves Lesotho open in South Africa), rounds to
-  hundredths of a degree (flattened integer rings), and computes per country a label point (pole
-  of inaccessibility of the largest part by a two-pass grid search) and a "main" box (parts within
-  15° of the largest: France without French Guiana). Countries without an ISO code get
-  `XK`/`XKX` (Kosovo) or Natural Earth's ADM0_A3 (`CYN`, `SOL`). ISO countries missing at this
-  scale are listed in `small` for an explicit error. Output is deterministic.
-- **Lookup** (`find_country`): one index of normalised names (NFKD without accents, casefolded,
-  punctuation and a leading "the" dropped; `&` = and), claimed in priority order — codes, display
-  names, then aliases (Natural Earth's short name, a curated list such as `UK`, `Holland`, `DRC`,
-  then i18n-iso-countries' names) — so an ambiguous alias (`Congo`) goes to Natural Earth's
-  meaning. Unknown names get `difflib` suggestions; small countries a "use a pin" message.
-- **Projection**: Equal Earth (Šavrič, Patterson & Jenny 2018; equal-area, pure numpy) centred on
-  the view's middle longitude. `MapView(box, area, antarctica, expand)`: projects the box's
-  sampled edges, grows the projected rectangle to `area`'s aspect ratio (more map, within the
-  world's outline; the world view without Antarctica is cut at 58° S), fits it inside `area`
-  (`region`), and maps points with one scale. Polygons are projected once per centre longitude
-  (`lru_cache`; each polygon moved by ±360° to be nearest the centre, which makes views over the
-  date line work), then clipped to the view rectangle (Sutherland–Hodgman, numpy per edge).
-  World view: ~280 polygons in ~25 ms; cached views ~6 ms. `cropped`: the view cuts the world at
-  its sides (a regional view).
-- **`map`** (`scenes/world_map.py`). Stages: stage 0 = the top-level `countries` / `pins` /
-  `arcs` (with the map), stage *i* = `steps[i-1]`; steps follow `screenshot`: step *i* at beat
-  *i* via `distribute`, beat 1 = intro (title, map sweep, legend, caption, stage 0) + step 1,
-  `play_steps(fraction=0.6, cap=1.6)`. **Layout**: title (`chart_title`), caption
-  (`chart_caption`), legend (`color_bar`, horizontal, ≤ 0.6 x body width) centred under the map,
-  map and legend centred together in the body; a cropped view gets a panel (`surface` fill = sea,
-  thin `dim` frame) under the countries. Countries are one `VMobject` each (rings as closed
-  straight-segment subpaths built with numpy), land = `land_color` mixed 0.3 over the background
-  (0.18 for countries without a value on a choropleth), borders 0.8 wide in the background colour.
-  **Highlights** are copies over the base shape (fill + 1.6x border; on a choropleth an outline
-  of 3.5) so a highlight can be revealed, dimmed or zoomed as its own target. **Labels** are text
-  on background-coloured plates (opacity 0.88; lint reads the plate as the backdrop): a country's
-  goes on its label point when it fits in 90 % of its main box and is free, else beside it via
-  `label_spot` with a leader (z 3.5, under every plate); pins' labels go beside the pin (leader
-  when pushed away), arcs' at the top of the arc; all avoid earlier labels and every pin of the
-  same view. **Arcs**: `ArcBetweenPoints` bending 72° upwards (flipped when its top would leave
-  the map), trimmed 0.13 units at pin ends, arrow tip; `Create` grows them. **Focus**: as
-  `screenshot` — camera on the step's items (country main boxes clipped to the map, pins, arc
-  ends) at most `focus_scale` / 0.6 of the frame, the step's labels, pins and strokes built at
-  1 / magnification; labels built for another camera fade when the camera moves. Animations:
-  the map sweeps west to east (each country's `FadeIn` windowed by its x), highlights fade in,
-  pins drop in, arcs grow, labels follow (`window` rates).
-- **Targets**: `title`, `map` (panel + countries), `legend`, `country:<a3>` / `country:<a2>` /
-  `country:<name>` (one target: a highlight with its label and leader, or a valued country's
-  shape), `pin<N>` / `pin:<label>`, `arc<N>`, `step<N>`. Only countries the params name have
-  targets, so `target_names` stays short and static.
-- Known limits: arcs are drawn on the flat map, not as great circles, and do not wrap; no
-  bundled city list (pins take coordinates or a country); 1:110m drops small states; no
-  graticule; a `world` view in 9:16 is a narrow strip (documented).
+- **Data** (`src/vidgen/data/geo/world-110m.json` + `LICENSE`): Natural Earth 1:110m countries
+  via `world-atlas`, names/codes from `i18n-iso-countries`, built by `tools/make_world_map.py`
+  (antimeridian cuts, outer rings counter-clockwise and holes clockwise for Cairo's non-zero
+  fill, label points, "main" boxes; deterministic). ISO countries missing at this scale are in
+  `small` (explicit error).
+- **Lookup** (`find_country`): normalised names claimed in priority order (codes, display names,
+  aliases); unknown → suggestions; small countries → "use a pin".
+- **Projection**: Equal Earth (numpy) centred on the view's middle longitude; `MapView(box, area,
+  antarctica, expand)`; polygons cached per centre longitude and shifted ±360° (views over the
+  date line work). A `world` view in portrait keeps the items' longitudes and every latitude.
+- **`map`** (`scenes/world_map.py`; keys docs/CONFIG.md#map): steps as `screenshot`; only
+  countries the params name have targets (static `target_names`). Limits: flat arcs, no city
+  list, no graticule.
 
 ## 40. Refinements (Step 37, review 2)
 
-- **Examples split**: `examples/minimal` keeps the core built-ins (title, bullets, icon_grid,
-  bar/line charts, image, quote, equation, code, text_card, end_card) and the beat-action
-  examples; `examples/gallery` uses every type added in Steps 25–36 once (three `chapter`
-  dividers group them). Their assets moved with them (`app.png`, `clip.webm`, `train.py`; the
-  maintainer scripts `tools/make_screenshot.py` / `make_clip.py` write there). A test checks
-  that the two examples together use every built-in type (`flowchart` = `diagram`).
-- **Header synonyms** (`SceneParams.header_synonyms`, default on; `HEADER_SYNONYMS` in
-  `vidgen.scene`): a `Params` model with only one of `heading` / `title` (and of the `_size`,
-  `_color` pairs) also accepts the other name, via a pydantic `AliasChoices` set in
-  `__pydantic_init_subclass__` (inherited models keep it). `title`, `chapter`, `end_card` opt out
-  (their `title` is the main text). Giving both names is an error (`'title' is another name for
-  'heading', which is given too; keep one`). `vidgen schema` adds the other name as a property
-  with the field's schema and a `not: {anyOf: [{required: [a, b]}]}`; `list-scenes` prints
-  `(also: title)` and its JSON fields gain `aliases` (list; added within version 1). Target
-  names: `actions.TARGET_SYNONYMS` — `title` selects a `heading` target when the scene has no
-  `title`, and the reverse (`match_names` over a scene's whole name list; `find_targets` uses
-  it too).
+- **Examples**: `examples/minimal` (core built-ins, beat actions) and `examples/gallery` (the
+  rest); a test checks that together they use every built-in type.
+- **Header synonyms** (`SceneParams.header_synonyms`, default on; `HEADER_SYNONYMS`): a `Params`
+  model with only one of `heading`/`title` (and their `_size`/`_color`) accepts the other via
+  `AliasChoices` set in `__pydantic_init_subclass__`; `title`, `chapter`, `end_card` opt out. Both
+  given → error (`'title' is another name for 'heading', which is given too; keep one`).
+  `actions.TARGET_SYNONYMS` does the same for target names.
 - **Unknown keys**: `config.validation_problems(error, prefix, model=None, noun="parameter")`
-  rewrites pydantic's "Extra inputs are not permitted" with `describe.unknown_key_message`:
-  `unknown parameter 'dim_prev'; did you mean 'dim_previous'? (known: ...)` (16 names shown),
-  resolving nested models along the error location (list indexes and union tags skipped).
-  Used for scene params (`validate`, `parse_params`), action options (`noun="option"`) and the
-  top-level config (`noun="key"`).
-- **`one_or_many(item)`** (`vidgen.api`): `Annotated[list[item] | item, AfterValidator]`, the
-  value always a list. `highlight` of `diagram`, `heatmap`, `histogram`, `network`, `scatter`
-  use it (a single item was an error).
-- **Text on fills** (`Target.on_fill`, `NarratedScene.target(..., on_fill=)`): `(text, shape)`
-  pairs. `dim_to` recolours such text with `text_color_on(shape colour mixed over the background
-  at its dimmed opacity)` and keeps it at `TEXT_ON_FILL_DIM` (0.7) instead of fading it with the
-  shape; `highlight` `color` / `flash` give it `text_color_on(highlight colour)` while the shape
-  is painted; `fill` gives it the colour that reads on the plate-tinted shape. Registered by
-  `pie` (labels inside their slice), `heatmap` (values; rows, columns, cells) and
-  `screenshot` / `video_clip` (callout labels on their plates). `pie` and `heatmap` highlight
-  steps use `dim_to` for their texts too (the module helper `pie.recolor` is gone). Undo:
-  `Dim.revert` restores the colours of the recoloured text; `Highlight.revert` after `fill`
-  likewise.
-- **Scene dimming survives `until`** (`Target.scene_dim`): `dim_to(..., own=True)` (scenes)
-  records the factor; `Dim` (the action) passes `own=False`, and its revert caps the restored
-  opacity at `rest x scene_dim` (`_Memory.restore(cap=)`).
-- **Decorations follow** (`scenes/actions._follow`): highlight boxes, underlines and fill plates
-  get an updater that keeps their offset to the outline (not time-based: waits stay frozen
-  frames) and scales their opacity with the anchor's (0 while it is off screen); an outline the
-  scene never draws (table / comparison guide rectangles) is followed but never faded. Undo
-  clears the updaters before fading them out.
+  rewrites pydantic's extra-input error with `describe.unknown_key_message` (`unknown parameter
+  'dim_prev'; did you mean 'dim_previous'? (known: ...)`) for params, action options
+  (`noun="option"`) and the top level (`noun="key"`).
+- **`one_or_many(item)`** (`vidgen.api`): `Annotated[list[item] | item, AfterValidator]`, always a
+  list.
+- **Text on fills** (`NarratedScene.target(..., on_fill=)`, `(text, shape)` pairs): dimming and
+  highlighting recolour such text with `text_color_on` (dimmed at `TEXT_ON_FILL_DIM` 0.7) instead
+  of fading it; reverts restore it.
+- **Scene dimming survives `until`** (`Target.scene_dim`): `dim_to(..., own=True)` records the
+  factor; the `dim` action's revert caps at `rest x scene_dim`.
+- **Decorations follow** (`scenes/actions._follow`): boxes, underlines and fill plates get a
+  non-time-based updater (waits stay frozen) keeping their offset and opacity relative to the
+  outline; undo clears it first.
 - **Copy-free fades** (`helpers.Fade`, `helpers.fade_out`, in `vidgen.api`): Manim's
-  `FadeIn`/`FadeOut` and every `Animation.begin` copy the mobject (`create_starting_mobject`);
-  for a 57-line `code_walkthrough` that was 33 of 59 s of a preview render. `Fade` animates fill /
-  stroke arrays (and a shift) of the family's `VMobject`s and returns no starting copy;
-  `clear_all` (every scene's outro) uses `fade_out` (`Fade` for vector-only families, Manim's
-  `FadeOut` with images/clips). `Repaint` (dim / highlight) skips the starting copy too. The
-  walkthrough: 59 → 27 s (profiled, preview).
-- **Portrait growth**: `comparison` points, column headings and verdict x `portrait_growth`
-  (1.3, as `bullets`); `icon_grid` labels x 1.3 in portrait (reduced as before when they do not
-  fit); `timeline.vertical_growth` 1.5 and `process.column_growth` 1.5 (tried, then the halfway
-  factor, then the old 1.2 rule; never more wrapped lines). 16:9 unchanged.
-- **9:16 world map** (`WorldMap._portrait_world`): a `world` (or `auto` → world) view in a
-  portrait frame keeps the longitudes of the items (+12 % each side, at least 140°; unchanged
-  past 300°) and every latitude, so the map is a regional panel instead of a strip.
-- **Layout dump `rotation`** (`introspect._glyph_heights`): for a one-line text (≥ 4 glyphs)
-  the principal axis of the glyph centres gives its angle; ≥ 8° counts as rotated and glyph
-  heights are measured along the normal, so `font_px` (and lint `min_font`) no longer measure a
-  rotated label sideways. New key `rotation` (degrees, 0 when level / several lines / math);
-  `LAYOUT_VERSION` stays 1 (additive). kphi3's `lint_ignore` for its rotated label is gone.
-- **`table` widths**: one-line widths are measured once per text at `measure_size` (40 pt) and
-  scaled (linear in the size): a 24-row table's fitting took 85 s, 26 s now.
-- **`list-icons --sheet PNG --theme [PRESET]`** (`iconlist.SheetColors`): the sheet in the
-  project's theme (no value) or a preset's: background, icons in `primary`, names in `text`,
-  categories in `dim`.
-- **Warnings for too much content** read alike: `the <thing>'s N <items> do(es) not fit this
-  frame at the readable size; <remedy>` (`heatmap` and `comparison` reworded).
-- **Header bands alike**: `table`, `code`, `code_walkthrough`, `equation_derivation`,
-  `screenshot` and `video_clip` (framed) build their title with `chart_title` (1.3x in portrait,
-  balanced lines) like the charts and the `heading` scenes; their 9:16 titles were ~1.3x
-  smaller than the others'. A `table` caption follows a short table (`Table._tuck`: at most
-  `caption_gap` 0.45 under it, both centred in their space) instead of standing at the frame's
-  bottom.
-- **Test markers**: `slow` now also marks the parametrized render sweeps (every scene type x
-  orientation, every target, every preset) and every test function over ~1.5 s, so `pytest -m
-  "not slow"` stays a quick check (~1.7 min on a 2-CPU box, 1257 tests) while the full suite
-  (~14 min) runs everything.
-
+  `FadeIn`/`FadeOut` copy the mobject in `begin`, which dominated long renders; `Fade` animates
+  fill/stroke arrays without a copy. `clear_all` uses `fade_out` (Manim's `FadeOut` with
+  images/clips); `Repaint` skips the copy too.
+- **Layout dump `rotation`** (`introspect._glyph_heights`): one-line text (≥ 4 glyphs) rotated
+  ≥ 8° is measured along its normal; key `rotation` in degrees.
+- **Too-much-content warnings** read `the <thing>'s N <items> do(es) not fit this frame at the
+  readable size; <remedy>`.
 ## 41. Refinements (Step 38, overlays: framework, `lower_third`, `watermark`)
 
 - **Config.** `VideoConfig.overlays: list[OverlayConfig]` (`config.OverlayConfig`, `extra="allow"`
@@ -8345,1819 +7082,734 @@ Security rules are in §94.2, §94.15 and §94.16 (tests: `tests/test_phase_t_re
   `session.normal_text`, `exports.WINDOWS_RESERVED`.
 ## 95. Cell biology in physical scale (Phase U, Steps 202–211)
 
-Reference: docs/CONFIG.md `cell`. 2D cell-biology presentations at university and research
-level: precise, stylised but never wrong, in schu-video-generator's flat style, written by AI agents in YAML,
-checked by `vidgen validate` (and from Step 209 by `vidgen lint`), in 16:9 and 9:16.
+2D cell-biology presentations at university and research level, stylised but never wrong, checked by
+`vidgen validate` and `vidgen lint`, in 16:9 and 9:16. Five scene types: `cell`, `molecule`,
+`pathway`, `cell_cycle`, `metabolism`. User side (keys, the rules a user meets, examples):
+docs/CONFIG.md (`#cell`, `#molecule`, `#pathway`, `#cell_cycle`, `#metabolism`) and
+docs/COOKBOOK-CELL-BIOLOGY.md.
 
 ### 95.1 The phase (plan)
 
-- **Step 202, the cell world and its scale** (this section's §95.2–95.7): the model, its rules,
-  the camera in µm with its levels, level of detail and scale bar, a first renderer with
-  placeholder organelles at true relative scale, the `cell` scene type and the `zoom_to` action.
-- **Step 203, the structure library**: accurate morphology replacing the placeholders, kind by
-  kind, behind the same model: the nucleus (an envelope continuous with the ER, pores as
-  complexes spanning both membranes, the nucleolus), rough / smooth ER as one network (sheets
-  joined to the outer nuclear membrane, tubules from their edges), the Golgi (cis / medial /
-  trans with their own compartment names), mitochondria (lamellar and tubular cristae with
-  junctions: the intracristal space continuous with the intermembrane space), lysosomes,
-  peroxisomes, early / late endosomes and multivesicular bodies, vesicles with coats (clathrin,
-  COPI, COPII: a `coat` option and sizes), centrosome; plant cells (`cell: plant`: wall, central
-  vacuole and tonoplast, chloroplasts with thylakoids, grana and stroma), prokaryotes
-  (`cell: bacterium`: nucleoid, periplasm for Gram-negative, 70S ribosomes); the cytoskeleton
-  (actin 7 nm, microtubules 25 nm with + / − ends, intermediate filaments 10 nm) and motors
-  (kinesin to +, dynein to −, myosin); the bilayer close-up (phospholipids, cholesterol,
-  glycolipids on the exoplasmic leaflet, rafts) as the `complex`-level drawing of a membrane;
-  `style: section | surface` (a thin section, or a surface view of a structure). New compartments
-  and membranes are rows of `catalog.py`; new kinds are `Kind`s with sizes, places and surfaces;
-  their drawings are `cell_vector` pieces with LOD features.
-- **Step 204, molecules and notation**: molecules are `complex` kinds with a `notation` (DNA
-  with 5′/3′ ends and base pairs, mRNA, tRNA with its anticodon, rRNA, nucleosomes; proteins with
-  domains, GPCRs, RTKs, gated channels, carriers, pumps, ATP synthase, kinases, G proteins; ions
-  and small molecules typeset with charges and subscripts); `vidgen.cellworld.names` holds the
-  naming rules (italic gene vs roman protein, species-aware case: human TP53, mouse Trp53;
-  modification markers P, Ub, Ac, Me) as data, so validation and the lint use one table. A
-  membrane protein's `on:` names its membrane and the side its domains face (topology is in the
-  catalog: lumenal = exoplasmic face).
-- **Steps 205, 206, 208, processes as actions**: actions on `cell` scenes (like `zoom_to`, in
-  `scenes/cell_actions.py` against `vidgen.api`), each with a **rule** in the world first: a pure
-  function from the world and the action's options to the moves it plans (paths in µm,
-  membranes crossed, compartments entered) or a `VidgenError` naming the beat (a vesicle cannot
-  fuse with the nucleus; active transport needs ATP or a co-transported ion going down its
-  gradient; a ribosome reads mRNA 5′→3′ and the chain grows N→C), then a renderer animating the
-  plan. The world gains *state over beats* (an object's compartment after an endocytosis, a
-  channel open or closed, a membrane potential) as `World.moved`-style replaced copies, replayed
-  by `vidgen validate` in beat and `at` order as Phase O's levels are. Timing: beat starts and
-  `at: "@word"` as every action; a plot (a `function_plot` beside a `cell`, an action potential)
-  reads the same planned values.
-- **Step 207, the `pathway` scene type** (separate, decided now): signalling pathways are graphs,
-  not geometry — nodes and SBGN-inspired arcs (activation, inhibition, phosphorylation, complex
-  formation, translocation, feedback) laid out automatically in compartment bands (extracellular
-  / membrane / cytosol / nucleus). It shares `catalog.py` (compartment names and labels, the kinds
-  and naming of Step 204's molecules) and the graph layout of `diagram` (`vidgen.graph`), not the
-  cell camera; its own actions (`signal`, `knock_out`, `inhibit`…) and rules (a translocation to
-  the nucleus crosses the nuclear envelope; an inhibitor's T-bar contradicts a declared effect).
-  A `cell` scene and a `pathway` scene can carry a molecule between them with the existing
-  `carry:`.
-- **Step 209, the accuracy lint** reads the model, not pixels, where it can: `vidgen lint`
-  rebuilds each `cell` scene's world from its params (`Params.world()`, no render) and checks the
-  rules that are judgements rather than impossibilities (done: §95.14) — sizes or counts far outside a kind's
-  `size_range` (the catalog already holds it) without the scene's `not_to_scale: true` (which
-  then shows a small "not to scale" note), a drawn exaggeration (the layout dump's `cell` key
-  gives each still's µm span and LOD weights: a glyph drawn larger than its thing), wrong
-  directions in the planned moves of Steps 205–206, active transport without an energy source,
-  naming mistakes (Step 204's table), pathway arrows against declared effects. Hard
-  impossibilities stay validation errors (this step). `references:` (DOI / PMID, never invented)
-  per scene: small on-screen citations and the video description.
-- **Step 210** the example "From gene to secreted protein", the gallery section "Cell biology",
-  the guide topic, the cookbook page; **Step 211** the review with a scientific-accuracy pass.
+Built; §95.2–95.16 describe it. Every type follows one pattern: a manim-free model with **rules** in
+`vidgen.cellworld` (a pure function from the world and an action's options to the moves it plans, or a
+`VidgenError` naming the beat), a renderer, and a scene against `vidgen.api`. State over beats is
+replayed by `vidgen validate` in beat and `at` order. Impossibilities are validation errors;
+judgements are lint (§95.14).
 
 ### 95.2 A new scene type `cell` (decided)
 
-Not a mode of `stage` (characters, lip sync, a ground line, tile and iso places: none of it
-applies, and a cell's camera spans five orders of magnitude) nor of `iso_diagram` (a projection
-of blocks on a grid with its own label placement). A `cell` scene has its own params, its own
-world in µm and its own camera, like `iso_diagram` was its own type next to the iso places. What
-the cell types share lives in `vidgen.cellworld` (the catalog, the geometry, the rules), so
-Step 207's `pathway` uses the same names without being a `cell`.
+`cell` is its own type, not a mode of `stage` (characters, ground line, tiles do not apply; the camera
+spans five orders of magnitude) nor of `iso_diagram`. Shared catalog, geometry and rules live in
+`vidgen.cellworld`, so `pathway` uses the same names without being a `cell`.
 
 ### 95.3 The world model (`vidgen/cellworld/`, no manim)
 
-Three layers as in §86.1 / §89.1: the **model and rules** (`vidgen.cellworld`: `units`,
-`catalog`, `geometry`, `model`, `view`; a test imports them in a fresh interpreter and checks
-`manim` is not loaded), the **renderer** (`vidgen/cell_vector.py`: Manim mobjects of the world)
-and the **scene** (`scenes/cell.py`, `scenes/cell_actions.py`, written against `vidgen.api`).
+Three layers as in §86.1 / §89.1: model and rules (`vidgen.cellworld`; a test checks it imports without
+`manim`), renderer (`vidgen/cell_vector.py`, re-exporting `cell_draw/`), scene (`scenes/cell.py`,
+`scenes/cell_actions.py`).
 
 - **Units.** Everything inside is µm (floats). YAML writes a number (µm) or a length string
-  (`parse_length`: `"25 nm"`, `"1.5 um"`, `"20 µm"`, `"0.1 mm"`; zero or negative refused;
-  `parse_coordinate` allows signs for `at`). `format_length` writes `25 nm`, `1.5 µm`; `nice_length`
-  the 1-2-5 lengths of scale bars.
-- **The catalog** (`catalog.py`, data only): `COMPARTMENTS` (cytosol, nucleoplasm, perinuclear
-  space, ER / Golgi / lysosome / endosome / vesicle lumens, intermembrane space, matrix,
-  peroxisomal matrix, extracellular; each with a label, a one-line note and a **topology**:
-  `cytosolic`, `lumenal` — topologically outside, what exocytosis empties —, `extracellular`,
-  `mitochondrial`, `peroxisomal`, later `plastid`), `MEMBRANES` (each between an outside and an
-  inside compartment: plasma, outer / inner nuclear, ER, Golgi, outer / inner mitochondrial,
-  lysosomal, endosomal, vesicle, peroxisomal), the **kinds** (`Kind`: label and plural,
-  `structure` or `complex`, shape, default length and width, the textbook `size_range`, its own
-  membranes from the outside in and the compartments they enclose, the compartments it may be
-  in (`places`), the kinds whose membrane it may sit on (`surfaces`), the textbook reason the
-  rules quote (`why`), a hue) and the typical animal cell (`TYPICAL_ANIMAL`). Constants: bilayer
-  5 nm, perinuclear gap 30 nm (20–40), mitochondrial intermembrane gap 20 nm, ER lumen 50 nm,
-  ER tubule 50 nm, Golgi lumen 30 nm / period 90 nm, pores 1 per µm of envelope in a section,
-  ER ribosomes 6 per µm per face. Sizes are textbook consensus (Alberts, Lodish): nucleus 7 × 6 µm
-  (5–10), mitochondrion 2 × 0.7 µm (0.5–4 long, 0.5–1 wide), ribosome 25 nm (20–30), cell 20 µm
-  (5–100 allowed), and so on (CONFIG's table).
-- **Geometry** (`geometry.py`): a world is a **cross-section** (a thin-section view). Shapes in
-  µm: `Ellipse`, `Capsule` (a stadium: mitochondria), `ArcBand` (a curved band with round ends:
-  ER sheets, Golgi cisternae, ER tubules), each with `contains(p, pad)`, `outline`, `inset` (the
-  next membrane in), `bounds`, and surface points with outward normals (`surface`, `faces`);
-  `inside` / `overlap` by outline samples. **Membranes are bilayer mid-lines**: two membranes of
-  an envelope are `gap + bilayer` apart, a complex bound to a membrane sits `bilayer / 2 +` its
-  radius off the line.
-- **The world** (`model.py`): `build_cell_world(CellSpec) -> CellWorld`. A `CellSpec` (kind,
-  size, aspect, `contents`, objects as `ObjectSpec`s with a `where` for messages, seed) is what
-  the scene's params give. Entries: the typical contents (unless `contents: none`), each replaced
-  by an object of the same id, then the objects; ids default to the kind (`kind_2` for a
-  second); reserved ids (`cell`, `title`, `tissue`, `scale_bar`, `cytosol`, `extracellular`,
-  `world`). Each entry places one or more `Placed` things (`key`: the id, or `<id>#<n>`) with
-  their `footprint` shapes and `parts` (a membrane-bounded piece: its membranes outside in and
-  the compartment inside each), where it is (`host`: a compartment *instance*, `cytosol` or
-  `<key>.<compartment>`), the structure whose membrane it sits on (`surface`) and the outward
-  `normal` there, and a Golgi stack's cis direction (`facing`). Generated entries belong to a
-  structure (`owner`): `nucleus.pores`, `nucleus.ribosomes` (outer nuclear membrane),
-  `rough_er.ribosomes`. `compartment_at(p)` answers which compartment a point is in;
-  `region_at(p)` which membrane-less region (nucleolus, centrosome). The neighbouring cells of
-  the tissue are `Neighbour`s (outline and nucleus) on a stretched hexagonal lattice.
-- **Placement**: kinds in an order that lets each lean on the ones before (nucleus, Golgi,
-  centrosome, nucleolus, rough ER, smooth ER, then the rest; written `at` first within a kind):
-  the typical layout's place (the nucleus a little off centre; the Golgi 1.6 µm out from the
-  envelope towards −25°, its convex cis face towards the nucleus; the centrosome beside it; the
-  rough ER sheets round the far side of the nucleus, 200°, 0.35 µm out and 0.4 µm apart; the
-  smooth ER beyond its end), else scattered with `random.Random("<seed>:<id>")` (600 tries per
-  thing; structures keep 0.25 µm off the plasma membrane and 0.2 µm off each other). Complexes:
-  `on:` points on the host's cytosolic faces, `in:` the instances named, `at` one point.
-  Deterministic: the same spec builds the same world (tested).
+  (`parse_length`: `"25 nm"`, `"1.5 um"`, `"20 µm"`, `"0.1 mm"`; ≤ 0 refused; `parse_coordinate`
+  allows signs). `format_length` writes `25 nm`, `1.5 µm`; `nice_length` gives 1-2-5 lengths.
+- **Catalog** (`catalog.py`, data only): `COMPARTMENTS` (label, note, **topology**: `cytosolic`,
+  `lumenal` — topologically outside —, `extracellular`, `mitochondrial`, `peroxisomal`, `plastid`),
+  `MEMBRANES` (outside and inside compartment, lipid mix, `exo` side), kinds (`Kind`: label, plural,
+  `structure` or `complex`, shape, default size, textbook `size_range`, own membranes outside-in with
+  the compartments they enclose, `places`, `surfaces`, the reason the rules quote `why`, `cells` /
+  `cells_why`, hue), the typical animal, plant and bacterial cells, and the textbook constants
+  (Alberts, Lodish: bilayer, gaps, lumens, Golgi period, pore densities, walls, filaments, coats),
+  each defined and commented in `catalog.py`.
+- **Geometry** (`geometry.py`): a world is a **cross-section**. Shapes in µm (`Ellipse`, `Capsule`,
+  `ArcBand`, `RoundedBox`, `Polyline`) with `contains(p, pad)`, `outline`, `inset`, `bounds`,
+  `surface` / `faces` (points with outward normals). **Membranes are bilayer mid-lines**: an
+  envelope's membranes are `gap + bilayer` apart; a bound complex sits `bilayer / 2 +` its radius off.
+- **The world** (`model.py`; built by `build.py`): `build_cell_world(CellSpec) -> CellWorld`.
+  `CellSpec`: kind, size, aspect, `contents`, `ObjectSpec`s (with a `where` for messages), seed.
+  Entries: the typical contents (unless `contents: none`), each replaced by an object of the same id,
+  then the objects; ids default to the kind (`kind_2` for a second); reserved ids `cell`, `title`,
+  `tissue`, `scale_bar`, `cytosol`, `extracellular`, `world`. An entry places `Placed` things (`key`:
+  id or `<id>#<n>`) with `footprint`, `parts` (membranes and the compartment inside each), `host` (a
+  compartment *instance*: `cytosol` or `<key>.<compartment>`), `surface`, `normal`, `facing` (a Golgi
+  stack's cis side); generated entries have an `owner` (`nucleus.pores`, `rough_er.ribosomes`).
+  Queries: `compartment_at(p)`, `region_at(p)` (nucleolus, centrosome). Neighbouring cells are
+  `Neighbour`s.
+- **Placement** (`builder.py`): kinds in dependency order (nucleus, Golgi, centrosome, nucleolus, rough
+  ER, smooth ER, the rest; written `at` first within a kind); the typical layout's place (Golgi on a
+  curve round the nucleus, cis face towards it; rough-ER sheets joined to the outer nuclear membrane;
+  smooth ER joining a rough sheet), else scattered with `random.Random("<seed>:<id>")` (600 tries;
+  structures 0.25 µm off the plasma membrane, 0.2 µm off each other). Complexes: `on:` the host's
+  cytosolic faces, `in:` named instances, `at` one point. **Deterministic** per spec.
 
 ### 95.4 The location rules
 
-`build_cell_world` refuses with a `VidgenError` naming the object (`objects[3] (ribosome
-'ribosome')`, or `contents: typical`), what is wrong and what to write; the scene's params
-validator turns it into a `scenes[i].params` problem. Rules (Step 202): an unknown kind, an
-`in:` or `on:` target, a compartment of an object (did-you-mean over every name); a complex
-`in:` a compartment not in its kind's `places` or `on:` a kind not in its `surfaces` (with the
-`why`: "ribosomes translate in the cytosol (free, or on the cytosolic face of the rough ER and the
-outer nuclear membrane) and, as mitochondria's own ribosomes, in the matrix; never in the
-nucleoplasm: their subunits are assembled in the nucleolus and leave through the nuclear pores,
-and translation starts only in the cytoplasm"); a thing whose `at` lies in a compartment it may
-not be in ("that point is in the nucleoplasm of 'nucleus'"); a structure overlapping another or
-reaching the plasma membrane; a nucleolus not wholly inside a nucleus's inner membrane; a rough
-ER without a nucleus (it grows from the envelope); `at` with `count`, `in` with `on`, `in` on a
-structure, a kind option on another kind, a reserved or duplicate id; no room for a count. The
-`places` / `surfaces` data is what later steps extend (a kinesin `on:` a microtubule, a
-receptor `on:` the plasma membrane facing out). Not rules but lint (Step 209): sizes outside a
-kind's range, counts, exaggerated glyphs.
+`build_cell_world` raises `VidgenError` naming the object (`objects[3] (ribosome 'ribosome')`, or
+`contents: typical`), what is wrong and the fix; the params validator reports it as a
+`scenes[i].params` problem. Rules: unknown names (did-you-mean), `places` / `surfaces` / `cells`
+violations quoting `why`, an `at` in a forbidden compartment, overlapping structures or one reaching
+the plasma membrane, a nucleolus outside its nucleus, a rough ER without a nucleus, conflicting options
+(`at` + `count`, `in` + `on`, `in` on a structure, another kind's option), reserved or duplicate ids, no
+room for a count. The full list a user meets: docs/CONFIG.md#cell. Sizes, counts and exaggerations are
+lint (§95.14).
 
 ### 95.5 The camera in µm, levels, level of detail, scale bar (`view.py`, no manim)
 
-- **Scale.** The body (the safe area under the title) shows `CellView(center, span, level)`:
-  `span` µm across the body's **shorter side**, so a YAML view means the same in 16:9 and 9:16.
-  The scene fixes `unit` = body's shorter side / the start view's span (scene units per µm); a
-  view is a camera width `frame width × span / start span` and a centre that puts the view's
-  centre on the body's centre.
-- **Levels** (`level_view`): `tissue` (3.2 cell lengths, the cell in the middle), `cell` (fits
-  the cell's box with 7 % margin, `fit_span`), `organelle` (a structure's box at 62 % of the
-  short side; a sheet or tubule network: 2.6 µm of it), `complex` (a complex at 20 %: 125 nm for a
-  ribosome; on a structure: a bound pore, else a bound ribosome, else a point of its outer
-  membrane, 160 nm). `focus_point` gives what a level centres on; an entry of several things takes
-  its first; `width` overrides the span. `default_level`: organelle for structures, complex for
-  complexes, cell / tissue for those targets.
-- **Level of detail** (`lod_weights`): each feature is drawn by the size it takes on screen, in
-  pixels of a frame whose **shorter side is 1080 px** whatever the resolution (so a preview shows
-  what the final shows), faded on a log scale between two sizes (`LOD`): ribosome dots 0.5–1.2 px
-  (a 25 nm ribosome is about 1.2 px at the cell level: real size, a rim of 0.8 px keeps it
-  visible), their large (60S) and small (40S) subunits 9–16 px, an envelope's two membranes apart
-  at a 1.6–3.2 px gap (nucleus 35 nm, mitochondrion 25 nm, mid-line to mid-line), a membrane as
-  its 5 nm bilayer at 2.5–5 px, pores 1.5–3 px, cristae at a mitochondrion 18–32 px wide,
-  neighbouring cells as the span grows from 1.25 to 1.7 cell lengths, labels 8–14 px.
-- **Scale bar** (`scale_bar`): the largest 1-2-5 length up to 22 % of the span, written
-  `format_length`.
-- **Zoom path** (`zoom_path`): van Wijk and Nuij's smooth and efficient zoom-and-pan path
-  (ρ = 1.4): an even pace on a log scale for a zoom on one point (a 150× zoom does not rush its
-  end, which Manim's linear `MoveCamera` would), and out on the way between far places (two
-  ribosomes 5 µm apart are not travelled to at 125 nm across: the first stills showed empty
-  cytosol for a second).
+- **Scale.** The body (safe area under the title) shows `CellView(center, span, level)`; `span` is µm
+  across the body's **shorter side**, so a view means the same in 16:9 and 9:16. `unit` = body's
+  shorter side / the start view's span.
+- **Levels** (`level_view`, shares in `FILL`): `tissue` (3.2 cell lengths), `cell` (the cell's box with
+  7 % margin, `fit_span`), `organelle` (structure at 62 % of the short side; a sheet or tubule network:
+  2.6 µm), `complex` (complex at 20 %; on a structure: a bound pore, else ribosome, else its outer
+  membrane, 160 nm). A cytosolic vesicle within `FUSION_REACH` = 0.6 µm of the plasma membrane is
+  framed with that membrane. `focus_point`; `width` overrides; `default_level` (organelle for
+  structures, complex for complexes).
+- **LOD** (`lod_weights`): each feature drawn by its on-screen size in pixels of a frame whose
+  **shorter side is 1080 px** whatever the resolution (a preview shows what the final shows), faded on
+  a log scale between two sizes per feature (table in `view.py`; ribosome dots keep a 0.8 px rim).
+- **Scale bar** (`scale_bar`): the largest 1-2-5 length up to `SCALE_BAR_SHARE` = 22 % of the span.
+- **Zoom path** (`zoom_path`): van Wijk and Nuij's smooth zoom-and-pan, ρ = 1.4 (`ZOOM_RHO`): an even
+  pace on a log scale (Manim's linear `MoveCamera` rushes a deep zoom's end), out and in between far
+  places.
 
 ### 95.6 Drawing (`cell_vector.py`) and the scene (`scenes/cell.py`, `scenes/cell_actions.py`)
 
-- **Exact outlines.** Shapes become cubic Bézier paths (arcs in pieces of at most 22.5°: within
-  0.1 nm of the true curve for a 20 µm membrane at any zoom); several shapes of one look are one
-  `VMobject` with subpaths (all of an entry's ribosome dots: one mobject). `CellDrawing` builds
-  `tissue`, `cell` (cytosol and plasma membrane) and one `VGroup` per structure (with its bound
-  pores and ribosomes) or entry of free complexes, in drawing order. Pieces register a LOD
-  feature expression (`"particles&!particle_detail"`, `"!double_membrane&!bilayer"`); a membrane
-  is a line (low zoom), a band of its true width and a midplane line (the two leaflets) at high
-  zoom; double membranes are one line until their gap shows. Placeholders for Step 203: the
-  nucleus (envelope band, nucleoplasm, a nucleolus without an outline: it has no membrane),
-  rough-ER arcs with bound ribosomes on both cytosolic faces, smooth-ER arcs, Golgi cisternae
-  paler cis to stronger trans, the centrosome's two centrioles at right angles in a halo,
-  mitochondria (two membranes, lamellar cristae from both sides), lysosomes with dense granules,
-  peroxisomes, vesicles; pores as a gap through both membranes with the complex's rings.
-  Colours from the theme: fills are each kind's hue mixed into the background, outlines darker
-  (light themes) or lighter (dark themes).
-- **Strokes in pixels.** Manim's moving camera scales strokes with the zoom; `update` sets every
-  piece's stroke width from pixels each time the camera moves (`stroke_unit`), so outlines stay
-  1.6 px and a bilayer is drawn its true 5 nm.
-- **The camera listener** (`Cell.on_camera`, registered with `add_camera_listener` and also
-  called by `CellZoom` on every interpolation, so a move the runner finishes without drawing a
-  frame leaves nothing stale): when the camera changed, the drawing's LOD and strokes, the pinned
-  overlays (the title on a plate, readable over the tissue; the labels; the scale bar) keep their
-  place and size on screen and lie in front (`OVERLAY_Z`), labels show by their structure's size
-  and whether their anchor is in view, the scale bar its length and text. Every text the bar can
-  show in the scene (the spans of the start and of each `zoom_to`) is made at the start and only
-  shown or hidden: Manim draws an animation's family as it was when the animation began, so a text
-  swapped in mid-zoom was not drawn and the old one stayed (seen in the first stills).
-- **Labels** are laid out for the start view: in columns left and right of the cell when the body
-  has room (16:9), else in rows above and below it (9:16, as many rows as needed), else beside
-  each thing; sides balanced, each label anchored on the outline point of the member furthest
-  towards its side, spread to keep 0.1–0.14 units apart, a leader line to the plate's nearest
-  edge. Only what is large enough to see at the start is named (`labels` weight > 0.5). Labels
-  fade out as the camera zooms more than 1.2–1.6× away from the start view and give way to the
-  tissue; a zoomed view points at things with `callout`. (Labels per view: Step 203's or 205's
-  call, when the processes need them.)
-- **Steps and targets.** `reveal: all` brings the title, tissue (unseen until zoomed out), cell,
-  scale bar and every object in the first beat; `per_beat` one object per beat (`ChainedTargets`
-  of `math_axes`, so a `reveal` action on an object brings what it stands on). Targets: `title`,
-  `cell`, `tissue`, `scale_bar`, each entry id (`target_names` builds the world, cached per spec
-  by `lru_cache`). `layout_keys` adds `cell`: the span (µm), pixels per µm, the scale bar's text
-  and the LOD weights (for Step 209).
-- **`zoom_to`** (`cell_actions.py`): one target (the cell, the tissue or an object), `level`,
-  `width`, `until`; `moves_camera`, `alters_targets = False`, 2 s; `scene_problems` refuses it on
-  other scene types, with several or wildcard targets, on `title` / `scale_bar`, and a view the
-  level cannot give; the storyboard draws its half-way still (`mid_still_actions`). `CellZoom`
-  animates the camera frame along `zoom_path`.
+- **Outlines** are cubic Bézier paths (arcs in pieces ≤ 22.5°: within 0.1 nm for a 20 µm membrane);
+  shapes of one look are one `VMobject` with subpaths. `CellDrawing` builds `tissue`, `cell` and one
+  `VGroup` per structure or free-complex entry. Pieces register a LOD feature expression
+  (`"particles&!particle_detail"`); a membrane is a line at low zoom and a true-width band with a
+  midplane at high zoom. Fills are the kind's hue mixed into the background; outlines darker (light
+  themes) or lighter (dark).
+- **Strokes in pixels**: `update` resets stroke widths from pixels on every camera move
+  (`stroke_unit`), since Manim's moving camera scales strokes.
+- **Camera listener** (`Cell.on_camera`, via `add_camera_listener` and called by `CellZoom` on every
+  interpolation, so nothing is left stale): LOD, strokes, pinned overlays (title plate, labels, scale
+  bar) at fixed screen size in front (`OVERLAY_Z`). Every scale-bar text (each 1-2-5 length from 4 nm
+  to twice the largest planned span) is made at the start and only shown or hidden: Manim draws an
+  animation's family as it was at its start, so a text swapped in mid-zoom would not be drawn.
+- **Start-view labels**: columns left and right (16:9), else rows above and below (9:16), else beside
+  each thing; anchored on the outline point furthest towards the label's side, spread, with leaders.
+  Only things with `labels` weight > 0.5 are named; labels fade as the camera zooms 1.2–1.6× away.
+  9:16 rows untangle crossing leaders. Zoomed-view labels: §95.8.
+- **Targets**: `title`, `cell`, `tissue`, `scale_bar`, each entry id (`target_names` builds the world,
+  `lru_cache` per spec). `reveal: all` (everything in beat one; the tissue unseen until zoomed out) or
+  `per_beat` (`ChainedTargets`). `layout_keys` adds `cell`: span, pixels per µm, scale-bar text, LOD
+  weights.
+- **`zoom_to`**: one target, `level`, `width`, `until`, `labels`; `moves_camera`,
+  `alters_targets = False`, 2 s; `scene_problems` refuses other scene types, several or wildcard
+  targets, `title` / `scale_bar`, a view the level cannot give; the storyboard draws its half-way still
+  (`mid_still_actions`). `CellZoom` animates along `zoom_path`.
 
 ### 95.7 Public (Step 202)
 
-- `vidgen.api` adds `CELL_COMPARTMENTS`, `CELL_KINDS`, `CELL_LEVELS`, `CELL_OBJECT_KINDS`,
-  `CellColors`, `CellDrawing`, `CellObjectSpec` (`cellworld.ObjectSpec`), `CellSpec`, `CellView`,
-  `CellWorld`, `build_cell_world`, `cell_default_level`, `cell_label_weight`, `cell_level_view`,
-  `cell_lod_weights`, `cell_scale_bar`, `cell_zoom_path`, `did_you_mean`, `format_length`,
-  `parse_coordinate`, `parse_length` (prefixed where a bare name would be vague; the geometry's
-  `Ellipse` is not exported: it would shadow Manim's). `vidgen.cellworld` is importable without
-  manim for tools and lint.
-- Config: the scene type `cell` and the action `zoom_to` (no new video-level keys). Nothing
-  existing changes: other scene types, actions and the gallery's other frames are untouched.
-- **Gaps** (for the later steps): placeholder morphology (the ER is not joined to the nuclear
-  envelope; smooth-ER tubules are loose arcs; Golgi cisternae are bare arcs without vesicles);
-  animal cells only; labels for the start view only; LOD opacities are rest states — a `dim`
-  played while a zoom changes LOD can leave a piece at the wrong opacity until the next camera
-  move; a scale-bar length outside the scene's planned spans (a built-in `zoom` deeper than any
-  `zoom_to`) has no text; the tissue is loose round cells (no junctions).
+`vidgen.api`: `CELL_COMPARTMENTS`, `CELL_KINDS`, `CELL_LEVELS`, `CELL_OBJECT_KINDS`, `CellColors`,
+`CellDrawing`, `CellObjectSpec` (`cellworld.ObjectSpec`), `CellSpec`, `CellView`, `CellWorld`,
+`build_cell_world`, `cell_default_level`, `cell_label_weight`, `cell_level_view`, `cell_lod_weights`,
+`cell_scale_bar`, `cell_zoom_path`, `did_you_mean`, `format_length`, `parse_coordinate`,
+`parse_length`. The geometry's `Ellipse` is not exported (it would shadow Manim's).
+`vidgen.cellworld` imports without manim for tools and lint.
 
 ### 95.8 The structure library (Step 203)
 
-- **Modules.** `cellworld` is split by job (still no manim): `model.py` (specs, `Placed`,
-  `CellWorld`, error texts), `catalog.py` (kinds, compartments, membranes with their lipid mix,
-  textbook constants, the three typical cells), `geometry.py` (+ `RoundedBox`, `Polyline`),
-  `curves.py` (Bézier pieces of any shape, adaptive arc steps), `regions.py` (`Region`: boolean
-  unions and differences of shapes through skia-pathops, a manim dependency already, in µm about
-  a local origin, with a sequential fallback and a nudge when Skia refuses an op), `morphology.py`
-  (the shapes of each structure: cristae and crista junctions, envelopes with pores, ER necks and
-  networks, Golgi cisternae and buds, grana and lamellae, intraluminal vesicles, centrioles,
-  wavy filaments), `builder.py` (placing: cell shapes per kind, envelopes, plasmodesmata through
-  both walls, sheets joined to the outer nuclear membrane, Golgi on a curve round the nucleus,
-  chloroplasts along the wall), `filaments.py` (microtubules from the centrosome, cortical
-  arrays, cortex, stress fibres, intermediate filaments, flagella and pili; motors facing their
-  end), `build.py` (`build_cell_world`: entries, static checks, generated things),
-  `bilayer.py` (lipid layouts: phospholipids, sterols, glycolipids, rafts; a surface mosaic),
-  `anatomy.py` (`part_anchors`: the parts a view names), `view.py` (levels, focus points, LOD).
-  Drawing moved to the package `cell_draw/` (`base`, `drawing`, `organelles`, `plant`,
-  `bacteria`, `cytoskeleton`, `closeup`); `cell_vector.py` re-exports it.
-- **Morphology** follows textbook sizes (constants in `catalog.py`: bilayer 5 nm, perinuclear
-  space 30 nm, crista lumen 25 nm with 13 nm junctions, ER lumen 50 nm, Golgi lumen 30 nm at a
-  60 nm period with 55 nm rims, about 10 pores per µm² of envelope, granum period 18 nm, a plant
-  wall 250 nm, a Gram-negative periplasm 25 nm). The outer nuclear membrane and the rough ER are
-  one membrane (the region union draws no seam), and the smooth ER joins a rough sheet.
-- **Cell kinds** (`CellSpec.kind`: `animal`, `plant`, `bacterium`) with `gram`, `capsule`,
-  `wall`, `plasmodesmata`; each kind lists the cells it occurs in with the reason
-  (`Kind.cells`, `cells_why`), checked like places. Neighbours: plant cells share exact walls
-  (one middle lamella), bacteria lie in a colony, animal cells on a loose lattice.
-- **Level of detail** gains features (`lipids`, `pore_detail`, `thylakoids`, `coat_detail`,
-  `fine`, `mt_lines`, `actin_lines`, `if_lines`, `filament_detail`, `actin_detail`,
-  `mito_double`, `plastid_double`, `envelope_double`); molecules (lipids, tubulin and actin
-  beads, a surface mosaic) are built only round the views (start and every `zoom_to`) that span
-  0.45 µm or less (`closeups`), so a cell's thousands of lipids cost nothing elsewhere.
-- **Labels per view.** Each `zoom_to` view gets labels from `part_anchors` (laid out on the body's
-  edges: columns in 16:9, rows in 9:16, moved to the other edge before a second row), shown while
-  the camera is near that view; `ZoomTo.Options.labels` (`true` / `false` / names) chooses them.
-- **Emphasis kept through LOD.** `Pieces` measures what an action did to a piece against what LOD
-  last wrote (as a factor), remembers it per owner (entry), and gives it to pieces that come into
-  view later; an action still writing colours it read while a piece was hidden is ignored for
-  pieces shown within the last play. Hidden pieces drop their points (cost nothing to draw).
-- **Scale-bar texts** cover every 1-2-5 length from 4 nm to twice the largest planned span, so a
-  built-in `zoom` deeper than any `zoom_to` has its text.
-- **Public:** `vidgen.api` adds `CELL_COATS`, `CELL_MEMBRANES`, `CellAnchor`
-  (`cellworld.Anchor`), `cell_part_anchors`. Config: `cell` params `cell.{gram, capsule, wall,
-  plasmodesmata}`, `style`; object options `coat`, `cargo`, `grana`, `style`; new kinds (see
-  CONFIG); `zoom_to` option `labels`. YAML 1.1's `on:` (read as `true`) is accepted in objects and
-  views. Nothing outside the `cell` scene changes (the Phase Q baseline frames match).
-- **Gaps:** leaders in a zoomed view can cross when anchors crowd one spot; the surface style is
-  a schematic (pores and a lipid mosaic, not a rendered 3-D surface); motors are static glyphs
-  (walking is Step 205's); the tissue still has no junctions.
+- **Modules** (`cellworld`, no manim): `model`, `catalog`, `geometry`, `curves` (Bézier pieces,
+  adaptive arc steps), `regions` (`Region`: boolean ops via skia-pathops, a manim dependency, with a
+  sequential fallback and a nudge when Skia refuses; **paths in nanometres** — in µm Skia lost small
+  overlapping pieces), `morphology` (cristae, envelopes with pores, ER networks, Golgi, grana,
+  intraluminal vesicles, centrioles, filaments), `builder` (placing), `filaments` (microtubules,
+  cortex, stress fibres, flagella, pili; motors facing their end), `build` (`build_cell_world`, static
+  checks), `bilayer` (lipid layouts, rafts, surface mosaic), `anatomy` (`part_anchors`), `view`.
+  Drawing: `cell_draw/` (`base`, `drawing`, `organelles`, `plant`, `bacteria`, `cytoskeleton`,
+  `closeup`, `molecules`, `traffic`, `expression`, `expression_route`).
+- **Morphology**: the outer nuclear membrane and the rough ER are one membrane (the region union draws
+  no seam); stroma lamellae leave granal thylakoids at their margins. Part anchors are checked against
+  the model (each label point in its compartment ≥ 3 nm from its edge, or in its bilayer).
+- **Cell kinds** `animal`, `plant` (exact shared walls), `bacterium` (a colony), with `gram`,
+  `capsule`, `wall`, `plasmodesmata`; `style: section | surface` (surface: a schematic of pores and a
+  lipid mosaic).
+- **Close-ups**: lipids, tubulin and actin beads, mosaic are built only round views spanning ≤ 0.45 µm
+  (start and each `zoom_to`: `closeups`), so they cost nothing elsewhere; lipids leave a gap round
+  membrane proteins (`lipid_layout(gaps=)`, random stream unchanged).
+- **Zoomed-view labels**: each `zoom_to` view gets labels from `part_anchors` on the body's edges,
+  shown near that view; `ZoomTo.Options.labels` (`true` / `false` / names).
+- **Emphasis through LOD**: `Pieces` records what an action did to a piece relative to what LOD last
+  wrote (a factor per owner) and applies it to pieces that appear later; hidden pieces drop their
+  points.
+- **Public:** `CELL_COATS`, `CELL_MEMBRANES`, `CellAnchor` (`cellworld.Anchor`), `cell_part_anchors`.
+  YAML 1.1's `on:` (read as `true`) is accepted in objects and views.
+- **Limits:** no `set_state` in `cell`; an endocytosed vesicle is not added to the world; zoomed-view
+  labels can go stale after a process (`labels: false`).
 
 ### 95.9 Molecules and notation (Step 204)
 
-- **Decided: a separate scene type `molecule`** for standalone close-ups (a fixed camera in nm,
-  a membrane drawn across the view between its two compartments, molecules laid out in rows)
-  and molecules as **kinds of the cell world** (complexes) for the `cell` scene. Both draw the
-  same glyphs; neither needs the other.
-- **Three layers again.** Data and rules without manim in `vidgen.cellworld`: `notation`
-  (chemical markup: `Ca2+` → Ca²⁺, `HCO3-`, `SO4 2-`, `Pi`, `F_o`; a monatomic ion's digits are
-  its charge, a polyatomic one's are counts), `names` (species nomenclature as data — HGNC, MGI,
-  RGD, SGD, PomBase, FlyBase, ZFIN, E. coli, TAIR — gene symbols italic and checked, protein
-  names roman and refused when written like their gene where the case tells them apart;
-  modification markers P / Ub / Ac / Me with the residues they go on; histone marks checked
-  against the human H2A, H2B, H3.1, H4 sequences), `sequences` (DNA / RNA alphabets, complements,
-  the standard genetic code, Crick's wobble: an anticodon must read a codon of its amino acid),
-  `molecules` (the catalog: `MoleculeKind` with label markup, family, sizes in nm with textbook
-  ranges, places or membranes with the reason, the oriented part and side — `n` the cytosolic /
-  matrix / stroma side, `p` the exoplasmic side, from each membrane's `exo` in the catalog — states,
-  cells; `check_membrane`, `check_faces`, `check_place`; each molecule also registered as a
-  `Kind` of the cell world), `glyphs` (`MoleculeSpec`, `check_molecule`, `molecule_glyph`: prims
-  in nm in a local frame — a membrane protein's +y is its exoplasmic side, the bilayer's
-  mid-plane y = 0 — with named anchors, modification sites and facts the tests read),
-  `placing` (membrane proteins `on:` the cell or a structure; each candidate place's two sides
-  probed in the world, so the glyph's exoplasmic side faces the membrane's exoplasmic
-  compartment; ATP synthase lines the cristae and the stroma lamellae). The renderer
-  `cell_draw/molecules.py` turns prims into mobjects (static for the `molecule` scene;
-  level-of-detail pieces, prims of one look merged, for the `cell` scene). Scenes:
-  `scenes/molecule.py`, and `scenes/cell.py` (molecule options `state`, `faces`, `membrane`;
-  markup labels).
-- **Sizes** (catalog): B-DNA 2 nm, 0.34 nm / bp, 10.5 bp / turn, minor groove 0.35 of a turn;
-  nucleosome 11 nm, 147 bp, 1.65 left-handed turns, ~200 bp repeat; tRNA ~7 nm per arm; protein
-  diameter 2 × 0.066 × M^⅓ nm (Erickson 2009: ~5 nm at 50 kDa); GPCR ~4 × 7 nm; RTK ~20 nm;
-  channel ~10 nm; Na⁺/K⁺-ATPase ~15 nm; ATP synthase ~22 nm, F₁ ~10 nm, c-ring 8 (animal
-  mitochondria), 10 (bacteria), 14 (chloroplasts); ions at their hydrated radii (0.28–0.43 nm).
-  Small molecules are symbols at about their size; a `molecule` scene fits the view to them.
-- **Rules** (errors with the reason): a membrane protein in a membrane it never occurs in, its
-  oriented part facing the wrong side (*ATP synthase F₁ must face the mitochondrial matrix…*),
-  `in:` / `at` for a membrane protein, a soluble molecule in a compartment it is not found in
-  (DNA in a eukaryote's cytosol; cAMP outside the cytosol), a molecule in a cell that has none
-  (Na⁺/K⁺ pump in a plant; nucleosomes in a bacterium), an option of another kind, a state the
-  kind lacks, a symport whose solutes go opposite ways, a wrong base, an anticodon that does not
-  read its amino acid, a marker on the wrong residue, a gene or protein written in the wrong case.
-- **LOD** gains `molecules` (a 10 nm molecule drawn whole from 6 px, a dot before) and
-  `molecule_detail` (40–70 px). A `zoom_to` a molecule frames its glyph at about half the view;
-  its part anchors are the glyph's plus the membrane's two compartments.
-- **Layout of the `molecule` scene:** membrane proteins in one row along the membrane, soluble
-  molecules in rows on their side (wrapped to suit the frame), each slot as wide as its name;
-  part labels in columns or rows, whichever leaves the drawing larger, the sides balanced; the
-  compartments' names by the membrane where it is free, else at the left beyond the molecules.
-- **Step 203 corrections:** part anchors are checked against the model (a test: each label's
-  point lies in its compartment, at least 3 nm from its edge, or in the bilayer of its membrane):
-  the matrix beside a crista (not in its intracristal space), the glycocalyx 3–8 nm outside the
-  bilayer on the side its label goes to, the Golgi lumen and coat, heterochromatin on a patch,
-  the inner mitochondrial membrane away from a junction. Stroma lamellae leave granal
-  thylakoids at their margins (oblique from the top and bottom ones), never through a stack.
-  `Region` paths are in nanometres: in µm Skia lost pieces of small overlapping shapes and filled
-  a ring of smooth-ER tubules. The raft glow stays within the bilayer.
-- **Public:** `vidgen.api` adds `MOLECULE_KINDS`, `MoleculeKind`, `MoleculeSpec`, `MoleculeGlyph`,
-  `molecule_glyph`, `check_molecule`, `place_glyph`, `glyph_mobjects`, `membrane_sides`,
-  `protein_size`, `BILAYER_NM`, `check_molecule_membrane`, `check_molecule_faces`,
-  `check_molecule_place`, `SPECIES`, `MODIFICATIONS`, `nomenclature_species`, `check_gene`,
-  `check_protein`, `gene_markup`, `protein_markup`, `check_modification`, `histone_mark`,
-  `chem_markup`, `chem_plain`, `charge_of`, `check_markup`, `CODONS`, `check_sequence`,
-  `check_trna`, `codons_read`, `reverse_complement`, `LIPID_HEAD_HUE`, `LIPID_TAIL_HUE`. Config:
-  the scene type `molecule`; `cell` object options `state`, `faces`, `membrane` and the molecule
-  kinds. Nothing else changes (the Phase Q baseline frames match).
-- **Gaps:** molecules are static (states change by scene, not by action: Step 205); lipids are
-  drawn under membrane proteins in a `cell` close-up (no gap in the bilayer there); a row of
-  several membrane proteins in a 9:16 frame is small (one membrane, one row); the nucleosome is
-  seen face on only; rRNA is a schematic; small-molecule glyphs are symbols (no atoms).
+- **Decided:** a separate type `molecule` for close-ups (fixed camera in nm, a membrane across the
+  view, molecules in rows), and molecules as **kinds of the cell world** for `cell`; both draw the same
+  glyphs.
+- **Modules** (`cellworld`, no manim): `notation` (chemical markup: `Ca2+` → Ca²⁺; a monatomic ion's
+  digits are its charge, a polyatomic one's counts), `names` (species nomenclature as data — HGNC, MGI,
+  RGD, SGD, PomBase, FlyBase, ZFIN, E. coli, TAIR —; italic checked gene symbols, roman protein names
+  refused when written like the gene; modification markers P / Ub / Ac / Me with their residues;
+  histone marks against the human H2A, H2B, H3.1, H4 sequences), `sequences` (alphabets, complements,
+  `CODONS`, Crick's wobble), `molecules` (`MoleculeKind`: markup, family, nm sizes with ranges,
+  places / membranes with reasons, oriented part and side — `n` cytosolic / matrix / stroma, `p`
+  exoplasmic —, states, cells; `check_membrane`, `check_faces`, `check_place`; each also a cell-world
+  `Kind`), `glyphs` (`MoleculeSpec`, `check_molecule`, `molecule_glyph`: prims in nm, a membrane
+  protein's +y exoplasmic, bilayer mid-plane y = 0, named anchors), `placing` (both sides of each
+  candidate probed so the exoplasmic side faces the exoplasmic compartment). Renderer
+  `cell_draw/molecules.py`. Scenes `scenes/molecule.py` (layout), `scenes/molecule_runtime.py`
+  (process runtime mixin), `scenes/cell.py`.
+- **Sizes** in the molecule catalog; protein diameter 2 × 0.066 × M^⅓ nm (`protein_size`, Erickson
+  2009).
+- **Rules** (errors with the reason): wrong membrane or facing, `in:` / `at` for a membrane protein,
+  wrong compartment or cell, another kind's option, a missing state, an opposed symport, wrong bases,
+  an anticodon not reading its amino acid, a marker on the wrong residue, gene / protein case. Details:
+  docs/CONFIG.md#molecules-in-a-cell and #molecule.
+- **LOD**: `molecules` (a 10 nm molecule whole from 6 px) and `molecule_detail` (40–70 px). A `zoom_to`
+  a molecule frames its glyph at about half the view.
+- **`molecule` layout**: membrane proteins in a row along the membrane (three or more on several rows
+  when that frames them larger), soluble ones in rows on their side, each slot as wide as its name;
+  part labels in columns or rows, whichever leaves the drawing larger.
+- **Public:** `MOLECULE_KINDS`, `MoleculeKind`, `MoleculeSpec`, `MoleculeGlyph`, `molecule_glyph`,
+  `check_molecule`, `place_glyph`, `glyph_mobjects`, `membrane_sides`, `protein_size`, `BILAYER_NM`,
+  `check_molecule_membrane`, `check_molecule_faces`, `check_molecule_place`, `SPECIES`,
+  `MODIFICATIONS`, `nomenclature_species`, `check_gene`, `check_protein`, `gene_markup`,
+  `protein_markup`, `check_modification`, `histone_mark`, `chem_markup`, `chem_plain`, `charge_of`,
+  `check_markup`, `CODONS`, `check_sequence`, `check_trna`, `codons_read`, `reverse_complement`,
+  `LIPID_HEAD_HUE`, `LIPID_TAIL_HUE`.
 
 ### 95.10 Transport and membrane processes as actions (Step 205)
 
-- **Where.** Processes at the molecule scale are actions of the `molecule` scene: `set_state`,
-  `transport`, `diffuse`, `osmosis`, `action_potential`. Processes of the whole cell are actions of
-  the `cell` scene: `motor_walk`, `endocytosis`, `exocytosis`. Each action has a duration and
-  `until` like any other action, so it is timed to beats and words. Each validates with a clear
-  error before rendering: the wrong scene, an unknown molecule, a state the kind lacks, a
-  direction against the gradient for a passive path, an ion a channel does not pass, a walk past
-  the end of a track, a vesicle fused twice.
-- **Three layers.** No manim in `vidgen.cellworld.transport` and `vidgen.cellworld.traffic`. A
-  process is a `Plan` of `Phase`s. Each phase has protein states, particle `Move`s (paths in nm,
-  with a Brownian-bridge random walk) and a caption. The membrane shapes of an event are
-  keyframes. `cell_draw/traffic.py` (`EventDrawing`) draws the event overlay.
-  `scenes/molecule_process.py` plays plans: `PlanPlayer` and `Hold`, with morphs between
-  states. Prims are matched by look and interpolated; unmatched prims fade in or out.
-- **Physics.**
-  - Nernst: E = (RT/zF) ln(c_out/c_in), RT/F = 26.7 mV at 37 °C.
-  - Free energy: ΔG = RT ln(c₂/c₁) + zFΔψ. A passive path must have ΔG < 0. A coupled carrier
-    must have total ΔG < 0 over its stoichiometry (SGLT1 2 Na⁺ : 1 glucose; NCX 3 Na⁺ : 1 Ca²⁺).
-  - Typical mammalian concentrations, in mM (cytosol / outside): K⁺ 140/5, Na⁺ 12/145, Cl⁻ 10/110,
-    Ca²⁺ 0.0001/2, glucose 0.5/5. Resting potential −70 mV.
-  - Na⁺/K⁺-ATPase: the Post–Albers cycle E1 → E1-P → E2-P → E2. 3 Na⁺ out, then 2 K⁺ in, per ATP.
-  - Carriers use alternating access, with an occluded state between the two open states.
-    Uniporters: GLUT1, GLUT4. Symporters: SGLT1, SGLT2, NKCC1, KCC2. Antiporters: NCX, NHE1.
-  - Other pumps: a P-type H⁺ pump, a V-type pump (no states), and an ABC transporter (two NBDs,
-    ATP-driven closure).
-  - Channels: selectivity by ion. Gating kinds are voltage, ligand and mechanical. Inactivation
-    (a ball-and-chain plug) only on voltage-gated channels. Aquaporin passes water in single
-    file and no ions.
-  - Simple diffusion: only bilayer-permeant molecules (O₂, CO₂, water, small lipophilic drugs).
-  - Osmosis: water moves toward the higher osmolarity.
-  - Action potential: a monotone cubic through textbook points (−70 → +40 mV, undershoot −80 mV,
-    about 4 ms). Events in ms: Na⁺ channels open at 0.8 and inactivate at 1.6; K⁺ channels open
-    at 1.5 and close at 4.6. A live readout and an optional plot inset are drawn.
-  - Kinesin and dynein take 8 nm steps hand over hand; myosin V takes 36 nm steps. Each motor
-    walks toward its end (kinesin to plus, dynein to minus).
-  - Endocytosis: a clathrin pit forms, then a neck, then dynamin scission. Exocytosis: SNARE
-    docking, then a fusion pore, then collapse into the membrane.
-- **Step 204 gaps fixed.**
-  - Lipids leave a gap around each membrane protein in a `cell` close-up
-    (`lipid_layout(gaps=)`). The random-number stream is unchanged, so earlier frames match.
-  - A `molecule` scene in a tall frame puts membrane proteins in several rows.
-- **Public:** `vidgen.api` adds `cell_transport`, `cell_traffic`, `CellEventDrawing`,
-  `cell_motor_curves`, `cell_motor_parts`, `MOLECULE_ION_FLOW`, `MoleculePrim`, `carrier_parts`,
-  `molecule_small_prims`, `MOLECULE_ION_RADII`, `MOLECULE_ION_HUES`, `MOLECULE_TRANSPORTERS`,
-  `TYPICAL_CONCENTRATIONS`, `molecule_pump_type`.
-  - Config, molecule items: `transporter`, `ratio`.
-  - Config, `molecule` params: `solutes`, `potential`, `bars`, `seed`.
-  - Config, cell motor options: `track`, `s`, `side`.
-  - Config, the eight actions above.
-  - The Phase Q baseline frames match.
-- **Gaps:**
-  - The `cell` scene has no `set_state`.
-  - An endocytosed vesicle is not added to the world as an object.
-  - Part labels in a zoomed view can go stale after a process (use `labels: false`).
-  - Four membrane proteins plus the action-potential plot make small drawings.
-  - The plot is an inset, not a `function_plot` scene.
+- **Actions.** `molecule`: `set_state`, `transport`, `diffuse`, `osmosis`, `action_potential`.
+  `cell`: `motor_walk`, `endocytosis`, `exocytosis` (`snares: generic | constitutive | neuronal`,
+  default `generic`: a cell-type option on the action, not a cell kind). Each validates before
+  rendering (wrong scene, unknown molecule, missing state, a passive path against its gradient, an ion
+  a channel does not pass, a walk past a track's end, a vesicle fused twice). Keys:
+  docs/CONFIG.md#cell-actions and #molecule.
+- **Layers.** `cellworld.transport` and `cellworld.traffic` (no manim): a process is a `Plan` of
+  `Phase`s (protein states, particle `Move`s in nm with a Brownian-bridge walk, a caption); an event's
+  membrane shapes are keyframes. `cell_draw/traffic.py` (`EventDrawing`) draws events;
+  `scenes/molecule_process.py` plays plans (`PlanPlayer`, `Hold`; prims matched by look and
+  interpolated, unmatched ones fade).
+- **Physics** (data `TYPICAL_CONCENTRATIONS`, `MOLECULE_TRANSPORTERS`, `MOLECULE_ION_FLOW`): Nernst with
+  RT/F = 26.7 mV at 37 °C; ΔG = RT ln(c₂/c₁) + zFΔψ; a passive path needs ΔG < 0, a coupled carrier a
+  total ΔG < 0 over its stoichiometry; resting potential −70 mV; the Na⁺/K⁺-ATPase Post–Albers cycle;
+  carriers by alternating access with an occluded state; inactivation only on voltage-gated channels;
+  simple diffusion only for bilayer-permeant molecules; the action potential a monotone cubic through
+  textbook points; motor step sizes per motor, each walking to its end.
+- **Public:** `cell_transport`, `cell_traffic`, `CellEventDrawing`, `cell_motor_curves`,
+  `cell_motor_parts`, `MOLECULE_ION_FLOW`, `MoleculePrim`, `carrier_parts`, `molecule_small_prims`,
+  `MOLECULE_ION_RADII`, `MOLECULE_ION_HUES`, `MOLECULE_TRANSPORTERS`, `TYPICAL_CONCENTRATIONS`,
+  `molecule_pump_type`.
 
 ### 95.11 Gene expression as actions (Step 206)
 
-- **Where.** A `gene:` param (in `molecule` and `cell`) makes the gene a target. The molecule
-  scene is a close-up with every base and amino acid written. It has the actions `transcribe`,
-  `cap`, `splice`, `polyadenylate`, `export`, `translate` (`codons`), `target_er`, `glycosylate`
-  and `fold` (`chaperone`). The cell scene follows the products through the cell with
-  `transcribe`, `export`, `translate`, `to_golgi` and `secrete` (`to`). The close-up steps are
-  refused in a cell, with a pointer to the molecule scene. A `molecule` scene with a gene has no
-  `molecules`, `solutes`, `membrane` or `potential`.
-- **The gene** (`GeneSpec` → `build_gene` → `Gene`):
-  - It is written as a coding-strand `sequence` (with 1-based intron spans), as a `protein`
-    (back-translated with frequent human codons), or generated from `codons` and a `seed`.
-  - A generated gene has a TATA box at −31..−24 and an Inr at +1, a Kozak context, introns
-    (GU…branch A 18–40 nt from the 3′ end…polypyrimidine tract…AG, at least 30 nt), a stop codon,
-    AAUAAA, a CA cleavage site and a GU-rich element.
-  - A bacterium has −35 and −10 boxes, a Shine–Dalgarno sequence and a terminator hairpin.
-  - The ORF is the first AUG of the mature mRNA to the first in-frame stop codon. The genetic code
-    is NCBI table 1. The anticodons are the ones human cells use (inosine at the wobble place for
-    the eight I-read boxes, checked against Crick's rules).
-  - The signal peptide is found by a von Heijne rule: an h-region of at least 7, small residues
-    at −1 and −3. Preproinsulin gives 24. Sequons are N-X-S/T with X not Pro.
-  - The validation errors are clear: bad letters, introns without GU…AG or too short, a frame
-    that does not reach a stop codon, a `protein` that does not match the sequence, and a
-    premature stop codon more than 50 nt before the last junction (an NMD target).
-- **Rules** (`ExpressionState`, `step_problem` / `advance`, replayed in beat and `at` order by
-  `vidgen validate`). Each step needs what comes before it: splicing a transcript, export after
-  processing, translation in the cytosol, `target_er` only for a signal peptide before the
-  signal leaves the tunnel unbound, `glycosylate` only in the ER with a sequon that has reached
-  the OST, a chaperone that fits the compartment. In a cell, `cell_steps` expands each step into
-  the molecular steps it implies, so the same rules apply.
-- **Three layers.**
-  - No manim: `cellworld/expression.py` (the model and rules), `expression_stage.py` (the stage
-    in nucleotide slots: `Look`, `Pose`, `Clip` of captioned phases, `Builder`; the nucleus
-    steps), `expression_cyto.py` (ribosome, tRNAs, the tunnel, the chain path, SRP/Sec61, OST,
-    chaperones) and `expression_route.py` (`RoutePlanner` in µm for the cell scene).
-  - Drawing: `cell_draw/expression.py` (`ExpressionDrawing`, one mobject per look, made up front)
-    and `cell_draw/expression_route.py` (`RouteDrawing`, markers of a fixed screen size).
-  - Scenes: `scenes/molecule_gene.py` (the `GeneExpression` mixin, `StagePlayer`),
-    `scenes/cell_expression.py` (`CellExpression`, `RoutePlayer`) and `scenes/gene_actions.py`.
-- **Scale and numbers.** DNA and RNA are stretched about 6× against the proteins so that the
-  letters can be read, and the scene says *schematic: not to scale*. The window is 36 slots
-  (16:9) or 18 (9:16). The numbers drawn:
-  - a bubble of 13 bp and an RNA–DNA hybrid of 8 bp;
-  - capping at about 25 nt;
-  - a tunnel of 30 residues and the OST about 65 residues from the PTC;
-  - 12 A in the tail (about 200 in mammals);
-  - Glc₃Man₉GlcNAc₂ in SNFG symbols.
-- **Timing.** An action's length follows its content: `run_time_for` builds and caches the clip.
-  Elongation captions its first two cycles and then runs fast (at most 7 s). A short beat
-  squeezes the action, and `run_time` overrides the length.
-- **Speed.** Texts are cached as plain shapes rather than MarkupText copies. Captions are wrapped
-  by a character-width estimate. `StageFade` replaces `FadeIn` of the whole group.
-- **Public:** `vidgen.api` adds `GENE_CELL_STEPS`, `GENE_CHAPERONES`, `GENE_STEPS`,
-  `ExpressionState`, `Gene`, `GeneSpec`, `build_gene`, `parse_protein`, `signal_peptide_length`,
-  `gene_advance`, `gene_cell_advance`, `gene_cell_step_problem`, `gene_step_problem`,
-  `ExpressionStage`, `GeneRoutePlanner`, `gene_route_problem`, `ExpressionDrawing` and
-  `GeneRouteDrawing`.
-  - Config: the `gene` param (`id`, `name`, `product`, `species`, `sequence`, `introns`,
-    `protein`, `codons`, `signal_peptide`, `glycosylation`, `seed`, `start`, `codes`) and the 11
-    actions above.
-  - The Phase Q baseline frames match.
-- **Gaps:**
-  - A 9:16 close-up leaves vertical space unused.
-  - The cell-scene markers are schematic and move cargo in straight lines.
-  - Calnexin is drawn floating, not anchored in the membrane.
-  - Several steps in one short beat get squeezed (the guide advises one step per beat).
-  - Caption wrapping is an estimate.
-  - The Step 205 gaps remain: no `set_state` in a cell, the endocytosed vesicle is not an
-    object, and labels go stale.
+- **Where.** A `gene:` param (in `molecule` and `cell`) makes the gene a target. `molecule` with a gene
+  is a close-up of every base and residue (`transcribe`, `cap`, `splice`, `polyadenylate`, `export`,
+  `translate`, `target_er`, `glycosylate`, `fold`) and has no `molecules`, `solutes`, `membrane`,
+  `potential`. `cell` follows products through the cell (`transcribe`, `export`, `translate`,
+  `to_golgi`, `secrete`); close-up steps in a cell are refused with a pointer to `molecule`. Keys:
+  docs/CONFIG.md#a-gene-in-a-cell.
+- **The gene** (`GeneSpec` → `build_gene` → `Gene`): a coding-strand `sequence` with 1-based introns, a
+  `protein` (back-translated with frequent human codons), or generated from `codons` and `seed` (with
+  promoter, Kozak, consensus introns ≥ 30 nt, stop, polyadenylation signals; bacterial elements for a
+  bacterium). ORF = first AUG of the mature mRNA to the first in-frame stop; NCBI table 1; human
+  anticodons (inosine at the wobble place). Signal peptide by a von Heijne rule; sequons N-X-S/T, X not
+  Pro. A premature stop more than `NMD_DISTANCE` = 50 nt before the last junction is refused.
+- **Rules** (`ExpressionState`, `step_problem` / `advance`, replayed in beat and `at` order): each step
+  needs its predecessors (e.g. `target_er` only for a signal peptide before it leaves the tunnel,
+  `glycosylate` only in the ER once a sequon reaches the OST). In a cell, `cell_steps` expands each
+  step into the molecular steps it implies, so the same rules apply.
+- **Modules.** No manim: `cellworld/expression.py` (model, rules), `expression_stage.py` (stage in
+  nucleotide slots: `Look`, `Pose`, `Clip`, `Builder`), `expression_cyto.py` (ribosome, tRNAs, tunnel,
+  SRP/Sec61, OST, chaperones), `expression_route.py` (`RoutePlanner` in µm; gentle curves). Drawing:
+  `cell_draw/expression.py` (`ExpressionDrawing`, one mobject per look, made up front),
+  `cell_draw/expression_route.py` (`RouteDrawing`). Scenes: `scenes/molecule_gene.py`
+  (`GeneExpression`, `StagePlayer`), `scenes/cell_expression.py` (`CellExpression`, `RoutePlayer`),
+  `scenes/gene_actions.py`.
+- **Scale.** Nucleic acids are stretched about 6× against proteins; the scene says *schematic: not to
+  scale*. Window `WINDOW_WIDE` 36 / `WINDOW_TALL` 15 slots, chosen by the **frame**'s shape.
+- **Timing.** An action's length follows its content (`run_time_for` builds and caches the clip);
+  elongation captions two cycles then runs fast (≤ 7 s); a short beat squeezes it; `run_time` overrides.
+- **Public:** `GENE_CELL_STEPS`, `GENE_CHAPERONES`, `GENE_STEPS`, `ExpressionState`, `Gene`, `GeneSpec`,
+  `build_gene`, `parse_protein`, `signal_peptide_length`, `gene_advance`, `gene_cell_advance`,
+  `gene_cell_step_problem`, `gene_step_problem`, `ExpressionStage`, `GeneRoutePlanner`,
+  `gene_route_problem`, `ExpressionDrawing`, `GeneRouteDrawing`.
 
 ### 95.12 Signalling pathways: the `pathway` scene (Step 207)
 
-- **Where.** A scene type of its own (decided in §95.1): a pathway is a graph, not geometry.
-  Three layers again. No manim: `cellworld/pathway.py` (bands, node kinds, arc types, specs,
-  `build_pathway` with every rule, loops, the activity model and effects, the signal's waves, the
-  drug table), `cellworld/pathway_layout.py` (the band layout and routes) and
-  `cellworld/pathway_templates.py` (the three templates as specs). Drawing and runtime:
-  `scenes/pathway.py` (params, layout choice, glyphs, label placement, targets, reveal) and
-  `scenes/pathway_play.py` (the `PathwayPlay` mixin: what the actions draw). Actions:
-  `scenes/pathway_actions.py` (`signal`, `inhibit`, `knockout`, `drug`, `amplify`; the replay of
-  their order), and `focus` (`iso_actions.py`) now also moves the camera onto pathway targets.
-- **Shared names with the cell world.** Band labels come from the catalog's compartments and
-  membranes (`extracellular`, `plasma_membrane`, `cytosol`; `nucleoplasm` and the ER / mitochondrial
-  compartment names are aliases of their bands); gene symbols are checked with `names.check_gene`
-  (italic, the species' case) and protein labels with `check_protein` (a protein written like its
-  gene is refused where the case tells them apart), marks and sites with `check_modification`,
-  small-molecule labels typeset with `notation.chem_markup` (`PIP3` → PIP₃, `Ca2+`); `Gα_s` writes
-  a subscript.
-- **Notation** (SBGN PD / AF adapted): macromolecules as rounded boxes, complexes with cut corners,
-  simple chemicals as ellipses, genes as nucleic-acid features (square top, round bottom; italic
-  symbol), phenotypes as hexagons, drugs as pills; state variables as pills on the top edge (GDP /
-  GTP, pS133 = P on Ser133); arcs: activation (filled arrowhead), inhibition (T-bar), catalysis
-  (open circle), phosphorylation (a P disc on the arc), dephosphorylation (−P), binding (a dot),
-  translocation and expression (dashed), `indirect` (dashed). Inhibitory arcs are drawn in the
-  theme's accent colour.
-- **Rules** (`VidgenError` with the reason, did-you-mean for names): unknown nodes, kinds, arc
-  types, compartments, templates; self-arcs, duplicate ids or arcs; `effect` contradicting a type
-  that cannot flip; a GAP activating / a GEF inhibiting a GTPase or G protein; a phosphatase that
-  phosphorylates, a kinase that dephosphorylates, phosphorylation by an adaptor and the like;
-  catalysis from a non-enzyme; a gene acting other than by `expresses`, regulated other than by
-  `transcribes`; `transcribes` from a non-TF, to a non-gene, or across compartments (*add a
-  translocates arc*); `translocates` between different labels, within a band, across the plasma
-  membrane, or skipping the cytosol; `converts` between non-small-molecules; a drug node activating
-  without `role: activator`; arcs against a declared `role`; a site on an arc that is not a
-  (de)phosphorylation or on a residue the mark never goes on; places: each kind's bands with the
-  reason (a gene in the nucleus or the mitochondrion, a ligand outside, a receptor in the plasma
-  membrane or the ER, G proteins at the membrane…), known small molecules' compartments (cAMP in
-  the cytosol / nucleus, DAG / PIP₂ / PIP₃ in the membrane, IP₃ in the cytosol); states the kind
-  lacks. Loops not broken by a `feedback` arc (Tarjan's strongly connected components) are warned
-  about by `vidgen validate` (`validate_project`).
-- **Layout** (`pathway_layout`, deterministic, manim-free; units of the node sizes): the main axis
-  is the flow (LR: x, bands as columns; TB: y downwards, bands as rows). Ranks: a membrane band is
-  one rank (its nodes in a row along the membrane, arcs between them lateral); other bands are
-  layered by the longest path within the band over the arcs that are neither feedback nor close an
-  undeclared loop (a source pulled to just before its nearest successor); bands follow each other.
-  **Satellites** save ranks: a node nothing upstream activates acting on a node with other inputs
-  (PDE4 on cAMP, mTORC2 on Akt) and, left to right, an outcome after its node stand beside that
-  node in its rank (a block kept together; LR: the modifier below, clear of the state badges on
-  top). Long arcs get a dummy in each rank between; order by barycenter sweeps with blocks moving
-  whole, transposition elsewhere, the order with fewest crossings kept; cross positions by a
-  weighted isotonic fit (satellites pulled next to their node). Gaps: `rank_gap` within a band,
-  `band_gap` + pads between bands (the membranes are drawn there), more where an arc label must
-  fit (labels are placed later, in the scene). **Routes** cross each rank's slab straight along
-  the main axis (at the node's port, or the dummy's place) and change cross position only in the
-  empty gaps between ranks (cubic S-curves whose tangents run along the main axis stay within the
-  gap), so no route passes through a node (`route_hits` checks it; tests for the templates in both
-  directions and a crowded custom graph). Lateral arcs join neighbours straight; non-neighbours
-  bend into the gap after the row. Ports spread along a node's side, ordered by where the arc goes.
-- **Fitting.** Label sizes are measured once (Pango markup, two lines past 9 characters); for each
-  direction (the frame's own first: LR in landscape, TB in portrait) the largest text factor from
-  1.3× down to the readable size (`readable_size()` × 1.02, as lint measures words) at which the
-  layout fits the body is kept; the other direction wins only with text 12 % larger. At the readable
-  size a layout up to 3 % too large is scaled quietly; more is drawn smaller with a warning
-  (split the pathway or `remove` nodes). `edge_labels: auto` drops the arc labels when they would cost
-  more than 10 % of the text size (long LR pathways). Small texts (badges, labels, band names) are
-  72 % of the node size, never below readable.
-- **Labels kept clear.** Band names, arc labels, drug pills and amplification factors are placed
-  at the candidate spot (corners and edges of a band; around an arc's middle; round a node) that
-  covers the least: node boxes with their badges, marks, arrowheads, earlier labels (3× the cost:
-  text over text is a lint error), arc points, the safe area's edge; arc labels also prefer to stay
-  near their arc. Nodes with badges are made taller (and, top to bottom, wider) so the badges never
-  cover their names.
-- **The logic.** `signal_waves`: breadth first from the start, each step carrying a sign (the
-  target turns on, off, or was reached: the arc only flashes), so a double negative turns its
-  target on; feedback arcs fire after the rest; `to` follows the shortest activating, non-feedback
-  path; a path given node by node is checked arc by arc; knocked-out, drugged and held nodes stop
-  it. `activity`: a semi-quantitative steady state with the stimulus on — no activating input:
-  1; else the geometric mean of the activating inputs (2 % residue for a lost one when there are
-  several); divided by 1 + 3 × the active inhibitors; off nodes 0; feedback and loop-closing arcs
-  left out. `effects` compares before and after (↑ above +25 %, ↓ below −20 %, off below 0.03).
-  Checked against the textbook: PTEN loss raises PIP₃, Akt, Rheb, mTORC1 and lowers TSC2, GSK3β,
-  FOXO; a PI3K or mTORC2 block the reverse; a MEK block switches ERK, Elk-1, *FOS* off; RasGAP loss
-  raises Ras and the cascade; PDE loss raises cAMP to *PCK1*; no adenylyl cyclase, no cAMP.
-- **Drawing the actions** (`PathwayPlay`): every change is remembered for `until`. Things that
-  appear part-way (lit arcs, badges, crosses, pills, copies) are made invisible when built and
-  drawn by animations that keep them so until their turn (`Draw`, `Appear`): Manim adds an
-  animation's mobjects when the whole `Succession` starts. A label's colour flips quickly half-way
-  through its node's fill change (never mid-tone on mid-tone). Effects appear upstream first
-  (`LaggedStart` in topological order); GTPases go back to GDP when held or down, to GTP when up.
-  Known drugs (erlotinib, trametinib, vemurafenib, rapamycin, IBMX, H-89…) must name their target
-  (a word of the node's id, label or gene).
-- **Templates** (human nomenclature; Alberts ch. 15, Lodish ch. 15–16): `gpcr_camp_pka` (glucagon,
-  GCGR, Gαs, adenylyl cyclase, cAMP, PKA ⇢ nuclear PKA, CREB pSer133, *PCK1*, gluconeogenesis; PDE4,
-  PKA → PDE4 feedback), `rtk_ras_mapk` (EGF, EGFR, Grb2, SOS, Ras at the membrane, RasGAP, Raf, MEK,
-  ERK ⇢ nuclear ERK, Elk-1, *FOS*, proliferation; ERK ⊣ SOS feedback), `pi3k_akt` (growth factor,
-  RTK, PI3K, PIP₂ → PIP₃, PTEN, PDK1 pThr308, mTORC2 pSer473, Akt ⊣ TSC2 (GAP) ⊣ Rheb → mTORC1 →
-  cell growth, Akt ⊣ GSK3β pSer9, Akt ⊣ FOXO → *BCL2L11* → apoptosis).
-- **Public:** `vidgen.api` adds `cell_pathway` and `cell_pathway_layout` (the modules), `PATHWAY_BANDS`,
-  `PATHWAY_EDGE_TYPES`, `PATHWAY_NODE_KINDS`, `PATHWAY_TEMPLATES`, `Pathway`, `PathwaySpec`,
-  `build_pathway`. Config: the scene type `pathway` and the actions `signal`, `inhibit`,
-  `knockout`, `drug`, `amplify`; `focus` accepts pathway scenes. Nothing else changes (the Phase Q
-  baseline frames match).
-- **Gaps:** 16:9 holds about nine ranks at the readable size (the `pi3k_akt` template fills it);
-  arc labels are dropped in long left-to-right pathways; satellites are one modifier and one outcome
-  per node; a molecule is not carried between a `cell` and a `pathway` scene yet (§95.1's `carry:`);
-  amplification copies are glyphs without names.
+- **Modules.** No manim: `cellworld/pathway.py` (bands, node kinds, arc types, `build_pathway` with
+  every rule, loops, activity and effects, signal waves, drug table), `pathway_layout.py`,
+  `pathway_templates.py` (`PATHWAY_TEMPLATES`: `gpcr_camp_pka`, `rtk_ras_mapk`, `pi3k_akt`).
+  Runtime: `scenes/pathway.py`, `scenes/pathway_play.py` (`PathwayPlay`), `scenes/pathway_actions.py`
+  (`PATHWAY_ACTIONS`: `signal`, `inhibit`, `knockout`, `drug`, `amplify`; order replayed). `focus`
+  (`iso_actions.py`) also moves the camera onto pathway targets.
+- **Shared names**: band labels from the catalog's compartments and membranes (other compartments are
+  aliases of their bands); `names.check_gene` / `check_protein` / `check_modification`,
+  `notation.chem_markup`.
+- **Notation** (SBGN PD / AF adapted) and **rules** (did-you-mean; biological impossibilities of arcs,
+  places and states): docs/CONFIG.md#pathway. An inhibitory phosphorylation is a T-bar with a P,
+  played as switching its target off. Loops not broken by a `feedback` arc (Tarjan SCCs) are warnings
+  of `validate_project`.
+- **Layout** (`pathway_layout`, deterministic): the main axis is the flow (LR: bands as columns; TB:
+  rows). A membrane band is one rank; other bands are layered by longest path over arcs that are
+  neither feedback nor loop-closing. **Satellites**: a node nothing upstream activates acting on a
+  node with other inputs, and (LR) an outcome after its node, stand beside that node in its rank. Long
+  arcs get dummies; barycenter sweeps (blocks move whole), fewest crossings kept; cross positions by a
+  weighted isotonic fit. **Routes** run straight through each rank's slab and change cross position
+  only in the gaps between ranks, so no route passes through a node (`route_hits`).
+- **Fitting.** Per direction (the frame's own first) the largest text factor in `GROWTH` (1.9× down to
+  `readable_size()` × 1.02) at which the layout fits; the other direction wins only with text 12 %
+  larger. Up to 3 % overflow at readable size is scaled quietly, more draws smaller with a warning. A
+  width-bound pathway spreads up to 3× (`SPREAD`). `edge_labels: auto` drops arc labels when they
+  would cost more than 10 % of text size. Band names, arc labels, pills take the candidate spot
+  covering least (earlier labels cost 3×); nodes with badges are made taller so badges never cover
+  names.
+- **Logic.** `signal_waves`: breadth first, each step carrying a sign (on, off, reached), so a double
+  negative turns its target on; feedback fires last; knocked-out, drugged and held nodes stop it.
+  `activity` (steady state, stimulus on): no activating input 1; else the geometric mean of activating
+  inputs (2 % residue for a lost one among several), divided by 1 + 3 × active inhibitors; off nodes
+  0; feedback and loop-closing arcs left out. `effects`: ↑ above +25 %, ↓ below −20 %, off below 0.03.
+  Known drugs must name their target.
+- **Drawing**: changes remembered for `until`; part-way items are built invisible and drawn by `Draw`
+  / `Appear` (Manim adds an animation's mobjects when the whole `Succession` starts); effects appear
+  upstream first (topological `LaggedStart`).
+- **Public:** `cell_pathway`, `cell_pathway_layout` (modules), `PATHWAY_BANDS`, `PATHWAY_EDGE_TYPES`,
+  `PATHWAY_NODE_KINDS`, `PATHWAY_TEMPLATES`, `Pathway`, `PathwaySpec`, `build_pathway`.
 
 ### 95.13 Cell cycle, division and energy: the `cell_cycle` and `metabolism` scenes (Step 208)
 
-- **Decision: two scene types, not actions on `cell`** (a deviation from §95.1's plan for 208).
-  The cycle is a diagram in time (a ring and plots), a division is a cell drawn large whose
-  chromosome count matters more than its µm scale, and the energy pathways are graphs and a
-  membrane in cross-section: none sits well in the cell world's camera. So `cell_cycle` (`mode:
-  cycle | mitosis | meiosis`) and `metabolism` (`process: glycolysis | link_reaction | tca | etc |
-  light_reactions`), with two actions, `advance` (both types) and `checkpoint` (`mode: cycle`).
-  The YAML stays short: one scene per picture, `advance: <target>, to: <point or stage>`.
-- **Three layers as before.** No manim: `cellworld/cycle.py` (typical hours, the M stages, the
-  restriction point at 60 % of G1, the checkpoints as regulator rows — nodes and arcs →/⊣ with P
-  or Ub marks — for pass and per arrest cause, `cycle_geometry`, the four cyclin–CDK level curves
-  as monotone cubics over control points, `CycleState` with `advance_problem`: G0 only from G1
-  before R, no passing an arrested checkpoint), `cellworld/division.py` (stages and their
-  captions, `stage_counts` per cell or nucleus, `check_spec`, and `plan_division`: keyframes of
-  items — chromatids as point lists with a colour per segment, so crossover segments swap — cell
-  outlines with the furrow and midbody bridge or the plant cell plate, envelopes, poles, fibres,
-  labels; every keyframe has every item, missing ones copied at opacity 0, so drawing is plain
-  interpolation) and `cellworld/energy.py` (metabolites and steps with enzymes, cofactors and
-  carbons; the two chains' components with what they take and give, protons pumped, photons and
-  reactions; H⁺ per ATP for c₈, c₁₄, c₁₀ rings; `check_setting` with the reasons; `tallies`,
-  `electron_path`, `chain_effects`). Drawing: `scenes/division_draw.py` (per-keyframe zoom, the
-  portrait rotation), `scenes/bio_draw.py` (measured text blocks, regulator rows, `driven`), the
-  scenes `scenes/cell_cycle.py` and `scenes/metabolism.py`, and `scenes/cycle_actions.py`.
-- **Science** (Alberts ch. 14 and 17; Morgan *The Cell Cycle*; Berg; Lehninger): the regulators
-  and counts listed in CONFIG; mitotic anaphase has 4n chromosomes per cell (separated sisters
-  count); meiosis I is reductional (2n → n, chromatids non-identical after crossing over), II
-  equational; one obligate chiasma per bivalent, at most two with interference (≥ 0.15 apart);
-  ETC pumps 4 + 4 + 2 H⁺ per NADH into the intermembrane space, 6 from FADH₂; the light reactions
-  6 H⁺ into the lumen per two electrons, O₂ counted in halves; ATP synthase's F₁ faces the N side.
-- **Drawing notes.** Manim draws only mobjects present when an animation starts, so every text
-  that will show (tally digits, centre labels, captions) is made at build time and shown by
-  opacity, and the scenes animate through `UpdateFromAlphaFunc`. In a portrait frame the chain's
-  membrane is folded back on itself (a crista or a thylakoid) and the division's spindle runs
-  down the frame; glycolysis with pyruvate oxidation snakes into two columns with the second's
-  labels stacked on its right.
-- **Validation** is replayed in beat and `at` order (`action_sequence_problems` on the scene
-  class): checkpoint arrests and their `until`, stage order, counts in `expect`, the gradient
-  before ATP synthase, the cycle's turns.
-- **Public:** `vidgen.api` adds the modules `cell_cycle_model`, `cell_division` and `cell_energy`.
-  Config: the scene types `cell_cycle`, `metabolism`; the actions `advance`, `checkpoint`.
-  Nothing else changes (the Phase Q baseline frames match).
-- **Gaps:** the cyclin curves are stylised (a.u.); meiosis is drawn in an animal cell only;
-  2n is at most 8; no non-disjunction or checkpoint failure pictures; the chains carry two
-  electrons per run (not a Q cycle animation); β-oxidation, gluconeogenesis and the Calvin cycle
-  are not drawn; the gallery shows meiosis and the citric acid cycle (the GIF budget is nearly
-  spent: about 27 KB left).
+- **Decided: two scene types, not `cell` actions** — a cycle is a diagram in time, a division a cell
+  whose chromosome count matters more than µm scale, energy pathways graphs plus a membrane section.
+  `cell_cycle` (`mode: cycle | mitosis | meiosis`), `metabolism` (`process: glycolysis |
+  link_reaction | tca | etc | light_reactions`); actions `advance` (both), `checkpoint` (`cycle`).
+- **Modules.** No manim: `cellworld/cycle.py` (phases, restriction point at 60 % of G1, checkpoints as
+  regulator rows, `cycle_geometry`, stylised cyclin–CDK curves, `CycleState.advance_problem`: G0 only
+  from G1 before R, no passing an arrested checkpoint), `cellworld/division.py` (`stage_counts`,
+  `check_spec`, `plan_division`: keyframes of items; **every keyframe has every item**, missing ones at
+  opacity 0, so drawing is plain interpolation; chromatids coloured per segment so crossovers swap;
+  2n ≤ 8, animal cell), `cellworld/energy.py` (steps, chain components, proton and ATP counts,
+  `check_setting`, `tallies`, `electron_path`, `chain_effects`). Drawing: `scenes/division_draw.py`,
+  `scenes/bio_draw.py`, `scenes/cell_cycle.py`, `scenes/metabolism.py` (columns grow up to `GROW` =
+  1.6×), `scenes/cycle_actions.py`. Every text that will show is made at build time and shown by
+  opacity. Enzyme names are roman.
+- **Validation** replayed in beat and `at` order (`action_sequence_problems`): arrests and their
+  `until`, stage order, `expect` counts, the gradient before ATP synthase, the cycle's turns.
+  Non-disjunction: §96.11.
+- **Public:** modules `cell_cycle_model`, `cell_division`, `cell_energy`.
 
 ### 95.14 Scientific accuracy lint and references (Step 209)
 
-- **Where the knowledge lives.** `vidgen.cellworld.accuracy` (no manim): text checks of narration
-  against textbook facts — `direction_claims` (nucleic acids made 3′→5′, a ribosome reading mRNA
-  3′→5′, proteins made C→N, kinesin to minus / dynein to plus, protons pumped into the matrix or
-  stroma, Na⁺ pumped in / K⁺ out), `location_claims` (the `PLACES` table: glycolysis, the citric
-  acid cycle, pyruvate oxidation, the respiratory chain, transcription, splicing, translation, the
-  Calvin cycle, the light reactions, replication, β-oxidation; eukaryotic facts skipped for a
-  prokaryote and in sentences about bacteria), `count_claims` (glycolysis net ATP / NADH /
-  pyruvate; NADH, FADH₂, CO₂, GTP per turn or per glucose; Na⁺ / K⁺ per pump cycle; H⁺ per NADH,
-  FADH₂ and complex; cells after mitosis / meiosis; stop codons, human chromosomes, bp per turn and
-  per nucleosome), `placement_claims` (a cell scene's things said to be where the scene has none),
-  `pathway_claims` (an arc's sign or (de)phosphorylation against "A activates B" / "B is
-  inhibited by A"), `naming_claims` (gene vs protein forms per species with `protein_form`, wrong
-  case, italics in markup), the transport words (`says_active`, `says_passive`, `transport_mode`).
-  **False positives are avoided by narrowness**: text is normalised (primes, arrows, "five
-  prime", sub/superscripts), split into sentences and `;` clauses; a sentence with a negation, a
-  contrast ("but", "rather than", "whereas") or a question is skipped; each claim needs its
-  context words (a synthesis verb and a nucleic acid; a protein word and a synthesis verb; the
-  pump named; "per turn" or "per glucose" accepted either way when unsaid), and contexts that make
-  a direction right (the template, proofreading, the lagging strand overall, kinesin-14, an
-  anticodon written 3′-…-5′) exempt it. Lint run over every example and the Phase U scratch
-  projects (about 260 scenes): 0 findings.
-- **The rules** (`vidgen.lint.science_rule`, scene scope, default warning, each a `RuleConfig` in
-  `LintRules`, after `music_check` in `LINT_RULES`): `science_scale` (`factor` 1.5: a `cell`
-  object's size or width outside its kind's `size_range` / `WIDTH_RANGES` by the factor, the cell
-  outside `CELL_TYPICAL`, only while `scale_bar` and not `not_to_scale`; `MOST_PER_CELL` counts of
-  nuclei, centrosomes, nucleoli, vacuoles, nucleoids always), `science_location`,
-  `science_direction`, `science_energy` (molecule scenes: a beat's `transport` targets all passive
-  but called active, all pumps but called passive; "active transport" with no pump, coupled
-  carrier or ATP in a molecule or cell scene; cell scenes with motors exempt), `science_naming`
-  (declared genes: molecule `gene`, the `gene:` param, pathway nodes' genes; texts: title, molecule
-  labels with markup, cell labels, callout labels, narration), `science_pathway`,
-  `science_counts`. `science_issues(project, scene_id, rules)` validates the scene's params through
-  its registered type (no render; a world is rebuilt from the lru cache) and the runner fills
-  `SceneContext.science` once per scene. Hard impossibilities stay validation errors; the lint
-  takes judgements and words. Decided: config-level, not pixels — the drawn-exaggeration check
-  planned in §95.1 (a glyph larger than its thing at LOD) is left out: the LOD minimum sizes are
-  deliberate (a ribosome dot keeps 0.8 px) and would only add noise.
-- **`not_to_scale: true`** on a `cell` scene: a pinned "not to scale" note on a plate in the body's
-  lower right (part of the `cell` target's group) and no `science_scale` size findings.
-- **Narration–picture rules (Phase P) know the new scenes.** `SHOWING_ACTIONS` gains the cell
-  biology actions (`zoom_to`, `advance`, `checkpoint`, `signal`, `knockout`, `drug`, `inhibit`,
-  `amplify`, the gene steps, the transport actions, `motor_walk`, `endocytosis`, `exocytosis`); an
-  action without a `label` of its own shows its single target's on-screen name, from the scene
-  type's optional classmethod `target_text(params, name)` (`cell`: an object's label or kind name;
-  `pathway`: a node's plain label), so `said_before_shown` narrows a label's arrival to that action.
-- **References** (`vidgen.references`, no manim): `ReferenceConfig` (`label` ≤ 120 characters, at
-  least one of `doi` / `pmid` / `isbn` / `url`, `id`), `FigureCreditConfig` (`text`, `license`, the
-  same identifiers; a string is its text), checked offline: DOI `10.<4–9 digits>/<suffix>`
-  (prefixes `doi:`, `https://doi.org/` taken off), PMID 1–8 digits, ISBN-10/13 check digits, http(s)
-  URL with a dotted host. No network: no `vidgen refs check` (decided: resolving DOIs is not
-  offline-safe and adds nothing the format check and the author's copy-paste do not). Scene keys
-  `references` (≤ 12) and `figure_credit`; beat key `cite` (ids or 1-based places; checked);
-  video key `citations: {show: footer | marker | card | none, card_seconds: 4, description: true}`.
-  Numbers are video-wide in order of first appearance (`video_references`; the same identifier
-  keeps its number). Docs and tests use only clearly fake placeholders in valid formats
-  (`10.0000/example`, PMID `12345678`, ISBN `978-0-00-000000-2`).
-- **On screen** (`vidgen/citations.py`, core: not a built-in scene module): a `Citations` overlay (not a registered type: no
-  `overlays:` entry needed) that `overlays.scene_overlays` adds for each scene with references or a
-  credit; `Scene._build_overlays` builds overlays when any scene has citations. States: the numbers
-  of the beat in effect (its `cite`s; all of the scene's when no beat cites; hidden in a beat that
-  cites nothing while others do), or the card for the scene's last `min(card_seconds, duration/2)`;
-  each look built once (readable caption size, a plate in the background colour at 0.88). The
-  footer and the marker reserve their room (`default_reserve`), so layouts keep clear; the card
-  lies over the end (`lint_skip = ("overlay_overlap",)`).
+- **Knowledge** (`vidgen.cellworld.accuracy`, no manim): narration checks `direction_claims`,
+  `location_claims` (`PLACES`), `count_claims`, `placement_claims`, `pathway_claims`, `naming_claims`
+  (`protein_form`), transport words (`says_active`, `says_passive`, `transport_mode`). **False
+  positives avoided by narrowness**: normalised text split into sentences and `;` clauses; sentences
+  with a negation, contrast or question skipped; each claim needs its context words; contexts that make
+  a direction right exempt it. English only, one sentence at a time.
+- **Rules** (`vidgen.lint.science_rule`, scene scope, default warning, `RuleConfig`s in `LintRules`,
+  after `music_check` in `LINT_RULES`): `science_scale` (`factor` 1.5 against `size_range` /
+  `WIDTH_RANGES` / `CELL_TYPICAL`, only while `scale_bar` and not `not_to_scale`; `MOST_PER_CELL`
+  always), `science_location`, `science_direction`, `science_energy`, `science_naming`,
+  `science_pathway`, `science_counts` (what each reports: docs/CONFIG.md#lint-vidgen-lint).
+  `science_issues(project, scene_id, rules)` validates the params through the registered type (no
+  render; worlds from the lru cache); the runner fills `SceneContext.science` once per scene.
+  Decided: config-level, not pixels — no drawn-exaggeration check (LOD minimum sizes are deliberate).
+- **`not_to_scale: true`** (`cell`): a pinned "not to scale" plate lower right (part of the `cell`
+  target) and no `science_scale` size findings.
+- **Narration–picture rules**: `SHOWING_ACTIONS` includes the cell-biology actions; an action without
+  its own `label` shows its single target's name from the type's optional classmethod
+  `target_text(params, name)`, so `said_before_shown` narrows a label's arrival to that action.
+- **References** (`vidgen.references`, no manim): `ReferenceConfig` (`label` ≤ 120 chars, at least one
+  of `doi` / `pmid` / `isbn` / `url`, `id`), `FigureCreditConfig` (`text`, `license`, identifiers; a
+  string is its text), checked offline (DOI `10.<4–9 digits>/<suffix>` with `doi:` /
+  `https://doi.org/` removed, PMID 1–8 digits, ISBN-10/13 check digits, http(s) URL with a dotted
+  host). No network check (decided: resolving DOIs is not offline-safe). Scene `references` (≤ 12),
+  `figure_credit`; beat `cite`; video `citations: {show: footer | marker | card | none,
+  card_seconds: 4, description: true}`. Numbers are video-wide by first appearance
+  (`video_references`). Docs and tests use only fake identifiers (`10.0000/example`, PMID
+  `12345678`, ISBN `978-0-00-000000-2`). User side:
+  docs/CONFIG.md#references-and-figure-credits-references-figure_credit-citations.
+- **On screen** (`vidgen/citations.py`, core): a `Citations` overlay (not a registered type) that
+  `overlays.scene_overlays` adds for each scene with references or a credit; `Scene._build_overlays`
+  builds overlays when any scene has citations. Shows the beat's `cite`s (all when no beat cites;
+  hidden in a non-citing beat when others cite), or the card for the last `min(card_seconds,
+  duration/2)`. Footer and marker reserve room (`default_reserve`) in every beat; the card lies over
+  the end (`lint_skip = ("overlay_overlap",)`).
 - **Description**: `write_chapter_list` writes `<output>_chapters.txt` when there are chapters or
-  citations; `chapter_export.write_youtube_list(path, chapters, references)` puts the chapter list,
-  a blank line, then `description_text` (`References` with `[n] label https://doi.org/… / PMID: … /
-  ISBN …`, `Figure credits`). No references: byte-identical to before.
-- **Compatibility**: the fingerprint leaves out `citations`, the scene's `references` /
-  `figure_credit` and beats' `cite`, and adds a `citations` entry only when the scene or the next
-  one (crossfades draw the next scene's overlays) has citations: projects without references keep
-  every fingerprint and frame (Phase Q baseline: 31 frames, max difference 0).
-- **Public:** `vidgen.api` adds the modules `cell_accuracy` (`vidgen.cellworld.accuracy`) and
-  `video_references` (`vidgen.references`). Config: `citations`, scene `references` /
-  `figure_credit`, beat `cite`, `cell` param `not_to_scale`, the seven `science_*` lint rules.
-- **Gaps:** the text checks are English only; claims spread over two sentences, or behind a comma,
-  are not read; pathway names are matched by label and gene only (not "protein kinase A" for PKA);
-  molecule scenes have no `target_text`; the citations reserve room even in beats that show none
-  (a scene's layout cannot change between beats); the metabolism scene writes enzyme names in
-  italics (a stylistic choice of Step 208, not a gene symbol; left for Step 211's review).
+  citations; `chapter_export.write_youtube_list(path, chapters, references)` appends
+  `description_text` (References, Figure credits). Without references the output is byte-identical.
+- **Fingerprint** leaves out `citations`, `references`, `figure_credit`, `cite`; adds a `citations`
+  entry only when the scene or the next one (crossfades draw its overlays) has citations.
+- **Public:** modules `cell_accuracy`, `video_references`.
 
 ### 95.15 Example, guide, cookbook and gallery (Step 210)
 
-- **The example** `examples/gene-to-secreted-protein` (README with the scene table and checks):
-  eight scenes, about 3:34 with Kokoro (`af_heart`, speed 0.85), the `discovery` bed at −4 dB,
-  karaoke captions, `terms:` (messenger RNA, signal peptide, glycan), `citations: {show: marker}`,
-  a 9:16 variant `short`. **Decided: α1-antitrypsin, not insulin** — constitutively secreted and
-  N-glycosylated (three N-glycans), so every step shown is true of it; insulin (not glycosylated;
-  proinsulin cut by PC1/3, PC2 and carboxypeptidase E in regulated granules) would need other
-  scenes. The `molecule` close-ups use a generated model gene, said so in the narration (a real
-  418-residue precursor does not fit a close-up). The `pathway` is built from nodes and edges
-  (IL-6 → IL-6R–gp130 → JAK1 → STAT3 (pTyr705) ⇒ nucleus → *SERPINA1*, the transcription arc
-  `indirect`). References only where the identifier is known: Blobel & Dobberstein 1975 by DOI,
-  Alberts 6th ed. by ISBN (check digit verified).
-- **Guide topic `biology`** (aliases `cell-biology`, `science`, `lecture`, `research`): choosing the
-  scene, accuracy rules, naming, references, pacing dense content, one snippet; the `scenes`
-  topic points to it. **Cookbook** `docs/COOKBOOK-CELL-BIOLOGY.md` (linked from the README, the
-  cookbook, the guide and the gallery), its pattern validated by `tests/test_docs.py`.
-- **Gallery.** `GROUP_SECTIONS` shows the guide groups `signalling pathways`, `cell cycle and
-  division` and `energy metabolism` in the `cell biology` section, so the five types share one
-  "Cell biology" section; five showcases end it (`plant_cell`, `sodium_pump`, `mek_inhibitor`,
-  `mitosis`, `respiratory_chain`; one per type); `SECTION_NOTES` links the example and the
-  cookbook; `SECTION_FOOTERS` gives a showcase page its section's further reading (the cartoon
-  sections keep theirs). **Budget: optimised, not raised** — stills are saved as 256-colour palette
-  PNGs (median cut, no dithering; `STILL_COLORS`): 3.0 → 1.2 MB for the 100 committed stills, mean
-  error under 1/255 per channel; the gallery is 9.4 MB of its 10 MB with every GIF ≤ 150 KB (the
-  mitosis showcase starts at metaphase to fit).
-- **Fixes found while making it.** The cell route's transcription caption no longer says "(in a
-  molecule scene each step is shown up close)" (a viewer-facing caption). The cell world's
-  pieces (`drawing.tissue`, `drawing.cell`, each object group), a membrane event's overlay and a
-  gene close-up's stage are marked `scenery`; `introspect` now marks a *group* scenery when it is,
-  or holds only scenery pieces (empty groups aside), so `off_frame` no longer reports a zoomed
-  view's cropped world. The close-up's "schematic: not to scale" is drawn at the readable size
-  inside the safe area (it was scaled 0.85 and offset by its width × 0.85 twice), beside the
-  legend when it fits in 36 % of the width, else a line above it (9:16, where the protein's
-  readout takes the width).
-- **Public:** no new `vidgen.api` names. Config: none (a guide topic, showcases). `gallery`:
-  `GROUP_SECTIONS`, `SECTION_FOOTERS`, `DEFAULT_FOOTER`, `STILL_COLORS`.
-- **Gaps (for Step 211):** the exocytosis step captions name the neuronal SNAREs (the example turns
-  them off; the to-Golgi caption now says "some proteins also get O-glycans"); the 16:9
-  pathway leaves much of the frame empty; a hepatocyte is drawn as the typical animal cell.
+- **Example** `examples/gene-to-secreted-protein` (README with scene table; 9:16 variant `short`).
+  **Decided: α1-antitrypsin, not insulin** — constitutively secreted and N-glycosylated, so every step
+  shown is true of it.
+- **Guide topic `biology`** (aliases `cell-biology`, `science`, `lecture`, `research`) and
+  docs/COOKBOOK-CELL-BIOLOGY.md (pattern validated by `tests/test_docs.py`).
+- **Gallery**: `GROUP_SECTIONS` merges the cell-biology guide groups into one "Cell biology" section;
+  `SECTION_NOTES`, `SECTION_FOOTERS` / `DEFAULT_FOOTER` give further reading; stills are 256-colour
+  palette PNGs (`STILL_COLORS`). Budget: §96.12.
+- **Scenery**: the cell world's pieces, event overlays and a gene close-up's stage are `scenery`;
+  `introspect` marks a group scenery when it holds only scenery, so `off_frame` ignores a zoomed view's
+  cropped world.
 
 ### 95.16 Review of Phase U (Step 211)
 
-- **Scientific accuracy pass** (library, templates, lint facts, example). Checked against the
-  textbook account: the three pathway templates (GPCR–cAMP–PKA with PDE4 feedback, RTK–Ras–MAPK
-  with RasGAP and ERK ⊣ SOS, PI3K–Akt: PTEN dephosphorylating PIP₃, PDK1 Thr308 / mTORC2 Ser473
-  activating, Akt ⊣ TSC2 ⊣ Rheb → mTORC1, Akt ⊣ GSK3β (Ser9) and ⊣ FOXO); an inhibitory
-  phosphorylation is drawn as a T-bar with a P on it and played as switching its target off
-  (GSK3β pS9 dimmed) — tested. The process captions (transcription, capping, splicing,
-  polyadenylation, export, translation, SRP/Sec61, OST, chaperones, COPII/Golgi/TGN, endocytosis,
-  pump cycles, the action potential), the energy counts (glycolysis, TCA, 10 / 6 H⁺ per NADH /
-  FADH₂, the light reactions' 6 H⁺, ½ O₂ and 1 NADPH per two electrons) and the accuracy lint's
-  facts are correct. **Fixed:** the exocytosis caption named the neuronal SNAREs for every cell
-  (now `snares: generic` by default, `constitutive` — a VAMP, syntaxin-4, SNAP-23 —, `neuronal`
-  with Ca²⁺ on synaptotagmin; decided: a cell-type option on the action, not a cell kind, since a
-  `cell` is one animal cell whatever its tissue); enzymes in `metabolism` were italic (proteins are
-  roman); calnexin floated in the lumen (now its lectin domain on a stalk from its helix in the ER
-  membrane when the view is tall enough to show both — a wide close-up frames the globule as
-  before, the stalk leaving the view); after termination on the ER the large subunit rose
-  through the membrane (now the subunits part in the cytosol); an ion channel was named "Ion
-  channel" (now "Na⁺ channel").
-- **Frame use.** `molecule`: three or more membrane proteins go on several rows whenever that
-  frames them larger (it was tall frames only), so a wide frame narrowed by the action-potential
-  panel draws them larger; in a tall frame the plot spans the panel, the concentrations under it
-  (they overlapped). A gene close-up decides wide or tall by the **frame** (with a 9:16 title,
-  captions and karaoke its view could be wider than tall and took the 36-slot wide layout) and
-  shows 15 slots across in a tall frame (was 18). A cytosolic vesicle within 0.6 µm of the
-  plasma membrane, viewed at the complex level, is framed with the membrane it would fuse with
-  (from its inner edge to 160 nm outside, by the body's shape) instead of a patch of its own
-  membrane; the example puts its vesicle under the top of the cell so the membrane runs across
-  16:9 and 9:16 alike. `pathway`: text grows up to 1.9× (was 1.3×) and a pathway bound by the
-  width spreads its ranks' nodes (LR) or its ranks (TB) up to 3× to use the height (`SPREAD`).
-  `metabolism`: a pathway in columns grows up to 1.6× to fill (`GROW`); the chain's tallies sit
-  low, clear of ATP synthase's name.
-- **Captions.** Step captions are never below the readable size (they were scaled to fit two
-  reserved lines); a gene close-up reserves three lines in 16:9 and four in 9:16. `notes` on every
-  process action is `auto` (default: the full caption in a wide frame, its first clause in a tall
-  one), `full` / `true`, `short`, `false`; `vidgen.cellworld.captions.short_note` cuts at the first
-  `: ` / `; ` / ` — ` outside parentheses and markup (a first clause under 32 characters takes the
-  next). **Decided:** shortening by rule, not a second hand-written text per caption — every
-  caption is written statement-first, so its first clause is the statement and the rest the
-  detail the narration or the 16:9 version carries (one caption reworded to fit: the OST reach).
-- **Gene symbols in captions.** Scene types may define `gene_symbols(params)` (`cell`: its gene's
-  `name`; `molecule`: that and its molecules' `gene`; `pathway`: its gene nodes). The captions
-  overlay (option `genes: true`) collects them over the video and sets them in italics (Manim
-  `t2s`) where the narration writes them as whole words, case-sensitive, except before "protein",
-  "kinase", "receptor"… (`names.gene_spans`, `PROTEIN_WORDS`). **Decided:** video-wide (the
-  example names *SERPINA1* in the tissue scene, declared in later scenes) and opt-out, not
-  `terms:` (a term is a colour, not a style). Scenes without declared genes build the same texts
-  as before (the Phase Q baseline is unchanged).
-- **Labels.** LR pathway band names: the membrane's at the bottom first and a word's room between
-  names; molecule rows: a side name a row's other names cover moves to the row's free end;
-  `metabolism` P/N-side names take the place (and wrap) covering the least; the cell scene's
-  label rows (9:16) untangle: a label an outer row's leader crosses steps aside, or changes rows
-  with it when both are alone in their rows; Sec61's name stands beside the channel in the
-  membrane (the chain threads its middle).
-- **Gaps closed from earlier steps:** calnexin anchored; cell-scene products (mRNAs, COPII and
-  secretory vesicles) travel on gentle curves (`expression_route.curve`); a motor's cargo vesicle
-  is placed wholly in the cytosol (it overlapped the nuclear envelope); `scenes/molecule.py`
-  split (1,825 → 1,454 lines; the process runtime is `scenes/molecule_runtime.py`, a mixin).
-- **Public:** `vidgen.api` adds `CellNoteMode`, `cell_note_text`, `gene_spans`. Config: process
-  actions' `notes` takes `auto | full | short | false` (`true` = full); `exocytosis` `snares`;
-  captions overlay `genes`; scene-type hook `gene_symbols(params)`.
-- **Gaps:** the `cell` scene has no `set_state`; an endocytosed vesicle is not a world object;
-  zoomed-view part labels go stale after a process (`labels: false` advised); molecule glyphs'
-  inner letters (ATP synthase's α/β, flow labels) are below the readable size (pre-existing lint
-  findings in the gallery's `synthase` and the showcases); a 9:16 close-up of a horizontal strip
-  (gene, membrane) still leaves height unused; gallery media of the cell-biology section were
-  not regenerated (pathway and metabolism stills differ a little from a render now).
+- **Captions** never go below the readable size (a gene close-up reserves three lines in 16:9, four in
+  9:16). `notes` on process actions: `auto` (default: full in a wide frame, first clause in a tall
+  one), `full` / `true`, `short`, `false`; `cellworld.captions.short_note` cuts at the first `: ` /
+  `; ` / ` — ` outside parentheses and markup (a first clause under 32 characters takes the next).
+  **Decided:** shortening by rule — every caption is written statement-first.
+- **Gene symbols in captions**: scene types may define `gene_symbols(params)`; the captions overlay
+  (`genes: true`) collects them video-wide and italicises them (Manim `t2s`) where narration writes
+  them as whole words, case-sensitive, except before "protein", "kinase", "receptor"…
+  (`names.gene_spans`, `PROTEIN_WORDS`). **Decided:** video-wide and opt-out, not `terms:` (a term is a
+  colour, not a style). Scenes without genes build unchanged texts.
+- **Public:** `CellNoteMode`, `cell_note_text`, `gene_spans`; hook `gene_symbols(params)`;
+  docs/CONFIG.md#captions.
 
 ## 96. Genetics at university level (Phase V, Steps 213–221)
 
-Genetics videos for lectures, medical and biology students and science channels: standard terms
-and notation, **computed rather than drawn by hand** (ratios, probabilities, gametes, map
-distances, frequencies come from a model), in schu-video-generator's flat style, written by AI agents in YAML,
-checked by `vidgen validate` with did-you-mean errors and by `vidgen lint`, in 16:9 and 9:16.
-Built like Phase U (§95): a model with rules and no manim (`vidgen/genetics/`), renderers and
-scene types apart. Additive and opt-in: existing projects, scenes, gallery frames, audio and the
-studio unchanged. References for the facts: standard textbooks (Griffiths *Introduction to
-Genetic Analysis*, Hartwell *Genetics: From Genes to Genomes*, Strachan & Read *Human Molecular
-Genetics*) and nomenclatures (NSGC pedigrees, ISCN karyotypes, HGVS variants, HGNC symbols).
+Genetics videos with standard notation, **computed rather than drawn by hand** (ratios,
+probabilities, gametes, map distances, frequencies come from a model), checked by `vidgen validate`
+(did-you-mean errors) and `vidgen lint`, in 16:9 and 9:16. Built like §95: a manim-free model with
+rules (`vidgen/genetics/`), renderers and scene types apart; additive and opt-in. Nomenclatures: NSGC
+(pedigrees), ISCN (karyotypes), HGVS (variants), HGNC (symbols). User side: docs/CONFIG.md (`#cross`
+… `#gwas`, the YAML and every user-facing refusal) and docs/COOKBOOK-GENETICS.md.
 
 ### 96.1 The phase (plan)
 
-- **Step 213, the model and this plan** (§96.3–96.6): loci, alleles and notation, genotypes,
-  phenotypes (dominance, lethal alleles, penetrance, expressivity, epistasis), modes of
-  inheritance, the exact cross engine; scene types decided (§96.2). No scene type yet.
-- **Step 214, `cross`**: Punnett squares and branch (forked-line) diagrams on the cross engine;
-  animated gamete formation, squares filling step by step, offspring counted into ratios;
-  mono-, di-, trihybrid, test, reciprocal, P → F1 → F2; every dominance and epistasis kind,
-  lethal 2:1, X / Y crosses split by sex; optional chi-square of observed against expected
-  counts with its p-value (`genetics/stats.py`, exact upper regularized gamma; no scipy).
-- **Step 215, `pedigree`**: NSGC symbols, deterministic layout by generation, the analysis of
-  which modes fit (§96.5), deduced genotypes, carrier and risk probabilities.
-- **Step 216, `karyotype` and `linkage_map`**; non-disjunction as an option of Phase U's
-  `cell_cycle` meiosis.
-- **Step 217, `mutation`, `crispr`, `dna_lab`** (PCR, gel, Sanger, NGS).
-- **Step 218, `population` and `gwas`**.
-- **Step 219, the genetics lint** (§96.5); **Step 220** the example (cystic fibrosis from pedigree
-  to diagnosis), docs (guide topic `genetics`, CONFIG, `docs/COOKBOOK-GENETICS.md`), gallery
-  section "Genetics"; **Step 221** the review with a scientific-accuracy pass.
+Built; §96.2–96.20 describe it: nine scene types, non-disjunction in `cell_cycle` meiosis, seven
+`genetics_*` lint rules.
 
 ### 96.2 Scene types (decided)
 
-| Type | Step | Shows | Relation to Phase U |
-| --- | --- | --- | --- |
-| `cross` | 214 | Punnett square, branch diagram, gametes, ratios, chi-square | new; gametes from linked loci drawn as homologue pairs with the chromatid look of `cell_cycle` (`cellworld.division`) |
-| `pedigree` | 215 | a family chart in NSGC notation, mode analysis, risks | new; its own layout (generations are rows; not `vidgen.graph`, whose layered layout does not know couples and sibships) |
-| `karyotype` | 216 | ideograms with G-bands, a karyogram, ISCN notation, aneuploidy, structural changes | new; chromosome outlines and centromeres as in `cellworld.division` |
-| `linkage_map` | 216 | chromosomes with loci in cM, crossing over between linked loci (coupling / repulsion), three-point crosses, interference | new; crossing over drawn like `cell_cycle`'s meiosis I chiasmata |
-| `cell_cycle` (existing) | 216 | meiosis with `nondisjunction: {division: I \| II, pair: n}` and the resulting gametes' counts | an option of the Phase U type, not a new type |
-| `mutation` | 217 | a coding sequence with a variant: silent, missense, nonsense, frameshift, in-frame indel, splice site; HGVS `c.` / `p.` | the genetic code `cellworld.sequences.CODONS`, the gene strip of the `molecule` scene's `gene:` (`cellworld.expression`) |
-| `crispr` | 217 | sgRNA (20 nt spacer), NGG PAM, Cas9 cut 3 bp 5′ of the PAM, NHEJ / HDR | the DNA ladder of the `molecule` scene (5′ / 3′ ends, base pairs) |
-| `dna_lab` | 217 | `method: pcr \| gel \| sanger \| ngs` | like `metabolism`'s `process:`: one type, several techniques sharing DNA drawing and plots |
-| `population` | 218 | Hardy–Weinberg, seeded drift / selection / migration / bottleneck / founder simulations, allele frequencies over generations | the axes of `function_plot` / `line_chart` (`vidgen.charts`, `math_axes`) |
-| `gwas` | 218 | Manhattan plot (−log₁₀ p by chromosome, 5 × 10⁻⁸ line), QQ plot | `vidgen.charts` |
+| Type | Shows | Shares |
+| --- | --- | --- |
+| `cross` | Punnett square, branch diagram, gametes, ratios, chi-square | chromatid look of `cellworld.division` |
+| `pedigree` | NSGC chart, mode analysis, risks | own layout (`vidgen.graph` does not know couples and sibships) |
+| `karyotype` | G-band ideograms, karyogram, ISCN changes | chromosome outlines of `cellworld.division` |
+| `linkage_map` | loci in cM, crossing over, three-point crosses | chiasmata as in `cell_cycle` meiosis I |
+| `cell_cycle` (existing) | meiosis with `nondisjunction` | an option, not a type |
+| `mutation` | a coding sequence with a variant, HGVS `c.` / `p.` | `cellworld.sequences.CODONS`, `cellworld.expression` |
+| `crispr` | sgRNA, PAM, Cas9 cut, NHEJ / HDR | DNA ladder of `molecule` |
+| `dna_lab` | `method: pcr \| gel \| sanger \| ngs` | one type, several techniques (like `metabolism`) |
+| `population` | Hardy–Weinberg, seeded Wright–Fisher simulations | `vidgen.charts` axes |
+| `gwas` | Manhattan, QQ, regional plots | `vidgen.charts` |
 
-Why new types rather than modes of Phase U types: a Punnett square, a pedigree or a gel has
-nothing of a cell's µm camera or a molecule's membrane rows; each new type is one picture
-grammar with its own params, as `pathway` was next to `cell`. What they share lives in the
-model (`vidgen.genetics`) and in Phase U's `cellworld` (sequences, names, chromosome look,
-accuracy text helpers), imported, not copied. Gene symbols are italic through the existing
-`gene_symbols(params)` hook (§95.16) and HGNC / species checks through `cellworld.names`.
+New types rather than modes: each is one picture grammar. Shared code lives in `vidgen.genetics` and
+`cellworld` (sequences, names, chromosome look, accuracy helpers), imported, not copied. Gene symbols
+go italic through `gene_symbols(params)` (§95.16) and are checked by `cellworld.names`.
 
 ### 96.3 The model (`vidgen/genetics/`, no manim; Step 213)
 
-Modules: `notation` (allele symbols), `model` (loci, linkage groups, epistasis, the system and
-its builder), `genotype` (genotypes, gametes, parsing and writing), `phenotype` (phenotypes,
-penetrance, epistasis, lethality, class order), `cross` (the engine), `modes` (modes of
-inheritance), `presets` (textbook systems). A test imports them in a fresh interpreter and checks
-`manim` is not loaded. Probabilities are `fractions.Fraction` everywhere (floats from YAML go
-through their decimal text: `0.1` is exactly 1/10; `"17%"` and `"1/6"` are read too).
+Modules `notation`, `model`, `genotype`, `phenotype`, `cross`, `modes`, `presets`, plus each scene's
+model (§96.7–96.18); a test checks they import without `manim`. **Probabilities are
+`fractions.Fraction` everywhere** (YAML floats go through their decimal text: `0.1` is exactly 1/10;
+`"17%"`, `"1/6"` read too).
 
-- **Allele notation.** A symbol is a base (letters and digits) with an optional superscript after
-  `^`: `A`, `a`, `I^A`, `c^{ch}` (braces for several characters), `w^+`, or `+` alone; `+` (alone
-  or as the superscript) marks the wild type. Shown three ways: text with Unicode superscripts
-  (`Iᴬ`, `w⁺`, `cᶜʰ`; where Unicode has no superscript letter — capital C F Q S X Y Z, q — the
-  `^` form stays: `A^Y`), Pango markup for drawings (alleles italic, `<i>I<sup>A</sup></i>`; the
-  chromosome letters X and Y roman) and the YAML form, which reads back (tested for every
-  preset). Symbols must differ between the loci of one system (write `vg^+` and `b^+`, not `+`
-  twice), so a genotype reads unambiguously. `X` and `Y` may be alleles (Mendel's `Y` / `y`)
-  only in a system without sex chromosomes.
-- **A locus** (`gene`, `trait`, `alleles` most dominant first, `chromosome: autosome | X | Y |
-  mt`, `dominance`, `heterozygotes`, `lethal`, `penetrance`, `normal`, `expressivity`):
-  `dominance` is `complete` (the listed order), `incomplete` or `codominant` (two alleles) or a
-  hierarchy `"I^A = I^B > i"` (`>` complete, `=` codominant, `~` incomplete). A heterozygote of a
-  codominant level shows both phenotypes (`"A and B"`, or its `heterozygotes:` name: ABO's `AB`);
-  of an incomplete level its own named phenotype (required: `heterozygotes: {C^R/C^W: pink}`);
-  naming the heterozygote of a completely dominant pair is refused with the fix. Lethal alleles:
-  `recessive` (homozygotes and hemizygotes die: the yellow mouse's Aʸ) or `dominant`.
-  Penetrance is an exact share per phenotype (a number applies to the one phenotype that is not
-  `normal`); non-penetrant carriers show `normal` (default: the wild-type allele's phenotype).
-  Expressivity (`constant` / `variable`) is a recorded property for the pedigree and the lint;
-  it does not change ratios.
-- **Linkage** (`linkage: [{loci: [A, B, C], rf: [0.1, 0.2], coincidence: 0.5, rf_male: 0}]`):
-  loci in map order on one chromosome with the recombination frequency of each adjacent
-  interval, 0 ≤ RF ≤ 0.5 (above 0.5 is refused: loci far apart assort independently; map
-  distances over 50 cM are sums of intervals, Step 216). Three loci may give `coincidence` or
-  `interference` (= 1 − coincidence). `rf_male` for sex-specific recombination (none in
-  Drosophila males). Two or more X-linked loci need their group (they share the X); Y-linked and
-  mitochondrial loci never take one.
-- **Epistasis** between two loci (`epistasis: [{kind, epistatic, hypostatic}]`, or `loci: [A, B]`
-  for the symmetric kinds), each kind with its dihybrid F2: `recessive` 9:3:4, `dominant`
-  12:3:1, `suppression` 13:3, `duplicate` 15:1, `complementary` 9:7, `cumulative` 9:6:1. The
-  first three show the loci's own phenotypes; `duplicate` / `complementary` take them from two
-  loci with the same two phenotype names, else `phenotypes: [purple, white]`; `cumulative` always
-  names its three (`[disc, sphere, long]`). The loci need two alleles with complete dominance
-  where the kind reads "dominant" / "recessive".
-- **The system** (`GeneticSystem`, built by `build_system(spec, where)` from the scene's YAML:
-  `loci`, `linkage`, `epistasis`, `sex: XY` to follow the sexes without sex-linked loci, or one
-  `preset:`): the loci, the autosomal groups (an unlinked locus is a group of one: independent
-  assortment), the X group, the Y loci, the mt loci, the epistasis entries and the **traits**
-  (phenotype columns: an independent locus, or an epistatic pair). Presets (`PRESETS`, each with
-  a note and an example cross): `pea_seed_shape`, `pea_dihybrid`, `snapdragon`, `abo`,
-  `rabbit_coat`, `labrador`, `squash_colour`, `chicken_feathers`, `shepherds_purse`,
-  `sweet_pea`, `squash_shape`, `yellow_mouse`, `drosophila_white`, `hemophilia_a`,
-  `drosophila_b_vg` (Morgan's b–vg test cross, 17 % recombinants, `rf_male: 0`).
-- **Genotypes** (`parse_genotype(system, text, where, sex)`): written `AaBb`, `A/a B/b`,
-  `I^A i`, linked loci with their phase `AB/ab` (coupling) or `Ab/aB` (repulsion) — required as
-  soon as the genotype is heterozygous at two linked loci —, sex chromosomes `X^H X^h`,
-  `X^H/Y`, several X-linked loci `X^{H,b}`, Y-linked `Y^T`, a mitochondrial allele once.
-  Canonical form: dominant haplotype first, X before Y. `genotype_text(system, g, style)` writes
-  text / markup / YAML: one-letter alleles run together (`AaBb`, `XᴴXʰ`), longer ones spaced
-  with `/` (`b⁺ vg⁺/b vg`).
-- **Errors** name the place (`parents[0]: genotype 'RrYx': …`) and the fix: an allele not
-  defined (the alleles listed, did-you-mean), an allele of another locus, an X-linked allele
-  without its X (`write X^H X^h (female) or X^H Y (male)`), a female with a Y, XXY / X0 (a
-  karyotype, Step 216), a locus missing or with three alleles, linked loci without their phase,
-  RF > 0.5, an unknown key / chromosome / epistasis kind / preset (did-you-mean), `X^w` written as
-  an allele, `+` used by two loci, incomplete dominance without the heterozygote's phenotype.
-- **Modes of inheritance** (`MODES`: `AD`, `AR`, `XD`, `XR`, `YL`, `MT`, each with its hallmarks
-  as data; `parse_mode("x-linked recessive")`; `mode_of(system, locus, phenotype)` from the
-  chromosome and the dominance): one table for the pedigree analysis and the lint.
+- **Alleles**: a base with an optional superscript after `^` (`I^A`, `c^{ch}`, `w^+`, `+`; `+` is wild
+  type), written as text with Unicode superscripts (the `^` form stays where Unicode lacks the
+  letter), Pango markup (alleles italic, X / Y roman) or YAML, which reads back. Symbols must differ
+  between a system's loci. `X` / `Y` are alleles only in a system without sex chromosomes.
+- **Locus** keys (`gene`, `trait`, `alleles` most dominant first, `chromosome: autosome | X | Y | mt`,
+  `dominance`, `heterozygotes`, `lethal`, `penetrance`, `normal`, `expressivity`): docs/CONFIG.md#cross.
+  Dominance hierarchy `"I^A = I^B > i"` (`>` complete, `=` codominant, `~` incomplete; one kind per
+  level). Penetrance is an exact share per phenotype; non-penetrant carriers show `normal`.
+  `expressivity` is recorded for pedigree and lint only.
+- **Linkage**: loci in map order with each interval's RF, 0 ≤ RF ≤ 0.5; `coincidence` or
+  `interference` for three loci; `rf_male`. Two or more X-linked loci need a group; Y / mt never.
+- **Epistasis** between two loci, one pair per locus: `recessive` 9:3:4, `dominant` 12:3:1,
+  `suppression` 13:3, `duplicate` 15:1, `complementary` 9:7, `cumulative` 9:6:1.
+- **System** (`GeneticSystem`, `build_system(spec, where)`; or one `preset:` from `PRESETS`): loci,
+  autosomal groups (an unlinked locus is a group of one), X group, Y and mt loci, epistasis, **traits**
+  (phenotype columns). No ZW / X0 systems; one mt allele per individual.
+- **Genotypes** (`parse_genotype(system, text, where, sex)`): `AaBb`, `A/a B/b`, phase `AB/ab` /
+  `Ab/aB` (required when heterozygous at two linked loci), `X^H X^h`, `X^H/Y`, `X^{H,b}`, `Y^T`.
+  Canonical: dominant haplotype first, X before Y. `genotype_text(system, g, style)` writes text /
+  markup / YAML. Errors name the place (`parents[0]: genotype 'RrYx': …`) and the fix.
+- **Modes** (`MODES`: `AD`, `AR`, `XD`, `XR`, `YL`, `MT`, hallmarks as data; `parse_mode`;
+  `mode_of(system, locus, phenotype)`): one table for pedigree analysis and lint.
 
 ### 96.4 The cross engine (Step 213)
 
-- **Gametes** (`gametes(system, genotype, sex)`): the product over autosomal groups of each
-  group's haplotypes (segregation; independent assortment between groups), with crossing over
-  inside a group: every crossover pattern of its intervals with its probability (independent
-  intervals; for three loci the double crossovers are `C·r₁·r₂`, singles `r − C·r₁·r₂`), the
-  gamete switching homologue at each crossover. Two loci: parentals `(1 − r)/2`, recombinants
-  `r/2` each. Females recombine X-linked loci; males pass X or Y (1/2 each); `rf_male` applies to
-  male meiosis; eggs carry the mtDNA, sperm and pollen none.
-- **A cross** (`cross(system, mother, father)` → `CrossResult`): every egg × sperm, the zygotes
-  (sum 1), the share carrying a lethal genotype (`lethal`), and the survivors' genotype and
-  phenotype distributions renormalized (yellow mice: lethal 1/4, then 2/3 yellow : 1/3 agouti).
-  Phenotype classes (`Phenotype`: one phenotype per trait, plus the sex when the system has sex
-  chromosomes) are ordered as textbooks write ratios: females first, then each trait in dominance
-  order (incomplete heterozygotes between their parents: red, pink, white) or the kind's
-  epistasis order (9 black : 3 brown : 4 yellow; 12 white : 3 yellow : 1 green; 13 white : 3
-  coloured). `ratio()` gives the smallest whole numbers, `ratio_text()` `9 : 3 : 3 : 1`.
-  Without sex chromosomes or mtDNA the two parents' roles are symmetric (seed and pollen).
-- **Test cross** (`make_tester`, `test_cross`): the partner homozygous (hemizygous) for every
-  locus' single recessive allele, of the other sex; refused where the lowest level holds two
-  alleles. **Reciprocal** (`reciprocal(system, mother, father)`): the father's line as the
-  mother and the mother's line as the father (a true-breeding mother needed at X-linked loci;
-  the new father keeps the old father's Y; mtDNA goes with its line).
-- Tested exactly: 3:1, 1:2:1, 9:3:3:1, 27:9:…:1, 1:1:1:1 test cross, ABO 1:1:1:1 and 1:1:2, a
-  dominance series, 9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1 (and their test crosses 1:1:2, 1:3,
-  3:1), 2:1 lethal, penetrance 4/5, X-linked recessive both ways and F2 (white only in males),
-  a carrier mother's sons 1/2 affected, Y-linked, mitochondrial, coupling and repulsion test
-  crosses, RF = 0.5 as 1:1:1:1, Morgan's 17 % and no recombinants from Drosophila males, three
-  loci with coincidence 0.5, X-linked loci recombining in females only.
+- **Gametes** (`gametes(system, genotype, sex)`): the product over autosomal groups of each group's
+  haplotypes, with every crossover pattern inside a group (three loci: doubles `C·r₁·r₂`, singles
+  `r − C·r₁·r₂`; two loci: parentals `(1 − r)/2`, recombinants `r/2`). Females recombine X-linked
+  loci; males pass X or Y; `rf_male` applies to male meiosis; eggs carry the mtDNA.
+- **Cross** (`cross(system, mother, father)` → `CrossResult`): every egg × sperm, zygotes summing to 1,
+  the `lethal` share, survivors' distributions renormalized. Phenotype classes (with sex when the
+  system has sex chromosomes) in textbook order: females first, then dominance order (incomplete
+  heterozygotes between their parents) or the epistasis kind's order. `ratio()` smallest whole
+  numbers, `ratio_text()` `9 : 3 : 3 : 1`. Without sex chromosomes or mtDNA parents are symmetric.
+- **Test cross** (`make_tester`, `test_cross`): the partner homozygous (hemizygous) recessive at every
+  locus, of the other sex; refused where the lowest level holds two alleles. **Reciprocal**
+  (`reciprocal`): the lines swap sexes (a true-breeding mother needed at X-linked loci; the new father
+  keeps the old father's Y; mtDNA goes with its line).
 
 ### 96.5 How the later steps plug in (plan; YAML as planned)
 
-- **`cross` (214).** Params: the genetic system (`preset` or `loci` / `linkage` / `epistasis` /
-  `sex`), the parents (`parents: [RrYy, RrYy]`, or `mother:` / `father:` when the system
-  `needs_sexes`; `generations: [P, F1, F2]` with `P: [RRYY, rryy]` to derive F1 and its
-  intercross or selfing), `show: punnett | branch | gametes | ratios` (`auto`: Punnett up to 4 × 4
-  gametes, branch beyond), `observed: {round yellow: 315, …}` for the chi-square. Actions:
-  `form_gametes` (a parent's homologues separating, crossing over for linked loci), `fill`
-  (`row`, `column`, `cell`, `all`), `count` (`genotypes` / `phenotypes`, the ratio built up),
-  `highlight` (a class), `chi_square`. Everything shown comes from `CrossResult` (cells are
-  `fertilize(egg, sperm)`, tallies are its distributions), so a drawn ratio cannot disagree with
-  the cross.
-
-  ```yaml
-  - id: dihybrid
-    type: cross
-    params:
-      preset: pea_dihybrid
-      parents: [RrYy, RrYy]
-      show: punnett
-    beats:
-      - text: "Each parent makes four kinds of gametes in equal numbers."
-        actions: [{form_gametes: both}]
-      - text: "Sixteen equally likely combinations give a nine to three to three to one ratio."
-        actions: [{fill: all}, {count: phenotypes}]
-  ```
-- **`pedigree` (215).** Params: `individuals` (`id`, `sex: female | male | unknown`, `affected`,
-  `carrier`, `deceased`, `proband`, `adopted`, `parents: [I-1, I-2]`, `twins: {with, kind: MZ | DZ}`,
-  `consanguineous` couples), `mode:` (a `parse_mode` name) or `analyse: true`, the locus (a
-  `preset` or `loci` with one locus) for genotypes and risks, `penetrance`. The analysis is exact
-  reasoning on the model: each mode is tried by assigning genotypes consistent with every
-  phenotype (and penetrance), giving the consistent modes, forced genotypes and, by Bayesian
-  conditioning on the chart, carrier probabilities (2/3 for an unaffected sibling of an affected
-  child in AR) and the risk for a proposed child. Actions: `reveal` (a generation), `highlight`,
-  `deduce`, `risk`.
-- **`karyotype` / `linkage_map` (216).** `karyotype`: `karyotype: "47,XX,+21"` (ISCN parsed and
-  checked), `show: ideogram | karyogram`, `highlight: [21]`, structural changes
-  (`del(5)(p15.2)`, `inv`, `t(9;22)(q34;q11)`, `rob(14;21)`); band data schematic (ISCN 400-band
-  level names only where verified). `linkage_map`: loci with positions in cM, map functions
-  (Haldane, Kosambi) between cM and RF, a three-point test cross from counts (`counts:` of the
-  eight classes → gene order from the double crossovers, distances, coefficient of coincidence,
-  interference) computed in `genetics/mapping.py`; actions `cross_over`, `measure`.
-- **Molecular (217).** `mutation`: `sequence` (a coding sequence, `cellworld.sequences`
-  checks), `variant: c.1521_1523del` (HGVS parsed in `genetics/hgvs.py`; the protein
-  consequence computed with the genetic code and written `p.(Phe508del)`); `crispr`: `target`
-  sequence, `spacer` (20 nt), the PAM checked (NGG 3′ of the protospacer on the non-target
-  strand), the cut 3 bp 5′ of the PAM, `repair: nhej | hdr`; `dna_lab`: `method`, `primers` (5′→3′,
-  checked against the template), `cycles` (from one template molecule, 2ⁿ − 2n double-stranded copies of exactly the target length
-  after n cycles, the first two appearing in cycle 3),
-  `ladder` and fragment sizes (log-linear migration), Sanger peaks or NGS reads from a seeded
-  model with a variant call.
-- **`population` / `gwas` (218).** `population`: `model: hardy_weinberg` (p² + 2pq + q² with
-  worked numbers; carrier frequency 2pq from an incidence q²) or `drift | selection | migration |
-  bottleneck | founder` (`N`, `s`, `h`, `m`, `generations`, `replicates`, `seed`;
-  Wright–Fisher in `genetics/population.py`, deterministic per seed); `gwas`: `plot: manhattan |
-  qq`, seeded synthetic data or a CSV, the 5 × 10⁻⁸ line.
-- **The lint (219)** (`vidgen.lint.genetics_rule`, knowledge in `genetics/accuracy.py`, like
-  §95.14): rebuilds each genetics scene's model from its params (no render) and checks the
-  narration and on-screen text against it — a ratio or probability that does not follow from
-  the cross (`genetics_ratio`), a pedigree inconsistent with its stated mode (AD skipping a
-  generation without reduced penetrance, XR passed father → son: `genetics_pedigree`), RF over
-  50 % or cM / RF confusion (`genetics_linkage`), Hardy–Weinberg arithmetic (`genetics_hw`),
-  a CRISPR target without an NGG PAM (`genetics_crispr`), karyotype and HGVS format errors;
-  `science_naming` reused for gene symbols; `said_before_shown` / `unsaid_reveal` learn the new
-  targets. Hard impossibilities stay validation errors (as now: RF > 0.5, a female with a Y).
+Superseded by the built scenes: §96.7–96.18 describe each type and docs/CONFIG.md its YAML.
 
 ### 96.6 Public (Step 213)
 
-- `vidgen.api` adds `genetics` (the package), `GeneticSystem`, `CrossResult`,
-  `build_genetic_system` (`genetics.build_system`), `genetic_cross` (`genetics.cross`),
-  `parse_genotype`, `GENETICS_PRESETS`, `INHERITANCE_MODES`. No scene type, action or config key
-  yet: nothing existing changes.
-- **Gaps** (for later steps): ZW sex determination (birds, butterflies) and X0 systems are not
-  modelled; heteroplasmy is not (one mitochondrial allele per individual); penetrance is per
-  phenotype, not age-dependent; epistasis is between two loci, one pair per locus; a dominance
-  hierarchy cannot mix codominance and incomplete dominance in one level; the map functions
-  (cM ↔ RF) are Step 216's.
+`vidgen.api`: `genetics` (the package; every genetics module is reached through it), `GeneticSystem`,
+`CrossResult`, `build_genetic_system` (`genetics.build_system`), `genetic_cross` (`genetics.cross`),
+`parse_genotype`, `GENETICS_PRESETS`, `INHERITANCE_MODES`.
 
 ### 96.7 The `cross` scene (Step 214)
 
-**What is computed** (no manim; `genetics/punnett.py`, `stats.py`, `glyphs.py`, in
-`vidgen.genetics` and so in `vidgen.api` through `genetics`):
-
-- `punnett.build_plan(params)` → `CrossPlan` (cached by the params' JSON: `plan_cross`): the
-  system, the parents, `kind`, their roles, the P line, every gamete of each parent
-  (`GameteView`: frequency, each allele with the homologue it came from — 0, 1 or `None` when
-  both carry it —, recombinant or not; ordered by frequency, then dominance, so parental gametes
-  of linked loci come first), the Punnett cells (`Cell`: `fertilize(egg, sperm)`, probability,
-  lethal, phenotype distribution), the phenotype classes (`PhenotypeClass`: label `round,
-  yellow` / `white, male`, exact share of the survivors, its number of the whole-number ratio, its
-  cells, a cell count when every cell is equally likely, its pictures), the genotype classes of the
-  zygotes (`GenotypeClass`: key `RrYy` — one-letter alleles run together, else the YAML form —,
-  shares of zygotes and survivors, lethal), `show` resolved, the branch tree and the notes.
-- **Parents**: `parents` (two genotypes; with sex chromosomes in any order, the X and Y say who is
-  the mother), or `mother` / `father` (needed with mitochondrial loci); `P` (true-breeding: its
-  cross must give one F1 genotype per sex, else refused with the genotypes found) gives the F1
-  intercross, labelled F₁ / F₂; `kind: test` takes one parent and adds `make_tester`;
-  `kind: reciprocal` uses `reciprocal`.
-- **The branch diagram** is a probability tree of the survivors: levels sex (when the classes
-  have one) then each trait, or (`branch: genotypes`) each locus (the X / Y pair last); every node
-  carries the probability **conditional** on its path and the product. For independent traits the
-  conditionals are the forked-line method's (3/4, 1/4 everywhere); for linked loci they differ, so
-  the tree stays exact. Limits: a Punnett square up to 8 × 8 (`auto`: up to 4 × 4), at most 16
-  leaves.
-- **Chi-square** (`stats.chi_square`): expected counts exact (N × share as fractions), χ² exact, df
-  = classes − 1, p = Q(df/2, χ²/2) with the upper regularized gamma function (series below a + 1,
-  Lentz's continued fraction above; equal to SciPy's `gammaincc` to 1e-9 in the tests), the
-  critical value by bisection, rejection when p < α, classes with E < 5 flagged. `observed` is a
-  mapping matched to the classes by their words in any order (`yellow round` = `round, yellow`),
-  or a list in class order; every class once.
-- **Pictures** (`glyphs.class_glyphs`): from the trait's name and the phenotype's words — pea
-  (shape, colour; both traits in one pea), flower, eye (a fly's compound eye for red / white /
-  sepia…, else a human eye), fly (body colour, wings, eye colour), coat (an animal head), feather,
-  fruit (colour, disc / sphere / long), blood drop with the ABO group, capsule, affected /
-  unaffected square, swatch. Drawn by `scenes/cross_draw.py` (original flat shapes).
-- **Notes** from the model: a linked parent's parental and recombinant gamete shares and RF (or "no
-  crossing over in this sex"), the lethal genotype with the share of zygotes and the survivors'
-  ratio, the tester, the reciprocal cross (and when it cannot differ), each epistasis in the loci's
-  symbols (`ee masks the B locus (ee is yellow whatever B)`).
-
-**The scene** (`scenes/cross.py`): 16:9 — the drawing on the left 58 %, the panel (class tables,
-chi-square) on the right; parent 1 beside the rows and parent 2 over the columns of the square
-(the textbook figure), "×" in the corner (♀ / ♂ there with sex chromosomes). A branch diagram
-without a panel uses the whole width: the parents with their gametes in a column on the left.
-9:16 — the parents in a row on top (gametes under each for a branch diagram), the drawing, the
-panel under it. Cells are as tall as the height allows and as wide as their genotypes; gamete chips
-become pills for long alleles; a low row puts its share beside its gamete. Tables use 1.15 × the
-label size, fitted to the panel; the phenotype table drops its percentages when it would shrink
-below 85 %; genotype tables go to two columns beyond six classes and stop at 12 (a trihybrid's 27
-are not tabled). Cards stack in the panel and replace each other when the next does not fit. A
-branch diagram's leaves are the table of its kind (products, percentages in 16:9 when the tree
-keeps 90 % of its size, pictures, ratio numbers, the ratio line under the tree); the panel then
-holds only the other kind (when it fits) and the chi-square test, and is left out when empty.
-
-**Actions** (`scenes/cross_actions.py`; `needs_visible = False`, each finds what it needs done
-first): `form_gametes` (targets `both` / `parents` / `gametes`, `parent1` / `mother` /
-`gametes1`, `parent2` / `father` / `gametes2`), `fill` (`square` / `all`, `row<N>`, `col<N>`,
-`cell<R>.<C>`, `cells:<class or genotype>`, patterns; `by: auto | cell | row | column`; `tree` on a
-branch diagram), `count` / `ratio` (`phenotypes`, `genotypes`), `chi_square` (`test` /
-`chi_square`). Any of them puts the scene in manual mode (the first step shows the parents and
-the empty square only); without them the scene's own steps are the parents, the gametes, the
-filling, each table counted with its ratio, the test. `action_sequence_problems` refuses gametes
-formed twice, a cell filled twice, a table counted twice, the test twice. The built-in
-`highlight` / `dim` / `callout` work on every target (`cells:` with `style: box` or `fill`).
-
-Changes from the plan (§96.5): `show` is `auto | punnett | branch` (gametes and ratios are always
-part of the scene, so no `show: gametes | ratios`); `generations: [P, F1, F2]` became `P: [...]`
-alone (the F1 is derived, the F2 shown); `kind` (`cross`, `test`, `reciprocal`) names the
-cross; the chi-square target has the alias `test` (`chi_square: test`); the counts are a
-`count` action plus a `ratio` action (a table can be counted on one word and its ratio said on
-another). Crossing over is shown by the gametes (recombinants ringed, their frequencies), not by
-chiasmata on the parents' chromosomes (`linkage_map`, Step 216, draws crossing over).
-
-**Public**: no new `vidgen.api` names (the new modules are reached as `genetics.punnett`,
-`genetics.stats`, `genetics.glyphs`); a scene type `cross` and five actions; no config key. Gaps:
-phenotype names in `loci` are not translatable strings; per-cell penetrance (a genotype split
-between phenotypes) shows the main phenotype in its cell (the tables are exact); the 9:16 genotype
-tree is small with 9 leaves; the lint of ratios said in narration is Step 219's.
+- **Plan** (`genetics/punnett.py`): `build_plan(params)` → `CrossPlan`, cached by the params' JSON
+  (`plan_cross`): system, parents, `kind: cross | test | reciprocal`, P line, `GameteView`s (frequency,
+  each allele's homologue 0 / 1 / `None`, recombinant; ordered by frequency then dominance), `Cell`s
+  (`fertilize(egg, sperm)`), `PhenotypeClass`es, `GenotypeClass`es, branch tree, notes. **Everything
+  shown comes from `CrossResult`**, so a drawn ratio cannot disagree with the cross. `P`
+  (true-breeding) must give one F1 genotype per sex.
+- **Branch diagram**: a tree of survivors (sex, then each trait; or `branch: genotypes`), each node with
+  its probability **conditional** on its path, so linked loci stay exact. Limits: Punnett up to 8 × 8
+  (`show: auto` up to 4 × 4, branch beyond), at most 16 leaves.
+- **Chi-square** (`genetics/stats.py`, no scipy): exact expected counts and χ², df = classes − 1,
+  p = Q(df/2, χ²/2) by the upper regularized gamma (series below a + 1, Lentz's continued fraction
+  above), critical value by bisection, E < 5 flagged; `observed` matched by words in any order or a
+  list in class order.
+- **Pictures** (`genetics/glyphs.py`, `class_glyphs`; drawn by `scenes/cross_draw.py`) from trait and
+  phenotype words; coat heads via param `animal` / `glyphs.animal_of` (preset, title or trait, else
+  neutral fur — never a guess).
+- **Scene** (`scenes/cross.py`): 16:9 drawing left 58 %, panel right (parent 1 beside rows, parent 2
+  over columns); 9:16 stacked. Tables at 1.15 × label size; genotype tables two-column beyond six
+  classes, none beyond 12.
+- **Actions** (`scenes/cross_actions.py`; `needs_visible = False`, each runs what it needs first):
+  `form_gametes`, `fill`, `count`, `ratio`, `chi_square` (targets: docs/CONFIG.md#cross). Any of
+  them makes the scene manual; `action_sequence_problems` refuses anything done twice. Crossing over
+  shows as ringed recombinant gametes, not chiasmata (that is `linkage_map`).
 
 ### 96.8 The `pedigree` scene (Step 215)
 
-**The chart** (`genetics/pedigree.py`, no manim): `parse_pedigree(individuals, couples)` →
-`Pedigree` (people in YAML order, couples with their children in birth order, each person's
-generation, who married in, NSGC labels). A person is a mapping (`id`, `sex`, `affected`,
-`carrier`, `deceased`, `proband`, `consultand`, `adopted: in | out`, `loss: miscarriage |
-stillbirth`, `proposed`, `parents`, `spouse`, `twin: {with, kind: MZ | DZ | unknown}`, `age`,
-`label`) or a line (`"II-3: female affected deceased of I-1 + I-2 twin II-4 MZ age 45 y"`).
-Couples come from shared children, `spouse:` and `couples:` (childless, `consanguineous`,
-`separated`); consanguinity is also found from shared ancestors. Generations are solved as
-offsets (partners equal, children +1) per connected family; a conflict (an uncle marrying his
-niece) is refused. **Married in**: a founder whose partner has parents on the chart (and an
-adopted-in child: unrelated). **NSGC ids** (`II-3` for everyone, or for no one): the numeral is
-the generation (checked), the numbers must read left to right as drawn (the layout's order is
-named in the error); other ids are numbered by the layout. Refused with the reason: two fathers or
-two mothers, one parent only, a parent without a sex, a cycle, twins who are not siblings, MZ
-twins of different sexes, affected and carrier together, a proposed child with a phenotype or
-without parents, several probands / consultands / proposed children, more than two partners.
-
-**The layout** (`genetics/pedigree_layout.py`): anchors (everyone with parents, one founder per
-cluster of founder partners: the one with most partners, then the male) own a rectangular block;
-a married-in partner stands beside its anchor (male left of female, unless an edge pull decides;
-with NSGC ids by their numbers); a sibship is its children's blocks side by side (twins adjacent,
-0.3 pitch between families) centred under the mating line; two partners on both sides of a person
-with two partners. **Joins** (two relatives as partners): their children belong to the partner
-reached later in preorder; both lines are pulled towards each other up to the common ancestors'
-sibship (the person moved to the sibship's edge, its spouse on the other side), where the two
-branches stand side by side — so the (double) mating line crosses nothing. Positions are in pitch
-units (one symbol and its gap), deterministic.
-
-**The analysis** (`genetics/pedigree_analysis.py`): one locus, two alleles; a genotype is (sex,
-copies of the disease allele): autosomal 0–2, a female's X 0–2, a male's X / Y and mtDNA 0–1;
-transmission per mode (X: the mother's X to every child, the father's to daughters; Y father to
-son; mtDNA from the mother); P(affected | genotype) = `penetrance` for the disease genotype, else
-0 (no phenocopies; XR heterozygotes unaffected). Founders follow Hardy–Weinberg with allele
-frequency q → 0 (weights as (power of q, coefficient) — an exact semiring for the leading term,
-so the posterior is the limit: the explanations needing the fewest copies entering the family,
-weighted by their probabilities); with `carrier_frequency` c (recessive modes) q = c / (2 − c),
-exact (P(heterozygote | unaffected) = 2q / (1 + q) = c). `rare: true` (default): a married-in
-founder carries no more copies than its phenotype needs. MZ twins share their genotype; a carrier
-must be heterozygous (impossible for a male's X, the Y and mtDNA). Inference is variable
-elimination (greedy smallest factor first), so consanguineous loops are exact. A mode **fits**
-when the total weight is not zero; an excluded mode's reason is the first textbook rule that
-applies (skipped generation at full penetrance, affected parents with an unaffected child under
-AR, an affected mother's unaffected son or an affected daughter's unaffected father under XR,
-father → son with a married-in mother, an affected father's unaffected daughter under XD, an
-affected female under YL, mtDNA not from the mother, discordant MZ twins, impossible carriers,
-a married-in parent who would have to carry a rare allele), else the smallest nuclear family no
-genotypes fit; when it would fit at penetrance 1/2 the reason ends with the exact condition
-(Step 221): "— excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)", naming the people
-forced to carry the disease genotype unaffected (else the unaffected people the reason names
-who might: "I-1 or I-2"), their genotype per mode and sex, and "unusual" (AR) / "very unusual"
-(XR) for the recessive modes, where reduced penetrance is rare (it is a known feature of many dominant ones). A fitting mode's note: who must be non-penetrant (same
-wording), or the people from outside who must carry the allele.
-`infer` gives each person's posterior, the forced genotypes, obligate carriers (forced
-heterozygotes, unaffected) and the proposed child's risk (P(affected); per sex for X / Y modes;
-the textbook factors — carrier probabilities, transmission, sex, penetrance — when the parents'
-joint posterior is the product of their marginals and the product equals the risk).
-
-**The plan** (`genetics/pedigree_plan.py`, cached by the params' JSON): chart, layout, labels,
-options, the modes tried (`analyse: [..]`), the stated mode (`mode`, or a `preset` / one `loci`
-locus: its alleles, its mode by `mode_of`, the condition = the phenotype that is not "normal…" or
-`condition`), the mode used (the stated one if the chart fits it, else the only fitting one,
-else none) and `warnings`. `declared_mode_problem(plan)` gives the reason a chart does not fit its
-stated mode, for the lint (Step 219); validation errors: a male carrier under a stated X-linked
-mode, any carrier under YL / MT, `mode` against the locus' mode, `genotypes` / `deduce` / `risk`
-without a mode.
-
-**The scene** (`scenes/pedigree.py`, symbols `scenes/pedigree_draw.py`, actions
-`scenes/pedigree_actions.py`): the pitch fits the chart's width and height (16:9 chart 60 %, the
-panel right; 9:16 chart on top up to 56 % of the body, the panel under it); symbol 0.5 pitch;
-numbers at each symbol's top corner (away from a twin line); under it the genotype slot (two lines
-— probability over genotype — when "2/3 Aa" is wider than the pitch and the height allows) and the
-age / label lines; the Roman numerals at the left; a legend of the marks used. Lines appear with
-the people they join (a mating line when both partners are on, a child's line with the child).
-The analysis card lists each mode with a tick or cross and its reason; when it does not fit the
-panel, a strip of the modes with one reason at a time (each replacing the last). The risk card:
-the factors, the product, the exact risk and per-sex risks; the risk is also written under the
-proposed child. Self-play: a generation per beat, then analysis, genotypes, risk as asked; any of
-`deduce` / `analyse` / `risk` (or a `reveal` of chart targets) makes it manual: the chart at
-once except what a `reveal` brings later (and the proposed child, which `risk` brings).
-
-**Public**: no new `vidgen.api` names (`genetics.pedigree`, `genetics.pedigree_layout`,
-`genetics.pedigree_analysis`, `genetics.pedigree_plan`); a scene type `pedigree`; actions
-`deduce`, `analyse`, `risk`; no config key. Changes from the plan (§96.5): `analyse` is a param
-(`true` or a list) and an action (`analyse: modes`); the action that shows genotypes is `deduce`;
-`reveal` / `highlight` are the built-ins on `generation:<R>` / `person:<id>`; `carrier_frequency`
-and `rare` added; `twin: {with, kind}`. Gaps: one locus; quadrants for several conditions,
-pregnancy (P) symbols other than the proposed child, infertility marks, partners from different
-generations and people who married into the family twice are not supported; heteroplasmy,
-new mutations and age-dependent penetrance not modelled.
+- **Chart** (`genetics/pedigree.py`): `parse_pedigree(individuals, couples)` → `Pedigree` (people in
+  YAML order, couples with children in birth order, generations, married-in, NSGC labels); person keys
+  and the line form: docs/CONFIG.md#pedigree. Couples from shared children, `spouse:`, `couples:`;
+  consanguinity also from shared ancestors. Generations solved as offsets per family (conflicts
+  refused). NSGC ids (`II-3`) for everyone or no one; the numeral must match the generation and numbers
+  read left to right as drawn. One locus per chart.
+- **Layout** (`genetics/pedigree_layout.py`, deterministic, pitch units): anchors own rectangular
+  blocks; a married-in partner beside its anchor; a sibship is its children's blocks centred under the
+  mating line (twins adjacent). **Joins** (relatives as partners): both lines are pulled together up
+  to the common ancestors' sibship, so the mating line crosses nothing.
+- **Analysis** (`genetics/pedigree_analysis.py`): one locus, two alleles; genotype = (sex, disease
+  copies); P(affected | genotype) = `penetrance` for the disease genotype, else 0 (no phenocopies).
+  Founders follow Hardy–Weinberg with q → 0 (weights as (power of q, coefficient), an exact semiring
+  for the leading term); with `carrier_frequency` c, q = c / (2 − c). `rare: true` (default): a
+  married-in founder carries no more copies than its phenotype needs. Inference is variable
+  elimination (greedy smallest factor), exact on consanguineous loops. A mode **fits** when the total
+  weight is non-zero. An excluded mode's reason is the first textbook rule that applies, else the
+  smallest nuclear family no genotypes fit; when penetrance 1/2 would allow it the reason ends with
+  the exact condition ("— excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)"; "unusual" for
+  AR, "very unusual" for XR); a fitting mode's note uses the same form. A male is never called a carrier
+  of an X-linked allele. `infer`: posteriors, forced genotypes, obligate carriers, the proposed child's
+  risk (per sex for X / Y modes; textbook factors shown when their product equals the risk).
+- **Plan** (`genetics/pedigree_plan.py`, cached by params JSON): chart, layout, modes tried
+  (`analyse`), stated mode (`mode`, or via `mode_of` from a `preset` / one locus), the mode used (stated
+  if it fits, else the only fitting one, else none), `warnings`. `declared_mode_problem(plan)` feeds
+  the lint. Validation errors: a male carrier under a stated X-linked mode, any carrier under YL / MT,
+  `mode` against the locus' mode, `genotypes` / `deduce` / `risk` without a mode.
+- **Scene** (`scenes/pedigree.py`, `pedigree_draw.py`, `pedigree_actions.py`): 16:9 chart 60 % with
+  the panel right; 9:16 chart on top with what the tallest card leaves (`_panel_need`); a height-bound
+  chart spreads up to 1.3 pitches. Actions `deduce`, `analyse`, `risk`; any of them, or a `reveal` of
+  `generation:<R>` / `person:<id>`, makes it manual (else a generation per beat).
 
 ### 96.9 The `linkage_map` scene (Step 216)
 
-**What is computed** (`genetics/mapping.py`, no manim):
-
-- **Map functions** (`MAP_FUNCTIONS`, `rf_to_cm`, `cm_to_rf`): `none` d = 100 r (what three-point
-  analyses report; `SHORT_CM` = 15 cM is where the scene warns it underestimates), `haldane`
-  d = −½ ln(1 − 2r) M (no interference), `kosambi` d = ¼ ln((1 + 2r)/(1 − 2r)) M; RF over ½ is
-  refused (a distance over 50 cM is a sum of intervals); at r = ½ the map functions give ∞ and
-  `cm_to_rf` tends to ½ (independent assortment).
-- **Test-cross classes** (`class_key`, `parse_counts`): a class names each locus once — the
-  mutant allele by its symbol, the wild type `v+` / `v^+` (any order) or `+` (by position in
-  `loci`); all 2ⁿ classes once (0 allowed).
-- **`analyse(loci, counts, function)`** → `MapAnalysis`: reciprocal pairs summed; the largest pair
-  is parental (a tie refused: the parentals cannot be told), its first class gives the phase
-  (`coupling` / `repulsion` for two loci, `mixed` for three when the mutant alleles are split);
-  for three loci the smallest pair is the double crossovers (a tie refused), the middle locus the
-  one at which a double-crossover class differs from a parental class by one locus; each interval's
-  recombinants are the classes whose two loci are combined unlike the parental class (double
-  crossovers count in both intervals); RF exact (`Fraction`), cM by the function; the outer RF
-  counted directly (it misses the double crossovers); expected double crossovers RF₁ × RF₂ × N,
-  coincidence = observed / expected, interference = 1 − coincidence (undefined when an interval has
-  no recombinants). Notes: RF ≥ 40 % (maybe unlinked: a chi-square test decides), an interval over
-  15 cM without a map function. Tested on Griffiths' *v cv ct* data computed by hand: order *v – ct
-  – cv*, 191/1448 and 93/1448, c = 8/(191·93/1448) ≈ 0.65, I ≈ 0.35.
-- **The plan** (`build_linkage_plan` / `plan_linkage`, cached by the params' JSON): `counts` (with
-  `loci`) or `map` (`{y: 0, w: 1.5}` sorted by position; two loci at one position refused);
-  the map order, positions, the heterozygote's homologues (from the parental classes, or `phase`
-  for a map), the crossovers drawn (`auto`: the first interval; `double`; `v-ct` between
-  neighbours only), `measure_interval` (any two loci: distance and the RF the function gives).
-
-**The scene** (`scenes/linkage_map.py`, actions `scenes/linkage_actions.py`): the chromosome area
-draws the heterozygote's homologue pair as four chromatids (sisters pinched at the centromere,
-the homologue colours of `cross` / `cell_cycle`), loci as bands across them, the alleles above and
-below (a second row where neighbours would touch, for both their even and their map positions).
-The chromosome is drawn in the true map order from the start (it is the parent's chromosome; the
-experimenter's ignorance of the order is the table's: its columns start in the given order and
-move into map order at the `order` step). Crossing over: the inner chromatids are pulled together
-at the chiasma (a bump in their lanes), the segments beyond it change owner half-way, they part;
-each chromatid's alleles are written beside it, coloured by origin, *parental* / *recombinant*.
-Counts: the table (classes in the author's order, numbers right-aligned, the total), the
-steps' cards replacing each other (classes; gene order; distances with the sums; interference),
-tags on the rows (parental, DCO, then SCO with its interval), the map bar (loci staggered when
-close, positions, interval braces, the unit and the function). 16:9: chromosomes and map left
-(42 %), table and card right; 9:16: chromosomes, table, card, map stacked; `map` mode: chromosomes
-on top, map and card side by side (16:9) or stacked. Self-play: chromosomes, the crossing over, the
-steps, the map (merged into at most two steps a beat so a short scene does not overrun); a
-`reveal` of a step (or `measure`) makes it manual; each step runs the steps it needs first.
-`cross_over` takes the place of the scene's own crossing over (and starts from the pair as it was).
-
-Public: no new `vidgen.api` names (`genetics.mapping`); scene type `linkage_map`; actions
-`cross_over`, `measure`. Changes from the plan (§96.5): the steps are built-in `reveal` targets
-rather than actions; `phase` and `crossover` params added.
+- **Map functions** (`genetics/mapping.py`: `MAP_FUNCTIONS`, `rf_to_cm`, `cm_to_rf`): `none` d = 100 r
+  (warned beyond `SHORT_CM` = 15 cM), `haldane` d = −½ ln(1 − 2r) M, `kosambi` d = ¼ ln((1 + 2r)/
+  (1 − 2r)) M; RF > ½ refused; at r = ½ distance is ∞.
+- **`analyse(loci, counts, function)`** → `MapAnalysis`: all 2ⁿ classes once (`class_key`,
+  `parse_counts`); reciprocal pairs summed; largest pair parental (tie refused), giving the phase; for
+  three loci the smallest pair is the DCOs (tie refused) and fixes the middle locus; RF exact
+  (`Fraction`), DCOs counted in both intervals, outer RF counted directly; coincidence = observed /
+  (RF₁ × RF₂ × N), interference = 1 − coincidence (undefined with an empty interval).
+- **Plan** (`build_linkage_plan` / `plan_linkage`, cached): `counts` + `loci` or `map`, `phase`,
+  `crossover`, `measure_interval`.
+- **Scene** (`scenes/linkage_map.py`, `linkage_actions.py`): the homologue pair as four chromatids in
+  true map order from the start (the table's columns move into map order at the `order` step); the
+  steps are built-in `reveal` targets; actions `cross_over`, `measure`.
 
 ### 96.10 The `karyotype` scene (Step 216)
 
-**The model** (`genetics/karyotype.py`, no manim): the 24 chromosomes with GRCh38 lengths and
-centromere midpoints (Mb), textbook classes (metacentric 1, 3, 16, 19, 20; acrocentric 13–15,
-21, 22, Y; satellites on 13–15, 21, 22), Denver groups A–G, and each arm's last ISCN band
-(`TERMINAL`: 1p36, 1q44, …, Xq28, Yq12), the one band fact checked. **Bands are schematic**:
-each arm is split into its regions (from the terminal band's region number) and bands (the last
-region's count from the terminal band, `REGION_BANDS` = 3 for the others), widths varied by a
-fixed hash, the terminal band pale and dark bands alternating inwards (four shades),
-heterochromatin 1q12, 9q12, 16q11, Yq12 grey, p11 / p12 stalk / p13 satellite on the satellited
-acrocentrics. A named band (`band_ref`, `parse_band_label`: `7q31.2`) lies where this scheme puts it
-(a sub-band a share of its band; a band past a region's drawn count in proportion), so labels and
-breakpoints agree with the drawing; positions are near, not at, the measured ISCN ones (said in
-the card's note and the docs).
-
-**ISCN** (`parse_karyotype`): count, sex chromosomes (X, Y only, at least one X, at most five),
-then `+N` / `-N`, `del(c)(band)` (terminal) or `(bandband)` (interstitial, one arm), `dup`, `inv`
-(paracentric within an arm, pericentric across the centromere), `t(a;b)(band;band)` (sex
-chromosome or lower number first), `rob(a;b)(q10;q10)` / `der(a;b)(q10;q10)` / `rob(a;b)` between
-acrocentric autosomes; `mat` / `pat` / `dn` kept. Refused with the fix: a count that is not what is
-listed (computed: 44 + sex + gains − losses − Robertsonian fusions), lower-case or Y-only sex
-chromosomes, ±X / ±Y, `5p-`, mosaics, unknown changes (did-you-mean), bands past an arm's end,
-interstitial changes across the centromere, a change on a chromosome the cell lacks. The cell's
-chromosomes are `Copy`s by slot: a normal copy is one segment; a derivative is segments of normal
-chromosomes (`Segment(chrom, a, b)`, a > b inverted) with its centromere and marked stretches —
-terminal deletion (the rest), interstitial deletion (two pieces), tandem duplication, inversion
-(the middle reversed, the centromere moved when pericentric), reciprocal translocation (each
-derivative keeps its centromere's segment and takes the partner's distal one, oriented outwards
-whichever arms broke), Robertsonian (the first chromosome's q arm reversed above the centromere,
-the second's below; in the first's slot). Readings in words and classic conditions only where
-certain (trisomy 21 / 18 / 13, translocation Down syndrome or a balanced Robertsonian carrier,
-Turner, Klinefelter, triple X, 47,XYY, cri-du-chat for a 5p terminal deletion, the Philadelphia
-chromosome for t(9;22)(q34;q11)).
-
-**The scene** (`scenes/karyotype.py`, ideograms `scenes/karyotype_draw.py`, action
-`scenes/karyotype_actions.py`): a chromosome is a column of band polygons cut from capsules (each
-arm a capsule between telomere, centromere and stalk, so the centromere is a constriction), fixed
-neutral greys in every theme (G-banding is dark on light), the outline in the theme's ink;
-material from another chromosome tinted with the accent. `show: karyogram`: rows by group (16:9
-1–5 / 6–12, X / 13–18 / 19–22, Y; 9:16 five rows), centromeres on a line per row, one scale for
-all, width from length (slimmer when the width is short), group letters, numbers; an empty Y slot
-is left out; changes: a box round the slot, a dashed ghost for a lost chromosome (45,X: "X or Y"),
-brackets beside a derivative's marked stretch. `show: ideogram` (auto when `chromosomes` is given
-or every change is structural): the slots' copies in columns (a Robertsonian's consumed
-chromosome as a ghost column), one row (16:9) or a row per slot (9:16), p / q labels, names under
-(derivatives in the highlight colour), labels with leader lines — asked-for bands beside the first
-normal copy, a derivative's breakpoints beside it. An edit: the normal chromosome stands where its
-derivative will; its segments (`segment_piece`, bands in source order) `ReplacementTransform` into
-the derivative's (an inverted one along a half-turn arc, a translocated one along an arc), what no
-derivative keeps fades out, outlines are redrawn, names and brackets appear. The card: the notation,
-the count and sex, each change read, the conditions, notes (16:9).
-
-Public: no new `vidgen.api` names (`genetics.karyotype`); scene type `karyotype`; action
-`rearrange`. Changes from the plan: `show: auto | karyogram | ideogram` (the plan's
-`highlight: [21]` became the automatic highlight of the changes and the built-in `highlight` on
-`chromosome:21`); `bands` labels; `notation`.
+- **Model** (`genetics/karyotype.py`): 24 chromosomes with GRCh38 lengths (`LENGTH_MB`) and centromeres,
+  classes, Denver groups, each arm's last ISCN band (`TERMINAL`, the one band fact checked). **Bands
+  are schematic**: regions and bands (`REGION_BANDS` = 3 except the last region's), widths by a fixed
+  hash; a named band (`band_ref`, `parse_band_label`) lies where this scheme puts it, so labels and
+  breakpoints agree with the drawing (near, not at, ISCN positions; the card says so).
+- **ISCN** (`parse_karyotype`): count, sex chromosomes, `+N` / `-N`, `del`, `dup`, `inv`, `t`, `rob` /
+  `der` between acrocentric autosomes, `mat` / `pat` / `dn`; the count must equal 44 + sex + gains −
+  losses − Robertsonian fusions; refusals: docs/CONFIG.md#karyotype. Order is lint
+  (`iscn_order_problem`, §96.18). A cell's chromosomes are `Copy`s by slot; a derivative is
+  `Segment(chrom, a, b)` pieces (a > b inverted) with its centromere. Conditions are named only where
+  certain.
+- **Scene** (`scenes/karyotype.py`, `karyotype_draw.py`, action `rearrange`): band polygons cut from
+  capsules, fixed neutral greys in every theme, foreign material accent-tinted; `show: auto |
+  karyogram | ideogram`. `rearrange`: segments (`segment_piece`) `ReplacementTransform` into the
+  derivative's.
 
 ### 96.11 Non-disjunction in `cell_cycle` meiosis (Step 216)
 
-`DivisionSpec.nondisjunction = (I | II, pair index)` (scene param `{division, pair}` from 1),
-checked in `check_spec` (meiosis only; a pair the cell has). Meiosis I: at anaphase I the
-homologue that would go right goes left too (lifted a little so both show), the first daughter
-receives both homologues; meiosis II: in the first daughter the pair's sister chromatids both go
-to the upper pole. The daughters' and products' chromosomes are lists (`members`, `products`), so
-territories, plates and labels follow what each cell has; without `nondisjunction` every keyframe
-is unchanged (checked item by item against the Step 211 planner for 2n = 2–8, three seeds).
-Captions say what goes wrong and, at the end, the gametes and zygotes (`gamete_outcomes`: I — 2
-of 4 n + 1, 2 n − 1, trisomic and monosomic zygotes; II — 2 of 4 n, 1 n + 1, 1 n − 1);
-`nondisjunction_cells` gives each cell's (chromosomes, chromatids) once they differ (centromere
-count: an unsplit pair counts once at anaphase II), shown in the counts line and refusing `expect`
-of per-cell counts there. Gametes are labelled `n + 1 = 3`.
+`DivisionSpec.nondisjunction = (I | II, pair index)` (param `{division, pair}` from 1), checked in
+`check_spec` (meiosis only; an existing pair). I: both homologues go to the first daughter at anaphase
+I; II: in the first daughter both sisters go to the upper pole. Daughters' and products' chromosomes
+are lists (`members`, `products`); without the option every keyframe is unchanged. `gamete_outcomes`
+(I: 2 of 4 n + 1, 2 n − 1; II: 2 of 4 n, 1 n + 1, 1 n − 1); `nondisjunction_cells` gives per-cell
+(chromosomes, chromatids) once they differ and refuses per-cell `expect` there.
 
 ### 96.12 The gallery budget (Step 216)
 
-The committed `docs/gallery` was at 9.95 MB of its 10 MB test budget after Step 215. Phase V adds
-nine scene types and a genetics showcase, each needing two stills and two GIFs; squeezing every
-new GIF to a lower frame rate would make the newest previews the worst. Decision: the budget grows
-by what the entries still to come need and every entry is held to a share — `ENTRY_MAX` = 0.36 MB
-per entry (its page, two palette stills, two GIFs each ≤ `CLIP_MAX_BYTES`; the heaviest entries so
-far, `cross`, `cell`, `rainy_evening`, weigh 0.33 MB), a test per entry, and `BUDGET` = 13 MB
-(10 MB + 8 entries after Step 216 × 0.36 MB). The genetics samples are kept to two or three short
-beats. After Step 216: 10.6 MB (`linkage_map` 0.32 MB, `karyotype` 0.31 MB); after Step 217:
-11.5 MB (`mutation` 0.28 MB, `dna_lab` 0.26 MB, `crispr` 0.30 MB — its sample is one beat, the
-scene's many coloured tiles making heavy GIFs); after Step 218: 12.0 MB (`population` 0.34 MB — its
-sample has three lines and no heterozygosity panel —, `gwas` 0.17 MB).
+Every gallery entry is held to `ENTRY_MAX` = 0.36 MB (page, two palette stills, two GIFs each ≤
+`CLIP_MAX_BYTES`), one test per entry, under a total `BUDGET` (both in `tests/test_gallery.py`).
+Decided: the budget grows with the entries rather than lowering new GIFs' frame rate; genetics
+samples are two or three short beats.
 
 ### 96.13 The `mutation` scene and HGVS (Step 217)
 
-**The model** (`genetics/hgvs.py`, `genetics/reference_genes.py`, `genetics/mutation.py`; no manim):
-
-- **`CodingSequence`**: exonic coding-strand DNA from `c.first` (`c.1` is the A of the ATG), the
-  coding exons as `c.` ranges, the intron sequences when known, the CDS length and the first exon's
-  number. `coding_sequence()` checks the bases (an mRNA's U is read as T), the exons (in order,
-  touching, covering the window) and the length.
-- **DNA variants** (`parse_c` → `RawVariant`, `resolve` → `DnaVariant` + `Edit`): substitution,
-  `del`, `dup`, `ins`, `delins` and intronic substitutions (`c.92+1G>A`, `c.1585-1G>A`; the
-  reference base comes from the intron when it is known, else from the GT…AG consensus at ±1, ±2).
-  The usual slips are refused with the fix (`c.A20T`, `→` for `>`, lower case, `c.0`, a reversed
-  range, several bases in a substitution, `ins` without its two flanking positions, a `p.` given as
-  the DNA change). `normalize(cds, edit)` writes what a change *is*: common bases trimmed, one base
-  for one a substitution, deletions and insertions moved to their 3′-most position **within the
-  exon** (HGVS's 3′ rule), an insertion that copies the bases before it a duplication;
-  `check_written` refuses a non-canonical description with the canonical one and the reason. The
-  bases an author writes after `del` / `dup` are checked and kept in the drawing (`c.1521_1523delCTT`).
-- **The protein** (`protein_change`): the mutant window is translated with `cellworld.sequences.CODONS`
-  and compared with the reference — synonymous, missense, nonsense, frameshift (`fs` counts the first
-  changed residue as 1 up to the new stop; `None` → `fs*?`), in-frame `del` / `dup` / `ins` /
-  `delins` (3′-most in a run), start loss `p.(Met1?)`, stop loss `ext`; a splice-site change is
-  `p.?`. `ProteinChange.text(style, stop)` writes `p.(Glu7Val)`, `p.(E7V)`, `p.(Arg553*)` or
-  `p.(Arg553Ter)`. `parse_p` reads an author's form back (refusing `X` for a stop and `ΔF508`), and
-  `check_stated` compares it with the computed one, naming the legacy numbering when the residue
-  number is one less (HGVS counts the initiator Met).
-- **Consequence** (`consequence`): the canonical DNA change, the protein change, its class, the two
-  translations, the mutant sequence and the notes — the side chains of a missense, the codon of a
-  synonymous change, whether an indel keeps the frame, nonsense-mediated decay (a premature stop
-  more than `NMD_DISTANCE` = 50 nt upstream of the last exon–exon junction; the exons must be
-  complete to judge it), and for a splice site the predicted RNA change (exon skipping for an
-  internal exon, else intron retention; `splice: skip | retain | auto`).
-- **Reference genes** (`reference_genes.py`): windows of real coding sequence with their exons,
-  transcript and CDS length — **HBB** (NM_000518.5, c.1–150), **CFTR** (NM_000492.4, c.1516–1680 in
-  exons 11–13) and **GJB2** (NM_004004.6, c.1–66) — each with the textbook variants that lie in it
-  and their legacy names (HbS c.20A>T p.(Glu7Val) = β6 Glu→Val; HbC, HbE, codon 39 nonsense,
-  IVS-I-1; F508del c.1521_1523del p.(Phe508del) = ΔF508, G542X, G551D, R553X, 1717-1G>A; 35delG
-  c.35del p.(Gly12Valfs*2)). A test translates every window and checks each variant's published
-  protein change.
-- **The plan** (`build_mutation_plan` / `plan_mutation`, cached by the params' JSON): the coding
-  sequence (a reference window, an author's `sequence`, or a gene built by `cellworld.expression`
-  whose exons and introns become `c.` ranges), the symbol checked by `cellworld.names`, and each
-  variant as a `VariantView` (consequence, the `p.` text in the author's style, the legacy name,
-  a note).
-
-**The scene** (`scenes/mutation.py`, helpers `scenes/molecular_draw.py`, action
-`scenes/molecular_actions.py`): a reference row and a variant row — base tiles in Phase U's base
-colours (lightened so the dark letter keeps 4.5:1 contrast), a box per codon, the amino acid on a
-chip under it with its residue number. The variant row is a copy of the reference that changes:
-the replaced bases leave, the rest slide to their new places in the fixed codon frame and the new
-ones drop in, so a frameshift regroups every later codon and reaches its premature stop; changed
-bases are ringed, changed residues highlighted, a stop red, deleted residues struck through, and a
-tick marks the junction of a deletion. A splice-site variant draws the exon border instead (exonic
-bases in tiles, intronic bases lower-case in pale outlined tiles, the codon box at the border
-dashed). The gene strip (when the exons are known) shows the coding exons with GT…AG, the window
-bracketed, an arrow at the variant and, for a splice site, the predicted mRNA (the exon skipped or
-the intron kept). The card gives the symbol, `c.`, the computed `p.`, the class, the legacy name and
-the notes; notes (then the legacy name, then the big type) are dropped rather than shrunk below the
-readable size. Self-play: the reference, then each variant; `mutate` puts one on a word.
-
-Public: no new `vidgen.api` names (`genetics.hgvs`, `genetics.mutation`, `genetics.reference_genes`);
-scene type `mutation`; action `mutate`.
+- **`CodingSequence`** (`genetics/hgvs.py`): coding-strand DNA from `c.first` (`c.1` = the A of the
+  ATG), coding exons as `c.` ranges, intron sequences when known; `coding_sequence()` checks bases (U
+  read as T), exons (in order, touching, covering) and length.
+- **DNA variants** (`parse_c` → `RawVariant`, `resolve` → `DnaVariant` + `Edit`): substitution, `del`,
+  `dup`, `ins`, `delins`, intronic substitutions (reference base from the intron, else the GT…AG
+  consensus at ±1, ±2); common slips refused with the fix (docs/CONFIG.md#mutation).
+  `normalize(cds, edit)` trims common bases, shifts indels 3′-most **within the exon** and turns a
+  copying insertion into a dup; `check_written` refuses a non-canonical form with the canonical one.
+- **Protein** (`protein_change`, with `CODONS`): synonymous, missense, nonsense, frameshift (`fs`
+  counts the first changed residue as 1; no stop → `fs*?`), in-frame indels, `p.(Met1?)`, `ext`;
+  splice site `p.?`. `ProteinChange.text(style, stop)`; `parse_p` and `check_stated` compare an
+  author's form, naming legacy numbering when the residue is one less.
+- **Consequence** (`consequence`): canonical change, protein change, class, translations, notes (NMD
+  when a premature stop lies more than `NMD_DISTANCE` = 50 nt upstream of the last junction, judged
+  only with complete exons; a splice site predicts exon skipping for an internal exon, else intron
+  retention; `splice: skip | retain | auto`).
+- **Reference genes** (`genetics/reference_genes.py`): real coding windows of **HBB** (NM_000518.5),
+  **CFTR** (NM_000492.4, exons 11–13) and **GJB2** (NM_004004.6) with their textbook variants and
+  legacy names (CFTR legacy = c. + 132; its old exon numbering is in the module text); a test checks
+  each variant's published protein change.
+- **Plan** (`genetics/mutation.py`, `build_mutation_plan` / `plan_mutation`, cached): a reference
+  window, an author's `sequence` or a `cellworld.expression` gene; symbol checked by `cellworld.names`;
+  `VariantView`s.
+- **Scene** (`scenes/mutation.py`, `scenes/molecular_draw.py`, action `mutate` in
+  `scenes/molecular_actions.py`): reference and variant rows of base tiles (Phase U base colours
+  lightened for 4.5:1 contrast) in a fixed codon frame, so a frameshift regroups every later codon. The
+  card drops notes, then the legacy name, then the big type rather than go below readable size.
 
 ### 96.14 The `crispr` scene (Step 217)
 
-**The model** (`genetics/crispr.py`, no manim): `CAS` holds SpCas9 (PAM `NGG`, 20-nt spacer) and
-SaCas9 (`NNGRRT`, 21–23 nt), both cutting both strands 3 bp upstream (5′) of the PAM (blunt ends).
-`find_guides` lists every protospacer with a PAM on either strand with its cut position and GC
-content; `check_guide` places an author's spacer and refuses, with the guides that would work, a
-spacer that is not in the target (naming the reverse-complement and written-backwards mistakes),
-one without a PAM after it (naming what is there, and another enzyme's PAM when it fits), the wrong
-length, a spacer written with its PAM, one that occurs twice. `repair` gives the outcome: NHEJ
-joins the ends with an indel (default +1, the commonest SpCas9 outcome, copying the base 4 bp
-upstream of the PAM) or HDR copies a donor carrying `edit`; with `coding_first` the outcome runs
-through `hgvs.edit_consequence`, so it is written in HGVS with its protein change, and the notes say
-whether the frame is kept (a knockout), how far the edit lies from the cut, and whether the repaired
-allele still has its protospacer and PAM (Cas9 would cut it again).
-
-**The scene** (`scenes/crispr.py`): the target drawn **from the strand that carries the PAM** — with
-a guide on the bottom strand the same DNA is shown as its reverse complement, so the protospacer
-always reads 5′→3′ along the top row and every label keeps its lane (the card says so; HGVS stays in
-the target's own numbering). The enzyme is two lobes behind the DNA, the sgRNA a row of RNA tiles
-with a scaffold hairpin. Steps: `dna` → `scan` (the enzyme passes the PAMs it finds, settles on the
-right one, the PAM is boxed, the protospacer bracketed, the displaced strand lifts and the spacer
-takes its place) → `cleave` (both strands part at the cut) → `repair` (the complex leaves, a donor
-appears for HDR, the repaired allele is drawn with its changed bases ringed). Cards: the target, the
-guide (enzyme, PAM, spacer, how many guides the target offers), the break, the repair.
-
-Public: no new `vidgen.api` names (`genetics.crispr`); scene type `crispr`; actions `scan`,
-`cleave`, `repair`.
+- **Model** (`genetics/crispr.py`): `CAS` holds SpCas9 (`NGG`, 20-nt spacer) and SaCas9 (`NNGRRT`,
+  21–23 nt), both cutting both strands 3 bp 5′ of the PAM (blunt). `find_guides` lists every
+  protospacer with a PAM on either strand; `check_guide` refuses a bad spacer listing the guides that
+  would work. `repair`: NHEJ indel (default +1, copying the base 4 bp upstream of the PAM) or HDR with a
+  donor carrying `edit`; with `coding_first` the outcome runs through `hgvs.edit_consequence`, and
+  notes say whether the repaired allele keeps its protospacer and PAM.
+- **Scene** (`scenes/crispr.py`): drawn **from the strand that carries the PAM** (a bottom-strand guide
+  shows the reverse complement, so the protospacer reads 5′→3′ on top; HGVS keeps the target's
+  numbering). Steps / actions `scan`, `cleave`, `repair` after `dna`. In 9:16 tiles shrink to fit when
+  the protospacer and PAM do not fit at readable size.
 
 ### 96.15 The `dna_lab` scene (Step 217)
 
-**The model** (`genetics/dna_lab.py`, no manim), one plan per `method`:
-
-- **PCR**: the primers are checked against the template (the forward primer repeats the top strand,
-  the reverse primer is the reverse complement of the top strand downstream; each must bind once,
-  and they must point towards each other), the product runs between their 5′ ends, Tm by the Wallace
-  rule below 14 nt else the GC formula, annealing ~5 °C below the lower Tm (refused at or above it),
-  denaturation 94–98 °C, extension 68–74 °C, ~1 kb per minute. `pcr_strands` simulates the strands
-  of the first cycles exactly (each primer extends to the end of its template), so the
-  defined-length product first appears in cycle 3; `PcrPlan.counts(n)` aggregates the same rule to
-  2ⁿ molecules and 2ⁿ − 2n of exactly the product (a primer site at the template's edge gives the
-  product a cycle earlier, and the counts follow the simulation).
-- **Gel**: `resolving_range` interpolates the standard agarose table; `migration` is linear in
-  log₁₀(size) over that range (0.1–0.9 of the run) and compressed smoothly outside it, strictly
-  decreasing in size; `size_from_distance` reads a size off the ladder by log-linear interpolation.
-  Notes flag fragments outside the range and bands that would run as one.
-- **Sanger**: the read, its template strand, seeded peak heights and the called bases, a
-  heterozygous position called with its IUPAC code.
-- **NGS**: seeded reads from the two alleles (`zygosity`), per-base sequencing errors, coverage per
-  position, the alt-read share at the site and the call (heterozygous ≥ 15 %, homozygous ≥ 85 %,
-  below 10× *low coverage*); `pack_rows` stacks the reads so they do not touch.
-
-**The scene** (`scenes/dna_lab.py`): PCR — the template as two bars with the primers as arrows,
-the product measured, a temperature trace of three cycles and a row of molecules per cycle (those
-of the product's length in the highlight colour); gel — the plate with its wells at the cathode,
-the ladder labelled (labels that would collide are left out), the bands migrating to their
-distances and their sizes read off; Sanger — the template and the new strand, the fragments
-flashing in turn, then the chromatogram with its called bases in the base colours; NGS — the
-reference, the reads stacked with the base at the site coloured and errors marked, the coverage
-bars and the variant call. Each method has its steps (`setup` → …), played by `run: <target>` or
-beat by beat.
-
-Public: no new `vidgen.api` names (`genetics.dna_lab`); scene type `dna_lab`; action `run`.
-
-**Gaps after Step 217**: `mutation` shows one window of a transcript (no multi-exon scrolling), the
-splice prediction is schematic (no cryptic sites, no branch-point or polypyrimidine analysis), RNA
-`r.` changes are written only for splice sites; `crispr` has SpCas9 and SaCas9 only (no base or
-prime editing, no off-target search, no PAM-proximal seed weighting), and NHEJ's indel is the
-author's choice rather than a distribution; `dna_lab` has one PCR product (no multiplex, no
-nested PCR, no qPCR curve), the gel is one lane set without a running clock, Sanger peaks are
-stylised (no real mobility or peak shape) and NGS is a seeded read model, not an aligner.
+- **Model** (`genetics/dna_lab.py`), one plan per `method`. **PCR**: primers checked against the
+  template (each binds once; they point towards each other); Tm by the Wallace rule below 14 nt, else
+  the GC formula; annealing refused at or above the lower Tm. `pcr_strands` simulates the first cycles
+  exactly (the defined-length product first appears in cycle 3); `PcrPlan.counts(n)`: 2ⁿ molecules,
+  2ⁿ − 2n of exactly the product (a primer at the template's edge gives it a cycle earlier). **Gel**:
+  `resolving_range` from the standard agarose table; `migration` linear in log₁₀(size) over that range
+  (0.1–0.9 of the run), smoothly compressed outside, strictly decreasing; `size_from_distance` reads
+  the ladder log-linearly. **Sanger**: seeded peaks, heterozygous calls by IUPAC code. **NGS**
+  (`plan_ngs`): seeded reads with per-base errors; `variant` `31C>T` or `a_bdel[BASES]` (1–12 bp);
+  the call counts only reads spanning the whole site (`NgsPlan.site_depth`): heterozygous ≥ 15 %,
+  homozygous ≥ 85 %, below 10× *low coverage*; reads start from `MIN_OVERLAP` − L to len −
+  `MIN_OVERLAP` and are clipped, so coverage is even to the window's edges.
+- **Scene** (`scenes/dna_lab.py`, action `run: <target>`): each method's steps beat by beat; gel
+  readings one per size ("≈" outside the resolving range); a gapped NGS read as two pieces and a line;
+  a short call card drops lines, never the call.
 
 ### 96.16 The `population` scene (Step 218)
 
-**The model** (`genetics/population.py`, no manim):
-
-- **Hardy–Weinberg** (`hardy_weinberg(spec)` → `HardyWeinberg`): one source of `counts` (genotype
-  counts: p = (2n<sub>AA</sub> + n<sub>Aa</sub>) / 2N, exact), `frequencies` (adding up to 1),
-  `p`, or `incidence` (of a recessive condition: q = √incidence, an exact `Fraction` when the
-  numerator and denominator are squares — 1/2500 → 1/50 —, else a float; refused with `inbreeding`,
-  as q² = incidence assumes random mating); the alleles (`[A, a]`; genotypes written `AA`, `Aa` /
-  `aA`, `aa`); expected genotype frequencies p² + Fpq, 2pq(1 − F), q² + Fpq; the carrier frequency
-  2pq with the rare-allele approximation 2q in the notes. From counts `hwe_test`: expected counts
-  N p², 2Npq, Nq² exact, χ² exact, **df = 1** (three classes − 1 − one allele frequency estimated),
-  p = Q(½, χ²/2) (`stats.chi_square_p`), the critical value 3.84, classes with E < 5, and
-  F̂ = 1 − H<sub>obs</sub>/H<sub>exp</sub>. Errors: a share outside [0, 1], frequencies not adding
-  up to 1, counts that are not whole numbers ≥ 0 or do not add up to `total`, a genotype not of the
-  alleles (did-you-mean), a missing genotype, two sources.
-- **Wright–Fisher** (`simulate(spec)` → `Simulation`): N diploids, each generation the expected
-  frequency after selection (p' = (p²w<sub>AA</sub> + pq w<sub>Aa</sub>)/w̄), mutation
-  (p(1 − μ) + (1 − p)ν) and migration (two populations: (1 − m)p₁ + m p₂ both ways, or one way into
-  the second) is sampled as Binomial(2N, p')/2N with `numpy.random.default_rng(seed)` (the same seed
-  gives the same lines; replicates draw in turn from one generator). Sizes per generation: N, a
-  `bottleneck` `{at, N, generations}` (then N again), a `founder` sample of `founders` from a source
-  at p₀ at generation 0. The deterministic recursion (no sampling) for selection, mutation and
-  migration; each line's fixation / loss generation (absorbing only when nothing reintroduces the
-  allele); expected heterozygosity H<sub>t</sub> = H<sub>t−1</sub>(1 − 1/2N<sub>t</sub>) (exact
-  in expectation for binomial sampling of 2N copies) and the lines' mean 2pq for drift, bottleneck
-  and founder; the first line's individuals at a generation (its 2N copies paired at random,
-  seeded, so the dots carry exactly that generation's allele count). Fitness `{AA, Aa, aa}` (none
-  negative, not all 0) or `s`, `h` (w = 1, 1 − hs, 1 − s; s in [−1, 1]). Notes per model: P(fixation)
-  = p₀ under drift, the 1/2N loss of H, heterozygote advantage p̂ = t/(s + t), 2Ns < 1, ν/(μ + ν),
-  the one-way migration closed form, the heterozygosity a bottleneck removes.
-- **The plan** (`build_population_plan` / `plan_population`, cached by the spec's JSON): the model,
-  `hw` or `sim`; a param of another model is refused naming its model.
-
-**The scene** (`scenes/population.py`, actions `scenes/population_actions.py`): Hardy–Weinberg —
-the dots left (16:9) or on top (9:16), at most 100 (a dot stands for N/100 people when there are
-more, the legend then giving the real counts), and the working as blocks stacked on the right
-(alleles, expected, carriers, chi-square; when the next block does not fit, the earlier ones leave).
-Simulations — the frequency plot (`chart_axes`, the line chart's styling: palette colours, 3–3.5 px
-lines; the deterministic course as a thick line in the text colour; populations in the primary and
-secondary colours with their names coloured in the card), optionally the heterozygosity plot
-(`heterozygosity`; default for bottleneck and founder) with its expectation and the lines' mean, the
-bottleneck as a shaded band with its N on a plate, the founder's source as a dashed line; the dots
-(the first line's individuals) and the card (the model, its notes; at the last generation the
-outcome: fixed / lost / segregating, the deterministic end, H). A generation counter beside the
-plot's title follows the lines. Lines grow by a driven animation (points to the current fractional
-generation); a fixed or lost line gets a dot where it absorbs. Self-play: the plot and dots, about a
-third of the generations, the rest; any `simulate` / `resample` (or a `reveal` of `generation:<t>`)
-makes it manual. `action_sequence_problems` refuses a `simulate` that does not go forward.
-
-Public: no new `vidgen.api` names (`genetics.population`); scene type `population`; actions
-`simulate`, `resample`. Changes from the plan (§96.5): `model` defaults to `hardy_weinberg`; the
-mutation model is its own `model: mutation` (and `mu` / `nu` add to any simulation); `heterozygosity`
-added; Hardy–Weinberg steps are built-in `reveal` targets.
+- **Hardy–Weinberg** (`genetics/population.py`, `hardy_weinberg(spec)` → `HardyWeinberg`): exactly one
+  source (`counts`, `frequencies`, `p`, `incidence`; q = √incidence exact as a `Fraction` when both
+  parts are squares; `incidence` refused with `inbreeding`); expected p² + Fpq, 2pq(1 − F), q² + Fpq.
+  `hwe_test`: exact expected counts and χ², **df = 1** (three classes − 1 − one estimated frequency),
+  critical 3.84, E < 5 flagged, F̂ = 1 − H_obs/H_exp. Two alleles only.
+- **Wright–Fisher** (`simulate(spec)` → `Simulation`): each generation the expected frequency after
+  selection, mutation and migration is sampled as Binomial(2N, p')/2N with
+  `numpy.random.default_rng(seed)` (same seed, same lines; replicates draw in turn from one generator);
+  `bottleneck`, `founder`; the deterministic recursion; fixation / loss generations (absorbing only
+  when nothing reintroduces the allele); expected H_t = H_{t−1}(1 − 1/2N_t); the first line's
+  individuals per generation (seeded, matching that generation's allele count). Fitness `{AA, Aa, aa}`
+  or `s`, `h`; viability selection only. `model` defaults to `hardy_weinberg`; `model: mutation`
+  exists and `mu` / `nu` add to any simulation.
+- **Plan** (`build_population_plan` / `plan_population`, cached): a param of another model is refused
+  naming its model.
+- **Scene** (`scenes/population.py`, actions `simulate`, `resample` in `population_actions.py`): at most
+  100 dots (one per N/100 beyond); Hardy–Weinberg steps are `reveal` targets; any `simulate` /
+  `resample` / `reveal` of `generation:<t>` makes it manual; a `simulate` that does not go forward is
+  refused.
 
 ### 96.17 The `gwas` scene (Step 218)
 
-**The model** (`genetics/gwas.py`, no manim): p-values kept as −log₁₀ p, parsed from numbers or
-strings through `decimal` (so `"3e-450"` works; 0 < p ≤ 1); z ↔ −log₁₀ p (two-sided, `erfc`, an
-asymptotic expansion beyond z = 37, bisection for the inverse). Chromosomes 1–22 and X (`chr7`, 23 =
-X; Y / MT refused with the reason); positions in bp or `"53.8 Mb"` / `"420 kb"` (a bare number below
-1000 is refused as Mb written as bp), within GRCh38 lengths (`genetics.karyotype.LENGTH_MB`). The
-genome axis: chromosomes in order with a 12 Mb gap. **Author data**: `read_rows` (CSV / TSV, the usual
-column names CHR / BP / P / SNP / gene / r2), `author_variants`, then `clump` (smallest p first,
-nothing within `clump_kb` of a lead becomes another; leads below `label_p` = 5 × 10⁻⁸ labelled from
-`labels` or a gene column, else their id). **Synthetic**: a seeded null background (`background`,
-default 2400 variants spread by chromosome length, p uniform, optionally inflated by λ: z·√λ) and the
-author's `peaks`, each a lead with 48 variants (half within ±80 kb, half across ±400 kb), r² =
-e<sup>−d/0.15 Mb</sup> × U(0.55, 1) and z<sub>i</sub> = r<sub>i</sub> z<sub>lead</sub> + √(1 − r²)·ε, so a
-neighbour's expected χ² ≈ r² χ²<sub>lead</sub>; background variants inside a window get a small r².
-λ<sub>GC</sub> = median χ²₁ / 0.4549 (over the null background for a synthetic study: its peaks'
-variants would otherwise be a far larger share than in a real study of millions); QQ points
-(expected −log₁₀((i − 0.5)/n), the low end thinned); at most `MAX_DRAWN` = 4000 points drawn (every
-p < 0.01 kept). `build_gwas_plan` / `plan_gwas` (cached by the spec's JSON).
-
-**The scene** (`scenes/gwas.py`; action `regional` in `scenes/population_actions.py`): the
-Manhattan plot (`chart_axes` with the y title turned along the axis, so no row is spent on it;
-chromosome numbers thinned when they would touch; alternating primary and a 45 % tint; the
-significance line solid in the accent colour and the suggestive line dashed, both labelled in a margin
-right of the plot; points above `y_max` — default the data's top, at most 40 — as triangles at the
-top with their p in the label; peaks ringed and labelled, italic for gene symbols); the info row over
-it (the boxed **simulated data** tag for a synthetic study, the trait, variants, hits); the QQ plot
-(diagonal dashed, λ<sub>GC</sub> over it); the regional plot (the peak's window boxed on the Manhattan
-plot with zoom lines, r² colours fixed in every theme — five bins — and the lead a purple diamond,
-its id, gene and p). 16:9: the Manhattan plot alone, or beside the QQ plot (70 / 30), or over the
-regional plot with the QQ plot in a column at the right; 9:16 stacked. Self-play: the axes, the
-points chromosome by chromosome, the thresholds, the peak labels, the QQ plot, the regional plot (with
-the `regional` param); a `reveal` of a later target makes it manual (the `regional` action does not).
-
-Public: no new `vidgen.api` names (`genetics.gwas`); scene type `gwas`; action `regional`. Changes from
-the plan (§96.5): `plot: both`; `regional` (param and action) added; inline `variants` and `labels`.
-
-**Gaps after Step 218**: two alleles only (no multi-allelic Hardy–Weinberg, no exact HWE test for
-small counts — only the warning); no age structure, overlapping generations, selfing or assortative
-mating; selection acts on viability only (no fecundity or sex-specific fitness); the synthetic GWAS is
-a display model (a few thousand variants and LD as a distance decay), not a genotype simulation; no
-gene track, recombination rate or conditional analysis in the regional plot; one regional plot per
-scene.
+- **Model** (`genetics/gwas.py`): p kept as −log₁₀ p, parsed through `decimal` (`"3e-450"`; 0 < p ≤ 1);
+  z ↔ −log₁₀ p two-sided (`erfc`, asymptotic beyond z = 37). Chromosomes 1–22 and X (Y / MT refused);
+  positions in bp or `"53.8 Mb"` (a bare number below 1000 refused), within `karyotype.LENGTH_MB`.
+  Author data: `read_rows` (CSV / TSV), inline `variants`, `clump` (leads below `label_p` = 5 × 10⁻⁸
+  labelled). Synthetic (tagged *simulated data*): seeded null background (default 2400 variants,
+  optional λ inflation) plus `peaks` with LD as distance decay (z_i = r_i z_lead + √(1 − r²)·ε).
+  λ_GC = median χ²₁ / 0.4549 (over the null background for synthetic data); at most `MAX_DRAWN` = 4000
+  points drawn (every p < 0.01 kept). `build_gwas_plan` / `plan_gwas` (cached).
+- **Scene** (`scenes/gwas.py`; action `regional` in `scenes/population_actions.py`): `plot: manhattan |
+  qq | both`, optional regional plot (five fixed r² colours); a `reveal` of a later target makes it
+  manual (the `regional` action does not).
 
 ### 96.18 The genetics accuracy lint (Step 219)
 
-Built on §95.14's framework, not beside it: the knowledge is `vidgen.genetics.accuracy` (no manim;
-it reuses `cellworld.accuracy`'s `sentences`, `plain`, `normal_text` and `Claim`), the glue
-`vidgen.lint.genetics_rule` (`GENETICS_RULES`, `genetics_issues(project, scene_id, rules)`), and the
-runner appends its findings to `SceneContext.science` after the `science_*` ones, so they are
-reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssue` gains an optional
-`severity` (an issue's own: the pedigree error, HGVS info).
+Built on §95.14's framework: knowledge in `vidgen.genetics.accuracy` (reusing `cellworld.accuracy`'s
+`sentences`, `plain`, `normal_text`, `Claim`), glue in `vidgen.lint.genetics_rule` (`GENETICS_RULES`,
+`genetics_issues(project, scene_id, rules)`); findings are appended to `SceneContext.science` after the
+`science_*` ones, so they are reported, ignored and configured the same way. `ScienceIssue` has an
+optional own `severity`. Configs `GeneticsRatioRule` / `GeneticsLinkageRule` (`tolerance` 0.05),
+`GeneticsHweRule` (`tolerance` 0.1), `GeneticsPedigreeRule`, `GeneticsCrisprRule`,
+`GeneticsKaryotypeRule`, `GeneticsHgvsRule`; scene scope, default warning, last in `LINT_RULES`. What
+each rule reports: docs/CONFIG.md#lint-vidgen-lint.
 
-- **Reading claims.** As in §95.14, narrowly: a sentence with a negation or contrast, a question or a
-  hypothetical (`HYPOTHETICAL`: would, could, instead, modified, becomes, than, unlike, compared,
-  "expected if"…) is not read. **Shares** (`shares_in`): `1/4`, `1 in 2,500`, `one in four`, `2 out
-  of 3`, `25 %`, `twenty-five percent`, `half`, `a quarter`, `three quarters`, `two thirds` (an
-  ordinal only with a numerator other than "a" or before "of": not "a third child"), `all the
-  daughters`; each knows whether it was said with "about" (`tolerance`, relative) or as a bound ("more
-  than", "up to": not compared) and how finely it was written (17 % is ±0.5 points). Numbers in digits
-  or words up to millions (`number`). **Ratios** (`ratios_said`): `9:3:3:1`, "three to one", "nine to
-  three to three to one", "three round to one wrinkled", "9 purple : 7 white" — between the numbers
-  only the cross's phenotype words; the "to" form needs those words or a ratio word.
-- **`genetics_ratio`** (`cross_claims`, cross scenes): a ratio must be one of `cross_ratios(plan)` —
-  phenotypes, genotypes, zygotes (lethal ones included: the yellow mouse's 1 : 2 : 1), by sex, sexes
-  pooled, each parent's gametes (sentence about gametes), the observed counts, without the epistasis
-  (sentence about classes merging or masking), one trait's (sentence says "each trait alone", a
-  trait's name or only one trait's phenotypes) — compared as reduced, sorted numbers. A share is
-  read when the sentence has a group word (offspring, sons, daughters, children, plants, flies…) or a
-  chance word, and names phenotypes (`CrossVocabulary`: full names, words naming only one phenotype,
-  "affected" / "unaffected" for a two-phenotype trait with a normal one, blood groups after
-  "group" / "type", "carriers" / "heterozygotes" for one two-allele locus); the group after the share
-  decides: "half the sons" is among the sons, "a quarter of the children are affected sons" the joint
-  share, "each son has a 50 % chance" among the sons. Skipped: sentences about the F1 of a `P` cross,
-  about a test cross the scene is not, about gametes.
-- **`genetics_pedigree`**: `declared_mode_problem` (Step 215) as an **error** on the first beat
-  (with the modes that fit, or the reduced-penetrance hint); `pedigree_text_claims` in every scene ("a
-  dominant trait skips a generation" without penetrance / recessive / carrier words or a
-  `penetrance:` below 1; father → son / male-to-male transmission when the sentence says X-linked or
-  the scene's mode is XR / XD, Y and autosomal sentences left alone); `pedigree_claims` in pedigree
-  scenes with an inference: a carrier probability of a person named by NSGC id, or of "an unaffected
-  sibling / brother / sister" (any unaffected person's value accepted), and the proposed child's risk
-  (per sex for a son or daughter); conditional sentences (if, given, assuming) are left alone.
-- **`genetics_linkage`** (`linkage_claims`): in any scene an RF or recombinant share over 50 %; with
-  pairs (`map_pairs` of a `linkage_map` plan: distance on the map, the interval RF, for the outer pair
-  of three loci the direct count and the sum; `cross_pairs` of a cross's linkage groups: 100 × RF
-  summed, r₁ + r₂ − 2Cr₁r₂, unlinked pairs) a distance in cM / map units or an RF for the two loci the
-  sentence names (`mentions`: symbols as written, a one-letter capital only beside and / gene / locus /
-  a dash), or any pair's when it names none; "unlinked" / "assort independently" for a pair with
-  RF < 0.4, "linked" for an unlinked pair.
-- **`genetics_hwe`** (`hw_claims`): the formulas (carriers as q² or p², the incidence as 2pq,
-  p² + q² = 1) and, per beat, q, the incidence and the carrier frequency said: q² against the
-  incidence, carriers against 2q(1 − q) or 2q (both accepted within `tolerance`, 0.1); with a
-  population Hardy–Weinberg scene q and the incidence against the scene's.
-- **`genetics_crispr`** (`crispr_claims`): the enzyme is the sentence's (SpCas9 / Cas9, SaCas9,
-  Cas12a / Cpf1) or the `crispr` scene's (no Cas, no scene: not read); a PAM token next to "PAM" that
-  is not the enzyme's (`PAMS`, or an instance of it: AGG fits NGG), a cut downstream / 3′ / after /
-  inside the PAM or N ≠ 3 bp upstream, sticky / staggered / overhang ends (Cas12a, nickases,
-  restriction enzymes named: left alone), the PAM upstream of the protospacer or on the target strand,
-  a spacer length outside `SPACER_RANGES` (SpCas9 17–24 nt).
-- **`genetics_karyotype`** (`karyotype_claims`, also on titles and callout labels; the scene's
-  `karyotype`): ISCN tokens (`47,XX,+21`, `46,XY,t(9;22)(q34;q11.2)`) parsed with
-  `genetics.karyotype.parse_karyotype` (its error and fix), out of ISCN order (`iscn_order_problem`:
-  after the sex chromosomes by chromosome, sex chromosomes first, numerical before structural on one
-  chromosome — the order Step 216 left unchecked), a token or Turner / Klinefelter said with only the
-  other sex's words (SRY named: left alone), and a condition said (trisomy / monosomy N, Down, Edwards,
-  Patau, Turner, Klinefelter, triple X, cri-du-chat, Philadelphia) that the sentence's karyotype, or the
-  karyotype scene's, does not have (`_conditions`: translocation trisomy 21 counts as Down; comparisons
-  with like / such as / other left alone).
-- **`genetics_hgvs`** (`hgvs_claims`, also on screen): `c.` and `p.` tokens parsed by `genetics.hgvs`
-  (format errors with their fix: `c.A20T`); in a `mutation` scene a `c.` that is not one of its
-  variants (canonical forms compared) and a `p.` that `check_stated` does not accept for any variant —
-  the legacy numbering (one residue lower, no initiator Met) reported unless the sentence says legacy /
-  traditional / known as / mature protein; outside a mutation scene the reference genes' textbook
-  variants (`_legacy_numbering`: HbS `Glu6Val` when the sentence names HBB, sickle cell, haemoglobin;
-  CFTR, cystic fibrosis); **info**: `ΔF508` / `delta F508` and one-letter shorthand (`R553X`, `G551D`,
-  `E6V`) with their HGVS form, in genetics scenes or sentences about a variant, unless called legacy
-  (`F508del`, the community's name, is not reported).
-- **`science_naming` reused.** `science_issues` validates the params of `mutation`, `crispr`, `gwas`,
-  `karyotype` too, and `_genes` asks their new `gene_symbols(params)` (the mutation plan's symbol,
-  `crispr`'s `symbol`, the genes of `gwas` peaks / variants / labels, `karyotype` band texts that are
-  HGNC-form symbols), which also put them in italics in captions (`video_gene_symbols`).
-- **Narration–picture rules.** `SHOWING_ACTIONS` adds the genetics actions (`form_gametes`, `fill`,
-  `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`,
-  `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`); `gwas`
-  (`peak:<label>` → the label) and `karyotype` (`band:<band>` → its text) get `target_text` (`cross`
-  and `pedigree` had one since Steps 214–215).
-- **Config.** `GeneticsRatioRule` / `GeneticsLinkageRule` (`tolerance` 0.05), `GeneticsHweRule`
-  (`tolerance` 0.1), `GeneticsPedigreeRule`, `GeneticsCrisprRule`, `GeneticsKaryotypeRule`,
-  `GeneticsHgvsRule`; all scene scope, default warning, last in `LINT_RULES`.
-- **False positives.** Every example, the gallery and the Phase U / V scratch projects (229 scenes):
-  no finding on correct material; one real finding (Step 216's scratch karyotype out of ISCN order).
-  The tests hold a correct-sentence list beside each wrong one.
-- **Public:** no new `vidgen.api` names (`genetics.accuracy` through `genetics`); seven lint rules;
-  scene types `mutation`, `crispr`, `gwas`, `karyotype` gain `gene_symbols`, `gwas` and `karyotype`
-  `target_text`. Nothing renders differently except caption italics of those genes in videos that
-  have such scenes.
-- **Gaps:** English only; a claim spread over two sentences is read only for Hardy–Weinberg numbers
-  within a beat; shares are matched to phenotypes and carriers, not to named genotype classes or
-  gametes; pedigree probabilities only for NSGC-named people, "an unaffected sibling" and the proposed
-  child; no narration checks of GWAS thresholds, PCR cycle counts or gel sizes; PAM tokens are read
-  only as written letters (not "N G G" spelled for the TTS).
+- **Reading** narrowly: sentences with a negation, contrast, question or hypothetical (`HYPOTHETICAL`)
+  are skipped. `shares_in` reads shares in digits and words, each knowing "about" (relative
+  `tolerance`), bounds (not compared) and written precision; `ratios_said` reads ratios with only the
+  cross's phenotype words between numbers. English only.
+- **Model sources**: `genetics_ratio` compares against `cross_ratios(plan)` (reduced, sorted);
+  `genetics_pedigree` raises `declared_mode_problem` as an **error** on the first beat and checks
+  `pedigree_claims` against `infer`; `genetics_linkage` uses `map_pairs` / `cross_pairs`;
+  `genetics_hwe` the scene's Hardy–Weinberg model; `genetics_crispr` `PAMS` / `SPACER_RANGES`;
+  `genetics_karyotype` `parse_karyotype` and `iscn_order_problem`; `genetics_hgvs` `genetics.hgvs`,
+  `check_stated` and `_legacy_numbering` (info for legacy shorthand; `F508del` not reported).
+- **`science_naming` reused**: `science_issues` validates `mutation`, `crispr`, `gwas`, `karyotype`
+  too and asks their `gene_symbols(params)`, which also italicise them in captions
+  (`video_gene_symbols`).
+- **Narration–picture rules**: `SHOWING_ACTIONS` includes the genetics actions; `target_text` on
+  `cross`, `pedigree`, `gwas` (`peak:<label>`), `karyotype` (`band:<band>`).
 
 ### 96.19 The example, the guide topic and the cookbook (Step 220)
 
-- **`examples/cystic-fibrosis`** (README with a scene table, the choices and the checks): one
-  disease through six of the nine types — `pedigree` (AD / AR / XR tested, obligate carriers),
-  `cross` (two carriers), `pedigree` again (2/3, the partner at `carrier_frequency: 1/25`, the risk
-  1/150 with its factors), `karyotype` (ideogram of 7, `bands: {7q31.2: CFTR}`), `mutation` (CFTR
-  c.1521_1523del p.(Phe508del)), `dna_lab` `ngs` (the brother heterozygous for the deletion),
-  `population` (incidence 1/2500 → 49/1250) and a `process` recap. The family is shown twice so each
-  scene stays readable; the diagnosis is sequencing because a 3-bp difference does not show on an
-  agarose gel. Kokoro `af_heart` at 0.85 (0.9 failed `narration_speed` on two beats), `discovery`
-  at −6 dB, karaoke captions, `citations: {show: marker}`, references by PMID (Riordan et al. and
-  Kerem et al., *Science* 1989). A test validates both variants, runs the genetics lint and checks
-  the narrated numbers against the plans.
-- **NGS deletions** (`genetics.dna_lab.plan_ngs`): `variant` is `31C>T` or `a_bdel[BASES]` (1–12 bp,
-  a reference base on both sides, the bases checked); alt reads are aligned with `-` gaps; the call
-  counts only reads spanning the whole site (`NgsPlan.site_depth`; `end`, `kind`, `site` added with
-  defaults). Reads start anywhere from `MIN_OVERLAP` − L to len − `MIN_OVERLAP` and are clipped to
-  the window, so coverage is even up to its edges (a deletion at position 6 of the CFTR window
-  needs it); this changes the reads of existing `ngs` scenes (a deliberate improvement; nothing
-  committed used one). The scene draws a gapped read as two bar pieces and a bridging line (as
-  genome browsers do), drops tile letters that would touch (9:16), sizes rows up to 0.8 tile and
-  puts the verdict in the call card's heading (a short card drops lines, never the call).
-- **Lint** (shared, findings only, no rendering change): a lone character on a plate is a tile —
-  not a label for `label_spacing`, not a word for `max_words`; `introspect._backdrop` widens a
-  glyph's box narrower than half its height before sampling (an `I` read as grey on grey);
-  `genetics_hwe`'s q pattern accepts "frequency of disease alleles, is …" and a number said as q
-  is not read again as the incidence.
-- **Docs**: guide topic `genetics` (aliases heredity, inheritance, medical-genetics, punnett, hgvs:
-  choosing by question, notation NSGC / ISCN / HGVS / HGNC, exactness, the seven rules, tone,
-  pacing, a snippet), a pointer from `scenes`; `docs/COOKBOOK-GENETICS.md` (choosing, notation, exact
-  numbers, reading a pedigree aloud, counselling tone, pacing, references, a mistakes table with
-  the rule that catches each, a validated pattern) linked from README, `docs/COOKBOOK.md`, the
-  guide and the gallery; the gallery's Genetics section gets a note (`SECTION_NOTES`,
-  `SECTION_FOOTERS`); the CONFIG completeness test covers the nine genetics types (they were
-  complete). No gallery media changed (12.0 MB of 13 MB).
-- **Gaps**: in 9:16 the pedigree's "1/25 Aa" label is 2.42 % of the frame (warning size 2.5 %) and
-  the variant card with its notes has 43 words; NGS insertions and indels are not modelled; the
-  deleted residue's strike-through is a `covered_text` finding the example ignores with a reason.
+- **`examples/cystic-fibrosis`** (README with scene table): one disease through six of the nine types
+  and a `process` recap; diagnosis by sequencing because a 3-bp difference does not show on an agarose
+  gel. A test validates both variants, runs the genetics lint and checks narrated numbers against the
+  plans.
+- **Shared lint details**: a lone character on a plate is a tile (not a label for `label_spacing`, not
+  a word for `max_words`); `introspect._backdrop` widens a glyph box narrower than half its height
+  before sampling.
+- **Docs**: guide topic `genetics` (aliases heredity, inheritance, medical-genetics, punnett, hgvs),
+  docs/COOKBOOK-GENETICS.md, gallery Genetics section (`SECTION_NOTES`, `SECTION_FOOTERS`); the CONFIG
+  completeness test covers the nine types.
 
 ### 96.20 Review of Phase V (Step 221)
 
-- **Scientific-accuracy pass** (no error found in the data; checked by hand against the RefSeq
-  proteins, HGVS, ISCN and the textbooks): the HBB / CFTR / GJB2 windows translate to the known
-  proteins and every textbook variant's `p.`; CFTR's legacy numbering is c. + 132 (the A of the ATG
-  is legacy 133: c.1585-1G>A ↔ 1717-1G>A, c.1624G>T ↔ 1756G>T, c.489+1G>T ↔ 621+1G>T) and the old
-  exon numbering called intron 11 intron 10 — now in the module text and the variant's note;
-  exon spans (exon 11 = c.1393–1584, 192 bp; exon 12 = c.1585–1679, 95 bp), CDS lengths (444,
-  4443, 681 nt); the 15 presets' ratios; SpCas9 NGG / 20 nt, SaCas9 NNGRRT / 21–23 nt, blunt cut
-  3 bp 5′ of the PAM; Tm (Wallace / GC formula), the agarose ranges, ddNTPs; HWE 49/1250, df = 1;
-  λ_GC with the χ²₁ median 0.4549; Haldane / Kosambi; the three-point v–ct–cv data; band
-  landmarks (7q31.2 CFTR, 9q34 ABL1, 22q11.2 BCR, 5p15.2, Xq28 F8); FTO / MC4R positions (GRCh38).
-- **Pedigree exclusion wording**: a mode excluded at full penetrance that penetrance 1/2 would
-  allow ends with the exact condition (see §96.8 "explain"), e.g. "— excluded unless I-1 is
-  non-penetrant (Xᵃ Y; very unusual)"; the fitting note under reduced penetrance uses the same
-  form ("fits with reduced penetrance: II-1 is non-penetrant (heterozygous)"); a male is never
-  called a carrier of an X-linked allele. The compact (9:16) reason starts with the mode code only.
-  The XR daughter rule reads "needs an Xᵃ from her unaffected father I-1".
-- **Frame use**: `pedigree` spreads a height-bound chart sideways (`Px` up to 1.3 pitches), puts the
-  legend in a column beside the chart in 16:9 when that gives a larger pitch, numbers individuals
-  beside the symbol's top corner on the side without a mating line (above only when someone has
-  partners on both sides; outside adoption brackets), and in 9:16 gives the chart what the cards
-  that will be shown leave (`_panel_need`: the tallest of them, the analysis at its compact size
-  when shorter). The proband's / consultand's arrow points at the lower half of the symbol (clear
-  of the labels under it) and its P goes to the first spot round the tail that touches no other
-  mark or label (`pedigree_draw.letter_spots`). `karyotype` draws normal chromosomes (no changes,
-  ≤ 4 copies) in 16:9 lying across the frame, p arm left, labels over their band with a leader
-  through it, p / q under the last copy; few ideogram columns are drawn broader (up to the
-  metaphase share) with larger band labels; broad capsules get round ends (extra samples where
-  the half-width ≥ 0.25). `mutation` with few codons in 16:9 (when it makes tiles ≥ 15 % larger)
-  puts the card in a column beside the rows, which then use the body's height; a narrow card
-  writes the notation at 1.15× instead of 1.5×; the card says "legacy: ΔF508"; the in-frame note
-  is "3 nt lost: a multiple of 3" and "codon 507 ATC → ATT: still Ile".
-- **Gel**: the poles (words, or − / + when narrow) and the ladder sizes stand outside the plate on
-  the left, the lanes inside it (the lanes were shifted half a lane right before), lane names
-  alternate heights rather than shrink, and the readings are one per size: a dashed line level with
-  the bands from the ladder across the plate and the size in a right margin (stepped apart when
-  close), "≈" for a size outside the gel's resolving range; the card lists the caveats first.
-- **Coat glyphs**: `cross` param `animal` (auto, dog, mouse, rabbit, cat, guinea pig, none);
-  `glyphs.animal_of`: the preset's (labrador → dog, yellow_mouse → mouse, rabbit_coat → rabbit),
-  one named in the title or a trait, else a neutral patch of fur — never a guessed mouse.
-- **`fit_text` ligatures** (shared): Manim's `Paragraph` assigns glyphs to lines by counting
-  characters, so a font that joins two letters into one glyph (Source Serif 4 "fi"; Inter "->",
-  "=>") moved letters onto the neighbouring line ("Cystic fibrosis i / n a family"). `_paragraph`
-  rebuilds a multi-line paragraph with `disable_ligatures=True` when its glyph count differs from
-  its letter count (and keeps the first build if Manim refuses, i.e. glyphs missing for another
-  reason). One-line texts and texts without ligatures are built as before: the Phase Q baseline
-  stays 31/31 identical.
-- **`crispr` 9:16**: when the protospacer and PAM do not fit at the readable tile size the tiles
-  shrink to fit the frame with their 5′ / 3′ ends (they ran off both edges); unchanged otherwise.
-- **Example**: `codons: 5` (the card beside the rows in 16:9); 9:16 lint clean of layout findings.
-
+- **`fit_text` ligatures** (shared): Manim's `Paragraph` assigns glyphs to lines by counting characters,
+  so a ligature (Source Serif 4 "fi"; Inter "->", "=>") moves letters to the next line. `_paragraph`
+  rebuilds a multi-line paragraph with `disable_ligatures=True` when its glyph count differs from its
+  letter count (keeping the first build if Manim refuses). Other texts are built unchanged.
+- The review's data checks, wording and frame-use rules are folded into §96.8–96.15.
 ## 97. Science foundation: scientific charts and worked calculations (Phase W, Steps 222–228)
 
 One chart core shared by science scenes, and worked calculations with units (the `calculation`
@@ -11213,1778 +8865,801 @@ Without `cut` / `shorts` / `hold` everything behaves as before.
   reuses a dump with ≥ 2 (`_stills_current`).
 ## 102. A neon city, an implant's view, other timelines (Phase AA, Steps 251–254)
 
-Reference: docs/CONFIG.md "Isometric places" (**A city at night**), "Particles" (`glow`), "Echo
-characters (`echo`)", "Overlays" (`hud`). A second private story cartoon (a first-person noir
-romance at night in a city of towers: an implant that alerts and scans, a ride through the
-city in a hover pod under glowing rain, a lab where other timelines overlap the present, a kiss
-echoed across timelines) drives generic features for every author. The story, its script and
-its project live in the scratchpad and are never committed; docs and samples use neutral
-content.
+User docs: docs/CONFIG.md "Isometric places" (**A city at night**), "Particles" (`glow`), "Echo
+characters (`echo`)", "Overlays" (`hud`). All features below are additive and opt-in. Their
+helper names (towers, traffic, HUD model, echo, kiss, haze, pendant) are exported from `vidgen.api`.
 
 ### 102.1 The phase (plan) and the gap analysis (Step 251)
 
-- **251**: the adapted script (private), test renders (a city of houses in neon colours with
-  coloured rain; then the new city, a lab with an echo and a HUD), the gap list below, this plan,
-  and the first features: towers (§102.2), traffic (§102.3), glowing particles (§102.4), the
-  `hud` overlay (§102.5), echo characters (§102.6).
-- **252**: the rest of the gaps: a `kiss` action; hologram display patterns `equations` and
-  `timelines`; a handheld `scanner` small prop; small props `takeout` and `crystal`; a `medal`
-  accessory; a glowing, pulsing pendant; a `haze` over a spot; a sliding room door; a closer look
-  at a pod's rider if needed. A private test cut of key shots. Done (§102.8-§102.16), with the
-  review of 251's stills: the HUD keeps its texts off faces and is drawn in pieces, iso rain
-  splashes in plain rings.
-- **253**: the story video (private): build, previews, stills of every shot, final 16:9 1080p
-  and a delivery copy under 28 MB.
-- **254**: Shorts (9:16) cut from it and a critical review of the film and the features.
-
-**What schu-video-generator did already** (test render: an outdoor iso place at `light: night` with two houses
-in neon colours, a lamp, a sign, path streets, rain with `color: [cyan, blue, green]`,
-`fill_light: 0.45`, two characters and a close-up; 10.8 s in 161.7 s at 854 × 480): night
-light, lit windows and lamps that glow, coloured rain with splashes and puddles, faces readable
-at night, per-speaker Kokoro voices with effects (`[robot, radio]` for a voice in the head),
-holograms, `materialise`, hand in hand, flashback looks, alarms, shots and zooms, music beds
-(`enigma`, `neon`, `beacon`, `calm`).
-
-**Gaps per need** (generic names): a city of tall buildings at night (window grids, neon,
-screens, algae farms); things flying over an iso place (hover pods on lanes); glowing rain; a
-heads-up display over the frame (alerts, readouts, a heartbeat that skips, a scanner spiking off
-its scale); other selves in their own costumes overlapping the present; a kiss; floating
-formulas and many timelines on a display; a handheld scanner; a haze; small props (takeout,
-crystals), a medal, a glowing pendant; a sliding door.
+Features: towers (§102.2), traffic (§102.3), glowing particles (§102.4), the `hud` overlay
+(§102.5, §102.8), echo characters (§102.6), iso splashes (§102.9), display patterns (§102.10),
+sliding doors (§102.11), haze (§102.12), small props (§102.13), neck accessories (§102.14), `kiss`
+(§102.15), wavy hair (§102.17), wall strip lights (§102.18).
 
 ### 102.2 Towers (Step 251)
 
-- **World** (`world/iso.py`): `OBJECT_KINDS["tower"]` (2 x 2, 9 tiles); `TALL_KINDS` (kinds a
-  placing may give a `height`: tower 2–30); `OBJECT_FEATURES` (a tower's `screen`, `garden`);
-  `ObjectPlacing.height` / `.features` and `IsoObject.features` (checked in `place_objects`:
-  height only for a tall kind and in range, features of its kind); `SWITCHED_KINDS` + tower;
-  `default_state("tower").on` is true (its windows lit). Config: `IsoObjectParam.height`,
-  `screen`, `garden` (towers only), `on` now `bool | None` (`None`: the kind's own: a tower lit,
-  others off — unchanged for them).
-- **Drawing** (`iso_objects._tower`, maths in `cartoon/iso_city.py`, no manim): the box in the
-  main colour; on each face rows of windows every `TOWER_FLOOR` 0.5 from `TOWER_FIRST` 0.55,
-  columns every `TOWER_COLUMN` 0.34 (windows 0.2 × 0.28), a seeded `TOWER_LIT_SHARE` 0.58 lit
-  (glow polys in one of four warm / cool lights) while on, the rest dark glass shaded by the
-  face; algae-farm bands (`garden_bands`: 0.42 tall every 2.5 from 1.4, `#3DFFB0`, glowing, with
-  darker tank frames); neon trims (glow bands `TOWER_TRIM` 0.05 wide) up the outer edges and
-  the front corner and round the top in `detail`; the info screen (`screen_box`: 12–88 % across
-  the front, 52–80 % up, at least 1.2 tiles) in a deep shade of the neon (`screen_color`) with a
-  casing and its lines as at time 0; an antenna (`TOWER_ANTENNA` 1.1). `object_lights` gives the
-  antenna's tip (red `TOWER_ANTENNA_LIGHT`, blinked by `IsoBlinkers`); `tower_screen` the
-  screen's corners.
+- **World** (`world/iso.py`): `OBJECT_KINDS["tower"]` (2 x 2); `TALL_KINDS` (kinds a placing may
+  give a `height`: tower 2–30); `OBJECT_FEATURES` (tower `screen`, `garden`); checked in
+  `place_objects` (height only for a tall kind, in range; features of its kind). Tower is in
+  `SWITCHED_KINDS`, lit by default. `IsoObjectParam.on: bool | None` (`None`: the kind's default).
+- **Drawing** (`iso_objects._tower`, maths in `cartoon/iso_city.py`, no manim): seeded lit window
+  grid (`TOWER_LIT_SHARE` 0.58) while on, algae bands (`garden_bands`), neon trims in `detail`, the
+  info screen (`screen_box`, `screen_color`, corners `tower_screen`), an antenna whose red tip
+  (`TOWER_ANTENNA_LIGHT`) `IsoBlinkers` blinks.
 - **Crawling screens** (`IsoScreens`, a story thing over the place's pictures, unlit): over each
-  screen no other object hides (`in_front` of the tower's box and overlapping the screen's
-  picture box) a plate in the screen's colour and `SCREEN_LINES` 6 bars crawling up at
-  `SCREEN_CRAWL` 0.12 screen heights a second (`screen_lines(now, seed)`: a bar wrapping to the
-  bottom gets a new seeded length).
-- **The wide view**: `wide_view` no longer keeps placed `TALL_KINDS` objects whole (a skyline is
-  cut by the frame's top; `place_bounds` still counts them, so `wide: 1.5–2.5` fills the frame
-  with the streets).
+  screen no other object hides (`in_front`), `SCREEN_LINES` bars crawling up
+  (`screen_lines(now, seed)`).
+- **Wide view**: `wide_view` does not keep `TALL_KINDS` objects whole (the frame cuts a skyline);
+  `place_bounds` still counts them.
 
 ### 102.3 Traffic (Step 251)
 
 - **Config** (`IsoTrafficLane`, `StageIso.traffic`): `{from, to, height 0.5–30 = 3, count 1–12 =
-  3, seconds 1–120 = 6, color = #5FE8FF, size 0.4–3 = 1, at}`; ends are spots or cells (checked:
-  known spot, in the map, not the same), outdoors only. `StageIso.lane_ends` gives the world
-  points (cell middles, `height` over the start cell's floor).
-- **Motion** (`lane_pods(now, seconds, count, at)`): looping, `count` pods evenly spaced, already
-  on their way at time 0; with `at`, each crosses once (the next `seconds / count` later) with
-  smoothstep easing. Pods fade over `POD_FADE` 8 % at the ends.
-- **Drawing** (`IsoTraffic`, a story thing, unlit, drawn behind the characters): per pod a
-  tapered trail (`POD_TRAIL` 2.4 lengths, 0.32 opaque), a glow under it, an ellipse hull
-  (`POD_HULL` dark, rim in the lane's colour), a canopy dome with a rider's head, a headlight;
-  `POD_LENGTH` 0.8 tile widths × `size`; facing the way the lane goes across the picture.
-- **Hidden behind buildings** (`pod_hidden`): a pod whose box (`POD_BOX`) has an object's box
-  drawn in front of it (`in_front`) and whose middle lies inside that box's outline on the
-  picture (`box_outline`, the hull of its corners) is not drawn (all objects of the place are
-  occluders). Decided over drawing pods into the place's front pictures (§89.9): those are made
-  per character and position; the outline test is a few comparisons per pod and frame.
-- Following one: a `pan` to the lane's end spot with the same `run_time` (no `follow` of a pod).
+  3, seconds 1–120 = 6, color = #5FE8FF, size 0.4–3 = 1, at, shape, hull}` (shape §107); ends are
+  known spots or in-map cells, not equal; outdoors only. `StageIso.lane_ends` gives world points.
+- **Motion** (`lane_pods`): looping, `count` pods evenly spaced, under way at time 0; with `at`,
+  each crosses once, smoothstep eased; fades over `POD_FADE` 8 % at the ends.
+- **Drawing** (`IsoTraffic`, story thing, unlit, behind characters), `POD_LENGTH` 0.8 tile widths ×
+  `size`. `pod_hidden`: a pod is not drawn when an object's box is `in_front` of its `POD_BOX` and
+  the pod's middle lies in that box's screen outline (`box_outline`) — a few comparisons per pod
+  and frame, instead of drawing pods into the per-character front pictures (§89.9).
+- To follow a pod, `pan` to the lane's end spot with the same `run_time`.
 
 ### 102.4 Glowing particles (Step 251)
 
-`ParticleSettings.glow` (any kind): each particle's fill is its colour `GLOW_CORE` 0.45 of the
-way to white and its stroke a halo in the colour (`GLOW_HALO_WIDTH` 3, `GLOW_HALO_OPACITY` 0.4);
-the kind's opacity × `GLOW_BOOST` 1.6 (at most 1); rain's splashes too. Strokes scale with the
-camera's view in Cairo, so the halo's width is set to `GLOW_HALO_WIDTH × zoom` whenever the
-view's zoom changes (the halo stays as wide on screen in a close-up). Without `glow` every value
-is the same as before (the boost is 1; the splash opacity is `min(SPLASH_OPACITY × 1, 1)`).
+`ParticleSettings.glow` (any kind, rain splashes too): fill `GLOW_CORE` 0.45 towards white, a halo
+stroke (`GLOW_HALO_WIDTH` 3, `GLOW_HALO_OPACITY` 0.4), opacity × `GLOW_BOOST` 1.6 (max 1). Cairo
+strokes scale with the camera, so the halo width is reset to `GLOW_HALO_WIDTH × zoom` on every zoom
+change. Without `glow` nothing changes.
 
 ### 102.5 The `hud` overlay (Step 251)
 
-- **Model** (`vidgen/hud.py`, no manim): `alert_on(t)` (on 68 % of 0.8 s), `lines_shown(t,
-  count, every)` (a line every `HUD_LINE_SECONDS` 0.6 s, flickering in over 0.25 s),
-  `HeartMonitor {bpm, to, at, skips}` → `heart_rate` (eased over `HEART_RISE` 1.6 s),
-  `heart_beats` (one every 60 / rate s from time 0, steady before it; the first `skips` beats
-  from `at` left out: a gap), `ecg(phase)` (P, QRS, T shapes), `heart_trace(t)` (the last
-  `HEART_WINDOW` 3 s); `ScanMeter {level, to, at, wave}` → `scan_level` (eased over 0.7 s; above
-  1 off the scale), `scan_wave` (`organic`: three drifting partials; `steady`: one sine; scaled
-  by the level, at most 1.6).
-- **Overlay** (`scenes/hud.py`, `@overlay("hud")`, layer 9: under captions and the hook; lint
-  skips `contrast`): timed in its scene like a lower third (`scene`, `at` — the shared
-  `scene_at` check now in `scenes/overlays.py` —, `duration`, `across_cuts`; `validate_project`,
-  `window`, `_start_in_scene` are `LowerThird`'s). `build` lays out, in the safe area (a Short's
-  clear part): corner brackets and `SCAN_LINES` 36 scan lines over the frame (two VMobjects),
-  the alert plate (a warning triangle, bold monospace words, warning outline) at the top
-  centre, the readout lines (monospace `caption`, a dark edge) under it at the left, the heart
-  and scan panels' plates at the bottom corners (0.3 of the width, 0.46 in portrait; 0.18 of
-  the height); `opacity` is applied in place to everything it makes. `state(t)` = (the frame
-  since it came on, the boot progress): it changes every frame. `pose` builds a new group of the
-  built parts (shared) with faded copies where needed (the alert blinking, lines not yet in)
-  and the moving parts made fresh (the rate and its word, a heart pulsing on each beat, the
-  trace; the meter's label or `off_scale` blinking, its bar, its wave) — no deep copy of the
-  whole HUD per frame; booting, a flicker × the progress.
-- **Cost**: the overlay layer draws the pose's whole box (here the full frame) twice per frame;
-  measured on a 5.9 s lab scene at 854 × 480: 30.3 s with it, 19.6 s without.
+- **Model** (`vidgen/hud.py`, no manim): `alert_on`, `lines_shown` (`HUD_LINE_SECONDS` 0.6),
+  `HeartMonitor {bpm, to, at, skips}` → `heart_rate`, `heart_beats` (the first `skips` beats from
+  `at` left out), `heart_trace`; `ScanMeter {level, to, at, wave}` → `scan_level` (above 1 is off
+  the scale), `scan_wave` (`organic` | `steady`).
+- **Overlay** (`scenes/hud.py`, `@overlay("hud")`, layer 9: under captions and the hook; lint skips
+  `contrast`): timed like a lower third (`scene`, `at` via the shared `scene_at` in
+  `scenes/overlays.py`, `duration`, `across_cuts`; reuses `LowerThird`'s `validate_project`,
+  `window`, `_start_in_scene`). Frame brackets and scan lines, alert plate, readout lines, heart
+  and scan panels, all in the safe area; `opacity` applies to everything. `pose` reuses built parts
+  and makes only moving parts fresh. Drawn in pieces (§102.8).
 
 ### 102.6 Echo characters (Step 251)
 
-`CharacterEntry.echo: bool | EchoConfig {color = #B48CFF, opacity 0.2–0.9 = 0.5, flicker}`
-(`echo_look()`; a hologram and an echo together are refused). `cartoon/echo.py`:
-`apply_echo(figure, color, opacity)` (after `build_character`'s hologram step): every filled
-member keeps its colour moved `ECHO_TINT` 0.22 towards the echo's colour at `opacity` × its fill
-opacity; outlines become the colour `ECHO_EDGE_WHITE` 0.35 of the way to white at 0.9 of their
-opacity; hidden shapes too (every expression and viseme); `figure.echo`. The stage treats it as
-a hologram for light (`unmark_lit`, no soft shading, no fill light) and flickers it
-(`_Flicker`, its `flicker`). It appears with `materialise` (a wireframe, then solid) like any
-character.
+`CharacterEntry.echo: bool | EchoConfig {color = #B48CFF, opacity 0.2–0.9 = 0.5, flicker}`; hologram
+and echo together are refused. `cartoon/echo.py` `apply_echo(figure, color, opacity)` (after
+`build_character`'s hologram step) tints every member, hidden shapes too (expressions, visemes),
+sets `figure.echo`. The stage treats an echo as a hologram for light (unlit, no fill light) and
+flickers it. Lint `look_alike` (`character_pairs`) skips pairs with an echo.
 
 ### 102.7 Public surface and compatibility (Step 251)
 
-- `vidgen.api` adds `ECHO_COLOR`, `apply_echo`, `is_echo`; `IsoScreens`, `IsoTraffic`, `PodLane`,
-  `POD_LENGTH`, `TOWER_ANTENNA_LIGHT`, `box_outline`, `garden_bands`, `lane_pods`, `pod_hidden`,
-  `screen_color`, `screen_lines`, `screen_seed`, `tower_screen`, `in_front`; `HUD_COLOR`,
-  `HUD_WARNING`, `HUD_LINE_SECONDS`, `HeartMonitor`, `ScanMeter`, `alert_on`, `heart_beats`,
-  `heart_rate`, `heart_trace`, `lines_shown`, `scan_level`, `scan_wave`. Config: iso object
-  `tower` with `height`, `screen`, `garden`; `iso.traffic`; particles `glow`; overlay `hud`;
-  `characters[].echo`.
-- Additive and opt-in. Shared code touched: `ParticleField` (the boost is 1 and no stroke
-  change without `glow`), `wide_view` (only `TALL_KINDS` objects are no longer kept), the
-  `LowerThird`'s `at` check (moved into `scene_at`, same messages), `IsoObjectParam.on`
-  (`None` default: the same states for every existing kind), the stage's hologram checks (now
-  also echoes). Phase Q baseline 31/31 identical. Tests whose lists grew: `test_story_fx`
-  (`LIT_OBJECTS`), `test_iso_staging` (the `on` message), `test_overlays` (the overlay types).
-- No gallery entry: the gallery is 16.1 of 16.5 MB and a rainy neon city's GIFs (every pixel
-  of rain changing) would not fit.
+Config: iso object `tower` (`height`, `screen`, `garden`); `iso.traffic`; particles `glow`; overlay
+`hud`; `characters[].echo`.
 
 ### 102.8 A HUD that keeps off faces, drawn in pieces (Step 252)
 
 - **Faces**: `Overlay.avoids_faces` (class flag; `Hud` sets it) makes `OverlayLayer` give the
-  overlay `faces`, a callable returning the boxes `(left, bottom, right, top)` of the heads of
-  the scene's `cast` on screen at the frame being drawn (`OverlayLayer.face_boxes`: each figure
-  in `scene.mobjects`, not `hidden_by_shot`, `shown` ≥ 0.3, its `head` part's points through the
-  scene camera's centre and zoom into the overlays' whole-frame units). Decided over planning
-  faces per beat (the stage's predicted stills, `directing._still`, know no iso place) and over
-  reading the layout dump (it exists only for stills): the head points are a few arrays per
-  character and frame, read when the layer asks for the overlay's state.
-- **Places** (`vidgen/hud.py`, no manim): `face_cover(box, faces)` (the sum of each face's share
-  under the box, faces grown by `FACE_GROW` 0.12), `pick_place(places, faces, current, avoid)`
-  (the least covering place, the first of equals; a place overlapping `avoid` only when all do;
-  `current` kept while it covers ≤ `FACE_COVER` 0.02 or is within `FACE_SWITCH` 0.05 of the
-  best: no hopping). `Hud.build` makes the alert and the lines at the origin and their places:
-  the alert at the top centre, top right, top left, bottom centre above the meters; the lines'
-  block at the top left, top right (flush right), above the left or the right meter, each under
-  (or over) the alert's place when they would meet it. `Hud.state` picks the alert's place,
-  then the lines' (avoiding the alert's); `avoid_faces: false` keeps the first places (251's
-  look). `compact`: texts and panels × `COMPACT` 0.72, the safe margin halved.
-- **Pieces**: `Overlay.pieces` (class int, 0: one piece) — `state(t)` returns one state per
-  piece (`None`: hidden) and `pose_piece(mobject, k, state)` draws each; `OverlayLayer._patches`
-  caches each piece's patch by `(k, (piece, state))`, `composite` / `rgba` blend them in order,
-  `posed` (stills, the layout dump) groups them (`Overlay.posed_whole`). The HUD's four: the still
-  frame and plates (`(level,)`: drawn once when settled), the texts (places, alert lit, line
-  fades, level), the heart monitor and the scan meter (the frame since it came on: each frame,
-  small patches). Its boot flicker is the level in every piece's state. Measured on 251's lab
-  scene (5.9 s at 854 × 480): 24.7 s with the HUD (30.3 s in 251), 19.6 s without.
-- **Lint `overlay_face`** (`lint/shorts_rule.py`, after `shorts_safe_area`, still and mid-beat,
-  default warning, `OverlayFaceRule.min_cover` 0.15): the layout dump's still `overlays` entry
-  gets `faces: true` for an overlay that `avoids_faces`; its text objects (with letters) and
-  plates (`shape` objects with fill ≥ 0.3: not the frame's group) covering ≥ `min_cover` of a
-  character's `face` box are reported; not in a Short (`shorts_safe_area` reports any overlay
-  over a face there).
+  overlay `faces`, a callable returning on-screen head boxes `(left, bottom, right, top)` at the
+  current frame (`OverlayLayer.face_boxes`: figures in `scene.mobjects`, not `hidden_by_shot`,
+  `shown` ≥ 0.3, `head` points through the camera). Read live, because the stage's predicted
+  stills know no iso place.
+- **Places** (`vidgen/hud.py`): `face_cover(box, faces)` (faces grown `FACE_GROW` 0.12),
+  `pick_place(places, faces, current, avoid)` (least covering, first of equals; `current` kept while
+  it covers ≤ `FACE_COVER` 0.02 or is within `FACE_SWITCH` 0.05 of the best: no hopping). The alert
+  is placed first, then the lines (avoiding the alert). `avoid_faces: false` keeps the first places.
+  `compact`: texts and panels × `COMPACT` 0.72, the safe margin halved (every edge moves out).
+- **Pieces**: `Overlay.pieces` (class int, 0: one piece): `state(t)` returns one state per piece
+  (`None`: hidden), `pose_piece(mobject, k, state)` draws each; `OverlayLayer._patches` caches each
+  patch by `(k, (piece, state))`, `composite` / `rgba` blend them in order, `posed` groups them
+  (`Overlay.posed_whole`). The HUD has four (static frame, texts, heart, meter), so the static
+  part is drawn once.
+- **Lint `overlay_face`** (`lint/shorts_rule.py`, after `shorts_safe_area`, warning,
+  `OverlayFaceRule.min_cover` 0.15): the layout dump's `overlays` entry has `faces: true` for an
+  overlay that avoids faces; its texts and plates (`shape`, fill ≥ 0.3) covering ≥ `min_cover` of a
+  `face` box are reported; not in a Short (`shorts_safe_area` checks those overlays by the same
+  boxes: `_keeps_off_faces`, `_covering`, `_face_cover`). `hidden_speaker` skips such overlays.
+- **In a Short** (`shorts_zones`): the HUD area is raised by `SHORTS_CAPTION_BAND` (0.13 of its
+  height) to keep meters above captions; `compact` there only shrinks.
 
 ### 102.9 Plain splashes on an iso place (Step 252)
 
-A splash is a flat ring and two droplets thrown up (§69.39); seen from above in a close-up two
-dots over a line read as a tiny face. On an `IsoRainGround` `ParticleField._draw_splashes` keeps
-the ring only (`splash_shapes(...)[:, :1]`); flat stages are unchanged (Phase Q baseline).
+On an `IsoRainGround`, `ParticleField._draw_splashes` keeps only the ring (`splash_shapes(...)[:,
+:1]`): seen from above the droplets read as a face. Flat stages keep §69.39's splash.
 
 ### 102.10 Display patterns `equations` and `timelines` (Step 252)
 
-`DisplayFrame` gains `glyphs` (open strokes), `wings` (closed outlines), `boxes`, `dots` (x, y,
-r); the display's drawing keeps `GLYPHS` 48, `WINGS` 12, `BOXES` 8, `DOTS` 16 more members
-(`holo_box`, `holo_wing`, `holo_glyph`, `holo_dot` in `DISPLAY_PARTS`, before the edge; empty for
-the other patterns). `equations`: the `FORMULAS` (3 rows of symbols from `GLYPH_STROKES`: sum,
-integral, equals, x, psi, pi, root, plus) written one symbol after another over
-`WRITE_SECONDS` 2.4; `BUTTERFLIES` 6 formula butterflies (a symbol between two wings beating at
-`WING_BEATS` 1.6 Hz) each rising from a seeded point of the panel over `BUTTERFLY_SECONDS` 5.5,
-drifting outwards and swaying, growing in and shrinking away, kept in `FLOAT_BOX` (inside the
-display's glow, so its redraw region holds them). `timelines`: a binary tree of
-`TIMELINE_LEVELS` 3 from the panel's foot, growing level by level over `TIMELINE_GROW` 1.6 s,
-then a small panel at each of its 8 tips with two dots coming together and pulsing, each panel
-at its own phase of `MEETING_SECONDS` 3.2.
+`DisplayFrame` gains `glyphs`, `wings`, `boxes`, `dots`; the display always has `GLYPHS` 48,
+`WINGS` 12, `BOXES` 8, `DOTS` 16 extra members (`holo_*` in `DISPLAY_PARTS`, before the edge; empty
+for other patterns). `equations`: formulas written symbol by symbol plus floating formula
+butterflies kept in `FLOAT_BOX` (inside the glow, so the redraw region holds them). `timelines`: a
+binary tree of `TIMELINE_LEVELS` 3 growing, then two dots meeting at each of its 8 tips.
 
 ### 102.11 Sliding doors (Step 252)
 
-`IsoColors.doors` (`swing` | `slide`, from `StageIso.doors`): `_wall_door(..., style)` draws a
-slide door (`_slide_door`): a steel frame, a light strip over it and a keypad light (glowing
-polys), closed two panels and a glowing seam, open a dark doorway with the panels' edges at its
-sides. Opening is the place change of §89.10 (the new picture fades in over the action's
-`run_time`). Foley: `place_change_cues(..., sliding=True)` gives a `swoosh` hiss (`DOOR_HISS`)
-and on closing a soft `thud` (`DOOR_SLIDE_SHUT`). The sliding motion itself is the crossfade —
-decided over a story thing animating the panels (the door is part of its wall's picture, ordered
-with everything).
+`StageIso.doors: swing | slide` (`IsoColors.doors`; `_wall_door(..., style)`, `_slide_door`).
+Opening is §89.10's place change (a crossfade over the action's `run_time`; the door is part of its
+wall picture). Foley: `place_change_cues(..., sliding=True)` → `DOOR_HISS`, on closing
+`DOOR_SLIDE_SHUT`.
 
 ### 102.12 A haze over a spot (Step 252)
 
 `StageIso.haze: [IsoHazeParam {at, width 1.2, height 2.6, color #BFE8FF, strength 0.6, from}]`
-(checked like a traffic lane's ends; `haze_foot` is its cell's middle on the floor).
-`cartoon/haze.py` (no manim): `haze_ribbons(now, seed)` — `HAZE_RIBBONS` 7 outlines in haze
-units (u across −0.5..0.5, v up 0..1) swaying on a climbing ripple (more higher up), tapering at
-both ends, each with a breathing opacity share; `haze_sparks` (8 rising sparkles);
-`haze_level(now, start)` (a fade in over `HAZE_FADE` 0.8 s). `IsoHaze` (`iso_overlays.py`), a
-story thing over the place's pictures (behind the characters), unlit: per haze a floor glow,
-the ribbons and the sparkles mapped from its foot to its top on screen.
+(checked like traffic ends). `cartoon/haze.py` (no manim): `haze_ribbons`, `haze_sparks`,
+`haze_level` (fade in `HAZE_FADE` 0.8 s). `IsoHaze` (`iso_overlays.py`): story thing over the place
+pictures, behind characters, unlit.
 
 ### 102.13 Small props `scanner`, `takeout`, `crystal` (Step 252)
 
-In `SMALL_PROPS` (so iso places take them). `scanner` and `crystal` are `SWITCHED_PROPS` with
-`GLOWS`. A scanner's living overlays are its lit screen, a bar and a wave (tagged `screen`, the
-last two with `SCAN_ROLE`); `LivingProp(scan=ScanMeter)` (the HUD's model, `at` in scene
-seconds; `StageProp.scan: ScannerReading {level, to, at, wave}`) draws them on every frame
-(`_read`): the bar filled to the reading, the wave scaled by it, both in `SCANNER_WARNING`
-blinking and the wave jittering while above 1; the glow brightens with the reading. A crystal's
-lit core is a `lantern` overlay; its glow pulses (`crystal_pulse`). Grips: a scanner by its
-handle.
+In `SMALL_PROPS`; `scanner` and `crystal` are `SWITCHED_PROPS` with `GLOWS`. A scanner's bar and wave
+(`SCAN_ROLE`) are drawn each frame by `LivingProp(scan=ScanMeter)` (`StageProp.scan:
+ScannerReading {level, to, at, wave}`, `at` in scene seconds), warning-coloured above 1. A crystal's
+core is a `lantern` overlay (`crystal_pulse`).
 
 ### 102.14 Accessories `medal` and `pendant` (Step 252)
 
-`Accessory` adds both; `NECK_ACCESSORIES` (necklace, medal, pendant): one at a time. Drawn on
-the body (`clothes._medal`, `_pendant`; a plain outfit with one is no longer the pre-113 plain
-drawing). The medal: a V ribbon in the accessory colour, a gold disc (`MEDAL_RADIUS` 0.048) with
-a star, trailing a little in the wind. The pendant: a dark cord, a stone (`PENDANT_RADIUS`
-0.032) hanging `PENDANT_DROP` below the neck (clear of long hair), a white core and a halo
-marked `PENDANT_GLOW` (`core` / `halo`). The stage unmarks those members lit and
-(not in a draft) adds a `PendantPulse` (figure_fx: the halo's opacity follows `pendant_level`, a
-quick rise and slow fade every `PENDANT_SECONDS` 1.6, the stone a little; times the figure's
-`FigureAlpha` level).
+`NECK_ACCESSORIES` (necklace, medal, pendant): one at a time. `clothes._medal`, `_pendant` (core and
+halo marked `PENDANT_GLOW`). The stage unmarks those lit and (not in a draft) adds a `PendantPulse`
+(halo follows `pendant_level` every `PENDANT_SECONDS` 1.6, times `FigureAlpha`).
 
 ### 102.15 The `kiss` action (Step 252)
 
-`- {kiss: a, with: b, hearts, color}` (`story_actions.KissAction`, stage only, one target,
-generated characters; default `run_time` `KISS_SECONDS` 3). `StoryStaging.kiss` returns a
-`KissMotion` per character sharing one `KissPlan` and a `KissBurst`, plus a soft `chime` at the
-contact (foley). `KissPlan` (figure_fx): on its first frame both face each other, it records
-their poses, the lean (`lean_angles`: `KISS_LEAN` 11°, the one whose head is higher up to 8°
-more), poses both at full lean to measure the step across (`step_in`: half of what closes the
-heads' gap to an overlap of `KISS_TOUCH` 0.03 of a head's width) and the rise (half the heads'
-height difference, at most `KISS_RISE` 0.6 head heights each: on an iso place two neighbours on
-a map row stand on a slant). Each frame (once per time, from either animation) `kiss_share` (in
-over `KISS_IN` 0.7 s, held, back over `KISS_OUT` 0.6 s) sets the body's angle (forward), the
-legs' turned back (the feet stay down), the eyes `closed` from `EYES_CLOSE` 0.6, and the offset
-— kept apart from where the stage puts the figure (moved since the last frame: that is its own
-place), as `HandHold` does. The animations run on the kiss's own clock (`alpha × seconds`):
-the scene may play them in another run time. `figure.kissing` names the other while it lasts
-(the layout dump's `kissing`; `character_overlap` lets them stand close). `KissBurst`: hearts
-and sparkles (`kiss.burst`) rising from where the faces meet from `contact_time`, added over
-the scene (top z) and removed at the end, unlit.
+`- {kiss: a, with: b, hearts, color}` (`story_actions.KissAction`, stage only, generated characters,
+default `run_time` `KISS_SECONDS` 3). `StoryStaging.kiss` returns a `KissMotion` per character
+sharing one `KissPlan` and a `KissBurst`, plus a `chime` at contact. `KissPlan` (figure_fx) on its
+first frame turns both to face each other, records poses, computes the lean (`KISS_LEAN` 11°), the
+step in (to `KISS_TOUCH` 0.03 head widths) and the rise (at most `KISS_RISE` 0.6 head heights
+each: iso neighbours stand on a slant). Per frame `kiss_share` (in `KISS_IN` 0.7 s, out `KISS_OUT`
+0.6 s) sets lean, legs (feet down), eyes `closed`, and an offset kept apart from the stage's own
+placement (as `HandHold`). It runs on its own clock (`alpha × seconds`). `figure.kissing` names the
+partner (layout dump `kissing`; `character_overlap` allows it). Partners holding hands let go first
+(arms set before poses are recorded; two offsets would drift the pair off frame).
 
 ### 102.16 Lint `look_alike` and echoes; public surface and compatibility (Step 252)
 
-- `character_pairs` leaves out pairs with an `echo` (another self is alike on purpose).
-- `vidgen.api` adds `face_cover`, `pick_place`; `HazeSpot`, `IsoHaze`; `KISS_COLOR`,
-  `KISS_SECONDS`, `KissBurst`, `KissMotion`, `KissPlan`, `PENDANT_GLOW`, `PendantPulse`,
-  `contact_time`. `Overlay.avoids_faces`, `Overlay.pieces`, `Overlay.faces`,
-  `Overlay.pose_piece`, `Overlay.posed_whole`; config: overlay `hud` `avoid_faces`, `compact`;
-  lint `overlay_face`; display patterns `equations`, `timelines`; props `scanner` (`scan`),
-  `takeout`, `crystal`; accessories `medal`, `pendant`; `iso.doors`, `iso.haze`; action `kiss`.
-- Additive and opt-in. Shared code touched: the overlay layer (one patch per overlay as before
-  unless it has pieces; faces only for overlays that ask), `ParticleField` splashes (iso grounds
-  only), `DISPLAY_PARTS` (empty members for the old patterns), `SWITCHED_PROPS` (messages list
-  the new props), the necklace check of plain bodies. Phase Q baseline 31/31 identical. Tests
-  whose expectations grew: `test_particle_lint` (rule order), `test_story_fx` (panel patterns),
-  `test_cartoon_props` (74 props), `test_cartoon_living`, `test_cartoon_small_props`,
-  `test_cartoon_fire_nature` (the switched-props message).
-- Left: a closer look at a pod's rider (a `zoom` on the lane's end spot, `size: 1.4`, reads in
-  the test renders; no rider character inside a pod).
+`look_alike`: §102.6. Config: `hud` `avoid_faces`, `compact`; lint `overlay_face`; display
+patterns `equations`, `timelines`; props `scanner` (`scan`), `takeout`, `crystal`; accessories
+`medal`, `pendant`; `iso.doors`, `iso.haze`; action `kiss`. Overlay API: `Overlay.avoids_faces`,
+`.pieces`, `.faces`, `.pose_piece`, `.posed_whole`.
 
 ### 102.17 Wavy hair (Step 253)
 
-`look.hair: wavy` (`HairStyle`; not in `random_cast.HAIR`, so random casts stay as they were):
-long locks behind the head that wave as they fall past the jaw (`WAVY_LENGTH` 1.95 head radii
-below the head's middle, `WAVY_WAVES` 2.5 waves a side, flaring a little) and end in three
-curls (`generator._wavy_outline` / `_wavy_side`). From the front one lock on each side, the chin,
-the neck and the chest left clear between them (a pendant shows); from the side one mass down
-the back. One polygon in the hair colour behind the head, trailing like `long` hair. `long`
-is unchanged (its square block reads as a helmet in a close-up; `wavy` is the long hair that
-reads).
+`look.hair: wavy` (`HairStyle`; not in `random_cast.HAIR`, so random casts are unchanged): long
+waving locks ending in curls (`generator._wavy_outline` / `_wavy_side`), chin and neck clear; one
+polygon behind the head, trailing like `long`.
 
 ### 102.18 Neon strip lights on a room's walls (Step 253)
 
-`iso.wall_lights: <colour> | [left, right]` (`StageIso.wall_lights`, indoor places only;
-`wall_light_colors()`): along each standing (not cut-away) wall face that looks into the room, a
-strip near the top (`STRIP_CORE` 2.66–2.74 tile units over the base) in a light tint of the
-colour inside a softer band mixed with the wall's colour (`STRIP_HALO`), both `Poly(glow=True)`
-so no `light` dims them (`iso_scenery._strip_light`, `IsoColors.strips`: the left back wall's,
-a wall along a map column, and the right one's, along a row). Part of the walls' pictures (no
-cost per frame). With dark `colors.wall` / `floor` and `light: night` it makes a corridor or a
-room at night that still reads.
+`iso.wall_lights: <colour> | [left, right]` (indoor only; `wall_light_colors()`): a glowing strip
+near the top of each standing wall face (`iso_scenery._strip_light`, `IsoColors.strips`,
+`Poly(glow=True)`, so no `light` dims it). Part of the wall pictures (no per-frame cost).
 
 ### 102.19 Fixes from building a story: a kiss holding hands, lights behind a body, overlays (Step 253)
 
-- A `kiss` between characters who hold hands lets go of the hands first (their arms back at their
-  sides, set at once before the kiss records its poses): `HandHold` and `KissPlan` each keep their
-  offset apart from where the stage puts a figure and took the other's step for a stage move,
-  so the pair drifted off the frame. `hold_hands` again after the kiss to hold them again.
+- Kiss while holding hands: §102.15. HUD and `hidden_speaker`: §102.8.
 - A lab object's blinking lights (`IsoBlinkers(hidden=)`) are not drawn while a character stands
-  in front of the object (`in_front` of its box) and covers the light on screen
-  (`IsoStaging._iso_light_hidden`; a shot's hidden characters do not count).
-- Lint `hidden_speaker` leaves out the objects of overlays that keep off faces (a `hud`: the
-  still's `overlays` entry has `faces`), whose frame over the whole picture hid every speaker;
-  `overlay_face` checks those. Other overlays over a face still count.
-- Staging note (no code): actions of a beat at different `at` play one after another when an
-  earlier one is still running (the action runner waits for each phase), so actions that should
-  overlap (two pairs materialising and kissing) share one `at`.
-- Public surface: config `look.hair: wavy`, `iso.wall_lights`; `IsoColors.strips`,
-  `IsoBlinkers(hidden=)` (keyword, default `None`). Additive; Phase Q baseline 31/31 identical.
+  `in_front` of the object and covers the light (`IsoStaging._iso_light_hidden`; shot-hidden
+  characters do not count).
+- Actions of one beat at different `at` run one after another while an earlier one runs (the
+  runner waits per phase); actions meant to overlap share one `at`.
 
 ### 102.20 Shorts of the story; review of Phase AA (Step 254)
 
-Seven vertical Shorts were cut from the private story video with §101's `cut:` variants. What
-they found, fixed generically:
-
-- **A cut drops a scene's own overlay**: a scene overlay timed `at` a beat the cut leaves out is
-  an error (`scene ... has no beat ...`), and `false` only turns off a video-wide overlay. A cut
-  entry's `overlays: {<id>: {drop: true}}` leaves the scene's overlay out (`cuts._drop_overlays`,
-  after the entry's changes are merged; the key is `cuts.DROP`, as for cast entries).
-- **A HUD in a Short keeps its meters above the captions**: in a Short (`shorts_zones`) the
-  HUD's area is the Shorts area raised by `SHORTS_CAPTION_BAND` (0.13 of its height: a one-line
-  karaoke phrase, its plate and margin), and `compact` there shrinks only (no inset towards the
-  edges, which would reach into the app's parts). Before, the heart and scan meters stood on the
-  captions' line.
-- **`compact` outside Shorts**: the top of the HUD's area moved down by the inset (`y1 - inset`)
-  where the contract (§102.8: "the safe margin halved") moves every edge out; now `y1 + inset`.
-  Only HUDs with `compact: true` change (new in this phase; no baseline frame has a HUD).
-- **Lint `shorts_safe_area` and a HUD**: in a Short the rule counted a HUD's frame (scan lines
-  over the whole picture) as an overlay covering every face. Overlays that keep off faces (the
-  still's `overlays` entry has `faces`) are now checked by their texts and panels' plates only,
-  the boxes `overlay_face` uses (`_keeps_off_faces`, `_covering`, `_face_cover`, shared by both
-  rules); other overlays as before (their union, captions by their `reach`).
-- **Render fingerprints and cuts**: the top-level config in a scene's fingerprint included the
-  `cut:` itself, so any change in `cut.beats` (or a scene entry) made every scene of the cut
-  stale. A cut is already applied to the scenes (its hook to `overlays`, its end card to the
-  scenes), so `cut` is left out of the fingerprint when there is one; without a cut the dump
-  keeps `cut: null`, so other projects' fingerprints (and renders) are unchanged. A new hook
-  still re-renders every scene (a video-wide overlay).
-
-Known gaps: lint does not check the hook while it shows (it is fading or the first mid-beat still
-comes after it; a hook of three or four lines covers a face near the top: look at the still at
-1 s, keep hooks to two lines); a zoom near a wide stage's edge is kept on the stage, so a high
-`scale` pushes the targets aside (leave `scale` out or zoom on fewer targets); a busy scene (rain,
-many lights) encodes larger (a Short of a rainy city was 29.7 MB at the default CRF; re-encoded
-at CRF 23 with the audio copied: 20.4 MB).
-
-Render performance at 1080 × 1920, one scene at a time, peak 1.6 GB: 4.8–7.8× real time for
-rooms with two characters (an office, the lab, the door), 9.8–12.6× for scenes with several echo
-characters or a rainy city with traffic, 3.4× for a city held on one tower; the end card ≈3×.
-
-Public surface: cut entry `overlays: {<id>: {drop: true}}`; `vidgen.scenes.hud.SHORTS_CAPTION_BAND`.
-Behaviour: HUD meters in a Short, `compact` top edge, `shorts_safe_area` with a HUD, fingerprints
-of cut scenes. Phase Q baseline 31/31 identical.
+- **A cut drops a scene's own overlay**: a scene overlay timed `at` a beat the cut leaves out is an
+  error (`scene ... has no beat ...`); a cut entry's `overlays: {<id>: {drop: true}}` leaves it out
+  (`cuts._drop_overlays`, after the entry's changes merge; key `cuts.DROP`).
+- **Render fingerprints and cuts**: with a `cut:`, `cut` is left out of each scene's fingerprint
+  (it is already applied to the scenes); without one the dump keeps `cut: null`, so other projects'
+  fingerprints are stable. A new hook re-renders every scene (a video-wide overlay).
+- Limits: lint does not check the hook while it shows; a zoom near a wide stage's edge is kept on
+  the stage, so a high `scale` pushes targets aside.
 
 ## 103. More iso lab and sci-fi objects (Phase AB, Steps 258–260)
 
-Phase AB adds 24 iso objects (`OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` like §100.11's),
-each 1 x 1 by default (a chemistry bench and an airlock 2 x 1), `color` / `detail` honoured, and an `on` state where it works. Docs stay
-lean: one "Other objects" list in CONFIG and the guide.
+24 lab / sci-fi objects in `OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` (§100.11 style), 1 x 1
+except `chemistry_bench`, `airlock` (2 x 1); user list: CONFIG "Other objects". Rules:
 
-- **Step 258**: `laptop` (on a small desk; `open`, default open: `OPENING_KINDS`), `terminal_kiosk`,
-  `quantum_core`, `robot_arm`, `microscope` (on its own small table: objects do not stack),
-  `centrifuge` and `coffee_machine` (on a bench cabinet), `lab_stool` (`top` for small things),
-  `wall_clock` (`WALL_KINDS`: placed at a cell of a room's standing back wall, facing the floor
-  below or right of it; `_wall_box` is a thin slab on the wall's face; `time: "HH:MM"`, default
-  10:10, `IsoObject.time` / `ObjectPlacing.time`). The working ones are in `SWITCHED_KINDS`;
-  screens and lights are `glow` polygons when on.
-- **Moving parts** (`MOVING_KINDS`: core, arm, centrifuge, coffee machine): `object_motion(item,
-  look, base, now)` gives a fixed number of `Motion` polygons (world points, fill, opacity, ink,
-  glow) — the core's pulsing halo, bright core and sparks on its ring; the arm swinging between
-  `ARM_POSES`; the rotor turning over a dark window; steam puffs over the mug. The stage draws
-  them with an `IsoGadgets` living thing over the place while each is on and shown (its states
-  logged from the start and by `iso_change`: `_iso_state_log`); the glowing parts are left out of
-  the light grade. Not in a draft. `ObjectLook.moving` tells the picture of a working robot
-  arm to leave its arm to the overlay.
-- **Step 259**: `grow_rack` (grow lights in the detail colour wash its shelves when on),
-  `terrarium` (its flowers glow faintly always; not switched), `specimen_tank` (`color` its liquid;
-  a floating silhouette only when the placing gives `detail`), `chemistry_bench` (2 x 1; liquids in
-  `color`, `detail` and `LIQUIDS`), `distillation_rig`, `lab_fridge` (also in `OPENING_KINDS`:
-  door swung out; it works while on *or* open: `OPEN_WORKING`, `object_working`), `fume_hood`.
-  Liquids glow (and brighten) while on; tank, bench, rig, fridge and hood are moving kinds
-  (bubbles, steam, flame and drips, cold mist, fan and vapour). `object_motion` takes the
-  object's `state`.
-- **Moving parts and what hides them (259, replacing 258's limits)**: one `IsoGadgets` per working
-  object. One another object covers on screen moves too, under a *cover* picture (an `IsoObject`
-  holder with `iso_scenery.front(its box)`) that follows the place's changes like a body's front
-  picture (`_iso_follow_change`). `_iso_place_gadgets` (run by `_iso_keep_order`, the draw-order
-  updater being on while there are gadgets) keeps each gadget and its cover right after the last
-  body front picture that shows the object, else after `_iso_gadget_home`: a character right
-  behind a working object no longer hides its motion.
-
-- **Step 260**: `telescope`, `satellite_dish` (the stage turns its dish slowly, side to side,
-  facing the viewer), `charging_station` (its four bars fill over and over), `crate_stack` (hazard
-  stripes; `top` for small things), `airlock` (2 x 1, a bulkhead with a round hatch; also in
-  `OPENING_KINDS`: open, the door slid into the wall and a dark tunnel; on, its beacon flashes),
-  `printer_3d` (a vase grows layer by layer under a moving head), `hazard_sign` (`kind`:
-  `IsoObjectParam.kind` -> the placing's `features`, `OBJECT_FEATURES["hazard_sign"]` =
-  `HAZARD_SIGNS`, did-you-mean on a typo), `fire_extinguisher`.
-- **Review (260)**: the coffee machine is a light drip machine (head over a big mug with a
-  handle, a coffee window on its side, a stream while on; steam drifts out from under the head);
-  screen text on a laptop and a kiosk facing right reads from the left (`_reading`). All 24
-  objects (the plan said 26; the three batches list 24) use the shared shading, outline widths
-  and palette; heights are 0.85–2.5 tiles (a character is 2). A preview of a room with all of
-  them working: about 3–4 s of rendering per second of video (one `IsoGadgets` per working object).
-
-Public surface: object kinds above; `IsoObjectParam.time`, `IsoObjectParam.kind`; `WALL_KINDS`;
-`HAZARD_SIGNS`; `ObjectLook.moving`; `Motion`, `MOVING_KINDS`, `object_motion`, `object_working`,
-`clock_hands`; `IsoGadgets`, `Gadget`. Additive.
+- **Tables**: `SWITCHED_KINDS` (`on`), `OPENING_KINDS` (`open`), `OPEN_WORKING` / `object_working`
+  (works while on *or* open), `WALL_KINDS` (placed at a standing back-wall cell, facing the floor
+  below or right of it; `_wall_box` a thin slab; `wall_clock` `time: "HH:MM"` default 10:10,
+  `clock_hands`), `IsoObjectParam.kind` → the placing's `features` (`hazard_sign`: `HAZARD_SIGNS`,
+  did-you-mean). Objects do not stack; `top` objects hold small things. Screen text facing right
+  reads from the left (`_reading`).
+- **Moving parts** (`MOVING_KINDS`): `object_motion(item, look, base, now, state)` returns a fixed
+  number of `Motion` polygons. The stage draws one `IsoGadgets` per working, shown object (states
+  logged from the start and by `iso_change`: `_iso_state_log`); glowing parts skip the light grade;
+  not in a draft. `ObjectLook.moving` tells the picture to leave the moving part to the overlay.
+- **What hides them**: an object covering a gadget is redrawn over it as a *cover* picture
+  (`iso_scenery.front(its box)`) that follows place changes (`_iso_follow_change`).
+  `_iso_place_gadgets` (from `_iso_keep_order`) keeps each gadget and cover right after the last
+  body front picture showing the object, else after `_iso_gadget_home`; order among gadgets §109.
 
 ## 104. More iso objects: home, town, nature, school, fantasy, seasons (Phase AC, Steps 261–267)
 
-Phase AC adds 63 non-lab iso objects in §103's style and conventions (`color` / `detail`, `on` /
-`open` / `kind` only where they add value; working parts self-lit, moving parts drawn by the stage
-while on). Docs stay lean: the one "Other objects" list in CONFIG and the guide.
+63 more objects in §103's conventions; user list: CONFIG "Other objects".
 
-- **Where they are drawn**: `cartoon/iso_objects.py` is long, so each batch's drawings live in a
-  module of their own under `vidgen.cartoon` (Step 261: `iso_home.py`). `MORE_MODULES` (kind ->
-  module name) tells `object_shapes` / `object_motion` where to look; such a module has
-  `DRAWINGS` (frame, look, state -> shapes) and `motion(frame, look, now)`, and builds on
-  `iso_objects`' frame and helpers (it is imported lazily, so there is no import cycle). Kinds,
-  footprints, colours, `SWITCHED_KINDS` and `MOVING_KINDS` stay in their usual tables.
-- **Step 261 (home I)**: `fireplace` (2 x 1; bricks `color`, stone `detail`; on: flames, embers,
-  sparks and warm light on the floor, flickering), `kitchen_counter` (2 x 1, `top`), `stove` (on:
-  oven window and the ring under the pot glow, the pot steams), `sink`, `bookshelf_tall` (`top`),
-  `armchair` (`top`), `floor_lamp` (on: the shade glows, a pool of light), `tv` (`detail` its
-  sky; on: a picture with a hill and a sun, a cloud sails across, a flicker), `piano` (2 x 1,
-  upright, `top`). Moving: fireplace, stove, TV. Heights 1.2–2.55 tiles.
-- **Lamplight**: `LAMPLIGHT_KINDS` (`lamp`, `floor_lamp`, `fireplace`): a lit one lights the
-  characters near it like a lamp (§89.13), from its footprint's middle (a lamp: its first cell's,
-  as before).
-
-Public surface: the kinds above; `MORE_MODULES`, `LAMPLIGHT_KINDS` (also in `vidgen.api`). Additive.
-
-- **Step 262 (home II, café, shop)**: drawn in `iso_shop.py`. `bathtub` (2 x 1; enamel `color`,
-  water `detail`, foam, a duck), `wardrobe` (2 x 1, `top`; in `OPENING_KINDS`: open, both doors
-  swing out 105 degrees, clothes in `detail` and others inside), `crib` (barred sides as lines, a
-  blanket in `detail`, a mobile; 1.85 tall), `cafe_table` (2 x 1, `top`; `color` the iron, `detail`
-  the marble top; two bistro chairs), `counter` (2 x 1, `top`), `cash_register` (on a counter
-  piece), `display_case` (2 x 1, `top`; `kind`: cakes or jewels on velvet), `market_stall` (2 x 1;
-  awning stripes `color` / `detail`), `vending_machine` (switched: window, sign and buttons glow,
-  a pool of light). None move. Heights 1.15–2.66 tiles.
-- **Kinds**: `OBJECT_STYLES` (object -> its kinds, the first the default: `hazard_sign` ->
-  `HAZARD_SIGNS`, `display_case` -> `DISPLAY_CASES`) checks `IsoObjectParam.kind` per object and
-  is part of `OBJECT_FEATURES`.
-
-Public surface (262): the kinds above; `DISPLAY_CASES`, `OBJECT_STYLES` (also in `vidgen.api`). Additive.
-
-- **Step 263 (town)**: drawn in `iso_town.py`. `street_lamp` (4.0 tall; a crook with a hanging
-  lantern, `detail` its glass off; on: glows, a pool under the lantern), `traffic_light` (moving:
-  red 3.6 s, green 3.6 s, amber 1.2 s, `SIGNAL_CYCLE`; a still picture shows red), `bus_stop`
-  (2 x 1; glass shelter, bench, advert in `detail`, round sign on a post), `mailbox` (pillar box),
-  `fountain` (2 x 2; moving while on: a jet, four falls on the viewer's side with drops, spreading
-  rings; its water is no light), `phone_booth` (on: panes and sign glow, a small pool), `car`
-  (2 x 1, side-on, its nose on the right side face; on: headlights, tail light, a pool ahead of it,
-  outside its footprint), `bicycle` (side-on with a basket in `detail`), `newsstand` (2 x 1;
-  magazines, papers, striped awning). `LAMPLIGHT_KINDS` adds `street_lamp` and `phone_booth`.
-- **Warm light pools**: `light_pool(centre, radius, strength)` in `iso_objects` (three glowing
-  rings of `LIGHT_POOL` #FF8F3A, the middle `POOL_CORE`, `POOL_RINGS` opacities) now draws every
-  lamp's pool: `lamp`, `floor_lamp`, `vending_machine` and the new ones. The old pale yellow (and the
-  vending machine's pale blue) at ~0.3 over the night-graded ground read olive / grey, because the
-  glow layer is alpha-composited over the blue-multiplied picture; a saturated amber stays warm on
-  grass, paths and floors. Changes the look of lit iso lamps (intended); Phase Q baseline unchanged.
-
-Public surface (263): the kinds above; `light_pool` (`iso_objects.__all__`). Additive.
-
-- **Step 264 (nature)**: drawn in `iso_nature.py`. `campfire` (stones in `color`, leaning logs in
-  `detail` with charred tips; on: embers glow, a warm pool; moving: three flames and five sparks
-  rising; lights who stands near, `LAMPLIGHT_KINDS`), `tent` (2 x 2; ridge tent, open door with tied
-  flaps, `detail` trim and bedroll, poles and guy ropes), `log` (2 x 1, `top` 0.5; its body the
-  seen hull of its two end circles, a cut end with rings, moss in `detail`), `stump` (`top` 0.57;
-  rings, roots, a sprout), `mushroom_ring` (2 x 2; eleven mushrooms, their `detail` spots lights and
-  a faint mint `pool` on the grass: it glows at night only), `pond` (2 x 2; water in `detail` in a
-  sandy edge in `color`, lily pads and a lily, reeds and cattails; switched: `on` spreads three
-  ripple rings, cheap moving parts; off or still, two faint rings lie on it), `scarecrow` (cut-out
-  facing the viewer: shirt in `color`, straw hat in `detail`, a crow on the arm on its facing side),
-  `beehive` (a skep of straw coils on a stand in `detail`; on: five bees circle it, hidden while
-  behind the skep).
-- **Pools of light by day**: a pool (`light_pool`, the fireplace's floor light, the mushroom ring's
-  glow) is now a `Disc` marked `pool` (no longer `glow`), drawn only in its own picture
-  (`draw_shapes(pool=True)`: pools drawn, other shapes clear them, shadows skipped; the plain and
-  glow pictures leave pools out). The stage shows those tiles (`PoolTile`, between a picture's
-  tiles and its glow tiles) at `pool_strength(grade)` of their opacity (`lighting`: `POOL_DAY` 0.1
-  by day, `POOL_CURVE` 0.7 up to 1 at `LAMP_DARK`; night 1, sunset ~0.6, indoor ~0.45, morning
-  ~0.25), set on the camera by `StageLight` (`POOL_STRENGTH`; no light or a draft: by day). Before,
-  the pool was in the day picture and drawn again ungraded in the glow layer: a strong orange patch
-  by day. `POOL_RINGS` rose to 0.34 / 0.34 / 0.38 (drawn once now, not twice). A pool is drawn by the
-  base picture (its pieces) or by its piece's layer only, never by a character's front picture
-  (`IsoScenery.pool_shapes`), and pool tiles drop the tiles' 2-pixel overlap and meet on whole
-  pixels (`draw_tile` rounds): seen-through pixels drawn twice showed as stripes.
-
-Public surface (264): the kinds above; `Disc.pool`, `draw_shapes(pool=)`, `IsoScenery.pools` /
-`pool_shapes`, `PoolTile`, `POOL_STRENGTH`, `pool_strength`, `POOL_DAY`. Additive; Phase Q
-baseline 31/31 identical.
-
-- **Step 265 (farm, school, office)**: drawn in `iso_school.py`. `vegetable_patch` (2 x 1; a
-  raised plank bed in `color`, staked tomatoes with fruit in `detail`, cabbages, carrots),
-  `wheelbarrow` (green tray with soil and a seedling, wheel at its nose, handles in `detail`),
-  `hay_bale` (2 x 1, `top` 0.72; straw texture, twine in `detail`), `school_desk` (an iso object,
-  apart from the 2D `school_desk` prop: a sloping lid, book box, steel frame in `detail`, its
-  chair in front of it so a pupil faces the room's back wall; no `top`, its desk is not at the
-  cell's middle), `desk_with_pc` (2 x 1; switched: the screen glows in `detail` with a window,
-  icons and a taskbar, the tower's light; moving: a line typed and a blinking cursor),
-  `water_cooler` (bottle in `detail`; moving: three bubbles rising), `printer` (an office printer,
-  apart from `printer_3d`; switched: its panel glows in `detail`; moving: a sheet slides out onto
-  its tray, past its footprint's front edge, then fades), `globe` (floor globe on a tripod in
-  `detail`, seas in `color`; moving: its land turns, `CONTINENTS` as (longitude, latitude)
-  outlines on a tilted axis, points round the back pressed onto its edge; off or still, its land
-  is in the picture), `trophy_shelf` (2 x 1, `top`; cups, statuettes, a medal, a plaque and a
-  star, gold in `detail`). None light characters. Heights 0.78–2.08 tiles.
-
-Public surface (265): the kinds above. Additive; no shared drawing code changed.
-
-- **Step 266 (fantasy)**: drawn in `iso_fantasy.py`. `treasure_chest` (wood in `color`, bands
-  and lock in `detail`, a rounded lid; in `OPENING_KINDS`: open, its lid swings back, a heap of
-  coins and gems and the lid's inside glow, a warm pool; in `OPEN_WORKING`: while open a golden
-  halo pulses and sparkles twinkle up), `cauldron` (iron pot in `detail` on three legs over
-  logs, potion in `color`, a ladle; switched: fire, glowing potion and foam, a pool, lights
-  characters; moving: flames, bubbles bursting, vapour), `giant_crystal` (shards in `color` from
-  rocks in `detail`, leaning away from the middle facing either way; switched: they glow and a
-  pool in their tint lies round them; moving: a halo and heart pulse, tips twinkle; not in
-  `LAMPLIGHT_KINDS`, lamplight is warm), `throne` (`top` 0.62; velvet `color`, gilt `detail`,
-  stone step), `torch_sconce` (in `WALL_KINDS` like `wall_clock`: an iron plate and bracket in
-  `color`, a torch in `detail`; switched: a flame, a pool on the floor below the wall, lights
-  characters; moving: flame, its flickering light on the wall, sparks; its draw box a slab
-  `SCONCE_SPAN` out from the wall, the clock's unchanged), `signpost` (three arrow boards in
-  `color` on a post in `detail`), `archway` (2 x 1; stone pillars and a round arch of voussoirs
-  with a keystone, ivy in `detail`; not walkable, like `flower_arch`), `statue` (a bronze
-  `color` hero raising a sword on a `detail` plinth with a plaque). Heights 1.15–3.25 tiles.
-  Shared fix: a layer picture's clip (`IsoScenery.clip`) now also covers its own piece's pool of
-  light — a switched object is drawn in its layer, clipped to its box, and a pool lying out from
-  the box (the sconce's on the floor, a car's ahead of it) was cut to a streak.
-
-Public surface (266): the kinds above; `OPEN_WORKING` gains `treasure_chest`, `WALL_KINDS`
-`torch_sconce`, `LAMPLIGHT_KINDS` `cauldron` and `torch_sconce`. Additive; Phase Q baseline
-31/31 identical.
-
-- **Step 267 (seasons, harbour, travel)**: drawn in `iso_seasons.py`. `christmas_tree` (three
-  tiers in `color` with baubles, a garland of lights, a star in `detail`, a red pot; switched:
-  lights and star shine, a small pool; moving: lights twinkle in turn, a glow breathes round the
-  star), `snowman` (three snowballs on a drift, scarf `color`, top hat `detail`, a carrot nose
-  pointing the way it faces), `pumpkin` (ribbed, a carved face; switched: the face glows, a pool;
-  moving: the face flickers), `gift_pile` (four wrapped boxes, the biggest in `color`, ribbons and
-  bows in `detail`), `balloon_bunch` (five balloons, the first in `color`, strings to a weight in
-  `detail`; switched + moving: they sway; off or still, in the picture), `birthday_cake` (two
-  tiers on a little round table, icing `color`, top tier `detail`, four candles; switched: flames,
-  a pool; moving: they flicker), `boat` (2 x 1; `ObjectKind.floats`: every cell must be water,
-  "floats: put it on water (~)", with a hint when `at` is a spot, whose letter is ground; a
-  hull in `color`, deck, stripe, mast, mainsail and jib in `detail`, a pennant, a stern lantern;
-  its waterline at the water's surface (`-WATER_DEPTH`), foam where it meets the water; switched:
-  the lantern lit, a pool on the water; moving: the whole boat rises, pitches and rolls, so off
-  or still it is in the picture and working it is drawn only by the stage), `dock` (1 x 2,
-  walkable and `over_water` like `bridge`, `deck` 0.22: planks over posts, the front half's
-  posts reaching into the water, a coil of rope), `lighthouse` (5.6 tiles; banded tower in white
-  and `color`, gallery, glass lantern room, dome in `detail`; switched: lantern and windows lit;
-  moving: a beam sweeping round, fainter pointing away), `train_car` (3 x 1, side-on on a stretch
-  of track: windows, doors, a trim in `detail`, bogies), `rocket` (2 x 2; on a concrete pad with
-  hazard stripes beside an orange service tower; switched: an engine flame, a pool; moving: the
-  flame and smoke billowing over the pad, lit at night). None light characters. Heights
-  0.85–5.6 tiles.
-- **Review of the 63**: moving light thrown on things is now `Motion.pool` and shown as strong as
-  pools of light (`IsoGadgets(pool_strength=)`, the stage passes the camera's `POOL_STRENGTH`):
-  the fireplace's floor glow, the torch's light on its wall, the crystal's light on the ground,
-  the lighthouse's beam, the tree's star glow (they showed at full strength by day). A working
-  object's gadget region now also covers where its parts reach over `GADGET_SAMPLES` (a beam
-  leaves its box). Redrawn: the stove's steam (soft see-through S-wisps, not white dots), the
-  vending machine lit (a brighter window with a bright middle, light round it on its front, no
-  glare line when lit, a larger pool), the crib (fewer, thicker bars, no far-side bars, a bigger
-  star and moon), the bicycle (stretched to fill its cell, bigger wheels, thicker frame), the
-  crystal's pulse (its shards brighten from within; the round halo read as a bubble). Checked:
-  outlines and shading come from the shared helpers; heights 0.35–5.6 tiles against a
-  character's 2.0; pools are warm rings, faint by day; did-you-mean for names and kinds. A
-  preview of 19 working objects in one place: 8.9 s of video in 21 s (one working: 8.8 s; none:
-  5.3 s), about 5 ms per working object per frame.
-
-Public surface (267): the kinds above; `ObjectKind.floats`, `Motion.pool`,
-`IsoGadgets(pool_strength=)`, `POOL_DAY` and `POOL_STRENGTH` in `vidgen.api`. Additive; Phase Q
-baseline 31/31 identical.
-
+- **Modules**: one per batch under `vidgen.cartoon` (`iso_home`, `iso_shop`, `iso_town`,
+  `iso_nature`, `iso_school`, `iso_fantasy`, `iso_seasons`; `iso_retro` §107). `MORE_MODULES` (kind →
+  module) tells `object_shapes` / `object_motion` where to look; each module has `DRAWINGS` (frame,
+  look, state → shapes) and `motion(frame, look, now)` and is imported lazily (no cycle). Kinds and
+  their tables stay in `world/iso.py`.
+- **Lamplight**: `LAMPLIGHT_KINDS`: a lit one lights nearby characters like a lamp (§89.13), from its
+  footprint's middle (a `lamp`: its first cell's). Lamplight is warm, so cold-glowing kinds are out.
+- **Kinds per object**: `OBJECT_STYLES` (object → its kinds, the first the default; e.g.
+  `display_case` → `DISPLAY_CASES`) checks `IsoObjectParam.kind`; part of `OBJECT_FEATURES`.
+- **Placing rules**: `ObjectKind.floats` (`boat`: every cell water; error "floats: put it on water
+  (~)"); `dock` walkable and `over_water` (`deck` 0.22); `archway` not walkable; `torch_sconce` is a
+  `WALL_KINDS` object with a draw box `SCONCE_SPAN` out from the wall. A working `boat` moves whole,
+  so the stage alone draws it while working. `traffic_light` cycles `SIGNAL_CYCLE`; a still shows red.
+- **Pools of light**: `light_pool(centre, radius, strength)` (saturated amber `LIGHT_POOL`, since a
+  pale colour over the night-multiplied picture reads olive) draws every lamp's pool. A pool is a
+  `Disc` marked `pool`, drawn only in its own picture (`draw_shapes(pool=True)`; plain and glow
+  pictures leave pools out). The stage shows pool tiles (`PoolTile`, between a picture's tiles and
+  its glow tiles) at `pool_strength(grade)` (`POOL_DAY` 0.1 by day up to 1 at `LAMP_DARK`), set on
+  the camera by `StageLight` (`POOL_STRENGTH`; no light or a draft: day). A pool is drawn by the
+  base picture or its piece's layer, never by a character's front picture
+  (`IsoScenery.pool_shapes`); pool tiles have no overlap and meet on whole pixels (`draw_tile`
+  rounds) so no pixel is drawn twice. A layer picture's clip (`IsoScenery.clip`) includes its pool.
+- **Moving light** (`Motion.pool`) shows at pool strength (`IsoGadgets(pool_strength=)`). A gadget's
+  redraw region covers where its parts reach over `GADGET_SAMPLES`.
 ## 105. Seven features without AI APIs (Phase AD, Steps 268–275)
 
-Owner's constraint: no AI API calls (no LLM or hosted model) in code, tests or the work itself:
-rules, heuristics and local data only; where judgement helps, building blocks (CLI, MCP tools) an
-agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and using furniture,
-270 a day passing in one scene, 271 iso weather (reflecting puddles, fog banks, wind), 272
-`vidgen story draft`, 273 `vidgen shorts suggest`, 274 ambient life, 275 review. Docs stay lean.
+No AI API calls (no LLM or hosted model) in this code or its tests: rules, heuristics and local data
+only, plus CLI / MCP building blocks an agent can use.
 
 ### 105.1 Moving vehicles (Step 268)
 
-- **Actions** (`scenes/driving.py`): `drive_to` (a `car`, a `train_car`), `sail_to` (a `boat`),
-  `lift_off` (a `rocket`), on the place's objects; `to` a spot or `{column, row}`, `via` spots or
-  cells, `speed` (tiles per second; `VEHICLE_SPEEDS`: car 2.6, train 2.2, boat 1.1; a walker
-  about 1.4); a lift-off's `run_time` (`LIFT_OFF_SECONDS` 4). Named after `walk_to` / `ride_to`
-  (a verb per medium; `launch` is the orbit scene's). Timed like any move: `at`, word anchors;
-  `run_time_for` is the route's length over the speed plus `SET_OFF_SECONDS` 0.6.
-- **Rules** (`world/iso_vehicles.py`, no manim). A car (path cells only, one level) and a boat
-  (water) go cell to cell over the **four** neighbours (drawn side-on: no diagonals), a
-  cheapest-path search over (cell, heading) with `DRIVE_TURN_COST` 0.3 per turn and `UTURN_COST`
-  4 to turn round (where a way ends: a three-point turn, drawn as a flip). Its **middle** moves
-  from between its two cells through the middle of each edge it crosses: two whole cells on a
-  straight, across the corner cell at a turn (the heading switches half-way). It stops with its
-  front in the goal cell; a *spot* off its way (a door on the grass by the road, a pier on the
-  shore) becomes the nearest cell it can stop on within `GOAL_REACH` 2 (an explicit cell is taken
-  as written). A train car rolls along its **track**: the straight line of its cells, extended both
-  ways over level free floor or path (`track_cells`); its middle stops at `to`, on that line.
-  Characters standing in the way (`crowd`), objects, other ground and steps are named in the
-  error (`'car' cannot drive from row 2, column 3 to row 2, column 7: the way stops at row 2,
-  column 4: the bench at row 2, column 5`). A rocket rises `LIFT_HEIGHT` straight up (the stage
-  gives the height that leaves any view), `lift_share` from rest, faster and faster; ground moves
-  ease in and out (`drive_share`).
-- **Validate** replays them in `iso_move_problems` (`ISO_VEHICLE_ACTIONS`, `vehicle_problems`): the
-  vehicles where they stopped (`moved_place`), so later walks go round a parked car; a second
-  `lift_off` is refused. At render `iso_place_now` includes the vehicles' planned places.
-- **Drawn** (`cartoon/iso_driving.py`). A driven vehicle's `ObjectLook.driven` leaves it out of the
-  place's pictures (a car, a boat, a train car: nothing; a rocket: its pad and tower), and the
-  stage draws an `IsoVehicle`: a **sprite** of its shapes (drawn as the place's are, at the level
-  of detail the camera's zoom needs) moved across the screen. Iso has no perspective, so a move in
-  the world is a shift of the picture: one sprite per (heading, on, wheel step / flame frame)
-  serves the whole drive. Considered: vector polygons per frame like `IsoGadgets` (a car has ~60
-  shapes with lines and discs; sprites are cheaper and match the place's look exactly). The
-  sprite is three fixed image mobjects (picture, `PoolTile`, `GlowTile`, drawn by `draw_tile`)
-  whose pixels change: Manim keeps the members of a moving mobject from the animation's start, so
-  swapped members stayed drawn (a ghost car). Headings: the existing two frames (facing left /
-  right) and `reverse` for driving away up the picture (`car_shapes(..., reverse=True)`: the back
-  window, tail lights on the visible end; a boat's bow mirrored); `spin` draws spokes turning
-  with the distance driven (`SPOKE_STEPS`). The train car's body is `train_body`, its track
-  `track_shapes` added to the place's ground along `track_cells` (under everything standing on
-  it). A rocket's flame (`rocket_fire`, longer while lifting off) flickers in `FLAME_FRAMES`; its
-  smoke over the pad is an `IsoGadgets` (`rocket_smoke`: `launch_smoke` puffs, graded by the
-  light) while the engine fires and `SMOKE_AFTER` 2.5 s after it has gone (hidden once out of
-  the view: `IsoDrive(gone=)`).
-- **On the stage** (`scenes/stage_vehicles.py`, `IsoDriving`): the vehicle is a body of the place
-  like a character (`_iso_bodies`): it stands in a box (`IsoVehicle.box`, `VEHICLE_SIZES`), has a
-  front picture of the pieces in front of it (`IsoScenery.front(box, exclude=)`: not its own
-  piece, so a rocket's tower behind it is not drawn over it) and is sorted with the characters
-  (`_iso_keep_order`); `IsoDrive` redraws the bodies while it plays (`_iso_redrawn`). It is also
-  a living thing of the stage (`update_to`, `changing`...): a switch, a flame, a boat's bob show
-  without an animation. `switch_on` / `switch_off` switch it (`iso_switch_vehicles`); `follow`
-  follows it; lint `offscreen_action` watches its moves; foley `drive_cues` (engine, brakes for a
-  car or a train, a boat's splash, a launch's roar). A tall frame's wide view keeps the vehicles
-  and where their moves go in view (`_iso_vehicle_views`).
-- **Measured** (854 x 480 @ 15 fps, preview): a 18 x 10 town with a car, a train car, a boat and a
-  rocket all moving, two characters: 21.5 s of video in 17 s.
-- **Public**: `vidgen.api` adds `ISO_VEHICLE_ACTIONS`, `LIFT_OFF_SECONDS`, `VEHICLE_ACTIONS`,
-  `VEHICLE_SPEEDS`, `VehicleRoute`, `drive_seconds`, `middle_of`, `moved_item`, `moved_place`,
-  `plan_vehicle`, `start_heading`, `track_cells`, `IsoDrive`, `IsoVehicle`, `rocket_smoke`,
-  `track_shapes`, `vehicle_shapes`; `ObjectLook.driven`; `IsoScenery.front(exclude=)`. Additive:
-  a scene without these actions takes no new branch; Phase Q baseline 31/31 identical.
-- **Left for later**: a turn shows one in-between angle (45°, §105.8), not a smooth turn; a
-  U-turn flips the vehicle; moving vehicles and walkers do not avoid each other (as two walkers);
-  no riders (`get_in` is the flat stage's); a train car is one car (no coupled cars); no
-  reflections or wake trail behind a boat beyond its foam.
+- **Actions** (`scenes/driving.py`; user docs CONFIG): `drive_to` (`car`, `train_car`), `sail_to`
+  (`boat`), `lift_off` (`rocket`) on the place's objects; `to`, `via`, `speed` (`VEHICLE_SPEEDS`:
+  car 2.6, train 2.2, boat 1.1 tiles/s), lift-off `run_time` `LIFT_OFF_SECONDS` 4. `run_time_for`
+  = route length / speed + `SET_OFF_SECONDS` 0.6.
+- **Rules** (`world/iso_vehicles.py`, no manim): cars (path cells, one level) and boats (water) move
+  over four neighbours (side-on drawing: no diagonals), a cheapest path over (cell, heading) with
+  `DRIVE_TURN_COST` 0.3 and `UTURN_COST` 4 (a U-turn is drawn as a flip). It stops with its front
+  in the goal cell; a *spot* off its way becomes the nearest stoppable cell within `GOAL_REACH` 2
+  (an explicit cell is taken as written). A train car rolls along `track_cells` (its line extended
+  over level free floor or path), its middle stopping at `to`. Blockers are named in the
+  `VidgenError`. A rocket rises `LIFT_HEIGHT`. In the middle half of a corner's leg
+  (`VehicleRoute.turning`) a car or boat is drawn at 45° (`turning_shapes`).
+- **Validate** replays them in `iso_move_problems` (`ISO_VEHICLE_ACTIONS`, `vehicle_problems`):
+  vehicles stay where they stopped (`moved_place`); a second `lift_off` is refused. At render
+  `iso_place_now` includes planned vehicle places.
+- **Drawn** (`cartoon/iso_driving.py`): `ObjectLook.driven` leaves a driven vehicle out of the place
+  pictures (a rocket keeps its pad and tower); the stage draws an `IsoVehicle`, a sprite shifted
+  across the screen (iso has no perspective; one sprite per heading / on / wheel or flame frame).
+  The sprite is three fixed image mobjects (picture, `PoolTile`, `GlowTile`) whose pixels change,
+  because Manim keeps a moving mobject's members from the animation's start (swapped members
+  ghost). `car_shapes(..., reverse=True)` is the back view driving up the picture. Train track
+  `track_shapes` is in the ground along `track_cells`. Rocket smoke is an `IsoGadgets`
+  (`rocket_smoke`) while firing and `SMOKE_AFTER` 2.5 s after.
+- **On the stage** (`scenes/stage_vehicles.py`, `IsoDriving`): a body of the place (`_iso_bodies`,
+  `IsoVehicle.box`, `VEHICLE_SIZES`) with a front picture (`IsoScenery.front(box, exclude=)`: not its
+  own piece), sorted with characters; `IsoDrive` redraws bodies while it plays. A living thing
+  (`update_to`, `changing`). Works with `switch_on` / `switch_off` (`iso_switch_vehicles`),
+  `follow`, lint `offscreen_action`, foley `drive_cues`, a tall frame's wide view
+  (`_iso_vehicle_views`).
+- **Limits**: vehicles and walkers do not avoid each other; no riders; one train car; headlights
+  switch at once.
 
 ### 105.2 Sitting, lying and using furniture (Step 269)
 
-- **Actions** (`scenes/sitting.py`): `sit_on` (the flat stage's, §69.28) takes an *object* of an
-  iso place too (`to` not a prop); `lie_on` (a bed) and `use` (`run_time`, default
-  `USE_SECONDS` 3) are iso only; `stand_up` stands up from any. Names reuse `sit_on` / `stand_up`
-  (one verb per posture on both stages); `use` instead of a verb per object (`warm_hands`,
-  `type`...): the object picks the pose. Who sits or lies where is the scene's `Postures`
-  (`Postures.lie`: a bed someone lies on takes nobody else; `PINNED_ACTIONS` + `wander`, `meet`).
-- **Rules** (`world/iso_seats.py`, no manim): `ISO_SEATS` (kind -> `IsoSeat`s: hips at `a`, `b`
-  shares of the footprint in the object's own frame, as `_Frame` draws it, `z` over its base; the
-  way the sitter `faces`: `front`, `back` (a school desk's chair), `+a` / `-a` (a café table's
-  chairs face each other); `front` regions), `ISO_BEDS` (`IsoBed`: across at `a`, the head's top
-  at `head`, the mattress `z`), `ISO_USES` (`IsoUse`: `style` `type` / `warm` / `read` / `reach`,
-  the object's own place for the hands). A facing-`right` object mirrors the frame, so seat
-  points and facings follow it (`seat_facing`: `left` / `right` on the picture; characters have
-  no back view, and every iso object faces the viewer, so a seat never faces away). `sit_on` takes
-  the free seat nearest the feet (`seat_order`); `use_point` puts the hands half way between the
-  object's place for them and the nearest point of its footprint (one beside a laptop reaches to
-  its side). Validate replays them in `iso_move_problems` (`ISO_SEAT_ACTIONS`,
-  `seat_step_problem`): the object must be within `SEAT_REACH` (1 cell, 8 neighbours) of the
-  character's cell (a seated character uses what is next to its seat), seats taken, a walk
-  before `stand_up`, `use` while lying; the hint gives the free cell to `walk_to` (`next_to`).
-  The action's own check names an unknown object (did you mean) or one with nothing to sit on,
-  lie on or use. The flat stage's holding replay leaves these steps to it on an iso place.
-- **Drawn** (`scenes/stage_seats.py`, `IsoSeating`; `IsoSeatMove` in `cartoon/iso_motion.py`, a
-  `BodyMove`): the feet go in the world to the floor under the seat (`iso_feet`, the shadow's
-  `ground_y` follow) and the body is `Character.seated` with the hips on the seat
-  (`view.height(z)`), facing the seat's way; standing up returns to the point it sat down from.
-  Lying turns the body `LIE_DEGREES` (atan 2: the map's axes on the picture) about the hips, its
-  face up, scales the figure `LIE_SCALE` 0.72 by its squash (a whole character is longer than a
-  cartoon bed on the picture) and folds the legs away under the blanket; its hips lie so far
-  along the bed that the head's top is at `head`. **Draw order**: the sitter's box is inside the
-  object's, so its front picture leaves the object out (`IsoScenery.front(exclude=)`, as a
-  vehicle's) and starts with the object's *part* in front of it (`IsoScenery.part`: the shapes of
-  the object, as `shape_points` lie wholly in the seat's `front` regions, made once per seat into
-  an extra piece in no picture but front ones; a region may stop at a height: a bus shelter's
-  posts, not its roof). What else stands in front of the sitter (a desk in front of a chair) is
-  drawn over it as for any body. The seat is on the figure (`iso_seat`) from the start of sitting
-  down and until the end of standing up (half in the object's box the whole object was drawn over
-  it). Lip sync, expressions and `look_at` (the head only, `is_posed`) work as on the flat stage.
-- **Use**: an `ArmMove` of the arms (`reached_parts` to the use point, both hands for `type` /
-  `warm`, the near one otherwise): in, small moves (`USE_STEP` per style, `USE_BOB`), back. A
-  standing user turns to the object (to its side when the object is straight behind or in front:
-  there is no back view); a seated one keeps its facing.
-- **Public**: `vidgen.api` adds `ISO_SEATS`, `ISO_BEDS`, `ISO_USES`, `ISO_SEAT_ACTIONS`,
-  `IsoSeat`, `IsoBed`, `IsoUse`, `LIE_DEGREES`, `LIE_SCALE`, `LIE_SECONDS`, `SEAT_REACH`,
-  `USE_SECONDS`, `bed_facing`, `footprint_apart`, `in_regions`, `kinds_words`, `next_to`,
-  `object_frame_point`, `object_uses_hint`, `seat_facing`, `seat_hips`, `seat_order`,
-  `use_point`, `IsoSeatMove`, `shape_points`; `Postures.lie`; `IsoScenery.part`,
-  `IsoScenery.front(first=)`. Additive: Phase Q baseline 31/31 and iso-story `night` /
-  `rowans_room` (25 stills) identical.
-- **Left for later**: no front view while seated (a seat facing the viewer shows the side view);
-  `use` is timed (the hands come back after `run_time`), not a held posture; no `lie_on` on a
-  sofa or the flat stage; a bean's head reaches over a bus shelter's roof (drawn over it). (A
-  school desk's sitter tucks its legs away since §105.8.)
+- **Actions** (`scenes/sitting.py`): `sit_on` (§69.28) also takes an iso object; `lie_on` and `use`
+  (`run_time` `USE_SECONDS` 3, timed, not held) are iso only; `stand_up` from any. `use`, not a verb
+  per object: the object picks the pose. Postures live in the scene's `Postures` (`Postures.lie`:
+  one per bed; `PINNED_ACTIONS` + `wander`, `meet`).
+- **Rules** (`world/iso_seats.py`, no manim): `ISO_SEATS` (kind → `IsoSeat`: hips at footprint
+  shares `a`, `b` in the object's `_Frame`, `z`, `faces` `front` | `back` | `+a` | `-a`, `front`
+  regions, `tucked`), `ISO_BEDS` (`IsoBed`), `ISO_USES` (`IsoUse`, `style` `type` | `warm` | `read`
+  | `reach`). A facing-`right` object mirrors the frame (`seat_facing`; no back view). `sit_on` takes
+  the free seat nearest the feet (`seat_order`); `use_point` = half way between the hand place and
+  the nearest footprint point. Validate (`iso_move_problems`, `ISO_SEAT_ACTIONS`,
+  `seat_step_problem`): object within `SEAT_REACH` 1 (8 neighbours), seat free, a walk before
+  `stand_up`, no `use` while lying; the hint names the cell to `walk_to` (`next_to`).
+- **Drawn** (`scenes/stage_seats.py`, `IsoSeating`; `IsoSeatMove` in `cartoon/iso_motion.py`): feet
+  to the floor under the seat (`iso_feet`), `Character.seated`; standing up returns to the start.
+  Lying: turned `LIE_DEGREES` (atan 2) about the hips, scaled `LIE_SCALE` 0.72, legs folded.
+  **Draw order**: the sitter's box is inside the object's, so its front picture excludes the object
+  and starts with the object's *part* in front (`IsoScenery.part`: shapes whose `shape_points` lie
+  in the seat's `front` regions, one extra piece per seat, in front pictures only). The seat is on
+  the figure (`iso_seat`) from sitting down to the end of standing up.
+- **Use**: an `ArmMove` (`reached_parts`; both hands for `type` / `warm`). A standing user turns to
+  the object (to its side if straight behind or in front); a seated one keeps its facing.
 
 ### 105.3 A day passing in one scene (Step 270)
 
-- **Action** (`scenes/light_action.py`, `TimeOfDay`): `- {time_of_day: sunset, run_time: 6}`
-  (`LIGHT_PRESETS`; `run_time` default `TIME_OF_DAY_SECONDS` 6), `auto_lights` (default true),
-  `move_sun` (default: on when the stage has a `sun` / `moon` prop outdoors). Not a `light` option:
-  a name of its own reads as what the author means (a day passing) and its defaults differ (a long
-  fade, lights and sun on by themselves); `light` is unchanged. Did-you-mean for the preset; one
-  per action; stage scenes only (`pass_time`); `move_sun: true` needs a sun or moon outdoors.
+- **Action** (`scenes/light_action.py`, `TimeOfDay`): `- {time_of_day: <preset>, run_time,
+  auto_lights, move_sun}` (`LIGHT_PRESETS`; default `TIME_OF_DAY_SECONDS` 6; `auto_lights` true;
+  `move_sun` on with a `sun` / `moon` prop outdoors, `true` requires one). Its own action, not a
+  `light` option, because its defaults differ; `light` switches nothing.
 - **Rules** (`cartoon/lighting.py`, no manim): `darkness(grade)` (one minus the mean `multiply`
-  over `LAMP_DARK`, the measure of the pools and the lamplight: day 0, morning 0.07, indoor 0.26,
-  sunset 0.45, night 1); dusk is `DUSK_DARK` 0.35 (a sunset is past it); `dusk_crossing` finds where
-  a smoothstep fade crosses it (bisection of the eased share) and whether lights go on or off;
-  `auto_switch_time` puts each light up to `AUTO_SPREAD` 0.9 s (at most `AUTO_SPREAD_SHARE` 0.2 of
-  the fade) early or late by a CRC of its name, inside the fade (no lights in one frame, the same in
-  every render); `day_stages`: from a light day (darkness <= 0.2) to `night` the fade goes through
-  `sunset` at `TWILIGHT_SHARE` 0.5, from night (>= 0.9) to `day` through `morning` (a straight
-  blend of day and night is a dull grey-blue).
-- **Stage** (`scenes/stage_daylight.py`, `DayPassing`, part of `Stage`): `pass_time` adds a
-  `change_light` per stage (so the stars, shadows, pools, ambience marks and sky bodies follow as
-  for `light`) and, with `auto_lights` and not to `indoor`, switches at the first crossing: on an
-  iso place each of `StageIso.auto_lit()` (`AUTO_LIGHT_KINDS`: lamp, floor_lamp, street_lamp, house,
-  phone_booth, vending_machine, lighthouse, christmas_tree, pumpkin, car; not towers, fires or
-  machines; not those placed with `auto_light: false`) by `iso_change(..., auto=True)` over
-  `AUTO_SWITCH_SECONDS` 1.2 and a driven car by `iso_switch_vehicles`; on the flat stage each
-  `lamp` prop (made living when a `time_of_day` may switch it) by `LivingProp.switch(fade=)`.
-  Those already so stay. The auto-lit objects are layered (`_iso_action_targets`) so they can
-  change. `iso_change(auto=True)`: lint's `offscreen_action` does not watch it, and a working
-  object's moving parts fade with it (`Gadget.level`, `_iso_gadget_fades`: going out it shows its
-  old state fading); a flat lamp's lantern and glow fade (`LivingProp._level`, `_Shown.show(0..1)`).
-- **Sky**: a stage with a `time_of_day` and no `background` or picture (outdoors; a room keeps its
-  windows) draws its `background` rectangle as the time of day's sky (`window_sky`, the rooms'
-  window gradients), not graded, faded with the light's changes (`sky_at`, `_show_light`), and its
-  stars at `grade.stars ** 2` (they come out once it is dark).
-- **Checked by eye** (`/home/claude/work/scratch/s270/sheet.png`): an iso village day -> night ->
-  morning (lights one after another, a lamp with `auto_light: false` dark, pools warm, stars late),
-  a city street at sunset then night with a car driving home (headlights on), the flat stage with a
-  sun and moon and a lamp fading in, a 9:16 village; frame-to-frame differences show no pop (the
-  largest outside the intro/outro are moving things and a pumpkin's own flicker).
-- **Public**: `vidgen.api` adds `AUTO_LIGHT_KINDS`, `AUTO_SWITCH_SECONDS`, `DUSK_DARK`,
-  `TIME_OF_DAY_SECONDS`, `TWILIGHT_SHARE`, `auto_switch_time`, `darkness`, `day_stages`,
-  `dusk_crossing`; config: `time_of_day` action, `auto_light` on iso objects and stage props.
-  Additive: Phase Q baseline 31/31 and iso-story `night` / `rowans_room` (25 stills) identical.
-- **Left for later**: a driven car's headlights switch at once (its sprite has no in-between); towers
-  keep their windows as set; the `light` action switches nothing; the sky of a day passing is the
-  window skies' gradient (no sun glow on the horizon); an iso place has no sun or moon to move.
+  over `LAMP_DARK`: day 0 … night 1); dusk `DUSK_DARK` 0.35; `dusk_crossing` finds where the
+  smoothstep fade crosses it; `auto_switch_time` offsets each light up to `AUTO_SPREAD` 0.9 s (at
+  most `AUTO_SPREAD_SHARE` 0.2 of the fade) by a CRC of its name (deterministic); a fade from past
+  dusk to darker switches at `DARK_SWITCH_SHARE` 0.25. `day_stages`: day → night passes `sunset` at
+  `TWILIGHT_SHARE` 0.5, night → day passes `morning`.
+- **Stage** (`scenes/stage_daylight.py`, `DayPassing`): `pass_time` adds a `change_light` per stage
+  and, with `auto_lights` and not to `indoor`, switches at the crossing each of `StageIso.auto_lit()`
+  (`AUTO_LIGHT_KINDS` minus `auto_light: false`) via `iso_change(..., auto=True)` over
+  `AUTO_SWITCH_SECONDS` 1.2, driven cars, and flat `lamp` props (`LivingProp.switch(fade=)`).
+  Auto-lit objects are layered (`_iso_action_targets`). `offscreen_action` ignores auto changes;
+  moving parts fade with them (`Gadget.level`).
+- **Sky**: an outdoor stage with `time_of_day` and no `background` draws the time of day's sky
+  (`window_sky`, ungraded, `sky_at`), stars at `grade.stars ** 2`. With a ground band a sky body
+  sinks behind it (`SkyBody(sink=)`).
 
 ### 105.4 Iso weather: reflections, fog, wind (Step 271)
 
-- **Config** (no new keys but one use): an iso stage takes the stage's `fog` (refused there
-  before) and its `wind` / the `wind` action (which moved only particles and trailing pieces);
-  rain's `settled` also counts for `puddles` (seconds of rain already fallen: the puddles start
-  grown, on a flat stage too). Chosen over a `fog` particles kind or a `wind: {strength,
-  direction}` mapping: one fog and one wind on both stages (a signed level, ± on screen, as the
-  particles and the trailing pieces read it). Indoors (`place: indoor`) `fog`, `wind` and the
-  `wind` action are refused (as in a `room`). Reflections need nothing: rain with `puddles`.
-- **Rules** (`cartoon/iso_weather.py`, `cartoon/fog.py`, no manim): a light is a glowing `Poly`
-  or `Disc` of an object (not a pool, `glow_outlines`); its mirror image in a puddle at height
-  `z` is the outline mirrored to `2z - h` (`mirrored`: seen from above, a light `h` up shows
-  `h` under its foot, so low lights and trims down to the ground show in the puddles in front);
-  `puddle_lights` keeps the lights whose image reaches a puddle; `still_reflection` cuts it to
-  the puddle's ellipse (Sutherland–Hodgman, `clip_convex`), kept `REFLECTION_SHIMMER` inside
-  its edge, with points along its edges; `shimmered` wobbles it sideways while it rains (a wave
-  down the picture). Wind: `ISO_SWAYS` (tree, pine, bush, flowers, plant: the flat props'
-  `Sway`; scarecrow, balloon_bunch), `iso_sway_degrees` = the flat lean times `ISO_SWAY_SHARE`
-  0.55; `sway_rows` bends a sprite: each row shifts by the square of its height over the foot
-  (premultiplied, smooth between pixels). Fog: `iso_fog_depths` puts the five bands
-  (`FOG_DEPTHS` shares) from the place's back edge (`x + y`) to near its front;
-  `iso_band_outlines` is `band_outlines` in tile widths (`ISO_FOG_SCALE` 6 per frame height),
-  banks `ISO_FOG_HEIGHT` 1.2 high (haze 1.6); seen from above the banks hold more
-  (`ISO_FOG_LAYER_SHARES` 0.3/0.35/0.35) and a density counts `ISO_FOG_THICKER` 1.6 times.
-- **Drawing** (`cartoon/iso_atmosphere.py`): `IsoReflections` (a glow widened
-  `REFLECTION_HALO` at 0.35 of the opacity, then the image whitened `REFLECTION_WHITEN`) at
-  `REFLECTION_OPACITY × darkness × lit(owner)`, never graded, laid right over the puddles; each
-  cut once per puddle size step (`SIZE_STEP` 0.02), only the wobble per frame. `IsoFog`: a
-  `FogBand` per share (`iso_depth`), lit by the light, drifting with `fog_shift`. `IsoSwayer`: a
-  sprite of the object (`draw_sprite`, levels of detail as a vehicle's) padded for its lean and
-  bent each frame by the wind's force where it stands (gusts cross the place).
-- **Stage** (`scenes/stage_weather.py`, `IsoWeather`, part of `Stage`): with a wind that ever
-  blows, outdoors, not in a draft, the swaying kinds no action targets are `IsoScenery.apart`
-  (in no picture, still on the top surface: they keep the rain off) and drawn as swayers with a
-  cover picture of what stands in front (following the place's changes, `iso_covers`), placed
-  after the layers of the objects behind them and after the bodies they stand in front of
-  (`_iso_place_swayers`); a balloon bunch is not a working object then (drawn whole, bent). The
-  fog bands go right before the first body at their depth or nearer, else after the place's
-  bodies (`_iso_sort_fog`, from `_iso_keep_order` and the entrance). The lights' states are
-  logged from the start when puddles may lie (`_iso_glow_log`, from `iso_change`), so a lamp
-  switched (or switched by a `time_of_day`) fades its reflection; `night` is `darkness` of the
-  light now.
-- **Cost** (854x480, 15 fps preview, sample `s271/proj`): reflections +25 % on a rainy neon street
-  (23.8 s vs 19.1 s for 12.7 s of video), fog +4 % (15.3 vs 14.7 s), wind +34 % on a meadow with
-  seven swaying objects and leaves (11.0 vs 8.2 s). Nothing changes while nothing moves (things
-  that move by themselves: redrawn only while it rains, the light changes, the fog drifts, the
-  wind blows).
-- **Checked by eye** (`/home/claude/work/scratch/s271/sheet.png`): a rainy neon night street
-  (trims, lanterns and a phone booth in the puddles, wobbling), a foggy village from night to
-  morning (a character walking into it), a windy meadow (right, a gale to the left, calm; a
-  character hidden behind a swaying tree), 9:16 of all three.
-- **Public**: `vidgen.api` adds `ISO_SWAYS`, `VOID`, `glow_outlines`, `iso_sway_degrees`,
-  `iso_fog_depths`, `IsoFog`, `IsoReflections`, `IsoSwayer`, `wind_phase`; `IsoScenery(apart=)`,
-  `FogBand(shares=)`, `IsoPuddles.size_at` / `raining`. Additive: Phase Q baseline 31/31 and
-  iso-story `night` / `rowans_room` (25 stills) identical.
-- **Left for later**: characters and moving vehicles are not mirrored; reflections only of
-  glowing shapes (not of gadgets' lights, IsoScreens or the blinking antennas); fog over a front
-  house's roof is as thick as the base picture there (the bands layer the bodies, not the
-  place's pieces); swaying is a shear (balloon bunches swing whole since §105.8); objects an
-  action changes, a snow cap on a swaying tree and flags (no flag object) do not sway.
+- **Config**: iso stages take the stage's `fog`, `wind` and the `wind` action (one fog and one
+  wind on both stages); indoors they are refused. Rain `settled` pre-grows `puddles`. Reflections
+  come with rain `puddles`.
+- **Rules** (`cartoon/iso_weather.py`, `cartoon/fog.py`, no manim): lights are an object's glowing
+  `Poly` / `Disc`, not pools (`glow_outlines`), mirrored to `2z - h` (`mirrored`), clipped to the
+  puddle ellipse (`still_reflection`, `clip_convex`), wobbling while it rains (`shimmered`). Wind:
+  `ISO_SWAYS` (kind → `Sway`), `iso_sway_degrees` = `ISO_SWAY_SHARE` 1.0 × degrees × felt force ^
+  `ISO_SWAY_POWER` 0.65; `sway_rows` shears a sprite; `ISO_SWINGS` (`balloon_bunch`) turn whole
+  (`swing_pixels`). Fog: `iso_fog_depths` spreads the five bands from the back edge (`x + y`)
+  forward; `iso_band_outlines` in tile widths.
+- **Drawing** (`cartoon/iso_atmosphere.py`): `IsoReflections` at `REFLECTION_OPACITY × darkness ×
+  lit(owner)`, ungraded, clipped once per puddle size step (`SIZE_STEP` 0.02), only the wobble per
+  frame; `IsoFog` (`FogBand` per share); `IsoSwayer` (a padded sprite bent by the local force).
+- **Stage** (`scenes/stage_weather.py`, `IsoWeather`): with wind, outdoors, not in a draft, swaying
+  kinds no action targets are `IsoScenery.apart` (in no picture, still in the top surface, so they
+  keep rain off) and drawn as swayers with cover pictures (`iso_covers`, `_iso_place_swayers`). Fog
+  bands go before the first body at their depth (`_iso_sort_fog`). Light states are logged when
+  puddles may lie (`_iso_glow_log`) so a switched lamp fades its reflection. Nothing is redrawn
+  while nothing moves.
+- **Limits**: only glowing shapes are mirrored; objects an action changes do not sway.
 
 ### 105.5 A story in prose to a draft project (Step 272)
 
 - **Command**: `vidgen story draft STORY [-o DIR|FILE] [--style iso|flat] [--format 16:9|9:16]
-  [--narrator VOICE] [--seed S] [--force] [--json]`; MCP tool `story_draft` (`input_path` or
-  `story_text`). Writes `video.yaml` (with `plan_yaml.commented_yaml` / `write_project`, as `plan`
-  and `screenplay` do) and `story_draft.md`; `--json` (`jsonout.story_document`) returns paths, the
-  report's text, cast, scenes and every line of dialogue with `speaker`, `confidence`, `method`.
-  A subcommand group (`story draft`) leaves room for later story tools. Never calls a model.
-- **Reading** (`story_text.py`, no manim): scenes at headings (the first H1 is the title), break
-  lines and paragraphs opening on a time cue (after two paragraphs of the scene); paragraphs
-  split where a line ends a sentence and the next opens one; quotes `"…"`, `“…”`, `«…»` (an
-  unclosed one runs to the paragraph's end). Characters: capitalised words that are speakers in a
-  tag, have a title (`TITLES`), are in the small name lists, or are the subject of a verb twice and
-  rarely after `in` / `at` / `to` (a place); `Mum` / `Grandpa` alone count (`FAMILY`); a word
-  always after another is its surname. Voice kind: title, then name lists, then pronouns in the
-  sentences that name only that character (and the next), at least 2 and twice the other kind.
-  First person: at least 3 first-person words outside quotes and one per 100 words; `My name is X`
-  names the protagonist (else id `me`). Attribution per quote, with a confidence: a tag next to it
-  (`said Mara` 0.95, `I said` 0.9, `she replied` 0.75: the last character of that kind mentioned,
-  the paragraph's narration before the quote counted first; a `he` before any man was named: the
-  first man the story names later, 0.5), the paragraph's other tagged quote, an action beat (the
-  subject of the paragraph's narration 0.6, several: the last 0.45), alternation of a two-person
-  exchange 0.5, the last character mentioned 0.3, else the narrator 0.1. Tags of at most 10 words
-  are dropped from the narration; quotes split by a tag merge (a trailing comma before a capital
-  becomes a full stop). Narration: sentence groups of at most `MAX_BEAT_WORDS` 25. Moves: a subject
-  (name, possessive phrase + name, pronoun, `I`) followed by a movement verb (`MOVE_VERBS`: walk,
-  run, enter, exit; `left the key on...` is not leaving).
-- **Places** (`story_places.py`): `PLACES`, eleven ready-made iso places (village, city, lab,
-  office, home, cafe, forest, harbour, castle, school, winter; 12–14 by 7–8 cells, outdoor and
-  indoor with `wide: fill`), each with four stand spots, walk goals, lights switched on at night
-  (a `<place>_night` set), three free cells for objects the story names (`OBJECT_WORDS`, one-cell
-  kinds, added to the place's set so later scenes there keep them) and its flat ready-made set
-  for `--style flat`. Chosen by keyword counts (a tie or no words: the scene before's). Light:
-  `LIGHT_WORDS`, clock times (`3 AM` night) and `three in the morning`; a cue in the scene's first
-  third sets it, later different cues become `time_of_day` actions (outdoors, at most two); no cue
-  keeps the scene before's night or evening unless the scene starts on a time cue; indoors only
-  night or indoor. Weather words (a word followed by `stopped`, `dropped`, `had gone`... does not
-  count): rain with puddles, snow settling, `fog: 0.5`, `wind: windy` (`gale` for gale / storm);
-  indoors a TODO. Music: the built-in bed with most mood words (`MUSIC_WORDS`, default cartoon).
-- **Draft** (`story_draft.py`): title card, the scenes, end card; up to four characters per scene at
-  the stand spots (others a TODO), an `enter` where a character first appears with an entering
-  verb, an `exit` only if it is not seen again in the scene; dialogue beats get the voice, the tag's
-  emotion, an `emote` for it, a close-up when emotional (`!` or an emotion), a two-shot when over
-  12 words; walks to the first free goal. Voices: `screenplay.assign_voices` / `_generated_looks`
-  (third person: narrator `bf_emma` or `--narrator`; first person: the protagonist's kind picked
-  first and used for both the narrator and its own `voices:` entry). Captions in the speakers'
-  colours, `auto_direct: true`, `soft_pastel`. Beats with a doubtful speaker (< 0.6) get a
-  `# TODO:`.
-- **Public**: `vidgen.api` adds `Story`, `read_story`, `STORY_PLACES`, `StoryPlace`, `choose_place`,
-  `light_cues`, `music_of`, `objects_named`, `weather_of`, `DraftOptions`, `StoryDraft`,
-  `draft_story`, `report_markdown`, `story_yaml`. Additive: no shared code changed beyond the CLI,
-  `jsonout` and the MCP server.
-- **Left for later** (single curly quotes and described speakers: §105.8): a described
-  speaker's pronouns (`The mayor stood up. "...," she announced.`) still go to a named one; places are
-  placeholders (no map built from the story); characters stand from the scene's start unless the
-  story brings them in; more than four characters in a scene are not placed.
+  [--narrator VOICE] [--seed S] [--force] [--json] [--audio]`; MCP `story_draft` (`input_path` or
+  `story_text`); user docs CONFIG "A story in prose". Writes `video.yaml`
+  (`plan_yaml.commented_yaml` / `write_project`) and `story_draft.md`; `--json`
+  (`jsonout.story_document`): paths, report, cast, scenes, every line with `speaker`,
+  `confidence`, `method`. Never calls a model.
+- **Reading** (`story_text.py`, no manim): scenes at headings, break lines and time cues; quotes
+  `"…"`, `“…”`, `«…»`, and single curly quotes when there are no double ones (`quote_pattern`).
+  Characters from tags, `TITLES`, name lists, `FAMILY`, repeated subjects, `PERSON_NOUNS`
+  (`Character.described`). First person: ≥ 3 first-person words outside quotes and one per 100
+  words. Each quote gets a speaker with a confidence and method (tag 0.95–0.75, action beat 0.6,
+  address by name 0.55, alternation 0.5, last mentioned 0.3, narrator 0.1). Narration beats ≤
+  `MAX_BEAT_WORDS` 25; moves from `MOVE_VERBS`.
+- **Places** (`story_places.py`): `PLACES` (eleven ready iso places with stand spots, walk goals, a
+  `<place>_night` set, free cells for `OBJECT_WORDS` objects — numbered when the kind exists — and a
+  flat set), chosen by keyword counts (tie: previous scene). Light from `LIGHT_WORDS` / clock times
+  (later cues → ≤ 2 `time_of_day` actions outdoors), weather words, music by `MUSIC_WORDS`,
+  `DRAFT_AMBIENT` outdoors.
+- **Draft** (`story_draft.py`): title card (`card_mood` / `CARD_LOOKS`), scenes, end card; ≤ 4
+  characters per scene, `enter` / `exit` from verbs, dialogue with emotion, close-ups and
+  two-shots; voices via `screenplay.assign_voices` (narrator `bf_emma` or `--narrator`; first person
+  shares the protagonist's voice). `auto_direct: true`; speakers under 0.6 get `# TODO:`. `--audio`:
+  §111.
 
 ### 105.6 Shorts suggestions (Step 273)
 
 - **Command**: `vidgen shorts suggest [PROJECT] [--count 3] [--min 30] [--max 60] [--teaser]
-  [--spoilers] [--end-card TEXT] [--write] [--out shorts.yaml] [--json]`; MCP tool
-  `shorts_suggest`. A subcommand group like `story draft`. Never calls a model.
-- **Timing** (`shorts_suggest.timed_beats`): `VideoPlan` of the base config (in a
-  `project_session`, so scene types' `outro` count): each narrated beat's start in the film and its
-  window (to the next beat's start; the last to the narration's end), the MP3's length when there
-  is one, else words / `narration.words_per_second` (as the silent storyboard). Silent scenes
-  (cards) break runs. A cut's length = beats + each scene entry's `outro` + the end card (3 s;
-  teaser card 2.5 s); measured on the sample: 47.2 s planned vs 46.8 s of the variant's own plan
-  (crossfades overlap).
-- **Windows**: every run of whole beats in one run of narrated scenes, `min`..`max` long; not
-  opening on an `overlap` / `interrupt` beat; no kept beat whose action waits `until` a beat outside.
-- **Score** (`score_window`, parts kept for the report): dialogue share of time × 6, questions ×
-  1.5 and exclamations × 1 (spoken ones; narration's at half; capped 3), emotional / action words
-  (`EMOTION_WORDS` stems) and beat emotions × 0.6 (cap 8), beats with move actions × 0.75 (cap 4),
-  variety (scenes − 1, 0.75 per speaker, 0.5 per shot; cap 4), start (+1 a scene's start; −1.5 a
-  narration opening on a leaning word or a line answering one left out), end (+2 a strong last
-  line: spoken `!` / `?` or ≤ 8 words; +1 a scene's end), length −0.1 per second from 45,
-  spoiler −4 for a window holding the ending (beats in the last 15 % of the narration, and the last
-  beat) unless `--spoilers`. Greedy pick by score; at most 25 % overlap with a picked window.
-- **Hook** (`hook_line`, `shorten`): sentences of the window that are questions (3, +1 spoken),
-  exclamations (2, +1 spoken) or short emotional spoken lines (1.5); the window's first line −1.5
-  (heard at once anyway); shortened to ≤ 6 words (the sentence, else a clause split at `, ; : —`,
-  a question's last clause first; leading fillers dropped); else `HOOK_TEMPLATES` by the window's
-  words, else "Wait for the ending.".
-- **Variants** (`short_variant`): `format` 1080×1920, `preview` 360×640, `shorts: true` (or
-  `{max_seconds}` over 60), `audio {target_lufs: -14, bitrate: 256k}`, overlays: the full video's
-  `watermark` + karaoke captions (`speakers: color` with named voices), `cut`: one entry per scene
-  (whole: its id; a run: `{from, to}` / `{from}`; the teaser's scattered beats: a list),
-  `cut.beats` with `{zoom: speakers, at: 0, cut: true, hold: true}` prepended to the first kept
-  beat's own actions on every stage scene (no `hold` when a framed character moves later), hook,
-  end card. Notes: moves / light changes of left-out beats before a mid-scene start, framing
-  without hold. Names `short1..`, `teaser`, skipping the config file's own variant names.
-- **Teaser** (`teaser_beats`): beats ≤ 6 s, not in the ending, ranked by `beat_score`, ≤ 2 per
-  scene, ≤ 15 s in all, in film order; end card `type: card` (the title big, the line under it).
-- **Writing** (`write_suggestions`): decision — a separate file included by the config rather
-  than `variants:` inside it: the generated file can be replaced on every run while the config's
-  text and comments stay as written. `includes.INCLUDABLE_KEYS` gains `variants` (merged by name
-  under the config's own; the config's win). The config gets `shorts.yaml` added to `include:`
-  by a one-line text edit (flow, scalar or block list; checked by loading it back; a flow-style
-  YAML or JSON config is written again whole); `<config>.bak` and `shorts.yaml.bak` backups. The
-  CLI validates the project with its variants after writing (problems: exit 1).
-- **Public**: `vidgen.api` adds `TimedBeat`, `ShortsWindow` (`Window`), `Suggestions`,
-  `timed_beats`, `suggest_shorts`, `write_suggestions`, `shorts_yaml`; JSON document `shorts`
-  (`jsonout.shorts_document`). Additive; `INCLUDABLE_KEYS` accepts one key more (its error message
-  lists it). Fix found on the way: a story draft's added object of a kind the place already names
-  (`lamp` by the harbour's street lamp) gets a numbered name (`story_places.StoryPlace.iso`).
-- **Left for later**: no restaging beyond the opening zoom and the light (§105.8; shots per beat,
-  characters' starting spots after left-out moves are notes for the author / an agent); a window never jumps over beats (only the teaser does); hooks are taken from the text,
-  so a narrator's question can win when the dialogue has none; scores use word lists in English.
+  [--spoilers] [--end-card TEXT] [--write] [--out shorts.yaml] [--json]`; MCP `shorts_suggest`;
+  user docs CONFIG "Suggested Shorts". Never calls a model.
+- **Timing** (`shorts_suggest.timed_beats`): `VideoPlan` of the base config in a
+  `project_session`; beat lengths from MP3s, else words / `narration.words_per_second`; silent
+  scenes break runs; a cut's length adds scene `outro`s and the end card (3 s; teaser 2.5 s).
+- **Windows**: runs of whole beats in one run of narrated scenes, `min`..`max` long, not opening on
+  an `overlap` / `interrupt` beat, no kept beat waiting `until` a left-out one. Scored by
+  `score_window` (dialogue, questions, emotion words `EMOTION_WORDS`, moves, variety, start / end
+  strength, length over 45 s, spoiler −4 for the last 15 % unless `--spoilers`; parts kept for the
+  report); greedy, ≤ 25 % overlap. Hook: `hook_line` / `shorten` (≤ 6 words), else
+  `HOOK_TEMPLATES`, else "Wait for the ending.". Teaser (`teaser_beats`): beats ≤ 6 s, ≤ 2 per
+  scene, ≤ 15 s, film order.
+- **Variants** (`short_variant`): 1080×1920, preview 360×640, `shorts: true`, `audio {target_lufs:
+  -14, bitrate: 256k}`, watermark + karaoke captions, a `cut` per scene, `{zoom: speakers, at: 0,
+  cut: true, hold: true}` prepended to the first kept beat of each stage scene (no `hold` when a
+  framed character moves later); a mid-scene start first restates the light left by skipped beats
+  (`RESTATE_SECONDS` 0.1). Names `short1..`, `teaser`, skipping existing ones.
+- **Writing** (`write_suggestions`): a separate included file, not `variants:` in the config, so it
+  can be regenerated while the config's text stays. `includes.INCLUDABLE_KEYS` has `variants`
+  (merged by name; the config's win). `shorts.yaml` is added to `include:` by a one-line text edit
+  (verified by reloading; flow-style YAML or JSON is rewritten whole); backups `<config>.bak`,
+  `shorts.yaml.bak`; then validated (problems: exit 1). JSON document `shorts`
+  (`jsonout.shorts_document`).
 
 ### 105.7 Ambient life (Step 274)
 
-- **Config**: the stage's `ambient` (iso only): `{walkers, birds, cat, ducks, butterflies,
-  fireflies, flies, muted, seed, auto}`; counts or `true` (`AMBIENT_DEFAULTS`: 3, 4, 1, 2, 3, 10,
-  1; at most `AMBIENT_MAX`); `ambient: true` is `{auto: true}`: every kind that suits the place
-  besides those given. Checks (`_check_ambient`): not on a flat stage (its `birds` is a flock),
-  indoors only `cat` / `flies` (`INDOOR_KINDS`), `ducks` need water; did-you-mean on keys (the
-  config's unknown-key message). A stage key, not under `iso:` (as `fog`, `wind`), so a story
-  draft or a variant can set it per scene. Keys chosen over the brief's sketch: `ducks`, `flies`
-  added; `muted` defaults to true (background extras should not draw the eye).
-- **Rules** (`world/iso_ambient.py`, no manim): `ambient_cells` — `walk` (floor, path, blocks;
-  not `avoid`, not `roads`), `rest` (walk cells outside `clear`: where one may stop), `paths`,
-  `water`, `air` (nothing over `LOW_OBJECT` 1.2 tiles), `blooms` (flowers, bush, plant), `green`
-  (and trees), the free spots. The stage avoids `around()` (8 neighbours and the three cells two
-  in front on the picture) the main characters' spots, the spots and cells of the scene's moves,
-  small things' spots, the objects the actions name, seats and beds and driven vehicles; it keeps
-  `clear` (radius 2) round the characters' cells (passing allowed: one stopping right behind a
-  character showed over its shoulders on the sheet); `roads` are the path cells when a car
-  drives, a train's track. An `AmbientPlan` per creature (seed `ambient_seed(seed, name)`) makes
-  its `AmbientMove`s lazily as far as asked (`at(t)` asks in any order: the same poses): walkers
-  stroll between paths and spots (`cell_route`, Dijkstra, paths cheaper, steps of one) at
-  0.95 tiles/s and stand 1–4 s looking round; the cat walks within 5 cells and sits / grooms;
-  ducks glide on water and dip; birds peck, hop (0.45 tiles, an arc) and every 6–14 s fly to a
-  cell 4+ away (an arc over what stands between; no flight past a tower over 7.5 tiles) or out of
-  the place beyond a picture edge (faded), away 3–7 s, then back from an edge; butterflies flutter
-  (a wavering line) between bloom cells and rest on them; flies dart about a room; fireflies
-  hover about a point near green (sum of sines) and blink (`glow`). Several of a kind start
-  spread across the picture.
-- **Drawn** (`cartoon/iso_ambient.py`): `IsoCritter`, a body of the place like a driven vehicle:
-  three fixed image slots (picture, `PoolTile`, `GlowTile`) whose pixels are a sprite of simple
-  iso shapes drawn upright in the picture's plane (`_b`), made once per (pose, frame, facing,
-  level of detail) and faded in `ALPHA_STEPS`; an empty slot gets no area (the tile drawing skips
-  it). Walkers (`critter_look`: shirt, trousers, skin, hair by seed; `muted`: x0.86, colours 45 %
-  to grey), birds (wings in flight), a cat (walk frames, sit with a swishing tail, groom), ducks
-  (a ripple ring), butterflies (front view, wings beating), a fly, fireflies (a glowing speck in
-  a halo drawn as a pool of light). `box()` is clipped to its cell (as a character's); `region`
-  samples the plan (`PLAN_STEP`) for what Manim redraws.
-- **Stage** (`scenes/stage_ambient.py`, `IsoAmbience`): made at the end of `_iso_scenery` (none
-  in a draft), added with the set (`iso_ambient_shown`), in `_iso_bodies` (draw order, fog bands,
-  swaying trees layer them), in `story_things` (living: updated each frame), never targets.
-  `seen(kind, now)`: hidden past a camera zoom of 1.45–1.9 over the scene's wide view (close
-  shots, two-shots, a follow), butterflies `1 - rise(darkness, 0.2, 0.5)`, fireflies
-  `rise(darkness, 0.3, 0.7)` (they follow `time_of_day`); butterflies are left out of a scene
-  that stays dark, fireflies out of one that stays light. A creature's front picture is found per
-  (cell, height band) (`_iso_body_over`, `IsoScenery.front(over=)`), drawn only over the
-  creature's sprite (`IsoTiles.clip`, `iso_clip` in `draw_tile`), and swapped into what Manim
-  draws without sorting it all again (`_iso_splice_front`): creatures change cells often.
-- **Cost** (854x480 preview, 15 fps, sample `s274/proj`; without → with): a village with 3
-  walkers, 4 birds, a cat, 2 ducks, 3 butterflies 7.5 → 11.6 s (13.9 s of video); a park at dusk
-  with 12 fireflies, a cat 10.4 → 14.5 s; a street with 6 walkers, 3 birds 8.2 → 11.7 s. Before
-  the clipping and the splicing the same scenes took 13.6 / 14.2 / 15.9 s.
-- **Checked by eye** (`/home/claude/work/scratch/s274/sheet.png`): village by day (walkers along
-  the path, birds, a duck on the pond, a cat by a house, a butterfly on the flowers), motion
-  frames, the close-up without them, a park from sunset to night (fireflies coming out, a cat),
-  a city street with six walkers passing the towers and lamps (hidden behind them), the two-shot
-  without them, 9:16 of all three. Lint: no new issues (only the sample cast's look-alike).
-- **Public**: `vidgen.api` adds `AMBIENT_DEFAULTS`, `AMBIENT_KEYS`, `AMBIENT_KINDS`,
-  `AMBIENT_MAX`, `INDOOR_KINDS`, `AmbientCells`, `AmbientMove`, `AmbientPlan`, `AmbientPose`,
-  `ambient_cells`, `ambient_counts`, `ambient_seed`, `around`, `cell_route`, `plan_ambient`,
-  `CritterLook`, `IsoCritter`, `critter_look`, `critter_shapes`; `IsoScenery.front(over=)`,
-  `IsoTiles.clip`. Additive: Phase Q baseline 31/31 and iso-story `night` / `rowans_room` (25
-  stills) identical.
-- **Left for later**: creatures do not react to the characters (birds do not flee a walker) nor
-  avoid each other (moving vehicles' roads, tracks and boat lanes they do, §105.8); they wait in a
-  cell only away from where characters stood at the start or walk to (not along their walks);
-  no fish ripples; no sounds of their own (the birdsong bed plays); a creature is a fixed sprite
-  per pose (no snow on it, not mirrored in puddles).
+- **Config**: stage key `ambient` (iso only; a stage key like `fog`): `{walkers, birds, cat, ducks,
+  butterflies, fireflies, flies, muted, seed, auto}`; counts or `true` (`AMBIENT_DEFAULTS` 3, 4, 1,
+  2, 3, 10, 1; max `AMBIENT_MAX`); `ambient: true` = `{auto: true}`. `_check_ambient`: not flat,
+  indoors only `INDOOR_KINDS` (`cat`, `flies`), `ducks` need water. `muted` defaults to true.
+- **Rules** (`world/iso_ambient.py`, no manim): `ambient_cells`; creatures avoid `around()` the main
+  characters' spots, move targets, named objects, seats, beds, driven vehicles, a `clear` radius 2
+  round characters, `roads` / tracks and a sailing boat's lanes (`_ambient_lanes`). An
+  `AmbientPlan` per creature (seed `ambient_seed(seed, name)`) builds `AmbientMove`s lazily; `at(t)`
+  in any order gives the same poses (deterministic). Walkers route with `cell_route`.
+- **Drawn** (`cartoon/iso_ambient.py`): `IsoCritter`, a place body with three fixed image slots
+  (picture, `PoolTile`, `GlowTile`), a sprite per (pose, frame, facing, detail); `critter_look` by
+  seed (`muted`: colours `MUTED_SHARE` 0.35 to grey); walkers and the cat take lamplight.
+- **Stage** (`scenes/stage_ambient.py`, `IsoAmbience`): made at the end of `_iso_scenery` (none in
+  a draft), in `_iso_bodies` and `story_things`, never action targets. Hidden past a zoom of
+  1.45–1.9 over the wide view; butterflies fade with darkness, fireflies appear with it. Front
+  pictures per (cell, height band) (`IsoScenery.front(over=)`), clipped to the sprite
+  (`IsoTiles.clip`) and spliced in without a full re-sort (`_iso_splice_front`).
+- **Limits**: creatures do not react to characters or each other; no own sounds.
 
 ### 105.8 Review of Phase AD (Step 275)
 
-Fixes from a look at each step's sheet; all additive, Phase Q baseline 31/31 and iso-story `night`
-/ `rowans_room` (25 stills) identical.
-
-- **Vehicles**: the headlights' pool was ahead in the world for all four headings but, driving away
-  up the picture, the car hid most of it (it read as beside the car): there it lies further on and
-  wider (`car_shapes(reverse=True)`: 1.0 tile past the nose, radius 0.75; a parked car unchanged).
-  Corners: in the middle half of a corner's leg (`VehicleRoute.turning`) a car or a boat is drawn
-  turned 45° (`turning_shapes`: the along-row sprite's shapes turned about its middle; at 45° one
-  of the faces drawn shows whole and the other edge-on, so no gaps), nose-on, tail-on or side-on
-  by the corner; U-turns still flip. The train behind a rocket's tower was checked: the track was
-  behind the pad, so the tower drawn over it is right (and a train in front of a rocket and a
-  tower is drawn over them).
-- **Seats**: `IsoSeat.tucked` (a school desk): the sitter's legs fold away (`iso_tucked`, as in
-  bed); seen through the chair's back they showed over the desk's front.
-- **Sky**: the sun did stay behind the set (it reads as in front when it set beside a
-  character's feet, fading); with a ground band (`_start_sky_path(ground)`) a sky body has a
-  `sink` (its height on the path): whole down to the horizon, it sinks behind the ground and is
-  gone `sink` under it. `time_of_day` from a light past dusk already (a rainy iso day's overcast,
-  §89.12) to a darker one switches the lights on at `DARK_SWITCH_SHARE` 0.25 of the fade (they
-  never switched: no dusk was crossed).
-- **Wind**: an iso lean is `ISO_SWAY_SHARE` 1.0 × degrees × felt force ^ `ISO_SWAY_POWER` 0.65
-  (was 0.55 × the felt force: a windy day bent a tree ~4°, now ~10°; a gale ~16°, was ~13°);
-  `ISO_SWINGS` (balloon bunches, `Sway` 14°) turn whole about their foot (`swing_pixels`,
-  premultiplied PIL rotation) instead of the shear.
-- **Story draft**: `quote_pattern` — single curly quotes are speech in a text without double
-  quotes or guillemets (an opening `‘` not inside a word, a `’` followed by a letter is an
-  apostrophe); `PERSON_NOUNS` — `said the old man` / `the girl asked` make a character
-  (`old_man`, `Character.described`, kind from the noun; `a girl called Rosa` names, no speech);
-  a line calling a character by name (start or end, `_addressed`) is the other one's of the
-  exchange when no tag or a guess under 0.6 says otherwise (0.55). `card_mood` / `CARD_LOOKS`:
-  the title card is `night` (dark, neon letters: opening or mostly at night, a mystery or neon
-  bed), `bedtime`, `cosy` (warm burst, two or more `COSY_WORDS`) or `quiet`; `DRAFT_AMBIENT`: a
-  modest `ambient` on the outdoor places (fireflies at night).
-- **Shorts**: a mid-scene start restates the light the left-out beats left (their last
-  `time_of_day` / `light` to a preset, `at: 0`, `RESTATE_SECONDS` 0.1) before the opening zoom.
-  Tried on a 3:54 drafted story (`s275/clock`, five scenes): the picks are the storm's dialogue,
-  the shop's opening and the lesson; the ending scene is held back as a spoiler.
-- **Ambient**: walkers get a face of dots (an eye under the hair's edge, a smile's end) and
-  `MUTED_SHARE` 0.35 (was 0.45); walkers and the cat take lamplight (`LampLit` by their feet,
-  `_iso_lamp_at`); ducks keep off a sailing boat's lanes (`_ambient_lanes`: its routes replayed).
-- **Schema** (from Step 251): an optional boolean `on` (`bool | None`) takes the YAML 1.1 `"true"`
-  key too (`test_phase_q_review` failed since then).
-- **Cost** (854x480 preview, 15 fps, `s275/wx`): a harbour at night with a car and a boat moving
-  and `time_of_day` 19.2 s for 15 s of video; with rain and puddles, a breeze and ten creatures
-  31.1 s (+62 %; most of it the light's fade grading every picture and the rain).
-- **Public**: `vidgen.api` adds `turning_shapes`, `ISO_SWINGS`, `swing_pixels`, `PERSON_NOUNS`,
-  `quote_pattern`, `CARD_LOOKS`, `DRAFT_AMBIENT`, `card_mood`; `VehicleRoute.turning`,
-  `IsoSeat.tucked`, `SkyBody(sink=)`.
+Folded into §105.1–§105.7. Schema rule: an optional boolean (`bool | None`, e.g. `on`) also accepts
+the YAML 1.1 `"true"` key.
 
 ## 106. A fixed-scale wide view for iso places (Step 277)
 
-The whole-place wide view (§89.13, §100.6) fits the place's bounding box, so outdoors about half
-of the frame is background and a bigger map only pulls the camera back; a number is relative to
-the whole map and stops at 2.5 (9:16 needs ~5). The owner's goal: ground to the frame's edges by
-using bigger maps, not by zooming in on the action.
+The whole-place wide views (§89.13, §100.6) fit the place's bounding box; `wide: fixed` fixes the
+character's share of the frame instead, so a bigger map fills the frame with ground.
 
-- **Setting**: `StageIso.wide` adds `fixed` and `IsoFixedWide` (`{tiles: N}`, 2–80).
-  `StageIso.fixed`, `wide_fit()` (`"fixed"` for both) and `view_tiles(fw, fh, character_size)`.
-  `character_size` is accepted on a stage with an iso place only with `wide: fixed`
-  (`_iso_wide_given`; with `{tiles}` or another wide view it is refused, the message naming
-  `wide: fixed`); `expand_character_size` passes the video's to iso scenes with `wide: fixed`.
-- **Scale** (`iso_stage`): `ISO_FIXED_SHARES` small 0.14, medium 0.20, large 0.28 — a character
-  (`ISO_CHARACTER_HEIGHT` × `ISO_RISE` tile widths) as a share of the frame's *height* in both
-  formats; `fixed_tiles(fw, fh, size)` the tile widths across the frame (16:9 medium 10.89, 9:16
-  3.44). The view is `tiles × unit` wide, never wider than the whole place's fit (a smaller place
-  shows whole, the diorama).
-- **On the ground**: a view of half size `hu` x `hv` (tile widths) centred on picture point
-  (u, v) lies on the ground (`z` 0) iff the ground point under its centre, `x = 2v + u`,
-  `y = 2v − u`, is `fixed_reach = hu + 2hv` cells from every map edge. `on_ground` clamps x and y
-  independently (an axis too short: its middle), so `fixed_fill_size = ceil(2 · reach)`:
-  16:9 34 / 24 / 17, 9:16 23 / 16 / 12 (small / medium / large); measured with magenta stills
-  (s277): background 0 % from those sizes, one size smaller leaves thin corners (0.1–2.5 %).
-  Non-square maps: the shorter side counts.
-- **Centring** (`fixed_view`): the middle of the bodies' padded picture bounds (the place's middle
-  without any), `on_ground`, then moved as little as keeps the bodies in view (`ISO_MARGIN`,
-  `ISO_WIDE_BODY_ROOM`: a character by an edge wins over the ground), then inside the frame.
-  `wide_view(..., fit="fixed", tiles=)` dispatches to it; `ground_view_center` is the same move
-  for any view in Manim units. The other `fit`s are unchanged.
-- **Moves over it**: `Stage.zoom_base()` = the fixed view's magnification over the whole place
-  (1 otherwise); `Zoom` multiplies `scale`, its automatic cap (`max_scale`) and its "already
-  fills" test by it. Shots: `frame_shot` / `shot_view` take `max_scale` (`MAX_SHOT_SCALE` ×
-  base on an iso place); `follow_width(most=)` likewise — on big maps the base passes 8 (9:16
-  32x32 large ~14) and a close-up would otherwise be wider than the wide view. `MAX_DETAIL` 3 → 5
-  so those zooms stay sharp (levels 4–5 are only reached past zoom ~11; older renders unchanged).
-  `SmoothFollow(settle=)` moves the target centre (`Stage._follow_settle` → `_iso_on_ground`;
-  feet kept in view too), and `_MoveThenFollow` applies it within `FOLLOW_MAX_OFFSET` of the
-  character; `pan_point` moves onto the ground keeping the target in the middle half of the view.
-- **Lint `iso_ground`** (still rule, default warning): `IsoStaging.layout_keys` adds `iso_ground`
-  on a scene's first beat (`view` fixed | tiles | auto | fill | number, `place`, `map`, `size`,
-  `tiles`, `need`); a fixed view on a map below `need` → "this 12x12 place shows the background
-  around it in 9:16 at character_size medium; a map of at least 16x16 fills the frame (or give
-  the stage a sky background)"; outdoor `auto` / `fill` → an info hint naming `wide: fixed` and
-  the size (`IsoGroundRule.hint`).
-- **Compatibility**: without `wide: fixed` the framing, shots and moves are as before (Phase Q
-  baseline 31/31, iso-story `night` / `rowans_room` 25 stills identical).
-- **Public**: `vidgen.api` adds `ISO_FIXED_SHARES`, `fixed_tiles`, `fixed_reach`,
-  `fixed_fill_size`, `fixed_view`, `on_ground`, `ground_view_center`, `MAX_SHOT_SCALE`,
-  `FOLLOW_MAX_OFFSET`; `wide_view(tiles=)`, `frame_shot` / `shot_view(max_scale=)`,
-  `follow_width(most=)`, `SmoothFollow(settle=)`.
+- **Setting**: `StageIso.wide` takes `fixed` and `IsoFixedWide` (`{tiles: N}`, 2–80);
+  `StageIso.fixed`, `wide_fit()` (`"fixed"` for both), `view_tiles(fw, fh, character_size)`.
+  `character_size` on an iso stage is accepted only with `wide: fixed` (`_iso_wide_given`; refused
+  otherwise, naming `wide: fixed`); `expand_character_size` passes the video's to such scenes.
+- **Scale** (`iso_stage`): `ISO_FIXED_SHARES` small 0.14, medium 0.20, large 0.28 — a character's
+  height as a share of the frame's height in both formats; `fixed_tiles(fw, fh, size)` = tile widths
+  across. The view is never wider than the whole place's fit (a small place shows whole).
+- **On the ground**: a view of half size `hu` × `hv` centred on picture point (u, v) shows only
+  ground iff the ground point under its centre (`x = 2v + u`, `y = 2v − u`) is `fixed_reach = hu +
+  2hv` cells from every map edge. `on_ground` clamps x and y independently (an axis too short: its
+  middle); `fixed_fill_size = ceil(2 · reach)` (the shorter side of a non-square map counts).
+- **Centring** (`fixed_view`): the middle of the bodies' padded bounds (else the place's middle),
+  `on_ground`, then moved as little as keeps the bodies in view (`ISO_MARGIN`,
+  `ISO_WIDE_BODY_ROOM`: bodies win over the ground), then inside the frame. `wide_view(...,
+  fit="fixed", tiles=)` dispatches to it; `ground_view_center` is the same move for any view.
+- **Moves over it**: `Stage.zoom_base()` = the fixed view's magnification over the whole place (1
+  otherwise); `Zoom` multiplies `scale`, its cap (`max_scale`) and its "already fills" test by it;
+  `frame_shot` / `shot_view(max_scale=)` (`MAX_SHOT_SCALE` × base on iso), `follow_width(most=)`
+  likewise. `MAX_DETAIL` 5. `SmoothFollow(settle=)` keeps the view on the ground
+  (`Stage._follow_settle` → `_iso_on_ground`, feet in view), applied by `_MoveThenFollow` within
+  `FOLLOW_MAX_OFFSET`; `pan_point` moves onto the ground keeping the target in the middle half.
+- **Lint `iso_ground`** (still rule, warning): `IsoStaging.layout_keys` adds `iso_ground` on a
+  scene's first beat (`view`, `place`, `map`, `size`, `tiles`, `need`); a fixed view on a map below
+  `need` warns with the size that fills the frame; outdoor `auto` / `fill` gives an info hint naming
+  `wide: fixed` (`IsoGroundRule.hint`).
+- Without `wide: fixed`, framing, shots and moves are unchanged.
 
 ## 107. A retro-future kit (Phase AE, Step 278)
 
-Phase AE (Steps 278–281) makes a second, brighter private story cartoon in a 1950s-60s "world of
-tomorrow" look (pastels and chrome, googie buildings, saucers, a monorail, tape-reel computers).
-Step 278 is the generic kit; docs stay lean (one list in CONFIG and the guide, a guide bullet).
+A 1950s–60s "world of tomorrow" kit; user list: CONFIG "Other objects".
 
-- **Style** (`StageIso.style: plain | retro`, default plain): the stage merges
-  `STYLE_COLORS[style]` under the place's `colors` (retro: mint `grass`, terracotta `earth`, cream
-  `path`, turquoise `water`, cream `floor` / `tiles`, turquoise `wall`, coral `cut`),
-  `STYLE_TEXTURES[style]` under its `textures`, and takes objects' default colours from
-  `object_colors(kind, style)` (`STYLE_OBJECT_COLORS`: houses, trees, lamps, benches, signs, cars,
-  towers, office furniture... in turquoise, coral, mustard, mint and cream; a placing's `color` /
-  `detail` win). Traffic in a retro place defaults to cream saucers. Chosen over a theme preset: a
-  place's look is the iso place's business (themes colour text and charts), and one key reads as
-  what the author means.
-- **Textures** (`StageIso.textures: {grass | path | floor | tiles: texture}`, `TEXTURES`:
-  `plain`, `tufts`, `lawn` (a darker stripe on every other row, a daisy now and then), `stones`,
-  `checker` (two darker quarters per cell, `CHECKER_TONE`), `terrazzo` (seeded chips, softened
-  into the floor), `boards`, `tiles`). `IsoColors.textures` / `texture(surface)`; a surface's own
-  texture (`DEFAULT_TEXTURES`) takes the old code path (pictures identical), any other one draws
-  in `_texture` and drops the cell parity shading. Raised grass and path blocks get them too.
-- **Blue hour** (`light: blue_hour`, `LIGHT_PRESETS` + `PRESET_LIGHTS`): tint `#4A66C8` at 0.58, a
-  cool glow (0.035, 0.045, 0.09) lifting the blacks to indigo, stars 0.7, shadows 0.6, and
-  `PRESET_SATURATION` 1.3 (`LightGrade.saturation` above 1 boosts; `grade_rgbas` clips then).
-  `darkness` 0.6 (past `DUSK_DARK`): pools, lamplight and glows show. Its window sky, sun / moon
-  places, crickets (`ambience.NIGHT`) and a twilight on the way to it (`day_stages`) follow.
-  Measured on the sample's stills (preview, mean Rec. 709 luma / Hasler–Süsstrunk colourfulness):
-  street 141 / 69 vs `night` 97 / 52 (day 185 / 61); office 145 / 49 vs night 93 / 34.
-- **Objects** (`cartoon/iso_retro.py`, `MORE_MODULES`): `googie_building` (3 x 3, 4.9: glass
-  shop front and door, slot windows, clerestory glass under a roof swept up to the front right on
-  a V of pylons, a mast with a boomerang sign board and a starburst; on: glass, sign and star
-  glow, a pool), `retro_tower` (2 x 2, `TALL_KINDS` 4–30, on by default: a round shaft with
-  ribbon windows (seeded lit share), fins, a saucer deck with portholes, a cupola, a spire and an
-  atom ball), `starburst_sign`, `ray_lamp` (lamplight, auto light), `atomic_sculpture` (moving:
-  electrons orbit while on), `monorail` (a beam on T pylons across its footprint; `size`
-  lengthens it), `tube_computer` (2 x 1; moving: reels turn, bulbs blink; vacuum tubes glow),
-  `sunburst_clock` (`WALL_KINDS`, `CLOCK_KINDS` with `wall_clock`: `time`), `tv_console` (moving:
-  `kind: wave` an oscilloscope wave, `face` a robot face talking in a wave: `CONSOLE_PICTURES`),
-  `retro_desk` (2 x 1, `top`; a kidney top on hairpin legs, a terminal glowing green while on, a
-  dial telephone), `hedge` and `planter` (across their footprint, `size`). `ISO_USES` gains the
-  desk (type), the tube computer and the TV console (reach).
+- **Style** (`StageIso.style: plain | retro`, default plain): merges `STYLE_COLORS[style]` under the
+  place's `colors`, `STYLE_TEXTURES[style]` under its `textures`, and takes objects' default
+  colours from `object_colors(kind, style)` (`STYLE_OBJECT_COLORS`; a placing's `color` / `detail`
+  win). Retro traffic defaults to cream saucers. An iso key, not a theme preset (themes colour text
+  and charts).
+- **Textures** (`StageIso.textures: {grass | path | floor | tiles: texture}`, `TEXTURES`,
+  `TEXTURED_SURFACES`; `IsoColors.textures` / `texture(surface)`): a surface's own texture
+  (`DEFAULT_TEXTURES`) takes the plain code path (identical pictures); any other draws in `_texture`
+  without the cell parity shading.
+- **Objects** (`cartoon/iso_retro.py` via `MORE_MODULES`): `retro_tower` is in `TALL_KINDS` (4–30,
+  on by default); `sunburst_clock` in `WALL_KINDS` and `CLOCK_KINDS` (with `wall_clock`: `time`);
+  `tv_console` `kind` from `CONSOLE_PICTURES`; `monorail`, `hedge`, `planter` take `size`. `ISO_USES`
+  has `retro_desk` (`type`), `tube_computer`, `tv_console` (`reach`).
 - **Rocket car** (`CAR_STYLES`: `car` `kind: sedan | rocket`): `car_shapes` hands a rocket to
-  `rocket_car_shapes` (pointed nose, chrome stripe, bubble canopy, tail fins, a jet ring;
-  headlight pool ahead as a sedan's). Driven too: `IsoVehicle(features=)`,
-  `vehicle_shapes(features=)`, `frame_item(features=)`.
-- **Traffic shapes** (`IsoTrafficLane.shape: capsule | saucer | monorail`, `hull`;
-  `PodLane.shape` / `hull`, `POD_SHAPES`, `POD_RETRO_HULL`): the same six parts per pod drawn as a
-  saucer (a wide flat hull, a dome with its rider, a ring of light, a glow below) or a monorail
-  train (a long round-ended hull along the lane, a band of windows, a nose and a headlight, no
-  trail). A monorail lane at about 3.15 over a `monorail` beam's row rides on it (not hidden by
-  what stands in front; pods never are, but tall objects).
-- **Looks** (`config.py`, `clothes.py`, `generator.py`): `outfit: suit` (jacket, lapels, shirt
-  V in `trim`, tie in `accessory`, buttons, pocket square), `lab_coat` (in `SKIRTED_OUTFITS`: an
-  open coat with tails over a shirt and trousers in `trim`, pockets, a pen), `jumpsuit` (wide
-  collar, zip, belt with a buckle, badge); `hair: pompadour` (the cap's radius swells over the
-  brow, a high hairline), `bob` (to the chin, flipped out); `accessories: fedora` (pinched crown,
-  band in `trim`, snap brim), `pillbox` (both in `TOP_OF_HEAD`). `random_cast` keeps its own lists
-  (casts unchanged).
-- **Checked by eye** (`/home/claude/work/scratch/s278/sheet.png`, sample `s278/proj`): a 30 x 30
-  retro street (`wide: fixed`, medium) by day, at blue hour and at plain night, a two-shot of each;
-  a 24 x 24 office and a lab by day and at blue hour (office at night too); 9:16 of the street and
-  the office; close-ups of the twelve objects and the rocket car off and lit.
-- **Cost** (854 x 480 preview, 15 fps): the street with ~60 objects, three traffic lanes and four
-  walkers: 6.2 s of video in 19.5 s by day, 64.5 s at night, 92 s at blue hour (its lights and
-  pools; the saturation adds to every grade).
-- **Public**: `vidgen.api` adds `CAR_STYLES`, `CLOCK_KINDS`, `CONSOLE_PICTURES`, `TALL_KINDS`,
-  `STYLE_OBJECT_COLORS`, `object_colors`, `STYLE_COLORS`, `STYLE_TEXTURES`, `TEXTURED_SURFACES`,
-  `TEXTURES`, `POD_HULL`, `POD_RETRO_HULL`, `POD_SHAPES`; `IsoColors.textures` / `texture()`,
-  `PodLane.shape` / `hull`, `IsoVehicle(features=)`, `vehicle_shapes(features=)`,
-  `frame_item(features=)`; `PRESET_SATURATION`. Additive: the frame baseline 33/33 identical.
-- **Left for later**: the monorail train does not stop at stations or hide behind what stands in
-  front of it; no driven monorail car object; the retro ground lacks kerbs and road markings;
-  objects without a retro colour keep their own (lab machines); 9:16 previews at 270 x 480 draw
-  characters at `medium` with outlines so thick they read as silhouettes (use 540 x 960); blue
-  hour renders about 1.4x slower than night on lit places.
+  `rocket_car_shapes`; driven too (`IsoVehicle(features=)`, `vehicle_shapes(features=)`,
+  `frame_item(features=)`).
+- **Traffic shapes** (`IsoTrafficLane.shape: capsule | saucer | monorail`, `hull`; `PodLane.shape`
+  / `hull`, `POD_SHAPES`, `POD_RETRO_HULL`). A monorail lane at about 3.15 over a `monorail` beam's
+  row rides on it, never hidden.
+- **Looks**: outfits `suit`, `lab_coat` (`SKIRTED_OUTFITS`), `jumpsuit`; hair `pompadour`, `bob`;
+  accessories `fedora`, `pillbox` (`TOP_OF_HEAD`). `random_cast` keeps its own lists.
 
 ## 108. Crisp blue hour, friendly faces, rooms with walls (Step 279)
 
-Fixes from the review of the Step 278 sheet (`s278/sheet.png`), before the private test cut;
-additive (frame baseline 33/33 identical).
-
-- **Blue hour** (`PRESET_LIGHTS["blue_hour"]` `#3555B8` at 0.56, no glow; `PRESET_SATURATION` 1.6;
-  `PRESET_TONES` (gamma 1.2, contrast 1.3, vivid 1.15)): `LightGrade` gains `gamma` (a power on each
-  channel before the multiply: mid tones darker, whites kept), `contrast` (a stretch about
-  `CONTRAST_PIVOT` 0.35 after the multiply and glow) and `vivid` (saturation after it), `curved`;
-  `grade_rgbas` / `grade_pixels` share `_graded_colors` for them (a grade without them keeps the
-  old code path: every other light unchanged). The 278 grade lifted the blacks (glow) and tinted
-  0.58 towards lavender, so every colour converged on one luminance and hue (a filter). Chosen by
-  trying candidates on day stills (`s279/grade_try2.py`) and looking: more tint reads as a filter,
-  a contrast pivot at 0.5 reads as day, warm-heavy grades read as sunset. Measured (preview,
-  luma / colourfulness / luma std-dev): street 141 / 69 / 39 (278) → 130 / 88 / 46 (night 97 / 52 /
-  41); office 145 / 49 / 35 → 135 / 60 / 43 (night 94 / 34 / 26). `lifted` relaxes the curve and the
-  boosts with the fill light's share; `blend_grades`, `flash_grade`, `flashback_grade` carry them
-  (`dataclasses.replace`).
-- **Fill colour** (`Stage.fill_color`): `lifted(grade, share, toward)` lifts towards a multiply
-  (the colour's `tint_grade(..., 1).multiply`) instead of white; `mark_light_lift(..., toward)`,
-  `LIGHT_LIFT_TOWARD`, cached by (grade, share, toward).
-- **Faces** — the "goggles" were outlines, not the eyes: on a fixed wide view the characters are
-  built at the whole place's scale (zoom base ~3 on a 30 x 30 map) where their natural stroke is
-  below one pixel, so `one_pixel_stroke()` floored every outline to one pixel *of the whole place*,
-  which the wide view and a close-up then magnify (~18x: 25 px rims). `pixel_zoom(zoom)` (a context
-  in `cartoon/character.py`; `Stage.construct` wraps the scene in it with `zoom_base()` on an iso
-  place, 1 elsewhere) makes the floor one pixel of the fixed view. And `eyes: bright`
-  (`BRIGHT_EYE`: 0.36 x 0.46 of the eye radius, rim 0.3 of the outline, pupil 0.42 of the eye's width,
-  a catchlight 0.2 of the pupil's) for friendly close-ups.
+- **Blue hour** (`light: blue_hour` in `LIGHT_PRESETS` / `PRESET_LIGHTS`, `cartoon/lighting.py`):
+  tint `#3555B8` at 0.56, no glow, stars 0.7, shadows 0.6; `PRESET_SATURATION` 1.6; `PRESET_TONES`
+  (gamma 1.2, contrast 1.3, vivid 1.15). `LightGrade` has `saturation` (> 1 boosts; `grade_rgbas`
+  clips), `gamma` (per channel before the multiply), `contrast` (about `CONTRAST_PIVOT` 0.35 after
+  multiply and glow), `vivid` (after), `curved`; `grade_rgbas` / `grade_pixels` share
+  `_graded_colors` (a grade without them takes the plain path). Lifted blacks or a strong tint read
+  as a filter, a pivot at 0.5 as day. Its `darkness` is past `DUSK_DARK` (pools, lamplight, glows
+  show). `lifted`, `blend_grades`, `flash_grade`, `flashback_grade` carry the tone fields.
+- **Fill colour** (`Stage.fill_color`): `lifted(grade, share, toward)` lifts towards the colour's
+  multiply instead of white; `mark_light_lift(..., toward)`, `LIGHT_LIFT_TOWARD`, cached by (grade,
+  share, toward).
+- **Outlines on a fixed view**: characters are built at the whole place's scale, so the one-pixel
+  stroke floor must be one pixel of the fixed view (else close-ups magnify outlines ~18×).
+  `pixel_zoom(zoom)` (context in `cartoon/character.py`; `Stage.construct` wraps the scene in it
+  with `zoom_base()` on iso, 1 elsewhere) makes `one_pixel_stroke()` use it.
+- **Eyes**: `eyes: bright` (`BRIGHT_EYE`).
 - **Rooms** (`StageIso.show_walls`, indoor with `wide: fixed`; `wall_room()`): the standing back
-  walls cover the picture `2 h ISO_RISE` cells behind their foot (`wall_reach`, less
-  `WALL_VIEW_MARGIN` 0.3; 0 when a back edge is not standing wall all along), so `on_ground(...,
-  back=)` / `ground_view_center(..., back=)` / `fixed_view(..., back=)` / `wide_view(..., back=)`
-  let the view reach that far behind the back edges; `fixed_view` then sits across from the bodies'
-  middle as far back as that allows (`v = (reach − back + |u|) / 2`, the back corner at u 0), and the
-  bodies still win. Chosen over a bigger room (which only adds bare floor) and over a forced corner
-  view (it lost the characters): staging near the back walls plus this framing shows the walls as a
-  band along the frame's top; with a 3-tile wall a medium 16:9 view (10.9 tiles) cannot show the
-  corner itself without background, so the private film stages the action within ~6 rows of the
-  back walls at `character_size: large` and gives the stage a wall-coloured `background`.
-  Wall dressing: `poster` (`POSTER_PICTURES` rocket | atom | planet, `kind:`) and `wall_shelf`
-  (two planks of books and a plant) join `WALL_KINDS` (`cartoon/iso_retro.py`, `WALL_SPANS`).
-- **Test cut** (private, `story-qc2/testcut/`, 1:38 at 854 x 480 with Kokoro voices): stills
-  luma 107–140, colourfulness 42–97, contrast 43–59 (`s279/measure.csv`); cost at blue hour 12–30 s
-  per second of video (the rainy city 20 s/s with a pan; a `follow` of a car zooms to character
-  size and hid the city, a pan with the drive's run time keeps the wide view).
-- **Left for later**: a shot that frames an object (the AI's TV face) rather than characters; the
-  walls show only as a band (a taller-wall option would show more); blue hour still costs about
-  1.4x night.
-- **Public**: `vidgen.api` adds `PRESET_SATURATION` (missing since §107), `PRESET_TONES`,
-  `CONTRAST_PIVOT`, `pixel_zoom`, `wall_reach`, `WALL_VIEW_MARGIN`, `POSTER_PICTURES`;
-  `LightGrade(vivid, gamma, contrast)`, `.curved`; `lifted(toward=)`, `on_ground(back=)`,
-  `ground_view_center(back=)`, `fixed_view(back=)`, `wide_view(back=)`; `Stage.fill_color`,
-  `StageIso.show_walls`, `CharacterLook.eyes: bright`.
+  walls cover `2 h ISO_RISE` cells behind their foot (`wall_reach`, less `WALL_VIEW_MARGIN` 0.3; 0
+  unless a back edge is standing wall all along); `on_ground` / `ground_view_center` / `fixed_view`
+  / `wide_view` take `back=` to reach that far; `fixed_view` then sits as far back as allowed (`v =
+  (reach − back + |u|) / 2`), bodies still win. `poster` (`POSTER_PICTURES`) and `wall_shelf` are
+  `WALL_KINDS` (`cartoon/iso_retro.py`, `WALL_SPANS`).
 
 ## 109. Fast lit iso places, object zooms (Step 280)
 
-Building the private film (48 scenes, 7:40 at 1920x1080, one scene per command under a 10-minute
-limit and a 3 GB memory cap) showed that a lit iso place cost 23–45 s per video second: profiles
-(cProfile of the worker) put ~75 % in `grade_pixels` (each tile graded on every frame, ~150
-calls a frame) and most of the rest in `draw_tile`'s resize; ~98 % of those tiles were unchanged
-from the frame before.
-
-- **Graded pictures kept** (`cartoon/shading.py`): `GradedPictures` keeps, per picture, the grade,
-  the pixels' fingerprint (`pixels_digest`: shape, dtype, CRC-32 and Adler-32 of the bytes,
-  ~0.03 ms a megabyte; a copy compared with `array_equal` was 5x slower and doubled the memory)
-  and the graded pixels (read-only); same fingerprint and grade: the kept array. Pictures change
-  in place (pools, sprites, snow), hence the fingerprint rather than identity. `OwnedCache` holds
-  the values per live owner (a `weakref.finalize` drops a picture's entry with it) within
-  `GRADED_CACHE_BYTES` (192 MB). `StageLight._draw_image` skips pictures wholly outside the frame
-  (`_in_frame`: nothing of them is drawn) — before, every off-screen tile of a level was graded.
-- **Tile parts kept** (`cartoon/iso_pictures.py`): an iso tile no longer has its whole picture
-  graded before drawing; the light hands it `(GradedPictures, grade)` (`TILE_GRADING`) and
-  `draw_tile` asks `TileParts` for its part on screen keyed by (fingerprint, grade, size, box):
-  a hit draws the kept part (no grading, no resize); a miss grades (through `GradedPictures`, so a
-  moving camera still skips grading) and resizes. Parts are a frame's worth: `TILE_PARTS_BYTES`
-  128 MB is far more than needed.
-- **Memory** for big maps at 1080p: `TILE_CACHE` 320 → 64 (the scenery's LRU of drawn tiles
-  duplicated what each `IsoTiles` keeps); `IsoTiles` lets the other levels' tiles go when its
-  level of detail changes (`_forget_levels`: a zoom on a 26 x 26 lit room held both levels,
-  +0.9 GB, and was killed by the cap) and the oldest tiles not shown once it keeps more than
-  `TILES_KEPT` (3) x those shown + `TILES_SPARE` (16) (`_forget_old`: a long pan made and kept every
-  tile it passed). Made again if the camera comes back (rare; a few seconds).
-- **Measured**: 854 x 480 office (7.3 s, a pan) 233 s → 56 s; 1920 x 1080 office still 13.5 s in
-  147 s, rainy city 4–8 s scenes 150–400 s (a pan misses the part cache on every frame), rooms at
-  `indoor` light 3–6 s per second. Frame baseline 33/33 identical; a render test draws a lit room
-  with and without the caches identically (`test_picture_caches.py`).
-- **Object zoom** (`scenes/actions.py`, `scenes/stage_iso.py`): `zoom` on an iso object framed the
-  middle of the place (an object's layered picture spans the whole place canvas) — now the targets'
-  box comes from the scene's `target_box(target)` when it has one (`Stage.target_box`: the
-  object's picture bounds, `_iso_object_box`), else from the on-screen parts as before (same union
-  of bounds, so other zooms are unchanged). Camera moves (`moves_camera`: zoom, pan, follow, shot)
-  no longer count among the targets that make an object a layered picture.
-- **Moving parts back to front**: `_iso_gadget_places` sorted by the pieces' draw order. Each
-  working object's gadget is placed right after the place's pictures with its cover (the picture
-  of what stands in front of it); in config order, a water cooler's cover (which includes the TV
-  in front of it) was drawn over the TV's own moving face.
-- **Private film decisions** (not code): rooms at 3:27 AM use `light: indoor` (warm lamplight,
-  night windows) with peach terrazzo floors — at `blue_hour` any warm floor turns tan or grey (the
-  multiply caps red at ~0.65); the city keeps `blue_hour`; zooms at ~1.5–2.6 of the fixed view.
-- **Left for later**: a shot (`closeup`) framed at a beat's start on a character who sits down in
-  that beat is framed where it stood (use a `zoom` after the sit); every stage scene fades in from
-  and out to its background colour (`_cover`), a visible dip between consecutive shots of one
-  place (the rainy ride); a zoom deep into a big lit map still needs ~2.5 GB at 1080p; `test_actions`'
-  `BUILTIN_ACTIONS` list lacks the Phase AD actions (pre-existing failures).
-- **Public**: no new `vidgen.api` names (internal caches); `Stage.target_box` is a scene method
-  (like `pan_point`).
+- **Graded pictures kept** (`cartoon/shading.py`): `GradedPictures` keeps per picture the grade, a
+  fingerprint (`pixels_digest`: shape, dtype, CRC-32 and Adler-32 of the bytes) and the read-only
+  graded pixels; same fingerprint and grade → the kept array. A fingerprint, not identity, because
+  pictures change in place (pools, sprites, snow). `OwnedCache` holds values per live owner
+  (`weakref.finalize`) within `GRADED_CACHE_BYTES` 192 MB. `StageLight._draw_image` skips pictures
+  wholly outside the frame (`_in_frame`).
+- **Tile parts kept** (`cartoon/iso_pictures.py`): the light hands a tile `(GradedPictures, grade)`
+  (`TILE_GRADING`); `draw_tile` asks `TileParts` for its on-screen part keyed by (fingerprint, grade,
+  size, box): a hit draws it as is, a miss grades and resizes (`TILE_PARTS_BYTES` 128 MB).
+- **Memory**: `TILE_CACHE` 64; `IsoTiles` drops other levels' tiles when its level of detail changes
+  (`_forget_levels`) and the oldest unshown tiles beyond `TILES_KEPT` 3 × shown + `TILES_SPARE` 16
+  (`_forget_old`). The caches never change pixels (`tests/test_picture_caches.py`).
+- **Object zoom** (`scenes/actions.py`, `scenes/stage_iso.py`): the targets' box comes from the
+  scene's `target_box(target)` when it has one (`Stage.target_box`: an object's picture bounds,
+  `_iso_object_box`; a layered picture spans the whole canvas), else from on-screen parts. Camera
+  moves (`moves_camera`: zoom, pan, follow, shot) do not make an object a layered picture.
+- **Gadgets back to front**: `_iso_gadget_places` sorts gadgets by their pieces' draw order.
+- **Limit**: a `closeup` at a beat's start on a character who sits down in that beat frames where it
+  stood (zoom after the sit).
 
 ## 110. Arms at the sides, crossfaded stages, batched joins (Step 281)
 
-The owner's note on the private film: "one of the arms is always looking in the background". A
-generated character's side view (facing right or left: it reads as a three-quarter view, both
-eyes on the face) hung both arms on the body's edges and drew the far arm (`arm_right` facing
-right) behind the body (`DEFAULT_DRAW_ORDER` 10): on a tall or pear body and under a suit's coat
-only a sliver of it showed, so the figure read as one-armed. The front view already drew both
-arms in front, on the body's edges.
-
 - **`arms: front | classic`** (`ArmStyle`; `CharacterLook.arms`, video `cartoon_arms`;
-  `generator.ARM_STYLES`). `front` (`generator._arms` / `_arm_hang`): each arm that should hang
-  beside the body (the side view's far arm, both arms of the front view) gets its shoulder out to
-  just past the body's edge at the top of the sleeve (`ARM_SHOULDER_OUT` × the limb's width) and
-  the least lean out (0.5° steps, at most `ARM_MAX_LEAN` 14°) that keeps the forearm and hand
-  `ARM_GAP` clear of the body's outline (a pear's or a round body's hips may still touch the hand
-  at the cap); the side view's near arm leans only so far that its hand's middle is on the body's
-  edge (a pear: ~8°, a tall body: 0). The lean is drawn into the rest shapes (the elbow pivot and
-  the hand's end turn with them), so poses, walk swings and `reach` (which works from the rest
-  geometry) keep working; a pose's angles are relative to the leaning rest. The side view's far
-  arm is drawn over the body and under the near arm (`FAR_ARM_ORDER` 34 / 35): an arm swinging
-  forward or reaching across now shows over the torso (a three-quarter body's far side faces the
-  viewer) and crossed arms read as crossed. `classic` is the drawing of before (the same parts,
-  pivots, ends and orders; a test checks it).
-- **Defaults** (as changed by Step 282, §110.1): a character's `look.arms`, else the video's
-  `cartoon_arms`, else `front` (`generator.DEFAULT_ARMS`). The look cache key (`look_key`) has
-  the style. The character sheet follows `cartoon_arms`. (Step 281 made `front` the default only
-  on iso places with the fixed wide view, `stage.stage_arms`, else `classic`.)
-- **Global default at Step 281 kept `classic`**: with `front` everywhere, 25 of the 33 baseline
-  stills change (every still with a character: `yard` 9, `meadow` 16; the 8 `gradient-descent`
-  stills have none), max difference 225; the change is the arms only (sheet
-  `s281/baseline_front.png`, private). The owner decided for `front` (§110.1).
-- **Crossfades into a stage** (`Stage` entrance): the set faded in from its background colour
-  under a cover even when a crossfade / push / wipe brought the scene in, so consecutive shots
-  of one place dipped (mean luma 80–100 down to ~37 between the ride's shots). With an
-  overlapping `transition_in` the set is simply there (the transition blends it in); the scene
-  before already holds its last picture instead of fading out. A render test measures it.
-- **Joining many crossfaded scenes** (`render/ffmpeg.py`): one `xfade` graph over 48 runs at
-  1080p was killed by the 3 GB cap (every input open at once, frames held for each). Over
-  `BLEND_BATCH` (8) runs, `_blend_batches` blends 8 runs at a time into lossless H.264
-  intermediates (`LOSSLESS_CODEC`, removed after the join), then blends those with the
-  transitions between batches: the same frames (a test compares batched and one-graph joins).
-- **Private film** (not code): `cartoon_arms: front`, `transition: {type: crossfade, duration:
-  0.5}` (the scene's fade-out and fade-in were ~0.85 s of each boundary: 7:40 → 7:14, narration
-  7:02), title and end cards 4 s; the first ride shot re-staged (phone booth and bus stop moved
-  off the road's front), a tall tower in front of the road left out of the two later ride sets (it hid the pod for
-  seconds), one set without the far side of the city (memory), one zoom raised to 2.0.
-- **Left for later**: a lit 36 x 36 city zoomed to ~1.5 at 1080p still grows to ~3 GB over an
-  11 s scene (a shot zoomed 1.45–1.6 was killed; at 2.0 it renders in 146 s); the side view is the
-  only non-front view (no true profile); a far arm swinging forward crosses the torso in front.
-- **Public**: config `cartoon_arms`, `look.arms`; `vidgen.api.character(..., arms=)` takes the
-  caller's default (the video's and the look's win). No other new `vidgen.api` names.
+  `generator.ARM_STYLES`). `front` (`generator._arms` / `_arm_hang`): each hanging arm (the side
+  view's far arm, both front-view arms) gets its shoulder just past the body's edge
+  (`ARM_SHOULDER_OUT`) and the least lean (0.5° steps, at most `ARM_MAX_LEAN` 14°) keeping forearm
+  and hand `ARM_GAP` clear of the outline; the side view's near arm leans until its hand's middle is
+  on the edge. The lean is in the rest shapes, so poses (relative to the leaning rest), walk swings
+  and `reach` work. The side view's far arm is drawn over the body and under the near arm
+  (`FAR_ARM_ORDER` 34 / 35). `classic` is the older drawing, unchanged (pinned by tests with
+  `arms="classic"`). Defaults: §110.1. `look_key` includes the style.
+- **Crossfades into a stage** (`Stage` entrance): with an overlapping `transition_in` the set is
+  simply there (the transition blends it; no fade from the background colour), and the scene before
+  holds its last picture instead of fading out, so shots of one place do not dip.
+- **Joining many crossfaded scenes** (`render/ffmpeg.py`): over `BLEND_BATCH` 8 runs,
+  `_blend_batches` blends 8 at a time into lossless H.264 intermediates (`LOSSLESS_CODEC`, removed
+  after), then blends those: the same frames as one graph without every input open at once.
+- **API**: `vidgen.api.character(..., arms=)` takes the caller's default (the video's and the look's
+  win).
 
 ### 110.1 `front` is the default everywhere (Step 282)
 
-The owner's decision: every generated character hangs both arms at its sides unless told
-otherwise. `generator.DEFAULT_ARMS = "front"` is the default of `generate_parts`, `look_parts` /
-`look_key` and `build_character`; `stage.stage_arms` is gone (no stage-specific rule is left).
-`classic` stays as the opt-out (`cartoon_arms: classic` or `look: {arms: classic}`) and draws
-exactly as before: the Step 113 drawing pins (`test_cartoon_outfits`) and a Step 281 digest
-(`test_arms_front`) are checked with `arms="classic"`. Every place that draws a generated
-character passes the video's `cartoon_arms`: `api.character` (stages and custom scenes), the
-stills and the character sheet, and now the scene host (`build_host(..., arms=)`, which before
-drew `classic` whatever the video said); the look gallery still (`write_looks_png`, §69.47)
-takes the default unless a look says. A visible change for every existing video with characters: the
-frame baseline was remade (25 of 33 stills differ, arms only), and the gallery's character
-entries (`stage` and the nine cartoon / iso showcases) were rendered again. Pre-made SVG
-characters are untouched.
+A character's `look.arms`, else the video's `cartoon_arms`, else `generator.DEFAULT_ARMS =
+"front"` (default of `generate_parts`, `look_parts` / `look_key`, `build_character`); no
+stage-specific rule. `classic` is the opt-out. Every place that draws a generated character passes
+the video's `cartoon_arms`: `api.character`, stills, the character sheet, the scene host
+(`build_host(..., arms=)`); the look gallery still (`write_looks_png`, §69.47) takes the default
+unless a look says. Pre-made SVG characters are untouched.
 
 ## 111. Audio-only output (Phase AF, Step 283)
 
-Audiobooks, podcast-style episodes and the sound of an existing video, without Manim.
+User docs: docs/CONFIG.md "Audio only (`audio_only`, `sections`, `pacing`)", docs/COOKBOOK-AUDIO.md.
 
-- **Switch**: `vidgen render --audio-only` for one run, `audio_only: true` for the project (`output:`
-  and `format:` already mean other things, so neither carries it). `vidgen.audio_only.render_audio`
-  checks the scenes as a render does (`_check_scenes`, `warn_audio`), plans the timeline
-  (`plan_audio`), writes `build/<render>/audio/voice.wav` (each beat's MP3 at its start, shaped by
-  its `BeatWindow` like `add_narration`; 10 s blocks, a beat decoded when first needed), `sfx.wav`
-  (`sfx.write_track`, stings ducked, composed stings as in a render) and the mix
-  (`mix.mix_audio(..., always_write=True)`: the only change to `mix.py`, default off, so a video's mix
-  is unchanged — `test_video_mix_is_pinned` holds Step 282's numbers), copies it to
-  `Project.audio_path` (`<output>[_<variant>][_preview|_draft].wav`, 48 kHz stereo 24-bit) and writes
-  `timings.json` (the combined timings' shape, without `format`, plus `audio_only: {timing,
-  left_out}`). No `pre_render` / `post_render` hooks, no SRT (transcripts are Step 284).
+- **Switch**: `vidgen render --audio-only` or `audio_only: true` (not `output:` / `format:`, which
+  mean other things). `vidgen.audio_only.render_audio` checks scenes as a render does
+  (`_check_scenes`, `warn_audio`), plans the timeline (`plan_audio`), writes
+  `build/<render>/audio/voice.wav` (each beat's MP3 at its start, shaped by its `BeatWindow` like
+  `add_narration`), `sfx.wav` (`sfx.write_track`) and the mix (`mix.mix_audio(...,
+  always_write=True)`; default off, so a video's mix is unchanged), delivers `Project.audio_path`
+  (`<output>[_<variant>][_preview|_draft].<ext>`, §111.1) and writes `timings.json` (the combined
+  timings' shape without `format`, plus `audio_only: {timing, left_out}`). No `pre_render` /
+  `post_render` hooks. MCP `render` takes `audio_only`.
 - **Timing** (`pacing:`): `speech` (default) times each line by its MP3 (else the word estimate)
-  and gaps — `line` (default `narration.pad`), `speaker`, `scene`, `chapter`, the beat's own `pause`;
-  a start sting `sting_before` ahead of the speech, an end sting its length + `sting_after` before the
-  next line; overlaps and interrupts through `beat_windows` as in a video; no gap next to a silent
-  scene (it lasts `pacing.silent` or its `duration`); the first scene starts at 0 with `lead_in`
-  before its first line (so no "Intro" chapter), `tail` after the last. `video` takes every start
-  from `VideoPlan` at the format's fps (frame-rounded `sfx` actions as the runner cues them): the
-  MP4's soundtrack. Both deterministic.
-- **Sounds**: only what the config fixes — a scene's `sfx:`, `sfx` actions (word anchors resolved
-  by the audio, §87.2), stings, generated voice sounds (§69.33), the type's `entrance_sfx` with
-  `sfx.auto`. Stage foley / ambience, automatic animation sounds and a clip's sound come from
-  scene code at render time; they are left out and named (`AudioPlan.left_out`, a warning,
-  `--json` `left_out`).
-- **Projects without pictures**: `sections:` (`vidgen.sections.expand_sections`, applied to the raw
-  config in `Project._load` and `parse_config`, before cuts, sets and translations): a section
-  `{id, title, voice, music, sfx, beats}` is a `text_card` scene showing its title (a video render
-  is a plain slideshow; no new scene type, so the gallery and the scene lists are unchanged), the
-  title also its `chapter`; a plain string is a beat; `{pause: S}` is a silent scene. Unknown keys
-  get a did-you-mean. Tools that edit the YAML's `scenes:` in place (`vidgen direct`, the MCP
-  editors) do not handle `sections:`.
-- **Pauses**: `BeatConfig.pause` (0–60 s) and `- pause: S` items (`config.merge_pause_items`, added to
-  the beat before, before default ids are given) replace the gap after a beat: `SpokenLine.pause`
-  in `beat_windows`, so videos (`VideoPlan` and the scene's clock alike) honour it too; unset, every
-  window is as before (frame baseline: the 8 character-free stills identical; the 25 with
-  characters differ by Step 282's arms only).
-- **Story draft**: `vidgen story draft --audio` (`DraftOptions.audio`) keeps the draft's voices,
-  lines, speakers and emotions as sections titled by the story's headings, the music bed,
-  `audio: {normalize: true}`; no cards, cast looks, sets, shots or actions; its own report sections
-  and TODOs (`commented_yaml(list_key="sections")`).
-- **Public**: config `audio_only`, `pacing`, `sections`, beat `pause`; CLI `render --audio-only`,
-  `story draft --audio`; `render --json` with `audio_only: true`. No new `vidgen.api` names.
+  plus gaps (`line` default `narration.pad`, `speaker`, `scene`, `chapter`, or the beat's `pause`),
+  stings (`sting_before`, `sting_after`), overlaps via `beat_windows`; silent scenes last
+  `pacing.silent` (overriding a pause section's seconds too) or their `duration`; first scene at 0
+  after `lead_in`, `tail` after the last. `video` takes every start from `VideoPlan` at the
+  format's fps (the MP4's soundtrack). Both deterministic.
+- **Sounds**: only what the config fixes (scene `sfx:`, `sfx` actions §87.2, stings, voice sounds
+  §69.33, `entrance_sfx` with `sfx.auto`); sounds made by scene code at render time are left out and
+  named (`AudioPlan.left_out`, a warning, `--json` `left_out`) unless §112.1 supplies them.
+- **Sections** (`vidgen.sections.expand_sections`, on the raw config in `Project._load` and
+  `parse_config`, before cuts, sets and translations): `{id, title, voice, music, sfx, room,
+  ambience, beats}` → a `text_card` scene showing its title (also its `chapter`); a string is a
+  beat; `{pause: S}` a silent scene. No new scene type. `vidgen direct` and the MCP YAML editors do
+  not handle `sections:`. Problems are reported as `sections[i]` (`sections.section_location`;
+  `.chapter` / `.params.text` → `.title`, `.duration` → `.pause`) for load errors (`section_error`)
+  and later ones (`Project.attributed`, `Project.from_sections`, `Project.section_sources` §112.3).
+  `vidgen schema`: the top level requires `title` and `oneOf` `scenes` / `sections`; variants cannot
+  set `sections`.
+- **Pauses**: `BeatConfig.pause` (0–60 s) and `- pause: S` items (`config.merge_pause_items`, merged
+  into the beat before, before default ids) replace the gap after a beat (`SpokenLine.pause` in
+  `beat_windows`; videos honour it too).
+- **Story draft** `--audio` (`DraftOptions.audio`): sections with the voices, lines and emotions,
+  the music bed, `audio: {normalize: true}` (`commented_yaml(list_key="sections")`).
+- `chapter_warnings` is empty for `audio_only: true`.
 
 ### 111.1 Audio files (Step 284)
 
-`audio_output: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate,
-bit_depth, loudness, room_tone, transcripts}` (`AudioOutputConfig`). The deliverable is
-`Project.audio_path(preview)` with the format's suffix. `AudioOutputConfig.plain` (48 kHz stereo
-24-bit WAV, no preset, no room tone: the default) copies `mix.wav` as Step 283 did, byte for byte;
-anything else is one FFmpeg encode (`vidgen.audio_encode`): `pan=mono|c0=0.5*c0+0.5*c1` for mono,
-`aresample` for another rate, `pcm_s16le` / `pcm_s24le` (`-rf64 auto`), `libmp3lame` (`-b:a`:
-constant bitrate, ID3v2.3), `aac` in `ipod` (M4A, faststart), `libopus` in Ogg (16 / 24 / 48 kHz,
-a config error otherwise); tags from `metadata` (`chapter_export.video_tags`); written to `.part`
-then replaced. No chapters embedded (out of scope). Missing encoders surface as the FFmpeg error
-with "needs an ffmpeg with libmp3lame / libopus".
+`audio_output` (`AudioOutputConfig`; keys: docs/CONFIG.md "Audio files"). `AudioOutputConfig.plain`
+(48 kHz stereo 24-bit WAV, no preset, no room tone, no split: the default) copies `mix.wav` byte for
+byte; anything else is one FFmpeg encode (`vidgen.audio_encode`): `pan=mono|c0=0.5*c0+0.5*c1`,
+`aresample`, `pcm_s16le` / `pcm_s24le` (`-rf64 auto`), `libmp3lame` (CBR, ID3v2.3), `aac` in `ipod`
+(faststart), `libopus` in Ogg (16 / 24 / 48 kHz only, else a config error); tags from `metadata`
+(`chapter_export.video_tags`); written to `.part` then replaced. No embedded chapters. A missing
+encoder gives the FFmpeg error plus "needs an ffmpeg with libmp3lame / libopus".
 
 ### 111.2 Loudness presets, the check, the voice leveller
 
-- **Presets** (`vidgen.audio_check.PRESETS`, `LoudnessPreset`): `podcast` −16 LUFS stereo / −19 mono
-  ±1 LU, TP ≤ −1 (mix limiter −1.5); `audiobook` ACX: RMS −23…−18 (mix aims −20, unweighted RMS
-  over all samples and channels, `mix.rms_db`), sample peak ≤ −3 (limiter −3.5 dBTP), noise floor ≤
-  −60 dB (the quietest 0.5 s; digital silence passes), head 0.5–1 s and tail 1–5 s of silence
-  (10 ms frames above −50 dBFS are sound), notes (never failures) for ACX's format (MP3 ≥ 192 kb/s,
-  44.1 kHz) and 120 min; `broadcast` EBU R128 −23 ±0.5 LU, TP ≤ −1; `custom` `audio.target_lufs` ±1,
-  TP ≤ `audio.true_peak`. The audiobook preset fills `pacing` `lead_in: 0.6`, `tail: 2.5` where the
-  config does not set them (`audio_only.effective_pacing`, `model_fields_set`).
-- **Mix targets**: `audio_check.mix_targets` → `mix.MixTargets(lufs | rms, true_peak, mono, level_voice,
-  room_tone)` passed to `mix_audio(..., targets=)`: a preset always normalises; with `mono` the sum
-  is the channels' average in both channels and the LUFS target is raised by `DUAL_MONO_LU`
-  (10·log10 2), so the encoded one-channel file measures the target; `room_tone` (dBFS RMS) adds a
-  fixed 10 s loop of pink noise (80 Hz–6 kHz, seed 111) after the gain, before the limiter. The
-  report gains `levelled_db`, `target_rms`, `mono` only when set.
-- **Leveller** (`audio.level_voice`, default `None`: on with the podcast / audiobook presets, off
-  otherwise, so a video's mix is unchanged unless set; `test_video_mix_is_pinned` still holds): the
-  voice track's 10 ms frame peaks (`mix.frame_peaks`, one pass) → gain per frame (`leveller_gain`):
-  threshold = median peak of the frames within 45 dB of the loudest + 8 dB, ratio 3, 6 dB soft knee,
-  `smooth_steps` over 5 frames (look-ahead ramps on the louder side) → `LevelledTrack.read`
-  interpolates it per sample. Chosen by measuring Step 283's samples at −16 LUFS (peak vs RMS
-  detectors, thresholds +2…+9 dB, ratios 2–4): the limiter's deepest cut fell 5.0 → 0.6 dB on the
-  ElevenLabs narration (0.4 → 0 on Kokoro) with the voices lowered 0.4 dB on average where lowered.
-  Music and effects are not levelled.
-- **Check** (`measure_file`): one FFmpeg run, `ebur128=peak=true+sample` (integrated, LRA, true and
-  sample peak; its summary parsed) and the decoded samples at 48 kHz in the file's channels streamed
-  to stdout (stderr to a temp file) → per-10 ms power, nothing else kept. `check(measured, preset)` →
-  `PresetResult` of `CheckItem(name, value, target, status: pass | fail | note)`. A render with a
-  preset measures its file, logs a warning naming what misses, and records `audio_output: {file,
-  check}` in `timings.json` (`render --json` `check`). CLI `vidgen audio check FILE|PROJECT
-  [--preset] [--lufs --true-peak] [--variant --preview --draft --output-dir] [--json]`: every preset,
-  or the one asked for / the project's (exit 1 when it fails).
+- **Presets** (`vidgen.audio_check.PRESETS`, `LoudnessPreset`; numbers in docs/CONFIG.md):
+  `podcast`, `audiobook` (ACX), `broadcast` (EBU R128), `custom` (`audio.target_lufs`,
+  `audio.true_peak`), `drama` (§112.3). Audiobook RMS is unweighted over all samples and channels
+  (`mix.rms_db`); its format and length items are notes, never failures. The audiobook preset fills
+  `pacing` `lead_in: 0.6`, `tail: 2.5` where unset (`audio_only.effective_pacing`,
+  `model_fields_set`).
+- **Mix targets**: `audio_check.mix_targets` → `mix.MixTargets(lufs | rms, true_peak, mono,
+  level_voice, room_tone)` → `mix_audio(..., targets=)`: a preset always normalises; with `mono` the
+  LUFS target is raised by `DUAL_MONO_LU` (10·log10 2) so the encoded mono file measures the target;
+  `room_tone` adds a fixed 10 s pink-noise loop (80 Hz–6 kHz, seed 111) after the gain, before the
+  limiter. Report keys `levelled_db`, `target_rms`, `mono` only when set.
+- **Leveller** (`audio.level_voice`, default `None`: on with `podcast` / `audiobook` / `drama`, off
+  otherwise): voice 10 ms frame peaks (`mix.frame_peaks`) → `leveller_gain` (threshold = median
+  peak of frames within 45 dB of the loudest + 8 dB, ratio 3, 6 dB soft knee, `smooth_steps` over 5
+  frames) → `LevelledTrack.read`. Music and effects are not levelled.
+- **Check** (`measure_file`): one FFmpeg run, `ebur128=peak=true+sample` plus decoded 48 kHz samples
+  on stdout → per-10 ms power only. `check(measured, preset)` → `PresetResult` of `CheckItem(name,
+  value, target, status: pass | fail | note)`. A render with a preset measures its file, warns on
+  misses, records `audio_output: {file, check}` in `timings.json` (`render --json` `check`). CLI
+  `vidgen audio check FILE|PROJECT [--preset] [--lufs --true-peak] [--variant --preview --draft
+  --output-dir] [--json]` (exit 1 on failure); MCP `audio_check` (read-only).
 
 ### 111.3 Transcripts
 
-`audio_output.transcripts` (default all) next to the file (`vidgen.transcripts`): `_transcript.txt`
-(`plain_text`: title, `[M:SS] Title` per published chapter but the intro, a paragraph per voice's
-turn within a scene, `Name:` when more than one voice is used, the unlabelled base voice
-`Narrator`); `.srt` and `.vtt` from `render.pipeline.video_cues` (the video's cues, word-timed;
-speaker names follow `subtitles.speakers`; WebVTT cue text escaped by `vtt_text`, Step 286);
-`_chapters.txt` by `write_chapter_list(..., warn=False)` (as a video, without YouTube's warnings
-since Step 286). **Public**: config `audio_output`, `audio.level_voice`; CLI `audio
-check`; `render --json` `check` / transcript outputs. No new `vidgen.api` names.
+`audio_output.transcripts` (default all), next to the file (`vidgen.transcripts`): `_transcript.txt`
+(`plain_text`: title, `[M:SS] Title` per chapter but the intro, a paragraph per voice turn, `Name:`
+when more than one voice, base voice `Narrator`); `.srt` / `.vtt` from `render.pipeline.video_cues`
+(names per `subtitles.speakers`; `vtt_text` escapes `&`, `<`, `>` and drops blank lines);
+`_chapters.txt` via `write_chapter_list(..., warn=False)`.
 
 ### 111.4 Stereo staging and rooms (Step 285)
 
-Opt-in, in videos and audio-only renders (`vidgen.staging`). Applied in the mix to each beat's
-voice after its overlap shape (`audio_only._voice_samples`, `scene.add_narration`), never to the
-MP3s: `pan` is a display field of a voice (`voices.DISPLAY_FIELDS`: not in `audio_fields`, not
-inherited by named voices), so nothing is re-voiced.
+Opt-in, videos and audio-only (`vidgen.staging`; keys: docs/CONFIG.md "Stereo staging and rooms").
+Applied in the mix to each beat's voice after its overlap shape (`audio_only._voice_samples`,
+`scene.add_narration`), never to the MP3s: `pan` is a display field (`voices.DISPLAY_FIELDS`: not in
+`audio_fields`, not inherited by named voices), so nothing is re-voiced.
 
-- **Pan**: `PanSetting` = −1…1 or `POSITIONS` (`far_left` −0.8, `left` −0.5, `centre`/`center`,
-  `right`, `far_right`: the stage's marks); on `voice:`, `voices.<n>`, a beat (`PanMove {from, to}`:
-  eased, raised cosine, from the first to the last sample within 40 dB of the line's peak). Law:
-  `sfx.stereo`'s equal power (centre = both channels at full level, so a centred dry voice is
-  bit-identical). `beat_staging(config, scene, beat, stage)`: the beat's pan, else `stage`, else its
-  voice's. `audio.follow_stage`: a video asks `NarratedScene.speaker_pan(beat)` (default `None`;
-  `StageScene`: the mean x of `beat_speakers` in the camera frame as the line starts, 0…1 →
-  −1…1); an audio-only render reads the stage's `characters:` `at` (`params_stage_pan`, marks via
-  `mark_x`). No moves follow a character walking during a line (a beat `{from, to}` does).
-- **Rooms**: `RoomName` / `RoomConfig {use, amount 0–2, narrator}` on a scene (sections pass `room`)
-  or `audio.room`; the base voice stays dry unless `narrator`; a scene's `none` cancels the default.
-  `ROOM_PRESETS`: early reflections (ms, gain taps added to the dry voice and panned with it;
-  corridor: an 11 ms flutter) plus a reverberation IR per channel (`reverb_ir`, cached): seeded
-  noise (seed 1110 + 7·index + channel), band-limited (2nd-order magnitudes), split at 2 kHz into
-  bands decaying with `rt60` / `rt60_high`, pre-delay, 8 ms onset, unit energy × `wet_db`; FFT
-  convolution, not panned (diffuse; the two IRs correlate < 0.1). `phone`: 300–3400 Hz (4th-order
-  magnitude, zero-phase), tanh saturation, band again, RMS-matched. Measured (scratch s285):
-  T30 at 500 Hz small_office 0.52 (the band filter's own ring), corridor 1.11, hall 2.24 s;
-  4 kHz 0.30 / 0.77 / 1.63 s. The output is longer by the tail, so a room rings under the next
-  line (room changes are as smooth as the tails overlap; no crossfade of a room bus). A tail past
-  the scene's end (video: the last beat's window; audio-only: the file's end) fades over 0.25 s.
-- **Width**: `audio.music_width` / `ambience_width` (0–2) scale the side signal of each music cue /
-  ambience bed in `MusicTrack.read` (`staging.widen`; 1 returns the block itself).
-- **Mono compatibility**: `measure_file` keeps per 10 ms the sums L², R², L·R of a stereo file:
-  `correlation`, `worst_correlation` (1 s windows with sound), `mono_fold_db` (mean channel power
-  over the fold's). `mono_check` → `PresetResult("mono")`: correlation ≥ 0, worst second ≥ −0.3,
-  fold ≤ 3.5 dB (hard pan / decorrelated = 3.01). `vidgen audio check` appends it for stereo files
-  (`--mono`: it sets the exit code); an audio-only render with staging (`uses_staging`) and stereo
-  output prints `mono:` and records `timings["stereo"]` (`render --json` `stereo`). The built-in
-  beds are wide already (calm: correlation 0.22 at width 1; at 1.4 its worst second is −0.37).
-- **Compatibility**: unset, every path is the old one (`staging.plain` skips the processing; the
-  scene fingerprint adds `staging` only when a beat is staged or `follow_stage` is on a stage):
-  Step 284's audio-only render pinned (`test_audio_only_render_is_pinned_without_staging`, RMS per
-  half second and bytes with neutral settings), the video mix pinned as before, frame baseline 0.
-- **Public**: config `voice.pan`, `voices.<n>.pan`, beat `pan`, scene / section `room`, `audio.room`,
-  `follow_stage`, `music_width`, `ambience_width`; CLI `audio check --mono`; `render --json`
-  `stereo`; `NarratedScene.speaker_pan` (a scene type may override it). No new `vidgen.api` names.
+- **Pan**: `PanSetting` (−1…1 or `POSITIONS`) on `voice:`, `voices.<n>`, a beat (`PanMove {from,
+  to}`, raised cosine over the line's sound). Equal-power law (`sfx.stereo`; centre = both channels
+  at full level, so a centred dry voice is bit-identical). `beat_staging(config, scene, beat,
+  stage)`: the beat's pan, else `stage`, else its voice's. `audio.follow_stage`: a video asks
+  `NarratedScene.speaker_pan(beat)` (default `None`; `StageScene`: mean x of `beat_speakers` as the
+  line starts); audio-only reads the stage's `characters:` `at` (`params_stage_pan`, `mark_x`).
+- **Rooms**: `RoomName` / `RoomConfig {use, amount 0–2, narrator}` on a scene / section or
+  `audio.room`; the base voice stays dry unless `narrator`; a scene's `none` cancels the default.
+  `ROOM_PRESETS`: early reflections (panned with the voice) plus a per-channel IR (`reverb_ir`,
+  cached; seeded noise, seed 1110 + 7·index + channel; two bands split at 2 kHz decaying by `rt60` /
+  `rt60_high`; unit energy × `wet_db`), FFT-convolved, not panned. `phone`: 300–3400 Hz band,
+  tanh saturation, RMS-matched. A tail past the scene's end (video: last beat window; audio-only:
+  file end) fades over 0.25 s.
+- **Width**: `audio.music_width` / `ambience_width` (0–2) scale the side signal in `MusicTrack.read`
+  (`staging.widen`; 1 returns the block itself).
+- **Mono compatibility**: `measure_file` keeps per 10 ms L², R², L·R; `mono_check` →
+  `PresetResult("mono")`: correlation ≥ 0, worst 1 s window ≥ −0.3, fold ≤ 3.5 dB. `audio check`
+  appends it for stereo files (`--mono` makes it set the exit code); an audio-only render with
+  staging (`uses_staging`) and stereo output records `timings["stereo"]` (`render --json` `stereo`).
+- **Unset = unchanged**: `staging.plain` skips processing; the scene fingerprint adds `staging` only
+  when a beat is staged or `follow_stage` is on a stage. `NarratedScene.speaker_pan` may be
+  overridden by a scene type.
 
 ### 111.5 Review (Step 286)
 
-- **WebVTT**: `&`, `<`, `>` escaped and blank lines dropped in cue text (a blank line ends a cue);
-  `-->` can no longer occur. SRT unchanged (the video's). Sample files pass a format checker
-  (scratch `s286/check_subs.py`: numbering, `HH:MM:SS,mmm` / `.mmm`, start < end, order).
-- **Sections in problems**: `sections.section_location` renames `scenes[i]` → `sections[i]`
-  (`.chapter` / `.params.text` → `.title`, `.duration` → `.pause`; one scene per section, so the
-  index holds). Applied to load errors (`Project._load` / `parse_config` when the raw config has
-  `sections`, `section_error`) and to later problems (`Project.attributed` when
-  `Project.from_sections`).
-- **Schema**: `vidgen schema` has `sections` (section / pause items, `additionalProperties: false`;
-  beats as strings or `BeatConfig`); the top level requires `title` and `oneOf` `scenes` /
-  `sections`. Variants still cannot set `sections`.
-- **YouTube**: `chapter_warnings` is empty for `audio_only: true`; an audio-only render writes
-  `_chapters.txt` without the warnings (`write_chapter_list(warn=False)`).
-- **MCP**: `render` takes `audio_only`; new tool `audio_check` (`vidgen audio check`: `target`,
-  `preset`, `variant`, `preview`; read-only).
-- Checked, unchanged: speech timing (gaps, pauses, stings, silent scenes, lead-in / tail), preset
-  numbers (ACX, R128, podcast mono −19), the equal-power pan law (`left` 7.65 dB L−R) and room IR
-  maths. `pacing.silent`, when set, overrides a pause section's own seconds too (documented).
+Folded into §111–§111.4.
 
 ## 112. Dramatized audiobooks: sound design, music cues, delivery (Phase AG, Steps 288–291)
 
-Radio-play / audio-movie productions made audio-only and fast: narrator centred and dry,
-characters panned in rooms (§111.4), with ambience, timed sound cues and music that follows the
-scenes. No paid or AI API calls; Kokoro local only. Plan: **288** sound design in audio-only
-renders; **289** music cues for drama (per-scene beds and crossfades, swells into pauses, stings
-on beats, named themes / motifs, deeper ducking presets, a dense-dialogue music check); **290**
-delivery (a `drama` loudness preset with LRA and dialogue-consistency checks, one file per
-chapter with an `.m3u` and per-chapter transcripts, spoken credits from the cast, a cold open);
-**291** `docs/COOKBOOK-AUDIODRAMA.md`, a private showcase, review. Everything is opt-in: unset,
-video mixes and audio-only renders are byte-identical.
+Radio plays rendered audio-only, Kokoro local only. User docs: docs/COOKBOOK-AUDIODRAMA.md,
+docs/CONFIG.md "Sound design", "Music for dramas", "Delivering an audio drama". Everything is
+opt-in: unset, video mixes and audio-only renders are byte-identical to renders without it.
 
 ### 112.1 Sound design (Step 288)
 
-`vidgen.sound_design` (no manim import) times everything in audio seconds from a `SceneSlot`
-(`spec`, `start`, `duration`, `beats: [BeatSlot(beat, start, end, body)]`; `body` = the seconds a
-fraction `at` counts over, the narration). The audio-only planner (`audio_only._design_sound`
-after either timeline) and the video join (`pipeline._add_designed_ambience`, scene and beat
-`ambience` only) build the slots and share it.
+`vidgen.sound_design` (no manim) times everything in audio seconds from a `SceneSlot` (`spec`,
+`start`, `duration`, `beats: [BeatSlot(beat, start, end, body)]`). The audio-only planner
+(`audio_only._design_sound`; returns at once when nothing is set) and the video join
+(`pipeline._add_designed_ambience`, scene and beat `ambience` only) share it.
 
-- **Beds** (`AmbienceSetting` on a scene / section / pause: a bed, a list, `AmbienceConfig {beds:
-  list | {bed: dB}, gain, width}`, or `false`; names `AmbienceBedName` = `ambience.AMBIENCE_BEDS`:
-  rain, fire, birdsong, city, room_tone, crickets, hum, alarm, a test keeps them equal).
-  `ambience_entries` walks the scenes: at a change every bed whose `(gain, width)` differs or that
-  is not wanted fades out and the new ones fade in over `audio.ambience_crossfade` (default 2 s,
-  min `MIN_FADE` 0.05) centred on the change; a bed with the same level and width plays on. The
-  first beds fade in from 0 over their own `BEDS[...].fade_in`, the last fade out at the end.
-  Beat changes `AmbienceChange {start, stop (bed | list | all), at (fraction | "@word" | end),
-  fade, gain}` (`BeatConfig.ambience`, one or a list; the word is checked at load) start or stop
-  beds at that time (word times: `word_anchors.beat_words`, the TTS alignment or the estimate).
-  Each piece is a timings `ambience` entry with `fade_in`, `fade_out`, `gain`, maybe `width`;
-  `ambience.designed_entries` picks those (the key `fade_in`), `ambience_spans` leaves them out,
-  and `mix.plan_ambience` places each as is (`AmbiencePlacement.width`; ducked under speech by its
-  bed's duck). The scene fingerprint excludes scene / beat `ambience` (mixed at the join).
-- **Cues**: `SfxCue` / the `sfx` action gain `repeat` (1–100), `every` (s), `room` (`True` the
-  scene's room, a `RoomName`, `False` / `none` dry; `None` → `audio.sfx_room`, default false) and
-  named `pan` positions; a repeated cue's `pan` may be a `PanMove {from, to}`: the plays step
-  evenly from one to the other (`staging.repeat_pans`). `sfx.repeated` gives each play's time and
-  params (footsteps alternate feet, `cartoon.foley.FEET`). `SfxEvent.room` (timings `room`, only
-  when set) makes `sfx.placed` run the dry sound through `staging.stage_voice` (panned early
-  reflections, wide tail; `align: end` aligns the dry sound's end). `staging.cue_room` resolves
-  the room; the scene's `room` default `audio.room`. `NarratedScene.sfx(..., repeat, every, room)`
-  does the same in videos. Measured on the demo (scratch `s288/caller`, Kokoro): every cue's onset
-  within 2 ms of its word; seven `step_wood` plays `{from: far_left, to: far_right}` in the
-  `small_office` measure R−L −8.9 → +11.0 dB monotonically.
-- **Scene sounds without pictures** (`audio.scene_sounds`, audio-only renders; default false and
-  the old warning). `stage_sounds`: the stage's set beds as `ambience.set_ambience` chooses them
-  (its `ambience` / the video's, rain particles, `light` changes half-way through their fade,
-  rooms and iso indoor `room_tone`, iso crickets); on a plain stage (no `level`, no `iso`) a
-  `_Walker` follows each character's x (marks via `mark_x`, a 16:9 frame 14.2 units wide;
-  entering characters start off stage) and `walk_to` / `run_to` / `enter` / `exit` play
-  `cartoon.foley.foley_cues` of a `PlayedAction` (walk seconds from `walk_seconds` and the
-  character's `cartoon_motion`, limited to the next beat; panned at the walk's middle); `open` /
-  `close` of a `door` prop or room door → `door_cues`; `knock`, `switch_on/off` (click, not the
-  quiet props), `jump` (boing after the crouch), `emote` / `react` to surprised (pop), `effect`
-  (`EFFECT_SOUNDS`). The first beat's actions wait for the set's fade-in (`STAGE_ENTRANCE`).
-  Against the video's own scene code (scratch `s288/stagedemo`): the same events, within 25–50 ms
-  (frame rounding at draft fps). Left out (named in the warning): a level's or iso place's moves,
-  vehicles, thrown props, pours, lightning, alarms, fires, ringing phones. `clip_sound`: a
-  `video_clip`'s trim, speed (`fit_duration`), loop and volume (0.25 under narration) via
-  `clips.clip_audio`, faded over 0.5 s, mixed into `voice.wav` (`write_voice_track(clips=)`).
-- **Sections**: `ambience` on sections; a pause section takes `ambience` and `room` (a pause's
-  cues sound in its room). `vidgen schema` has both.
-- **Compatibility**: with nothing set, `_design_sound` returns at once, no event has a room and no
-  timings key changes. Pinned: Step 284's audio-only render (bytes equal with the Step 288 options
-  neutral), the video mix (`test_video_mix_is_pinned`, bytes equal with them); frame baseline
-  33 stills, max difference 0.
-- **Public**: config scene / section / pause `ambience`, beat `ambience`, `sfx` `repeat` / `every`
-  / `room` / pan positions and moves, `audio.ambience_crossfade`, `sfx_room`, `scene_sounds`;
-  `NarratedScene.sfx(repeat=, every=, room=)`; `SfxEvent.room`; `vidgen.api.PanMove`.
+- **Beds** (`AmbienceSetting` on a scene / section / pause: a bed, a list, `AmbienceConfig {beds,
+  gain, width}`, or `false`; `AmbienceBedName` = `ambience.AMBIENCE_BEDS`, kept equal by a test).
+  `ambience_entries`: at a change, beds whose `(gain, width)` differs or that are not wanted fade
+  out and new ones fade in over `audio.ambience_crossfade` (2 s, min `MIN_FADE` 0.05) centred on
+  the change; unchanged beds play on. Beat changes `AmbienceChange {start, stop, at (fraction |
+  "@word" | end), fade, gain}` (word checked at load; times from `word_anchors.beat_words`). Each
+  piece is a timings `ambience` entry with `fade_in` (how `ambience.designed_entries` picks them;
+  `ambience_spans` skips them), placed as is by `mix.plan_ambience`. The scene fingerprint excludes
+  scene / beat `ambience` (mixed at the join).
+- **Cues**: `SfxCue` / `sfx` action `repeat` (1–100), `every`, `room` (`True` scene room, a
+  `RoomName`, `False` / `none` dry; `None` → `audio.sfx_room`, default false), named `pan` positions,
+  a repeated cue's `PanMove` (`staging.repeat_pans`). `sfx.repeated` gives each play (footsteps
+  alternate, `cartoon.foley.FEET`). `SfxEvent.room` (timings `room` only when set) makes
+  `sfx.placed` run the sound through `staging.stage_voice`; `staging.cue_room` resolves it.
+  `NarratedScene.sfx(..., repeat, every, room)` in videos.
+- **Scene sounds without pictures** (`audio.scene_sounds`, audio-only, default false):
+  `stage_sounds` gives the set beds as `ambience.set_ambience` chooses them and, on a plain stage
+  (no `level`, no `iso`), foley for `walk_to` / `run_to` / `enter` / `exit` (`_Walker` follows each
+  character's x via `mark_x`; `cartoon.foley.foley_cues`, `walk_seconds`), doors (`door_cues`),
+  `knock`, `switch_on/off`, `jump`, surprised `emote` / `react`, `effect` (`EFFECT_SOUNDS`); first-beat
+  actions wait `STAGE_ENTRANCE`. Level / iso moves, vehicles, thrown props, pours, lightning,
+  alarms, fires, phones stay left out (named). `clip_sound`: a `video_clip`'s sound via
+  `clips.clip_audio` (0.25 under narration), mixed into `voice.wav` (`write_voice_track(clips=)`).
 
 ### 112.2 Music cues for drama (Step 289)
 
-New module `vidgen.scoring` (no manim import); `mix.plan_score` places what it plans beside the
-`music:` cues (`Placement` with `theme` / `motif`), from the timings alone, so audio-only renders
-and the video join share it (no re-render; `score` and beat `motif` are left out of the scene
-fingerprint; the scene's `music` already was).
+`vidgen.scoring` (no manim); `mix.plan_score` places its pieces beside the `music:` cues
+(`Placement` with `theme` / `motif`) from the timings alone, so audio-only and the video join share
+it (no re-render: `score` and beat `motif` are out of the scene fingerprint, like scene `music`).
+Returns at once with no scene theme and no motif.
 
-- **Config**: `score: ScoreConfig {themes: {name: MusicTheme | source}, crossfade (3 s), curve
-  (equal_power | linear | smooth), duck (DuckSetting, default the drama preset), fade_in (2),
-  fade_out (4), motif_dip (6 dB), sting_dip (4 dB), check (None: on when themes play), dense_lu
-  (15)}`. `MusicTheme(ThemeVariation) {source, volume}`; `ThemeVariation {section, start,
-  transpose (±12), tempo, tracks}`. A scene's `music` takes a name (`SceneMusic` before-validator:
-  `{theme}`) or `{theme, variation, volume}`. `BeatConfig.motif: MotifCue {theme, at (start | end
-  | "@word" | fraction), length (6), fade_in (1), fade_out (2.5), gain, dip, variation}`.
-  `StingCue.at` also takes a word anchor (`placed_at` returns it); words of stings and motifs are
-  checked at load like the beat ambience's. (The visual `ThemeConfig` keeps its name; the music
-  one is `MusicTheme`.)
-- **Ducking presets** `DUCK_PRESETS` / `DuckPreset`: `light` (8 dB), `standard` (the defaults),
-  `drama` (18 dB, attack 0.5, release 2.5, hold 1.2, swell 3), `deep` (24 dB, 0.6, 2, 2). A
-  `DuckConfig` before-validator expands a string or `{preset, ...}` (given keys win); `preset` is
-  kept as a field. `DuckSetting` on `music:` cues and `score.duck`. New `DuckConfig.swell` (dB,
-  default 0): `mix.duck_gain_db` = `duck_curve` + `swell × (1 + duck_curve at depth 1)`, i.e. up
-  to `swell` where the music is released, following the raised-cosine release / attack (with
-  `swell` 0 exactly `duck_curve`, so cues mix as before).
-- **Scene themes** (`theme_pieces`): sticky — a scene without a theme keeps the one playing, a
-  silent pause section too (so it swells under the pause), `music: false` ends it. At a change the
-  old piece ends at `change + crossfade/2` with a fade-out of `crossfade`, the new starts at
-  `change − crossfade/2` with a fade-in of `crossfade` (min 0.05 s); the same `ThemePlay` (name,
-  source, level, variation) plays on. First piece from 0 over `fade_in`, last to the end over
-  `fade_out`. `fade_shape`: equal_power sin(πu/2) (power sum 1 across a change: measured 1.00 at
-  −2…+2 s on the demo), linear, smooth (raised cosine). A piece starts its source from the
-  beginning (or section / start), so a returning theme is heard from its top. Gain per frame:
-  `10^(volume/20) × envelope × scene curve (SceneMusic.volume, false) × ducking (score.duck over
-  speech + clip spans) × dips`.
-- **Motifs** (`motif_pieces`): at the timings' beat start + `start` / speech end (`end`, the
-  beat's seconds from `word_anchors.beat_words`) / a word (`sound_design.word_offset`, shared with
-  ambience changes and stings) / a fraction of the speech; `length` long; ducked like the themes.
-  `dip_curve`: the scene themes go down by the deepest of each motif's `dip × envelope` and each
-  sting's `sting_dip` (the timings' ducked sfx events, their sound's length, 0.05 s in, 0.6 s
-  out).
-- **Sources** (`theme_source`): without a note change, `music.Source` of a looping cue (beds,
-  pieces, files; a score bed's or a piece's `section`). With `transpose` / `tempo` / `tracks` (or
-  a `section` of a bed made in Python) the score is rendered again: a project piece, a score bed's
-  file, or the bed's score template (`studio/beds/<bed>.yaml`, a close re-creation);
-  `variant_score` sets `tempo` in the YAML before parsing, keeps the listed tracks (a kept part
-  that ducked under a dropped track loses its duck), adds `transpose` to every pitched (not
-  drum) track's parts; rendered at the music level (so a sparse version is as loud as the full
-  one: set its `volume`) and cached as `build/music/theme-<key>.npy` (key: `piece_key`,
-  variation, `VARIATION_VERSION`). `theme_problems` (in `music.config_problems`: validate and
-  render): an unknown theme (did-you-mean across themes, beds, pieces), a missing source, a
-  variation of an audio file, an unknown track or section.
-- **Check** (`dense_dialogue_check`, `MixReport.music_check`, `timings.mix.music_check` only
-  when measured): 100 ms frames of K-weighted power of the voice track and of the music
-  placements (no ambience, before the gain: a ratio); speech from `speech_spans`; dense = within a
-  5 s window filled ≥ 80% by speech (the window's whole width; the speech frames in it measured);
-  runs of ≥ 2 s reported `{start, end, lu}`; `under_dialogue_lu` over all speech, `in_pauses_lu`
-  (the music in gaps ≥ 1 s against the voices' level); `ok` when every dense run is ≥ `dense_lu`.
-  A warning names the worst runs. The check runs when scenes play themes (or `check: true` with
-  any music).
-- **Demo** (scratch `s289/drama`, Kokoro, 1:07, −18.3 LUFS, mono PASS): a theme (`love`, a 8-bar
-  project piece) at the opener and credits, a tense platform (`enigma`) into a warm morning
-  (`calm`), the piano motif of `love` on "remember" and again (transposed +2) after the last
-  line, a reveal sting on "ticket". `s289/measure.py`: the music 24.7 LU under the voices on
-  their lines and 18–22 LU higher in the pauses (1–6 LU under the voices' level); crossfades
-  0.71/0.71 at the change, power sum 1.00; `music_check` under dialogue 25.8 LU, in pauses
-  9.8 LU, dense runs 24.8 / 26.0 LU (ok); the variant `loud` (`duck: light`, tension +6 dB) is
-  caught: 8.1 LU at 6.9–11.0 s. Picture `s289/drama_plot.png`. The limiter's 5.4 dB there is the
-  Kokoro voices' own peaks (the music is −35 dBFS at those moments).
-- **Compatibility**: with no scene theme and no motif `plan_score` returns at once and no
-  `music_check` is written; `duck_gain_db` equals `duck_curve` without a swell; `_scene_curve`
-  is the old code moved. Pinned audio-only and video mixes byte-equal (test_staging,
-  test_audio_only, test_sound_design, and test_scoring with unused themes and `duck: {swell: 0}`);
-  frame baseline 33 stills, max difference 0 (`scene.py`'s sting branch is new only for a word).
-- **Public**: config `score`, scene `music: NAME | {theme, variation}`, beat `motif`, sting `at:
-  "@word"`, `duck` presets and `swell`; `timings.mix.music_check`, `mix.music[].theme / motif /
-  swell`.
+- **Config**: `score: ScoreConfig {themes, crossfade 3, curve equal_power | linear | smooth, duck
+  (default `drama`), fade_in 2, fade_out 4, motif_dip 6, sting_dip 4, check (None: on when themes
+  play), dense_lu 15}`; `MusicTheme(ThemeVariation) {source, volume}`, `ThemeVariation {section,
+  start, transpose ±12, tempo, tracks}`. Scene `music` takes a name (`SceneMusic` before-validator
+  → `{theme}`) or `{theme, variation, volume}`. `BeatConfig.motif: MotifCue {theme, at, length 6,
+  fade_in 1, fade_out 2.5, gain, dip, variation}`; `StingCue.at` takes a word anchor (`placed_at`);
+  words checked at load. The visual `ThemeConfig` keeps its name; the music one is `MusicTheme`.
+- **Ducking presets** `DUCK_PRESETS` / `DuckPreset`: `light`, `standard`, `drama`, `deep`; a
+  `DuckConfig` before-validator expands a string or `{preset, ...}` (given keys win). `swell` (dB,
+  default 0): `mix.duck_gain_db` = `duck_curve` + `swell × (1 + duck_curve at depth 1)`; with 0
+  exactly `duck_curve`.
+- **Scene themes** (`theme_pieces`): sticky (a scene without a theme, or a pause section, keeps the
+  one playing; `music: false` ends it). At a change the old piece fades out and the new fades in over
+  `crossfade`, centred on the change (min 0.05 s); the same `ThemePlay` plays on. `fade_shape`
+  equal_power = sin(πu/2). A piece starts its source from its top (or `section` / `start`). Gain =
+  `10^(volume/20) × envelope × scene curve × ducking (speech + clip spans) × dips`.
+- **Motifs** (`motif_pieces`): placed by `at` (word offsets via `sound_design.word_offset`, shared
+  with ambience and stings). `dip_curve`: themes dip by the deepest motif `dip × envelope` and each
+  sting's `sting_dip`.
+- **Sources** (`theme_source`): no note change → `music.Source` of a looping cue; with `transpose` /
+  `tempo` / `tracks` (or a section of a Python-made bed) the score is re-rendered from a project
+  piece, a score bed's file or its template (`studio/beds/<bed>.yaml`) by `variant_score` (tempo set
+  in the YAML, listed tracks kept, pitched tracks transposed), at the music level, cached as
+  `build/music/theme-<key>.npy` (key: `piece_key`, variation, `VARIATION_VERSION`).
+  `theme_problems` (in `music.config_problems`): unknown theme (did-you-mean), missing source, a
+  variation of an audio file, unknown track or section.
+- **Check** (`dense_dialogue_check`, `MixReport.music_check`, `timings.mix.music_check` only when
+  measured): 100 ms K-weighted frames of voice vs music placements (no ambience, pre-gain); dense =
+  a 5 s window ≥ 80 % speech; runs ≥ 2 s `{start, end, lu}`; `under_dialogue_lu`, `in_pauses_lu`;
+  `ok` when every dense run ≥ `dense_lu`; a warning names the worst runs.
 
 ### 112.3 Delivery (Step 290)
 
-New module `vidgen.delivery` (no manim import); `audio_check` gains the `drama` preset; `mix`
-writes split parts.
+`vidgen.delivery` (no manim); `audio_check` has `drama`; `mix` writes split parts.
 
-- **`drama` preset** (`PRESETS["drama"]`): podcast loudness (−16 LUFS stereo / −19 mono ±1 LU, TP ≤
-  −1 dBTP, limiter −1.5, `level_voice` default on) — the common podcast-app recommendation, not
-  a platform rule — plus `max_lra` 10 LU (`LoudnessPreset.max_lra`, ebur128's LRA) and
-  `dialogue` checks; no noise-floor / head / tail gate. `MixTargets.music_check` makes the mix run
-  `_check_music` for any music (`score.check: false` still turns it off). Dialogue: `measure_file(path,
-  momentary=True)` switches ebur128 to `framelog=info` and parses each 100 ms momentary value
-  (`parse_momentary`; off by default, so other measurements run as before); `line_loudness` =
-  the 400 ms blocks wholly inside a line's speech (else overlapping), gated at −70 LUFS and then
-  10 LU under their power mean (BS.1770's programme gating over the line). Lines (`DialogueLine
-  {beat, speaker, start, end}`, `delivery.dialogue`: each beat's speech via `speech_bounds`,
-  speakers named as in the transcripts) of ≥ `MIN_LINE` 0.8 s: the 10–90th percentile spread ≤
-  `LINE_SPREAD_LU` 6; speakers' power-mean levels within `VOICE_SPREAD_LU` 4; the music check's
-  `under_dialogue_lu` and its worst dense run (only runs in the file, for a split file) ≥
-  `score.dense_lu`. Without a project (`vidgen audio check FILE`) the dialogue item is a note.
-  Thresholds are recommendations chosen for earbuds; measured on the demo (Kokoro, levelled):
-  lines 1.6–2.0 LU, voices 1.8–2.5 LU, LRA 4.4–6.2 LU.
-- **Split** (`audio_output.split: chapters`; `plain` is false with it): `plan_parts` — one part
-  per chapter mark (`chapter_marks`; the first part from 0, so a cold open joins it; no marks:
-  one part titled by the video). Cut before chapter k = `max(min(scene start, first speech −
-  pacing.lead_in), (previous speech end + first speech)/2)`; fades (raised cosine, `MixPart.reader`)
-  in over ≤ `PART_FADE_IN` 0.3 s ending by the first speech, out over ≤ `PART_FADE_OUT` 2 s after
-  the last speech; none at the audio's own start and end. `mix_audio(parts=)` writes the whole as
-  before, then each part through the same `read` (pre-limiter sum), normalised on its own to the
-  whole's target (LUFS or RMS; else the whole's gain), the same limiter and room tone
-  (`MixReport.parts`: file, start, end, gain, LUFS, TP, limited). `write_parts`: copy (48 kHz
-  stereo 24-bit WAV) or encode each (`title` "Title: Chapter", `album`, `track` "k/n") to
-  `<output>_<NN>_<slug>.<ext>`; per file `_transcript.txt`, `.srt`, `.vtt` from `part_timings`
-  (its scenes and beats at its times, non-intro chapters); `<output>.m3u` (extended M3U, UTF-8,
-  `#EXTINF` whole seconds; entries the old playlist listed and the new does not are removed —
-  only files it named). The single file and `_chapters.txt` are not written. The check measures
-  each file (`audio_output.files[].check`, `stereo`) and `files_check` compares them (loudness
-  within `FILE_SPREAD_LU` 1, median line within `FILE_DIALOGUE_SPREAD_LU` 2); the result's
-  `check` lists every file's items as `NN name` plus those. `vidgen audio check PROJECT` reads
-  `timings.json` (`delivery.rendered_files`) for the files and lines; `--json` adds `files` and
-  `files_check`. `AudioRenderResult.files`; `output` is the playlist.
-- **Spoken credits** (`credits: CreditsConfig {speak, id, title, voice, music, cast, voiced_by,
-  lines, chapter}`) and **cold open** (`cold_open: ID | [IDs]`): `apply_delivery(data, origins)`
-  on the raw config after `apply_cut` (both in `Project._load_config`, variants too; not in
-  `parse_config`, like a cut). Cold open first: a scene id moves that scene to index 0 (drops
-  `chapter`, `transition`; `cuts._moved_origins`); beat ids (filled as `cuts._with_beat_ids`)
-  are deep-copied into a `text_card` scene `cold_open` (beat ids `cold_open_<id>`, the source
-  scene's `voice` written onto the beat, only `sfx` actions kept, the first beat's scene's
-  `room` / `ambience` / `music`). Credits then append a `text_card` scene: `credit_lines` =
-  the title sentence, "Starring A as X, B as Y and Z." (named voices in order of first line,
-  the cold open skipped; actor = `voiced_by[name]`, else a Kokoro id `xx_name` → Name, else
-  none), "Narrated by N." (base voice speaks and has an actor), `lines`; `music` default `main`
-  when `score.themes` has it. English text only. Errors: unknown id (did-you-mean over scenes
-  and beats), an existing `cold_open` / credits id.
-- **Compatibility**: nothing set → `apply_delivery` returns the data object itself, no parts, no
-  momentary parse, `music_check` as before, `MixReport.to_json` without `parts`; the scene
-  fingerprint now excludes `credits`, `cold_open`, `audio_output` (audio-only / already scenes).
-  Pinned: `test_staging`'s audio-only render with the Step 290 options neutral (bytes equal),
-  `test_video_mix_is_pinned`; frame baseline 33 stills, max difference 0. `vidgen audio check
-  FILE` now lists `drama` among every preset.
-- **Public**: config `audio_output.loudness: drama`, `audio_output.split`, `credits`, `cold_open`;
-  CLI `audio check --preset drama`; `render --json` `files`, `audio --json` `files` /
-  `files_check`; `timings.json` `audio_output.{split, playlist, files, files_check}`,
-  `mix.parts`. No new `vidgen.api` names.
+- **`drama` preset**: podcast loudness, `level_voice` on, plus `max_lra` 10 LU
+  (`LoudnessPreset.max_lra`) and `dialogue` checks; no noise-floor / head / tail gate.
+  `MixTargets.music_check` runs `_check_music` for any music (`score.check: false` turns it off).
+  `measure_file(path, momentary=True)` parses ebur128 `framelog=info` momentary values
+  (`parse_momentary`, off by default); `line_loudness` gates 400 ms blocks inside a line at −70 LUFS
+  then 10 LU under their mean. Lines (`DialogueLine`, `delivery.dialogue`, `speech_bounds`) ≥
+  `MIN_LINE` 0.8 s: 10–90th percentile spread ≤ `LINE_SPREAD_LU` 6; speakers within
+  `VOICE_SPREAD_LU` 4; music `under_dialogue_lu` and worst dense run ≥ `score.dense_lu`. Without a
+  project the dialogue item is a note.
+- **Split** (`audio_output.split: chapters`): `plan_parts`, one part per chapter mark (the first
+  from 0, so a cold open joins it; none: one part). Cut before chapter k = `max(min(scene start,
+  first speech − pacing.lead_in), (previous speech end + first speech)/2)`; fades in ≤
+  `PART_FADE_IN` 0.3 s, out ≤ `PART_FADE_OUT` 2 s (none at the audio's own ends). `mix_audio(parts=)`
+  writes the whole, then each part from the same pre-limiter `read`, normalised on its own to the
+  whole's target (`MixReport.parts`). `write_parts` → `<output>_<NN>_<slug>.<ext>` (`title`
+  "Title: Chapter", `album`, `track` "k/n") with per-file transcripts (`part_timings`) and
+  `<output>.m3u` (extended M3U, UTF-8; removes only files the previous playlist named and the new
+  one does not). No single file or `_chapters.txt`. `files_check`: loudness within `FILE_SPREAD_LU`
+  1, median line within `FILE_DIALOGUE_SPREAD_LU` 2. `vidgen audio check PROJECT` reads
+  `timings.json` (`delivery.rendered_files`). `AudioRenderResult.files`; `output` is the playlist.
+- **Credits and cold open** (`credits: CreditsConfig`, `cold_open: ID | [IDs]`, `[]` = none):
+  `apply_delivery(data, origins)` on the raw config after `apply_cut` in `Project._load_config`
+  (variants too; not in `parse_config`); returns the data object itself when unset. A scene id moves
+  that scene first (drops `chapter`, `transition`); beat ids are deep-copied into a `text_card`
+  scene `cold_open` (beats `cold_open_<id>`, source voice on the beat, only `sfx` actions, the first
+  source scene's `room` / `ambience` / `music`). Credits append a `text_card` scene (`credit_lines`:
+  title, "Starring A as X, …", "Narrated by N.", `lines`; actor from `voiced_by`, else a Kokoro id
+  `xx_name` → Name; `music` default `main` when `score.themes` has it; English only). Errors:
+  unknown id (did-you-mean), an existing `cold_open` / credits id. The scene fingerprint excludes
+  `credits`, `cold_open`, `audio_output`.
+- **Cold-open audio**: `delivery.cold_open_sources` maps `cold_open_<id>` → `<id>`;
+  `tts.run.plan_tts` reuses the source MP3 (`plan.reuse`) when hashes match and the source is
+  current or voiced this run (`_sources_first` orders it; `_copy_source` voices it otherwise).
+  Alignments and visemes are read under the source id.
+- **Section locations**: `delivery.scene_sources(data)` (section index, or `cold_open` / `credits`;
+  `None` when nothing moves) feeds `sections.section_location(text, sources)`;
+  `Project.section_sources` (set in `Project._load`, variant merged).
+- **JSON**: `render --json` `files`; `audio check --json` `files`, `files_check`; `timings.json`
+  `audio_output.{split, playlist, files, files_check}`, `mix.parts`.
 
 ### 112.4 Cookbook and review (Step 291)
 
-`docs/COOKBOOK-AUDIODRAMA.md` (its skeleton validated by `test_docs`). Review fixes:
-
-- **Cold-open audio**: `delivery.cold_open_sources(project)` maps each copied beat
-  `cold_open_<id>` to `<id>`; `tts.run.plan_tts` puts it in `plan.reuse` (the source's MP3 in the
-  same folder) when both hashes are equal and the source is current or voiced in this run;
-  `_sources_first` orders the copy after its source; at run time `_copy_source` voices it after
-  all when the source is not current then (a hook skipped it). Alignments and visemes are read
-  under the source's id (`source.stem`; unchanged for the variant copies, same id).
-- **Section locations**: `delivery.scene_sources(data)` (each scene's section index, or
-  `cold_open` / `credits` for added scenes; `None` when nothing moves) feeds
-  `sections.section_location(text, sources)`; `Project.section_sources`, set in `Project._load`
-  (variant merged), names problems and load errors.
-- `cold_open: []` is "no cold open" (was an IndexError).
-- Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
-  unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).
-
+`docs/COOKBOOK-AUDIODRAMA.md` (skeleton checked by `test_docs`). Review fixes are folded into §112.3.
 ## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–297)
 
 Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
