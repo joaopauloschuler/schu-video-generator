@@ -29100,3 +29100,16 @@ Review of `git diff 573a7ad..1ee1f00` (subjects, panels, approval, composed shee
 - **Left as written**: past HANDOFF, CHANGELOG and tasklist entries that name the file. No test or source reads it.
 - **Interfaces**: none changed.
 - **Test**: `tests/test_guide.py`, `tests/test_docs.py`.
+
+## Step 440 — the LTX HOWTO renamed to COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md
+- **Built** (docs only): `git mv docs/HOWTO-restyle-with-ltx-on-colab.md docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md`;
+  content and H1 unchanged (the document never named its own file). Every live link and mention now names the
+  new file; the prose "the HOWTO" is left as written.
+- **Files**: `docs/CONFIG.md` (one link), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (identical),
+  `tools/colab/README.md` (one link), `tools/colab/setup_session.py` (module docstring and the `HOWTO` constant
+  used in a printed hint), `tasklist.md`, `HANDOFF.md`. No test, packaging file, DESIGN.md, README or example
+  named the file.
+- **Left with the old name on purpose**: past HANDOFF sections, CHANGELOG entries and ticked tasklist lines
+  (records of what existed then).
+- **Interfaces**: none changed.
+- **Test**: `tests/test_guide.py tests/test_docs.py tests/test_colab_setup_session.py` (212 passed, 19 s).

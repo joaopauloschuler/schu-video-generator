@@ -3125,7 +3125,7 @@ scenes:
   `sheet_prompt:`) on one shot is a config error, so is an unknown subject or a sheet of more than 4 panels.
 - **Restyling a render with an open model, by hand**: `guide.final.mp4` and `guide.depth.mp4` can also
   go to LTX-2.3 with its union-control IC-LoRA (depth / canny) in ComfyUI on a Colab GPU, outside
-  `vidgen generate`: [HOWTO-restyle-with-ltx-on-colab.md](HOWTO-restyle-with-ltx-on-colab.md) (the
+  `vidgen generate`: [COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md](COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md) (the
   steps, scripts in `tools/colab/` with a one-command session setup, costs, errors and the results of the 2026-11-24 tests,
   among them a photoreal first frame made with an image-editing model).
 - **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was

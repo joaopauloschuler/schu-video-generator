@@ -1,4 +1,4 @@
-"""Find or create a Google Colab GPU session and set it up for docs/HOWTO-restyle-with-ltx-on-colab.md.
+"""Find or create a Google Colab GPU session and set it up for docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md.
 
     python tools/colab/setup_session.py NAME [--gpu L4|CPU] [--high-mem] [--no-image] [--latest] [--no-comfy-compiler]
                                        [--reserve-vram GB] [--no-vidgen | --vidgen-only]
@@ -63,7 +63,7 @@ PART_LOGS = {"ltx": ("setup.log", "download.log"), "image": ("setup_image.log",)
 PART_TITLES = {"ltx": "ComfyUI + LTX-2.3 weights", "image": "image models (Qwen-Image-Edit, Z-Image)"}
 VIDGEN_TITLE = "vidgen (this computer's code)"
 VIDGEN_SCRIPT = "setup_vidgen.sh"
-HOWTO = "docs/HOWTO-restyle-with-ltx-on-colab.md"
+HOWTO = "docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md"
 #: What the SSH check runs on the VM, and what it must print.
 SSH_CHECK = "echo vidgen-ssh-ok"
 #: ComfyUI and its VRAM sampler, as start_comfy.py starts them on the exec route.

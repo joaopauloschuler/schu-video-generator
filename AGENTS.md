@@ -5745,7 +5745,7 @@ scenes:
   most and held the camera still for up to 2 s at the start.
 - **An open model instead of Seedance** (by hand, outside `vidgen generate`): the shot's
   `guide.final.mp4` and `guide.depth.mp4` restyled by LTX-2.3 with its union-control IC-LoRA in
-  ComfyUI on a Colab L4: docs/HOWTO-restyle-with-ltx-on-colab.md in the repository (scripts in
+  ComfyUI on a Colab L4: docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md in the repository (scripts in
   `tools/colab/`; `python tools/colab/setup_session.py <name>` creates or reuses the session and sets it up). Tested twice: with the render's first frame the clip stays CG, without it
   it looks real but invents content; with a **photoreal first frame** (frame 0 restyled on the same GPU
   by Qwen-Image-Edit-2511) and a canny with the sun glint masked it looks real and keeps the layout

@@ -1,7 +1,7 @@
 # tools/colab: Colab sessions for vidgen and the LTX-2.3 HOWTO
 
 `setup_session.py` sets up a Colab GPU session in one command: vidgen (for `vidgen remote`) and the
-models of [`docs/HOWTO-restyle-with-ltx-on-colab.md`](../../docs/HOWTO-restyle-with-ltx-on-colab.md);
+models of [`docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md`](../../docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md);
 the other scripts are the HOWTO's per-run steps.
 
 ## Set up a session
