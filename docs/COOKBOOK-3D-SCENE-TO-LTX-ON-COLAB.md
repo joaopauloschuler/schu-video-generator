@@ -8,17 +8,19 @@ Settings: [CONFIG.md, Generated video](CONFIG.md#generated-video-videogen-vidgen
 [`tools/colab/`](../tools/colab/) (its [README](../tools/colab/README.md) lists them).
 **local** = your machine, **VM** = the Colab machine.
 
-**How much is known.** Every result here comes from 768x448 clips of 4 s at 24 fps, mostly one
-take each (seed 42); the no-guide 12 s chain had two takes per clip (section 11.4). All were judged
-from stills (contact sheets, crops, frame differences); nobody has watched the motion. The test
-subject was "a woman walking in a futuristic city" (projects `city-walk/` and `starfall/` in the
-owner's `video-projects/`).
+**How much is known.** Every result here comes from 768x448 clips of 4 s at 24 fps. The early tests
+had one take each (seed 42); the no-guide 12 s chain (section 11.4) and the 58 s no-guide film
+(section 11.5) had 2-4 takes per clip. All were judged from stills (contact sheets, crops, frame
+differences); nobody has watched the motion or heard the film's music. The test subject was "a woman
+walking in a futuristic city" (projects `city-walk/`, `dusk-walk/` and `starfall/` in the owner's
+`video-projects/`).
 
 ## The rule: first frame + stylesheet, no guide
 
 **With LTX, give a shot a starting picture and a stylesheet, and no guide video.** That is what held
-the picture, the place and the person in the one direct comparison (section 11.1), and it held over a
-12 s chain of three clips, each started from LTX's own last frame of the one before (section 11.4).
+the picture, the place and the person in the one direct comparison (section 11.1), over a 12 s
+chain of three clips, each started from LTX's own last frame of the one before (section 11.4), and
+over a 58 s film of 9 scenes (section 11.5).
 The parts:
 
 - **The stylesheet** (section 6): up to 4 panels drawn by an image model **from text alone**, on the
@@ -28,7 +30,7 @@ The parts:
   and LTX holds it. An image model may paint it from a render of your 3D scene.
 - **The prompt** carries the camera and the motion, because nothing else does: "The camera tracks
   steadily backwards in front of her at her pace". Short, positive words (section 6.3), one clear,
-  ordinary camera move per clip (section 8.5).
+  ordinary camera move per clip, named first with a film term ("Crane shot, rising: ...", section 8.5).
 - **Takes**: 2 or 3 seeds per shot, picked from stills. Seeds differ a lot (section 8.4).
 
 Why no guide: with a depth guide **the place comes from the guide**. It overrides the starting
@@ -342,6 +344,12 @@ neat hair); with no guide it stayed as in the sheet for 12 s, close-ups included
 The first frame of the first clip. Unlike panels, it may be painted from a render of your scene.
 
 - **A picture file** you made (an image model, a photo you may use): fit it to the clip's size.
+- **A picture from text** (the 58 s film, section 11.5): Z-Image-Turbo with vidgen's
+  `zimage_text_graph` at 1536x896 (twice the clip size) on the ComfyUI with default flags (section 5),
+  about 14 s a picture, 3 seeds per scene. Prompts 59-82 words, positive, the person in the panels'
+  words; her likeness was close in every candidate. Name the framing plainly: "high angle" came out
+  eye level until "Aerial view looking down from high above"; a portrait cut off her head until "her
+  whole head in the centre of the frame with space above her hair".
 - **A repainted blockout frame** (`first_frame: restyled`, comfyui provider): `vidgen remote ltx
   generate inputs . --guide` renders the scene, and Qwen-Image-Edit-2511 repaints its first frame
   (about 112 s with the model load, 0.073 units) into `build/videogen/<shot>/first_frame.restyled.png`.
@@ -444,34 +452,66 @@ done
 ```
 
 Submit the graphs one after the other (they queue in ComfyUI; on an L4 about 4 min each after the
-session's first job). On a shot inside vidgen, `seed:` on the `generated_shot` does the same: another
+session's first job). **Queue the takes of one prompt back to back**: a take that follows a take
+with the same prompt reuses ComfyUI's cached text encoding and ran in about 154 GPU s instead of
+about 224 (all 34 takes of section 11.5). On a shot inside vidgen, `seed:` on the `generated_shot` does the same: another
 seed is another request, a new take in `takes/<shot>/`, and `vidgen generate pick` chooses the one shown.
 
-**Measured** (section 11.4): with the **painted** starting picture, one seed of two cut away after
-frame 0 to another street and grew a second copy of the woman (the sheet's back-view panel as a
-person): check the change from frame 0 to 1 of every take. From LTX's own last frame every take
-continued cleanly, and the seed decided how much of the camera instruction happened. The 12 s film
-took 6 takes (5 new jobs and 1 earlier clip); no clip needed a third.
+**Measured.** In the 12 s chain (section 11.4), one seed of two from the **painted** starting
+picture cut away after frame 0 to another street and grew a second copy of the woman (the sheet's
+back-view panel as a person). In the 58 s film (section 11.5) all 34 takes kept their starting
+picture (from text or LTX's last frame) as frame 0, also where the place differs from the sheet's
+street panel (a walkway, rooftops, blue hour). Seeds: 2 per clip, 2 more with a reworded prompt where
+neither obeyed the camera (4 clips of 13); in 5 of 13 clips only one of 2 takes was usable. 5 takes
+of 34 had a defect (a hard cut at frame 12 to another place and face, a one-frame white flash, a
+flying black pole, a misty smear, a grey patch on a tower); a sixth, with a blurred passer-by, was
+passed over. No picked take had a second her, extra limbs, warped hands or feet, or text.
+
+**Judge a take** from a contact sheet (stills at 0, 1, 2, 3 s and the last frame, a row per take)
+and numbers (mean absolute RGB difference, 0-255): frame 0 against the starting picture (2-7 when
+held); the change frame 0 -> 1 against 1 -> 2 (a jump = a cut after frame 0); the change between
+all neighbouring frames (the cut: 73 against about 4; the flash: level 79 -> 208 -> 83); a sharpness
+number (variance of the vertical second difference) at the first and last frame.
 
 ### 8.5 The camera, through the prompt
 
-Measured on the chain of section 11.4 (the shot prompts in full: city-walk
-`continuous/noguide/prompts/`):
+Measured on the 12 s chain (section 11.4; prompts in city-walk `continuous/noguide/prompts/`) and
+the 58 s film (section 11.5; dusk-walk `prompts/`, the takes in `picks.json`). "Continuing" = the
+clip starts from the last frame of a clip that already moved that way.
 
 | instruction in the shot prompt | result | seed |
 |---|---|---|
 | "The camera tracks steadily backwards in front of her at her pace" | obeyed | 42 |
-| "The camera keeps gliding backwards ahead of her and slowly drifts round to her left side, until she is seen in a three-quarter view" | ignored: it kept tracking straight back, she stayed centred and frontal | 42 |
-| "Arc shot ... The camera slowly arcs to the right around her" | overdone: the camera turned past her onto the façade and she walked out of the frame on the right | 7 |
-| "Static shot ... The camera stays still as she comes closer ... and walks past it, leaving the frame on the right" | ignored: still a track-back, she stayed centred and the same size | 42 |
-| "The camera stops and she walks up close, then the camera pans to the right to follow her as she passes" | obeyed: full body to a close three-quarter view in 2 s, then a pan with her, ending on her shoulder | 7 |
+| "Tracking shot from behind ... The camera follows behind her at her pace, keeping her centred" | obeyed | 7 (42: she drew ahead a little) |
+| "... The camera tracks sideways at ground level alongside her heels" / "Close-up tracking shot in profile ... tracks sideways alongside her" | obeyed | 42, 7 / 42 (7: pushed in to her face) |
+| "The camera glides slowly forwards between the towers" (high angle, city only) | obeyed, a slight tilt up | 42 (7: tilted up into the sky) |
+| "The camera pushes slowly forwards towards her" / "Close-up portrait ... The camera pushes in slowly on her face" | obeyed (slow) | 42 / 7 |
+| "The camera keeps pushing slowly forwards past her shoulder" | partly: pushed in on her back | 42 |
+| "The camera stops and she walks up close, then the camera pans to the right to follow her as she passes" | obeyed: a close three-quarter view in 2 s, then a pan with her | 7 |
+| "The camera keeps gliding backwards ahead of her and slowly drifts round to her left side ..." | ignored: kept tracking straight back | 42 |
+| "Static shot ... The camera stays still as she comes closer ... and walks past it" | ignored: still a track-back | 42 |
+| "The camera cranes slowly down towards the wide plaza" (continuing a forward glide) | ignored: kept gliding and tilting up | 42, 7 |
+| "**Crane shot, descending:** ... The camera tilts down and lowers steadily towards the wide plaza" | roughly obeyed: a gentle descent | 2024 (11: descends, a flying artefact) |
+| "The camera cranes slowly upwards behind her" (continuing a follow) | ignored: kept following at eye level | 42, 7 |
+| "**Crane shot, rising:** ... The camera rises slowly straight upwards behind her and tilts down" | obeyed | 11 (2024: a smaller rise) |
+| "Medium-full shot, low angle: ... walks ... towards the camera ... The camera tracks slowly backwards in front of her" (she starts in three-quarter view) | ignored: she and the camera went sideways | 42, 7 |
+| "**Tracking shot, low angle:** ... walks straight towards the camera ... The camera moves backwards in front of her ..." | obeyed | 2024 (11: still sideways) |
+| "(Arc shot ...) The camera slowly arcs to the right around her" | overdone: swung round past her or to behind her | 7 (chain); 42, 7 (film) |
+| "The camera pulls slowly backwards and upwards, away from her" (extreme wide, high angle) | ignored: moved forwards (42), stayed still (7) | 42, 7 |
+| "Aerial drone shot pulling away: ... The drone flies slowly backwards and rises higher" | ignored: nearly static | 11, 2024 |
+| "**Slow zoom out:** ... The view widens slowly as the camera zooms out" | roughly obeyed: a modest widening | 7 |
 
 So:
 
-- Name **one clear, ordinary camera move** (track back, pan, arc). A gentle "drifts" is ignored, and
-  so is a still camera with the motion given to her.
-- A named move may be overdone: the arc lost her. Make 2-3 takes and pick.
-- Once a clip tracks back, the next clip keeps doing so unless the prompt names a clear move.
+- Name **one clear, ordinary camera move**, and **start the prompt with its film term**: "Crane shot,
+  descending", "Crane shot, rising", "Tracking shot, low angle" and "Slow zoom out" turned moves the
+  plain description had left undone into obeyed ones. A gentle "drifts" is ignored, and so is a still
+  camera with the motion given to her.
+- A clip keeps the move of the clip it continues (a track-back, a follow, a glide) unless the prompt
+  starts with another named move.
+- **Pulling back from a high, wide view is the hardest**: ignored in 4 takes with 2 wordings; only
+  "Slow zoom out" widened it.
+- A named arc is overdone (3 takes of 3). Make 2-3 takes and pick.
 - Before continuing from a take, check its **last** frame is a usable first frame: the subject in
   frame and sharp. The arc take ended with her leaving the frame and was not continued.
 
@@ -634,11 +674,18 @@ continue with no jump. No dissolve was needed. At a cut the frame-to-frame chang
 clip's level (no guide, cut 2: from 3.4 to about 10, where clip 3 starts moving faster); a dissolve
 would not change that.
 
+At the six joins of the 58 s film (section 11.5) the brightness matched within 0.2 level, the change
+at the join was 7.2-13.3, 1-2.5 above the second clip's own motion just after it and far below a
+scene cut (58-82), and no frame repeated. The weakness that stays is a **speed step**: the first clip
+ends nearly still and the second moves at once (change per frame 1.6 -> 9.6, 1.7 -> 11.9,
+1.2 -> 10.9, 3.5 -> 10.6 at four of the six joins). A dissolve does not fix it; how much it shows
+in motion is not known.
+
 ## 11. What was measured
 
 All: LTX-2.3 distilled Q5_K_M on the L4 `ltx`, 97 frames, 768x448, 24 fps, seed 42, the city-walk sheet
 and sheet prompt, `depth_range [2, 120]` where a guide was used. **One take each (seed 42), except the
-two seeds per clip of section 11.4; judged from stills and frame differences only.**
+several seeds per clip of sections 11.4 and 11.5; judged from stills and frame differences only.**
 
 ### 11.1 Which inputs LTX follows (the first 4 s of the walk)
 
@@ -695,6 +742,29 @@ previous clip's re-encoded frame), and the close-up of clip 3 has strong motion 
 nearly one held composition, and the change in the last 4 s is quick (full body to a shoulder
 close-up in about 2.5 s). No extra people, limbs or text in the picked takes.
 
+### 11.5 A one-minute film
+
+Project `dusk-walk/` ("Blue Hour"): the city-walk woman and sheet, no guide, 58.00 s, 768x448,
+24 fps, no dialogue.
+
+- **Shape:** 9 scenes, 15 clips (13 new, 2 reused from the 12 s chain); no scene longer than two
+  chained clips; each scene starts from its own starting picture (section 7), so sharpness restarts
+  at every scene. Plain cuts between scenes; the light changes from hazy dusk to blue hour at one cut.
+- **Clips:** 34 takes (section 8.4), 6,689 GPU s, about 4.3 units, peak VRAM 13.6 GB on the L4;
+  31 starting pictures from text, 518 GPU s (section 7).
+- **The cut** (`blue_hour.yaml`, one `video_clip` per clip, `vidgen render --preview` at full size):
+  vidgen does the `trim:` per clip (three clips cut short where they went soft, darker or into a
+  blurred close-up), drops the duplicated frame 0 of each chained clip, `match_previous: true` on each second
+  clip, the cuts, a 0.5 s fade in (`transition: {type: fade_color, color: '#000000', duration: 1.0}`
+  on the first scene) and the music (a vidgen score file, `fade_in: 0.5, fade_out: 2.0`, mixed to
+  -16 LUFS). ffmpeg then does, in one re-encode (CRF 17, audio copied), the **fade out to black over
+  the last 1.75 s** (vidgen fades a film out only into a scene after it) and the **title** with
+  `drawtext` (a `video_clip`'s `title:` is a heading on a plate). Joins: section 10.2.
+- **Weak spots, from stills:** the speed steps; a motion-blurred end of a reused clip; no closing
+  pull-back (a nearly static last view, the woman 10-15 px wide).
+- **Not known:** nobody has watched the motion or heard the music; every verdict comes from stills
+  and numbers.
+
 ## 12. 8 s in one clip: `fps: 12` + RIFE
 
 A clip is at most 121 frames (5 s at 24 fps). With `fps: 12` on a guided shot vidgen generates at 12 fps
@@ -741,7 +811,10 @@ already looks right.
 | Qwen-Image-Edit starting picture, with the model load | 112 s, 0.073 units |
 | no-guide clip, 97 frames 768x448 (first frame + sheet), a session's first job (loads the models) | about 390 s GPU, 0.25 units, about 7 min 20 s; peak 13.3 GB |
 | the same, later jobs | 224-252 s GPU, 0.15-0.16 units, about 4 min; peak 13.6 GB |
+| the same, after a take with the same prompt (cached text encoding) | about 154 s GPU |
 | the 12 s no-guide walk: 5 new jobs (section 11.4) | 1 313 s GPU (22 min), 0.85 units |
+| the 58 s no-guide film: 34 jobs (section 11.5) | 6 689 s GPU (111.5 min), 4.33 units; peak 13.6 GB |
+| Z-Image-Turbo starting picture, 1536x896 from text, ComfyUI with default flags | 13.7-14.4 s (first 99.7 s) |
 | depth guide + sheet clip, 97 frames 768x448 | 428-514 s GPU, 0.28-0.33 units, 7.5-9 min door to door |
 | sheet clip, 97 frames, peak VRAM | 19.2 GB (about 26 s a sampling step, text step on the CPU about 150 s) |
 | the guided 12 s walk: 1 picture + 4 clips | 1 935 s GPU (32 min), 1.25 units |
@@ -786,5 +859,6 @@ the L4 recipe of section 3.1.
 [`tools/colab/`](../tools/colab/) (the [README](../tools/colab/README.md) says where each script runs).
 The projects these results come from stay outside the repo, in the owner's `video-projects/`:
 `city-walk/` (the walk, its sheet, the four-variant test in `continuous/testA` and `testB`, the joins, the no-guide chain in `continuous/noguide`),
+`dusk-walk/` (the 58 s film: `NOTES.md`, `picks.json`, `blue_hour.yaml`, `scripts/final_cut.py`),
 `starfall/` (text-only panels, the blockout test, the image-model comparison), `escapement-remake/`
 (guide choice, 12 fps, the L4 memory fit), `footage-test/ltx-test/` (the canny and first-frame tests).
