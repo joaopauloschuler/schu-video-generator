@@ -9662,1672 +9662,789 @@ Returns at once with no scene theme and no motif.
 `docs/COOKBOOK-AUDIODRAMA.md` (skeleton checked by `test_docs`). Review fixes are folded into §112.3.
 ## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–297)
 
-Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
-lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
-timing, text, captions, music, sound design and assembly. By default the model's own audio is not used
-(the job is sent with `generate_audio: false`; §113.11 for `sound: model`). Opt-in (`videogen:` and, from Step 293, per-beat
-`generated_shot:` specs, §113.3); nothing changes for existing projects. Steps 292–294 spend nothing (paid
-endpoints mocked); Step 295 cleans up the sheet prompts after the first paid sheet pictures
-(§113.6); Step 296 records the first answers of the real API and shrinks the pictures sent
-(§113.7); Step 297 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
+Video models make selected shots; vidgen keeps story, timing, text, captions, music, sound and
+assembly. Opt-in through `videogen:` and per-beat `generated_shot:`; nothing changes for other
+projects. Providers: `openrouter` (paid), `mock` (fake API), `comfyui` (§113.20). User side:
+[docs/CONFIG.md](docs/CONFIG.md#generated-video-videogen-vidgen-generate),
+[docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md](docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md),
+[docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md](docs/COOKBOOK-RESTYLE-WITH-LTX-ON-COLAB.md).
 
 ### 113.1 API facts (checked 2026-11-07; no key used, nothing paid)
 
-Sources: OpenRouter's video skill page `openrouter.ai/skills/openrouter-video`, the multimodal
-guide `docs/guides/overview/multimodal/llms-full.txt` (video generation section), the cookbook
-page `docs/cookbook/video-generation/reference-to-video.md`, the Go SDK component pages
-`VideoGenerationRequest`, `InputReference`, `ContentPartAudio`, `AudioURL`, `ContentPartVideo`,
-the per-model pages `openrouter.ai/<model>/llms.txt` (heygen-video-1, seedance-2.5), and the
-public `GET /api/v1/videos/models` (fetched without a key; copy in
-`tests/data/openrouter_video_models.json`).
-
-- `POST /api/v1/videos` `{model (required), prompt (optional only for image-only models),
-  duration (int s), resolution | size "WxH" (interchangeable with resolution + aspect_ratio),
-  aspect_ratio, frame_images [{type: image_url, image_url: {url}, frame_type: first_frame |
-  last_frame}], input_references [{type: image_url | audio_url | video_url, <type>: {url}}],
-  generate_audio (default: the endpoint's flag), seed (determinism not guaranteed),
-  previous_job_id (continue / extend; same model and endpoint), callback_url (HTTPS webhook),
-  provider {order, only, ignore, options.<slug>.parameters.<key>}, session_id, user, trace}` →
-  202 `{id, polling_url, status: pending}`. "If both arrays are present, `frame_images` wins"
-  (image-to-video). An unlisted value is a 400; a listed one can still be refused by the
-  provider serving the call.
-- `GET /api/v1/videos/{id}` → `{id, status: pending | in_progress | completed | failed |
-  cancelled | expired, error, unsigned_urls, usage: {cost, is_byok}}`; poll about every 30 s.
-  `GET /api/v1/videos/{id}/content?index=0` (with the auth header) → the MP4 (`unsigned_urls`
-  are an alternative). vidgen uses the content endpoint.
-- `GET /api/v1/videos/models` (public): 33 models on 2026-11-07, each `{id, canonical_slug,
-  name, description, created, supported_resolutions, supported_aspect_ratios, supported_sizes,
-  supported_durations (often discrete: [4, 6, 8]), supported_frame_images, generate_audio,
-  seed, upscale_factor, creativity, pricing_skus: {name: price string}, allowed_passthrough_
-  parameters}` (`null` = not listed; heygen/avatar-iv and the edit / upscale models list no
-  durations). SKU names seen: `duration_seconds[_with_audio | _without_audio][_<tier>]`,
-  `cents_per_video_output_second_<tier>`, `cents_per_second_output[_<tier>]`,
-  `text_to_video_` / `image_to_video_duration_seconds_<tier>`, `reference_duration_seconds_
-  <tier>`, `long_duration_seconds_<tier>`, `cents_per_second_video_continuation_<tier>`,
-  `video_tokens[_<tier>][_without_audio | _with_video_input]` (Seedance), `cents_per_image_
-  input`, `reference_input_images`, `reference_images`, `minimum_cents_per_generation`,
-  `cents_per_megapixel_second_*` (upscaler).
-- Image references are honoured by all providers; audio and video references only by providers
-  that support them (BytePlus Seedance 2 and newer); others ignore them.
-- **Not eligible for Zero Data Retention**: the provider keeps the output a short time so it
-  can be retrieved; with ZDR enforced, video requests are not routed.
-- Errors: 402 / 429 / 413 / content-policy refusals are not documented on these pages (the
-  brief's list); vidgen maps them anyway (§113.2), plus 401 / 403 and failed / expired jobs.
-
-**The data-URL question (settled as far as the docs go).** `frame_images[].image_url.url`
-"is an https URL or a base64 data URL" (per-model pages) and the skill page says an image `url`
-"can be a public `https://` URL or a local-file data URL" (`data:<mime>;base64,<b64>`) for both
-`frame_images` and `input_references` (same entry shape). Confirmed: **pictures may be sent
-inline**. The reference-to-video cookbook describes only public HTTPS image URLs ("stable,
-directly downloadable"). For **audio_url and video_url no page says data URLs work**: the SDK's
-`AudioURL.url` / `VideoURL` have no description, and the only audio example (Seedance 2.5
-"lip-synced to the reference voiceover") uses a hosted https MP3. Not confirmed: inline audio /
-video; no size limits are documented (413 exists). So vidgen sends pictures inline, and for
-audio / video needs a hosted URL from a pluggable `uploader(Path) -> url` (none is chosen: the
-owner decides on a hosting service) or the opt-in `inline_media: all` (try it in Step 296 with
-the cheapest model: a rejected request is a 400 before generation). Without either, the request
-stops with an error naming both options. **Settled in Step 296 (§113.7): OpenRouter refuses
-inline audio** (HTTP 400 "Only HTTPS URLs are allowed"), so `inline_media: all` no longer sends
-audio / video inline.
+- `POST /api/v1/videos` `{model, prompt, duration, resolution | size, aspect_ratio, frame_images
+  [{type: image_url, image_url: {url}, frame_type: first_frame | last_frame}], input_references
+  [{type: image_url | audio_url | video_url, <type>: {url}}], generate_audio, seed,
+  previous_job_id, provider {options.<slug>.parameters.<key>, ...}, ...}` → 202 `{id,
+  polling_url, status}`. With both arrays, `frame_images` wins. `GET /api/v1/videos/{id}` →
+  `{status: pending | in_progress | completed | failed | cancelled | expired, error, usage: {cost,
+  is_byok}}`; vidgen downloads via `GET .../{id}/content?index=0`.
+- `GET /api/v1/videos/models` (public; copy in `tests/data/openrouter_video_models.json`): per model
+  supported resolutions / aspect ratios / sizes / durations / frame images, `generate_audio`,
+  `seed`, `pricing_skus` (`duration_seconds_*`, `cents_per_*`, `video_tokens_*`, per-image,
+  `minimum_*`, ...), `allowed_passthrough_parameters`; `null` = not listed. It is not filtered by
+  the account's privacy settings; video is not ZDR-eligible (with "ZDR endpoints only" every video
+  model is refused, HTTP 404).
+- Pictures may be sent inline as data URLs; **audio / video must be https URLs** (inline: HTTP
+  400). Audio / video references work only on providers that support them (Seedance 2+).
+- OpenRouter checks its own worst-case cost before accepting a job (HTTP 402 even with credits
+  above vidgen's estimate); vidgen cannot predict it.
 
 ### 113.2 The provider layer (Step 292)
 
-- **Package** `vidgen.videogen` (not a render input: listed in `NOT_RENDER_INPUTS`; the
-  `videogen` config is excluded from scene fingerprints).
-  - `VideoRequest(model, prompt, duration, resolution | size, aspect_ratio, frame_images,
-    references, seed, previous_job_id, provider_options: {slug: {param: value}})` (checked:
-    `author/name`, duration > 0, not size and resolution, frame images with a frame type,
-    references without). `MediaInput(kind: image | audio | video, path | url, frame_type)`.
-  - `canonical_request` (cache version, every field, `generate_audio` as requested, files by
-    SHA-256 and size, never by name) and `request_hash` (24 hex digits of its SHA-256).
-  - `JobState(id, status, polling_url, cost, is_byok, error)`.
-- **Models** (`models.py`): `VideoModel.from_record`, `parse_models`, `load_catalog(refresh,
-  cache_path, fetch, now, max_age=1 day)` → `Catalog(models, fetched_at, source live | cache,
-  note)`: the cache (`<vidgen cache>/openrouter/video_models.json`, `{fetched_at, doc}`) when
-  young; else fetched (public, no key) and cached; offline the cache whatever its age (a note),
-  else an error. `Catalog.find` with did-you-mean. `check_request(request, model) ->
-  RequestCheck(problems, notes, drop)`: duration not listed → problem with the snapped length
-  (`snap_duration`: the shortest allowed ≥ the wanted, else the longest; "did you mean 6?"),
-  resolution / size / aspect ratio not listed → problem with did-you-mean, a frame type not
-  listed, a passthrough option not allowed; a setting the model lists nothing for (e.g.
-  avatar-iv's duration) → note and not sent (`drop`); a seed on a model without one → dropped.
+- **Package** `vidgen.videogen` (in `NOT_RENDER_INPUTS`; `videogen` config outside fingerprints).
+  `VideoRequest(model, prompt, duration, resolution | size, aspect_ratio, frame_images,
+  references, seed, previous_job_id, provider_options, generate_audio, sheet, fps)` (checked:
+  `author/name`, duration > 0, not both size and resolution, frame images need a frame type,
+  references none). `MediaInput(kind: image | audio | video, path | url, frame_type)`.
+  **Cache key**: `canonical_request` (cache version, every field, files by SHA-256 and size, never
+  by name; `pictures_sent` §113.7; `sheet` / `fps` only when set) → `request_hash` (24 hex of
+  SHA-256). `JobState(id, status, polling_url, cost, is_byok, error)`.
+- **Models** (`models.py`): `load_catalog(refresh, cache_path, fetch, now, max_age=1 day) ->
+  Catalog` from `<vidgen cache>/openrouter/video_models.json` when young, else fetched (no key) and
+  cached; offline the cache at any age, else an error. `Catalog.find` with did-you-mean.
+  `check_request(request, model) -> RequestCheck(problems, notes, drop)`: unlisted duration /
+  resolution / size / aspect / frame type / passthrough → problem with a suggestion
+  (`snap_duration`: shortest allowed ≥ wanted, else the longest); a setting the model lists
+  nothing for → note and dropped; a seed on a model without one → dropped.
 - **Estimates** (`estimate(request, model, duration=, minimum=True) -> Estimate(cost, basis)`):
-  `cents_*` SKUs / 100; per-second SKUs × seconds; token SKUs × `W × H × 24 fps × s / 1024`
-  (ByteDance's formula; it reproduces the listed "from ~$0.10/s" of seedance-2.5 at 480p);
-  `+` per-picture SKUs × input pictures; a `minimum_*` floor. Choosing among SKUs
-  (`_applicable`): continuation SKUs only with `previous_job_id`, `reference_*` only with
-  references, `with_video_input` only with a video reference, `image_to_video` with frame
-  images else `text_to_video`, then the request's tier (else the untiered SKUs, else all), then
-  `without_audio` when listed (the audio choice follows `generate_audio`, §113.11); the **highest** remaining SKU (e.g. heygen's `long_duration`):
-  a conservative budget. Without a duration: the model's longest. Without resolution / size: all
-  tiers (the highest). Unknown (no SKUs understood, no length) → `cost None`: a paid run refuses.
-  `price_lines(model)` (one second per tier, `~` for token prices, the floor apart) and
-  `model_line` for the listing.
-- **Provider** (`openrouter.py`, `OpenRouterVideoProvider(key_via_proxy, inline_media,
-  uploader, transport, sleep, clock, environ, timeout 120, poll_interval 10, max_interval 60,
-  poll_timeout 900, retries 4)`): `submit(request, drop)` (one attempt, never retried;
-  refuses a body > 20 MB before sending), `status(id)`, `wait(job)` (sleep 10 s × 1.5 per
-  poll up to 60 s; past `poll_timeout` a VidgenError saying the paid job keeps running and the
-  next run polls it), `download(id, dest)` (atomic write). Polls and the download retry 429 /
-  5xx / 524 / 529 and unreachable (Retry-After or backoff). `request_body`: model, prompt,
-  set fields minus `drop`, `generate_audio` (as requested), `frame_images`, `input_references`
-  (`{type: <kind>_url, <kind>_url: {url}}`), `provider.options`. `media_url`: hosted url as is;
-  a picture inline (`data:image/png;base64,...`); audio / video inline only with
-  `inline_media: all`, else the `uploader`, else an error. Transport protocol
-  `(method, url, headers, body, timeout) -> Response(status, body, headers)` (urllib by default).
-- **Key** (decision): `OPENROUTER_API_KEY` read from the environment at each request
-  (`read_key`; spaces / non-ASCII refused), sent only as `Authorization: Bearer`, scrubbed
-  from errors (`httpapi.scrub`), never logged. **Proxy mode**: `videogen.key_via_proxy: true` or
-  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1|true|yes|on` → no Authorization header and no key needed
-  (the sandbox's agent proxy injects it). The missing-key message names both.
-- **Errors** (`http_error`, `job_failure`): 402 credits (nothing charged), 429 rate limited
-  (paid jobs not retried), 413 too large (inline inputs: smaller or hosted), 401 / 403 key,
-  content-policy words (`content policy`, `moderation`, `safety`, `flagged`, ...) in any answer
-  or a failed job's error, 404 job gone, failed / cancelled / expired jobs (expired: "submitting
-  it again is a new paid job"); `error.message` of JSON bodies quoted.
-- **Mock** (`mock.py`): `MockOpenRouter` (a transport faking `/videos`: job ids
-  `mock-job-N`, `states` per poll, `cost`, `video` bytes, scripted `submit_error`, `poll_error`
-  ×`poll_errors`, failed / expired states with `error`; records requests) and
-  `MockVideoProvider` (proxy mode, no sleeping). `videogen.provider: mock` uses it.
-- **Ledger** (`ledger.py`): `videogen-ledger.jsonl` (mock: `videogen-ledger.mock.jsonl`),
-  append-only lines `{event: submit, job_id, provider, model, request_hash, estimate_usd, time}`
-  and `{event: completed | failed | cancelled | expired, job_id, cost_usd, is_byok, time}`; an
-  unreadable line is an error. `Ledger.jobs()`, `spent()` (reported cost, else the estimate —
-  open, timed-out and unreported jobs count), `BudgetState(cap, spent).remaining_usd`,
+  per-second SKUs × s; token SKUs × `W × H × 24 × s / 1024`, a `with_video_input` SKU counting
+  `(1 + video references) ×` the output tokens; + per-picture SKUs; a `minimum_*` floor. SKU choice
+  (`_applicable`): continuation only with `previous_job_id`, `reference_*` only with references,
+  `with_video_input` only with a video reference, `image_to_video` vs `text_to_video` by frame
+  images, the request's tier, audio SKUs following `generate_audio` (§113.11); then the
+  **highest** remaining (conservative). No duration: the longest; no resolution: the highest tier.
+  Nothing understood (e.g. `megapixel` SKUs) → `cost None`, and paying refuses.
+- **Provider** (`openrouter.py`, `OpenRouterVideoProvider(key_via_proxy, uploader, transport,
+  sleep, clock, environ, timeout 120, poll_interval 10, max_interval 60, poll_timeout 900, retries
+  4)`): `submit` (one attempt, never retried; refuses a body > `MAX_INLINE_BYTES` 20 MiB before
+  sending), `status`, `wait` (×1.5 per poll up to 60 s; past `poll_timeout` a VidgenError: the job
+  keeps running, the next run polls it), `download` (atomic). Polls / downloads retry 429, 5xx,
+  524, 529, unreachable. `media_url`: a url as is; a picture as a data URL; audio / video through
+  `uploader(Path) -> url` (the quick tunnel, §115), else a VidgenError. Transport `(method, url,
+  headers, body, timeout) -> Response` (urllib).
+- **Key**: `OPENROUTER_API_KEY` read per request, sent only as `Authorization: Bearer`, scrubbed
+  from errors (`httpapi.scrub`), never logged or stored. Proxy mode (`videogen.key_via_proxy` or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1|true|yes|on`): no header, no key; also for sheets' image
+  provider.
+- **Errors** (`http_error`, `job_failure`): 402, 429 (paid submits not retried), 413, 401 / 403,
+  content-policy words (`is_policy_error`), 404, failed / cancelled / expired jobs.
+- **Mock** (`mock.py`): `MockOpenRouter` transport and `MockVideoProvider` (`provider: mock`; job
+  ids `mock-<8 hex>-N`, unique across runs); completed jobs return a playable MP4
+  (`synthetic_clip`, also QA's test patterns; a tone with `generate_audio: true`).
+- **Ledger** (`ledger.py`): `videogen-ledger.jsonl` (mock: `.mock.jsonl`, comfyui:
+  `.comfyui.jsonl`), append-only, `fsync`ed: `{event: submit, job_id, provider, model,
+  request_hash, estimate_usd, time}`, `{event: completed | failed | cancelled | expired, job_id,
+  cost_usd, is_byok, time}`, intents (§113.10); an unreadable line is an error. `spent()` = reported
+  cost, else the estimate (open, timed-out, unreported jobs and unresolved intents count).
   `refusal(budget, estimate, model)`: no cap, unknown estimate, estimate > remaining.
-- **Run** (`run.py`): `plan_clip(root, settings, request, catalog=, budget_usd=, duration=,
-  provider=, again=) -> ClipPlan` and `generate_clip(..., pay=False, provider=) -> ClipResult
-  (plan, path, job, paid, cost)`. Order: cache hit (`assets/generated_video/<hash>.mp4`) →
-  nothing sent; the ledger's last job of the same hash open or completed → polled / downloaded
-  (never resubmitted; `again=True` only after its output expired); model checks (problems refuse
-  before paying); estimate vs the cap (the lower of `videogen.budget_usd` and `budget_usd=`);
-  without `pay` the plan (`ClipPlan.lines()`: would generate / job reuse / estimate / budget /
-  notes / problems / refused / prompt); with `pay`: credentials, submit, `submit` line, wait,
-  terminal line, download, sidecar `<hash>.json` `{request, key, provider, job_id,
-  estimate_usd, cost_usd, bytes, time}`.
-- **Config** `videogen: {provider: openrouter | mock, budget_usd: null (≥ 0), key_via_proxy:
-  false, inline_media: images | all, poll_timeout: 900}` (`VideogenConfig`). Decision: a
-  `videogen:` section parallel to `imagegen:` rather than a top-level `generate:` (that name is
-  the scenes' image param and Step 293's per-beat spec).
-- **CLI** `vidgen generate models [--refresh] [--json]` (count, date, source; one line per
-  model: id | durations | resolutions | aspect ratios | frame images | estimated prices) and
-  `vidgen generate ledger [PROJECT] [--json]` (jobs, budget, spent, left). Step 293 adds `plan |
-  sheets | inputs` (§113.3), Step 294 `run [--pay] [--budget] | status | takes | pick`.
-- **Public** `vidgen.api`: `VideoRequest`, `MediaInput`, `generate_clip`, `plan_clip`.
-- **Tests** `tests/test_videogen.py` (mock only): cache keys by content, request errors,
-  model list / did-you-mean, checks (durations snapped, resolutions, frame types, passthrough,
-  dropped settings), estimates (per second, tiers, without audio, per token, per picture,
-  floors, unknown), catalog cache / offline / refresh, the paid flow (states, body, ledger,
-  sidecar, separate mock ledger), cache hit = no second submit, dry run sends nothing, cap /
-  estimate / unknown-price / settings refusals, ledger accounting, timeout then resume without a
-  second submit, 402 / 429 / 413 / content-policy submits (one attempt, no ledger line), failed
-  (policy) and expired jobs, polls retried on 429, inline pictures / hosted audio / uploader /
-  `inline_media: all`, proxy mode (config and env) sends no Authorization header, env mode sends
-  it and never logs or stores the key (scrubbed when echoed), config, the CLI.
-- **Not done (later steps)**: per-beat specs, sheets, guide renders, plans (293, §113.3); placing clips,
-  takes, QA, `run` / `status` CLI, MCP tools (294); a hosting `uploader`; the mock writes
-  placeholder bytes, not a playable MP4; estimates for upscale / edit models (`megapixel`) stay
-  unknown.
+- **Run** (`run.py`): `plan_clip(...) -> ClipPlan`, `generate_clip(..., pay=False) -> ClipResult`.
+  Order: cache hit `assets/generated_video/<hash>.mp4` → nothing sent; the ledger's last job of the
+  hash open or completed → polled / downloaded, never resubmitted (`again=True` only after its
+  output expired); model checks; estimate vs the cap (lower of `videogen.budget_usd` and
+  `budget_usd=`); with `pay`: submit, wait, download, sidecar `<hash>.json` `{request, key,
+  provider, job_id, estimate_usd, cost_usd, bytes, time}`.
+- `videogen:` is its own section (not top-level `generate:`, the scenes' image param);
+  `VideogenConfig` in `config.py`.
+- **CLI** `vidgen generate models | ledger | plan | sheets | inputs | run | status | takes | pick |
+  resolve | frames | subjects`. **Public** `vidgen.api`: `VideoRequest`, `MediaInput`,
+  `generate_clip`, `plan_clip`.
 
 ### 113.3 Sheets, shot specs, inputs and the plan (Step 293)
 
-- **Names** (decision, avoiding collisions): `characters[].reference_sheet` (not `sheet`: `vidgen
-  character-sheet` is the drawn cartoon sheet), top-level `style_sheet:` (not `style`: the
-  image `style` words and scenes' `style` params), the beat key `generated_shot:` (not
-  `generate:`: the scenes' image param). All three are excluded from scene fingerprints
-  (`style_sheet` like `videogen`; `characters[].reference_sheet` and beats' `generated_shot` by
-  nested excludes), so adding them re-renders nothing.
-- **Config**: `ReferenceSheet {prompt, views: [front | three_quarter | side | back] (default
-  front, three_quarter, side; distinct), expressions, notes, seed, approved: false}`;
-  `StyleSheet {palette (words or list), era, lens, notes, references (your pictures), frames: 1
-  (0–4), frame_prompt, seed, approved: false}` with `words()`; `GeneratedShot {kind: talking |
-  action | establishing, model (author/name), prompt, setting, characters, refs, audio: beat |
-  none, guide: false, first_frame (sheet | render | none | a picture), seed, resolution,
-  aspect_ratio, line: true}`: a talking shot refuses `audio: none`; defaults: audio beat and
-  first frame sheet for talking, none otherwise.
-- **Sheets** (`videogen/sheets.py`): each picture is an `ImageRequest` made by `image_request`
-  (prompt, style, key rules of `generate:` pictures; the style words = `imagegen.style` +
-  `style_sheet.words()`) moved to `assets/sheets/<owner>_<label>_<key>.png` (+ `.json`
-  sidecar). Characters: one picture per view (full body, neutral expression, portrait), one per
-  expression (front, head and shoulders); the prompt words are in §113.6 (Step 295); style:
-  `frames` stills of `frame_prompt` in the video's shape (frames after the first get seed + n −
-  1). `Sheet {owner, location, approved, pictures, notes}`: `ready` = approved and all made;
-  `status()` / `problem()`. `run_sheets(pay=False)`: the dry run (pictures, prices via
-  `price_plan`); with `pay`: problems refuse, the budget refuses (no cap, unknown price, total >
-  left), then per picture a ledger `submit` (`image-<key>`, estimate), the call, `completed`
-  with the reported cost (`failed`: counted at the estimate), the files. An approved sheet with
-  missing pictures (its prompt changed) is never made again: blocked until `approved: false`.
-  The ledger is the real one unless the image provider is named `mock` (tests).
-- **Shots** (`videogen/shots.py`, `project_shots(project, catalog)`): per beat with a spec, the
-  window on the planned timeline (`VideoPlan` start; `beat_windows` at the video's fps, as
-  renders time it). Lengths: `snap_duration` of the part; a beat longer than the model's longest
-  is split into `ceil(window / longest)` equal parts `<beat>_p<n>` (offset into the beat); a
-  model without durations: the request's duration is the part rounded up (dropped by
-  `check_request`), priced with `duration=` that many seconds. Resolution: the spec's or the
-  model's lowest; aspect ratio: the spec's or the listed one nearest the format (log ratio).
-  Speaker: the character whose `voice` is the beat's voice. Characters: the spec's, else the
-  speaker (talking, action) or none (establishing). Inputs (`ShotInput {role, kind, path, what,
-  frame}`): the first frame (sheet: the speaker's / first character's first picture; render:
-  `build/videogen/<shot>/first_frame.png`; a picture) as a frame image where the model lists
-  `first_frame`, else as a picture reference (avatar-iv lists no frame images); refs (default:
-  the characters' sheets and `style`; talking: none) — a name → all its sheet pictures, `style` →
-  the frames and `style_sheet.references`, else a picture file; audio → `audio.mp3`; guide →
-  `guide.mp4`. Blocked (planned and priced, not ready to pay): a sheet not ready, an input not
-  made yet, audio / video with `inline_media: images` (no uploader yet). Problems (with
-  did-you-mean): unknown model (from the catalog), characters, refs, missing pictures, a talking
-  shot without a speaker or sheet. `shot_problems` gives the catalog-free ones to `vidgen
-  validate`.
-- **Prompt** (`shot_prompt`): "<framing>: <prompt>." (talking: "Talking close-up of <Speaker>,
-  facing the camera, speaking"; "Action shot"; "Establishing shot"), "Setting: ...",
-  "Characters: Name (sheet prompt; notes); ...", `<Speaker> says: "<text>"` (or "Spoken over
-  the shot", without a speaker; `line: false` leaves it out), "Style: <style words>", "No
-  on-screen text, captions, subtitles or logos." Names display capitalised (`old_tom` → Old
-  Tom).
-- **Inputs** (`videogen/inputs.py`, `make_inputs(project, shots, guide=, render=)`): the voice
-  from the beat's narration MP3 (`vidgen tts` first): `apad`, `atrim` from the part's offset for
-  exactly its length, MP3 mono 44.1 kHz 128 kb/s; with `guide` the scene rendered as a draft
-  (`Project.load(..., draft=True)`, `render_scenes`, reused while current), cut from the beat's
-  real start in the scene's timings + the offset for the length, silent H.264, and its first
-  frame past a fade in (the first frame at least 0.7 × as bright as the brightest of the first
-  1.5 s). Without `--guide` the renders are skipped with a message.
-- **Plan** (`plan_shots(project, catalog=, budget_usd=, shot_ids=, lookup=) -> VideoGenPlan`):
-  per shot the request, `check_request`, `estimate` (with every input made: `plan_clip`, so a
-  cached clip or an earlier job counts 0), what the budget has left after it (the cap minus the
-  ledger's spent minus the sheets' estimate minus the shots before; `over_budget`); the sheets'
-  pictures still to make and their estimate; totals. `lines()`: per shot "shot <id> (<kind>,
-  scene, beat, part, video time, length): model, resolution, aspect", the length line (asks for
-  N s, trimmed to x later | follows the audio, priced as N s), each input (made or not), cached /
-  earlier job, estimate, budget left, notes, problems, blocked, prompt; the sheets; "total: ...
-  clips ..., sheets ...; together $x", the budget line ("OVER THE BUDGET" when it is), "dry run:
-  nothing was sent or paid; n shot(s) blocked, m with problems".
-- **CLI**: `vidgen generate plan [PROJECT] [--shot ID]... [--budget USD] [--variant NAME]
-  [--json]`, `vidgen generate sheets [PROJECT] [--sheet NAME]... [--pay] [--json]`, `vidgen
-  generate inputs [PROJECT] [--shot ID]... [--guide] [--json]`; `--pay` on plan / inputs is an
-  error (294 adds `run --pay`).
-- **Public** `vidgen.api`: `plan_shots`, `project_shots`, `project_sheets`.
-- **Tests** `tests/test_videogen_shots.py` (17; a stub image provider, the model fixture):
-  config and its errors, fingerprints unchanged, sheet pictures / prompts / status, dry run pays
-  nothing, pay needs a budget, pay records the ledger and never makes a picture twice, approval
-  freezes a sheet, over-budget refusal, talking (length from audio, portrait as a reference,
-  prompt), action (inputs, frame image, snapped length), split beats, nearest aspect ratio,
-  validation with did-you-mean (also through `validate_all`), the voice cut exactly, the first
-  frame past a fade, inputs with a stub render, the plan's prices / budget / blocked reasons /
-  text, ready once approved and cut, the CLI (text, JSON, sheets, `--pay` refused).
-- **Sample** (for Step 295): `scratch/s293/sample` — 9:16, two characters with sheets, a style
-  sheet, an establishing shot (veo-3.1-lite, 720p, 4 s: $0.12), an action shot
-  (seedance-2.0-fast, 480p, 4 s, six sheet pictures + style frame + voice + guide: ~$0.095) and
-  a talking close-up (avatar-iv, 720p, 5 s: $0.25); seven sheet pictures (seedream-4.5,
-  $0.04 each: $0.28); together ~$0.745 of the $2.00 budget.
-- **Not done (294 / 295)**: placing clips, trimming, takes, QA, `run` / `status`, MCP; a hosting
-  uploader (audio / video inline only with `inline_media: all`, unconfirmed); whether avatar-iv
-  takes the portrait as an input reference (its record lists no frame images) and whether a
-  240-pixel guide is accepted are open until Step 295.
+- **Names**: `characters[].reference_sheet` (not `sheet`: `vidgen character-sheet` is the cartoon
+  sheet), top-level `style_sheet:`, beat key `generated_shot:`. All outside scene fingerprints.
+  Keys: [docs/CONFIG.md](docs/CONFIG.md#shots-sheets-and-inputs-generated_shot-reference_sheet-style_sheet).
+  Views ⊂ `front | three_quarter | side | back`; `kind: talking | action | establishing`; a talking
+  shot refuses `audio: none`; sheets need `approved: true` before any job uses them.
+- **Sheets** (`videogen/sheets.py`): each picture an `ImageRequest` (`image_request`, style words
+  `imagegen.style` + `style_sheet.words()`) at `assets/sheets/<owner>_<label>_<key>.png` + `.json`:
+  one per view and per expression; `frames` style stills (frame n seed + n − 1). `Sheet.ready` =
+  approved and all made. `run_sheets(pay=False)`: with `pay`, budget checked, then per picture a
+  ledger `submit` (`image-<key>`) and `completed` / `failed`. An approved sheet with missing
+  pictures is never remade (blocked until `approved: false`).
+- **Shots** (`videogen/shots.py`, `project_shots(project, catalog)`): per beat with a spec, its
+  window on the planned timeline. A beat longer than the model's longest is split into
+  `ceil(window / longest)` equal parts `<beat>_p<n>`; each part's duration snaps up. Resolution:
+  the spec's or the lowest; aspect: the spec's or the listed one nearest the format. Speaker: the
+  character whose `voice` is the beat's. Inputs (`ShotInput`): first frame (sheet / render
+  `build/videogen/<shot>/first_frame.png` / file / `last_of` / `painted` / `restyled`) as a frame
+  image if the model lists `first_frame`, else a reference; refs (characters' sheets, `style`,
+  files); `audio.mp3`; the guide. **Blocked** = planned and priced, not payable (sheet not ready,
+  input not made or stale, no host, ...); **problems** refuse a paid run. `shot_problems` feeds
+  `vidgen validate`.
+- **Prompt** (`shot_prompt`): framing, setting, characters, the line (`line: false` omits it),
+  guide sentence, style, "No on-screen text, captions, subtitles or logos." Prompt changes change
+  keys, so wordings of paid shots are kept byte-identical where noted below.
+- **Inputs** (`videogen/inputs.py`, `make_inputs(project, shots, guide=, render=)`): the voice cut
+  from the beat's narration MP3 (offset, exact length, MP3 mono 44.1 kHz 128 kb/s); with `--guide`
+  the scene rendered (draft, or final per `render_kind`) and cut silent H.264 from the beat's start
+  + offset; its first frame past a fade in (≥ 0.7 × the brightest of the first 1.5 s).
+- **Plan** (`plan_shots(project, ...) -> VideoGenPlan`): per shot the request, checks, estimate
+  (via `plan_clip`, so a cached clip or earlier job is 0), budget left (cap − spent − sheets −
+  shots before); sheets to make; totals; nothing sent or paid. `--pay` on plan / inputs is an
+  error. **Public**: `plan_shots`, `project_shots`, `project_sheets`.
 
 ### 113.4 Takes in the film, QA and the workflow (Step 294)
 
-- **Run** (`videogen/workflow.py`, `run_shots(project, pay=, budget_usd=, shot_ids=, out=,
-  provider=, catalog=) -> RunReport`): the plan (`plan_shots`) in video order. Without `pay` a
-  dry run (nothing sent, paid or written; `would_generate` per ready shot, the total). With
-  `pay`: no cap (config or argument) → refused; any selected shot with problems → refused; the
-  ready shots' estimate above what is left → refused (all before anything is paid). Then per
-  shot: problems / blocked → skipped and named; else `generate_clip(root, settings,
-  shot.request(), pay=True, duration=shot.priced_seconds, budget_usd=, catalog=)` (the ledger is
-  re-read per job: the running budget); the clip (paid, cached, or an earlier job downloaded) →
-  `add_take`. The first `VidgenError` stops the run (`details.shots`: the outcomes so far); no
-  retry. `ShotRun.status`: `would_generate | cached | paid | downloaded | blocked | problems |
-  failed`.
-- **Takes** (`videogen/takes.py`): `takes/<shot>/<n>.mp4` + `<n>.json` `{shot, take, key,
-  model, provider, job_id, cost_usd, source, length, time, qa}` + `<n>.contact.png`; a clip whose
-  cache key is already a take is not added again. Picks in `takes/picks.json` `{shot: n |
-  "none"}`. `chosen_take`: the picked take; `none` → none (vidgen's picture); nothing picked
-  (`auto`) → the newest take without QA errors. `pick_take(root, shot, "N" | "none" | "auto",
-  known)` with did-you-mean. Decision: picks in a JSON file, not in `video.yaml` (no rewriting
-  the author's YAML; takes are files anyway). A new take needs a new request (seed, prompt,
-  model): the cache never pays twice.
-- **QA** (`videogen/qa.py`, `check_clip(path, length=, width=, height=) -> QAReport`): decoded
-  grey at 64 px wide at the clip's own rate (≤ 30 fps, so frame-to-frame flicker is not aliased
-  away). Duration < shot − 1 frame → warning (holds); aspect ratio off by > 2 % → warning (what
-  `cover` cuts); scaled up > 2× → warning; black frames (mean < 16 and 99th percentile < 40):
-  all → error, a run ≥ 0.5 s → warning; frozen (mean abs change < 0.6): all → error, ≥ 1 s →
-  warning; flicker = mean |Lₜ − (Lₜ₋₁ + Lₜ₊₁)/2| of the frame means > 3 → warning; cuts = a change
-  > max(30, 6 × median change) outside black → warning (not reported when flickering); a sound
-  stream → info. `contact_sheet(path, out, title, report, count 8, columns 4, thumb 200)`: evenly
-  spaced frames with times under the title and the report lines (PIL).
-- **Placing** (`videogen/compose.py`, `scene_placements(project, scene_id=None) -> [Placement
-  (scene, shot, take, number, model, start, length, fit, fade_in, fade_out, color_match)]`): only
-  when not a draft, `takes/` exists and some beat has a `generated_shot` with `place: true`
-  (otherwise nothing is computed: existing projects pay nothing). From `project_shots(project,
-  None)` (no model list in a render worker): start = the beat's planned start − the scene's
-  (`Shot.scene_start`, new), length = its window; a beat split by the model's longest clip has
-  folders `<beat>_p1..n` and the parts share the window equally (as planned). The scene's last
-  beat keeps its take to the scene's end (`Shot.scene_end`, new: fade-out and hold), so vidgen's
-  picture never flashes between takes. Fades (`crossfade`, default `videogen.crossfade` 0.25 s)
-  only against vidgen's picture: none at a scene's start or end (the film's transitions join
-  scenes) and none where two takes meet (a cut).
-- **In the render** (`vidgen/generated_layer.py`, `GeneratedLayer(scene, placements)`; a render
-  input): attached in `NarratedScene.__init__` right after the overlay layer, so the frame flow
-  is colour fade → drawing texture → **take** → overlays / captions → frame capture → file:
-  overlays and captions are drawn on the take, stills and the layout dump see it. For frames in a
-  window the scene's picture is replaced by `ClipReader(take, size, crop).frame(t − start)`
-  (`cover`: centred crop to the frame's aspect, `contain`: fitted on black): the frame showing
-  at each render frame's time (fps conform; a short take holds its last frame, a long one is cut);
-  colour gains `color_gains(samples, strength)` = (grey-world balance × exposure towards mean
-  118)^strength, each within 0.8-1.25, from 8 frames at 32 px (`videogen.color_match`, default
-  0.5; 0 = as made); alpha ramps for the fades. A frozen wait is split into single frames inside
-  windows only. The take's sound is never read. The scene's timings get `generated: [{shot,
-  take, model, start, length}]`.
-- **Fingerprint**: a scene's fingerprint gains `generated` (each placement: the take's path, size
-  and mtime, start, length, fit, fades, colour match) only when it shows takes, so a new take or
-  pick renders that scene alone and other projects' fingerprints are unchanged; files under
-  `assets/generated_video/` (the clip cache) are left out of the `assets` digest (they reach
-  renders only as takes; before, every downloaded clip made every scene stale).
-- **Credits and disclosure**: `credit_line(project)` = "Includes AI-generated footage (models,
-  sorted)." appended to the description file `<output>_chapters.txt` (also when there are no
-  chapters or references); lint rule `generated_footage` (scene scope, default info, last in
-  `LINT_RULES`): each scene showing takes, with a reminder to mark the upload as altered or
-  synthetic content (YouTube) / AI-generated (TikTok). `vidgen generate status` prints both.
-- **Config**: `videogen.crossfade` (0.25, 0-2 s), `videogen.color_match` (0.5, 0-1);
-  `generated_shot.place` (true), `fit` (cover | contain), `crossfade` (null). All excluded from
-  fingerprints as before; what placing uses is in `generated`.
-- **CLI**: `vidgen generate run [PROJECT] [--shot ID]... [--budget USD] [--pay] [--variant]
-  [--json]`, `status`, `takes [--shot ID]`, `pick --shot ID --take N | none | auto`; `--pay` on any
-  other action but `sheets` is an error.
-- **MCP**: `generate_plan` (read only), `generate_run` (paid annotation; `dry_run` default true;
-  `dry_run: false` needs `confirm_cost: true`, then `--pay`), `generate_status`,
-  `generate_takes` (the contact sheets as pictures, paged), `generate_pick`.
-- **Mock** (fixes to §113.2): a completed job's content is a playable H.264 MP4 made by FFmpeg
-  (`synthetic_clip`: `testsrc2` of the submitted duration, the submitted aspect ratio at the
-  resolution tier's short side, 360 without one; `video=` bytes still override), and
-  `synthetic_clip(path, w, h, s, fps, pattern=testsrc | bars | black | frozen | flicker | cut,
-  audio=)` makes QA's test clips. `MockVideoProvider()` without an `api` (the `provider: mock`
-  setting) uses job ids `mock-<8 hex>-N`: before, every run started at `mock-job-1` and the mock
-  ledger (keyed by job id) counted repeated runs once.
-- **Proxy mode for sheets** (fix): the OpenRouter image provider honours
-  `VIDGEN_OPENROUTER_KEY_VIA_PROXY` and, through `vidgen generate sheets`, `videogen.key_via_proxy`
-  (no key read, no Authorization header); before, sheets needed `OPENROUTER_API_KEY` even when
-  the proxy adds the key.
-- **Public** `vidgen.api`: `run_shots`, `check_clip`, `scene_placements`.
-- **Tests** `tests/test_videogen_compose.py` (18; synthetic clips): QA of good / black / bars
-  (still) / frozen / flicker / cut / short and wide clips, the contact sheet, the mock's MP4,
-  takes (dedupe, numbering, picks, QA errors not shown unless picked, did-you-mean), colour gains,
-  placements (windows, fades, last beat to the scene's end, `none`, `place: false`, drafts) and
-  fingerprints, a render (9:16 at 90×160: the take fills the beat under a watermark, the other
-  beats unchanged, only that scene re-rendered, the scene timings, the credit line), the
-  workflow (dry run sends nothing, pay makes takes, a second run is cached and pays nothing, no
-  budget / over budget refused before anything is sent, the first failure stops without retry),
-  the CLI and the lint rule. Frame baseline: 33 stills, max difference 0.
-- **The sample** (Step 295): `scratch/s293/sample` is voiced (Kokoro, Python 3.12 venv) and its
-  inputs are cut (`quay_b1` voice 3.57 s + guide + first frame, `closeup_b1` voice 4.27 s); only
-  the unmade sheets block its shots. A mock copy (`scratch/s294/sample-mock`, stand-in sheets)
-  ran end to end: three takes, a 9:16 preview with the takes placed, contact sheets, the credit
-  line and the lint notes.
+- **Run** (`videogen/workflow.py`, `run_shots(project, pay=, ...) -> RunReport`): without `pay` a
+  dry run. With `pay`, refused before any payment when there is no cap, a selected shot has
+  problems (or stale inputs, an unresolved intent), or the ready shots exceed the budget left. Per
+  shot: blocked → skipped; else `generate_clip` (ledger re-read per job) → `add_take`. The first
+  `VidgenError` stops the run; no retry. `ShotRun.status`: `would_generate | cached | paid |
+  downloaded | blocked | problems | failed`.
+- **Takes** (`videogen/takes.py`): `takes/<shot>/<n>.mp4` + `<n>.json` `{shot, take, key, model,
+  provider, job_id, cost_usd, source, length, time, qa, ...}` + `<n>.contact.png`; one take per
+  cache key. Picks in `takes/picks.json` `{shot: n | "none"}` (not `video.yaml`: vidgen never
+  rewrites the author's YAML). `chosen_take`: the pick; `none` → vidgen's picture; `auto` → the
+  newest take without QA errors.
+- **QA** (`videogen/qa.py`, `check_clip`): grey at 64 px wide, ≤ 30 fps. Warnings: short by > 1
+  frame, aspect off > 2 %, upscaled > 2×, a black run ≥ 0.5 s (mean < 16, p99 < 40), frozen ≥ 1 s
+  (mean change < 0.6), flicker > 3, a cut (> max(30, 6 × median)); all black or all frozen is an
+  error; sound is info. `contact_sheet` (8 frames, PIL).
+- **Placing** (`videogen/compose.py`, `scene_placements`): only when not a draft, `takes/` exists
+  and a beat has `generated_shot.place: true`. Window = the beat's planned window relative to the
+  scene (split parts share it equally); the scene's last beat holds its take to `Shot.scene_end`.
+  Fades (`crossfade`, default `videogen.crossfade` 0.25 s) only against vidgen's picture: none at
+  scene edges or between two takes.
+- **In the render** (`vidgen/generated_layer.py`, `GeneratedLayer`; a render input): after the
+  overlay layer in `NarratedScene.__init__`, so overlays and captions are drawn on the take. In a
+  window the frame is `ClipReader(take, size, crop).frame(t − start)` (`cover` / `contain`; a short
+  take holds its last frame); `color_gains` = (grey-world × exposure towards 118)^`color_match`
+  (default 0.5), each in 0.8–1.25, from 8 frames at 32 px. The take's sound is never read. Timings
+  get `generated: [{shot, take, model, start, length}]`.
+- **Fingerprint**: a scene gains `generated` (per placement: take path, size, mtime, start, length,
+  fit, fades, colour match, `match_join` when true) only when it shows takes; `generated_shot` keys
+  stay outside; `assets/generated_video/` is left out of the `assets` digest.
+- **Disclosure**: `credit_line(project)` = "Includes AI-generated footage (<models, sorted>)." appended to
+  `<output>_chapters.txt`; lint `generated_footage` (scene, info) on each scene with takes.
+- `--pay` only on `run` and `sheets`. **MCP**: `generate_plan`, `generate_run` (`dry_run` default
+  true; `dry_run: false` needs `confirm_cost: true`), `generate_status`, `generate_takes`,
+  `generate_pick`. **Public**: `run_shots`, `check_clip`, `scene_placements`.
 
 ### 113.5 Review of Steps 292–294
 
-What holds: nothing can be paid without `--pay` (or the MCP's two flags) and a cap; the cap is
-checked against conservative estimates before each job and for a whole run up front; the ledger
-records a job before it is polled, so a crash or timeout never leads to a second payment; the
-cache and the ledger's open jobs stop repeat payments of the same request; the key is never
-logged or stored; the model's audio is never asked for or used; placing takes is invisible to
-projects without them (fingerprints and the 33-still baseline unchanged).
-
-Fixed in 294: the mock's repeated job ids (its ledger undercounted), its placeholder bytes (no
-playable clip), the clip cache inside the `assets` digest (every downloaded clip re-rendered
-every scene), and sheets without proxy mode (the image provider needed `OPENROUTER_API_KEY` even
-when the proxy adds it).
-
-Open, by weight:
-1. **Unverified against the real API** (297, the paid experiment, settles it; inline audio was
-   refused in Step 296, §113.7): avatar-iv taking the portrait as an input reference, Seedance accepting a 240-pixel
-   guide, the real 402 / 429 / 413 / moderation bodies, and what `usage.cost` reports. A
-   rejected inline request should fail before generation (a 400), costing nothing.
-2. **No hosting uploader**: audio and video inputs need hosted https URLs (inline is refused,
-   §113.7); without a host, talking shots and shots with `audio:` / `guide:` stay blocked. Choosing a host is the owner's decision.
-3. **QA thresholds** come from synthetic clips; real footage (handheld, fast motion, a dark
-   scene) may need tuning: black and frozen errors are conservative, the rest are warnings.
-4. **Lint under a take**: layout rules still read vidgen's own objects of a beat that a take
-   covers (e.g. `look_alike`, text overlap) and may report what is not seen.
-5. **Timing at the edges**: the scene's last beat holds its take through the fade-out; a take
-   asked for the beat's window (e.g. 4 s for 3.67 s) then holds its last frame for the rest
-   (~0.2-0.5 s). Asking for the window plus the scene's outro would cost a step more on discrete
-   lengths (4 → 6 s on veo); left as is.
-6. **Sheets in `assets/sheets/`** still count as assets: making them re-renders every scene once
-   (render time, not money). They may be used as pictures by scenes, so they stay in.
-7. **Colour matching** is grey-world: it pulls deliberately tinted footage (golden hour) towards
-   neutral at half strength; `color_match: 0` turns it off.
-8. A mock job that timed out cannot be resumed (each run has its own fake API); real jobs can.
+Invariants: nothing is paid without `--pay` (or the MCP's two flags) and a cap; the cap is checked
+against conservative estimates per job and per run up front; the ledger records a job (and before
+that its intent) before polling, so a crash never pays twice; cache and open jobs stop repeat
+payments; the key is never logged or stored; placing takes is invisible to projects without them.
+Known limits: QA thresholds are from synthetic clips; layout lint still reads objects under a take;
+`assets/sheets/` counts as assets (scenes may use them), so new sheets re-render every scene once.
 
 ### 113.6 Cleaner sheet prompts and real image costs (Step 295)
 
-The first paid sheet pictures (seedream-4.5, the s293 sample, 7 pictures, 2026-11-07) kept the
-characters consistent but made poor references: the palette word "warm lamp orange" drew orange
-lamps in 6 of 7 pictures; Theo's role ("sells ferry tickets") drew a counter, a ticket booth and
-a sign "SELD FICKETS" (the style frame had a cut-off "CKET" sign); backgrounds were not plain,
-Theo's front view was cut at the waist, Mara's side view was three-quarter; the lens words
-(35 mm, handheld, shallow depth of field) fought a studio reference. `videogen/sheets.py` now
-builds:
-
-- **Character pictures** (`CHARACTER_SETUP`, `BACKDROP`, `WHO`, `VIEW_WORDS`): "Character model
-  sheet picture of one person: full body from head to toe, whole figure in frame, <view>, neutral
-  expression, arms relaxed at the sides, empty hands, standing on a plain seamless light grey
-  studio backdrop, even soft studio light, nothing else in the picture. Who the person is (draw
-  only the person and their clothes): <prompt>. No props." (expressions: "head and shoulders,
-  <front view>, <expression> expression, <backdrop>"). Views: front "facing the camera squarely,
-  body and face straight on"; three_quarter "body and face turned 45 degrees to the left, both
-  eyes visible"; side "strict 90-degree profile, facing left, only one eye visible"; back "seen
-  straight from behind, the face not visible".
-- **Exclusions** go in the request's `negative` (`CHARACTER_EXCLUDE`, `FRAME_EXCLUDE`; merged
-  with `imagegen.negative`). Every provider sends it as "Avoid: ..." at the end of the prompt
-  text (`compose_prompt`), since OpenRouter's `/images` takes no negative-prompt field. Character
-  pictures: text, letters, words, numbers, signs, signage, logos, labels, captions, watermarks,
-  props, objects in the hands, furniture, counters, booths, lamps, scenery, buildings, other
-  people, cropped head or feet. Style frames: the text / signage part only.
-- **Look words** (`_look_words(project, reference=)`): the palette as "colour palette: <colours>
-  (colours only, not objects: the colours of the clothing and the lighting tint)" and "era:
-  <era>" for both. Character pictures then take only those words of `imagegen.style` and
-  `style_sheet.notes` (split at commas) that are not shot-only (`_SHOT_ONLY`: lens / mm / depth
-  of field / bokeh / handheld / camera / close-up / wide angle / dolly / tracking words, and
-  scene-lighting clauses ending in "light" / "lighting"), and never `style_sheet.lens`. Style
-  frames keep the whole look ("(colours only, not objects)", the lens, the notes) and say "a still
-  of the film with no writing anywhere". Video shot prompts (`shot_prompt`,
-  `StyleSheet.words()`) are unchanged.
-- The prompts changed, so the picture keys changed: the old pictures stay in `assets/sheets/`
-  but every sheet reads "not made yet" (an approved sheet would be blocked until `approved:
-  false`).
-
-**Costs.** The ledger of that run shows `cost_usd` 0.04 per picture in `completed` events, and
-`run_sheets` writes `cost_usd` only from `GeneratedPicture.cost` (`usage.cost` of the response):
-OpenRouter's response reported $0.04 (the list price, as with seedream-5-0-flash in §66) while
-the account's usage rose only ~$0.16 for all 7 (~$0.023 each). vidgen keeps recording what the
-response reports, and now says where a number comes from:
-
-- `GeneratedPicture.usage` / `RawPicture.usage` (new, default `None`): the numeric fields of
-  the response's `usage` as sent; the sidecar keeps them under `usage`, so a later run can be
-  compared with the account's activity page.
-- Sidecars (`sidecar_document(..., estimate=, usage=)`): `cost_usd` + `cost_source: reported`
-  when the response has `usage.cost`; else the estimate with `cost_source: estimate`; neither: no
-  cost. Sheet ledger events (`completed`, `failed`) carry `cost_source` too (`cost_usd` stays the
-  reported cost or `null`; `Ledger.spent` counts `null` at the estimate, unchanged).
-- Printed lines (`imagegen.run.cost_words`): `$0.023 reported by openrouter`, `estimated $0.040
-  (not reported by openrouter)`, `cost not reported by openrouter`; the sheets' `done:` line
-  splits "reported" and "estimated". `vidgen imagegen` uses the same words.
-- Budget safety is unchanged: the check before paying still uses the estimate (`refusal`).
-
-Open: whether `usage.cost` over-reports for every image model or only for seedream-4.5 routed to a
-cheaper provider; asking `GET /generation` (as the TTS path does, §66) after a picture would
-give the billed `total_cost`, at the price of a key-authenticated lookup per picture.
+- **Character pictures** (`sheets.py`: `CHARACTER_SETUP`, `BACKDROP`, `WHO`, `VIEW_WORDS`): one
+  full-body person on a plain light-grey studio backdrop, neutral, empty hands, "No props";
+  expressions head and shoulders. Exclusions go in the request's `negative` (`CHARACTER_EXCLUDE`,
+  `FRAME_EXCLUDE`, merged with `imagegen.negative`), sent as "Avoid: ..." in the prompt
+  (`compose_prompt`): OpenRouter's `/images` has no negative field.
+- **Look words** (`_look_words`): palette as "colours only, not objects", era. Character pictures
+  drop shot-only words (`_SHOT_ONLY`: lens, camera, framing, lighting clauses) and never take
+  `style_sheet.lens`; style frames keep the whole look and ask for no writing.
+- **Costs**: sidecars and sheet ledger events carry `cost_source: reported` (response
+  `usage.cost`) or `estimate`; `usage` fields are kept; printed via `imagegen.run.cost_words`. The
+  pre-payment check uses the estimate. Reported cost can exceed what the account is billed.
 
 ### 113.7 What the API accepted, and smaller pictures (Step 296)
 
-The owner's first paid attempt at clips (2026-11-07, the s293 sample; nothing was charged for
-any of these) gave three answers:
-
-1. **Request size.** `vidgen generate run --pay --shot quay_b1` (Seedance 2.0 Fast, 6 sheet
-   pictures + the style frame, voice, guide) stopped inside vidgen before sending: "the request
-   is 48.0 MB with its inline inputs, more than vidgen sends (21 MB)". The sheet pictures are
-   2048x3642 PNGs of 5-7 MB, sent at full size as data URLs.
-2. **Inline audio is refused.** heygen/avatar-iv: HTTP 400 "Invalid reference URL:
-   input_references[1].audio_url.url: Only HTTPS URLs are allowed". Audio (and so video)
-   references must be https URLs. Inline pictures are documented but not yet confirmed for a
-   video job (no video job has been accepted yet).
-3. **Account privacy settings.** With "ZDR endpoints only" on, every video model is refused with
-   HTTP 404 "ZDR violation (account settings)". `GET /api/v1/models` with the key is filtered by
-   the account's privacy settings (a free check: compare its count with and without the key) but
-   lists only text models; `GET /api/v1/videos/models` is not filtered by the key, so a model
-   listed there may still be refused for the account.
-
-Built:
-
-- **Smaller pictures** (`videogen/pictures.py`): `sendable_picture(path, root)` returns the file
-  to send for a local picture: the file itself when it is a JPEG / WebP whose longest side is at
-  most `PICTURE_MAX_SIDE` (1280 px), else a copy resized to that limit (LANCZOS) and saved as
-  JPEG quality `JPEG_QUALITY` (90), or PNG when the picture has transparency. Copies live in
-  `build/videogen/pictures/<sha256 of the source, 24 hex>_<max side>.jpg|.png`, made once; the
-  sources are never changed. `sendable_request(request, root)` swaps every local picture of a
-  request (frame images and picture references) for its copy; `generate_clip` submits that.
-  The cache key is still computed from the sources (`canonical_request` gains `pictures_sent:
-  {max_side, jpeg_quality}`, so a new rule makes a new key but a new Pillow version does not).
-  No model in the list names a largest reference size, so one limit serves all. The sample's
-  quay_b1: pictures 47.9 MB of base64 at full size, 0.99 MB as copies; its request (audio /
-  guide counted as hosted URLs) is 0.99 MB. The 21 MB guard (`MAX_INLINE_BYTES`) stays.
-- **Request size in the plan**: `openrouter.request_bytes(request, root)` (local audio / video
-  counted as hosted URLs) for every ready, uncached shot; `vidgen generate plan` prints
-  "request: X MB with its inline pictures (vidgen sends at most 21 MB)" and JSON
-  `request_bytes`; over the limit is a problem. The plan's only writes are those copies.
-- **Inline audio / video flagged**: a shot with an audio or video input under `inline_media:
-  all` has the problem "audio/video references must be https URLs; OpenRouter refuses inline
-  audio/video — remove `audio:`/`guide:` from the shot or host the files" (`shots.
-  INLINE_AUDIO_VIDEO_PROBLEM`), so `run --pay` refuses the run before sending; under
-  `inline_media: images` such shots stay blocked (hosted URL needed). The provider no longer
-  sends audio / video inline at all (`OpenRouterVideoProvider` lost its `inline_media`
-  argument): a local sound or clip needs the `uploader`, else an error. `inline_media` stays a
-  valid setting; both values send pictures inline.
-
-Open: a talking shot cannot drop its audio (`audio: none` is refused for `talking`), so until a
-host exists (owner's choice) heygen/avatar-iv and the sample's quay_b1 / closeup_b1 cannot be
-paid for; whether video models accept inline pictures (harbour_b1 is the first such job to try).
-Step 306 adds the host (`videogen.host: quick_tunnel`, §115).
+- **Smaller pictures** (`videogen/pictures.py`): `sendable_picture` keeps a JPEG / WebP whose long
+  side ≤ `PICTURE_MAX_SIDE` 1280, else a resized copy (LANCZOS; JPEG `JPEG_QUALITY` 90, PNG with
+  transparency) at `build/videogen/pictures/<sha256 of source, 24 hex>_<max side>.jpg|.png`;
+  sources never change. `sendable_request` swaps every local picture; `generate_clip` submits it.
+  The key uses the sources plus `pictures_sent: {max_side, jpeg_quality}` (a new rule → new key; a
+  new Pillow → same key).
+- **Size in the plan**: `openrouter.request_bytes` (audio / video counted as URLs) per ready,
+  uncached shot; over `MAX_INLINE_BYTES` is a problem.
+- **Inline audio / video**: under `inline_media: all` without a host such a shot has
+  `shots.INLINE_AUDIO_VIDEO_PROBLEM`; under `images` it is blocked until hosted (`videogen.host:
+  quick_tunnel`, §115). The provider never sends audio / video inline.
 
 ### 113.8 A 3D scene's guide pass as a shot's guide (Step 307)
 
-Closes the gap between §114.14 (guide passes, "for video-to-video later") and generated shots.
-
-- **Config.** `generated_shot.guide: true | false | render | depth | outline | mask`
-  (`GuideChoice`, `GUIDE_CHOICES`); `true` = `render` (unchanged: the silent draft render).
-  `GeneratedShot.guide_source` → `render | depth | outline | mask | None`. A before-validator
-  refuses other strings with did-you-mean ("'dpeth' is not true, false, render, depth, outline,
-  mask (did you mean depth?)"); strings pydantic reads as booleans (`yes`, `off`) stay booleans.
-  `SceneConfig` refuses a pass on a scene that is not `type: 3d` when the config is read (a
-  `VidgenError` naming the beat, the scene and its type, and `guide: true` as the way out).
-  `generated_shot` stays out of scene fingerprints: nothing re-renders.
-- **Shots** (`shots.py`). The guide input is `build/videogen/<shot>/guide.<pass>.mp4`
-  (`guide_name`; the render stays `guide.mp4`), described in the plan as "depth pass of the
-  beat's 3D scene, N s" (`GUIDE_WHAT`). It is a `video` input like the render, so everything
-  else follows unchanged: `Shot.shared` (the plan's "would share" list with `host: quick_tunnel`),
-  `NO_HOST_BLOCKED` / `INLINE_AUDIO_VIDEO_PROBLEM` without a host, the inputs-not-made block.
-- **Prompt.** One sentence after the line and before the style (`GUIDE_PROMPTS`): depth "The
-  guide video is a depth map (near is white, far is dark): follow its layout and camera
-  motion"; outline "... an outline drawing (white edges on black): follow its shapes, layout and
-  camera motion"; mask "... a colour mask (each object one flat colour on black): follow its
-  layout and motion", then, for 1 to `MASK_NAMES_MAX` = 4 stand-ins, "Mask colours: Ana
-  #rrggbb, Ben #rrggbb" (stand-in `name`, else the display form of its id). The colours are
-  `passes.mask_colors` of the scene's objects (ids and shapes only, the floor first), the same
-  as the pass's table since §114.14's colours depend only on the set of ids. No sentence for
-  `render`: the old prompts (and so the old cache keys) are unchanged.
-- **Cache key.** The pass choice is in the request twice over: the guide file's contents (a
-  different clip) and the prompt sentence (so even identical bytes give another key; tested).
-  No new field in `canonical_request`: existing keys stay valid.
-- **Inputs** (`inputs.py`). `make_inputs` collects per scene the passes its shots need and asks
-  `render(project, scene, passes) -> SceneRender(video, starts, passes)` once per scene (tests
-  replace it). `_render_scene` loads the draft project, reuses the draft render while
-  `current_render(..., guide_passes=passes)` holds (before, `render_scenes` re-ran the worker each
-  time; the 3D frames were reused either way), else `render_scenes(..., guide_passes=passes)`
-  (new keyword, passed to the workers as `--guide-passes`): a render without the pass is made
-  again, reusing the clip (§114.14). The pass is `<draft render_dir>/three_d/<scene>.<pass>.mkv`,
-  frame n = the scene's frame n, so the cut is the render guide's: from the beat's start in the
-  scene's timings + the part's offset, `-t` the part's length, at the draft's size and fps.
-  `cut_pass` converts it: H.264, `yuv420p`, BT.709 limited range (converted with
-  `scale=out_color_matrix=bt709:out_range=tv` and tagged), `PASS_CRF` = 12 (the render guide keeps
-  ffmpeg's defaults). A missing pass file is a `VidgenError`.
-- **First frame** (decision): `first_frame: render` is always the **normal** render's first
-  frame past a fade, also with a pass guide (cut from the scene video to a temporary file, then
-  `first_frame`): a grey or flat-coloured first picture would steer the model to that look. A
-  pass guide alone writes no `first_frame.png` and no `guide.mp4`.
-- **Mask colours in the MP4** (measured on a 160x90 draft of the test scene): inside an object
-  every pixel within 6 levels of its table colour; ~2.5 % of the pixels (object edges: 4:2:0
-  shares one colour sample per 2x2 block) differ more, up to ~90 levels; snapping each pixel to
-  the nearest table colour gave the lossless mask back (100 % of pixels) at that size. The `.mkv`
-  stays exact.
-- **Docs**: `docs/COOKBOOK-3D-SCENE-TO-SEEDANCE.md` §6 "From a 3D scene to a generated clip" (sections
-  after it renumbered 7–9), linked from `docs/COOKBOOK-3D.md` §5; `examples/3d-to-video`
-  (YAML only); CONFIG; the guide.
-- **Tests** `tests/test_videogen_3d_guide.py` (16, one render): the values and their sources,
-  did-you-mean, a pass on a `text_card` scene refused, the input and prompt, the mask names
-  equal the real description's table, four different hashes for render / depth / outline / mask
-  with identical files, the plan's guide line, blocked without a host, shared with it, the
-  converted pass (H.264, yuv420p, size, frame count as `-t` cuts the render guide, the first frame
-  from the render, the missing pass refused), a real draft render of a mask guide (frames, size,
-  colours within 6 levels inside the crate, the second run reusing the render), the cookbook
-  YAML = the example and validates.
-- **Open**: whether Seedance (or any OpenRouter provider) uses a depth / outline / mask video
-  reference as a control signal or only as loose inspiration is not known (no paid run yet).
+- **Config**: `generated_shot.guide: true | false | render | final | canny | depth | outline | mask`
+  (`GuideChoice`, `GUIDE_CHOICES`; `true` = `render`, the silent draft render;
+  `GeneratedShot.guide_source`). A before-validator gives did-you-mean; boolean words stay
+  booleans. Passes (`depth`, `outline`, `mask`) need `type: 3d` (`depth` also `space` / `web`,
+  §113.19); `GUIDES_OF_ANY_SCENE` = none, `render`, `final`, `canny`. A wrong scene type is a
+  load-time `VidgenError`.
+- **Input**: `build/videogen/<shot>/guide.<pass>.mp4` (`guide_name`; render: `guide.mp4`), a
+  `video` input like the render (sharing, blocking as usual).
+- **Prompt**: one sentence per guide (`GUIDE_PROMPTS`) after the line; mask adds "Mask colours:
+  <name> #rrggbb, ..." for 1 to `MASK_NAMES_MAX` 4 stand-ins (from `passes.mask_colors`). No sentence
+  for `render`. The choice reaches the key through the file and the sentence; no extra field.
+- **Cut** (`inputs.py`): `make_inputs` asks `render(project, scene, passes, kind) -> SceneRender`
+  once per scene; `_render_scene` reuses the render while `current_render(..., guide_passes=)`
+  holds, else `render_scenes(..., guide_passes=)` (worker `--guide-passes`; 3D clips reused). A 3D
+  pass `<draft render_dir>/three_d/<scene>.<pass>.mkv` is cut like the render guide by `cut_pass`:
+  H.264, `yuv420p`, BT.709 limited range, `PASS_CRF` 12. Missing pass file → `VidgenError`.
+- **First frame**: `first_frame: render` is always the normal render's frame (a flat picture would
+  steer the look); a pass guide alone writes no `first_frame.png` / `guide.mp4`.
 
 ### 113.9 Cut inputs that no longer match their sources (Step 308)
 
-`ShotInput.ready` only says a file exists, and `generate run` never cuts, so an edit after `vidgen
-generate inputs` used to reach a paid job as the old voice or guide.
-
-- **Record**: `make_inputs` writes `build/videogen/<shot>/inputs.json` (`videogen/freshness.py`,
-  `{version, inputs: {<file>: {sha256, source}}}`; merged, so a cut without `--guide` keeps the
-  guide's entry). Not one of the `written` files, and never shared (the host shares only listed
-  inputs).
-- **Sources**: the voice: `narration_sha256` (`soundfont.file_sha256` of the beat's MP3), `offset`,
-  `length`. A render input (`guide*.mp4`, `first_frame.png`): `scene_fingerprint` of the **draft**
-  project, `draft` (`[width, height, fps]`: `draft:` is left out of the fingerprint), `guide` (the
-  kind; `render` for the first frame), `offset`, `length`. The fingerprint at the cut is the one the
-  worker recorded in the render's timings. The beat's start is not recorded: it follows from
-  inputs the fingerprint covers.
-- **What counts**: a draft has no placements (`compose._wants_placing`), so a picked take changes
-  nothing; `generated_shot` is outside the fingerprint, so prompt / model / seed edits change
-  nothing either (they change the request instead). Beat text and timing, 3D params, MP3s (size and
-  time), assets and vidgen's own source are inside it. Anything inside it marks every render input
-  of the **scene**, as it does the scene's render. A guide of another kind is another file with its
-  own entry: `guide: depth` to `outline` is "not made yet" until cut.
-- **Check** (`InputSources.stale`, called by `plan_shots` once per shot whose cut inputs all exist;
-  free, offline, no render): no entry, another source or another file hash is a reason. A voice
-  whose `.hash` no longer matches the beat's text or voice (`tts.cache.audio_status`) is one too,
-  and asks for `vidgen tts` first: cutting the same MP3 again would not help (an MP3 without a
-  `.hash` is the owner's own and counts as current).
-- **Result**: `blocked: inputs changed since they were cut (<file>: <reason>; ...): run `vidgen
-  generate inputs[ --guide][ --variant V]` (free) before paying` (`--guide` only when a render input
-  changed), also in the plan's JSON `blocked`; `ShotPlan.changed_inputs`. `run_shots(pay=True)`
-  refuses the **whole run** on such a shot before the first submit (like a shot with problems: the
-  fix is free, and a run with holes would pay for part of a film); without `--pay` it is skipped as
-  blocked. MCP's `generate_plan` / `generate_run` run the CLI and follow.
-- **Free reuse**: a shot with a cached clip or an earlier job of this exact request is not paid
-  again, so it is not blocked: it gets a note (the clip comes from the old inputs; a re-cut makes a
-  new, paid request).
-- **Variants** share `build/videogen/<shot>/`: inputs cut for one variant read as changed for
-  another whose fingerprint differs, and the command names `--variant`.
-- **Known false alarms** (safe direction: a free re-cut, though `--guide` renders the draft): new
-  files under `assets/`, including sheet pictures in `assets/sheets/`, change the fingerprint of
-  every scene; a vidgen upgrade does too.
-- `generate status` uses `project_shots`, not the plan, and does not show this block.
+- **Record** (`videogen/freshness.py`): `make_inputs` writes `build/videogen/<shot>/inputs.json`
+  `{version, inputs: {<file>: {sha256, source}}}` (merged; never shared). Voice source:
+  `narration_sha256`, `offset`, `length`. Render inputs: the scene fingerprint of the project that
+  drew it (draft, or `without_takes()` for `final`), `draft` `[w, h, fps]` (outside the
+  fingerprint), `guide` kind, `offset`, `length`; plus per-kind fields (opening picture, canny,
+  restyle, last_of, sheet, mix: §113.13–§113.24).
+- **Check** (`InputSources.stale`, in `plan_shots`; free, offline): missing entry, other source or
+  hash, or a voice whose `.hash` no longer matches (`tts.cache.audio_status`; asks for `vidgen tts`;
+  an MP3 without `.hash` is the owner's and current). Anything in the fingerprint marks every
+  render input of the scene; picks and `generated_shot` edits do not (the latter change the key).
+- **Result**: blocked "inputs changed since they were cut (...): run `vidgen generate inputs[
+  --guide][ --variant V]` (free) before paying" (`ShotPlan.changed_inputs`); `run_shots(pay=True)`
+  refuses the whole run on such a shot. A shot whose exact request is cached or has an earlier job
+  is not blocked (note only). Variants share `build/videogen/<shot>/`. False alarms (new assets, a
+  vidgen upgrade) err on the safe side. `generate status` does not show this block.
 
 ### 113.10 Submits with no known outcome (Step 309)
 
-A Ctrl+C or crash during the POST, or a lost answer, left no `submit` line, so a re-run could pay
-for the same request twice while the provider had accepted the first. Now:
-
-- **Intent first.** `_submit` passes `on_sending` to `provider.submit`, which calls it once the
-  body is built and the size check passed, just before the POST: `Ledger.record_intent` writes
-  `submit_intent {intent_id, provider, model, request_hash, estimate_usd}` (`Ledger.append` now
-  `fsync`s every line). A body that never left (too large, a missing input) writes no intent.
-- **Resolved how.** The `submit` line carries `intent_id` when the POST answered with a job. An
-  answer that means no job exists (`SubmitRefused`: HTTP 4xx except 408) appends
-  `intent_resolved {outcome: refused}`. Everything else (no answer, a timeout, 408, 5xx, a 2xx
-  vidgen cannot read, Ctrl+C, a crash, a `submit` line that could not be written) leaves it
-  unresolved: the message appended to the error says what to do.
-- **Re-run.** `plan_clip` sets `ClipPlan.unresolved_intent` (when no earlier job of the request
-  applies; a cached clip or an earlier job returns before it) and `refusal` is
-  `ledger.intent_refusal`: not paid, `again=True` does not bypass it. `plan_shots` adds it to the
-  shot's `blocked` and `ShotPlan.unresolved_intent`, and the plan does not add a new cost for the
-  shot (the estimate is in the budget already); `run_shots(pay=True)` refuses the whole run on a
-  selected shot with one (the fix needs the owner; `--shot` selects others).
-- **Budget choice.** An unresolved intent counts at its estimate in `Ledger.spent`, like a job with
-  no reported cost: the provider may have charged it, and a budget that left it out could be
-  exceeded. An orphan (the request was edited, so no shot matches it) still counts until
-  resolved and is listed by `plan`, `status` and `generate ledger`. Older vidgen versions ignore
-  the new events and do not count intents; nothing in the ledger format changes for them.
-- **Way out.** `vidgen generate resolve [PROJECT] --intent ID --not-charged | --job JOB_ID |
-  --charged [--cost USD]` (`Ledger.resolve_intent`): `--not-charged` frees the budget and the next
-  run pays; `--job` writes a `submit` line (with `intent_id`), so the next run polls and
-  downloads that job free; `--charged` keeps it counted (at USD or the estimate) and the next
-  run pays again, knowingly. Refused: an unknown id, an already resolved intent, a job id
-  already in the ledger.
-- **Readers**: `generate ledger` (text: unresolved ones; JSON `intents`, all), `generate plan`
-  (a line per unresolved one; JSON `unresolved_intents`, per-shot `unresolved_intent`), `generate
-  status` (a line; JSON `unresolved_intents`), `spent`. `sheets.run_sheets` is unchanged: sheet
-  pictures still write `submit` before the call (no intent; see known gaps).
+- **Intent first**: just before the POST (body built, size checked) `on_sending` →
+  `Ledger.record_intent` writes `submit_intent {intent_id, provider, model, request_hash,
+  estimate_usd}`. The `submit` line carries `intent_id`; an answer meaning no job (`SubmitRefused`:
+  4xx except 408) appends `intent_resolved {outcome: refused}`; anything else leaves it unresolved.
+- **Re-run**: `ClipPlan.unresolved_intent` → `ledger.intent_refusal` (not bypassed by
+  `again=True`); the shot is blocked with no new cost; `run_shots(pay=True)` refuses the whole run
+  on a selected shot with one. Unresolved intents (also orphans) count at their estimate in
+  `spent`.
+- **Way out**: `vidgen generate resolve [PROJECT] --intent ID --not-charged | --job JOB_ID |
+  --charged [--cost USD]` (`Ledger.resolve_intent`): frees the budget / writes a `submit` line so
+  the next run downloads that job / keeps it counted. Refused: unknown id, already resolved, a job
+  id already in the ledger. Shown by `generate ledger | plan | status` (JSON `intents`,
+  `unresolved_intents`). `run_sheets` writes `submit` before each picture, with no intent.
 
 ### 113.11 The model's own sound, and video references in token estimates (Step 312)
 
-Paid experiments on `bytedance/seedance-2.0-mini` (the beat's voice as an audio reference,
-`generate_audio: true`, two lines, two seeds) made a clip sound the owner judged to be the same
-person as the voice file and matching the lips. It is a new performance, drifting up to about 0.9 s
-later than the voice file, so the file cannot be laid over the clip. Other models may behave
-differently.
-
-- **The setting** (`SoundChoice`, `mix` | `model`): `generated_shot.sound`, then
-  `videogen.models.<model id>.sound` (`VideogenModelSettings`), then `videogen.sound` (default
-  `mix`); `VideogenConfig.sound_for(model, shot_sound)`. No model is special-cased; a `videogen.models`
-  id OpenRouter does not list is a warning in the plan (`VideoGenPlan.warnings`), not an error.
-- **Request** (`VideoRequest.generate_audio`, `Shot.sound`): in `canonical_request` and the
-  body. It was already in the canonical form as `false`, so `mix` requests keep their cache keys
-  (no new payment after upgrading); a `model` request has a different key.
-- **Plan**: `sound:` per shot (text and JSON); `generate_audio` false in the list blocks the shot
-  (`shot.blocked`: skipped, not refused for the whole run); unknown (`None`) is a note, the job
-  is still sent. A placed `model` take notes that a placed take plays vidgen's mix.
-- **Prices** (`_applicable`): `mix` keeps the `without_audio` choice; `model` removes
-  `without_audio` SKUs and, before the tier step, prefers `with_audio` ones (Seedance 2.0 mini charges
-  the same for both).
-- **Estimate of a video reference** (`estimate`, token SKUs): three real seedance-2.0-mini jobs
-  (480x854, 24 fps, 5 s, picture + audio + video references) were each charged $0.1907094 = 90,814 tokens
-  x $2.1e-06 exactly, so the `with_video_input` rate was the right SKU and the old token count (48,038)
-  was the error. 90,814 is 217 frames x 496 x 864 / 1024 (rounded down), with the real output 121 frames
-  at 496x864: the charge covers 96 more frames than the clip's, which the old estimate left out. The guide
-  video was 4.9 s long (117 frames at 24 fps in the last job), so 96 frames matches its whole seconds; the data
-  cannot tell whether that is the rule (all three guides were between 4 and 5 s). The estimate now counts each
-  video reference for as many seconds as the clip, at the request's tier size: `(1 + video references) x output
-  tokens` under a `with_video_input` SKU, $0.2018 for these jobs (5.8% above the real charge, on the
-  safe side). The budget check uses this estimate, so it refuses such shots earlier. Models
-  without a `with_video_input` SKU and shots without a video reference are unchanged; no other model's charges
-  were compared.
-- **In a film**: a placed take always plays vidgen's mix (`compose` handles only the picture). To
-  hear the model's sound: `place: false` and the take in a `video_clip` scene; with no beats it plays
-  at volume 1, with narration at 0.25 (`video_clip.UNDER_NARRATION`), `volume:` overrides. Out of scope:
-  timing captions or word-anchored actions from the clip's sound.
-- **QA** (`check_clip(..., sound=)`): a sounding clip is `info` (with `mix`: "never used"; with `model`:
-  where it is heard); `sound: model` with a silent clip is a warning.
-- **Mock**: a job with `generate_audio: true` returns a clip with a sine tone (`synthetic_clip(audio=True)`).
+- **Setting** (`SoundChoice` `mix` | `model`): `generated_shot.sound` > `videogen.models.<id>.sound`
+  > `videogen.sound` (default `mix`); `VideogenConfig.sound_for`. An unlisted `videogen.models` id
+  is a plan warning.
+- **Request**: `generate_audio` (`mix` = false, the form of all earlier keys; `model` → new key).
+  A model listing `generate_audio` false blocks a `model` shot; unknown is a note. Prices: `mix`
+  keeps `without_audio`; `model` drops it and prefers `with_audio`.
+- **In a film**: a placed take always plays vidgen's mix. To hear the model's sound: `place:
+  false` and the take in a `video_clip` scene (volume 1, or `UNDER_NARRATION` 0.25 under
+  narration). Seedance re-performs a reference voice (drift up to ~0.9 s), so the voice file
+  cannot be laid over the clip. A line with `sound: model` and no voice input gets a note.
+- **QA** (`check_clip(..., sound=)`): sound is info; `sound: model` with a silent clip warns.
 
 ### 113.12 Guided shots leave the framing to the guide (Step 313)
 
-Paid experiments (2026-11-08, `bytedance/seedance-2.0-mini` with a depth guide): a `kind: talking` shot's
-"Talking close-up of ..., facing the camera, speaking" pushed the camera in although the guide's camera is static;
-the same shot as `kind: action` kept the camera still and the ball followed the guide. The speaker stayed centred in
-every take although the guide places them low on the right; the sheet prompt copied under `Characters:` said
-"alone and centred in the middle of the picture, ... the whole body visible". That second cause is untested.
+A shot **has a guide** when `guide_source` is not `None` (also `render`).
 
-A shot **has a guide** when `generated_shot.guide_source` is not `None` (`true`, `render`, `depth`, `outline`, `mask`:
-`_resolve_inputs` always adds the guide input then). Applies to `render` guides too.
-
-- **Talking wording** (`shots.GUIDED_TALKING_FRAMING`): `{who}, speaking`, for example "Ana, speaking." No "close-up" and no
-  "facing the camera": the guide decides both. Action and establishing wording are unchanged. The references, the speaker and
-  `GUIDE_PROMPTS` are unchanged.
-- **Sheet words** (`shots.without_framing`, used only for the `Characters:` text of a guided shot): the sentence and
-  clause filter works on the joined text of `reference_sheet.prompt` + `.notes`. A sentence containing a clause that matches
-  `_FRAMING_WORDS` (centred/centered, centre or middle of the picture/frame/image, whole/full body, full-length, close-up,
-  head and shoulders, from head to toe, front/side/back/three-quarter view, facing the camera, in frame, waist-up, medium/wide shot)
-  loses its framing clauses (commas and semicolons separate clauses) and any clauses that only make a sheet picture clean
-  next to them (`_SHEET_ONLY_CLAUSE`: "exactly one single character", "alone", clauses starting "not"/"no"/"never"). A sentence with
-  no framing clause is kept whole, byte for byte (an isolated "Not a split image." stays). A clause naming clothes, hair or similar
-  (`_APPEARANCE_WORDS`) is never removed, even with framing words in it ("Full-body portrait of a woman in a red jacket" stays
-  whole): losing appearance is the worse error, and the owner can rewrite such a sentence. Whole-sentence dropping (the owner's suggestion)
-  was not used because it loses appearance in "A woman in a red jacket, centred in the frame". The sheet's picture prompts and `Sheet.notes`
-  are untouched, so sheet fingerprints and approved sheets stay valid. `generated_shot.prompt` and `setting` are never edited.
-  The style sheet's words (`Style:`) are the config's palette/era/lens/notes, not a sheet picture prompt, so they do not flow the same way: not filtered.
-- **Plan** (`_left_out_notes`): a `note:` per character whose sheet words lost anything, quoting what was left out and why; in the
-  JSON plan under the shot's `notes`. No note when nothing was removed.
-- **Unguided shots**: `_prompt_text(guided=False)` is the old code path, byte-identical (pinned from the pre-change code).
-- **A guided shot paid before this step**: its new prompt is a new request key, so it is not "cached" and no earlier job matches. The plan
-  rebuilds the prompt under the earlier wording (`Shot.earlier_prompt`, `_prompt_text(guided=False)`) and looks for a clip, a take
-  (`info.key`) or a ledger job (`status` `None` or `completed`) of that key (`_paid_under_earlier_wording`). If it finds one and the new key
-  has no clip and no earlier job, the shot is **blocked** (`EARLIER_WORDING_BLOCKED`): `run --pay` skips it and pays nothing; the earlier take stays
-  in the film. To pay for the new wording the owner sets or changes `seed:` on the shot (or edits its `prompt:`), which changes both keys.
-  Open: a clip paid before this step whose guide was later re-cut to different bytes has another key and is not recognised; a re-cut is already a new request.
+- **Talking wording** (`shots.GUIDED_TALKING_FRAMING`): `{who}, speaking` (no close-up, no facing
+  the camera).
+- **Sheet words** (`shots.without_framing`, only in a guided shot's `Characters:` text): in
+  sentences of `reference_sheet.prompt` + `.notes` with a `_FRAMING_WORDS` clause, framing clauses
+  and adjacent `_SHEET_ONLY_CLAUSE`s go; other sentences stay byte for byte; a clause with
+  `_APPEARANCE_WORDS` is never removed. Sheet prompts, notes, `prompt`, `setting` and style are
+  never edited (sheet keys stay). The plan notes what was left out (`_left_out_notes`).
+- **Unguided shots**: `_prompt_text(guided=False)`, byte-identical to before.
+- **Paid under the earlier wording** (`Shot.earlier_prompt`, `_paid_under_earlier_wording`): a clip,
+  take or open / completed job under the old key and none under the new → blocked
+  (`EARLIER_WORDING_BLOCKED`); a new `seed:` or `prompt:` pays for the new wording.
 
 ### 113.13 The starting picture in the guide, and what the provider really downloaded (Step 316)
 
-Paid experiments (2026-11-08, `bytedance/seedance-2.0-mini`): Seedance has separate first/last-frame and reference modes.
-A request with `frame_images` and `input_references` is accepted but runs as first-frame only: the provider never downloads
-the hosted voice or guide (the ledger shows only vidgen's own `HEAD`s) and it bills the no-guide price ($0.177 vs $0.191 for
-5 s), with no error. Putting the starting picture into the guide (frame 1 the picture, dissolving into the guide) and sending no
-frame image made the provider download voice and guide ($0.191), the clip opened close to the picture (`opening match` 0.83-0.85 versus
-0.98-0.985 for a true first frame) and the owner judged the cut between shots made this way very good.
+Seedance with `frame_images` plus `input_references` runs first-frame only and ignores the
+references, silently; with the picture spliced into the guide and no frame image it uses them.
 
-- **Setting** (`FirstFrameIn`, `frame` | `guide`): `generated_shot.first_frame_in`, then `videogen.models.<id>.first_frame_in`,
-  then `videogen.first_frame_in` (default `frame`), `VideogenConfig.first_frame_in_for`, as `sound_for` (Step 312).
-- **With `guide`** (`Shot.first_frame_in`): the shot needs a guide and a starting picture (`first_frame` resolved as today; either
-  missing is `shot.problems`). `_resolve_inputs` sets `Shot.opening_picture` and sends no first frame; the picture is not counted
-  in `used`, so a sheet picture stays available as a reference. The plan shows it; the guide input is
-  `guide_name(kind, opening=True)` (`guide[.<pass>].opening.mp4`).
-- **The combined guide** (`inputs.make_opening_guide`, made by `make_inputs` after the plain guide): `xfade` of the picture (cover,
-  crop) and the guide with `-t` the plain guide's length; length, size and fps from `probe` of the plain guide; the dissolve
-  (`videogen.first_frame_dissolve`, default 0.4 s, at most the guide's length) never lengthens the clip (`-t` caps the output).
-  `make_inputs` records `{..source.., opening_picture_sha256, opening_dissolve}` for it in `inputs.json`; `freshness._change` compares them
-  (`_CHANGE_REASONS`: "the starting picture changed", "the dissolve length changed"), so `generate plan` blocks an edit
-  before it can be paid for and a re-cut clears it.
-- **Role sentence** (`shots._guide_opening_sentences`, `models.GUIDE_OPENING_TEMPLATES`, by model id prefix; Seedance only so far): the prompt
-  of a `first_frame_in: guide` shot starts with "{video} opens on the exact starting picture ..." and who each `@imageN` / `@audioN`
-  is, numbered per kind by the order the references are sent (`ShotInput.owner` names a sheet's character). No template, no sentence.
-  Shots not using `guide` build their prompt through the old path, so paid shots keep their key.
-- **Block** (`models.known_first_frame_with_references`, `videogen.models.<id>.first_frame_with_references`, `shots._first_frame_with_references_problem`):
-  a shot with a true first frame and any reference on a model known to separate the modes (`bytedance/seedance-*`) is a plan
-  problem (`shot.problems`) naming `first_frame_in: guide`, a note when the clip or job is already paid for (`shot.cached` / earlier job). The user can
-  override with `first_frame_with_references: true`; models with no evidence are not listed and never blocked.
-- **What the provider really downloaded** (`run.unfetched_warnings`): after a hosted job, the hosted files (`host.files`) are compared with the `host_fetch`
-  `GET`s of status < 400 of this tunnel's ledger events (`HEAD`s are vidgen's own checks). A missing one is a warning (`ClipResult.warnings`), printed by `run_shots` and
-  kept in the take's `info["warnings"]` (`add_take(warnings=)`). Never an error, only for files actually hosted, and the message names the voice and the guide,
-  never an address. The mock provider opens no tunnel, so it has none.
-- **Not in this step**: meaningful file names, `first_frame: last_of:`, hard cuts in `video_clip`, an opening-frame QA score, an overlay preview.
+- **Setting** (`FirstFrameIn` `frame` | `guide`): `generated_shot.first_frame_in` >
+  `videogen.models.<id>.first_frame_in` > `videogen.first_frame_in` (default `frame`);
+  `first_frame_in_for`. With `guide` the shot needs a guide and a starting picture (else a
+  problem); `Shot.opening_picture` is set, no frame image sent, the picture stays usable as a
+  reference; input `guide[.<pass>].opening.mp4` (`guide_name(kind, opening=True)`).
+- **Combined guide** (`inputs.make_opening_guide`): `xfade` of the picture (cover crop) into the
+  plain guide, `-t` its length (never longer); dissolve `videogen.first_frame_dissolve` (0.4 s).
+  Recorded `opening_picture_sha256`, `opening_dissolve` (`freshness._change`).
+- **Role sentence** (`shots._guide_opening_sentences`, `models.GUIDE_OPENING_TEMPLATES` by id
+  prefix; Seedance): "{video} opens on the exact starting picture ..." and who each `@imageN` /
+  `@audioN` is, numbered per kind in send order. Other shots keep prompts and keys.
+- **Block** (`models.known_first_frame_with_references`, `shots._first_frame_with_references_problem`):
+  a true first frame plus references on `bytedance/seedance-*` is a problem naming `first_frame_in:
+  guide` (a note when paid already); `videogen.models.<id>.first_frame_with_references: true`
+  overrides; unknown models are never blocked.
+- **Downloads** (`run.unfetched_warnings`): hosted files (`host.files`) not fetched by a `GET` < 400
+  in the tunnel's `host_fetch` events are a warning (`ClipResult.warnings`, take
+  `info["warnings"]`), naming the input, never an address.
 
 ### 113.14 One shot after another: last_of, hard cuts, the opening match, the overlay (Step 317)
 
-- **`first_frame: last_of:<shot id>`** (`GeneratedShot.last_of_shot`, a beat's id means its last part). `shots._link_last_of` runs after every shot of
-  the project is known (`project_shots` builds all the shots first; `_fill_shot` then resolves inputs and prompts): an unknown shot, the shot itself and a
-  cycle are problems; a source with no take to show (`takes.chosen_take`, the rule of `generate status`) blocks the shot. The picture is
-  `build/videogen/<shot>/last_of.<source>.<take>.png`, cut by `inputs.last_frame` (`-sseof -0.5 -update 1 -vsync 0`: the last decoded frame; `-sseof -0.08` wrote no file on a real clip) and recorded in `inputs.json`.
-  `freshness._last_of_moved`: the current picture is not cut yet and an earlier one is recorded (another take is shown) makes the shot stale, so
-  `run --pay` refuses; `run_shots` also skips a shot whose source's shown take changed during the run. A no-take source is a blocked reason rather than a problem, so `run --pay` still pays for its source in the same command, and never for both.
-- **Hard cut** (`video_clip` param `fade: false`). `NarratedScene.outro_seconds(params)` is a new overridable classmethod (default `outro`), read by the instance (`self.outro`) and by `videoplan.scene_outro` (also `thumbnail`, `shorts_suggest`), so the planned timeline and the render agree. The picture is added before the first beat, so `entrance("clip")` plays nothing; title and caption still enter.
-- **Opening match** (`qa.opening_similarity`, `picture_similarity`): SSIM of the clip's first frame against `Shot.starting_picture` (a true first frame image or the picture in the guide; not a picture sent as a reference), grey at 320 px wide, 8 px squares every 4 px, the better of the picture cropped to fill and stretched (a clip made from a first frame image was cropped, one from a picture in the guide reached the clip stretched, when the shapes differ: real takes measured 0.98 cropped vs 0.73 stretched and 0.69 cropped vs 0.85 stretched). `metrics.opening_similarity` in the take's `qa` (kept also as `opening_picture`), the head line of `QAReport.lines` (contact sheet), a warning under `OPENING_WARNING` = 0.7 (a rough guide; real clips measured 0.98-0.985 with a true first frame, 0.83-0.85 with the picture in the guide). A picture that cannot be read is an `info` finding.
-- **Overlay** (`inputs.make_overlay`, `OVERLAY_NAME` = `overlay.png`): the starting picture blended 50% over the plain guide's first frame (past a fade in from black for a render guide), written by `generate inputs --guide` for a shot with a starting picture and a guide; never sent, not in `inputs.json`.
+- **`first_frame: last_of:<shot>`** (`GeneratedShot.last_of_shot`; a beat id = its last part;
+  `shots._link_last_of` after all shots exist): unknown, self and cycles are problems; a source
+  without a shown take blocks (so one `run --pay` pays the source, never both). Picture
+  `build/videogen/<shot>/last_of.<source>.<take>.png` (`inputs.last_frame`: `-sseof -0.5 -update 1
+  -vsync 0`), recorded; another shown take makes it stale (`freshness._last_of_moved`);
+  `run_shots` skips a shot whose source's take changed mid-run.
+- **Hard cut**: `video_clip` `fade: false`; `NarratedScene.outro_seconds(params)` (overridable
+  classmethod) is read by the scene and `videoplan.scene_outro`, so plan and render agree.
+- **Opening match** (`qa.opening_similarity`): SSIM of the clip's first frame vs
+  `Shot.starting_picture` (grey, 320 px, 8 px windows every 4 px, better of crop and stretch) in
+  the take's `qa` metrics; warning under `OPENING_WARNING` 0.7.
+- **Overlay** (`inputs.make_overlay`, `overlay.png`): the starting picture 50 % over the guide's
+  first frame; never sent, not recorded.
 
 ### 113.15 Painted starting pictures, file reference labels and the last-frame overlay (Step 319)
 
-- **`vidgen generate frames`** (`videogen.frames.run_frames`): a shot's `paint_first_frame: {prompt, refs, seed, model, resolution}` (`config.PaintFirstFrame`; default model
-  `bytedance-seed/seedream-4.5`, default resolution `2K`). `inputs.layout_picture` cuts the first frame of the beat's draft render to `build/videogen/<shot>/layout.png` (a dry run does this too: free).
-  `ImageRequest.input_references` (a tuple of paths, sendable copies made by `pictures.sendable_picture`) is sent as data URLs in OpenRouter's `input_references` (`imagegen.openrouter.request_body`; `check_request` refuses a model without that parameter or above its `max`). The image request uses a fixed
-  `ImagegenConfig(provider="openrouter", ...)` via `image_request(settings=)`, so `imagegen:` of the project does not affect it. The key is `sha1(base request key | SHA-256 of the layout and of each reference)`,
-  the file `assets/frames/<shot>_<key>.png` + `.json`. The first input is the layout, the prompt begins with `frames.LAYOUT_INSTRUCTION`; references are numbered in actual order, labelled via `ShotInput.label` (owner or `shows`) or the style flag.
-  Paying goes through `sheets.pay_for_pictures` (extracted from `run_sheets`, used by both): a budget and a known price are required, each picture has `image-<key>` `submit`/`completed` ledger lines, `OpenRouterImageProvider(retries=0)` so a dropped paid request is not retried.
-  `first_frame: painted` (`config.PAINTED_FIRST_FRAME`) resolves to the current request's file (`frames.painted_picture`); while it is missing the shot is blocked. `paint_first_frame` problems (bad refs) are in `shot.problems` (`vidgen validate`).
-  Observed: adding the painted file to `assets/` makes the draft render stale, but the re-rendered layout is byte-identical (same key). A layout from another machine could differ; the dry run would then list a new picture to pay for.
-- **File reference labels**: `generated_shot.refs` items may be `config.FileRef` (`{file, shows}`). `shots.reference_inputs` (extracted from `_resolve_inputs`, reused for `paint_first_frame.refs`) sets `ShotInput.owner` when `shows` names a character (displayed by `display_name`) or `ShotInput.shows` for other words (written as given). The role sentence (`shots._guide_opening_sentences`) numbers by actual input order; without `first_frame_in: guide`
-  a shot with a labelled file gets only the labels sentence. Shots with no `shows` get exactly their previous prompts (checked against the previous commit on all four paid shots: identical).
-- **Last-frame overlay** (`inputs.OVERLAY_LAST_NAME`, `overlay.last.png`): `make_overlay(at_end=True)` blends the starting picture over the plain guide's last frame (`inputs.last_frame`), printed next to the first-frame overlay. Never sent.
+- **`vidgen generate frames`** (`videogen.frames.run_frames`): `paint_first_frame: {prompt, refs,
+  seed, model (default bytedance-seed/seedream-4.5), resolution (2K)}` (`config.PaintFirstFrame`).
+  The layout `build/videogen/<shot>/layout.png` (first frame of the draft render, free) is the first
+  input; the prompt starts with `frames.LAYOUT_INSTRUCTION`; references go in OpenRouter's image
+  `input_references` (`check_request` refuses a model without it or above its `max`). Fixed
+  `ImagegenConfig(provider="openrouter")`, so the project's `imagegen:` does not apply. Key
+  `sha1(base request key | SHA-256 of layout and each reference)`; file `assets/frames/<shot>_<key>.png`
+  + `.json`. Paid through `sheets.pay_for_pictures` (budget, known price, `image-<key>` ledger
+  lines, `retries=0`). `first_frame: painted` → `frames.painted_picture`; missing → blocked.
+- **File labels**: `refs` items may be `{file, shows}` (`config.FileRef`); `shows` naming a character
+  sets `ShotInput.owner`, else `ShotInput.shows`. Without `shows` prompts are unchanged.
+- **Last-frame overlay**: `overlay.last.png` (`make_overlay(at_end=True)`), never sent.
 
 ### 113.16 Splitting a sheet into panels and joining takes (Step 319)
 
-- **`vidgen split-sheet`** (`videogen.split_sheet.split_sheet`, top-level CLI, no project): crops with ffmpeg's `crop` and, with `--scale` other than 1, `scale=...:flags=lanczos` (Pillow's Lanczos gave SSIM 0.81 and 0.97 on the two panels compared with the owner's ffmpeg-cut panels; the same ffmpeg filters give byte-identical PNGs). `--columns/--rows/--gap` cut equal panels and must divide into whole pixels; `--box X,Y,W,H` is repeated.
-- **Assembly** (documented recipe, no code): a film of picked takes is a second config (`film.yaml`) of `video_clip` scenes with `path: takes/<shot>/<n>.mp4`, `region: bleed`, `fade: false`, no beats and `duration:` the take's length, rendered with `vidgen render film.yaml --preview`. `place: false` on the shots stops the plan's note about a placed take's sound and keeps the shots from being laid over vidgen's own scenes; the takes themselves are not read by the generate commands from `film.yaml`.
+- **`vidgen split-sheet`** (`videogen.split_sheet`, no project): ffmpeg `crop` (+ `scale` lanczos
+  with `--scale`); `--columns/--rows/--gap` must give whole pixels; `--box X,Y,W,H` repeats.
+- **Assembly** (recipe): a `film.yaml` of `video_clip` scenes with `path: takes/<shot>/<n>.mp4`,
+  `region: bleed`, `fade: false`, no beats, `duration:` the take's; `place: false` on the shots.
 
 ### 113.17 Readable overlays, the film's disclosure, faster music list, the shot-with-a-line note (Step 321)
 
-- **Overlays.** `make_overlay` enlarges both overlays to `OVERLAY_LONG_SIDE` (1600) pixels on the longer side (the guide with bicubic, the picture with Lanczos), blended 50% as before. `at_end` also compares the guide's first and last frames (`changed_mask`: grey change >= `CHANGE_LEVELS`, 6, median-filtered; nothing above `MAX_CHANGED_SHARE`, 0.6, of the frame, a camera move or a fade): the changed area shows the guide at full strength with a magenta ring around it, drawn at the guide's scale (`OUTLINE_REACH`, 7 pixels) so a small late object is found. Still never sent.
-- **Disclosure of the film.yaml route.** `compose.clip_takes(project, scene_id)` finds `video_clip` scenes whose `path` is `takes/<shot>/<n>.mp4` (the `Take`'s sidecar names the model); `credit_line` and the `generated_footage` lint rule count them with placed takes, so the description file and lint carry the AI-footage line (§113.4).
-- **`vidgen list-music`** (`music_entries(analyse=False)`): the text list describes each bed from its `Bed` entry (`loop_seconds` = `Bed.seconds`, which equals the synthesised loop's length for all 17 beds: checked once by comparing `--json`), so it needs no synthesis (about 3 s). `--json` and `--render-dir` still make the beds.
-- **`vidgen generate plan`** notes a shot with a spoken line (`line` true) and `sound: model` but no voice input (`audio` not `beat`): the model invents the voice.
-- **Orphaned MP3s**: a config without any beat (a `film.yaml` of clips) reports none.
-- `narration.pad` and `pause:`: a beat lasts its voice plus `pause:`, or plus `narration.pad` when there is no `pause:`; the pad is not added on top of a pause.
+- Overlays are enlarged to `OVERLAY_LONG_SIDE` 1600 px; `at_end` marks where the guide changed
+  between first and last frame (`changed_mask`: ≥ `CHANGE_LEVELS` 6, nothing if more than
+  `MAX_CHANGED_SHARE` 0.6 changed) with a magenta ring (`OUTLINE_REACH` 7 px).
+- `compose.clip_takes` finds `video_clip` scenes showing `takes/<shot>/<n>.mp4`; `credit_line` and
+  `generated_footage` count them.
+- `vidgen list-music` text output comes from `Bed` entries without synthesis (`--json`,
+  `--render-dir` still synthesise).
+- A config without beats reports no orphaned MP3s. A beat lasts its voice plus `pause:`, or plus
+  `narration.pad` when there is no `pause:` (never both).
 
 ### 113.18 The finished render and the film's sound as references (Step 402)
 
-The owner's test: give a video model five seconds of a `space` / `web` scene **as rendered** (not
-a layout guide), with the film's sound, the prompt and the sheets, and ask for the same shot as
-real footage. Two shot options, any scene type:
-
-- **`guide: final`** (`GuideChoice` gains `final`; `GUIDES_OF_ANY_SCENE` = none, `render`,
-  `final`). The guide is cut from the scene's finished render at the video's size and frame rate
-  (`guide.final.mp4`), never from the draft (a draft draws less: flat cartoons, no texture). The
-  render must not show what vidgen draws over the scene (overlays, citations: the model would
-  repaint text) nor a placed take (the guide would show the model's own earlier clip):
-  `Project.without_takes()` is a copy without overlays and with `takes_shown` false
-  (`compose._wants_placing` is false for it, so neither the frames nor the fingerprint hold takes),
-  rendering into `build/<final|preview>[_<variant>]_source` (worker `--source`).
-  `inputs.render_project(project, "final", scene)` uses the film's own project instead when
-  `references.draws_overlays(config)` is false and no take is placed in the scene: the same pixels,
-  so `vidgen render` and `generate inputs --guide` share one render (a web scene on a one-CPU
-  machine draws 19 s a frame at 1280x720; two renders would double that). The choice flips when a
-  take is placed in the scene; a `final` input records the scene fingerprint of `without_takes()`
-  either way (`freshness.InputSources.render`; the same picture), so placing the shot's first take
-  does not make its guide look changed. A later render then draws `_source` once.
-- **`audio: mix`** (`GeneratedShot.audio_source`: `beat`, `mix`, `none`; `wants_audio` is "not
-  none"). `audio.mp3` is cut from the rendered film (`project.output_path(False)`) at the beat's
-  start in `build/final/timings.json` plus the part's offset, for the part's length (the same
-  `cut_audio`: mono MP3). Cut from the film rather than mixed again: the film's mix is the sound the
-  shot will be heard with, whatever music, ducking, effects and normalisation the video has. A
-  talking shot refuses `mix` (lip-sync wants the voice alone). Its record (`freshness.mix_source`) is
-  the film's name, size and modification time, the start and the length: rendering the film again
-  marks it changed (cutting again is free).
-- **Prompt.** `GUIDE_PROMPTS["final"]`: keep the render's layout, framing, camera motion and timing,
-  remake it as real camera footage, real light, surfaces and detail instead of a computer-graphics
-  look. `MIX_PROMPT` names the reference audio as the soundtrack. With `first_frame_in: guide` the
-  Seedance template's `opens_final` and `soundtrack` sentences take their place.
-- **Freshness.** `InputSources.render(shot, "final")` takes the fingerprint and size of
-  `render_project(..., "final", scene)` (under the record's `draft` key); the first frame of a
-  `final` shot is recorded as `final`.
-- **Render hook** (tests): `render(project, scene, passes, kind)`; `kind` is `render` or `final`.
-
-Rule of the cookbook (a 3D guide for every shot) is not changed: `final` is an experiment on what a
-model makes of a finished picture. The first clip was not made: OpenRouter answered HTTP 402 ("This
-request's maximum cost exceeds your available credits") for Seedance 2.0 and 2.0-fast at 480p, 6 s,
-with $3.57 of credits against vidgen's estimates of $0.50 and $0.38. OpenRouter checks a worst case
-of its own before accepting the job; it is not in the model list, so vidgen cannot predict it.
+- **`guide: final`** (any scene type): cut from the scene's **finished** render at the video's size
+  and fps (`guide.final.mp4`), never the draft, showing neither overlays nor placed takes:
+  `Project.without_takes()` (no overlays, `takes_shown` false) renders into
+  `build/<final|preview>[_<variant>]_source` (worker `--source`); `inputs.render_project(project,
+  "final", scene)` uses the film's own project when `references.draws_overlays` is false and no take
+  is placed in the scene (one shared render). Freshness always records the `without_takes()`
+  fingerprint, so placing a take does not stale its guide.
+- **`audio: mix`** (`audio_source`: `beat` | `mix` | `none`): `audio.mp3` cut from the rendered
+  film at the beat's start in `build/final/timings.json` + offset (the film's own mix); talking
+  shots refuse it. Record `freshness.mix_source`: film name, size, mtime, start, length.
+- **Prompt**: `GUIDE_PROMPTS["final"]` (keep layout, framing, motion, timing; remake as real
+  footage), `MIX_PROMPT`; with `first_frame_in: guide` the Seedance template's `opens_final` /
+  `soundtrack` sentences.
 
 ### 113.19 A web scene's exact depth (Step 403b)
 
-For a depth-control video model (the owner's experiment: LTX-2.3 with the IC-LoRA Union Control,
-which takes a depth, canny or pose video aligned to its output) vidgen gives the depth three.js
-itself drew, not an estimate. `guide: depth` is accepted on `space` and `web` scenes
-(`config.GUIDES_OF_WEB_SCENES`, `scene_draws_guide`, `is_web_scene_type`).
+`guide: depth` on `space` / `web` scenes (`GUIDES_OF_WEB_SCENES`, `scene_draws_guide`) uses the
+depth three.js drew.
 
-- **Drawn by the scene's own shaders.** Overriding materials (`MeshDepthMaterial`) would lose a sea
-  displaced in its vertex shader and every shader-made geometry. `vidgen/three-finish`'s `Finish`
-  already draws the scene into a target with a `DepthTexture`; with `ctx.draw_mode` `"depth"`
-  (`WebPage(draw_mode=)`, in the clip's inputs only when set, so no other key changes) `render(t)`
-  draws the scene exactly as for the picture at `t` (the `update` hook, the same camera; no motion
-  blur samples) and replaces the whole chain by one pass, `DEPTH_PACK`: the window depth made the
-  distance along the view (perspective `near / (1 − d (1 − near/far))`, precise with far = 4e7;
-  orthographic; a logarithmic depth buffer), packed as `n = 1 + round(u (2^24 − 2))`,
-  `u = (log2 z + 16) / 48` (`DEPTH_LOG`), into red, green and blue, `n = 0` where the depth stayed
-  cleared (the sky and the background: sky domes and atmosphere passes write no depth or one at the
-  far plane, both read "far"). It samples through the lens's barrel distortion (the grade's formula,
-  nearest texel), so the pass lies on the colour frame; no noise, halation, vignette, bloom, grade or
-  grain. A page counts its depth frames (`globalThis.__vidgenDepthFrames`); a page that draws none
-  (not through `Finish`) is refused at frame 0.
-- **Kept lossless beside the colour.** `Web._draw_view` draws, when `depth` is among the scene's
-  `guide_passes` (worker `--guide-passes`), `make_web_clip(..., draw_mode="depth")` into
-  `<render_dir>/web/<scene>.depth.mkv` (+ `.json`; always FFV1, never `compact`, which would break
-  the packing). `pipeline.scene_pass_clips` names a scene's pass clips by type (a `3d` scene's three,
-  a web scene's depth), used by `_has_guide_passes`, `guide_pass_outputs` and `inputs._render_scene`.
-- **From the finished render.** `inputs.render_kind(project, scene, guide)`: a web scene's pass is
-  cut from the `final` render (the video's size and frame rate: a depth control wants the output's
-  frames), a `3d` pass from the draft as before. The `(scene, made)` renders, `_passes_by_render`
-  and the freshness records (`InputSources.render`, the first frame's kind) all go through it.
-- **One range a shot, 1 / distance.** `web.depth.cut_depth` decodes the shot's part twice
-  (`-ss`/`-t` as `cut_video`): first a histogram of log2 z (64 bins an octave) gives `near`, the
-  distance the nearest 1 % of the shot's drawn pixels are within; then grey = `near / z` clipped
-  (near white, far dark, the sky black), H.264 as the other passes (BT.709, CRF 12). *Why 1 / z, not
-  the `3d` pass's linear range with a 0.15 floor:* a sea runs to the horizon; a linear range needs a
-  far bound that flattens everything beyond it to one grey with a step to the sky, while 1 / z falls
-  smoothly to black at the horizon, as depth estimators (Depth Anything, the depth the control
-  models are trained on) give it, near white. *Why per shot:* a range per frame flickers.
-- **Known gap.** An orbital scene drawn in depth slices (`vidgen/space-scale`, `depth: split`, the
-  default) clears the depth between slices: the pass holds only the nearest slice.
+- **Drawn by the scene's own shaders** (vertex-displaced geometry survives): with `ctx.draw_mode`
+  `"depth"` (`WebPage(draw_mode=)`, in the clip's inputs only when set) `vidgen/three-finish`'s
+  `Finish.render(t)` draws the frame as for `t` (no motion blur) and replaces the chain by
+  `DEPTH_PACK`: view distance z packed as `n = 1 + round(u (2^24 − 2))`, `u = (log2 z + 16) / 48`
+  (`DEPTH_LOG`) in RGB, `n = 0` where depth stayed cleared (sky); sampled through the lens
+  distortion, no post effects. A page that draws no depth frame
+  (`globalThis.__vidgenDepthFrames`) is refused at frame 0 ("guide: depth needs the page to draw
+  through vidgen/three-finish"); a page with its own composer draws its depth frames through `new
+  Finish(renderer, scene, camera, ctx).render(t)`.
+- **Lossless**: `<render_dir>/web/<scene>.depth.mkv` (+ `.json`; FFV1, never `compact`).
+  `pipeline.scene_pass_clips` names a scene's pass clips by type.
+- **From the finished render** (`inputs.render_kind`): web passes from `final`, `3d` passes from the
+  draft.
+- **Grey** (`web.depth.cut_depth`): one range per shot (per frame flickers): `near` = distance
+  within which the nearest 1 % of drawn pixels lie (log2 histogram, 64 bins / octave); grey =
+  `near / z` clipped (1/z fades smoothly to the horizon, like depth estimators), H.264 BT.709 CRF
+  12.
+- **Gap**: a scene drawn in depth slices (`vidgen/space-scale` `depth: split`, default) holds only
+  the nearest slice.
 
 ### 113.20 The `comfyui` video provider (Step 409)
 
-`videogen.provider: comfyui` runs workflows kept with vidgen on a ComfyUI server; no money is paid.
+`videogen.provider: comfyui` runs vidgen's own workflows on a ComfyUI server; no money is paid.
 
-- **Config.** `videogen.comfyui` (`ComfyuiSettings`) takes exactly one of `colab: <session>` or
-  `url: http(s)://...`, `units_per_hour` (1.94, an L4) and `text_encoder: cpu | gpu` (default cpu: the LTX
-  graph's `DualCLIPLoader`, node 3, gets `device: cpu` and the text encoder takes no VRAM; gpu: `device:
-  default`). `provider: comfyui` without it is a config
-  error. A shot's `model:` (and a `videogen.models` key) may be a workflow id as well as `author/name`.
-- **Workflows** (`videogen/comfyui.py`, `Workflow`, `WORKFLOWS`). A workflow declares the guides it
-  takes as its control video (`controls`), the optional first frame, and its shape rules: `short_side`
-  512, sizes in multiples of 64 (the long side rounded up: 16:9 -> 960x512), `8k+1` frames up to
-  `max_frames` 121, generated at one of `fps_choices` (12, 24) and stored at `fps` 24 (§113.25).
-  `record()` is its `VideoModel` (`provider: comfyui`, durations 1-5 at 24 fps,
-  resolution 512p, first frame, seed); `Catalog.find` and `vidgen generate models` add the workflows
-  to OpenRouter's list. `check_request` and `estimate` hand a workflow to `check_workflow_request`
-  (one control video, no last frame, 512p; references and audio are notes, not sent) and
-  `workflow_estimate` ($0). A shot with another guide, or a workflow under another provider (or an
-  OpenRouter model under `comfyui`), is a plan problem. `ltx-2.3-union-control`'s graph is
-  `videogen/ltx_graph.py` (standard library only); `tools/colab/build_workflow.py` loads that file by
-  its path and keeps its CLI and experiment graphs byte-identical. `with_audio` false (the shot's
-  `sound: mix`) drops the audio decode from the output.
-- **Fitting.** `prepare_job` scales the guide to cover the size (centre crop), resamples it to the
-  rate the clip is generated at (24 fps, or the shot's `fps: 12`) and cuts it to the frame count or holds its last frame (`fit_control`); the first frame the same
-  (`fit_picture`); without one, the control's first frame is a bypassed placeholder (LoadImage needs a
-  file). Files are named `vidgen_<request key>_control.mp4` / `_first.png` in ComfyUI's input folder,
-  outputs `vidgen_<key>_*.mp4`. The clip is kept as made; placing trims it to the shot (the duration
-  snaps up, so the clip is never shorter unless the shot sets `duration:`, §113.23).
-- **One client, two transports.** `comfyui_client.py` (standard library, no vidgen imports) is
-  ComfyUI's HTTP API and `run_job(job.json)`. `HttpTransport` uses it in process (job id = prompt id).
-  `ColabTransport` writes `job.json`, the fitted inputs and a copy of `comfyui_client.py` into one
-  archive, sends it (`Colab.upload`: over ssh, `vidgen.colab_ssh`; with `via="exec"` a quick tunnel, `vidgen.colab_transfer`), unpacks it into `/content/vidgen-comfyui/<job id>` and starts
-  `python3 comfyui_client.py job.json` there detached with `colab_vm.py` (`start` / `poll`, as
-  `vidgen remote`); the client's last stdout line is the outcome; `Colab.download` (ssh, or a tunnel on the VM) fetches
-  `output.mp4`. `colab:` on the VM itself (the setup marker `/content/.vidgen_setup_vidgen_done`)
-  uses `HttpTransport(127.0.0.1:8188)`: the path of `vidgen remote <session> generate run --pay`.
-- **Inputs made on the VM count here (Step 422).** `vidgen remote`'s rsync bring-back includes the web
-  captures' records (`build/*/web/*.json`, not the clips): the scene fingerprint reads the files their
-  pages loaded, so without them a shot's inputs made on the VM were stale on this computer. The Colab
-  and remote modules (`colab*.py`, `remote.py`) are in `NOT_RENDER_INPUTS`: they draw nothing, and a
-  change to them made every render and shot input stale.
-- **Provider and cost.** `ComfyUIVideoProvider` has the OpenRouter provider's interface, so
-  `generate_clip` caches by the same request key, records the submit and end in its own ledger
-  `videogen-ledger.comfyui.jsonl` (cost 0), and `run_shots` keeps the clip with `add_take`; picking,
-  placing and `first_frame: last_of:` work as for any take. *Why `--pay` stays:* it is still the
-  one switch that starts real work, and a dry run stays free; a job estimated at $0 needs no budget
-  (`ledger.refusal`, `run_shots`). A failure before ComfyUI queued the job is a refused submit (no open
-  intent). The ended job's `usage` (`gpu_seconds` from ComfyUI's execution start to its end,
-  `compute_units` = seconds x `units_per_hour` / 3600, `server`) goes into the clip's sidecar and the
-  take's record.
+- **Config**: `videogen.comfyui` (`ComfyuiSettings`): exactly one of `colab: <session>` or `url:`;
+  `units_per_hour` 1.94; `text_encoder: cpu | gpu` (default cpu: node 3 `DualCLIPLoader` gets
+  `device: cpu`). The `colab:` route is the command's `--via` (ssh default, exec), never in
+  `video.yaml`. A `model:` may be a workflow id.
+- **Workflows** (`videogen/comfyui.py`, `Workflow`, `WORKFLOWS`): `controls`, optional first frame,
+  `short_side` 512, `size_step` 64 (16:9 → 960x512), `8k+1` frames ≤ `max_frames` 121, `fps_choices`
+  (12, 24), stored at 24. `record()` makes a `VideoModel`, listed with OpenRouter's;
+  `check_workflow_request` (one control, no last frame; references and audio are notes) and
+  `workflow_estimate` ($0). Workflow / provider mismatch is a plan problem. The LTX graph is
+  `videogen/ltx_graph.py` (stdlib only; `tools/colab/build_workflow.py` loads it by path).
+  `sound: mix` drops the audio decode.
+- **Fitting** (`prepare_job`): `fit_control` covers the size (centre crop), resamples to the
+  generation rate, cuts or holds to the frame count; `fit_picture` for the first frame (else a
+  bypassed placeholder). Files `vidgen_<request key>_control.mp4` / `_first.png`. Clips are kept as
+  made and trimmed when placed.
+- **Transports**: `comfyui_client.py` (stdlib, no vidgen imports: ComfyUI's API, `run_job(job.json)`).
+  `HttpTransport` in process. `ColabTransport` uploads one archive (job, fitted inputs, the client)
+  over ssh (`vidgen.colab_ssh`; exec: `vidgen.colab_transfer`), unpacks to
+  `/content/vidgen-comfyui/<job id>`, runs the client detached via `colab_vm.py`, downloads
+  `output.mp4`. On the VM (marker `/content/.vidgen_setup_vidgen_done`) `colab:` means
+  `HttpTransport(127.0.0.1:8188)`. `vidgen remote`'s bring-back includes `build/*/web/*.json` (the
+  fingerprint reads them); `colab*.py`, `remote.py` are in `NOT_RENDER_INPUTS`.
+- **Provider**: `ComfyUIVideoProvider` has the OpenRouter interface: same request key, cache, takes,
+  ledger `videogen-ledger.comfyui.jsonl` (cost 0). `--pay` still starts the work; a $0 estimate needs
+  no budget. A failure before ComfyUI queued the job is a refused submit. `usage` (`gpu_seconds`,
+  `compute_units` = s × `units_per_hour` / 3600, `server`) goes to the sidecar and take.
 
 ### 113.21 The canny guide and the restyled first frame (Step 410)
 
-The tested best LTX setup (HOWTO "Recommended setup and why") as two shot settings.
-
-- **`guide: canny`** (`config.GUIDE_CHOICES`, `GUIDES_OF_ANY_SCENE`): `render_kind` is `final`, so the
-  colour part is cut from the same finished render as `guide: final` (same frames and timing) and its
-  first frame is `first_frame.png`. `videogen/canny.py` finds the edges in numpy + scipy (both already
-  dependencies through manim; *why not OpenCV:* it is not a dependency and would be a heavy one):
-  OpenCV's `Canny` re-implemented (3x3 Sobel with replicated border, L1 gradient, its sector
-  non-maximum suppression, 8-connected hysteresis; frame 60 of the Step 405 render gives the same
-  edge pixels as `cv2.Canny`), no blur first, then `make_canny_soft.py`'s glint mask (41 px Gaussian
-  of the grey frame `<= glint`, feathered 31 px). Frames are decoded and encoded with ffmpeg pipes, one
-  at a time. `GeneratedShot.canny` (`CannyGuide`: `low` 92, `high` 200, `glint` 150 or false; only
-  with `guide: canny`). Size: `inputs.guide_size` (the workflow's own size for a workflow model, so
-  `fit_control` only resamples; else 512 on the short side: the thresholds are for that scale).
-  Freshness: a `final` render source plus `canny` and `canny_size`.
-- **`first_frame: restyled`** (`RESTYLED_FIRST_FRAME`; a plan problem unless `videogen.provider:
-  comfyui` and a workflow model): `make_inputs` cuts `first_frame.png` as for `render`, then
-  `comfyui.restyle_picture` sends `qwen_graph.qwen_graph` (moved from
-  `tools/colab/build_image_workflow.py`, which loads the file by its path; one copy) through the same
-  transport as clips: the frame at 1.5x `guide_size` (Lanczos) is its own reference latent, the
-  output scaled to `guide_size` and saved once; `PreparedJob.output` (`output.png`) and `free_after`
-  (`POST /free` when the job ends: the video model loads next) are new job fields, honoured by
-  `run_job` and both transports; `job_outcome` takes a `.png` when there is no `.mp4`. The result
-  `first_frame.restyled.png` is the shot's frame input. Its record in `inputs.json` holds the first
-  frame's render source, `first_frame_sha256` and `restyle` (prompt, seed, size, model) and the job's
-  `usage`; `generate inputs` keeps it while that matches (`freshness.recorded_matches`), so a re-cut
-  costs no GPU, and the plan reports a change like any input's. *Why in `generate inputs`:* the clip's
-  request key needs the picture, and inputs are where a shot's derived files are made and tracked; it
-  is GPU time, not money, and is printed with its units. Default prompt `qwen_graph.RESTYLE_PROMPT`
-  (run 2's prompt C made general: it names the usual CG giveaways); `first_frame_prompt:` replaces it.
+- **`guide: canny`**: `render_kind` `final`; first frame `first_frame.png`. `videogen/canny.py`
+  re-implements OpenCV's `Canny` in numpy + scipy (OpenCV is not a dependency; same edges as
+  `cv2.Canny`), no blur, then a glint mask (41 px Gaussian of grey ≤ `glint`, feathered 31 px);
+  frames through ffmpeg pipes. `GeneratedShot.canny` (`CannyGuide`: `low` 92, `high` 200, `glint`
+  150 | false). Size `inputs.guide_size` (the workflow's size, else 512 short side). Freshness: the
+  `final` source plus `canny`, `canny_size`.
+- **`first_frame: restyled`** (`RESTYLED_FIRST_FRAME`; needs `comfyui` and a workflow model):
+  `make_inputs` cuts `first_frame.png`, then `comfyui.restyle_picture` runs `qwen_graph.qwen_graph`
+  (frame at 1.5 × `guide_size` as its own reference latent, output at `guide_size`) through the clip
+  transport; job fields `PreparedJob.output` (`output.png`) and `free_after` (`POST /free` after).
+  Result `first_frame.restyled.png`; record: source, `first_frame_sha256`, `restyle` (prompt, seed,
+  size, model), `usage`; kept while it matches (`freshness.recorded_matches`). Made in `generate
+  inputs` because the clip key needs it. Prompt `qwen_graph.RESTYLE_PROMPT` or
+  `first_frame_prompt:`.
 
 ### 113.22 Chained parts and their join (Step 412)
 
-- **Chained parts**: in a beat split into parts with a starting picture (`first_frame` not `none`),
-  part 1 uses `first_frame` and part k > 1 gets `Shot.last_of = <beat>_p<k-1>` in `_link_last_of`:
-  the same blocking and freshness as `first_frame: last_of:` (no restyle for it). So a run makes one part per pass, in order. `first_frame: none` parts are not chained.
-- **Frames at the join** (Step 414, `vidgen/videogen/chain.py`): LTX gives the picture back as its
-  frame 0, so a chained part's take starts `chain.CHAIN_DROP_FRAMES` (1) frames early and those are
-  hidden (`Shot.lead`, `Placement.lead`; `GeneratedLayer` reads the take from that frame on). With
-  `first` the part's first film frame (`chain.frame_index`, the layer's rounding): the picture is the
-  previous take's frame the film shows at `first - lead` (`chain.picture_at`, recorded as
-  `last_of_at`); the guide is cut from that film frame to the part's end (`chain.guide_span`, a
-  quarter frame early so the cut keeps it; `lead` in its record); the take's frame `i` lines up with
-  film frame `first - lead + i`. The part's duration covers `length + lead / fps`. Exact when the
-  model's frame rate is the film's.
-- **The join**: `Placement.match_join` (true for a part placed right after its beat's previous part;
-  in the fingerprint only when true). `GeneratedLayer` gives that take
-  `clip_join.GainMatch(channel_gains(previous take's last shown frame, its first frame))`, both after
-  their `color_match` gains, eased out over 1 s; outside `clip_join.GAIN_RANGE` nothing is applied.
+- **Chained parts**: in a split beat with a starting picture, part k > 1 gets `Shot.last_of =
+  <beat>_p<k-1>` (as `last_of:`, no restyle), so a run makes one part per pass in order.
+- **Frames** (`videogen/chain.py`): LTX returns the picture as frame 0, so a chained take starts
+  `CHAIN_DROP_FRAMES` (1) early and those frames are hidden (`Shot.lead`, `Placement.lead`). The
+  picture is the previous take's frame shown at `first - lead` (`picture_at`, recorded
+  `last_of_at`); the guide is cut from there (`guide_span`, a quarter frame early); take frame `i` =
+  film frame `first - lead + i`; duration covers `length + lead / fps`.
+- **Join**: `Placement.match_join` (in the fingerprint only when true): `clip_join.GainMatch` of the
+  previous take's last shown frame vs this take's first (after `color_match`), eased out over 1 s;
+  nothing outside `GAIN_RANGE`.
 
 ### 113.23 A stylesheet with the base video; the clip's size and length (Step 425)
 
-Trial run T2c (2026-11-25, `video-projects/sheet-trial-2026-11-25/trial2/`): LTX-2.3 follows the canny
-base video and a stylesheet in one run when each IC-LoRA has its own guide.
-
-- **Config.** `GeneratedShot.sheet` (a picture file, relative to the project) and `sheet_prompt` (what
-  each panel shows), only together, only on a workflow with `Workflow.takes_sheet`
-  (`ltx-2.3-union-control`); `videogen.provider` other than `comfyui` is a plan problem. *Why
-  `sheet_prompt` is required:* the head of the prompt describes the panels, and vidgen cannot know them.
-  `size` (`WIDTHxHEIGHT`, multiples of `size_step`; not with `resolution`) and `duration` (1 to
-  `max_seconds`) are keys of the workflows only: `Workflow.size(aspect_ratio, size)`,
-  `inputs.guide_size` and `prepare_job` honour `size`; `duration` replaces the snapped part length, so a
-  clip may be shorter than its part (a plan note; the clip follows the start of the guide).
-- **The shot.** `shots._sheet_input` sets `Shot.sheet` when the file exists and its aspect ratio is the
-  clip's within 1 % (`SHEET_ASPECT_TOLERANCE`), else a plan problem. *Why no crop:* a centre crop
-  would cut the outer panels; the sheet is scaled (Lanczos) to the clip's size. The prompt is
-  `Reference sheet: <sheet_prompt>. Generated video: <the shot's prompt>` (`SHEET_HEAD`, `SHEET_TAIL`,
-  T2c's format). `VideoRequest.sheet` (a `MediaInput`) carries the picture; `canonical_request` adds
-  `sheet` (its SHA-256 and size) only when there is one, so the keys of requests without a sheet stay;
-  the sheet's contents and `sheet_prompt` are thus in the clip's key. `add_take(sheet=)` names it in
-  the take's record.
-- **The graph** (`ltx_graph.graph(sheet_file=)`): T2c node for node. Node 2 becomes `LTXMultiICLoRA`
-  (`ic_lora_count` 2, `noisy_blend` 1; LoRA a = Ingredients 0.9, strength 1, guide 0; LoRA b = Union
-  Control ref0.5, `lora_strength`, guide 1); node 40 `LoadImage` (the sheet), 41 `RepeatImageBatch`
-  (`amount` = the clip's frames), 42 `LTXAddVideoICLoRAGuide` on the sheet (strength 1, frame 0,
-  `latent_downscale_factor` = node 2 output 1) fed by the conditioning and node 13; node 14 (the
-  control) chains after 42 with node 2 output 2. Without a sheet the graph is unchanged byte for byte
+- **Config**: `GeneratedShot.sheet` + `sheet_prompt` (required: vidgen cannot know the panels),
+  together, only on a `Workflow.takes_sheet` workflow (`ltx-2.3-union-control`) under `comfyui`.
+  Workflow-only keys `size` (`WxH`, multiples of `size_step`; not with `resolution`) and `duration`
+  (1 to `max_seconds`; replaces the snapped length, a shorter clip is a note).
+- **Shot**: `shots._sheet_input` needs the sheet's aspect within `SHEET_ASPECT_TOLERANCE` 1 % (scaled,
+  never cropped: a crop cuts panels). Prompt `Reference sheet: <sheet_prompt>. Generated video:
+  <prompt>` (`SHEET_HEAD`, `SHEET_TAIL`). `canonical_request` adds `sheet` (SHA-256, size) only
+  when set.
+- **Graph** (`ltx_graph.graph(sheet_file=)`): node 2 `LTXMultiICLoRA` (Ingredients LoRA on the sheet,
+  guide 0; Union Control on the control, guide 1); nodes 40–42 load, repeat (clip frames) and add the
+  sheet guide; node 14 chains after 42. Without a sheet the graph is byte-identical
   (`tests/data/ltx_graph/no_sheet.json`). Not with `second_control_file`.
-- **Compiler.** `ComfyUIVideoProvider.submit` of a request with a sheet first calls
-  `check_compiler`: `Transport.compiler_off()` (Colab: `vidgen.colab.comfy_compiler_off`; HTTP on the
-  Colab VM itself: `colab_vm.comfy_args`, from `/proc`; another URL: `system.argv` of `/system_stats`)
-  must be `True`, else a `VidgenError`
-  naming `Transport.compiler_fix` (Colab: `setup_session.py NAME --no-comfy-compiler`, which restarts
-  ComfyUI). The provider never restarts ComfyUI. Nothing is recorded in the ledger.
-- **A small card (Step 434).** `setup_session.py NAME --reserve-vram N` starts ComfyUI with
-  `--disable-dynamic-vram --reserve-vram N` too (`comfy_flags`); over SSH a running ComfyUI whose compiler
-  setting or VRAM flags (`running_reserve` of its `comfy_args`) differ from the asked-for ones is restarted,
-  stopped by the PIDs colab_vm's `state` lists (`comfy_pids`: the server on 8188 and the `nvidia-smi -l`
-  sampler), never by a `pkill -f` pattern (which matched the ssh shell's own command line). An L4 completes
-  97-frame sheet clips with `--reserve-vram 10` (L4-FIT.md, 2026-11-26). The provider does not check these flags.
-- **Free VRAM once per run.** A provider's first job has `PreparedJob.free_before` (`POST /free` before
-  the uploads, in `HttpTransport.submit` and in `run_job` on the VM); `run_shots` makes one provider for
-  a paid comfyui run, so the models are unloaded once, before its first job, and stay loaded between
-  its shots.
+- **Compiler**: a sheet job first needs `Transport.compiler_off()` true, else a `VidgenError` naming
+  `Transport.compiler_fix` (`setup_session.py NAME --no-comfy-compiler`); the provider never
+  restarts ComfyUI.
+- **VRAM**: `setup_session.py --reserve-vram N` adds `--disable-dynamic-vram --reserve-vram N`; a
+  running ComfyUI with other flags is restarted by its PIDs (`comfy_pids`), never `pkill -f`. A
+  provider's first job has `free_before` (`POST /free`); `run_shots` uses one provider per paid
+  comfyui run, so models unload once and stay loaded between shots.
 
 ### 113.24 Subjects: sheet panels made by vidgen, approved, a shot's sheet composed (Steps 428-429)
 
-Rules of the owner: sheets come only from an image model (frames of vidgen's own render are valid
-inputs, never a video model's frames); they are made before any video work, on the Colab machine (no
-hosted service), with the image model loaded once for the whole batch and unloaded after it.
+Sheets come only from an image model (never a video model's frames), made before video work.
 
-- **Config.** Top-level `subjects: {name: Subject}`: `look`, `location` (one view), `seed`, `views`
-  (1-4 `SubjectView`: `name`, exactly one of `prompt:` (§113.28), `from: {scene, at}` and `image:`,
-  `crop: [x, y, w, h]` (a still only), `text` (needed with a still)). A shot's
-  `subjects: [names]` (only on a `takes_sheet` workflow; not with `sheet` / `sheet_prompt`; at most
-  `MAX_SHEET_PANELS` = 4 panels together; unknown names and scenes are config errors). `subjects` is
-  left out of the render fingerprint.
-- **Panels** (`videogen/subjects.py`). The still: `from` is the frame at `at` of the scene's finished
-  render by `Project.without_takes()` (always that project, so placing a take never makes a panel stale;
-  `inputs.scene_render`); `image` a file. It is cropped and placed on `PANEL_SIZE` 1440x768 (object:
-  fitted whole on black; location: cover). `qwen_graph` (Qwen-Image-Edit-2511 GGUF + Lightning) with
-  `OBJECT_PROMPT` / `LOCATION_PROMPT`. `make_panels` runs the panels that are not current one job
-  after another through one transport: `free_before` on the first, `free_after` on the last only.
-  Records `sheets/<subject>/<view>.json` (`panel_record`): `source` = `{still: {scene, at,
-  scene_fingerprint, render | image, image_sha256; crop}, edit: {prompt, seed, model, size}, location?}`,
-  plus the still's and panel's SHA-256, seconds, usage, time. `PanelSources.state` compares offline; a
-  changed scene fingerprint with the same still re-records without GPU work. The still is kept as
-  `<view>.still.png` (a view may not be named `contact`), and `make_panels` ends by writing each
-  selected subject's `contact.png` (`write_contact`: panels at half size with their view names, the
-  stills underneath; Pillow, no GPU).
-- **Approval** (`set_approval`; `vidgen generate subjects --approve NAME | --approve-all | --reject NAME
-  [--view VIEW]`, no GPU). A top-level `"approved": true` in the record, beside `source`; only a current
-  panel can be approved (else `VidgenError`, nothing written); a remade panel gets a new record without
-  it, a re-recorded one (same still) keeps it. `shots._subjects_sheet` blocks a shot with a panel not
-  approved, naming its contact pictures and `approve_command`; the sheet is still composed and set, so
-  it can be looked at, but the blocked shot is never paid for. A `sheet:` file needs no approval.
-  `plan_shots` adds a warning (not a block) for each comfyui shot of a `takes_sheet` workflow with
-  neither `subjects:` nor `sheet:`.
-- **Sheet background** (Step 431; `GeneratedShot.sheet_background`, `VideogenConfig.sheet_background`,
-  default `black`; `subjects.sheet_background` resolves it). `sheet_layout.on_background` replaces the
-  near-black region (r+g+b <= 14) joined to the sheet's corner (the gaps and each panel's black touching
-  them; `scipy.ndimage.label`) by a background, edge blurred 2 px: `location_background` (the first location
-  panel, cover-fitted, Gaussian blur 18 px at 768 wide, x1.1, blended 35 % with its mean colour lifted to
-  luma 100: the Orrery film's `warmsheet.py` recipe with a generic tint), `colour_background`,
-  `picture_background`. Deterministic. `sheet_source` adds `sheet_background` (a picture with its SHA-256)
-  only when it is not black, so sheets composed before stay current. `background_words` appends "the
-  panels sit on a softly blurred <location>" to the built sheet_prompt. Default black by the G4 check
-  (HANDOFF Step 431): location kept the candle-lit Orrery bright (69.5 vs 29) but washed out the glider
-  over the sea (126 vs 68, haze, a second sun).
-- **The shot's sheet** (`videogen/sheet_layout.py`). `choose_grid` picks the columns x rows that shows
-  the panels largest (smallest panel area; ties: fewer empty cells, fewer columns), `GAP` 4 px,
-  Lanczos, row by row; `place_words` names cells ("top left", "bottom", "the whole sheet"). The sheet
-  prompt is `<place>, <look>, <text>` for a subject's first panel, `<place>, the same <name>, <text>`
-  after. `make_inputs` composes `build/videogen/<shot>/sheet.png` at `guide_size` and records it in
-  `inputs.json` (the panels' SHA-256 and size); `shots._subjects_sheet` sets `Shot.sheet` only when
-  that record matches, else blocks the shot (panels: `vidgen generate subjects`; sheet: `generate
-  inputs`). From there it is a `sheet:` shot (§113.23).
+- **Config**: top-level `subjects: {name: {look, location, seed, views}}`; 1–4 `SubjectView`s with
+  `name` and exactly one of `prompt:` (§113.28), `from: {scene, at}`, `image:`; `crop` and (needed)
+  `text` with a still. A shot's `subjects: [names]` (only on a `takes_sheet` workflow, not with
+  `sheet`, ≤ `MAX_SHEET_PANELS` 4). Outside the fingerprint.
+- **Panels** (`videogen/subjects.py`): a still (the `without_takes()` finished render at `at`, or a
+  file) cropped onto `PANEL_SIZE` 1440x768 (object fitted on black, location cover), edited by
+  `qwen_graph` (Qwen-Image-Edit-2511) with `OBJECT_PROMPT` / `LOCATION_PROMPT`. `make_panels` runs
+  stale panels through one transport. Record `sheets/<subject>/<view>.json`: `source = {still:
+  {scene, at, scene_fingerprint, render | image, image_sha256, crop} | null, edit: {prompt, seed,
+  model, size}, location?}`, still / panel SHA-256, usage. `PanelSources.state` compares offline;
+  same still under a new fingerprint re-records without GPU. Files `<view>.still.png` (no view
+  named `contact`), `contact.png` (`write_contact`).
+- **Approval** (`vidgen generate subjects --approve NAME | --approve-all | --reject NAME [--view
+  VIEW]`): `"approved": true` in the record; only a current panel (else `VidgenError`); a remade
+  panel loses it, a re-recorded one keeps it. An unapproved panel blocks the shot (the sheet is
+  still composed for viewing). `plan_shots` warns for a `takes_sheet` shot with neither `subjects:`
+  nor `sheet:`.
+- **Background** (`sheet_background`: shot > `videogen`; default `black`, `location`, `#rrggbb`, a
+  picture): `sheet_layout.on_background` replaces the near-black region (r+g+b ≤ 14) connected to
+  the corner. `location_background`: the first location panel blurred (18 px at 768 wide), ×1.1,
+  35 % blend with its mean lifted to luma 100. `sheet_source` adds it only when not black;
+  `background_words` adds "the panels sit on a softly blurred <location>". Black is default
+  (location washes out bright scenes).
+- **Composition** (`videogen/sheet_layout.py`): `choose_grid` (largest panels; ties: fewer empty
+  cells, fewer columns), `GAP` 4 px; `place_words` names cells; prompt `<place>, <look>, <text>`,
+  later panels `<place>, the same <name>, <text>`. `make_inputs` writes
+  `build/videogen/<shot>/sheet.png` at `guide_size`, recorded with the panels' SHA-256;
+  `Shot.sheet` is set only when that record matches, else blocked. Then it is a `sheet:` shot.
 
 ### 113.25 Generating at 12 fps, doubled to 24 fps (Step 433)
 
-Experiment 2026-11-26 on an L4 (`video-projects/escapement-remake/FPS12.md`): LTX-2.3 with base video
-and stylesheet at 12 fps keeps the look over 8 s (97 frames, the cost of a 4 s clip at 24 fps), and
-RIFE 4.26 doubling to 24 fps keeps every tick on its beat, each tick spread over 2 frames instead of 1.
-
-- **Config.** `GeneratedShot.fps` (`None`, 12 or 24; a workflow key like `size` and `duration`,
-  refused on an OpenRouter model). `Workflow.fps_problem` refuses any other value; the length limit is
-  a frame limit: `Workflow.durations(fps)` are the whole seconds whose `seconds x fps + 1` frames are
-  `8k+1` and at most `max_frames` 121 (24 fps: 1-5; 12 fps: 2, 4, 6, 8, 10), `duration_problem` names
-  the frames of a length that does not fit. The config, `check_workflow_request` and `prepare_job` use
-  them.
-- **The split rule and the plan.** `shots.shot_durations` gives a workflow's durations at the shot's
-  `fps` (else the model's list): a beat is split over its longest (5 s at 24 fps, 10 s at 12) and each
-  part's length snaps up within them. The plan prints a workflow shot's frames line (`frames: 49
-  generated at 12 fps (...), doubled by RIFE in the same ComfyUI job to 97 at 24 fps`).
-- **The key.** `VideoRequest.fps` is set only when the shot asks for a rate other than the workflow's
-  own (`shots.generation_fps`), and `canonical_request` adds `fps` only when set: requests at 24 fps,
-  with or without `fps: 24`, keep their keys. *Why the guide's freshness does not read it:* the guide
-  stays at the film's frame rate; the 12 fps control video is fitted from it at submit time
-  (`fit_control(fps=12)`, every other frame), so it is covered by the request key.
-- **The graph** (`ltx_graph.graph(fps=12, out_fps=24)`): frame rate 12 on nodes 6 (LTXVConditioning),
-  15 (audio latent) and the frame count on 12, 15 and 41 (sheet repeat), as at 24 fps; after the tiled
-  decode (24) node 50 `FrameInterpolationModelLoader` (`rife_v4.26.safetensors`) and node 51
-  `FrameInterpolate` (multiplier 2) feed node 26 (VHS_VideoCombine) at 24 fps. Core ComfyUI nodes, one
-  job. With `out_fps` equal to `fps` the graph is unchanged byte for byte.
-- **The take.** RIFE makes `2n - 1` frames (`Workflow.stored_frames`): 49 -> 97 for 4 s, as long as a
-  24 fps take of 4 s; 97 -> 193 (8.04 s) for 8 s. The take is placed and trimmed to its shot like any
-  other (the duration snaps up, §113.20).
-- **Setup.** `tools/colab/setup.sh` downloads `frame_interpolation/rife_v4.26.safetensors` from
-  `Comfy-Org/Frame-Interpolation` (ungated) and links it into `ComfyUI/models/frame_interpolation/`;
-  `vm_state.py` counts it among the LTX files, so an older session runs setup.sh again. A ComfyUI
-  without the file refuses the graph; `comfyui.missing_weights_hint` adds the setup command to that
-  error (no check before sending).
+- **Config**: `GeneratedShot.fps` (`None`, 12, 24; workflows only; `Workflow.fps_problem`).
+  `Workflow.durations(fps)`: whole seconds with `s × fps` a multiple of 8 and `s × fps + 1` ≤ 121
+  (24 fps: 1–5; 12 fps: 2–10 even); `duration_problem` names the frames. `shots.shot_durations`
+  splits beats over the longest (5 s / 10 s).
+- **Key**: `VideoRequest.fps` only when not the workflow's own (`shots.generation_fps`), so 24 fps
+  keys stay. The guide stays at the film's rate; `fit_control(fps=12)` thins it at submit (covered
+  by the key).
+- **Graph** (`ltx_graph.graph(fps=12, out_fps=24)`): rate 12 on nodes 6 and 15, then node 50
+  `FrameInterpolationModelLoader` (`rife_v4.26.safetensors`) and 51 `FrameInterpolate` ×2 into node
+  26 at 24 fps; `out_fps == fps` leaves the graph byte-identical. RIFE stores `2n − 1` frames
+  (`Workflow.stored_frames`).
+- **Setup**: `tools/colab/setup.sh` fetches `rife_v4.26.safetensors` (`Comfy-Org/Frame-Interpolation`);
+  `vm_state.py` counts it; a missing file's error gets `comfyui.missing_weights_hint`.
 
 ### 113.26 Three guides on the LTX workflow: canny, final, depth (Step 435)
 
-Experiment 2026-11-26 on an L4 (`video-projects/escapement-remake/GUIDE-TEST.md`; one shot, the
-escapement's 8 s at 12 fps, one seed, a stylesheet): three control videos for `ltx-2.3-union-control`
-sent by hand. The scene's own colour render kept the parts and the lighting best (3 parts wrong of
-the base's, against 7-8 for canny) and moved with the camera from frame 0, but kept some of the
-render's look (its opening flash, its regular perlage); a depth guide has no texture, so the model
-invented surfaces (a brass disc, a cream plate, a toothed rim) and brightened; the canny outline
-invented the most and lagged the camera by up to 2 s at the start. The next film compares the three
-shot by shot, so vidgen sends each of them.
-
-- **The workflow's controls.** `Workflow.controls` of `ltx-2.3-union-control` is `("canny", "final",
-  "depth")` (was `canny`, `depth`); `guide_problem` and `check_workflow_request` name them
-  (`Workflow.controls_text`: `canny, final or depth`), every other guide (`true` / `render`, `outline`,
-  `mask`, none) stays a plan problem. *Why `final`, not a new name:* `guide: final` already is "the
-  beat's finished render, silent, at the film's size" (§113.18), cut to `guide.final.mp4`; it is exactly
-  the colour control video the experiment sent. Nothing else changed: the graph does not depend on
-  what the control video shows (`fit_control` scales and resamples any of them, also at `fps: 12`),
-  the sheet graph is the same, the default guide of a shot is unchanged.
-- **The prompt.** Each guide keeps its own sentence (`shots.GUIDE_PROMPTS`): canny "an edge map ... of
-  the computer render", depth "a depth map (near is white, far is dark)", final "the finished computer
-  render of this shot: keep its layout ... and remake it as real camera footage". With a sheet it
-  follows `Reference sheet: ... Generated video: ...` as before.
-- **Depth of a web scene** is the existing route (§113.19): vidgen renders the scene's depth pass with
-  the finished render, the page draws it when `ctx.draw_mode` is `"depth"` through
-  `vidgen/three-finish`'s `Finish.render(t)`. *Why no new flag or author file:* a page that draws its
-  picture another way (its own `EffectComposer`, as the escapement film's page does) needs only to
-  draw the depth frames through a `Finish` made for that (`new Finish(renderer, scene, camera,
-  ctx).render(t)` when `ctx.draw_mode === "depth"`, two lines); the depth is then the scene's real
-  depth buffer, packed and greyed as for every other web scene. A page that draws no depth frame is
-  refused when it is drawn (`guide: depth needs the page to draw through vidgen/three-finish`).
-- **Staleness.** The guide is a shot input (`guide.<guide>.mp4`) and its file and the prompt sentence
-  are in the request key: a changed `guide:` makes that shot's input "not made yet" and its key new;
-  other shots keep theirs, and the renders are reused (canny, final and a web scene's depth all come
-  from the finished render, `render_kind` `final`). `generate plan` prints each shot's `guide:` line
-  (the file and what it is).
+- `Workflow.controls` of `ltx-2.3-union-control` = `("canny", "final", "depth")` (`controls_text`);
+  other guides are plan problems. The graph does not depend on what the control shows. Colour
+  (`final`) keeps parts and light best but some CG look, depth lets the model invent surfaces,
+  canny invents most: all three are offered.
+- Prompt sentences in `shots.GUIDE_PROMPTS`. A web scene's depth is §113.19.
+- **Staleness**: the guide file and sentence are in the key; a changed `guide:` makes only that
+  shot's input "not made yet"; canny, final and web depth share the `final` render.
 
 ### 113.27 The WebGL backend in a render's identity (Step 436)
 
-On the escapement film's L4 (2026-11-26) the GPU WebGL left black holes in gilded parts, and
-`VIDGEN_WEBGL=swiftshader vidgen generate inputs --guide` on the VM reused the GPU render: the web
-frames' own cache key has the Chromium flags (`engine_id`), but the scene's render (`build/<kind>/scenes/
-<scene>.mp4` + its timings) was reused before the web frames were asked for, its record not naming the
-backend.
-
-- **The record.** After a worker rendered a scene drawn in Chromium (`pipeline.scene_webgl`: `3d`,
-  `web`, `space`, a type built on `web`), the pipeline adds `render.webgl` (`gpu` or `swiftshader`,
-  `chromium.webgl_backend()`, the worker runs with the pipeline's environment) to its timings
-  (`_record_webgl`). `pipeline._usable_render` reuses such a render only when it equals the backend asked
-  for now (`_same_webgl`); a render without the key (made before Step 436) counts as `swiftshader`, the
-  default, so local caches stay valid. *Why in the pipeline, not the worker:* the worker and
-  `browser/chromium.py` are render inputs (`vidgen_source_digest`); changing them would make every
-  render and every cut guide stale once; `render/pipeline.py` is not. *Why not the fingerprint:* the fingerprint is also what a shot's cut inputs record, and the plan here
-  compares it with a VM-made input's; with the backend in it every VM-made guide would read stale on
-  this computer. *Why not two caches:* one render per scene path; switching back draws the scene again
-  (the 3D frames and the web frames have their own caches keyed on the backend, but one file each).
-- **`vidgen remote`** passes this computer's `VIDGEN_WEBGL` as `VIDGEN_RUN_WEBGL` in the `begin` call
-  (a `VM_KEYS` key, blank when unset); `colab_vm.child_env` sets the run's `VIDGEN_WEBGL` from it after
-  `/content/vidgen.env` (which says `gpu` on a GPU session), so `VIDGEN_WEBGL=swiftshader vidgen remote NAME
-  ...` draws in software there; unset, the VM's own setting stays.
+- After rendering a Chromium-drawn scene (`pipeline.scene_webgl`: `3d`, `web`, `space`, web-based
+  types) the pipeline records `render.webgl` (`gpu` | `swiftshader`) in its timings
+  (`_record_webgl`); `_usable_render` reuses it only for the same backend (`_same_webgl`; missing =
+  `swiftshader`). In `render/pipeline.py`, not the worker or `browser/chromium.py` (render inputs:
+  changing them stales every render); not in the fingerprint (a VM-made guide would read stale
+  locally). One render per scene path.
+- `vidgen remote` passes `VIDGEN_WEBGL` as `VIDGEN_RUN_WEBGL` (`VM_KEYS`); `colab_vm.child_env`
+  applies it after `/content/vidgen.env`; unset keeps the VM's.
 
 ### 113.28 Panels drawn from a prompt alone (Step 437)
 
-Rule of the owner: "The image model creates stylesheets for the video model. We do not guide the
-image model. The image model guides images." A sheet panel made by repainting a still of the scene
-(§113.24) kept the render's look; a view with `prompt:` is drawn from words alone, and that panel
-then guides the video model. It is the first way to make a sheet.
+The image model is not guided by images: a `prompt:` view is drawn from words alone, the first way
+to make a panel.
 
-- **Config.** `SubjectView.prompt` (text). `_one_source` takes exactly one of `prompt`, `from`,
-  `image` (none or two: a config error naming the three); `crop` only with a still; `text` optional
-  for a `prompt:` view, needed for a still. The shortest view is `- prompt: "..."`.
-- **Graph** (`qwen_graph.zimage_text_graph`). ComfyUI's own Z-Image-Turbo template, node names checked
-  against the L4 VM's `/object_info` (ComfyUI 0.46.0): `UNETLoader` `z_image_turbo_bf16.safetensors`,
-  `CLIPLoader` `qwen_3_4b.safetensors` (type `lumina2`), `VAELoader` `ae.safetensors` (nodes 1-3, shared
-  with `zimage_graph` by `_zimage_loaders`), `ModelSamplingAuraFlow` shift 3, `CLIPTextEncode` with the
-  prompt as written, `ConditioningZeroOut` as the negative, `EmptySD3LatentImage` at `PANEL_SIZE`
-  1440x768, `KSampler` 8 steps, cfg 1, `res_multistep` / `simple`, denoise 1, the subject's seed;
-  `VAEDecode`, `SaveImage`. No `LoadImage`, `VAEEncode`, ControlNet or model patch: nothing is uploaded.
-- **Panels** (`subjects.py`). `Panel.from_prompt`, `Panel.model` (`TEXT_PANEL_MODEL`), `Panel.prompt`
-  is the view's prompt stripped. Its source is `{still: null, edit: {prompt, seed, model, size},
-  location?}`, so a changed prompt or seed makes it stale ("its prompt, look, text or seed changed")
-  and gives a new job key (SHA-256 of model, prompt and seed); the record's `still_sha256` is null and
-  no `<view>.still.png` is written; the contact picture's still row says "drawn from its prompt alone".
-  The sheet prompt's words are the look (or "the same <name>"), plus `text` when given. Approval,
-  the plan's listing and blocking are unchanged; `generate subjects` stays free (no `--pay`, no ledger).
-- **One model at a time.** `_run_batch` orders the panels by model (in their first appearance) and
-  sets `free_after` on each model's last job, so a batch of both models unloads Qwen-Image-Edit
-  before Z-Image-Turbo loads, and nothing stays in VRAM after the batch.
+- `SubjectView.prompt`; `_one_source`: exactly one of `prompt`, `from`, `image`; `text` optional
+  here.
+- **Graph** (`qwen_graph.zimage_text_graph`): ComfyUI's Z-Image-Turbo template
+  (`z_image_turbo_bf16`, `qwen_3_4b` CLIP type `lumina2`, `ae`; loaders shared via
+  `_zimage_loaders`), AuraFlow shift 3, `ConditioningZeroOut` negative, `PANEL_SIZE`, 8 steps, cfg
+  1, `res_multistep` / `simple`, the subject's seed. Nothing is uploaded.
+- **Panel**: `Panel.from_prompt`, model `TEXT_PANEL_MODEL`; source `{still: null, edit: {...}}`, key
+  SHA-256 of model, prompt, seed; no `.still.png`. Approval and blocking as §113.24; `generate
+  subjects` stays free.
+- **One model at a time**: `_run_batch` groups panels by model and sets `free_after` on each
+  model's last job (and `free_before` on the first), so nothing stays in VRAM after the batch.
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
-Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
-headless Chromium driven by **Playwright** (Python), not Blender or Manim's 3D; the look is clean
-and simple (plain colours, one default light; realism is not a goal); characters are simple
-stand-ins (Step 300). Later, 3D scenes are the input of video-to-video generation (camera, layout
-and motion from vidgen, the look from a video model; not built in this phase, it needs an https
-file host), so the design keeps a stable camera, exact timing, named objects and deterministic
-frames, and Step 301 adds guide passes (depth, outline, mask). Out of scope: molecules, planets,
-glTF models, realistic materials and shadows, rigs, any AI or paid call.
+Simple 3D in **three.js** in headless Chromium via **Playwright** (not Blender or Manim 3D): plain
+colours, one light, stand-in characters; stable camera, exact timing, named objects, deterministic
+frames, guide passes for generated shots (§113.8). Keys: [docs/CONFIG.md](docs/CONFIG.md#3d);
+how-to `docs/COOKBOOK-3D.md`.
 
 ### 114.1 How a `3d` scene renders (Step 298)
 
-A `3d` scene is a `NarratedScene` like every other type (`scenes/scene_3d.py`, `Scene3D`), so the
-render worker, beats, audio, timings, the render fingerprint, overlays, captions, stills, the
-layout dump and lint all work unchanged. Its `construct`:
-
-1. works out the scene's length before playing: the beats on the scene's clock from
-   `beat_window` (start = the whole frames of the beats before, end = start + `heard`), the
-   frames = Σ round(window × fps) (a silent scene: its `duration` minus the outro) + the outro's
-   frames + 2 spare frames (`SPARE_FRAMES`; a longer scene holds the last frame);
-2. builds the **scene description** (§114.3) for `config.pixel_width × pixel_height` at
-   `config.frame_rate`;
-3. `make_3d_clip(render_dir/three_d, scene id, description)` (§114.5) returns a lossless clip of
-   all frames, drawn now by one Chromium or reused;
-4. shows the clip as a `ClipMobject` (§38) covering the frame (`fit_box(frame, cover)`, decoded at
-   the size shown, copied pixel for pixel), playing from scene time 0; the title (a `text_plate` in
-   the header band, z-index 3) fades in at beat 1; `finish()` fades out over the 0.5 s outro.
-
-**Why a clip shown by Manim, not frames written over Manim's.** `generated_layer` (§113.4) replaces
-the scene's frames under the overlays, but then the scene's own title and anything Manim draws
-(callouts, actions later) would be covered. As a `ClipMobject` the 3D picture is the bottom layer
-of the scene, every Manim object and the overlay layer are drawn over it, and the existing
-`ClipMobject` code (decoding, fades, `dim` / `highlight` / `zoom` on target `view`) is reused. Cost:
-one lossless decode per frame plus Manim's image copy (measured: a 7 s scene at 320x180 renders in
-3–5 s including Chromium's start).
-
-**Frame alignment.** Frame *n* of the clip holds *t = n / fps*; output frame *k* of the scene shows
-clip frame *k* (checked by comparing the rendered scene with the clip, `test_scene_3d.py`).
+`Scene3D` (`scenes/scene_3d.py`) is a `NarratedScene`. `construct`: length first (beats on the
+scene clock via `beat_window`, Σ round(window × fps) + outro + `SPARE_FRAMES` 2); the description
+(§114.3) at the config's size and fps; `make_3d_clip(render_dir/three_d, scene id, description)`
+(§114.5); the clip as a full-frame `ClipMobject` (§38) from time 0 (the bottom layer, so Manim
+objects and overlays draw over it; `dim` / `highlight` / `zoom` on target `view`); title
+`text_plate` fades in at beat 1; 0.5 s outro. Output frame *k* shows clip frame *k* (*t = k /
+fps*).
 
 ### 114.2 Params (Step 298)
 
-`Scene3DParams` (`three_d/spec.py`; exported by `vidgen.api` with `Camera3D`, `Light3D`,
-`Object3D`; Step 299 extends it, §114.7): `title`, `background` (theme colour or hex; default the theme's background),
-`camera: {position = [3, 2.5, 5], look_at = [0, 0, 0], fov = 40 (10–120)}`, `light: {ambient = 0.5
-(0–5), sun = 2.5 (0–10), sun_from = [-2, 6, 4], color = #ffffff}`, `objects: [{id, shape = box,
-size = [1, 1, 1], color = accent, position = [0, 0, 0], rotation = [0, 0, 0] (degrees, XYZ order),
-spin = [0, 0, 0] (degrees per second)}]`. Scene units, y up. Checks: object ids unique, matching
-`[A-Za-z_][A-Za-z0-9_-]*`, not `camera` (reserved: a track's target); `shape` among `SHAPES`
-with a did-you-mean (`cellworld.did_you_mean`); sizes positive; the camera not on its `look_at`;
-`sun_from` not zero; unknown keys get the usual did-you-mean. Targets: `view` (the 3D picture),
-`title`. The light values were chosen from stills: the top of a box brightest, its two visible
-sides clearly different.
-
-**`fov` across the shorter side.** three.js's `fov` is vertical; vidgen's is the angle across the
-frame's shorter side (the page converts for portrait frames), so a subject framed in 16:9 fills a
-9:16 frame alike and the long side sees more — the same rule as Manim's frame (shorter side 8
-units, §5.2).
+`Scene3DParams` (`three_d/spec.py`; `vidgen.api` with `Camera3D`, `Light3D`, `Object3D`):
+`title`, `background`, `camera: {position [3, 2.5, 5], look_at [0, 0, 0], fov 40 (10–120)}`,
+`light: {ambient 0.5 (0–5), sun 2.5 (0–10), sun_from [-2, 6, 4], color #ffffff}`, `objects: [{id,
+shape box, size [1, 1, 1], color accent, position, rotation (degrees, XYZ), spin (degrees/s)}]`.
+Y up. Ids unique, `[A-Za-z_][A-Za-z0-9_-]*`, not `camera`; did-you-mean on shapes, refs and keys;
+sizes positive; camera not on `look_at`; `sun_from` non-zero. Targets: `view`, `title`. `fov` is
+across the frame's **shorter** side (the page converts), like Manim's frame (§5.2).
 
 ### 114.3 The scene description (JSON, version 1)
 
-`three_d/description.py`, `scene_description(params, theme, width=, height=, fps=, frames=,
-beats=, draw_mode="normal")`: `{version: 1, width, height, fps, frames, duration, draw_mode,
-background, camera: {fov, position, look_at, near: 0.1, far: 500}, lights: [{id: ambient, kind:
-ambient, color, intensity}, {id: sun, kind: sun, color, intensity, position (sun_from scaled to
-20 units)}], objects: [{id, shape, size, color, position, rotation}], timeline: {beats: [{id,
-start, end}], tracks: [{target, property, easing, keys: [{t, value}]}]}}`. Colours are resolved
-to `#rrggbb`; numbers rounded to 6 decimals, so the JSON (and its hash) is stable.
-
-It is the one contract between Python and the page, built so later steps only extend it:
-objects carry ids (actions, guide masks and video-to-video prompts refer to them), the camera is
-data (moves are tracks on `camera`), times are seconds on the scene's clock with the beats
-included (Step 299–300 time moves to beats and words), and a **track** sets one property of one
-target from keys, eased between neighbours (`linear`, `smooth`) and held outside them. Step 298
-uses one kind: `spin` becomes a linear `rotation` track from 0 to the clip's end. Properties:
-`position`, `rotation` (degrees), and the camera's `look_at`; Step 300 adds `scale`, `opacity`
-([v]), `emissive` ([r, g, b]) and an arrow's `length` ([L]) (§114.11).
-
-**Draw mode.** `draw_mode` (`DRAW_MODES`: `normal`, and Step 301's guide passes `depth`,
-`outline`, `mask`, §114.14) is in the description and applied by the page's `applyDrawMode`; a
-pass is the same description with another mode, so it shares camera and timing by construction.
+`three_d/description.py`, `scene_description(params, theme, width=, height=, fps=, frames=, beats=,
+draw_mode="normal", camera_moves=, object_changes=)`: `{version: 1, width, height, fps, frames,
+duration, draw_mode, background, camera: {fov, position, look_at, near 0.1, far 500}, lights
+[ambient, sun (position = sun_from scaled to 20)], objects [{id, shape, size, color, position,
+rotation, parent, ...}], timeline: {beats [{id, start, end}], tracks [{target, property, easing
+linear | smooth, keys [{t, value}]}]}}`. Colours `#rrggbb`, numbers rounded to 6 decimals (stable
+hash). The one Python–page contract; extended only by adding fields. Track properties:
+`position`, `rotation`, camera `look_at`, `scale`, `opacity`, `emissive`, arrow `length`; keys
+eased between neighbours, held outside. `spin` is a linear `rotation` track. `draw_mode`
+(`DRAW_MODES`: `normal`, `depth`, `outline`, `mask`) is applied by the page's `applyDrawMode`.
 
 ### 114.4 The page and the browser
 
-Package data `vidgen/data/three/`: `three.module.js` and `three.core.js` from the npm package
-`three` 0.186.1 (unmodified; SHA-256 in THIRD_PARTY_NOTICES.md; the npm package ships no minified
-build, so the two files weigh 2.1 MB), its `LICENSE` (MIT), `page.html` (one canvas) and
-`vidgen3d.js` (an ES module: `vidgen3d.load(description)` builds renderer, scene, camera, lights
-and meshes — `MeshLambertMaterial`, plain colours — and `vidgen3d.frame(t)` applies the tracks at
-`t`, renders and returns the canvas as a PNG data URL). No `requestAnimationFrame`, no clock, no
-randomness: the page draws only when asked, at the time it is given (`preserveDrawingBuffer`, so
-the read is the frame just drawn). The `addons/` folder beside them (Step 334) is for `web`
-scenes only (§118.14): the `3d` page neither serves nor hashes it.
+`vidgen/data/three/`: `three.module.js`, `three.core.js` (npm `three` 0.186.1, unmodified and
+unminified; SHA-256 in THIRD_PARTY_NOTICES.md), `LICENSE`, `page.html`, `vidgen3d.js`
+(`load(description)`, `frame(t)` → PNG data URL; `MeshLambertMaterial`). No
+`requestAnimationFrame`, clock or randomness. `addons/` is for `web` only (§118.14).
 
-`three_d/browser.py`, `PageRenderer(description)` (a context manager; one per scene render):
-starts Playwright and Chromium (`headless`, `--use-angle=swiftshader --enable-unsafe-swiftshader
---ignore-gpu-blocklist`: WebGL on Chromium's software renderer, the same pixels whatever the
-graphics card; `VIDGEN_WEBGL=gpu` uses `--use-angle=vulkan --enable-features=Vulkan
---ignore-gpu-blocklist` instead and adds `webgl=gpu` to the engine id, Step 411), a context with the frame's size as viewport and `device_scale_factor 1`, and a
-route for **every** request: `http://vidgen-3d.invalid/<file>` is answered from `PAGE_FILES` in
-the package, anything else is aborted — so nothing is fetched from the network (ES-module imports
-need an http origin; `file://` modules are blocked by Chromium). `frame(n)` evaluates
-`vidgen3d.frame(n / fps)`, decodes the PNG (PIL) and checks its size; page errors and failed
-evaluations become `VidgenError("3D page: ...")`. `write_clip(description, path)` encodes the
-frames in order with PyAV as FFV1 (`bgr0`, lossless) in Matroska, to `<path>.partial` first.
-Measured: about 60 ms per frame at 540x960 and 130 ms at 1920x1080 (SwiftShader + PNG), plus
-about 1 s to start Chromium.
-
-**Missing dependencies.** Playwright is a base dependency (`playwright>=1.40`, Step 322); it is
-imported only when a `3d` scene renders. Not installed: `VidgenError(INSTALL_HINT)` = reinstall
-schu-video-generator, then `python -m playwright install chromium` (Windows: `py -m playwright install
-chromium`). Chromium
-missing (Playwright's "Executable doesn't exist"): `VidgenError(BROWSER_HINT)`. Other launch
-failures: "cannot start Chromium for a 3D scene: <first line>". `vidgen validate` and every other
-scene type never need Playwright (except `web`, §118). Since Step 328 the launch, the hints, the
-missing-browser check and the clip writer live in `browser/chromium.py`, shared with `web`
-(§118.5); the 3D cache keys did not change.
+`three_d/browser.py`, `PageRenderer(description)` (one per scene render): Chromium headless with
+`--use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist` (same pixels on any
+GPU); `VIDGEN_WEBGL=gpu` → `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist`.
+Viewport = frame size, `device_scale_factor 1`; every request routed: `http://vidgen-3d.invalid/<file>`
+from `PAGE_FILES`, everything else aborted (no network). Page errors → `VidgenError("3D page:
+...")`; a page that does not load → `VidgenError("3D page did not load: ...")`, Chromium closed.
+`write_clip` encodes FFV1 (`bgr0`) Matroska via PyAV to `<path>.partial` first; a clip that cannot
+be replaced is a `VidgenError`. Shared code in `browser/chromium.py` (§118.5). Playwright is a base
+dependency imported only when rendering: missing → `INSTALL_HINT`; Chromium missing →
+`BROWSER_HINT`; other launch failures "cannot start Chromium for a 3D scene: ...".
 
 ### 114.5 The cache
 
 `three_d/clip.py`, `make_3d_clip(folder, name, description)`: `folder/<name>.mkv` + `<name>.json`
-= `{key, description}`, with `key = sha256(engine + canonical JSON of the description)` and
-`engine = page digest (PAGE_FILES) + Playwright version` (which pins the Chromium build). The clip
-is reused when it exists and the stored key matches; otherwise the record is removed, the clip
-drawn and the record written last. `folder` is `<render_dir>/three_d` (per quality and variant).
-So: the scene-level render cache (fingerprint, §63) decides whether the scene renders at all — the
-page files are part of `vidgen_source_digest` (`data/three/*.html|*.js`); `--force` renders the
-scene again but reuses an unchanged clip.
+`{key, description}`; `key = sha256(engine_id + canonical JSON of the description)`, `engine_id` =
+page digest (`PAGE_FILES`, incl. the labels' font) + Playwright version (pins Chromium) +
+`webgl=gpu` on the GPU. Reused when the key matches; else record removed, clip drawn, record
+written last. `folder` = `<render_dir>/three_d`. The scene fingerprint (§63; page files are in
+`vidgen_source_digest`) decides whether the scene renders; `--force` re-renders but reuses an
+unchanged clip.
 
 ### 114.6 Public interface and decisions (Step 298)
 
-- `vidgen.api` gains `text_plate(text, fill, opacity=0.88)` (`layout.py`; the plate `video_clip`
-  used privately, now shared), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`,
-  `scene_description`, `make_3d_clip` — built-ins import only `vidgen.api`
-  (`test_builtins_use_only_the_public_api`).
-- One browser per scene render, not one per video: renders run in separate worker processes
-  (§5.2) and Chromium starts in about a second.
-- The 3D clip is a separate cached file, not frames streamed into Manim: it makes the scene
-  description and the frames an artefact Step 301 and video-to-video can use, and a caption or
-  title change re-renders the scene without drawing the 3D frames again.
-- `examples/gallery` has a `3d` scene (`crate`) and the gallery an entry. The shared render of
-  every built-in in `test_builtin_scenes.py` leaves `3d` out, and the per-type target render in
-  `test_actions_coverage.py` skips it without Playwright; `test_scene_3d.py` renders it (and
-  skips when Chromium is missing).
+- `vidgen.api`: `text_plate(text, fill, opacity=0.88)`, `Scene3DParams`, `Camera3D`, `Light3D`,
+  `Object3D`, `BeatSpan`, `scene_description`, `make_3d_clip`; built-ins import only `vidgen.api`.
+- One browser per scene render (workers are separate processes). The 3D clip is a separate cached
+  file, so a caption or title change does not redraw 3D frames.
 
 ### 114.7 Shapes, labels and groups (Step 299)
 
-`Object3D.shape` is one of `SHAPES`: `box`, `sphere`, `cylinder`, `cone`, `torus`, `plane`,
-`arrow`, `label`, `group`. `size` is `[w, h, d]` or one number for all three, default per shape
-(`DEFAULT_SIZES`: 1; `plane` 4 and flat, `[w, 0, d]`; `torus` `[1, 0.25, 1]` = outer width,
-thickness, outer depth, lying flat; `arrow` `[0.08, 1, 0.08]` = thickness, length; `label` 0.3 =
-text height; `group` none). `color` defaults to `accent` (a label: `text`). The page builds unit
-geometries scaled **in the geometry** (`geometry.scale`), never `mesh.scale`, so an object's
-children keep their own size.
+`SHAPES`: `box`, `sphere`, `cylinder`, `cone`, `torus`, `plane`, `arrow`, `label`, `group`,
+`standin` (§114.11). `size` `[w, h, d]` or a number; `DEFAULT_SIZES` (1; plane 4 flat; torus `[1,
+0.25, 1]`; arrow `[0.08, 1, 0.08]` = thickness, length; label 0.3 text height). Geometry is scaled
+in `geometry.scale`, never `mesh.scale` (children keep their size).
 
-- **Arrow.** Along +y, centred: a shaft cylinder and a cone head (head length `min(3.5 t, 0.45 L)`,
-  radius `1.25 t`), one `THREE.Group` named by the id (every part carries `userData.id` for
-  Step 301's masks). With `to` (a point, or an object id: the arrow stops at the edge of the
-  object's sphere, `World.focus`), Python works out the centre, the length and the rotation
-  (`euler_xyz` of the turn from +y to the direction, three.js's XYZ decomposition), so the page
-  only ever draws "an arrow along +y"; `to` with a `rotation` is an error.
-- **Label.** `text` drawn on a 2D canvas (Inter Bold, vidgen's bundled font, served to the page as
-  `inter-bold.ttf` and loaded with `FontFace` before the first frame, so labels are the same on
-  every machine) on a rounded plate in the theme's `surface` at 0.88 (as `text_plate`), shown as a
-  `THREE.Sprite`: it always faces the camera, its size is in scene units (it gets smaller with
-  distance) and other objects can hide it. `rotation` does not turn it.
-- **Groups.** `parent: <id>` names an object written **earlier** in `objects` (cycles impossible,
-  and the page builds in list order); the child's `position` / `rotation` are in its parent's frame
-  and the parent's `spin` carries it round. Any object may be a parent; `shape: group` draws
-  nothing. Flat with `parent`, not nested `children:` lists: the params stay non-recursive (the
-  schema, `list-scenes` and the translation walker handle them as before) and map one-to-one onto
-  the description.
-- **Floor.** `floor: true | {size: 12, color: surface, y: 0}`: a `plane` with id `floor`, first
-  in the description (the id is then taken).
-- **References** (`camera.look_at`, `to`, `parent`, the camera actions' targets) are object ids,
-  checked with did-you-mean (`cellworld.did_you_mean`).
+- **Arrow**: along +y, shaft + cone head (`min(3.5 t, 0.45 L)`, radius `1.25 t`), one group;
+  every part has `userData.id`. `to` (point or object id, stopping at its sphere): Python computes
+  centre, length, rotation (`euler_xyz`); `to` with `rotation` is an error.
+- **Label**: canvas text (Inter Bold served as `inter-bold.ttf`, loaded before frame 0) on a
+  `surface` plate at 0.88, a `THREE.Sprite` (faces the camera, scene-unit size).
+- **Groups**: `parent: <id>` of an **earlier** object (no cycles); child transforms in the parent's
+  frame. Flat `parent`, not nested `children:` (params stay non-recursive). `group` draws nothing.
+- **Floor**: `floor: true | {size 12, color surface, y 0}` → plane `floor`, first in the
+  description.
 
-`three_d/world.py` (`World(params)`) mirrors the page's transforms in numpy: `matrix(id, t)` =
-parent's matrix · T(position) · R(rotation + spin · t) with R = Rx · Ry · Rz (three.js XYZ);
-`position(id, t)`; `focus(id, t)` the centre and radius of a sphere around an object (a group:
-around all its descendants; a label's width estimated from its text). The camera moves and arrows
-use it; Step 300's actions can.
-
-The description (still version 1; only fields were added) lists objects parents first with
-`parent` (`null` at the top), groups without `size` / `color`, labels with `text`, `plate`,
-`plate_opacity`. The page's `load` is async (it awaits the font when there are labels).
+`three_d/world.py` `World(params)` mirrors the page in numpy: `matrix(id, t)` = parent ·
+T(position) · R(rotation + spin · t) (R = Rx · Ry · Rz), `position`, `focus` (bounding sphere).
+The page's `load` is async (font).
 
 ### 114.8 Camera moves (Step 299)
 
-The camera at the start is `params.camera` (`look_at` may be an object id: its centre at t = 0).
-It moves with five **beat actions** (`scenes/scene_3d_actions.py`): `camera_orbit` (around the
-vertical axis through an object, `around`, or the point looked at; `degrees`, positive =
-counter-clockwise from above, the camera moving to its right; `up`; it ends looking at the
-centre), `camera_dolly` (`by` units towards the point looked at: push-in / pull-back),
-`camera_fly_to` (to an object: it keeps the direction it looks from and stops where the object's
-sphere fills `FILL` = 60 % of the shorter side's fov, or at `distance`), `camera_look_at` (turn to
-an object or `point`), `camera_move` (to `to`, looking at `look_at` or as before). All take
-`easing: smooth | linear`.
+Beat actions (`scenes/scene_3d_actions.py`): `camera_orbit` (`around`, `degrees` positive =
+counter-clockwise from above, `up`), `camera_dolly` (`by`), `camera_fly_to` (keeps its direction,
+stops where the sphere fills `FILL` 60 % of the shorter fov, or at `distance`), `camera_look_at`
+(object or `point`), `camera_move` (`to`, `look_at`); `easing: smooth | linear`. Keys:
+[docs/CONFIG.md](docs/CONFIG.md#3d-camera-actions).
 
-**Why beat actions.** They reuse vidgen's beat and word timing unchanged: `at` (a fraction, or
-`"@word"` resolved from the estimate and refined by the beat's audio, §87.2), `run_time`, the
-did-you-mean of unknown actions, `vidgen validate`'s locations (`beats[1].actions[0].target`), and
-the shorthand `- camera_fly_to: ball`. They are non-animating cues (`animates = False`, like the
-orbit scene's `burn`, §98.5): the 3D frames are drawn before the scene plays, so
-`Scene3D.camera_moves` reads `action_times(name, 0.0)` (the due time on the scene's clock in whole
-frames, as the runner counts) and builds `CameraMove(kind, start, end, easing, ...)` s; `cue` does
-nothing. `scene_targets = False`: the target is an object id, checked by `scene_problems` against
-`params.object_ids()`, so `view` / `title` stay the only Manim targets.
-
-**Timing.** A move lasts `run_time` seconds, default until the end of its beat's window; it may
-run on into later beats (a camera move is not undone, unlike a 2D `zoom`). Moves are taken in
-time order, each from the pose the camera has when it starts; a move still running when the next
-starts **stops there** (its easing keeps its own length, so it is not squeezed). Moves are clipped
-to the clip's last frame.
-
-**In the description** (`three_d/camera.py`, `camera_tracks`): two tracks on `camera`,
-`position` and `look_at`, `linear`, with **one key per frame** from each move's first frame to its
-last; the eased path (an orbit is an arc, not a straight line) is computed in Python (`move_path`,
-`ease` = the page's `smooth`), so the page only interpolates and every frame's camera is explicit
-data for guide passes and video-to-video. Without moves there are no camera tracks. Between moves
-the tracks hold. Size: two vectors per moving frame (a 3 s move at 30 fps is about 180 keys).
-
-**Checks.** `Scene3D.action_sequence_problems` replays the moves in beat and `at` order, each run
-to its end (`camera_problems`): a dolly to or past the point looked at, an orbit from right above
-its centre, a camera ending on what it looks at are problems at the action's location.
-`Scene3D.validate_project` builds the world (`check_3d_scene`): an arrow whose tip is its tail, a
-camera standing on the object it looks at. At render, a move that still cannot be made (timing
-cut it differently) is a `VidgenError` naming the scene.
+- Non-animating cues (`animates = False`): `Scene3D.camera_moves` reads `action_times(name, 0.0)`
+  (whole frames) and builds `CameraMove`s before playing. `scene_targets = False`: targets are
+  object ids checked by `scene_problems`.
+- **Timing**: `run_time`, default to the end of the beat; may run into later beats; each move
+  starts from the pose at its start; a running move **stops** where the next starts (its easing is
+  not squeezed); clipped to the last frame.
+- **Tracks** (`three_d/camera.py`, `camera_tracks`): `position` and `look_at`, linear, **one key
+  per moving frame**, the eased path computed in Python (`move_path`, `ease`).
+- **Checks**: `action_sequence_problems` (`camera_problems`: dolly past the target, orbit from
+  straight above, ending on the target); `validate_project` (`check_3d_scene`: zero-length arrow,
+  camera on its target); an impossible move at render → `VidgenError`.
 
 ### 114.9 `vidgen validate` and a missing browser (Step 299)
 
-`browser.missing_dependency()` is a cheap check, no browser started: Playwright importable
-(`importlib.util.find_spec`), and the folder of the Chromium build it pins
-(`driver/package/browsers.json`: `chromium-<rev>` or `chromium_headless_shell-<rev>`) in
-Playwright's browsers folder (`PLAYWRIGHT_BROWSERS_PATH`, `0` = inside the package, else
-`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`). It
-returns `INSTALL_HINT`, `BROWSER_HINT` or `None` (also `None` when it cannot tell).
-`install_warnings(project)` turns it into a `vidgen validate` **warning** — only when the project
-has a `3d` scene — so non-3D projects never see it and validation never fails for it.
+`browser.missing_dependency()` (no browser started): Playwright importable and its pinned Chromium
+folder (`browsers.json` revision) in the browsers folder (`PLAYWRIGHT_BROWSERS_PATH`, `0` = in the
+package, else the OS cache) → `INSTALL_HINT` / `BROWSER_HINT` / `None`. `install_warnings`
+reports it as a validate **warning**, only for projects with a `3d` scene.
 
 ### 114.10 Public interface and decisions (Step 299)
 
-- `vidgen.api` gains `CameraMove`, `camera_problems`, `check_3d_scene` and `Floor3D`;
-  `scene_description` takes `camera_moves=`.
-- The vendored three.js stays unminified (2.1 MB; the owner's answer to Step 298's question).
-- The labels' font is part of the page digest (the 3D clip cache key).
-
+`vidgen.api`: `CameraMove`, `camera_problems`, `check_3d_scene`, `Floor3D`. three.js stays
+unminified; the labels' font is in the page digest.
 
 ### 114.11 Object actions and character stand-ins (Step 300)
 
-**Stand-ins.** `shape: standin` (`size` `[w, h, d]`, taller than wide; default `[0.5, 1.6, 0.5]`;
-centred on `position`, so it stands on a floor at `y = h / 2`): the page builds a capsule, a cone
-"nose" on its front (+z unturned, at 0.28 h above the centre, in the body colour made darker or
-lighter: `nose_color`) and, with `name`, a label sprite (as `label`, text height 0.14 h) above its
-head. `voice` (default its id) is the voice that says its lines (for lint, §114.12). Other new
-object fields: `visible: false` (hidden until `object_show`; description `opacity: 0`), a label's
-`screen_size: true` (`sizeAttenuation` off and the sprite divided by its depth from the camera at
-the start, `screen_depth` in the description: it keeps its size on screen).
+**Stand-in** (`shape: standin`, default `[0.5, 1.6, 0.5]`, centred, so on a floor at `y = h / 2`):
+capsule, a cone nose on +z at 0.28 h (`nose_color`), with `name` a label (0.14 h) above; `voice`
+(default id) for lint. Fields `visible: false` (until `object_show`), label `screen_size: true`
+(`screen_depth`).
 
-**Ten beat actions**, all `object_<kind>` (owner's decision: no collision with the stage's
-`look_at`, `turn`, `walk_to`... or the 2D `highlight`; the same scheme as `camera_`):
-`object_move` (`to` / `by`), `object_path` (`points`, `smooth` = Catmull-Rom through the start and
-the points, else straight; constant speed by arc length; `turn` = yaw along the tangent),
-`object_rotate` (`to` / `by`, Euler degrees), `object_spin` (`turns` about `axis`), `object_scale`
-(`to`: a number or a vector), `object_show` / `object_hide` (`style: fade | grow`),
-`object_highlight` (`color` default theme `highlight`, `strength`), `object_walk` (stand-ins only;
-`to`: `[x, z]` or an object id, stopping `WALK_GAP` from its sphere; `speed`; easing default
-`linear`) and `object_face` (yaw to an object or point, the shorter way). Like the camera actions
-they are non-animating cues (`_ThreeDAction`: target an object id, did-you-mean, `scene_problems`
-for a walk of a box, a glowing label, turning an arrow with `to`...); `Scene3D.object_changes`
-reads `action_times` and builds `ObjectChange`s. Length: `run_time`, else `seconds` (show, hide,
-face: 0.6 s), else to the end of the beat; a walk without `run_time` lasts its turn (0.4 s per
-half turn) plus distance / speed.
+**Beat actions** `object_move` (`to` / `by`), `object_path` (`points`, `smooth` Catmull-Rom,
+constant speed, `turn`), `object_rotate`, `object_spin` (`turns`, `axis`), `object_scale`,
+`object_show` / `object_hide` (`fade | grow`), `object_highlight` (emissive glow, not the 2D
+highlight), `object_walk` (stand-ins; to `[x, z]` or an object, `WALK_GAP`; `speed`; linear),
+`object_face` (shorter way). Keys: [docs/CONFIG.md](docs/CONFIG.md#3d-object-actions). Cues like
+the camera's (`_ThreeDAction`); `Scene3D.object_changes` → `ObjectChange`s. Length: `run_time`,
+else `seconds` (show, hide, face 0.6 s), else to the beat's end; a walk: turn (0.4 s per half
+turn) + distance / speed.
 
-**Motion (`three_d/motion.py`).** Every object has five channels with rest values: `position`
-(the param, an arrow's tail), `rotation` (without `spin`), `scale` (1), `appear` = [opacity,
-grow] and `glow` (an sRGB emissive colour). A change becomes one or two **segments** (frames
-first..end, a value per frame); in one channel of one object a segment that starts later cuts the
-earlier one at its first frame (it starts from the value there), except `glow`, where segments
-overlap and the brightest wins. Changes are planned in start order; a change that needs another
-object's place (walk to it, face it) reads it at its own first frame, from the segments planned
-so far — exact, since later changes do not alter earlier frames. A walk is a turn segment
-(rotation, ≤ 25 % of its time) and a position segment that waits for the turn, then moves with a
-bob of 2.5 % of the height, `round(distance / (0.38 h))` steps, ending at rest height.
+**Motion** (`three_d/motion.py`): channels `position`, `rotation`, `scale`, `appear` [opacity,
+grow], `glow`; changes become per-frame segments; a later segment cuts an earlier one in the same
+channel (glow: brightest wins). Planned in start order; a change needing another object's place
+reads it at its first frame (exact). A walk = turn (≤ 25 %) then move with a 2.5 % bob,
+`round(distance / (0.38 h))` steps. `World.attach` (`plan_world`) adds S(scale × grow) and
+`opacity` (product along parents); `World.follow`; arrows with `to` follow their target (loops are
+errors).
 
-`World.attach(motion)` (`plan_world`) makes `matrix(id, t)` = parent · T(position) · R(rotation +
-spin · t) · S(scale × grow) at frame `round(t · fps)` (cached; cleared when a segment is added),
-`opacity(id, t)` the product along its parents. `World.follow(id, t)` = the object's sphere at
-rest carried along by its origin's movement (a turning group does not wobble what follows it; an
-object growing in keeps its full size). Arrows with `to` are posed per time from their tail and
-`follow(to)` (a loop of arrows is an error; pointing at its own child is a params error).
+**Tracks** (`object_tracks`, `held_keys`: only frames that differ from a neighbour): `position`,
+`rotation`, `scale`, `opacity`, `emissive`, arrow `length`. Page: `node.scale`, `setLength`,
+`applyLooks` (opacity × parents', transparent below 1; emissive brightest of self and parents).
 
-**Tracks.** `object_tracks` writes, per object, one key per frame while a channel changes
-(`held_keys`: a frame is kept where the value differs from a neighbour, so held stretches cost
-two keys and a still channel none): `position`, `rotation` (+ spin; a spin alone keeps its 2-key
-track), `scale`, `opacity` [v], `emissive` [r, g, b], and for an arrow following a moving object
-`position`, `rotation`, `length` [L]. The page: `scale` sets `node.scale` (children scale too),
-an arrow's shaft and head are unit meshes stretched by `setLength`, and `applyLooks` sets each
-part's material opacity (× parents'; transparent and no depth write below 1; invisible at 0) and
-emissive (the brightest of itself and its parents). The description stays version 1.
-
-**The camera follows** (owner's decision 3; `three_d/camera.py`). A camera state is two
-`Ref`s, position and look-at, each a point or a point carried by an object since a time.
-`camera.look_at: <id>` follows from the start; during a move every reference is evaluated at the
-frame's time; when a move ends, `camera_fly_to` / an orbit around an object leave the position
-attached to the object (it keeps its distance) and `camera_look_at` / `camera_move` / an orbit
-leave the look-at on it; a move cut by the next one freezes where it was. `camera_poses` gives a
-pose per frame, `camera_tracks` keeps the frames where it changes (Step 299's tracks are
-unchanged for still objects).
+**Camera follows**: position and look-at are `Ref`s (point or object-carried point since a time);
+`look_at: <id>` follows from the start; after `camera_fly_to` / orbit-around the position stays
+attached, after `look_at` / `move` / orbit the look-at does; a cut move freezes. `camera_poses` per
+frame.
 
 ### 114.12 Lint: off frame and hidden (Step 300)
 
-`Scene3D.layout_keys` adds `three_d: {objects, spoken}` to every still of the layout dump:
-`framing_3d(description, world, t)` projects each shown object's sphere (`World.focus`, opacity ≥
-0.5) with the camera of the description at `t` (`camera_at`, the page's projection and `fov`
-rule), samples 64 points of the disc and gives the share **off** the frame (1 behind the camera)
-and the share **hidden** by nearer covering objects' discs (shrunk to 85 %; planes, labels,
-arrows, groups and the object's own group never cover). `spoken` (`spoken_objects`) = the ids
-the beat's object and camera actions name + stand-ins whose `voice` (default id) is the beat's
-voice (or the scene's). Rules (`lint/three_d_rule.py`, still scope, mid-beat stills too, skipped
-while a 2D `zoom` cuts the view): `three_d_off_frame` (`max_off` 0.5) and `three_d_hidden`
-(`max_hidden` 0.7), both warnings. Cheap (no pixels, no browser): an estimate — tall stand-ins
-count as their sphere.
+`Scene3D.layout_keys` adds `three_d: {objects, spoken}` to each layout still: `framing_3d` projects
+each shown object's sphere (opacity ≥ 0.5) with the camera at `t`, 64 disc samples → share **off**
+frame (1 behind the camera) and **hidden** by nearer discs (shrunk to 85 %; planes, labels, arrows,
+groups and own group never cover). `spoken_objects` = ids named by the beat's actions + stand-ins
+with the beat's voice. Rules (`lint/three_d_rule.py`, skipped under a 2D `zoom`):
+`three_d_off_frame` (`max_off` 0.5), `three_d_hidden` (`max_hidden` 0.7), warnings; no pixels.
 
 ### 114.13 Public interface and decisions (Step 300)
 
-- `vidgen.api` gains `ObjectChange`, `plan_world`, `framing_3d`, `hex6`; `scene_description` takes
-  `object_changes=`. New lint rules `three_d_off_frame`, `three_d_hidden` (`LINT_RULES`, last).
-- `object_highlight` is a 3D glow (emissive), not wired into the 2D `dim` / `highlight` machinery
-  (owner's decision 2): the objects stay non-Manim targets.
-- Poses are resolved per frame in Python and stored in the description (owner's decision 3):
-  guide passes and video-to-video get every frame as data; the page only interpolates.
-- `Scene3D.description` plans the world once more for lint (`self._world`) after
-  `scene_description` (cheap next to drawing the frames).
+`vidgen.api`: `ObjectChange`, `plan_world`, `framing_3d`, `hex6`. Poses are resolved per frame in
+Python and stored in the description; the page only interpolates. Objects stay non-Manim targets.
 
 ### 114.14 Guide passes: depth, outline, mask (Step 301)
 
-**What they are for.** The same 3D picture drawn three plainer ways, for tools that need a scene's
-layout, not its look — later the video-to-video step (camera, layout and motion from vidgen, the
-look from a video model), which is not built here. In plain words:
+**depth**: near white, far dark grey, background black. **outline**: white edges on black.
+**mask**: each object one flat colour on black, floor dark grey, with a table.
 
-- **depth**: grey by distance from the camera, **near white, far dark grey**, the empty background
-  black. It tells a model the shapes and how far away things are.
-- **outline**: **only the edges**, white lines on black (what edge inputs of video models expect),
-  like a line drawing (Step 302; Step 301 drew black on white).
-- **mask**: **each object one flat colour of its own** on black (no light, no blending at the
-  edges), the floor a neutral dark grey, with a table object id → colour, so a tool knows exactly
-  which pixels are which object.
-
-**One description, another draw mode.** `three_d/passes.py`, `guide_pass(description, world,
-mode)` = the normal description with `draw_mode: mode` and, for `depth`, `depth_range: [near,
-far]`, for `mask`, `mask_colors: {id: "#rrggbb"}`; camera, tracks, frames and objects are the
-same dict entries, so a pass has exactly the clip's frames, camera and timing (frame *n* of a pass
-is frame *n* of the clip). `scene_description(..., draw_mode=mode)` returns the same. Drawn and
-cached by `make_3d_clip(folder, "<scene>.<mode>", ...)` (its own key and record, as §114.5),
-beside the clip: `<render_dir>/three_d/<scene>.<mode>.mkv` + `.json`; the mask's table is written
-to `<scene>.mask-colors.json` (`mask_table`: `{scene, background: "#000000", colors: {id: colour},
-objects: [{id, shape, color, parent (+ name for a stand-in)}], names: {stand-in name: colour}}`).
-
-**The page.** In a pass every mesh part of an object gets a flat `ShaderMaterial` of the pass
-(keeping its `side`): the values are written as they are (no colour management, no tone mapping,
-no light), the renderer is made without antialiasing (a mask colour or a depth grey is never
-blended at an edge), sprites (labels, a stand-in's name tag) are hidden, and an object is drawn
-when its opacity is ≥ 0.5 (no fading, no glow). Captions, overlays and the title are Manim's
-layers over the clip, never in it.
-
-- **depth**: `u = clamp((far − z) / (far − near))`, z the distance along the view (camera space),
-  linear, drawn as `0.15 + 0.85 u` (the page's `DARKEST`): near white, far the darkest grey, so a
-  floor reaching past `far` stays that grey and only the empty background is black. *Why one range
-  per shot:* a range per frame would make the same object change grey as others move (flicker).
-  `depth_range(description, world)` (Step 302: fitted to the **objects**, owner's decision) looks
-  at up to `DEPTH_SAMPLES` = 120 frames (evenly spread, first and last): the camera of the
-  description at that time (`framing.view_basis`), every shown object in view except planes — its
-  extent along the view from its sphere (`World.focus`) and its box (the 8 corners of its size
-  through `World.matrix`; an arrow following an object: its current length), the tighter at each
-  end (an arrow's or a stand-in's sphere reaches far past it) — and widens the result by
-  `DEPTH_PAD` = 5 % of its span at each end. The floor and other planes are clamped to that range
-  (white in front of the objects, the darkest grey behind), so the objects get the contrast; a
-  scene of planes only fits its planes (a 17 × 17 grid of their points inside the view). The
-  scene's `depth_range: [near, far]` (0 ≤ near < far) replaces the fit. *Why linear, not
-  1/distance:* tried both on stills; with a floor reaching far back, 1/distance left the objects in
-  the middle almost black. *Why fitted to objects (Step 302):* fitted to everything in view, a
-  long floor took most of the range and the objects were nearly one grey.
-- **outline**: each frame is drawn twice into float render targets (one: view-space normal and
-  depth; two: the object's number, 1-based in description order, 0 = background), then a quad
-  with an edge shader writes white where the object changes to the right or below (silhouettes,
-  one object in front of another), where normals differ by more than ~37° (`NORMAL_COS` 0.8:
-  creases of boxes, cylinder caps, a stand-in's nose) or where 1/depth is not linear across three
-  pixels (`DEPTH_STEP`, an object hiding part of itself: 1/depth is linear on a flat face, so its
-  second difference is 0); black elsewhere. Lines are about 1 px per 540 px of the shorter side.
-- **mask**: `mask_colors(description)` (Step 302: stable between edits, owner's decision): the
-  floor `FLOOR_MASK` = `#404040` (neutral dark grey; in the table as `floor`); every other drawn
-  object (not groups, not labels) the colour of `MASK_PALETTE` (16 hues × 3 tones — bright,
-  dark, pale — 48 colours, never black or grey) at `sha256(id) mod 48`. A clash (two ids, one
-  colour) goes to the id **first in alphabetical order**; the other probes `MASK_PROBE` = 7 places
-  on (coprime with 48: every colour is tried; it changes hue and tone) to the first free one;
-  past 48 objects, a colour from the id's hash. So the colours depend only on the set of ids, not
-  their order: adding, removing or reordering objects changes another object's colour only when
-  their ids clash (then only the later one in the alphabet moves). The page writes the colour from
-  a `Vector3` of the hex digits / 255, so the PNG holds exactly the table's colour (tested). A
-  stand-in's nose has its colour; an arrow's shaft and head one colour.
-
-**Asking for them** (off by default). The `3d` param `guide_passes: true | all | [depth, outline,
-mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`; since Step 303 the string `all`
-is read as `true`, like `--guide-passes all`; since Step 304 every other string is read by the
-same `parse_passes` as `--guide-passes`, so `depth`, `depth,mask` and `depth, mask` work (stored
-as the list `[depth, mask]`, the same fingerprint as writing the list), empty items are skipped,
-an empty string is no pass, `all` among the names is all three, and an unknown name is refused
-with did-you-mean over the passes and `all`; strings pydantic reads as a boolean, such as
-`"yes"`, stay booleans), part of the params and so of
-the render fingerprint; and `vidgen render --guide-passes [LIST]` (alone = all; MCP `render`
-`guide_passes`) for every `3d` scene of the run: `render_project(guide_passes=)` → worker
-`--guide-passes depth,mask` → `scene.guide_passes` (a `NarratedScene` attribute, like
-`is_preview`). `Scene3D._draw_view` draws the union after the clip and sets
-`guide_passes_made`, which the worker records in the scene's timings (`render.guide_passes`). A
-reused render counts as usable for a request only when it made those passes and their files are
-there (`_has_guide_passes`, like `--frames`' stills); otherwise the scene renders again, reusing
-the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_passes`
-(scene id → files) and a `guide passes (<scene>): ...` line in the CLI output list them.
+- **Same description, another mode**: `three_d/passes.py` `guide_pass(description, world, mode,
+  depth=)` adds `draw_mode` and `depth_range` / `mask_colors`; frame *n* of a pass = frame *n* of
+  the clip. Cached by `make_3d_clip(folder, "<scene>.<mode>", ...)` →
+  `<render_dir>/three_d/<scene>.<mode>.mkv`; mask table `<scene>.mask-colors.json` (`mask_table`:
+  `{scene, background "#000000", colors, objects [{id, shape, color, parent, name}], names}`).
+- **Page**: flat `ShaderMaterial`s, no colour management / tone mapping / light / antialiasing,
+  sprites hidden, objects drawn at opacity ≥ 0.5.
+- **depth**: linear `u = clamp((far − z) / (far − near))` drawn `0.15 + 0.85 u` (`DARKEST`). One
+  range per shot (no flicker): `depth_range` fits the **objects** (not planes) over up to
+  `DEPTH_SAMPLES` 120 frames (sphere and box extents, the tighter), padded `DEPTH_PAD` 5 %; planes
+  clamp; a planes-only scene fits a 17 × 17 grid; param `depth_range: [near, far]` overrides.
+  Linear, not 1/z (a long floor left objects black); objects only (a floor took the range).
+- **outline**: two float targets (normal + depth; object number), an edge shader: object change
+  right or below, normals beyond `NORMAL_COS` 0.8, non-linear 1/depth (`DEPTH_STEP`); ~1 px per
+  540 px of the shorter side.
+- **mask**: `FLOOR_MASK` `#404040`; others `MASK_PALETTE` (16 hues × 3 tones = 48, no black or grey)
+  at `sha256(id) mod 48`; a clash goes to the alphabetically first id, the other probes
+  `MASK_PROBE` 7 on; past 48, a hash colour. Colours depend only on the **set** of ids; the frame
+  holds exactly the table colour.
+- **Asking**: param `guide_passes: true | all | [depth, outline, mask] | "depth,mask"`
+  (`parse_passes`, same as `--guide-passes`; in the fingerprint; `Scene3DParams.passes()`);
+  `vidgen render --guide-passes [LIST]` (alone = all; MCP `guide_passes`) →
+  `render_project(guide_passes=)` → worker → `scene.guide_passes`. `_draw_view` draws them after
+  the clip; timings record `render.guide_passes`; a reused render must have made them and their
+  files must exist (`_has_guide_passes`). `RenderResult.guide_passes`.
 
 ### 114.15 Public interface and decisions (Step 301)
 
-- `vidgen.api` gains `GUIDE_PASSES`, `guide_pass`, `make_guide_passes`, `mask_table`;
-  `DRAW_MODES` = `normal`, `depth`, `outline`, `mask`; the description stays version 1 (new
-  fields `depth_range`, `mask_colors` in passes only). `render_project`, `current_render` and
-  `render_scene` take `guide_passes=`; `RenderResult.guide_passes`.
-- Passes are separate lossless FFV1 clips (exact mask colours), not MP4s; converting for a video
-  model is the later video-to-video step's job (Step 307, §113.8: `generated_shot.guide: depth |
-  outline | mask` converts the beat's part to H.264 for the model).
-- One Chromium per pass (about 1 s each to start), reusing `make_3d_clip` unchanged rather than
-  a multi-mode page session.
-- Labels and name tags are left out of every pass (the owner: pure 3D); the mask table still
-  names stand-ins by `name`.
-- Lint stays sphere-based (owner's decision; masks are not used for lint); stand-ins stay centred
-  on `position`.
+`vidgen.api`: `GUIDE_PASSES`, `guide_pass`, `make_guide_passes`, `mask_table`; `render_project`,
+`current_render`, `render_scene` take `guide_passes=`. Passes stay lossless FFV1 (exact mask
+colours; H.264 conversion is `cut_pass`, §113.8); one Chromium per pass; labels and name tags are
+never in a pass; lint stays sphere-based.
 
 ### 114.16 Docs, example and review (Step 302)
 
-- **Owner's decisions on Step 301's questions**, applied: depth fitted to the objects with the
-  floor clamped, `depth_range` override (§114.14); outline white lines on black (no black-on-white
-  setting yet); the floor's mask colour a neutral dark grey in the table as `floor`; mask colours
-  from the ids (§114.14); passes stay lossless `.mkv` (conversion is the video-to-video step's).
-- **Docs and example**: `docs/COOKBOOK-3D.md` (setting up, building a scene, the camera in 16:9
-  and 9:16, stand-ins, guide passes, checks, common mistakes); the guide topic `three-d` (`vidgen
-  guide 3d`: topic names start with a letter, `3d` is an alias); `examples/3d-short` (YAML only: a
-  9:16 Short of about 15 s, shapes, two stand-ins walking and facing, four camera moves, karaoke
-  captions, `guide_passes: true`); the gallery sample (the guide's `crate`) and
-  `examples/gallery`'s `crate` show object actions.
-- **Review fixes**: a page that does not load (a Playwright timeout, a crashed page) is a
-  `VidgenError("3D page did not load: ...")` and Chromium is closed (was a traceback); the unused
-  `progress` argument of `write_clip` is gone; a clip that cannot be replaced (Windows: open in a
-  player) is a `VidgenError` naming it; the camera basis is one helper
-  (`framing.view_basis`) for lint and the depth range; the depth extent of long thin objects uses
-  their box.
-- `vidgen.api` is unchanged; `Scene3DParams` gains `depth_range`, `guide_pass` and
-  `make_guide_passes` take `depth=`; `passes.py` gains `FLOOR_MASK`, `MASK_PALETTE`.
-
+Docs `docs/COOKBOOK-3D.md`, guide topic `three-d` (alias `3d`), `examples/3d-short`,
+`examples/gallery`'s `crate`. `framing.view_basis` is the one camera basis for lint and depth range.
 ## 115. Hosted inputs through a Cloudflare Quick Tunnel (Phase AJ, Steps 305–306)
 
 OpenRouter's video API takes audio / video references only as `https://` URLs (§113.7). Local
@@ -12449,2059 +11566,883 @@ start are untouched; scores with soft or dark held string notes have less hiss. 
 `tests/test_studio_strings.py`.
 ## 122. Space scenes (Phase AN, Steps 367–378)
 
-The owner wants agents to make space scenes easily (2026-11-17): three.js `web` scenes built from
-ready-made parts, on the orbit model of Phase X (§98) instead of motion written in JavaScript.
-Owner's decisions: positions and timing are **true by default** (enlarged bodies or compressed
-distances are explicit, stated choices); the sky is algorithmic from a seed by default, a real
-star catalogue as an option; the spacecraft kit is its own step.
-
-| Step | What | Section |
-|---|---|---|
-| 367 | The orbit bridge: the third dimension audited and fixed, rotation data for the Sun, planets, Moon and Galilean moons, `orbit_data:` → `ctx.orbits` | §122.1–122.3 |
-| 368 | Scale: floating origin, depth, three scale modes and their honest labels (`vidgen/space-scale`) | §122.4 |
-| 369 | Checks for dark pictures in `vidgen motion check`; a registry of ready-made parts (`vidgen/parts`) and its contact sheet (`vidgen parts`) | §122.5 |
-| 370 | The sky: from a seed (default) or the real bright stars, the Milky Way, nebulae, galaxies (`vidgen/space-sky`) | §122.6 |
-| 371 | Planets, moons and rings from a seed: seven surface types, air, rings, 21 ready-made worlds (`vidgen/space-bodies`) | §122.7 |
-| 372 | Suns and light: stars by temperature, the far sun's glare, one object for a scene's light (planet-shine, ring-shine, eclipses), exposure modes (`vidgen/space-light`) | §122.8 |
-| 373 | Phenomena: a black hole that bends the sky, a wormhole, a jump to warp, asteroid fields and belts, comets, an aurora; their measured costs (`vidgen/space-phenomena`) | §122.9 |
-| 374 | The spacecraft kit: parts in metres with points to join them at, six invented ready-made craft from a seed, foil, plating and solar cells computed from numbers, plumes, attitude modes and burns of `ctx.orbits`, the sun's glare hidden, a point of light far away (`vidgen/space-craft`) | §122.10 |
-| 375 | Camera moves for space scenes as functions of time: fly-by, pass, arc at a chosen phase, arrival, reveal from behind a limb timed to the second, craft views, powers-of-ten zoom, lenses, checks in sentences, cuts (`vidgen/space-camera`); path lines near the camera fixed in `vidgen/space-scale` | §122.11 |
-| 376 | Space scenes without code: the `space` scene written in `video.yaml` alone (sky, sun, worlds, orbits and scale, light, craft, phenomena, camera moves in seconds or bars, finish, music, cards), its words checked in Python from the modules' own lists, the page written from them and drawn as a `web` scene, `script:` and `vidgen space-page` to go on in code, `vidgen music plan --style space`, lint `space_scene` | §122.12 |
-| 377 | The example film `examples/outbound`: five `space` scenes on the bar lines of an original score; a world of the orbit data as a camera subject fixed | §122.13 |
-| 378 | Critical review with fixes (a long lens's sky, an unlit craft said, burns steered under a speed-up, `shimmer` that follows a pan, a fly-by's frame, a transfer's departure alone, dated speed-ups, the `space` gallery entry, MCP `space_page`), `docs/COOKBOOK-SPACE.md` | §122.14 |
+three.js `web` scenes for space built from ready-made parts on the orbit model of §98, instead of
+motion written in JavaScript. Owner's rules: positions and timing are **true by default**
+(enlarged bodies or compressed distances are explicit, labelled choices); the sky is algorithmic
+from a seed by default, a real star catalogue as an option. Parts: orbit bridge (§122.1–122.3),
+`vidgen/space-scale` (§122.4), dark-picture checks and the parts registry (§122.5),
+`vidgen/space-sky` (§122.6), `vidgen/space-bodies` (§122.7), `vidgen/space-light` (§122.8),
+`vidgen/space-phenomena` (§122.9), `vidgen/space-craft` (§122.10), `vidgen/space-camera`
+(§122.11), the declarative `space` scene (§122.12), `examples/outbound` (§122.13). Author guide:
+`docs/COOKBOOK-SPACE.md`.
 
 ### 122.1 The third dimension of the orbit model (Step 367)
 
-Read module by module and measured (`tests/test_orbit_rotation.py`; the audit script of the step
-in `/home/claude/work/scratch/an367/tools/audit.py`).
+Which orbit modules are 3D:
+- **3D:** `elements.py` (perifocal → reference frame by R₃(−Ω) R₁(−i) R₃(−ω); `from_state` handles
+  equatorial (Ω = 0), circular (ω = 0) and retrograde-equatorial (i = 180°) orbits),
+  `manoeuvres.py` (local prograde / radial / normal frame), `nbody.py`, `ephemeris.py`
+  (heliocentric ecliptic J2000 with z; events by ecliptic longitude).
+- **Transfers** (`orbit_parts._transfer`): circular coplanar orbits in any common plane (refused
+  otherwise). The lead angle is measured in the ship's plane, atan2((r_s × r_t)·ĥ, r_s·r_t); in
+  the reference plane (h_x = h_y = 0) the x–y arithmetic is kept bit for bit.
+- **`nbody.py`** angular-momentum check (`angular_drift`, lint `orbit_conserved`) uses the whole
+  vector (`NBodyRun.angular_xy` holds L_x, L_y); the panel's signed ΔL/L stays L_z.
+- **2D by design:** `flyby.py` / the `flyby` param (`gravity_assist` refuses z; x is the planet's
+  direction of motion by definition), `threebody.py` / `system:` (rotating view about z),
+  `manybody.py`, `laws.py`, and the flat `orbit` scene's picture (each orbit seen from above its
+  reference plane; `normal` burns show only their projection).
+- **Dated presets** start on Table 1's elements of the date, then move on two-body orbits
+  (μ = GM☉ + GM), not along Table 1's rates (within the table's accuracy over a year).
 
-| part | 3D? | measured / note |
-|---|---|---|
-| `kepler.py` | — | anomalies only (scalars) |
-| `elements.py`: elements ↔ state, motion, conic | yes | perifocal → reference frame R₃(−Ω) R₁(−i) R₃(−ω), checked term by term; `from_state` handles equatorial (Ω = 0), circular (ω = 0) and retrograde-equatorial (i = 180°) orbits; 2,000 random ellipses and hyperbolas with i in {0, 90°, 180°, random}: state → elements → state agrees to 4 × 10⁻¹³ (relative) at three times |
-| `manoeuvres.py`: burns, trajectories | yes | the local frame (prograde, radial, normal) is 3D; a 1 km/s normal burn at 7.55 km/s tilts the plane by atan(1/7.55) to 10⁻¹⁴ rad |
-| transfers (`orbit_parts._transfer`) | one plane, any plane | circular coplanar orbits (refused otherwise). **Fixed:** the lead angle was measured between the x–y projections (`atan2(y, x)` and the sign of h_z), so between orbits in a common inclined plane the launch window was wrong: the ship missed its target by 221 km at i = 30°, 1,377 km at 60°, 10,125 km at 89° (Earth, 400 → 2,000 km). Now measured in the ship's plane, atan2((r_s × r_t)·ĥ, r_s·r_t): misses under 1 m at 0°, 30°, 60°, 89°, 150°. In the reference plane (h_x = h_y = 0) the old arithmetic is kept bit for bit |
-| `flyby.py`, the `flyby` param | **2D** | a gravity assist in the planet's frame, v∞ and the planet's velocity in the x–y plane (`gravity_assist` refuses z); the planet's real direction of motion is not used (x is it by definition) |
-| `nbody.py` | yes | the integration is 3D. **Fixed:** the angular-momentum check (`angular_drift`, the lint's `orbit_conserved`) looked at L_z only; it now takes the whole vector (`NBodyRun.angular_xy` holds L_x, L_y). In a flat system they are exactly 0 (z stays exactly 0), so every existing value is unchanged; the panel's signed ΔL/L stays L_z |
-| `threebody.py`, `system:` | **2D** | the circular restricted problem in its plane: Lagrange points, zero-velocity curves, `near` / `shift` / `drift` [x, y], the rotating view turns about z |
-| `manybody.py` | **2D** | the figure-eight, binaries, resonances (angles in x–y), the tidal schematic |
-| `laws.py` (cannonball) | **2D** | Newton's cannon in the x–y plane |
-| `ephemeris.py` | yes | heliocentric ecliptic J2000 positions with z; events by ecliptic longitude (as defined) |
-| dated presets | yes, approximate | the planets start on Table 1's elements of the date and then move on two-body orbits (μ = GM☉ + GM), not along Table 1's rates: after a year the model differs from Table 1 by 5,746 km for the Earth (7.9″ seen from the Sun), 16,500 km for Mars (15″), 13,974 km for Jupiter (3.7″), 105,960 km for Neptune (4.9″), within the table's own accuracy (arcseconds to arcminutes) |
-| the `orbit` scene's picture | 2D by design | every orbit seen from above its reference plane (x, y); `normal` burns show only their projection (documented on the param) |
-
-**Reference planes.** The presets measure i, Ω, ω from two planes: the planets, the Moon and
-Halley from the ecliptic of J2000; `iss`, `geo` and the Galilean moons from their planet's
-equator. The model used each set as written in one frame, which is right for the flat picture of
-one planet's satellites but not in 3D (an ISS-like orbit would lie 51.6° to the ecliptic, a
-geostationary one in the ecliptic). `OrbitPreset.plane` (`ecliptic` / `equator`) now says which;
-the flat `orbit` scene is unchanged (it draws each orbit from above its own plane), the `web`
-orbit data turns equatorial orbits into the ecliptic (§122.3). In a flat Earth-centred scene with
-`iss` and `moon` the two planes still mix (the Moon's i is to the ecliptic): left as it is, the top
-view hides it.
-
-**Unchanged outputs.** The resolved models of every `orbit` scene of `examples/gallery` and
-`examples/mars-transfer` (positions and velocities of every body at 64 times, transfer departure,
-arrival, phase and miss, the diagnostics) were dumped on the starting commit and after the step:
-identical.
+**Reference planes.** Planets, the Moon and Halley are measured from the J2000 ecliptic; `iss`,
+`geo` and the Galilean moons from their planet's equator. `OrbitPreset.plane` (`ecliptic` /
+`equator`) says which. The flat `orbit` scene draws each orbit from above its own plane (so `iss`
+and `moon` in one Earth-centred scene mix planes, hidden by the top view); the `web` orbit data
+turns equatorial orbits into the ecliptic (§122.3).
 
 ### 122.2 Body rotation data (Step 367)
 
-`vidgen.orbits.rotation`: the IAU WGCCRE model of each body — the north pole's right ascension
-α₀ and declination δ₀ (ICRF, degrees: constant + rate × T Julian centuries) and the prime
-meridian's angle W (degrees: constant + rate × d days from J2000.0 TDB), with periodic terms —
-and the radii. **Sources:** the IAU WGCCRE report 2015 (Archinal et al. 2018), the 2009 report
-(Archinal et al. 2011) for Mars, Saturn and Neptune, NASA's planetary fact sheets for the
-published periods and tilts. Written from memory of those documents (no network): **for the owner
-to check** (`RotationModel.check`; the Sun, Venus and the Earth are the ones I am sure of).
+`vidgen.orbits.rotation` (`ROTATIONS`, `RotationModel`, `rotation_model(name)`): the IAU WGCCRE
+model per body — pole α₀, δ₀ (ICRF, degrees, constant + rate × T Julian centuries), prime meridian
+W (degrees, constant + rate × d days from J2000.0 TDB), periodic terms (`Term`, `ARGUMENTS`) — and
+radii, for the Sun, the eight planets, the Moon, Io, Europa, Ganymede and Callisto. Sources: WGCCRE
+2015 (Archinal et al. 2018), 2009 (Archinal et al. 2011) for Mars, Saturn and Neptune, NASA fact
+sheets for published periods and tilts. Values were written without network access and are not
+checked against the documents (`RotationModel.check`); Neptune's W is unsure. Simplifications: the
+Earth has no ΔT (W about 0.3° off), the Moon keeps E1–E2 only, Mercury no libration, Mars no 2015
+periodic terms. An unknown name raises `VidgenError` with did-you-mean (`sol`/`luna` aliases).
 
-| body | pole α₀, δ₀ (°) | W (°, per day) | period (formula; published) | tilt (computed; published) | radii (km) | left out / unsure |
-|---|---|---|---|---|---|---|
-| Sun | 286.13, 63.87 | 84.176 + 14.1844000 d | 25.380 d; 25.38 d | 7.252° to the ecliptic; 7.25° | 695,700 | Carrington rate; the surface turns faster at the equator |
-| Mercury | 281.0103 − 0.0328T, 61.4155 − 0.0049T | 329.5988 + 6.1385108 d | 1407.51 h; 1407.6 h | 0.034°; 0.034° | 2440.53, 2438.26 | libration terms (≤ 0.01°) |
-| Venus | 272.76, 67.16 | 160.20 − 1.4813688 d | −5832.44 h; −5832.5 h | 177.36°; 177.4° | 6051.8 | — |
-| Earth | 0.00 − 0.641T, 90.00 − 0.557T | 190.147 + 360.9856235 d | 23.9345 h; 23.9345 h | 23.439°; 23.44° | 6378.1366, 6356.7519 | approximate model: no ΔT, so W is about 0.3° off the real Earth |
-| Moon | 269.9949 + 0.0031T − 3.8787 sin E1 − 0.1204 sin E2, 66.5392 + 0.0130T + 1.5419 cos E1 + 0.0239 cos E2 | 38.3213 + 13.17635815 d − 1.4 × 10⁻¹² d² + 3.5610 sin E1 + 0.1208 sin E2 | 27.3217 d; 655.7 h | equator 1.543° to the ecliptic; 1.54° | 1737.4 | E3–E13 (each under 0.1°) |
-| Mars | 317.68143 − 0.1061T, 52.88650 − 0.0609T | 176.630 + 350.89198226 d | 24.6230 h; 24.6229 h | 25.192°; 25.19° | 3396.19, 3376.20 | the 2015 periodic terms |
-| Jupiter | 268.056595 − 0.006499T, 64.495303 + 0.002413T | 284.95 + 870.5360000 d (System III) | 9.92492 h; 9.9250 h | 3.120°; 3.13° | 71,492, 66,854 | pole terms under 0.001° |
-| Saturn | 40.589 − 0.036T, 83.537 − 0.004T | 38.90 + 810.7939024 d (System III) | 10.6562 h; 10.656 h | 26.730°; 26.73° | 60,268, 54,364 | the interior period is uncertain by minutes |
-| Uranus | 257.311, −15.175 | 203.81 − 501.1600928 d | −17.24 h; −17.24 h | 97.770°; 97.77° | 25,559, 24,973 | — |
-| Neptune | 299.36 + 0.70 sin N, 43.46 − 0.51 cos N | 253.18 + 536.3128492 d − 0.48 sin N | 16.11 h; 16.11 h | 28.318°; 28.32° | 24,764, 24,341 | **unsure**: the 2015 report may use another W (about 15.97 h) |
-| Io, Europa, Ganymede, Callisto | 268.05, 268.08, 268.20, 268.72 (− 0.009T); 64.50, 64.51, 64.57, 64.83 (+ 0.003T); with J3–J8 terms | 200.39 + 203.4889538 d, 36.022 + 101.3747235 d, 44.064 + 50.3176081 d, 259.51 + 21.5710715 d | equal to the presets' orbital periods to 10⁻⁶ | poles within 0.05°, 0.47°, 0.20°, 0.20° of Jupiter's | 1829.4 × 1819.4 × 1815.7, 1562.6 × 1560.3 × 1559.5, 2631.2, 2410.3 | — |
-
-The checks are tests: each period from the formula against the published one (2 × 10⁻⁴), each
-planet's tilt computed from its pole and Table 1's orbit normal against the fact sheet (0.05°),
-the Sun's 7.25°, the Moon's 1.54° (Cassini's laws), the Galilean moons' periods against
-`GALILEAN_PERIODS`. Directions are turned from ICRF into the mean ecliptic and equinox of J2000 by
-ε = 84,381.448″ (the frame bias of 0.02″ ignored). A body's frame: x towards its prime meridian, z
-its IAU north pole (Venus and Uranus turn backwards about it); `frame(jd)` = E · R₃(α₀ + 90°)
-R₁(90° − δ₀) R₃(W). `equator_frame` (x the ecliptic's ascending node on the body's equator — the
-equinox for the Earth —, z the pole) turns orbits measured from an equator into the ecliptic.
-Pluto, Ceres and other moons have no rotation data yet; a body of the author's own has none
-(open: a `spin` for bodies of one's own, Step 371).
+Tests compare each formula period with the published one (2 × 10⁻⁴), each planet's tilt (pole vs
+Table 1 orbit normal) with the fact sheet (0.05°), the Galilean periods with `GALILEAN_PERIODS`.
+ICRF → mean ecliptic and equinox of J2000 by ε = 84,381.448″ (`OBLIQUITY_J2000_DEG`; frame bias
+ignored). A body's frame: x towards its prime meridian, z its IAU north pole (Venus and Uranus
+turn backwards about it); `frame(jd)` = E · R₃(α₀ + 90°) R₁(90° − δ₀) R₃(W). `equator_frame` (x the
+ecliptic's ascending node on the body's equator, z the pole) turns orbits measured from an equator
+into the ecliptic. Pluto, Ceres, other moons and bodies of the author's own have no rotation data.
 
 ### 122.3 Orbit data for `web` scenes: `orbit_data:` → `ctx.orbits` (Step 367)
 
-Built the way `music_data` is (§120.8): declared in the scene, computed in Python, cached, in the
-keys, given to the page by a helper script.
+Built like `music_data` (§120.8): declared in the scene, computed in Python, cached, in the keys,
+given to the page by a helper script.
 
-- **The interface.** A `web` scene's param `orbit_data:` (`vidgen.scenes.orbit_data.OrbitData`)
-  takes the `orbit` scene's own models and words — `central`, `bodies` (`OrbitBody`: presets,
-  elements, state vectors, `around`, `alongside`, `burns`; its drawing keys accepted and unused),
-  `span` / `orbits`, `dynamics` / `method` / `step`, `transfer`, `flyby`, `system`, `date` — plus
-  `speedup` (simulated seconds per scene second, instead of a span), `planes` and
-  `path_samples`. Labels (`label` of bodies, the central body, burns) are translatable as in the
-  `orbit` scene and reach the page as `label`. They are resolved by the same `resolve_model`, so a mistake reads as in the
-  `orbit` scene (`vidgen validate`: `scenes[1].params.orbit_data: ...`, with did-you-mean).
-- **Time base.** Frame n of the scene (vidgen's clock: scene time t = n / fps) shows simulated
-  time `span × min(n, N) / N`, N the scene's own frames (its beats or duration and its fade-out;
-  the clip's 2 spare frames hold the end): one constant speed-up from the first frame, as
-  `Playback` without its entrance. t = 0 is the `date` (default J2000.0 TT: the planet presets'
-  own epoch, so the default places the planets where they were then). `time`, `jd` and `index`
-  give it to the page.
-- **Units and frame.** SI: m, m/s, s, rad. The mean ecliptic and equinox of J2000 (x the equinox,
-  z the ecliptic's north pole), origin the central body; a `flyby` stays in the planet's frame
-  (`frame: flyby`). Each orbit's plane: `planes` per body, default the preset's `plane`; a body of
-  one's own around a planet or moon with rotation data its equator, around the Sun the ecliptic;
-  `alongside` the other body's. An `equator` orbit's position and velocity relative to its parent
-  are turned by `equator_frame` of the parent at the start's date (the pole is held for the scene:
-  the Earth's moves by less than 1′ a year), then the chain of parents is added up as `System.position`
-  does. With `dynamics: nbody` or a `flyby` every body stays as written (`as_written`; asking for
-  `equator` is refused); a transfer between bodies in different planes is refused.
-- **Rotation.** For each body with rotation data, per frame a quaternion (x, y, z, w; w ≥ 0) of its
-  frame and W (rad). A tidally locked moon (the Moon, the Galilean moons) orbiting a body of the
-  data faces it: x is the direction to its parent projected on its equator (the IAU puts the
-  mean sub-planet point at longitude 0), because the model places these moons by phase, not on the
-  date, and the IAU formula's meridian would not face the planet; W is then measured from the
-  same node as the IAU's. A geostationary satellite stays over one longitude of the turning Earth
-  to 10⁻³° over a day (test).
-- **What a body carries.** `name`, `key` (the preset), `parent` (the central body's name for its
-  direct satellites), `label`, `color` (a theme token), `gm`, `radius`, `plane`, `rotation`
-  (period, retrograde, synchronous, faces_parent, pole and spin axis as unit vectors, the pole's
-  α₀ δ₀, the tilt computed against its orbit's normal at the start or, for the Sun, the
-  ecliptic's, the published tilt, radii, source, note), `orbit` at the start in the data's frame
-  (a, e, i, raan, argp, nu, period, kind), `burns` (number, time, the first frame at or after it,
-  Δv in the data's frame, its prograde / radial / normal parts, size, direction, label), and the
-  base64 float64 series `position`, `velocity` (frames × 3), `quaternion` (frames × 4), `spin`,
-  `path` (`path_samples` points over the span, relative to the parent) and `conic` (the orbit at
-  the start, 361 points). The data also names its `approximations` in words (two-body orbits or
-  n-body, Table 1 on the date or J2000, the Galilean phases, impulsive burns, patched conics,
-  rotation models).
-- **A spacecraft** is a body: on a `transfer` or with `burns` its position and velocity follow its
-  Kepler arcs through the impulsive burns; a `flyby` probe is a body of the planet's frame. Step
-  374 reads `position` and `velocity` per frame (attitude along the velocity, or along a burn's
-  `dv` from its `frame`), `time` for the time base.
-- **Precision and agreement.** float64 from Python to the page (base64 little-endian), read
-  without interpolation from the frame the time falls on. Tests: the positions and velocities equal
-  `OrbitModel.position` / `velocity` at the frame times bit for bit (presets on a date, a transfer,
-  a flyby, an n-body run), equal the flat `orbit` scene's model, and the planets' first positions
-  equal `ephemeris.heliocentric` on the date (10⁻⁶ relative); a Chromium page reads
-  `ctx.orbits.position / velocity / quaternion / spin / time` at three frames and gets exactly the
-  Python values (`tests/test_orbit_data.py::test_the_page_receives_the_numbers_python_computed`).
-  `vidgen still` of a small project drew the transfer from `ctx.orbits` (the ship's x at frame 35:
-  −0.941639 AU on the page, −0.94163906 AU in the cached data).
+- **Interface.** `web` param `orbit_data:` (`vidgen.scenes.orbit_data.OrbitData`, pydantic) takes
+  the `orbit` scene's models and words — `central`, `bodies` (`OrbitBody`: presets, elements, state
+  vectors, `around`, `alongside`, `burns`; drawing keys accepted and unused), `span` / `orbits`,
+  `dynamics` / `method` / `step`, `transfer`, `flyby`, `system`, `date` — plus `speedup`
+  (simulated seconds per scene second, instead of a span), `planes`, `path_samples`. Resolved by
+  the same `resolve_model`, so errors read as in the `orbit` scene
+  (`scenes[1].params.orbit_data: ...`, did-you-mean). Labels are translatable and reach the page
+  as `label`. With `speedup`, validation builds a stand-in model whose dates are not checked
+  (`check_dates`); the data made for the scene's length is.
+- **Time base.** Frame n shows simulated time `span × min(n, N) / N`, N the scene's own frames
+  (beats or duration plus fade-out; the clip's 2 spare frames hold the end): one constant speed-up
+  from frame 0, no entrance. t = 0 is `date` (default J2000.0 TT, the presets' epoch). The page
+  gets `time`, `jd`, `index`.
+- **Units and frame.** SI (m, m/s, s, rad), mean ecliptic and equinox of J2000 (x the equinox, z
+  the ecliptic north pole), origin the central body; a `flyby` stays in the planet's frame
+  (`frame: flyby`, x along the planet's motion round the Sun): its pole (rings) and the `space`
+  scene's default sun are turned into that frame from the planet's motion on the date
+  (`orbits.ephemeris.flyby_axes`, JPL elements; the Sun stands near +y). Orbit plane per body: `planes`, default the preset's `plane`; a body of one's
+  own around a body with rotation data uses its equator, around the Sun the ecliptic; `alongside`
+  takes the other body's. An `equator` orbit's state relative to its parent is turned by the
+  parent's `equator_frame` at the start date (pole held for the scene), then parents are chained as
+  `System.position` does. With `dynamics: nbody` or a `flyby` every body stays `as_written`
+  (asking for `equator` is refused); a transfer between bodies in different planes is refused.
+- **Rotation.** Per frame, for each body with rotation data: a quaternion (x, y, z, w; w ≥ 0) and W
+  (rad). A tidally locked moon (the Moon, Galilean moons) orbiting a body of the data faces it: x
+  is the direction to its parent projected on its equator (the model places these moons by phase,
+  not by date, so the IAU meridian would not face the planet); W is measured from the IAU node.
+- **A body carries** `name`, `key`, `parent`, `label`, `color` (theme token), `gm`, `radius`,
+  `plane`, `rotation` (period, retrograde, synchronous, faces_parent, unit pole and spin axis, α₀
+  δ₀, computed tilt vs its orbit normal at the start (the Sun: vs the ecliptic), published tilt,
+  radii, source, note), `orbit` at the start (a, e, i, raan, argp, nu, period, kind), `burns`
+  (number, time, first frame at or after it, Δv in the data frame, prograde / radial / normal
+  parts, size, direction, label), and base64 little-endian float64 series `position`, `velocity`
+  (frames × 3), `quaternion` (frames × 4), `spin`, `path` (`path_samples` points over the span,
+  relative to the parent), `conic` (the start orbit, 361 points). The data names its
+  `approximations` in words.
+- **A spacecraft** is a body: on a `transfer` or with `burns` it follows its Kepler arcs through
+  impulsive burns; a `flyby` probe is a body of the planet's frame.
+- **Precision.** float64 end to end, read without interpolation at the frame the time falls on;
+  values equal `OrbitModel.position` / `velocity` at frame times bit for bit (tests:
+  `tests/test_orbit_data.py`). The page subtracts the camera position in float64 before handing
+  float32 to three.js (§122.4); `yUp` / `yUpQuaternion` give three.js axes.
 - **Cache and keys.** `vidgen.web.orbits.scene_orbit_data` (in `vidgen.api` as
-  `web_scene_orbits`, the one name this step adds there; the maker `make_orbit_data` stays in the
-  built-in scene module `vidgen/scenes/orbit_data.py`, which imports only `vidgen.api`) keeps the
-  data in `build/orbits/orbit-data-<key>.json`; the key holds the data version,
-  vidgen's version, the SHA-256 of the orbit code (`vidgen/orbits/`, `orbit_parts`, `orbit_sky`,
-  `orbit_systems`, `orbit_data`), the settings, the frame rate, the frames drawn and the scene's
-  own. The render fingerprint already holds the params, the beats' audio and vidgen's source, so
-  nothing is added there. The clip inputs get `orbits: {data: SHA-256 of what the page is sent,
-  helper: SHA-256 of orbits.js}` only for a scene with `orbit_data`; the helper is an init script
-  added only on those pages (like `music.js`): `runtime.js` and `engine_id()` are unchanged, so no
-  other clip key changes. Deterministic: the same settings give the same JSON (test).
-- **Measured.** The eight planets and the Moon on a date, 1,802 frames (60 s at 30 fps): made in
-  0.13 s, 2.3 MB of JSON (float64 base64: about 125 bytes per body per frame with rotation). A page
-  of a transfer: ready in 0.7 s at 320×180.
-- **For the later steps.** Step 368 (scale, floating origin): float64 metres from the central
-  body; a page subtracts the camera's position in float64 before handing float32 to three.js.
-  Step 371: `quaternion` (or `pole` and `spin`) and `radii`. Step 374: `position`, `velocity`,
-  `burns`, `time`. Step 376: `OrbitData` is a pydantic model that a declarative space scene can
-  hold as it is; `yUp` / `yUpQuaternion` give three.js's axes.
+  `web_scene_orbits`; the maker `make_orbit_data` lives in `vidgen/scenes/orbit_data.py`, which
+  imports only `vidgen.api`) caches `build/orbits/orbit-data-<key>.json`; the key holds the data
+  version (`ORBIT_DATA_VERSION`, 2), vidgen's version, the SHA-256 of the orbit code (`vidgen/orbits/`, `orbit_parts`,
+  `orbit_sky`, `orbit_systems`, `orbit_data`), the settings, the frame rate, the frames drawn and
+  the scene's own. Nothing is added to the render fingerprint (params, beats' audio and source are
+  already in it). Clip inputs get `orbits: {data: SHA-256 of what the page is sent, helper:
+  SHA-256 of orbits.js}` only for a scene with `orbit_data`; `orbits.js` is an init script added
+  only on those pages (like `music.js`), so `runtime.js`, `engine_id()` and other clip keys are
+  unchanged. Same settings → same JSON.
 
 ### 122.4 Scale: `vidgen/space-scale` (Step 368)
 
-Real astronomical numbers break a naive three.js page: a float32 cannot hold "1.5 × 10¹¹ m plus
-10 m" (its step there is about 16 km), a depth buffer of one near and far plane cannot hold a 100 m
-ship and a planet 4 × 10⁸ m behind it, and a shader that works in world coordinates
-(`cameraPosition - worldPosition`, as atmospheres and glows do) loses everything. The module
-`data/web/modules/space-scale.js` (import name `vidgen/space-scale`, in `VIDGEN_MODULES`; imports
-only `three`) makes `ctx.orbits` drawable: "give me the orbit data, a camera and a mode; I place
-everything each frame".
+float32 cannot hold 1.5 × 10¹¹ m + 10 m, one depth range cannot hold a 100 m ship and a planet
+4 × 10⁸ m behind it, and world-coordinate shaders lose everything. `data/web/modules/space-scale.js`
+(`vidgen/space-scale`, in `VIDGEN_MODULES`, imports only `three`) places `ctx.orbits` bodies each
+frame. User docs: docs/CONFIG.md (`web`, "Astronomical scales").
 
 ```js
 const space = new SpaceView(ctx, {renderer, scene, camera, mode: "true"});   // or "enlarged" + enlarge, or "log"
-space.add(earthMesh, {body: "Earth"});    // radius 1: drawn at the Earth's radius (times its factor)
+space.add(earthMesh, {body: "Earth"});    // radius-1 mesh drawn at the body's radius (times its factor)
 space.add(shipGroup, {body: "Ship"});     // no radius in the data: built in metres
-space.path("Moon", {kind: "conic"});      // a line exact every frame
+space.path("Moon", {kind: "conic"});
 // frame(t): space.update(t, {from: {body: "Ship", offset: [-200, 0, 50]}, to: "Ship"}); renderer.render(scene, camera);
-// a caption: space.note().text           // "" | "sizes not to scale · bodies enlarged 50×; distances to scale" | ...
 ```
 
-- **Floating origin.** Every position stays float64 in the data's frame (m, ecliptic J2000, from
-  the central body) until the camera's position is subtracted in JavaScript's doubles; three.js's
-  camera stands at its origin and gets the difference (turned to y up). Positions are the data's
-  own on each frame; between frames (three-finish's motion blur calls `update` at sub-frame
-  times) a cubic Hermite of the two frames' positions and velocities (exactly the data at the
-  frame; for the Earth over 1.5 days, within 1 km where a straight line is 10,000 km off). Paths
-  and orbits (`path(name)`) are rebuilt camera-relative each frame (≤ 4,096 points). Measured: a
-  ship 400 km above the Earth, the Earth 1 AU from the Sun: the ship's three.js position equals the
-  camera offset to under 1 mm once float32; made float32 before the subtraction it is kilometres
-  off. In Chromium, a shader striping by world distance and the ship's own path line: the naive
-  page loses the ship and scrambles the line from frame to frame; this one is steady (the ship's
-  silhouette changes by 5 of 484 pixels between consecutive frames of `vidgen still`, the
-  light and the horizon moving).
-- **Depth: measured** in headless Chromium (SwiftShader, WebGL 2, 24-bit depth; `EXT_clip_control`
-  is there but three-finish's depth texture is 24-bit integer, so a reversed float depth would mean
-  changing three-finish, which would change the keys of its pages: not done). The test: a red ball
-  under a green shell a little higher (any red showing is z-fighting), a blue box in front.
-  Red pixels per 320×180 frame:
+Options (`DEFAULTS`): `orbits`, `renderer`, `scene`, `camera`, `mode: "true"`, `enlarge: 1`, `depth:
+"split"`, `ratio: 1e4`, `join: 3`, `maxSlices: 8`, `near: 0.01`, `dofFocus: null`, `r0: null`;
+unknown options and values throw with did-you-mean.
 
-  | case | one fixed range (0.1 m–10⁹ m) | one range fitted per frame (`single`) | logarithmic depth (`log`) | depth slices (`split`) |
-  |---|---|---|---|---|
-  | ship 400 km up, shell 20 km | 458–9,689 | 0 | 0 | 0 |
-  | ship 400 km up, shell 100 m | — | 203–1,180 | 0–1 | 0–2 |
-  | Earth + Moon from 10⁸ m beyond the Moon, a 4 cm box 3 m away, shell 100 m | — | 44–69 | 4–13 | 0–1 |
-  | the same, shell transparent (opacity 0.5) | — | 58 pure red, 3 colours on the disc | — | 0, one even colour |
-
-  Seconds per frame at 1280×720 (lit 256-segment spheres, screenshot included, two runs): fixed
-  0.14–0.20, `single` 0.13–0.20, `log` 0.15–0.21, `split` 0.18–0.19. With three-finish (depth of
-  field, bloom, motion blur of 5 samples), the ship: `single` 0.85, `log` 0.91, `split` 1.04,
-  `split` + `dofFocus` 1.15. Depth of field: `log` writes a depth three-finish reads as
-  perspective (the Moon in focus came out blurred, its edge 5 px wide); `split` with `dofFocus`
-  reads right (focus 3 m: the box sharp, the Moon's edge 5 px; focus 10⁸ m: the Moon's edge 1 px,
-  the box blurred). **`split` is the default**: correct, every material as it is (a
-  `ShaderMaterial` needs no `logdepthbuf` chunks), three-finish's chain unchanged; `log` (renderer
-  made with `logarithmicDepthBuffer: true`) and `single` remain choices.
-- **How `split` works.** It replaces the renderer's `render` for its own scene and camera (so
-  three-finish's calls, sub-frames included, go through it; `dispose()` gives it back). Each call:
-  the view-depth interval of every visible mesh, line, point cloud and sprite in the frame (its
-  bounding sphere; inside one, the distance to its round body's surface, or a path's nearest
-  segment); overlapping intervals make one stretch; a stretch spanning more than `ratio` (default
-  10⁴; 10⁵ let a 100 m shell fight) is cut into equal ratios (overlapping by 10⁻⁴: no seam);
-  separate stretches get slices of their own unless together they span at most `join` (3); at
-  most `maxSlices` (8). Objects with `userData.overlay` (a lens's glare, §122.8) are left out of
-  the intervals and drawn once after the last slice, over everything. Drawn far to near, the depth buffer cleared between, `scene.background`,
-  the clear on the first pass only, the shadow maps in the first pass that draws the world (Step 374: in the sky's pass
-  everything that casts a shadow is hidden, so a scene with a sky had no shadows). A sky (`scene.background`, objects with
-  `userData.sky = true`, or since Step 393 objects with `frustumCulled = false` AND a negative `renderOrder`; `userData.sky =
-  false` keeps one in the world) is drawn first with near and far of its own. Since Step 393 a slice draws only the things
-  whose interval reaches it (a thing beginning beyond the slice's far plane is hidden there: a world's shell that holds its
-  depth off the far plane was drawn again in every nearer slice), and a thing outside its bounding sphere but beside the view
-  begins at (distance - radius) times the frame corner's cosines (a world added with `at` and `size` reached to `near`). three-finish's depth of
-  field reads the last slice's depth with the camera's near and far, right for a focus in the
-  nearest slice; `dofFocus` (metres, an object or a function of t) draws the depth again from
-  focus / 10⁵ to the farthest thing, nearer things at depth 0. Slices seen: ship 2, Earth and Moon
-  with the box 3, Sun to Neptune from above 1, the zoom below 1–5.
-- **Scale modes and their notes.** `true` (default; `enlarge` other than 1 is refused), `enlarged`
-  (radii times `enlarge`: a number or `{default, <body>: factor}`, a factor other than 1 required;
-  distances true), `log` (positions r → AU · log10(1 + r / r0) along the same direction, r0 a third
-  of the smallest periapsis around the central body: the flat `orbit` scene's `radial: log`,
-  `LOG_R0_SHARE` and `log_r0`; tested equal to `OrbitSky._radial` to 10⁻¹²; in 3D r is the whole
-  distance, the flat scene's x–y one, equal for orbits in the plane; a moon collapses onto its
-  planet as in the flat view). `scaleNote(mode, {enlarge, words})` / `space.note()` give
-  `{lines, text}` in the flat scene's words: nothing for `true`; "sizes not to scale" and "bodies
-  enlarged 50×; distances to scale" (per body: "1000× (Sun 10×)"); "distances compressed (log)",
-  "sizes not to scale" and the factor. The flat scene's notes are not translated (only its labels
-  are), so neither are these; `words` replaces them for another language. The modes are the names
-  `vidgen.orbits.accuracy.PICTURES` uses for narration claims about scale. `problems()` lists an
-  enlarged body covering another's centre (the Earth at 60× reaches past the Moon); `pixels(name)`
-  the radius on screen (Sun to Neptune at true scale from 32 AU: the Earth 0.0003 px).
-- **Powers of ten** (for Step 375): one camera moves continuously from 2 m above the Earth to
-  1.3 × 10¹³ m in one scene (`vidgen still`, 8 times): near plane and slices follow, no fighting.
-  What does not work yet: a sphere mesh is no ground (a 512 × 256 sphere's facets lie up to 120 m
-  under the true surface, a 64 × 32 one's 7.7 km; the horizon from 400 km shows their kinks) and a
-  unit sphere scaled to the Earth keeps its vertices to about 0.4 m, so closer than a few metres
-  a surface needs a local patch (Step 371 / 375); at true scale a system seen whole has every
-  body under a pixel (honest; `pixels` says so; a marker is the page's choice).
-- **Tests.** `tests/test_web_space_scale.py`: served by name only, imports only `three`; in Node
-  on orbit data made by Python (the page's own `orbits.js` builds `ctx.orbits`): the log view and
-  r0 equal the flat scene's, double-precision placement (above), Hermite, the slices, the notes,
-  errors with did-you-mean; `slow`: the ship and Earth–Moon pages in Chromium, `split` against
-  `single`, twice. Stills: `/home/claude/work/scratch/an368/stills/`.
-
-**Path lines near the camera (Step 375).** Step 374 found that a `space.path` line vanished in
-close shots. Two causes, both in `update` / `_intervals`, both fixed: (1) a line's `nearest` is
-its distance from the camera, but a depth slice begins at a depth along the view, which at the
-frame's corner is smaller (distance × cos of the half field of view each way): the part of a
-line nearest the camera and off the middle was cut by the slice's near plane (the Moon's orbit
-seen from 2.4 × 10⁹ m lost a sixth of its ellipse). The line's interval now begins at `nearest ×
-0.999 × cx × cy`. (2) Software GL draws nothing of a segment far longer than its distance from
-the camera (a 10 km chord 800 m away). `nearCuts(a, b, d, spare)` gives the shares at which
-such a segment (over four times as long as its distance) is cut: the point nearest the camera
-and points d, 2 d, 4 d, ... to both sides, at most 48 a segment and `PATH_SPARE` (96) a line and
-frame; the line's buffer has that many spare points and a draw range. The pieces lie on the
-same straight segment, so the picture is the same line. Pages importing `vidgen/space-scale`
-are drawn again (its bytes changed; no released film imports it).
+- **Floating origin.** Positions stay float64 in the data frame until the camera position is
+  subtracted in JS doubles; the three.js camera stands at the origin (y up). At a frame the data's
+  values are used; between frames (motion-blur sub-frames) a cubic Hermite of the two frames'
+  positions and velocities. Paths (`path(name)`, ≤ 4,096 points) are rebuilt camera-relative every
+  frame.
+- **Depth** `split` (default), `log` (renderer with `logarithmicDepthBuffer: true`) or `single` (one
+  range fitted per frame). `split` because it needs no shader chunks, keeps three-finish's 24-bit
+  depth chain and page keys unchanged, and gives right depth of field with `dofFocus` (three-finish
+  reads `log` depth as perspective).
+- **How `split` works.** It replaces the renderer's `render` for its scene and camera (three-finish
+  calls and sub-frames pass through; `dispose()` restores it). Per call: the view-depth interval of
+  every visible mesh, line, point cloud and sprite (bounding sphere; inside one, the distance to a
+  round body's surface or a path's nearest segment; an object outside its sphere but beside the view
+  begins at (distance − radius) × the frame corner's cosines); overlapping intervals form a stretch;
+  a stretch over `ratio` is cut into equal ratios (overlap 10⁻⁴; 10⁵ lets a 100 m shell fight);
+  separate stretches get own slices unless together within `join`; at most `maxSlices`
+  (`depthSlices(intervals, {ratio, join, maxSlices, near})`). Drawn far to near, depth cleared
+  between; `scene.background` and the clear only on the first pass; shadow maps in the first pass
+  that draws the world (the sky pass hides every caster). A slice draws only things whose interval
+  reaches it. The sky (`scene.background`, `userData.sky = true`, or `frustumCulled = false` with
+  negative `renderOrder`; `userData.sky = false` opts out) is drawn first with its own near and far.
+  `userData.overlay` objects (§122.8's glare) skip the intervals and are drawn once after the last
+  slice. Depth of field reads the last slice's depth; `dofFocus` (metres, an object or a function of
+  t) redraws depth from focus / 10⁵ to the farthest thing, nearer things at 0.
+- **Path lines near the camera.** A line's interval begins at `nearest × 0.999 × cx × cy` (corner
+  cosines). Software GL drops a segment far longer than its distance, so `nearCuts(a, b, d, spare)`
+  cuts one over 4× its distance at the nearest point and d, 2d, 4d, … each side (≤ 48 a segment,
+  `PATH_SPARE` 96 spare points a line, with a draw range); pieces stay on the same straight line.
+- **Scale modes.** `true` (`enlarge` ≠ 1 refused), `enlarged` (radii × `enlarge`: a number or
+  `{default, <body>: factor}`, a factor ≠ 1 required; distances true), `log` (r → AU · log10(1 + r /
+  r0) along the same direction, r0 a third of the smallest periapsis round the central body — the
+  flat `orbit` scene's `radial: log`, `LOG_R0_SHARE`, `log_r0`, equal to `OrbitSky._radial`; in 3D r
+  is the whole distance). Mode names match `vidgen.orbits.accuracy.PICTURES` (narration claims).
+- **Notes.** `scaleNote(mode, {enlarge, words})` / `space.note()` → `{lines, text}` (joined with " ·
+  ") in the flat scene's words ("sizes not to scale", "bodies enlarged 50×; distances to scale", per
+  body "1000× (Sun 10×)", "distances compressed (log)"; nothing for `true`); not translated, `words`
+  replaces them. `problems()` lists an enlarged body covering another's centre; `pixels(name)` gives
+  the on-screen radius (a marker for sub-pixel bodies is the page's choice).
+- **Limits.** A sphere mesh is no ground (a 512 × 256 sphere's facets lie up to 120 m under the
+  surface; a unit sphere scaled to the Earth keeps vertices to ~0.4 m): closer than a few metres
+  needs a local patch. Tests: `tests/test_web_space_scale.py`.
 
 ### 122.5 Checks for dark pictures; ready-made parts and their contact sheet (Step 369)
 
-**What fired wrongly on space pictures.** Synthetic clips (1280x720, 3 s, encoded as vidgen does:
-x264 crf 18 yuv420p; numpy, no three.js; `/home/claude/work/scratch/an369/tools/space_clips.py`)
-through the Step 360 check:
+**Dark-picture checks in `vidgen motion check`** (`motion_check.py`). Finding kinds, rules and
+thresholds with defaults: docs/CONFIG.md#motion-check-vidgen-motion-check. At 160 px a star field
+averages to flat luma, so the 160 px checks alone saw it as blank or frozen and missed black frames
+in it.
+- **One decode, two pictures.** ffmpeg's filter graph splits each frame: one branch scaled to 160 px
+  exactly as before (`scale=W:H:flags=area`, rgb24), the other to `detail_width` (640, area); both
+  stacked into one raw picture per frame on one pipe. The 160 px bytes are identical to the
+  single-picture command (a test compares them). A source no wider than 160 px gets the old
+  command; `--threshold detail_width=0` turns the finer picture off.
+- **Only dark frames** (`dark_share` of 160 px pixels under `dark_level`) are measured on the finer
+  picture: star points (brightest of a 3 × 3, `star_contrast` above its 5 × 5 ring, ring at most
+  `star_ring` of it), subject share, clipped share, banded share, change against the first frame of
+  its still stretch, star shimmer.
+- **Rules.** A star field (`star_field` stars or a `subject_area` subject) is not blank (out of every
+  check's blank mask); black frames entered from or left to a star field or a subject are `blank`
+  (error inside a scene, info at a cut, nothing at the video's ends), as is a subject gone and back
+  within `vanish_seconds`; a dark frame is unchanged only if the finer picture is too (can only
+  remove `frozen`); `clipped` only in dark frames; `shimmer` uses the median star's jump (lines
+  crossing stars spoil a mean), takes out the pan most bright stars share (`shimmer_reach`) first,
+  judges only point stars (`shimmer_point`) and frames where most stars are found again; `banding`
+  needs a staircase of three steps the same way (grain makes up-and-down steps); `empty`; `lost`
+  only in scenes named with `--subject SCENE` (repeatable, `all`, MCP `subject`; an unknown id is
+  an error before decoding), because only stars may be meant.
+- Not found: aliasing that crawls at even brightness; shimmer of under half the stars; banding
+  outside dark frames; a grainy film's dark frames never count as frozen.
 
-| clip | Step 360 said | why | Step 369 says |
-|---|---|---|---|
-| a star field (1,500 gaussian stars), still, drifting 0.3 px a frame, twinkling, flown into | nothing | at 160 px (8 x 8 source pixels a pixel) the stars average to a luma spread of 0.002: the whole clip was one **blank** run, left alone only because it began at frame 0; after a lit shot it is "N black frames at a cut" (info) or, entered quickly inside a scene, an **error** | a star field (its points counted at 640 px): not blank |
-| the same field with 5 black frames inside (the v7 bug in space) | nothing | the black frames are part of the blank run; the luma step stars to black is 0.003, far under `blank_jump` | **error**: "5 black frames inside the scene (entered from a star field…)" |
-| a crescent 60 px wide over stars drifting 0.1 px a frame; a planet sliding 1 px a frame; a sun moving 1 px a frame | **frozen** (info) all 3 s | the mean change of a mostly black 160 px frame stays under 0.0015 | not frozen: the finer picture changes against the stretch's first frame |
-| a planet that vanishes for 3 frames while the stars stay | **blank** error ("3 black frames") | right fault, wrong words; with star fields no longer blank it would have been lost | **error**: "3 frames of stars only inside the scene: a subject over 11.2 % of the frame vanished…" |
-| point-sampled stars (squares 0.6 to 1.5 px, lit only where a pixel centre falls) moving 0.37 px a frame | nothing | each star is a fraction of one 160 px block: no block changes by `pop` or `flicker_block` | **shimmer** warning (the median star's light jumps 38 % frame to frame) |
-| a cut from the star field to a sunlit planet | nothing (the dark shot was "blank" from frame 0) | | `cut_jump` info (as for any hard cut) |
-| a sun disc clipped to white over 7.5 % of the frame | frozen only | | **clipped** warning |
-| a dark nebula gradient (0 to 23 codes) | frozen only | | **banding** info |
+**Ready-made parts registry.** `data/web/modules/parts.js` (`vidgen/parts`, imports only `three`):
+`definePart(info, make)`, `parts({kind, name})`, `part(name)` (did-you-mean), `buildPart(name, stage,
+options, seed)`, `defaultStage(width, height)` (black background, 40° camera at (0, 0.8, 6) looking
+at the origin, warm key, faint fill), `KINDS` (sheet order: `sky`, `body`, `light`, `craft`,
+`craft-part`, `phenomenon`, `camera`, `structure`, `effect`, `environment`). `info` = `{name, kind,
+module, label, use, options, seed, at}` (`use` the one line a page writes, `options` the defaults
+`make` reads with colours as `"#rrggbb"`, `at` the time shown). `make(stage)` gets `{scene, camera,
+key, fill, renderer, width, height, ctx, options, seed, part}`, adds the part (may move the camera,
+change lights, set `scene.background` / `environment`), may return `{frame(t)}` and `{finish:
+false}`.
+- **Parts files beside the modules**: `data/web/parts/<module>.js` (served as
+  `__vidgen__/parts/<file>`, imported as `vidgen/parts/<file>` via an import-map prefix), not inside
+  the module, because a module's bytes are in the clip keys of every page importing it; the sheet
+  imports only the parts files, so `definePart` calls belong there.
+- **The description is JSON**, so Python reads it without a browser: the first argument of each
+  `definePart(` is parsed with braces matched outside strings and `json.loads`; a non-JSON
+  description is an error naming file and line. `KINDS` and required fields are equal in Python and
+  JS (test).
+- **The sheet page** `data/web/parts-sheet.js` (the only file of a `script:` scene in a temporary
+  folder) imports the parts files `ctx.data.files` names, makes one `WebGLRenderer` (stencil on), and
+  at frame n (fps 1) disposes part n−1 and builds part n on `defaultStage` at `at`, through
+  three-finish with `grain: 0` and bloom 0.12 / radius 0 / threshold 1 (stronger bloom washes small
+  tiles). Python lays out tiles (`WebPage.frame`, Pillow): name, kind, label, `use` line in JetBrains
+  Mono (cut with "…").
 
-Popping and flicker never fired on stars (a star is far below a block's thresholds at 160 px); the
-brightness jump at a cut from dark to sunlit is info as before, and the right severity.
-
-**One decode, two pictures.** ffmpeg's filter graph splits the decoded frame: one branch is
-scaled to 160 px exactly as before (`scale=W:H:flags=area`, rgb24), the other to
-`detail_width` (640 px, area); the two are stacked into one raw picture per frame on the same pipe
-(the small one padded to the finer width). The small picture's bytes are identical to the old
-command's: checked on 120 frames of Parallel Space and on the test clips (a test compares them),
-so every Step 360 number is unchanged. A source no wider than 160 px gets the old command. The
-finer picture is measured only for **dark frames** (`dark_share` 0.3 of the 160 px pixels under
-`dark_level` 0.05): 561 of Parallel Space's 5,546 frames, 1,623 of Escapement's 5,730; about
-8.6 ms a dark frame (numpy on 640x360), and the larger pipe. Parallel Space: 18.7 s → 25.8 s;
-Escapement 13.9 s → 32.5 s (2 cores). `--threshold detail_width=0` turns it off.
-
-**What the finer picture holds**, per dark frame: star points (a pixel that is the brightest of its
-3 x 3, at least `star_contrast` 0.04 brighter than the ring of its 5 x 5 border, the ring at most
-`star_ring` 0.35 of it: a point, not an edge, a disc's inside or a gradient); the subject share
-(pixels over `subject_level` 0.06 more than 2 px from a star point); the clipped share (luma ≥
-0.985); the banded share; whether the frame differs from the first frame of its still stretch
-(`still_level` 4/255 on more than `still_pixels` 0.03 % of the pixels: a slow drift adds up,
-encoder noise does not); and the stars' shimmer. Rules:
-
-- **A star field is not a blank frame**: a frame blank at 160 px with `star_field` (12) star points
-  or a subject of `subject_area` (0.05 %, 115 px at 640 x 360) is left out of `blank` and of every
-  check's blank mask. Black frames entered from (or left to) a frame with 4 x `star_field` points or
-  a subject over `vanish_area` are abrupt even though the luma barely moves: error inside a scene,
-  info at a cut, nothing at the video's ends (Step 360's rules).
-- **A vanished subject**: a subject over `vanish_area` (1 %) gone in one frame (under
-  `subject_area`) and back within `vanish_seconds` (1 s) while the frame is still a star field is
-  reported as `blank` (error): the Step 360 bug, drawn over a sky. Not across a cut.
-- **Frozen in the dark**: a dark frame counts as unchanged only when its finer picture is
-  unchanged too (the old rule AND the new one: this can only remove `frozen` findings).
-- **`clipped`** (warning): `clip_area` (3 %, a disc of 94 px radius at 1280 x 720) of a dark frame
-  at flat white. Only dark frames, so a white title card is not one.
-- **`shimmer`** (warning): for each star point of frame t, its light (the 3 x 3 sum, the largest
-  within 4 px) against the mean of frames t-1 and t+1 found the same way; the median star's
-  relative jump over `shimmer` (0.2), with `shimmer_stars` (20) stars, fewer than half of them lost
-  in both neighbours (else they move more than 4 px a frame and are not judged), on `shimmer_share`
-  of a second's frames. Measured medians: still 0, drift 0.013, smooth twinkling (1–3 Hz, ±35 %)
-  0.028, a fly-through (1.5 % zoom a frame) 0.040, Parallel Space's tunnel with stars 0.118,
-  point-sampled stars 0.38. The median, not the mean: the tunnel's lines crossing stars put the mean
-  at 0.29. Its strip shows the middle of each frame at full size (stars vanish at 240 px).
-- **`banding`** (info): along rows and columns (every other one) of the 8-bit finer picture,
-  inside luma codes 3 to 90 and away from stars, flat runs of `band_run` (6) px or more between
-  steps of 1 or 2 codes, where three steps in a row go the same way (a staircase); its share of the
-  frame over `band_share` (0.15) for `band_seconds` (1 s). Requiring three steps one way was needed:
-  grain on a flat dark background (Escapement's end card) has flat runs between steps up and down,
-  and counted 0.12–0.15 with two steps, 0.02–0.03 with three; the synthetic nebula 0.38, Parallel
-  Space's nebula 0.05–0.09. x264 at crf 18 turns a ±1.5-code dither of a dark gradient into steps
-  of about 1.16 codes (measured: dithered and plain gradients decode alike), so the check reads
-  what the viewer gets; a 2 x 2 area mean would also have hidden the dither.
-- **`empty`** (info): dark frames, not blank, with fewer than `star_field` stars and a subject under
-  `empty_area` (0.2 %) for `empty_seconds` (2 s): a small thing alone on black.
-- **`lost`** (warning) — **a scene-level hint, not automatic**: whether only stars for a while is a
-  fault depends on the shot (a sky shot has no subject on purpose). `--subject SCENE` (repeatable;
-  `all`; MCP `subject`) names the shots where a subject must stay in view; dark frames there with no
-  subject for `lost_seconds` (1 s) are reported. An unknown scene id is an error with the closest
-  name, given before anything is decoded.
-
-**The finished films** (read-only, `--no-strips`): Parallel Space v7's 22 findings are identical
-(kind, frames, message); none of the new checks fires (its tunnel stars shimmer 0.118, its nebula
-bands 0.05–0.09). Escapement loses its 4 `frozen` infos (frames 44–201, 419–479, 5400–5539,
-5552–5665): they were wrong. At 1280 px their first and last frames differ on 17–34 % of the
-pixels (up to 0.95 in luma): the title fades in and the watch turns and moves; the 160 px mean
-change of the mostly dark frame was under 0.0015. Side by side:
-`/home/claude/work/scratch/an369/stills/escapement_frozen_was_wrong.png`. Its other 13 are
-identical.
-
-**Not done**: aliasing that crawls without changing a star's light (a star stepping whole pixels at
-an even brightness) is not found; shimmer of fewer than half the stars is not reported (the
-median); banding is measured only in dark frames; a grainy film's dark frames never count as
-frozen (grain over 4/255 is change).
-
-**Ready-made parts: the registry.** `data/web/modules/parts.js` (`vidgen/parts`, on the import map;
-imports only `three`) keeps the parts by name: `definePart(info, make)`, `parts({kind, name})`,
-`part(name)` (did-you-mean), `buildPart(name, stage, options, seed)`, `defaultStage(width,
-height)` (black background, a 40° camera at (0, 0.8, 6) looking at the origin, a warm key light,
-a faint fill), `KINDS` (`sky`, `body`, `light`, `craft`, `craft-part` (Step 374), `phenomenon`, `camera` (Step 375), `structure`, `effect`,
-`environment`: the sheet's order). `info` is `{name, kind, module, label, use, options, seed,
-at}`: `module` the import that has the code, `use` the one line a page writes, `options` the
-defaults `make` reads (colours as `"#rrggbb"` strings), `at` the time the sheet shows. `make(stage)`
-gets `{scene, camera, key, fill, renderer, width, height, ctx, options, seed, part}`, adds the
-part to `scene` (it may move the camera, change the lights or set `scene.background` /
-`environment`) and may return `{frame(t)}` and `{finish: false}`.
-
-Decisions:
-
-- **Parts files beside the modules, not inside them.** Each module's parts are described in
-  `data/web/parts/<module>.js` (served as `__vidgen__/parts/<file>`, imported as
-  `vidgen/parts/<file>` through an import-map prefix). Registering inside `three-kit.js` would have
-  changed its bytes and so the clip keys of every page importing it (the four examples); a parts
-  file is loaded only by the sheet and by pages that import it, so adding or changing a part moves
-  no other key. A later module (Steps 370–374) may call `definePart` in its own file too, but the
-  sheet only imports the parts files: put the calls in `data/web/parts/<module>.js`.
-- **The description is JSON**, so Python reads it without a browser (`vidgen parts --list`,
-  choosing, `--kind`): the first argument of each `definePart(` is parsed with braces matched
-  outside strings and `json.loads`; a non-JSON description is an error naming the file and line.
-  `KINDS` and the required fields are kept equal in Python and JS by a test.
-- **One page, one part a frame.** The page (`data/web/parts-sheet.js`, copied into a temporary
-  folder as the only file of a `script:` scene) imports the parts files `ctx.data.files` names,
-  checks every name, makes one `WebGLRenderer` (stencil on, for portals) and, at frame n (fps 1),
-  takes down part n-1 (geometries, materials, textures, three-finish's targets) and builds part n
-  on `defaultStage`, sets it to `at` and draws it through `vidgen/three-finish` with `grain: 0` and
-  a weak bloom (strength 0.12, radius 0, threshold 1). Python lays out the tiles (`WebPage.frame`,
-  over black) with Pillow: name (bold), kind, label (2 lines), the `use` line in JetBrains Mono
-  (3 lines, wrapped, cut with "…").
-- **Bloom on small tiles.** Three-finish's bloom at strength 0.35–0.6 washed a 320 x 180 tile with
-  colour (UnrealBloom's widest levels cover the whole tile); 0.12 keeps a hint of glow without the
-  wash. Each tile is therefore a little less glowing than the part in a 720p film.
-- **The scale modes of `vidgen/space-scale` have no tile**: they place `ctx.orbits` bodies, and the
-  sheet has no orbit data; a picture of a mode is a picture of the bodies, which Step 371 adds.
-
-**Shipped parts** (20, `data/web/parts/three-kit.js`): skies `nebula-dome` (SkyDome), `nebula-sky`
-(three-finish `nebulaSky`), `star-field`, `star-shell`; structures `crystals` (the five
-polyhedra), `tesseract`, `portal`, `ring-structure`, `lattice`, `crystal-field`, `crystal-swarm`;
-effects `glow-lines`, `flare`, `shock-rings`, `glints`, `ribbon`, `spectrum-rays`, `tunnel`,
-`dust`; environment `studio-environment` (three-finish `studioEnvironment`). Music they react to
-(hits, notes, bands) is made up in the file.
-
-**`vidgen parts`** (`web/parts.py`; CLI `cmd_parts`; MCP `parts`): `[NAME ...]` (names or
-`fnmatch` patterns, did-you-mean), `--kind` (did-you-mean; a kind without parts says so),
-`--list` (text by kind, or `--json`; no browser), `--out` (default `parts_sheet.png`; PNG or JPEG),
-`--size WxH` (tile; default 320x180, one part 960x540; even, 48–1920), `--columns` (default up to
-5), `--time-limit` (default 300 s: after the tile that passes it the rest are left out and named in
-the sheet's title; the first tile is always drawn), a progress line per tile. Measured (2 cores,
-SwiftShader): 20 tiles at 320x180 in 11.9 s, page ready 0.7 s, 0.25–0.76 s a tile, the studio
-environment 4.3 s (PMREM of its soft boxes); one portal at 960x540 in 1.8 s. The sheet:
-`/home/claude/work/scratch/an369/stills/parts_sheet.png`.
-
-**How a later step adds a part** (Steps 370–374):
-
-1. Write the module as usual (`data/web/modules/<name>.js`, in `VIDGEN_MODULES`).
-2. Add `data/web/parts/<name>.js`: `import {definePart} from "vidgen/parts";`, your module, and one
-   `definePart({...JSON...}, (s) => {...})` per part. Give it a `kind` from `KINDS`, a `label` of
-   what it is, a `use` line a page can copy, `options` with the defaults `make` reads, a `seed`
-   when it is random, and an `at` that shows it well. `make` builds the part in `s.scene`, aims
-   `s.camera` so the part fills the tile, and returns `{frame(t)}` if it moves.
-3. `vidgen parts --list` must list it; `vidgen parts NAME` draws it large; look at the tile.
-   `tests/test_web_parts.py::test_the_contact_sheet_draws_every_part` (slow) draws every part and
-   fails on a black tile.
-4. Nothing else: the sheet, the list and MCP read the folder.
-
-**Tests.** `tests/test_motion_check.py`: 9 more default tests on synthetic numpy frames (a 320 x
-160 finer picture, its 4 x 4 area mean as the 160 px one; stars splatted bilinearly so their light
-stays the same as they move): a star field is not blank and black frames in it are an error (and,
-on the 160 px picture alone, the old "60 black frames at a cut"); a slow drift is not frozen,
-held stars are; a vanished subject; a clipped disc; shimmering vs twinkling vs fast-moving stars;
-a dark staircase vs the same gradient with grain; a nearly empty frame; `lost` with `--subject`,
-`all`, an unknown scene; thresholds off; and one `slow` on an encoded clip (the 160 px bytes the
-same with and without the finer picture; the command's JSON; `--subject` errors).
-`tests/test_web_parts.py` (6 default: the files and serving, the kinds equal in JS and Python,
-JSON descriptions and their errors, choosing, `--list`, the registry in Node; 1 `slow`: every part
-at 96 x 54 in Chromium, none black, the time limit, the command's JSON). `tests/test_mcp.py`:
-`parts` in the tool list and a slow call.
+**`vidgen parts`** (`web/parts.py`, CLI `cmd_parts`, MCP `parts`): `[NAME ...]` (names or `fnmatch`
+patterns, did-you-mean), `--kind`, `--list` (text by kind or `--json`; no browser), `--out` (default
+`parts_sheet.png`; PNG or JPEG), `--size WxH` (default 320x180, one part 960x540; even, 48–1920),
+`--columns` (default up to 5), `--time-limit` (default 300 s; later tiles are left out and named in
+the title; the first is always drawn). **Adding a part:** the module in `VIDGEN_MODULES`, then
+`data/web/parts/<name>.js` with one `definePart({...JSON...}, (s) => {...})` per part (a `KINDS`
+kind, `label`, `use`, `options`, `seed` when random, `at`, `make` aiming `s.camera` to fill the
+tile); nothing else (sheet, `--list` and MCP read the folder); the slow test
+`tests/test_web_parts.py::test_the_contact_sheet_draws_every_part` fails on a black tile.
 
 ### 122.6 The sky: `vidgen/space-sky` (Step 370)
 
-A sky that looks like a photograph taken from space, in one line:
-`const sky = spaceSky(renderer, {seed}); scene.add(sky.object)`, or `{stars: "real"}`. The module
-`data/web/modules/space-sky.js` (import name `vidgen/space-sky`, in `VIDGEN_MODULES`; imports
-`three`, `rng` of `vidgen/music-time`, `yUp` of `vidgen/space-scale` and its star file
-`vidgen/space-sky-stars`). The Step 358 kit's `SkyDome`, `nebulaSky`, `makeStarField` and
-`makeStarShell` stay what they are, a coloured nebula and glowing strokes for music videos (their
-stars are hash cells of one size and six fixed tints); nothing of theirs fitted a sky with
-magnitudes, so this is a module of its own and their files are unchanged.
+`const sky = spaceSky(renderer, {seed}); scene.add(sky.object)` (or `{stars: "real"}`).
+`data/web/modules/space-sky.js` (`vidgen/space-sky`, in `VIDGEN_MODULES`; imports `three`, `rng` of
+`vidgen/music-time`, `yUp` of `vidgen/space-scale`, and `vidgen/space-sky-stars`). Its own module,
+not an extension of three-kit's music-video skies (`SkyDome`, `nebulaSky`, `makeStarField`,
+`makeStarShell`, unchanged), which have no magnitudes. Options and defaults (`DEFAULTS`: `seed` 1,
+`stars` `seed` | `real`, `look` `natural` | `rich` | `sparse` (`LOOKS`, option sets the page's own
+options override), `limit` 8.5, `contrast` 0.8, `nebulae` / `galaxies` 0 (at most 12 each), …):
+docs/CONFIG.md (`web`, "The sky of a space scene"). Errors throw with did-you-mean.
 
 **Two layers, both made once.**
+- **Stars to magnitude `limit` are GL points** (≈ 69,000): a gaussian spot of sigma 0.75 px at 720p
+  (scaled with frame height, never under `MIN_SIGMA` 0.62 px) plus a halo. A spot that wide keeps
+  its summed light as it slides between pixels: this is what prevents shimmer. Stars whose middle
+  exceeds 1.2 (≈ mag 2.3) are instanced quads (halo wider than a GL point may be); points for the
+  rest because quads cost ~20× more in SwiftShader.
+- **Everything fainter is baked into a cube map** (half float, mipmaps, 1024 px a face for frames ≥
+  600 px tall, else 512; `size`): the Milky Way, faint stars, nebulae, painted galaxies. Each face is
+  drawn by a full-screen quad computing its direction as OpenGL addresses a cube map, so the sky
+  shader and `scene.background` both read it right. Nebulae and galaxies are separate scissored
+  passes over the texels they touch (`faceWindow`; a SwiftShader branch costs as much as its body).
+  Through a long lens the shader measures a texel in pixels (`fwidth` of the view direction) and
+  past `LENS_PIXELS` (2.5) reads level `LENS_SOFT` (1.5) × log2(texels / 2.5) (same mean light).
+- Not a cube alone: one sharp enough for stars at 720p needs 2048 px faces (≈ 270 MB) and still
+  softens under lenses over 40°.
 
-- **Stars down to magnitude `limit` (8.5) are GL points**, about 69,000 over the whole sky, each a
-  round spot drawn where it projects, to a fraction of a pixel: a gaussian of sigma 0.75 px at
-  720p (scaled with the frame's height, never under `MIN_SIGMA` 0.62 px) plus a halo
-  0.14 / (1 + r² / (2 sigma)²)^1.5 that only bright stars show. A spot that wide keeps its summed
-  light as it slides between pixels: this, not the cube map, is what stops shimmer. The few stars
-  whose middle is brighter than 1.2 (magnitude 2.3 and brighter: 67 of a seeded sky) are instanced quads, since
-  their halo is wider than a GL point may be. Instanced quads for every star cost 11 µs a star in
-  SwiftShader (0.78 s a frame for 69,000); points 0.5 µs.
-- **Everything fainter is baked into a cube map** (half float, mipmaps, 1024 px a face for a frame
-  600 px tall or more, else 512; `size`): the Milky Way, a carpet of faint stars (one to a cell of
-  three grids, a spot 1.5 texels wide, thick where the band is bright), nebulae and painted
-  galaxies. The bake draws each face with a full-screen quad whose fragment computes its direction
-  as OpenGL addresses a cube map, so the sky's own shader reads it by direction with no mirror, and
-  three.js reads the same texture right as `scene.background`. Nebulae and galaxies are separate
-  passes over only the texels they can touch (`faceWindow`, a scissor): in SwiftShader a branch
-  costs as much as its body, and five galaxies in one shader doubled the bake.
+**Counts and light.** `STAR_COUNTS` (whole-sky stars brighter than a magnitude; log-linear between
+rows). A seeded sky takes the ranks evenly spread (every seed has its Sirius and its counts),
+gathers fainter stars toward the band, adds open clusters. Colour: B−V from five groups →
+`temperature` (Ballesteros) → `blackbody` (linear sRGB), 0.7 of the way from white. `starAmplitude`:
+mag 2.5 is 1.0 linear; to mag 4 each magnitude 10^(−0.4 × 0.85), fainter 10^(−0.4 × `contrast`) (a
+photograph's stretch), mag 8.5 at 0.011 above the ACES toe; above 1.0 light grows with the square
+root. Below 595 px frame height light is thinned by (natural sigma / 0.62)^1.2.
 
-**Star counts and light.** `STAR_COUNTS`: the whole sky's stars brighter than a magnitude (0: 4,
-1: 15, 2: 48, 3: 171, 4: 513, 5: 1,602, 6: 4,800, 7: 14,000, 8: 41,000, 9: 117,000), a straight
-line in log N between rows. A seeded sky takes the ranks evenly spread (so every seed has its
-Sirius and its 41,000 stars to magnitude 8), gathers them toward the band the more the fainter
-(none at magnitude 1, seven times the pole's density at 8.5 in the plane toward the centre), and
-adds four to seven open clusters near the band. Colour: B−V drawn from five groups (22 % near
-−0.12, 25 % near 0.12, 18 % near 0.48, 27 % near 1.05, 8 % near 1.55) → temperature (Ballesteros)
-→ a black body's colour in linear sRGB (Kim's fit of the Planckian locus), 0.7 of the way from
-white: 6.5 % of the stars end with one channel over twice another. A star's middle pixel:
-magnitude 2.5 is white (1.0 linear); to magnitude 4 each magnitude is 10^(−0.4 × 0.85) of the one
-before, fainter ones 10^(−0.4 × `contrast`) with `contrast` 0.8 (the true ratio would be 1): a
-photograph's stretch. Magnitude 8.5 lands at 0.011, above the toe of three-finish's ACES curve,
-which turns everything under 0.002 into black; above 4.0 the light grows with the square root
-(Sirius 5.8), so the brightest stars glare a little through three-finish's bloom and do not
-flood. In a frame under 595 px tall the spot cannot shrink further, so its light is thinned by
-(natural sigma / 0.62)^1.2, as scaling a photograph down dims its stars: without it a 320x180
-tile was crowded with snow.
+**The band**: a sech² disc round a wandering midline, star clouds, a warmer bulge, a faint halo;
+dust is a continuous optical depth, light × exp(−τ × (0.78, 1.0, 1.34)) (a threshold looked like
+clouds at night).
 
-**The band.** In a galactic frame (centre, pole): a disc sech²(b / h) with h from 3.6° (anticentre)
-to 6.6° (centre) around a midline that wanders, 0.3 to 1 as bright from the anticentre to the
-centre, times two octaves of star clouds; a bulge (two gaussians, sigma 8.6° × 5.7° and 19° × 8.6°) in a
-warmer colour (1.0, 0.80, 0.54) than the disc's (0.74, 0.85, 1.0); a faint halo. Dust is a
-continuous optical depth, not a threshold: a rift along a wandering midline, 0.8° wide at the
-anticentre and 2° at the centre, times fractal noise of three scales, plus threads that leave it;
-light is multiplied by exp(−τ × (0.78, 1.0, 1.34)), so thin dust is brown and thick dust black,
-and the edges come from the light the dust swallows. A noise 5 texels wide stands for the grain
-of unresolved stars. The first version thresholded the dust and looked like clouds at night.
+**The real sky** (`stars: "real"`): RA/Dec J2000 turned about x by `OBLIQUITY` 23.4392911° into the
+J2000 ecliptic of `ctx.orbits`, then to y up as `vidgen/space-scale` does (`skyDirection` =
+`yUp(equatorialToEcliptic)`), so the sky agrees with the planets (tested against
+`make_orbit_data`). The band uses the real galactic frame (`GALACTIC`) but the algorithm's clouds
+and dust. The Magellanic Clouds and Andromeda are painted at their places. Stars fainter than the
+file's `complete_to` are seeded.
 
-**Nebulae and galaxies** (`nebulae`, `galaxies`: a number for seeded ones, or a list; at most 12
-each). Emission: deep red wisps (0.80, 0.07, 0.11), pink where dense, a pale core, dark lanes
-across. Reflection: smooth blue. Dark: multiplies what is behind. Painted galaxies: spiral
-(logarithmic arms, a warm bulge, blue arms with pink knots, dust on the arms' inner edge, any
-tilt), elliptical, irregular. `at` is a world direction or `{l, b}` degrees along and above the
-band. A 6° galaxy is 68 texels across: fine in the background, soft through a long lens
-(`size: 2048`: 20 s to bake, about 270 MB).
-
-**`spiralGalaxy(options)`** is the galaxy for the foreground: a `THREE.Group` (disc in its x–z
-plane) of 1,600 soft additive sprites (gas and bulge), about 550 dark sprites (dust ahead of the arms),
-and 40,000 star points whose light falls with the square of the distance. It can be flown past
-and seen edge-on (a dark lane across the bulge). Its faint sprites add up in linear light, so it
-needs a tone-mapped chain.
-
-**The real sky** (`stars: "real"`). Right ascension and declination (J2000) are turned about x by
-the obliquity 23.4392911° into the J2000 ecliptic frame of `ctx.orbits` and then to three.js's y
-up exactly as `vidgen/space-scale` turns positions (`skyDirection` = `yUp(equatorialToEcliptic)`),
-so the sky agrees with the planets: the galactic centre comes out at ecliptic longitude 266.84°,
-latitude −5.54°, and on 19 June the line from the Sun through the Earth points 5.6° from it
-(tested against `make_orbit_data`). The band uses the real galactic frame (north pole 192.85948°,
-+27.12825°; centre 266.40499°, −28.93617°); its clouds and dust are the algorithm's, not a map
-of the real ones. The two Magellanic Clouds and the Andromeda galaxy are painted where they are.
-Stars come from the star file; stars fainter than the file is complete to are seeded, so the
-star counts stay right.
-
-**The star file** `data/web/modules/space-sky-stars.js` is an ES module whose default export is
-one JSON object (JavaScript imports it, Python reads it): `{"catalog", "approximate", "epoch",
+**The star file** `data/web/modules/space-sky-stars.js`: an ES module whose default export is one
+JSON object (JS imports it statically, Python reads it): `{"catalog", "approximate", "epoch",
 "complete_to", "columns", "stars"}`, rows `[ra_deg, dec_deg, v_mag, b_minus_v]` or `[..., "Name"]`,
-degrees to 0.001, magnitudes to 0.01. `tools/make_star_catalogue.py` writes it: `--fixture` from
-its own table of 221 well-known stars written down from memory (marked `"approximate": true`,
-`complete_to` 2.5), or from the Yale Bright Star Catalogue's fixed-width file given by path
-(positions in bytes 76–90, V in 103–107, B−V in 110–114; entries without a position left out; a
-line that does not fit stops it; fewer than 8,000 stars is refused; the fixture's names are
-carried to the nearest catalogue star). The shipped file is the fixture: the real sky's stars
-brighter than magnitude 2.5 are at their places to the fixture's accuracy, and fainter ones are
-seeded. The file's two properties `catalog` and `approximate` are on `sky.info`. Nothing is
-downloaded by vidgen. The owner's decision (2026-11-17): the Bright Star Catalogue is not shipped
-(it has no formal licence); the hand-written list is what vidgen ships, and the converter stays so
-that a user who downloads the catalogue can convert it.
+degrees to 0.001, magnitudes to 0.01; `catalog` and `approximate` appear on `sky.info`.
+`tools/make_star_catalogue.py` writes it: `--fixture` from its own table of 221 well-known stars
+written from memory (`"approximate": true`, `complete_to` 2.5), or from the Yale Bright Star
+Catalogue's fixed-width file by path (bytes 76–90 position, 103–107 V, 110–114 B−V; entries without
+a position skipped; a line that does not fit stops it; under 8,000 stars refused; `.gz` read). The
+shipped file is the fixture: the BSC is not shipped (no formal licence; owner's decision); vidgen
+downloads nothing.
 
-**Drawing.** `sky.object` is a group of the cube (a box around the camera), the points and the
-quads: `frustumCulled = false`, `renderOrder` −1000 to −998, no depth test or write, positions
-from the view's rotation only, so it follows any camera without a call and `vidgen/space-scale`
-draws it in its sky pass. Values are linear light. Drawn into a render target (three-finish) it
-writes them as they are, with about one display code of noise added where the picture is dark
-(three-finish quantises to 8 bits before its grain). Drawn straight to the canvas it applies
-three.js's ACES curve and the sRGB encoding itself and dithers by one code, and each star is the
-step from the sky under it to the sky plus the star after the curve, so both ways look alike
-(`display` overrides the choice). `sky.background` is the whole sky, stars included, in one cube
-texture (stars 0.7 texels wide); `sky.environment` a PMREM of a 256 px copy for reflections;
-both are made on first use. `sky.direction(name)`: `"center"`, `"anticenter"`, `"pole"`,
-`"nebula N"`, `"galaxy N"`, a named star, or `{l, b}`. Disposing the sky's material frees the
-cube maps (the contact sheet's page does that).
+**Drawing.** `sky.object` (cube box, points, quads): `frustumCulled = false`, `renderOrder` −1000 to
+−998, no depth test or write, positions from the view rotation only (follows any camera;
+`vidgen/space-scale`'s sky pass). Linear light: into a render target written as is with ≈ one code
+of noise in the dark; straight to the canvas it applies ACES + sRGB and dithers, each star the step
+from sky to sky + star after the curve (`display` overrides). `sky.background` (whole sky in one
+cube) and `sky.environment` (PMREM of a 256 px copy) are made on first use. `sky.direction(name)`:
+`"center"`, `"anticenter"`, `"pole"`, `"nebula N"`, `"galaxy N"`, a named star, or `{l, b}`.
+Disposing the material frees the cube maps.
 
-**Measured** (2 cores, headless Chromium, SwiftShader; 1280x720, cube 1024 unless said):
+**`spiralGalaxy(options)`** (foreground): a `THREE.Group` (disc in x–z) of additive gas sprites,
+dark dust sprites and star points; fixed draw order (glow, stars, dust), not a sorted volume; needs
+a tone-mapped chain.
 
-| what | time |
-|---|---|
-| making the sky (shaders, the six faces, the first frame) | 5.3–5.7 s; 2.0 s for a 640x360 frame (cube 512); 20 s at `size: 2048` |
-| the same with 4 nebulae or 4 galaxies | the same (each is a scissored pass) |
-| a frame straight to the canvas: the cube alone / with 69,000 stars | 0.05–0.07 s / 0.10 s |
-| a frame through three-finish (bloom, grain, no FXAA) | 0.30 s, of which the sky is 0.10 s |
-| `vidgen still` of a sky scene, 1280x720 | 1.0–1.4 s a still after 6 s to open |
-| a render at 640x360 | 0.11 s a frame to the canvas, 0.15 s through three-finish |
-| `spiralGalaxy` a third of the frame high / filling it (through three-finish) | 0.25–0.4 s / 1.1 s more a frame |
-| eleven parts on `vidgen parts`' sheet at 320x180 | 29 s (2.5 s a tile) |
-
-**No shimmer: proved.** Four pans of 1.5 s at 640x360 and 30 fps through a 40° lens, measured
-with Step 369's check (`motion_check.measure`, median of the judged frames; the warning starts
-at 0.2; its reference clips: a still field 0, a smooth drift 0.013, point-sampled stars 0.38):
-
-| pan | drawn | shimmer |
-|---|---|---|
-| 0.5° a second (0.15 px a frame) | three-finish, `antialias: "none"` | 0.016 |
-| 0.5° a second | three-finish with FXAA (its default) | 0.022 |
-| 0.5° a second | straight to the canvas | 0.015 |
-| 3° a second (0.9 px a frame) | three-finish, `antialias: "none"` | 0.022 |
-
-`vidgen motion check` on the clip: no `shimmer`, `banding` or `clipped` finding.
-
-**With three-finish.** Bloom at its defaults (0.25 above 1.0) touches only stars brighter than
-magnitude 2.5, a small glow; grain and ACES leave the faint stars (they were placed above the
-toe). **FXAA does not suit stars**: on a spot off the pixel grid its edge direction is arbitrary
-and it smears the star into a small cross and dims it (still under the shimmer threshold, but
-plainly worse in a still). three-finish was not changed (its bytes are in the keys of the pages
-that import it): use `antialias: "none"` for star fields. A star-safe anti-aliasing in
-three-finish is left to the review step.
-
-**Decisions.** Points and a cube map instead of a cube map alone: a cube map sharp enough for
-stars at 720p needs 2048 px faces (270 MB) and still softens them under any lens longer than
-40°; points are sharp at every lens and size. The sky as an object rather than only
-`scene.background`: the points need a draw of their own, and space-scale already treats
-unculled objects as sky. One static import of the star file (9 KB now, about 250 KB for a
-9,100-star catalogue) rather than an awaited one, so the one line stays one line. Looks
-(`natural`, `rich`, `sparse`) are option sets, overridden by the page's own options. Presets on
-the contact sheet (`data/web/parts/space-sky.js`): `space-sky`, `space-sky-core`,
-`space-sky-rich`, `space-sky-sparse`, `space-sky-emission-nebula`,
-`space-sky-reflection-nebula`, `space-sky-dark-nebula`, `space-sky-galaxies`, `space-sky-real`,
-`spiral-galaxy`, and (kind environment) `space-sky-environment`; the skies return
-`{finish: false}` so the sheet's FXAA does not touch them.
-
-**Not done.** The real band's clouds and rift are not the real ones (no map of the Milky Way is
-shipped). No proper motion, planets or Sun in the sky (the bodies are Step 371/372's). Dust does
-not dim the point stars in front of it. The cube map softens under long lenses unless `size` is
-raised. `spiralGalaxy` is drawn in one fixed order (glow, stars, dust), right from most sides
-but not a sorted volume. An orthographic camera is not supported (directions need a perspective).
-
-**Tests.** `tests/test_web_space_sky.py`: the modules served by name and what they import; the
-star file equal to the converter's fixture output; the converter on lines built in the
-catalogue's layout (positions, a missing B−V, an entry without a position, a bad line, a `.gz`,
-too few stars); the parts; in Node: the frames (the equinox, the ecliptic's pole, the galactic
-centre's ecliptic place, Sagittarius' stars within 11° of the centre, galactic latitudes of
-Deneb, Betelgeuse, Acrux, Arcturus, the Earth in June against `make_orbit_data`), the counts and
-their inverse, the light per magnitude, colours, seeded stars (the same for a seed, the counts
-per magnitude, gathered toward the band), options and their errors with a did-you-mean, the
-faces' windows, the particle galaxy; `slow`: in Chromium the same frames twice, another seed
-another sky, black between the stars away from the band, Sirius at the middle of the frame for
-the real sky, the background cube and the environment. Stills:
-`/home/claude/work/scratch/an370/stills/`.
+Use three-finish with `antialias: "none"` for star fields (FXAA smears an off-grid star into a
+cross). Parts (`data/web/parts/space-sky.js`): `space-sky*`, `spiral-galaxy`,
+`space-sky-environment`; skies return `{finish: false}`. Limits: no proper motion; dust does not dim
+point stars; no orthographic camera. Tests: `tests/test_web_space_sky.py`.
 
 ### 122.7 Planets, moons and rings: `vidgen/space-bodies` (Step 371)
 
-A planet in one line: `const earth = planet(renderer, "earth"); scene.add(earth.object);
-earth.update(t, {sun})`; with orbit data `planet(renderer, "Saturn", {space})` places, sizes,
-tilts, turns and lights it. The module `data/web/modules/space-bodies.js` (import name
-`vidgen/space-bodies`, in `VIDGEN_MODULES`; imports `three` and `rng` of `vidgen/music-time`
-only). Nothing like it existed: the Step 358 kit has no bodies, the scratch pages of Steps 368 and
-370 used a plain `MeshStandardMaterial` sphere. No existing module's bytes changed; no real map,
-texture or image is used or imitated: every surface is generated.
+`const earth = planet(renderer, "earth"); scene.add(earth.object); earth.update(t, {sun})`; with
+orbit data `planet(renderer, "Saturn", {space})` places, sizes, tilts, turns and lights it.
+`data/web/modules/space-bodies.js` (`vidgen/space-bodies`, in `VIDGEN_MODULES`; imports only
+`three` and `rng` of `vidgen/music-time`). Every surface is generated; no real map or image is used
+or imitated. Types (`TYPES`: `rocky`, `icy`, `desert`, `ocean`, `lava`, `gas`, `ice-giant`), their
+options and defaults, palettes, airs, rings, the 21 `PRESETS` worlds (Solar System lookalikes with no
+real geography, plus invented ones): docs/CONFIG.md (`web`, "Planets, moons and rings"). A wrong
+key, name or value throws with did-you-mean.
 
-**How a body is drawn.** One mesh (a sphere of 48 × 24 segments, drawn from its back faces, a
-little larger than the body and its air) whose fragment shader works every pixel out from the
-view ray in the body's own axes:
+**How a body is drawn.** One mesh (a 48 × 24 sphere drawn from its back faces, a little larger than
+body and air) whose fragment shader works each pixel out from the view ray in the body's axes:
+- *Exact limb*: analytic ray–sphere, anti-aliased by the ray's pixel distance from the limb (no FXAA
+  or MSAA needed). `oblateness` scales the mesh along the pole; normals use the inverse transpose.
+- *Depth per pixel* (`gl_FragDepth`: the surface point, or the tangent point for air-only pixels):
+  the shell hides and is hidden correctly, works in every `vidgen/space-scale` slice (`split`,
+  `single`) and with three-finish's depth of field; not for a logarithmic depth buffer.
+  Premultiplied alpha, writes depth, drawn after opaque things.
+- *Surface* from two cube maps baked once: A = albedo (as its square root) + gloss above ½ / glow
+  below ½; B = the relief's push on the normal (zero exactly code 128: a smooth sea has no 8-bit
+  facets) + cloud deck or height. Cube maps: no pole pinch, no seam.
+- *Light*: one hard sun (`setSun(direction, {color, intensity})`); Lambert mixed with
+  Lommel-Seeliger (`regolith`); relief shadows by two looks toward the sun in the height channel;
+  water a microfacet lobe with Fresnel; clouds cast a shadow; city lights only on the night side
+  under clear sky. `body.fill` (black by default) and the `ECLIPSE` block (compiled only when asked)
+  are set by `spaceLight` (§122.8).
+- *Air*: gas thinning exponentially (`height` = scale height / radius), zenith optical depths
+  (`rayleigh`, `haze` with a Henyey-Greenstein `forward` lobe, `absorb`). Optical depth to space is
+  Chapman's function in Schüler's closed form (with its below-horizon branch), so sunlight reddens
+  at the terminator and the planet's shadow falls on the air by itself. The view ray is summed in
+  `AIR_STEPS` slabs (`quality` `fast` 2, `standard` 4, `fine` 8), each slab's share the exact
+  difference of transmittances, so thick air saturates instead of blowing out. A shell thinner than
+  a pixel is drawn 0.7 px deep with density × ratio^0.4 (no limb flicker).
+- *Small bodies*: maps have mipmaps; under 2.5 px radius the disc fades into one gaussian spot
+  (sigma ≥ 0.62 px, as the sky's stars) holding the disc's light (mean albedo × ⅔ × Lambert phase ×
+  area); from 1.5 px down only the spot.
+- *Two ways out*, as the sky: linear light into a render target (white ground facing the sun =
+  `light`), or ACES + sRGB + dither straight to the canvas; light without coverage is tone-mapped as
+  is, not divided by alpha.
 
-- *The limb is exact.* The ray meets the unit sphere analytically; the edge is anti-aliased by
-  the distance of the ray from the limb in pixels, so a body needs no FXAA or multisampling and
-  the limb is round however close the camera is. An oblate body (`oblateness`) is the same
-  sphere in a mesh scaled along the pole; normals go through the inverse transpose.
-- *Depth is written per pixel* (`gl_FragDepth`: the surface point, or the tangent point for
-  pixels of air only), so the body hides and is hidden correctly although the mesh is a shell,
-  works in each depth slice of `vidgen/space-scale` (`split`, `single`), and
-  `vidgen/three-finish`'s depth of field reads it. Not for a logarithmic depth buffer (stated in
-  the module's header). The material is see-through (premultiplied alpha: edge and air) and
-  writes depth; three.js draws it after opaque things.
-- *The surface* comes from two cube maps baked once (below): A = albedo (stored as its square
-  root) and one channel that is gloss above ½ (water) and glow below ½ (city lights, lava);
-  B = the relief's push on the normal in the body's axes (zero is exactly code 128, so a smooth
-  sea has no 8-bit facets) and one channel that is the cloud deck (worlds with clouds) or the
-  height (worlds with relief shadows). Cube maps have no pole pinch and no date-line seam.
-- *Light.* One hard sun (`body.sun`, a direction; `setSun(direction, {color, intensity})`).
-  Lambert's law mixed with Lommel-Seeliger's for dusty ground (`regolith` 0.6 rocky, 0.5 icy,
-  0.35 desert, 0.3 lava): a full moon is a flat disc, not a ball. Relief shadows: two looks
-  along the ground toward the sun in the height channel (is the ground there higher than the
-  sun's ray?), which gives craters their long shadows at the terminator for two texture reads.
-  Water: one wide microfacet lobe (roughness 0.2) with Fresnel, and the sky mirrored at grazing
-  angles. Clouds: lit above half the air (less red at the terminator than the ground), darker
-  where higher cloud stands sunward (the same extra read gives the deck's shadow on the ground).
-  City lights only on the night side and under clear sky, weak by default (`lights` 0.3).
-  A second, weak light (`body.fill = {direction, color}`) is black by default; `spaceLight` of
-  `vidgen/space-light` sets it (planet-shine and ring-shine, §122.8), and other bodies' shadows
-  (the `ECLIPSE` block, compiled only when it asks).
-- *The air* is a shell of gas thinning exponentially with height (`height`: the scale height as
-  a share of the radius, the body's real value in the presets: 0.0014 for the Earth-like world),
-  with a zenith optical depth per colour for gas (`rayleigh`), haze (`haze`, a forward-throwing
-  Henyey-Greenstein lobe) and absorption (`absorb`). The optical depth between a point and space
-  along any direction is Chapman's function in Schüler's closed approximation, with its branch for
-  directions under the horizon (twice the tangent path less the upward one), so the sun's light
-  reddens through the long paths at the terminator and the planet's shadow falls on the air by
-  itself. Along the view ray the scattered light is summed in `STEPS` slabs (`quality`: `fast` 2,
-  `standard` 4, `fine` 8); each slab's share is the exact difference of the transmittances at its
-  ends, so thick air (Venus-like, Titan-like) saturates instead of blowing out, and the same sum
-  gives the blue line outside the limb, the haze on the disc toward the limb, the orange light at
-  the terminator and the bright ring of a backlit world. A little second-hand light (`twilight`)
-  and a faint night glow (`glow`) keep a rim on the night side. Not ray marching: ten evaluations
-  of the closed form per pixel at `standard`. A shell thinner than a pixel is drawn 0.7 px deep
-  with its density reduced (power 0.4 of the ratio), so the limb does not flicker when the body
-  is small.
-- *Small bodies.* The maps have mipmaps (no sparkle). Under a radius of 2.5 px the disc fades
-  into one gaussian spot (sigma at least 0.62 px, as the sky's stars) that holds the whole
-  disc's light: mean albedo × ⅔ × the Lambert phase function × the disc's area; from 1.5 px down
-  only the spot is drawn. Measured in the test: a body of radius 0.6 px gives 2.2 to 6.5 times
-  the light of one of 0.3 px (4 expected; 8-bit rounding of faint values), and moving it by a
-  third of a pixel changes its light by less than 30 %.
-- *Two ways out*, as the sky: into a render target (three-finish) linear light, a white ground
-  facing the sun = `light` (1); straight to the canvas the body applies ACES and sRGB itself and
-  dithers.
+**Rings**: a flat slab (≥ 3 px on screen) where the view ray meets the ring plane; the radial profile
+(`ringProfile(seed, {style, gaps, color, opacity})`, `RING_STYLES` `broad` / `narrow`) is a 1024 × 1
+mipmapped texture read at the pixel's radial footprint, so grazing views average ringlets instead of
+aliasing. Light: Chandrasekhar single scattering in a thin layer × 3.0 / 1.8 for multiple
+scattering, plus a forward lobe for dusty parts. Globe shadow on rings by ray–sphere toward the sun
+(in oblate space) with widening penumbra; ring shadow on the globe from the profile where the sun ray
+crosses the plane. Far half drawn before the globe, near half after (three meshes, creation order).
 
-**Rings** are found the same way: a flat slab (never thinner than three pixels on screen) in
-whose pixels the view ray meets the ring plane; the radial profile is a 1024 × 1 texture with
-mipmaps (colour and optical depth, from `ringProfile(seed, {style, gaps, color, opacity})`: a
-`broad` sheet in provinces with a main gap, ringlets and narrow gaps, or a few `narrow` rings),
-read at the level of the pixel's footprint along the radius, clipped to the ring's width, so a
-grazing view averages the ringlets instead of aliasing them (still 13: one degree from edge-on, no
-moiré, no broken line; exactly edge-on the rings vanish, as a sheet without thickness does). Light:
-single scattering in a thin layer of grains (Chandrasekhar's reflection and transmission), times
-3.0 / 1.8 for the multiple scattering left out: bright from the sunlit side, and from the far side
-the thin parts glow while the dense ones are dark; a back-scattering phase function with a
-forward lobe for the dusty thin parts (`dust`). The globe's shadow on the rings is the ray-sphere
-test toward the sun (in the oblate globe's own scaled space), with a penumbra that widens with
-distance; the rings' shadow on the globe is the profile read where the sun's ray from the ground
-crosses the ring plane. Order: the far half is drawn before the globe and the near half after
-it (three meshes at one place, drawn in the order they were made); the globe's written depth hides
-what is behind it.
+**The bake** (`bakeBody`): per cube face three full-screen passes — coarse fields (three 128 px float
+cubes); vec4(height, three fields) in a 32-bit float cube (half float without the extension; no
+terraces); paint → A and B with mipmaps. Noise: hashed gradient noise with the cube's eight diagonals
+as gradients. Placed things from the seed in JS (`bakeInputs`); small craters a cell lattice, one
+size class per octave. Map `size` 256–2048, default 512 from 300 px frame height, 1024 from 900 px.
+Time bake stages with `gl.finish()`; the mipmap draw needs `autoClear` off or the last face is
+cleared. `drift` / `cloudDrift` use flow mapping (two map copies turned by a latitude-varying wind,
+half a cycle and back, cross-faded), so the map never winds up.
 
-**The bake** (`bakeBody`): three passes of a full-screen shader per cube face. (1) *coarse*:
-slow fields (domain warps, climate, the air wound round weather systems or storms) on three
-128-pixel float cubes; (2) *fields*: vec4(height, three fields of the type) at full size in a
-float cube (32-bit, so the relief has no terraces; half float where the extension is missing);
-(3) *paint*: the slope from neighbouring heights, colour, gloss or glow → A, and the normal's
-push and clouds or height → B, with mipmaps. Noise is hashed gradient noise whose gradients are
-the cube's eight diagonals (the dot product is three sign flips: measured 1.4 times as fast as
-random gradients in SwiftShader), octaves chosen from the map size. Placed things come from the
-seed in JavaScript (`bakeInputs`): 28 large craters (the five youngest with rays), 12 weather
-systems, 12 storms, 26 cracks, volcanoes, canyon arcs, vents. Small craters are a lattice of
-cells on the sphere, one size class per octave, each cell holding at most one bowl with a rim.
+**With `ctx.orbits`.** `planet(renderer, "Saturn", {space})` finds the body by name or preset key
+(`{body}` says which), adds itself to the `SpaceView` (unit radius → data radius × enlargement);
+`update(t)` takes pole and turning from the data quaternion and the sun direction from the data's
+Sun (else `update(t, {sun})` / `setSun`). `{orbits: ctx.orbits}` without a `SpaceView` gives turning
+and sun only. **Spin:** default `spin: "true"` (the data's turning); `problems()` warns in words over
+12° a frame (`turnPerFrame()`); stated alternatives keep the pole true: `"locked"` and `spin:
+seconds` (one turn per so many film seconds, negative backwards). Without orbit data `spin` is
+seconds per turn, or none.
 
-**Types** (`TYPES`; options are numbers from 0, 1 the default strength unless said):
+**Interface.** `planet(renderer, what, extra)` → `Body`: `object`, `update(t, {sun})`, `setSun`,
+`sun`, `fill`, `problems(t)`, `turnPerFrame(t)`, `options`, `rings`, `uniforms`, `material`,
+`dispose()`. Pure helpers: `resolveOptions`, `bakeInputs`, `bandRamp`, `ringProfile`, `levelFor`,
+`sizeFor`, `phaseLight`, `spotSigma`, `pointShare`, `onGlobe`, `linearColor`; constants `TYPES`,
+`PALETTES`, `PRESETS`, `AIRS`, `QUALITIES`, `AIR_STEPS`, `RING_STYLES`, `VERSION`. Parts
+(`data/web/parts/space-bodies.js`, kind `body`): `body-<type>`, `world-<preset>`, `rings-*`,
+`body-crescent`, `body-limb`. Use `antialias: "none"` in three-finish (FXAA breaks thin rings).
 
-| Type | What | Options (defaults) | Palettes |
-|---|---|---|---|
-| `rocky` | airless, cratered: highlands, maria (also flooding the largest basins), craters of every size, rays | `craters` 1, `maria` 0.3 (share of the globe), `rays` 1, `patches` 0, `relief` 1 | `moon`, `mercury`, `callisto`, `cinder` |
-| `icy` | bright ice, long cracks in pieces (lineae), a web of fine fractures, stained broken plains, few craters | `cracks` 1, `dark` 0.3, `craters` 0.4, `relief` 1 | `europa`, `ganymede`, `glacier`, `snow` |
-| `desert` | two dusts and dark ground, a low smooth half, shield volcanoes, canyons, craters, polar caps; thin dusty air | `dark` 0.35, `caps` 1, `craters` 0.6, `canyons` 1, `volcanoes` 1, `relief` 1 | `mars`, `ochre`, `slate` |
-| `ocean` | seas (deep, shallow, glint), continents with mountain chains, climate (desert, grass, forest, tundra, snow, sea ice), clouds with weather systems, air, city lights | `land` 0.3, `mountains` 1, `ice` 1, `wet` 0, `clouds` 0.5, `cloudDrift` 0 (degrees a second), `lights` 0.3, `relief` 1 | `earth`, `verdant`, `rust` |
-| `lava` | a dark crust in plates glowing where it parts, seas of lava where hottest; `style: "sulphur"`: pale plains, dark vents, red fallout | `heat` 0.5, `style` `"crust"`, `vents` 1, `glow` 1, `relief` 1 | `ember`, `io` |
-| `gas` | belts and zones (`bandRamp`), stirred where they meet, streaks, a great storm, white ovals, polar haze; flattened with `oblateness` | `bands` 17, `contrast` 1, `turbulence` 1, `storms` 6, `spot` 1, `drift` 0 (degrees a second), `polar` 0.6 | `jupiter`, `saturn`, `venus`, `titan`, `tempest`, `copper` |
-| `ice-giant` | the same shaders, smooth: faint bands, haze, a dark storm | `bands` 7, `contrast` 0.3, `turbulence` 0.5, `storms` 2, `spot` 0, `drift` 0, `polar` 0.35 | `uranus`, `neptune`, `azure`, `jade` |
-
-Every type also takes `seed`, `size` (the maps' faces: 256, 512, 1024, 2048; default by the
-frame's height: 512 from 300 px, 1024 from 900 px), `quality`, `light`, `palette` (a name or
-colours shaped like one), `tilt` (degrees, the pole leans toward +x), `spin`, `oblateness`, `air`
-(`false`, a name of `AIRS`: `earth`, `mars`, `venus`, `titan`, `giant`, `ice`, `thin`, `smoke`, or
-`{like, density, rayleigh, haze, absorb, height, forward, twilight, glow}`), `rings` (`true` or
-`{seed, style, inner, outer, color, opacity, gaps, dust}`; radii in body radii). A wrong key,
-name or value is an error with a did-you-mean. `drift` moves a giant's bands at different speeds
-without ever winding the map up: two copies of the map are turned by a wind that varies with
-latitude, half a cycle one way and back, and cross-faded (flow mapping); a function of t.
-
-**Ready-made worlds** (`PRESETS`, 21): `mercury`, `venus`, `earth`, `moon`, `mars`, `jupiter`,
-`saturn` (rings), `uranus` (narrow rings, on its side), `neptune`, `io`, `europa`, `ganymede`,
-`callisto`, `titan`, and invented ones: `ember` (lava, smoke), `boreas` (blue ice, thin rings),
-`ochre` (desert), `tempest` (violet giant, rings), `verdant` (wet ocean world), `cinder` (dark red
-rock), `azure` (blue ice giant, pale rings). The Solar System's are lookalikes in character and
-colour with each body's tilt and flattening; nothing is where it is on the real body.
-
-**With `ctx.orbits`.** `planet(renderer, "Saturn", {space})` finds the body of the orbit data by
-name (or by its preset key; `{body: "name"}` says which), adds itself to the `SpaceView` (unit
-radius → the data's radius, times the view's enlargement), and `update(t)` sets the pole and the
-turning from the data's quaternion and the sun's direction from the body the data calls the Sun
-(without one: `update(t, {sun})` or `setSun`). `{orbits: ctx.orbits}` without a `SpaceView` gives
-turning and sun only.
-
-**Turning under a speed-up** (Step 367's warning). The default is honest: `spin: "true"`, the
-data's own turning. A year a minute turns the Earth 73° a frame, which flickers; so
-`body.problems()` says so in words when a body turns more than 12° a frame
-(`body.turnPerFrame()`), and two stated choices replace the turning while the pole stays true:
-`spin: "locked"` (no turning) and `spin: seconds` (one turn in so many seconds of film, negative
-backwards: an artistic rate, to be said in the film's notes). Without orbit data `spin` is seconds
-per turn, or none.
-
-**Measured** (2 cores, SwiftShader, 1280 × 720; maps 512 unless said; bake = making the body and
-its first frame, shaders compiled):
-
-| Case | Bake | A frame, the body alone | With sky and three-finish (0.39 s without a body) |
-|---|---|---|---|
-| Earth-like, full disc (radius 265 px) | 2.4–3.3 s | 0.12 s (`fast` 0.09; no air 0.05) | |
-| Earth-like, close limb (over half the frame) | 3.3 s (`size: 1024`: 9.5 s) | 0.18–0.21 s (`fast` 0.16) | 0.59 s |
-| Ringed giant, whole | 2.2–2.4 s | 0.06–0.08 s | 0.47 s |
-| Ringed giant, rings filling the frame | 2.5 s | 0.30 s | |
-| Moon-like | 3.8–4.0 s | 0.05–0.06 s | |
-| Mars-like | 3.8 s | 0.12 s | |
-| Europa-like 3.7 s, lava 2.7 s, Jupiter-like 2.3 s, Neptune-like 2.4 s | | 0.05–0.10 s | |
-| Earth-like at `size: 256` | 1.4 s | | |
-
-A typical shot adds 0.1 to 0.2 s a frame. The bake is paid once per page (every `vidgen still`,
-every chunk of a render); six bodies in one scene baked in 15 s. `size: 1024` costs four times
-the texels (9.5 s) and is for close-ups and 1080p; the 33 tiles of the contact sheet take 33–43 s.
-Exposure with default settings (`light` 1, three-finish exposure 1, sky brightness 1): a day side's
-middle sits at 0.4–0.5 of white after ACES and its brightest clouds near 0.8 (measured on the
-stills; only the core of a sun glint reaches white), and the stars and the Milky Way of
-`vidgen/space-sky` stay visible beside it, which is a film's convention, not a camera's truth (a
-camera exposed for a sunlit planet sees no stars); Step 372's exposure helpers are to state that
-choice. `vidgen motion check` on a 2 s clip of small drifting, turning bodies (a ringed giant
-24 px across, an Earth 67 px, a moon 5 px, a point of radius 0.7 px; 640 × 360): no findings (no shimmer,
-banding or clipping).
-
-**Found on the way.** `gl.readPixels` with the wrong type on a float target does not wait for the
-GPU, so bake stages must be timed with `gl.finish()`. A draw of an empty scene to make the mipmaps
-clears the cube's last face unless `autoClear` is off (a wedge of the globe was black from behind:
-tested now from three sides). three-finish's FXAA breaks thin rings at a small size into dots (the
-parts are drawn straight to the canvas; `antialias: "none"` is right for bodies as for stars).
-Drawn to the canvas, light without coverage (a sub-pixel spot, the air outside the limb) must be
-tone-mapped as it is, not divided by its alpha.
-
-**Parts** (`data/web/parts/space-bodies.js`, kind `body`, 33): `body-rocky`, `body-icy`,
-`body-desert`, `body-ocean`, `body-lava`, `body-gas`, `body-ice-giant`; `world-<name>` for each
-of the 21 ready-made worlds; `rings-broad`, `rings-narrow`, `rings-far-side`; `body-crescent`;
-`body-limb`.
-
-**Public interface.** `planet(renderer, what, extra)` → `Body`: `object`, `update(t, {sun})`,
-`setSun`, `sun`, `fill`, `problems(t)`, `turnPerFrame(t)`, `options`, `rings`, `uniforms`,
-`material`, `dispose()`. Pure helpers (tested in Node): `resolveOptions`, `bakeInputs`,
-`bandRamp`, `ringProfile`, `levelFor`, `sizeFor`, `phaseLight`, `spotSigma`, `pointShare`,
-`onGlobe`, `linearColor`; constants `TYPES`, `PALETTES`, `PRESETS`, `AIRS`, `QUALITIES`,
-`AIR_STEPS`, `RING_STYLES`, `VERSION`.
-
-**Limits.** No landing: the maps are one texel per 20 km on an Earth at 512 (10 km at 1024), so a
-close limb is soft ground under sharp air, and the last kilometres are out of scope (§122.4's
-note). Relief is shading and two shadow looks, not displaced ground: the limb is always a smooth
-circle. Clouds are one flat deck. The air's sum is single scattering with a correction; thick air
-is a look, not a simulation. Rings have no thickness and no spokes. Ring-shine, planet-shine
-and eclipse shadows come from `vidgen/space-light` (§122.8), not from the body alone. Several ringed
-bodies overlapping on screen within one depth slice sort by their centres. An orthographic
-camera is not supported.
-
-**Tests** (`tests/test_web_space_bodies.py`): served by its import name with only its two
-imports; the 33 parts; in Node every world's options, the errors with their did-you-mean, bands,
-rings and placed things from a seed; `slow`: in Chromium the disc's size and roundness from three
-sides, a seed is a world, day and night, air outside the limb only with air, rings lit and
-shadowing, the sub-pixel spot's light, and a body of `ctx.orbits` placed, sized, lit and
-reporting its turning. Stills: `/home/claude/work/scratch/an371/stills/`.
+**Limits.** One texel per 20 km on an Earth at 512 (no landing); relief is shading, the limb always a
+smooth circle; one flat cloud deck; single scattering with a correction; rings without thickness or
+spokes; ringed bodies overlapping in one depth slice sort by centre; no orthographic camera. Default
+exposure keeps the stars beside a day side (a film convention, §122.8). Tests:
+`tests/test_web_space_bodies.py`.
 
 ### 122.8 Suns and light: `vidgen/space-light` (Step 372)
 
-A star in one line (`const sun = star(renderer, "sun"); scene.add(sun.object); sun.update(t)`) and
-the light of a whole space scene in one object (`const light = spaceLight({scene, camera, sun,
-bodies, sky}); light.update(t)`). The module `data/web/modules/space-light.js` (import name
-`vidgen/space-light`, in `VIDGEN_MODULES`; imports `three`, `rng` of `vidgen/music-time` and
-`blackbody` of `vidgen/space-sky`). Nothing like it existed: the Step 358 kit's `flare` is a
-sprite for music hits, and Step 371 left three hooks (`setSun(direction, {color, intensity})`,
-`light`, `body.fill`) that nothing computed.
+`const sun = star(renderer, "sun"); scene.add(sun.object); sun.update(t)` and, for a scene's light,
+`const light = spaceLight({scene, camera, sun, bodies, sky}); light.update(t)`.
+`data/web/modules/space-light.js` (`vidgen/space-light`, in `VIDGEN_MODULES`; imports `three`, `rng`
+of `vidgen/music-time`, `blackbody` of `vidgen/space-sky`). It computes the hooks
+`vidgen/space-bodies` leaves open (`setSun`, `light`, `body.fill`, `ECLIPSE`). Star kinds, options
+and defaults (`STARS`, `STAR_DEFAULTS`, `LIGHT_DEFAULTS`): docs/CONFIG.md (`web`, "Suns and light");
+errors throw with did-you-mean.
 
-**A star close up** is two shells drawn from their back faces round one place, in the order they
-were made, each pixel worked out from the view ray as a body's is (§122.7):
+**A star close up**: two back-face shells round one place, drawn in creation order, each pixel from
+the view ray (as §122.7). *Globe*: exact limb, depth per pixel; cells boil in place (nearest /
+second-nearest of lattice points each circling its own place; nothing scrolls), cells under ~2 px
+left out; a function of t alone; limb law I = μ^(0.3, 0.55, 0.95) per colour for cool stars, (1.0,
+0.66, 0.3) for hot; seeded spots (`starSpots`), faculae, limb loops (`starLoops`). *Corona* (shell
+of `reach` radii, additive, no depth write): a function of where the ray passes nearest the star;
+the angle round the disc reads a JS-made cube map (`coronaFaces`: R streamers, G finer structure, B
+rays, A active ground), so streamers stay rays in any lens (reading by the nearest point's 3D
+direction turns them into clouds in close-ups). `starTint`: a black body's colour pushed three
+times as far from white (a film's sun is yellower than the real white one).
 
-- *The globe* (a shell as high as the tallest loop): the exact anti-aliased
-  limb and the depth per pixel. **Cells that boil in place**: the nearest and second nearest of
-  points that each circle slowly about their own place in a lattice (8 candidates a pixel), so
-  every cell changes shape where it stands and nothing scrolls; the lane between two cells is the
-  difference of the two distances, soft and widest where three meet; a slower field (gradient
-  noise whose gradients turn with time, or the map's with `quality: "fast"`) makes regions
-  brighter and dimmer, and the star's map pushes the lattice about so cells are larger here and
-  smaller there. Cells smaller than about two pixels are left out (a small star does not sparkle).
-  A function of t alone. **Limb**: I = μ^(0.3, 0.55, 0.95) per colour for a cool star (the limb
-  darkens and reddens); a hot star's is drawn the other way (1.0, 0.66, 0.3): a white-hot middle,
-  a blue limb. **Spots** from the seed (`starSpots`: two belts of latitude, 60 % in pairs along
-  a parallel; umbra 0.16, penumbra 0.6 of the surface, the edge bent by the cells) and
-  **faculae**, a bright net round spots and over active ground that shows only toward the limb.
-  Darker is redder (brightness^(0.8, 1.0, 1.3)). **Loops** at the limb (`starLoops`): circles of
-  0.05 to 0.16 radii standing in a plane through the foot; where the view ray crosses that
-  plane, the distance from the circle gives a glow with wisps along the arc; behind the globe
-  they are hidden, before it nearly lost; a thin red rim of low gas hugs the limb.
-- *The corona* (a shell of `reach` 6 radii, additive, no depth written): everything is a function
-  of where the ray passes nearest the star. The angle round the disc reads a cube map made once
-  in JavaScript (`coronaFaces`: 256 px faces, gradient noise; R the great streamers, gathered
-  over the belts of activity, G finer structure, B thin rays, A active ground for the globe), so
-  streamers are rays in any lens; a streamer narrows to a stalk (its share to the power
-  1 + 2.6 ln b), leans a little as it leaves, and falls as b^−3 where it is strong and b^−4.6
-  between; a bright ring b^−11 hugs the limb. Pearl white with a little of the star's colour.
-  The first version read the map by the nearest point's 3D direction: in a close-up the rays
-  turned into clouds (the direction changes along a radius in a perspective view).
+**Three places**: an object (radius 1); the Sun of `ctx.orbits` (`star(renderer, "Sun", {space})`);
+or **in the sky** (`{direction, angularRadius}`, default 0.2665°: meshes moved round the camera
+before each draw, unculled so `vidgen/space-scale` draws them in the sky pass, writing far depth so
+every body covers them).
 
-**Colour and character by temperature** (`STARS`; `starTint` is a black body's colour, three times
-as far from white by default: a film's sun is yellower than the real one, which is white):
+**The far sun's glare.** Under 30 px radius at 720p (fading out by 140 px) the star is a point drawn
+by one more mesh, a `userData.overlay` object (§122.4), in the frame's own axes (spikes neither
+rotate nor flicker): a core (≥ 0.62 px), three halos, `spikes` (≥ 0.62 px across with light kept),
+six cool lens ghosts on the line through the frame's middle. Gone a third of a frame outside. Adds
+into a linear picture; on the canvas it is screened after the star's ACES.
 
-| Star | K | Character |
-|---|---|---|
-| `red-dwarf` | 3,200 | large cells (16 across a radius), 3 great spots, a dark red limb, 3 loops |
-| `orange` | 4,600 | 6 spots, cells 24 |
-| `sun` | 5,772 | cells 32, 5 spots, faculae, 4 loops |
-| `white` | 8,500 | nearly smooth, no spots or loops, brilliant (light 2.0) |
-| `blue-giant` | 22,000 | smooth, white-hot with a blue limb (light 2.3), a wide pale halo, few streamers |
+**What hides the sun** (`sunVisibility`, `star.visibility(camera)`; no read-back, no state): 96 fixed
+disc points (sunflower); each ray's nearest distance to every occluder between eye and sun gives a
+soft step, times the air's transmission exp(−ext × tangent column) with the bodies' Chapman column.
+Mean = the glare's light per colour; light-weighted mean position = where it sits (a sun setting
+behind a world with air dims, reddens and slides along the limb). Rays are straight. Occluders
+(`star.occluders`): `spaceLight` sets the bodies of `vidgen/space-bodies`; a page adds balls, e.g.
+`craft.shade(star)` (§122.10) or a named rock (§122.9).
 
-Options (`STAR_DEFAULTS`): `temperature`, `seed`, `light` (the middle of the disc; 1.2: under ACES
-the surface shows), `saturation`, `granulation`, `cells`, `boil` (rate), `spots`, `spotSize`,
-`faculae`, `limb`, `corona`, `reach`, `streamers`, `prominences`, `spin` (seconds a turn; 0),
-`tilt`, `glare`, `spikes` (0, 4, 6, 8), `spikeAngle`, `spikeLength`, `flare`, `quality` (`fast`:
-one noise less), `direction`, `angularRadius`, `display`; `{like: "red-dwarf", ...}` starts from a
-ready-made one. A wrong name or value is an error with a did-you-mean.
+**`spaceLight(options)`** → `SpaceLight`. `update(t)` runs after bodies, star and camera stand at t;
+no state between calls:
+1. *Each body's sun*: direction from body to star (camera-relative positions work as is), or one
+   direction for all; `body.setSun(direction, {color, intensity})` with `sunlightColor` (white for a
+   sun-like star, 0.7 of the way to the black body relative to the Sun's for others).
+2. *Distance*: `falloff: 0` (a stated artistic default: every world lit as if exposed for it);
+   `falloff: 2` is inverse square from `reference` (default the first body).
+3. *Fill* (`body.fill`): the stronger of planet-shine (`planetShine`: (2/3) × albedo × (radius /
+   distance)² × Lambert phase, ≤ albedo; source colour read once from its smallest baked mip) and
+   ring-shine (`ringShine`: 0.125 × opacity × |sin sun height over the rings|); one source a body,
+   never added. In `film` the tiny honest values are lifted by the stated convention `filmShine` =
+   0.236 × honest^0.158, × `shine` / `ringShine`.
+4. *Eclipses* (`eclipses: true`, opt-in because it recompiles the bodies' shaders): up to 4 bodies
+   between a body and the sun; with s along and d across the sun direction, w = s × tan(sun angular
+   radius), hidden share = min(1, r²/w²) × (1 − smoothstep(|r − w|, r + w, d)). A body with air leaves
+   copper light in its shadow (film 0.085, 0.022, 0.007 of sunlight; honest 3 × 10⁻⁴). No shadows on
+   rings.
+5. *Ordinary meshes*: `light.directional` (π × sunlight, so a white `MeshStandardMaterial` matches a
+   body's white ground) at `at` (default the camera), its colour × what `sunVisibility` leaves there;
+   `light.fill` for planet-shine; `shadows: {size}` a shadow box round `at`; `environment: true` sets
+   `scene.environment = sky.environment`.
 
-**Three places for a star.** As an object (radius 1, placed and scaled by the page); as the Sun
-of `ctx.orbits` (`star(renderer, "Sun", {space})`: the `SpaceView` places and sizes it, the data
-gives its pole); or **in the sky** (`{direction, angularRadius}`, default 0.2665°, the Sun from
-1 AU): its meshes are moved round the camera before each draw, are not culled (so
-`vidgen/space-scale` draws them in its sky pass) and write the far depth, so every body covers
-them.
+**Exposure** (`EXPOSURES`; a sunlit ground is `SKY_STOPS` 20 stops above the sky `vidgen/space-sky`
+draws). `"film"` (default, **a convention, not honest**): nothing changed, stars beside a day side.
+`"camera"` (honest): one `ev` (number or function of t): sunlit × 2^ev, sky × 2^(ev − 20), city
+lights × 2^(ev − `LIGHTS_STOPS` 10), planet-shine honest. `"auto"` (honest): `ev` from the frame at
+t, **a pure function of the scene at t** (frames render in any order and in parallel): a 32 × 18
+grid of soft view rays measures each body's sunlit and shine-lit share, each an entry {stops,
+share}, a star in frame a twentieth × what shows; `autoExposure` starts at `evMax` 20 and lets each
+entry pull toward its own, brightest last, by smoothstep(log share) from `dark` (2 × 10⁻⁴) to `day`
+(0.02). Light is held at `BURN` (32) × white so half floats stay finite.
 
-**A far sun: the glare.** Under 30 px of radius (at 720p; fading to none at 140 px, where the
-surface is the picture) the star is a brilliant point drawn by one more mesh, last and over
-everything, in the frame's own axes (a lens does not turn with the world, so spikes neither
-rotate nor flicker): a core (a gaussian never under 0.62 px, as the sky's stars), three halos
-(2.6, 16 and 90 px wide at 720p), `spikes` thin lines at `spikeAngle` (a gaussian across, never
-thinner than 0.62 px with its light kept: thinner lines broke into dots at 320x180;
-1 / (1 + (r / 42 px)²) along, four slightly different lengths), and six **lens ghosts** on the
-line from the sun through the frame's middle (round soft patches and two soft rings, cool tints,
-2 % of white at `flare` 1; a warm tint read as dirt on the dark, and there are no hexagons). The
-glare leaves with the sun (gone a third of a frame outside). Into a linear picture it adds;
-straight to the canvas it is laid on as a screen (source × (1 − destination)) after the star's
-own ACES curve.
+**Interface.** `Star`: `object`, `update(t)`, `direction`, `occluders`, `gain`, `seen`,
+`visibility(camera)`, `pixels(camera, height)`, `glare`, `corona`, `mesh`, `options`, `tint`,
+`lightColor`, `dispose()`. `SpaceLight`: `update(t)`, `directional`, `fill`, `ambient`, `state`
+(`{exposure, ev, gains, bodies: [{sun, intensity, shine, honest, source}], light}`), `albedos`,
+`dispose()`. Pure helpers: `resolveStar`, `starTint`, `sunlightColor`, `starSpots`, `starLoops`,
+`coronaFaces`, `sunVisibility`, `tangentColumn`, `phaseLight`, `planetShine`, `ringShine`,
+`filmShine`, `sunlight`, `exposureGains`, `autoExposure`, `pointShare`, `glareShare`; constants also
+`QUALITIES`, `AU`, `SUN_ANGULAR_RADIUS`, `VERSION`. Parts (`data/web/parts/space-light.js`, kind
+`light`); each `exposure-*` tile's label says whether it is honest.
 
-**What hides the sun** (`sunVisibility`, `star.visibility(camera)`): no read-back and no state.
-The sun's disc is 96 fixed points (a sunflower); each ray's nearest distance to every body
-between the eye and the sun (`star.occluders`, set by `spaceLight`) gives a soft step as wide as
-the point's own share of the disc, times the air's transmission exp(−ext × the tangent column)
-with the same Chapman column as the bodies' shader. The mean over the points is the glare's
-light per colour; the light-weighted mean position is where the glare sits. So a sun setting
-behind a world with air dims, reddens (blue goes first), shrinks to the sliver that is left and
-slides along the limb: stills 02 and 03, and the clip. Measured on 200 steps of a limb crossing
-the disc: no step over 2 % of the light. Rays are straight (the air's bending, which flattens a
-real sunset seen from orbit, is left out).
-
-**`spaceLight(options)`** → `SpaceLight`; `update(t)` after the bodies, the star and the camera
-stand at t. Each call (no state between calls):
-
-1. *Every body's sun*: the direction from the body to the star (the star's place in the scene:
-   camera-relative positions of `vidgen/space-scale` work as they are), or one direction for all
-   (a star in the sky, or `sun: [x, y, z]`); `body.setSun(direction, {color, intensity})` with
-   the star's light colour (`sunlightColor`: white for a sun-like star, 0.7 of the way to the
-   black body's colour relative to the Sun's for another).
-2. *Sunlight with distance*: `falloff` 0 by default, **an artistic default, stated**: every world
-   is lit as if the shot were exposed for it, so Neptune is not black. `falloff: 2` is the
-   inverse-square law from `reference` (a distance, a body, default the first body): Neptune then
-   gets 1/900 of the Earth's light, and `exposure: "auto"` opens up by itself.
-3. *A second, weak light* (`body.fill`): the strongest of **planet-shine** from another body
-   (`planetShine`: (2/3) × albedo × (radius / distance)² × the Lambert phase function, never over
-   the albedo; the source's mean colour read once from the smallest level of its baked map, mixed
-   with its clouds' colour; from the lit side of the source rather than its middle) and
-   **ring-shine** from the body's own rings (`ringShine`: 0.125 × opacity × |sin of the sun's
-   height over the rings|, from the lit face over the night side; a flat estimate). Honest values
-   are tiny (the full Earth on the Moon: 5.5 × 10⁻⁵ of sunlight). In `film` they are drawn by a
-   stated convention, `filmShine`: 0.236 × honest^0.158 (the Earth on the Moon → 0.05, a low
-   orbit's ground-shine 0.18 → 0.18, fading out under a full Moon's light on the Earth), times
-   `shine` / `ringShine`. One light a body: two sources are not added.
-4. *Eclipses* (`eclipses: true`): see below.
-5. *Ordinary meshes*: `light.directional`, a `THREE.DirectionalLight` (π × the sunlight, so a
-   white `MeshStandardMaterial` facing the sun is as bright as a body's white ground), at `at`
-   (an object, default the camera), its colour times what `sunVisibility` leaves of the sun there
-   (a craft in a planet's shadow is dark, at the shadow's edge red); `light.fill`, a second
-   directional light for planet-shine; `shadows: {size}` gives the first a shadow box round `at`;
-   `ambient` 0; `environment: true` sets `scene.environment = sky.environment`.
-
-**Eclipse shadows.** A soft disc test in the bodies' own shader: `vidgen/space-bodies` gained an
-`ECLIPSE` block (compiled only when `spaceLight` sets the define): for up to 4 bodies between
-this one and the sun (their middles in this body's axes and radii), s the distance along the
-sun's direction and d across it, w = s × tan(the sun's angular radius): the share of the sun
-hidden is min(1, r²/w²) × (1 − smoothstep(|r − w|, r + w, d)), a dark middle and a penumbra as
-wide as the geometry says (a moon smaller than the sun's disc hides only r²/w² of it). The
-sunlight on ground, clouds and air is multiplied by it. A body with air leaves a copper light in
-its shadow (film: 0.085, 0.022, 0.007 of sunlight; honest: 3 × 10⁻⁴). Cost at 720p, a full-disc
-Earth with sky and three-finish: 0.29 s → 0.32 s a frame; opt-in because it recompiles the
-bodies' shaders. Not done: shadows on rings, the bending of light, more than 4 bodies.
-
-**Exposure.** A sunlit ground is about a million times brighter than the sky that
-`vidgen/space-sky` draws (its look is a long exposure: about ISO 3200, f/2.8, 20 s against the
-"sunny 16" rule's ISO 100, f/16, 1/100 s: 20 stops, `SKY_STOPS`).
-
-| `exposure` | Honest? | What it does |
-|---|---|---|
-| `"film"` (default) | **no: a convention** | nothing is changed: the stars stay beside a day side, planet-shine is lifted by `filmShine`, city lights are as bright as Step 371 drew them |
-| `"camera"` | **yes** | one exposure `ev` (stops over a sunlit ground's; a number or a function of t) for everything: sunlit things × 2^ev, the sky × 2^(ev − 20), city lights × 2^(ev − 10) (`LIGHTS_STOPS`), planet-shine as faint as it is. `ev: 0`: the day side as in film, no stars. `ev: 20`: the stars as the sky draws them, the day side burnt out |
-| `"auto"` | **yes** | `camera` with `ev` chosen from what is in the frame at t |
-
-A light is held at `BURN` (32) times white: the picture is white long before, and half floats
-stay finite. **The automatic exposure is a pure function of the scene at t** (scenes render in
-any order and in parallel, so nothing may be carried from the frame before): a grid of 32 × 18
-view rays, each soft at a body's edge, measures the share of the frame covered by each body's
-sunlit ground and by its planet-shine-lit night; each is an entry {the stops it wants, its
-share}; a star in the frame counts as a twentieth of it times what shows. `autoExposure` starts
-at `evMax` (20: nothing lit, the stars' exposure) and lets every entry pull the exposure to its
-own, the brightest last, by smoothstep(log share) from `dark` (2 × 10⁻⁴ of the frame) to `day`
-(0.02), as a meter reading the whole frame lets a thin crescent burn out to show the dark side.
-It changes smoothly because the geometry does (measured: 100 steps of a shrinking lit share, no
-step over 0.8 stops); a cut changes it at once, as a new shot would.
-
-**Measured** (2 cores, SwiftShader, 1280 × 720; with the sky and three-finish unless said, where
-the sky and three-finish alone take 0.24 s a frame):
-
-| Shot | Making it | A frame |
-|---|---|---|
-| a star, disc 180 px in radius, corona | 0.6 s (the corona's map in JavaScript, shaders) | 0.38–0.41 s; alone to the canvas 0.17 s |
-| a star close up (the disc two thirds of the frame) | the same | 0.54–0.58 s; alone 0.39 s, `quality: "fast"` 0.32 s |
-| a far sun in the sky (glare, spikes, ghosts) | the same | 0.24–0.27 s (the glare adds about 0.03 s) |
-| sunrise over the Earth-like world's limb | 8–9 s with the world (maps of 512) | 0.38–0.43 s (the world's close limb is most of it) |
-| a moon with planet-shine and its world | 10 s (two bodies) | 0.27–0.31 s |
-| `eclipses: true` on a full-disc world | | + 0.03 s |
-| `spaceLight.update` (96 rays to the sun, 576 view rays in `auto`) | | under 1 ms in JavaScript |
-| the 15 parts on `vidgen parts` at 320x180 | | 31 s (0.5 s a star, 2–3 s a tile with a sky or a world) |
-
-**Steady in motion.** One clip (640 × 360, 30 fps): the sun rising 1° over the limb in 2 s, then
-1.5 s of the surface close up. `vidgen motion check`: 0 errors, 0 warnings (one info: the web
-scene's own fade at the cut). The glare's light grows frame by frame without a step back (mean
-luma of its region 6.1 → 32.5 over 44 frames; steps −0.02 to +1.6 codes, the negative ones grain
-before the sun shows). The surface: its mean stays within 0.1 code while it boils (196.6–196.7),
-0.1–0.7 codes of change a frame, 2.2 codes over 20 frames.
-
-**Changes to earlier Phase AN modules** (no released film depends on them; pages importing them
-are drawn again): `space-bodies.js` gained the `ECLIPSE` block (three multiplications by a
-vec3 that is 1 without the define; no other change); `space-scale.js` draws objects with
-`userData.overlay` once, after its last depth slice and over everything, and leaves them out of
-its depth intervals (a glare drawn with the far slice would be covered by every nearer world).
-
-**Parts** (`data/web/parts/space-light.js`, kind `light`, 15): `sun-yellow`, `sun-red-dwarf`,
-`sun-orange`, `sun-white`, `sun-blue-giant`, `sun-far`, `sunrise-limb`, `sunrise-diamond`,
-`planet-shine`, `eclipse-shadow`, `eclipse-moon`, `exposure-film`, `exposure-camera`,
-`exposure-camera-stars`, `exposure-auto` (each exposure tile says in its label whether it is
-honest).
-
-**Public interface.** `star(renderer, what, extra)` → `Star`: `object`, `update(t)`, `direction`,
-`occluders`, `gain`, `seen`, `visibility(camera)`, `pixels(camera, height)`, `glare`, `corona`,
-`mesh`, `options`, `tint`, `lightColor`, `dispose()`. `spaceLight(options)` → `SpaceLight`:
-`update(t)`, `directional`, `fill`, `ambient`, `state` (`{exposure, ev, gains, bodies: [{sun,
-intensity, shine, honest, source}], light}`), `albedos`, `dispose()`. Pure helpers (tested in
-Node): `resolveStar`, `starTint`, `sunlightColor`, `starSpots`, `starLoops`, `coronaFaces`,
-`sunVisibility`, `tangentColumn`, `phaseLight`, `planetShine`, `ringShine`, `filmShine`,
-`sunlight`, `exposureGains`, `autoExposure`, `pointShare`, `glareShare`; constants `STARS`,
-`STAR_DEFAULTS`, `LIGHT_DEFAULTS`, `EXPOSURES`, `QUALITIES`, `AU`, `SUN_ANGULAR_RADIUS`,
-`SKY_STOPS`, `LIGHTS_STOPS`, `BURN`, `VERSION`.
-
-**Limits.** A star's surface is a film's look, not a filtered photograph: in an honest exposure
-a sun in the frame is white whatever its temperature. Cells are a lattice's (one size class);
-spots have no fibrils; a loop seen edge-on thins away; the corona is a function of the angle
-round the disc, not a volume. Planet-shine is one directional light per body with no shadow and
-no phase across the source's disc; ring-shine is a flat estimate; neither is added to the other.
-The glare knows the bodies of `vidgen/space-bodies` (round, with or without air), not ordinary
-meshes: a spacecraft does not hide the sun's glare. The automatic exposure does not see the sky,
-city lights or ordinary meshes. An orthographic camera is not supported.
-
-**Tests** (`tests/test_web_space_light.py`): served by its import name with its three imports;
-the 15 parts and which say "honest"; in Node: the stars' options and errors, colours by
-temperature, spots, loops and the corona's map from a seed, the sun's visibility (free, hidden,
-half, smooth over 200 steps, red through air), planet-shine, ring-shine, the film convention,
-sunlight with distance, the exposure gains, the automatic exposure, and `spaceLight` on stand-in
-bodies (film, `shine: 0`, `camera` at 3 and 20 stops, `ev` as a function, `auto`, a placed sun
-with and without falloff, a craft in a world's shadow and at its red edge, errors, `dispose`);
-`slow`: in Chromium a star's disc, limb and corona, the same frame twice, boiling without a
-change of its light, a hot and a cool star, a far sun's glare and spikes, a moon hiding it
-wholly and by half, planet-shine against none, an eclipse's shadow, film against an honest
-exposure, the automatic exposure opening, and the Sun of `ctx.orbits` through
-`vidgen/space-scale` with its glare over the night side. Stills:
-`/home/claude/work/scratch/an372/stills/`.
+**Limits.** In an honest exposure a sun in frame is white whatever its temperature; the corona is a
+function of angle, not a volume; planet-shine is one unshadowed directional light per body; the
+auto exposure does not see the sky, city lights or ordinary meshes; no orthographic camera. Tests:
+`tests/test_web_space_light.py`.
 
 ### 122.9 Phenomena: `vidgen/space-phenomena` (Step 373)
 
-**What it is.** Six ready-made phenomena for a space scene, each one call and one `update(t)`:
-`blackHole`, `wormhole`, `warp`, `asteroids` (and `asteroid`, one rock for a close-up), `comet`,
-`aurora`. The module `data/web/modules/space-phenomena.js` (import name `vidgen/space-phenomena`,
-in `VIDGEN_MODULES`; imports `three`, `rng` of `vidgen/music-time` and `blackbody`, `starColor`,
-`starAmplitude` of `vidgen/space-sky`). Everything is a pure function of the time given to
-`update` and of seeds; nothing is kept between frames. Costs were measured first (prototypes of
-each at 1280x720 in software GL) and decided the design: none needed baking beyond a map made
-once, and no phenomenon has a separate cheap stand-in, only `quality: "fast" | "normal" | "fine"`.
+`data/web/modules/space-phenomena.js` (`vidgen/space-phenomena`, in `VIDGEN_MODULES`; imports
+`three`, `rng` of `vidgen/music-time`, `blackbody`, `starColor`, `starAmplitude` of
+`vidgen/space-sky`): `blackHole`, `wormhole`, `warp`, `asteroids`, `asteroid`, `comet`, `aurora`,
+each one call and one `update(t)`. Each is a pure function of the time given to `update` and of
+seeds (nothing kept between frames; at most a map made once); no cheap stand-ins, only `quality`
+(`QUALITIES`: `fast`, `normal`, `fine`). Options, defaults, costs: docs/CONFIG.md (`web`,
+"Phenomena"); a misspelt option throws with the closest known one.
 
-**Black hole.** `blackHole(renderer, {sky})` returns `object`, a quad that covers the ball of
-radius `lens` round the hole (the whole frame when the camera is inside it). One unit of the
-object is the horizon's radius (the Schwarzschild radius rs); its y axis is the disc's axis.
-For every pixel the fragment shader steps the light path back from the camera round the hole:
-in the plane of the camera, the hole and the ray, with u = 1 / r in units of rs and the angle φ
-round the hole, a light path obeys u'' = −u + 1.5 u² exactly. The start is the camera's own
-(u₀ = 1 / r₀, u' = −u₀ cot ψ √(1 − u₀) for a camera at rest that sees the ray ψ from the outward
-direction), the impact parameter b = r₀ sin ψ / √(1 − u₀). The steps (`HOLE_STEPS`: 28 / 44 / 88,
-velocity Verlet) are shared out over the angle the path is expected to sweep (ψ plus an estimate
-of the bending from the strong-field and weak-field formulas), so every pixel uses its steps.
-What comes of it:
+**Black hole.** `object` is a quad covering the ball of radius `lens` (the whole frame when the
+camera is inside); one unit = the Schwarzschild radius rs, y the disc axis. Per pixel the shader
+steps the light path back from the camera: u = 1/r, u'' = −u + 1.5 u², start u₀ = 1/r₀, u' = −u₀ cot
+ψ √(1 − u₀) (camera at rest), b = r₀ sin ψ / √(1 − u₀); `HOLE_STEPS` 28 / 44 / 88 velocity-Verlet
+steps shared over the expected swept angle.
+- Shadow: b < 3√3/2 rs (`SHADOW` 2.598), edge smoothed over the pixel's footprint in b. The sky:
+  the `SpaceSky` cube read in the exit direction (nothing baked).
+- Stars stay points (a lens brightens a star, it does not lengthen it): the hole draws the sky's
+  stars itself, primary and secondary image. Before each draw JS steps 128 paths for the camera
+  distance (`lensTables`) into two float textures (per star–hole angle: each image's b and gain,
+  held at 24; per path the radius at 64 angles, for disc cover); third and later images left out.
+- Disc in x–z between `inner` and `outer`: the path's first two plane crossings (cubic between
+  steps) give the direct disc and its far side, composed front to back; shift g = √(1 − 1.5/r) / (1
+  − Ω L), Ω = √(0.5/r³). Photon ring at 1.012 × shadow radius, ≥ 1.5 px with light thinned.
+- Disc look (stated choices): warm = (T(r)/T_max)^1.6 × (0.62 + 0.9 gas) × g^`doppler`, colour from
+  `heatRamp` (64-texel `blackbody` ramp), light ∝ warm^2.5, T(r) the thin-disc law. The gas map
+  (1024 × 512) turns ∝ r^−3/2: two copies each sheared for one period, the *finished light*
+  cross-faded (blending maps before the non-linear steps made the disc breathe).
+- Approximations: non-rotating hole, camera at rest, only the sky bent (scene objects drawn
+  normally), a finite lens (`lensRadius`: 2.6 Einstein radii, ≥ 20 rs or 1.4 × `outer`, ≤ 64) with
+  the bending eased out over 55–100 % of it, thin flat disc. `sky` may be a plain cube texture
+  (stars then stretch) or absent.
 
-- **The shadow** is the set of pixels with b under 3√3 / 2 rs (2.598 rs, `SHADOW`): its true
-  apparent size. Its edge is smoothed over the pixel's footprint in b.
-- **The sky** is read from the Step 370 sky in the direction the path leaves in: the faint light
-  from the sky's own cube (`sky.target`, with its gain and turn), the stars as points (below). An
-  Einstein ring appears where the Milky Way stands behind the hole (still 03); the bent picture
-  moves as the camera moves because nothing is baked.
-- **Stars stay points.** A star is too small to be stretched: a lens makes it brighter, not
-  longer. So the hole draws the sky's stars itself, twice: each star's own image pushed outward
-  and its second image on the far side of the hole. Before each draw JavaScript steps 128 paths
-  for the camera's distance (`lensTables`: the same equation, finer) and writes two small float
-  textures: for the angle β between a star and the hole, the impact parameter of each image and
-  the gain in brightness (sin θ dθ / (sin β dβ), held at 24), and for the 128 paths the radius
-  at 64 angles (where a path crosses the disc: the star's light is dimmed by what the disc
-  covers there). Only the stars near enough are drawn (a loop over all of them in JavaScript
-  chooses them: far cheaper than their vertex shader). Third and later images are left out.
-- **The disc** lies in the object's x–z plane between `inner` (3 rs, the innermost stable orbit)
-  and `outer` (14 rs). The path's first two crossings of that plane are found between steps
-  (a cubic through the two steps' values and slopes): the first is the disc seen directly, the
-  second its far side seen over the top of the shadow or under it. Light and cover are composed
-  front to back. The gas's shift g = √(1 − 1.5 / r) / (1 − Ω L) (Ω = √(0.5 / r³), L the ray's
-  angular momentum about the disc's axis: exact for gas on circular orbits and a far camera)
-  makes the side that comes toward the camera brighter and whiter.
-- **The thin ring** of light that went round the hole once more is drawn as a line at 1.012 ×
-  the shadow's radius, never under 1.5 px wide and thinned in light where it would be, brighter
-  on the approaching side (`ring: 0` for none). The true ring is far thinner than a pixel.
+**Wormhole.** A ball of radius 1 (the mouth) showing `other` with ours bent round the rim. Ellis
+wormhole with a straight middle (`wormholeRadius`: 1 for |l| ≤ `length`/2, √(1 + (|l| −
+`length`/2)²) beyond); paths keep b = r sin ψ, l'' = b² r'/r³, φ' = b/r², strides ∝ r
+(`WORMHOLE_STEPS` 24 / 36 / 72), the straight middle in one exact stride, straight lines outside
+the lens. b < 1 exits on the other side. Both skies are read from their `background` cubes.
+`passage(camera, progress, {from, look})` moves the camera on the line through the centre and
+returns `{progress, l, side, inside}`; the camera frame is carried straight through, so the far sky
+is attached mirrored across the mouth's plane (a convention).
 
-*The disc's look* (the part that is a painter's): one temperature per place gives both colour and
-light, so dim gas is red and white gas is bright, never grey: warm = (T(r) / T_max)^1.6 ×
-(0.62 + 0.9 gas) × g^`doppler`, colour = the black-body colour of `temperature` × warm (from
-`heatRamp`, a 64-texel ramp of `blackbody`), light ∝ warm^2.5. T(r) is a thin disc's
-(r^−3/4 (1 − √(inner / r))^1/4, hottest at 1.36 × inner, zero at the inner edge). The exponent
-1.6 (a steeper fall than the true 1) and the temperatures themselves (5,400 K at the hottest
-ring, where real discs are far hotter and blue-white) are stated choices: they give white-hot
-inside and a red glow outside. `doppler` 0.7 softens the shift's effect on brightness (the true
-exponent is 3 to 4 on g; here 2.5 × 0.7). The gas is a map made once from the seed (1024 × 512:
-long streaks, clumps along trailing spiral arms, fine filaments, rings), read at the crossing's
-radius and angle with the map's level chosen from the pixel's size on the disc. It turns faster
-inside (rate ∝ r^−3/2, `speed` radians a second at the inner edge): two copies of the map are
-each sheared for one period and the finished light of one is faded out as the other's fades in,
-so the pattern flows without winding up and the disc's brightness does not breathe (measured:
-the frame's mean within 5 % over a period). The outer edge thins out in wisps.
+**Warp** (invented). `warpAt(progress)` is the whole script, pure (`speed`, `travel`, `flash`,
+`tunnel`, `sky`; `WARP_MARKS` `{enter: 0.14, leave: 0.84, out: 0.96}`). Each star is a streak from
+now to `shutter` frames ago (`warpStreak`), so consecutive streaks overlap and nothing strobes; the
+flash is never a white frame; `intensity` scales light only, never the lens. `motion check` warns
+`shimmer` in the tunnel (streaks move over 4 px a frame): expected.
 
-*Approximations, plainly.* A non-rotating hole (no frame dragging, a round shadow). A camera at
-rest (no aberration or shift from the camera's own motion). Only the sky is bent: other things
-in the scene are drawn as usual, in front of the hole's middle or hidden behind it inside the
-lens. The lens is finite (`lensRadius`: 2.6 Einstein radii for the camera's distance, at least 20
-rs or 1.4 × `outer`, at most 64): between 55 % and 100 % of it the bending is eased out to
-nothing, which shifts the sky there by up to a few degrees and dims stars by up to 30 % in that
-zone. The disc is thin and flat, with no light of its own between crossings and no shadowing of
-itself. The sky's light is not shifted in colour. `sky` may be a plain cube texture (then stars
-are part of the picture and stretch into arcs) or absent (black).
+**Asteroids.** `rockShape(seed)` (direction → surface and shade), `rockGeometry(seed, detail,
+{smooth})`. JS places every rock each frame; rocks over 1.7 px are instanced meshes (`shapes` × three
+LODs, at most `rocks`), all are points holding their lit face's light (`phaseOfSphere`), fading as
+the mesh grows in; `follow` repeats the field's box round the camera (a rock shrinks to nothing
+where it would jump); a belt is Kepler orbits with `gaps` (`beltDensity`). Meshes are
+`MeshStandardMaterial` lit by the scene's lights; no rock-on-rock shadows; `asteroid` (65,000 faces)
+casts and takes shadows. `glint` and a belt's sizes are stated choices.
 
-**Wormhole.** `wormhole(renderer, {sky, other})`: a ball of radius 1 (the mouth) that shows
-`other`, a second sky, with ours bent round its rim. The space is an Ellis wormhole's with a
-straight middle: at the distance l along it the tube's radius is 1 for |l| ≤ `length` / 2 and
-√(1 + (|l| − `length` / 2)²) beyond (`wormholeRadius`). A light path keeps b = r sin ψ; along it
-l'' = b² r' / r³ and φ' = b / r², stepped in strides proportional to r (`WORMHOLE_STEPS`: 24 /
-36 / 72), with the straight middle crossed in one stride (the path winds round it evenly: Δφ =
-b Δl / cos, exact) and the flat space outside the lens (6 radii) by a straight line. Paths with
-b < 1 come out on the other side: the whole other sky is seen inside the mouth, upright in the
-middle and wound up endlessly toward the rim; paths with b > 1 come back to our sky, bent. Both
-skies are read from their `background` cube maps (stars as wide as the cube's texels: softer
-than the sky's own points). `rim` adds a thin line of light at the mouth's edge and `glow` a
-faint light on the walls of the straight middle: both are a painter's, not physics.
-`passage(camera, progress, {from})` flies a camera through: at 0 it stands at `from`, at 0.5 in
-the middle of the throat, at 1 as far out on the other side, along the straight line through
-the centre; `progress` is whatever function of time the page gives, so it locks to bars. It
-returns `{l, side, inside}`: when `side` is −1 the camera is under the other sky (the page shows
-that sky's object and hides this side's things). Inside a long wormhole (`length: 30`) the far
-sky is wound into rings round the way out: the tunnel of bent light (still 05). The camera's own
-frame is carried straight through, so the far sky is attached mirrored across the mouth's plane
-(which way round the far sky is, is a convention: there is no other connection to compare with).
+**Comet.** `cometFrame(toSun, velocity)` → `away` (ion tail) and `lag` (dust bends by `curve` ×
+s^1.7); tails are camera-facing ribbons with structure in the fragment shader. With `{space, body}`
+place, sun and motion come from `ctx.orbits` and `activity` = `cometActivity(distance)` = (1 AU /
+r)², nothing under 0.1, held at 1.6 (tail length ∝ √activity, light ∝ activity); one unit = `unit`
+metres (2 × 10⁹, stated). `comet.nucleus` is an `asteroid`.
 
-**Warp.** `warp(renderer, {seconds, fps})` and `update(t, {progress, camera, intensity})`. Invented,
-not physics. `warpAt(progress)` is the whole script, a pure function: `speed` (0 at rest, running
-away until `WARP_MARKS.enter` 0.14, 1 in the tunnel, braking between 0.84 and 0.96), `travel`
-(its integral, from a table), `flash` (a burst on entering, 0.6 of it on leaving), `tunnel`,
-`sky` (how bright the ordinary sky should be: the page passes it to `sky.set({brightness})`).
-2,600 stars in a tube round the camera fly toward it along `direction` (default where the
-camera looks: the point they stretch from). Each is a streak from where it is to where it was
-`shutter` (4) frames ago (`warpStreak`), so streaks of following frames overlap and nothing
-strobes; a streak keeps a share of its star's light as it grows and has an even brightness with
-soft ends. Stars ahead turn blue, behind red, the more the faster. The tunnel adds soft bands
-on a tube's wall (two scales of a noise map, moving slower than the stars) and a light ahead;
-the flash is a burst of that light and a faint veil, never a white frame. `intensity` (from
-`ctx.music`) scales the light of streaks and tunnel: a pulse of brightness; the camera's lens is
-never touched.
+**Aurora.** Four thin shells over a `vidgen/space-bodies` world, narrow strips round each magnetic
+pole (an oval `latitude` from a pole `offset` off the spin pole); turns with `body.spinner`, reads
+`body.sun`.
 
-**Asteroids.** `rockShape(seed)` is a rock: a function from a direction to the surface there
-(lumps at three scales, bowls with raised rims in a power law of sizes, one to three facets
-where what sticks out past a plane is pressed nearly flat) and a shade (dark crater floors,
-light rims). `rockGeometry(seed, detail, {smooth})` makes a mesh of it (smooth normals from the
-shape itself, or flat faces). `asteroids(renderer, {layout})` holds thousands: `"field"` (3,000
-in a box of `size` 120, radii 0.15 to 9 by `power` 1.8: many small, few large; with `follow` the
-box repeats round the camera, a rock shrinking to nothing where it would jump sides, so a
-flight never runs out of rocks) or `"belt"` (16,000 on slightly oval, slightly tilted orbits
-between `inner` and `outer`, faster inside by Kepler's third law, with `gaps` cleared lanes and
-a band of dust). Each frame JavaScript places every rock; those larger than 1.7 px in the
-picture are meshes (`shapes` 4 shapes × three levels of detail, instanced, at most `rocks` 800,
-each tumbling at its own rate), all are points that hold the light of their lit face (a sphere's
-phase law) and fade as their mesh grows in. Meshes are `MeshStandardMaterial`, lit by the
-scene's lights: with Step 372's one sun and no ambient light a rock has a hard terminator and a
-black night side. Rocks cast no shadows on each other. `asteroid({seed})` is one rock of 65,000
-faces for a close-up that casts and takes shadows (`spaceLight({shadows})`: its craters then
-shadow themselves). `glint` (a belt's default 0.5) draws far rocks brighter than their size
-gives, or a belt seen from afar would be black: a stated choice. A belt's sizes are not to scale.
+**Order and depth.** Hole and wormhole draw after the sky and before everything else (`renderOrder`
+−900), test depth at their middle's distance, write none. The warp is in the sky pass
+(`frustumCulled = false`; its flash `userData.overlay`). Rock points, tails, head and curtains are
+additive and test depth. Every object has a bounding sphere of its true reach (§122.4). A rock or a
+comet nucleus hides a star's glare when named: `sun.occluders = [...sun.occluders, rock]` (scale
+taken as a ball radius); a field's instanced rocks do not.
 
-**Comet.** `comet(renderer)`: a dark nucleus (a rock of albedo 0.04 that turns), jets from spots
-that turn with it and shine only while they face the sun, a head (bright in the middle, tight on
-the sunward side, a faint shell), a dust tail and an ion tail. `cometFrame(toSun, velocity)`
-gives the two directions: `away` from the sun (the ion tail's straight line) and `lag`, square
-to it and against the motion (the side the dust tail bends to, by `curve` × s^1.7 along its
-length). The tails are ribbons along those curves that always face the camera, with their
-structure drawn in the fragment shader (dust: a broad fan, sharp on the leading edge, soft on
-the lagging one, faint bands; ions: five thin rays with knots that drift outward); seen
-end-on a tail thins away. `update(t, {sun, velocity, activity})` sets them by hand; with
-`{space, body: "Halley"}` (orbit data, Step 367) place, sun and motion come from `ctx.orbits`
-and `activity` = `cometActivity(distance)` = (1 AU / r)², nothing under 0.1, held at 1.6: the
-tails grow as the comet nears the sun (tail lengths ∝ √activity, light ∝ activity). One unit of
-the object is the head's size; with `space` it is `unit` metres (2 × 10⁹: head and tails are
-drawn at a stated size, far larger than a nucleus and far smaller than the orbit). Seen from
-inside the head, head and tails fade (their glow is all round the camera there).
+**Interface.** Returned objects: `BlackHole` (`object`, `update(t)`, `set(options)`, `options`,
+`uniforms`, `lens`, `dispose()`), `Wormhole` (`object`, `passage`, `release()`, `state`,
+`dispose()`), `Warp` (`object`, `update(t, {progress, camera, direction, intensity})`, `state`,
+`dispose()`), `Asteroids` (`object`, `update(t, {camera, sun})`, `place(i, t, eye)`, `count`,
+`shown`, `dispose()`), `Asteroid` (`object`, `update(t)`, `dispose()`), `Comet` (`object`,
+`update(t, {sun, velocity, activity})`, `nucleus`, `state`, `dispose()`), `Aurora` (`object`,
+`update(t, {sun})`, `dispose()`). Defaults: `HOLE_DEFAULTS`, `WORMHOLE_DEFAULTS`, `WARP_DEFAULTS`,
+`ASTEROIDS_DEFAULTS`, `ASTEROID_DEFAULTS`, `COMET_DEFAULTS`, `AURORA_DEFAULTS`. Pure helpers:
+`deflection`, `lightPath`, `lensTables`, `lensRadius`, `discShift`, `discTemperature`, `heatRamp`,
+`wormholeRadius`, `wormholePath`, `warpSpeed`, `warpAt`, `warpStreak`, `rockShape`, `rockGeometry`,
+`rockRadius`, `phaseOfSphere`, `beltDensity`, `cometActivity`, `cometFrame`; also `SHADOW`,
+`HOLE_STEPS`, `WORMHOLE_STEPS`, `WARP_MARKS`, `QUALITIES`, `VERSION`. The hole reads `sky.target`,
+`sky.stars`, `sky.starUniforms`, `sky.skyMaterial`, `sky.options` of a `SpaceSky`. Parts
+(`data/web/parts/space-phenomena.js`, kind `phenomenon`): `black-hole`, `black-hole-from-above`,
+`einstein-ring`, `wormhole`, `wormhole-tunnel`, `warp-streaks`, `warp-tunnel`, `asteroid-field`,
+`asteroid-belt`, `asteroid`, `comet`, `aurora`; labels carry the frame cost.
 
-**Aurora.** `aurora(body)` adds four thin shells over a world of `vidgen/space-bodies` (heights
-0.016 to 0.052 radii × `height`: taller than true, so the curtains read from orbit), each a
-narrow strip of a sphere round a magnetic pole. The light is an oval `latitude` 68° from a magnetic pole that stands `offset` 9°
-off the pole of turning, wandering by ±2.5°, broken into folds and fine rays from a noise map
-that drifts; green below, red above; full on the night side, `day` 0.12 of it on the day side;
-brighter where the eye looks along the sheet (at the limb). It turns with the ground
-(`body.spinner`) and reads the sun from `body.sun`.
-
-**Order and depth.** Hole and wormhole are drawn after the sky and before everything else
-(`renderOrder` −900), test depth at their middle's distance and write none: a thing in front of
-the middle covers them, a thing behind it inside the lens is covered. The warp belongs to the
-sky's pass (`frustumCulled = false`; its flash has `userData.overlay`). Rocks' points, tails,
-head and curtains are additive and test depth. In `vidgen/space-scale`'s slices every object
-has a bounding sphere of its true reach.
-
-**The sun's glare.** A rock or a comet's nucleus hides the glare of a Step 372 star when it is
-named: `sun.occluders = [...sun.occluders, rock]` (`rock.object`'s scale is taken as the radius
-of a ball; checked: the glare's share goes from 1 to 0 behind an `asteroid`). The instanced rocks
-of a field do not hide it.
-
-**Measured** (2 cores, SwiftShader, 1280x720, with the sky and three-finish with a bloom, which
-alone cost 0.27 to 0.29 s a frame; three frames averaged, and the machine's own spread is about
-0.15 s on a one-second frame):
-
-| Shot | s a frame | of that the phenomenon | To make (about) |
-|---|---|---|---|
-| Black hole filling the frame, `normal` | 1.0 – 1.25 | 0.75 – 0.9 | 1.5 s (the gas map) |
-| the same, `fast` / `fine` | 1.06 / 1.30 – 1.44 | about 0.2 less / 0.2 – 0.4 more | |
-| the same from above the disc | 1.02 – 1.08 | 0.75 | |
-| Black hole without a disc | 0.56 – 0.60 | 0.3 | |
-| Wormhole from outside / inside the tunnel | 0.74 / 0.73 | 0.45 | 7 s (the second sky and both skies' cube pictures) |
-| Warp, in the tunnel | 0.38 | 0.1 | 0.2 s |
-| Asteroid field (3,000 rocks, 760 as meshes) | 0.33 | 0.05 (a frame full of large near rocks was not measured) | 0.3 s |
-| Belt of 16,000 round a world | 0.30 | 0.05 or less (the rest is the world) | 0.3 s |
-| One asteroid close up, shadow map 2048 | 0.36 | 0.1 | 2 s (65,000 faces) |
-| Comet, far / at the nucleus | 0.23 – 0.25 / 0.35 | 0.05 / 0.1 (the sparse sky alone 0.19) | 0.5 s |
-| Aurora on an Earth-like world | 0.48 – 0.59 | 0.1 – 0.2 (the world alone 0.38 – 0.41) | 0.2 s |
-
-The films so far ran at 0.75 to 1.2 s a frame in all. So every phenomenon is affordable as a
-shot of a three-minute film; a black hole that fills the frame is the dearest and costs about
-what a whole frame of those films did (a 20-second shot at 30 fps: 10 to 12 minutes; three
-minutes of it alone: about 1.7 hours). Make it smaller in the frame, choose `quality: "fast"`, or
-draw the scene at `Finish`'s `renderScale` 0.75 where time is short. The star points now cost
-less than the machine's spread; before only the near stars were drawn they cost 0.2 to 0.4 s.
-The aurora first covered a whole cap round each pole and cost 0.25 to 0.3 s; it is drawn on
-narrow strips round the magnetic poles.
-
-**Steadiness.** One clip (640x360, 30 fps, 5.5 s; 73 s to render): 2.5 s of the black hole with
-the camera going round it at 5° a second while the gas flows, and a 3 s jump to warp.
-`vidgen motion check`: 0 errors. The black hole has no finding of its own (the frame's mean
-moves by at most 0.005 from frame to frame). The jump has one warning, `shimmer`, over its
-tunnel ("the median star's brightness jumps by 31 %"): the check finds a star again within 4 px
-of where it was, and a warp's streaks move far more than that every frame; the frame's mean
-shows no strobing (the largest step is the entering flash's rise over five frames). It is the
-streaks' motion read as stars, not aliasing, and is expected of any warp shot.
-
-**Found on the way.** The loop of 44 steps is about half of the hole's cost (9 ms a step at
-720p). A sky's stars read from a cube map are blobs that a lens stretches into
-arcs and thins: inside the lens the sky looked emptier than outside and its edge showed; hence
-the lensed points. Blending two sheared copies of the gas map before the non-linear steps made
-the disc's light breathe with the period (the frame's mean rose by a third at mid-blend): the
-finished light is blended instead. Pixels per radius are not constant across a frame (b follows
-the sine of the angle from the hole, the picture its tangent): a lens of 21 rs seen from 34 rs
-covers a whole 16:9 frame through a 40° lens. Giving a jet's uniforms the tails' shared vector
-objects pointed every tail along the last jet. A backtick in a GLSL comment inside a template
-string ends the string. The sky of seed 4 has a straight dark edge in one place
-(seen at the top right from (30, 4.5, −24) looking at the origin, with and without the
-hole): a seam of the Step 370 sky, not of this module; recorded for Step 378.
-
-**Parts** (`data/web/parts/space-phenomena.js`, kind `phenomenon`, 12): `black-hole`,
-`black-hole-from-above`, `einstein-ring`, `wormhole`, `wormhole-tunnel`, `warp-streaks`,
-`warp-tunnel`, `asteroid-field`, `asteroid-belt`, `asteroid`, `comet`, `aurora`; the labels
-carry the measured cost ("+0.7 to 0.9 s a frame"). The twelve tiles take 21 to 27 s.
-
-**Public interface.** `blackHole(renderer, options)` → `BlackHole` (`object`, `update(t)`,
-`set(options)`, `options`, `uniforms`, `lens`, `dispose()`; options `sky`, `disc`, `inner`,
-`outer`, `temperature`, `tint`, `brightness`, `doppler`, `opacity`, `speed`, `ring`, `tilt`,
-`lens`, `stars`, `seed`, `quality`, `skyGain`). `wormhole(renderer, options)` → `Wormhole`
-(`object`, `passage(camera, progress, {from, look})`, `release()`, `state`, `dispose()`; options
-`sky`, `other`, `length`, `rim`, `rimColor`, `glow`, `lens`, `quality`, `skyGain`, `otherGain`).
-`warp(renderer, options)` → `Warp` (`object`, `update(t, {progress, camera, direction,
-intensity})`, `state`, `dispose()`; options `seed`, `count`, `depth`, `radius`, `speed`,
-`seconds`, `fps`, `shutter`, `tunnel`, `flash`, `color`, `ahead`, `behind`, `quality`).
-`asteroids(renderer, options)` → `Asteroids` (`object`, `update(t, {camera, sun})`, `place(i, t,
-eye)`, `count`, `shown`, `dispose()`; options `layout`, `seed`, `count`, `size`, `least`, `most`,
-`power`, `shapes`, `rocks`, `follow`, `tumble`, `glint`, `color`, `variety`, `albedo`,
-`brightness`, `dust`, `inner`, `outer`, `thickness`, `rate`, `gaps`, `eccentricity`, `light`,
-`sun`, `quality`). `asteroid(options)` → `Asteroid` (`object`, `update(t)`, `dispose()`; `seed`,
-`detail`, `craters`, `color`, `roughness`, `spin`, `axis`). `comet(renderer, options)` → `Comet`
-(`object`, `update(t, {sun, velocity, activity})`, `nucleus`, `state`, `dispose()`; `seed`,
-`nucleus`, `coma`, `dust`, `ion`, `jets`, `length`, `ionLength`, `curve`, `activity`,
-`dustColor`, `ionColor`, `comaColor`, `spin`, `space`, `body`, `orbits`, `unit`, `reference`,
-`quality`). `aurora(body, options)` → `Aurora` (`object`, `update(t, {sun})`, `dispose()`;
-`seed`, `latitude`, `width`, `offset`, `height`, `brightness`, `speed`, `color`, `top`, `poles`,
-`day`). Pure helpers (tested in Node): `deflection`, `lightPath`, `lensTables`, `lensRadius`,
-`discShift`, `discTemperature`, `heatRamp`, `wormholeRadius`, `wormholePath`, `warpSpeed`,
-`warpAt`, `warpStreak`, `rockShape`, `rockGeometry`, `rockRadius`, `phaseOfSphere`,
-`beltDensity`, `cometActivity`, `cometFrame`; constants `SHADOW`, `HOLE_STEPS`, `HOLE_DEFAULTS`,
-`WORMHOLE_STEPS`, `WORMHOLE_DEFAULTS`, `WARP_DEFAULTS`, `WARP_MARKS`, `ASTEROID_DEFAULTS`,
-`ASTEROIDS_DEFAULTS`, `COMET_DEFAULTS`, `AURORA_DEFAULTS`, `QUALITIES`, `VERSION`. A misspelt
-option stops with the closest known one. The hole reads `sky.target`, `sky.stars`,
-`sky.starUniforms`, `sky.skyMaterial` and `sky.options` of a `SpaceSky`; the aurora reads
-`body.spinner` and `body.sun` of a `Body`.
-
-**Earlier modules.** None changed: `web/loaded.py` gained the name in `VIDGEN_MODULES`, nothing
-else. No cache key of an existing page changes (the import map is in no key; `engine_id` and
-`runtime.js` are untouched).
-
-**Limits.** Beyond the approximations above: hole and wormhole bend only the sky, one of them at
-a time (two lenses that overlap each draw the unbent sky inside themselves). No rotating hole,
-no jet, no thick disc. An orthographic camera is not supported. The wormhole's skies are cube
-pictures (soft stars). A belt's rocks do not collide or clump, and the world's shadow does not
-fall on the belt. Rocks cast no shadows on each other; a field's meshes do not hide the sun's
-glare. A comet's tails are flat ribbons toward the camera, so a tail pointing at the camera
-thins away, and tails cast no shadow. The aurora's shells show as separate layers very close to
-the limb. On the canvas without `vidgen/three-finish`, light that adds up is only roughly right.
-
-**Tests** (`tests/test_web_space_phenomena.py`): served by its import name with its three
-imports; the 12 parts and the costs in their labels; in Node: the bending of light (Einstein's
-2 rs / b far out, growing without end toward the shadow), the star tables (the ring's radius
-√(2 D), gains, monotone), the disc's shift and temperature, the heat ramp, wormhole paths
-(through for b < 1, back for b > 1, straight far out, the middle's winding exactly), the jump's
-script (pure, monotone travel, flash, sky; a streak at least a frame's flight), rocks from a
-seed, sizes, the phase law, a belt's lanes, a comet's activity and frame, errors; `slow`: in
-Chromium a hole's shadow, its disc beside, over and under it, the brighter approaching side,
-the same frame twice, gas that moves with steady light, the sky bent inside a lens of 12 rs and
-identical outside it; a wormhole's other sky, a camera in the throat and out on the far side;
-a jump at rest and in the tunnel; rocks as meshes, the same twice; a comet's tails on the side
-away from the sun, one blue, one yellowish, the dust behind the motion; an aurora's green on
-the night side. Stills: `/home/claude/work/scratch/an373/stills/`.
+**Limits.** One lens at a time (overlapping lenses each draw the unbent sky inside); no rotating
+hole, jet or thick disc; no orthographic camera; the world's shadow does not fall on a belt; tails
+cast no shadow; additive light straight to the canvas is only roughly right. A backtick in a GLSL
+comment inside a JS template string ends the string. Tests: `tests/test_web_space_phenomena.py`.
 
 ### 122.10 The spacecraft kit: `vidgen/space-craft` (Step 374)
 
-The owner called this step essential: generated ships look cheap beside good planets unless
-their surfaces, their light and their small parts are right. The module
-`data/web/modules/space-craft.js` (import name `vidgen/space-craft`; it imports `three`, three's
-`BufferGeometryUtils` add-on and `rng` of `vidgen/music-time`) gives a ready-made craft in one
-line, the parts they are made of, and the motion of a craft that follows `ctx.orbits`.
+`data/web/modules/space-craft.js` (`vidgen/space-craft`; imports `three`, three's
+`BufferGeometryUtils` add-on and `rng` of `vidgen/music-time`): ready-made craft, the parts they are
+made of, and craft motion that follows `ctx.orbits`. Kinds, parts, options and defaults:
+docs/CONFIG.md (`web`, "Spacecraft").
 
 ```js
-import {craft, craftKit, attach, around, fleet, craftEnvironment} from "vidgen/space-craft";
-const probe = craft("probe", {seed: 7});                    // a ready-made craft; another design for every seed
-scene.add(probe.object);                                    // metres: +z the nose, +y the top, engines fire toward -z
+const probe = craft("probe", {seed: 7});                    // metres: +z the nose, +y the top, engines fire toward -z
 const light = spaceLight({scene, camera, renderer, sun, bodies: [earth], sky, at: probe.object, shadows: probe.shadows});
 probe.shade(sun);                                           // the craft hides the sun's glare
-scene.environment = craftEnvironment(renderer, scene, {at: probe.object}).texture;   // metal mirrors the sky and the planet
-function frame(t) { earth.update(t); probe.update(t, {sun, camera, height: ctx.height}); sun.update(t); light.update(t); finish.render(t); }
-const ship = craft("ship", {seed: 2}).fly(space, {body: "Ship", attitude: "prograde", burn: {seconds: 2}});   // from orbit_data
+scene.environment = craftEnvironment(renderer, scene, {at: probe.object}).texture;
+// frame(t): probe.update(t, {sun, camera, height: ctx.height}); sun.update(t); light.update(t);
+const ship = craft("ship", {seed: 2}).fly(space, {body: "Ship", attitude: "prograde", burn: {seconds: 2}});
 ```
 
-**Design.** Everything is computed: no image, no model file. The six ready-made craft are
-invented designs with believable sizes (no real or film spacecraft, no markings, flags or
-names). A craft is built from parts in metres, each a `THREE.Group` with named points; `attach`
-joins a part's point to another's, `around` repeats a part round a hull. When a craft is
-finished, its meshes are merged to one per surface (and one set per part that moves: a wing
-that tracks the sun, a dish on its gimbal, a ring habitat, a deployable panel), so a craft of
-30,000 to 85,000 triangles is 30 to 80 draws, most of them its plumes and lights.
+**Design.** Everything computed (no image or model file); the six craft (`CRAFT`: `probe`,
+`satellite`, `station`, `ship`, `lander`, `tug`) are invented designs of believable size, no real or
+film spacecraft, markings, flags or names. Parts (`craftKit({seed, accent, foil, detail, wear, lit})`)
+are `THREE.Group`s in metres with named points (`fore`, `aft`, `port`, `starboard`, `zenith`,
+`nadir`, `mount`, `tip`, `top`, `dock`, `feed`, `exit`, or `{angle, along, out}` on a hull, truss,
+boom or tank cluster); `attach` joins points, `around` repeats round a hull. A finished craft's
+meshes are merged to one per surface (and one set per moving part: tracking wing, gimballed dish,
+ring habitat, deployable panel): a few tens of draws. The same seed gives the same vertices, at both
+`DETAILS` (`"far"`: fewer sides, no rails or rivets, a third to a quarter of the triangles).
+`fleet(kind, {count, seed})` uses seeds seed, seed + 1, … at `"far"`.
 
-**Surfaces** (`SKINS`; all `MeshStandardMaterial`, so they take the scene's sun, planet-shine,
-shadows and environment). Their maps are numbers worked out once for all craft (about 1 s):
+**Surfaces** (`SKINS`, all `MeshStandardMaterial`): maps computed once for all craft — foil
+(`foilMaps`: crumpled at four scales, each the min/max of bowed facets so creases are sharp;
+metalness 0.9), plating (`platingMaps`: seeded panels, grooves, rivets; white paint 0.65 of white so
+panel lines survive sunlight), solar cells (`cellMaps`), `glass`, `window` (`WINDOW_LIGHT` 1.25).
+The sun's mirror image is held at `GLARE.value` (5) × a white surface (a glint, not a burnt face).
+The ship's tanks are foil, never plain white paint (it reads flat).
 
-- *Foil* (`foil`, `foil-silver`, `foil-black`; `foilMaps`): a crumpled sheet at four scales
-  (4, 11, 29 and 71 cells across 1.1 m): at each scale the height is the lowest (or highest) of
-  slightly bowed facets, one for every scattered point, so creases are sharp, straight and of
-  every length; a slow billow over all. Creases are duller; each large facet has its own gloss
-  (roughness 0.3 to 0.9) and tone. Metalness 0.9: the sunlit side is gold, single facets
-  sparkle, the shadow side mirrors the planet. (The first try, the cells of scattered points each
-  tilted its own way, looked like stained glass: flat polygons of one size.)
-- *Plating* (`paint`, `accent`, `aluminium`, `radiator`, `dish`, and `tiles` as a brick grid;
-  `platingMaps`): panels from a seeded splitting of a square, each a little pillowed and of its
-  own tone and gloss, grooves, rivets along the grooves, a few specks where dust has hit, a
-  faint cloud of grime. White paint is 0.65 of white, so a sunlit hull keeps its panel lines.
-- *Solar cells* (`cells`; `cellMaps`): dark blue cells of 15 cm with cut corners, thin
-  collecting lines, two bus bars, the pale sheet between them; glossy, a bluish sheen.
-- *Glass and windows*: `glass` mirrors the environment; `window` is lit from inside (a warm
-  light, `WINDOW_LIGHT`: 1.25 of white, so it glows a little without a blob).
-- The sun's own mirror image on a surface is held at `GLARE.value` (5) times a white surface: a
-  flat panel at the mirror angle is a glint that blooms, not a white hole (the first stills had
-  whole faces burnt out: a roughness of 0.3 gives a mirror image of the sun over 100).
+**Light.** `spaceLight` (§122.8) with `at: craft.object`, `shadows: craft.shadows` (a 2048 px box of
+the craft's size). `occlusion` (0.55) baked into vertex colours darkens joints. `craftEnvironment
+(renderer, scene, {at, size, hide, near, far})` → `{texture, update(), dispose()}`: the scene drawn
+once from the craft (craft, stars and glare left out: the sun is a light, not a reflection) into a
+128 px PMREM cube; made once, `update()` redraws. It sets the cube faces' angle to 90 without
+touching their projection (the cube camera's −90° fov made `vidgen/space-bodies` read a negative
+pixel size). `paintedEnvironment(renderer, {sky, worlds, size})`: the same without a scene.
 
-**Parts** (`craftKit({seed, accent, foil, detail, wear, lit})` → `CraftKit`): `hull` (cylinder,
-taper, cone, nose, sphere, box, prism; ring frames, windows, handrails, small boxes and
-conduits, an accent band), `tank` (sphere, capsule; straps), `tankCluster`, `truss`
-(longerons, a frame every bay, a diagonal on every face, a node at every joint), `solarWing`
-(cells, a ribbed back, frames, hinges, a yoke; `deploy`, `deployable`, `track`), `radiator`
-(pipes on both faces), `dish` (a true parabola r²/4f with a rim, ribs, a feed on three struts,
-a two-axis gimbal), `antenna` (whip, helix, horn, omni, patch), `boom` (a tube with collars or
-a lattice), `instrument` (camera, spectrometer, magnetometer, tracker, platform), `powerUnit`
-(a finned radioisotope unit), `dockingPort`, `cupola`, `airlock`, `engine` (chamber, a bell of
-a bell curve with cooling channels, hoops, a manifold, feed pipes, pumps, gimbal struts; an
-ion engine with a glowing grid), `thrusters` (a block of four), `leg` (a two-stage strut, side
-struts, a dished pad, a ladder), `ringHabitat` (turning; default 0.3 g at its rim),
-`container`, `light`. A part's points: `fore`, `aft`, `port`, `starboard`, `zenith`, `nadir`
-on a hull, `mount`, `tip`, `top`, `dock`, `feed`, `exit` where they make sense, and
-`{angle, along, out}` anywhere on the side of a hull, truss, boom or tank cluster. `detail:
-"far"` makes the same design with fewer sides and without rails, rivet heads and small boxes
-(a third to a quarter of the triangles): for fleets and the distance.
+**Engines** (`PLUMES`: `chemical`, `vacuum`, `ion`, `rcs`, `air`): light summed along the view ray
+(ten samples crowded near the axis) through an exhaust widening into vacuum — a core and a flare
+(per-volume brightness ∝ 1/width²). No shock diamonds in vacuum (`air` has them). `throttle` 0..1;
+`flicker(t, i)` a sum of fixed sines (±10 %). Drawn on its bounding cone's far side with the depth
+test.
 
-**Ready-made craft** (`craft(kind, {seed, ...})`, `CRAFT`; sizes for a sense of scale):
+**Motion: a pure function of t** (`craft.update(t, {...})`, nothing kept between frames).
+- *Attitude* (`ATTITUDES`): `prograde`, `retrograde` (relative to the orbited body, top away from
+  it), `radial`, `nadir`, `sun` (`axis`), `target` (`axis`), `thrust`, `inertial` (`forward`, `up`).
+  A list `[{mode}, {at, turn, mode}, ...]` turns from `at` over `turn` s (default 3), slerp with
+  smootherstep, each mode computed for t itself (`attitudeAt`, `attitudeQuaternion`).
+- *A burn of `ctx.orbits`* is an instant (§122.3). `fly(space, {body, burn: {seconds, turn}})` shows
+  it as `seconds` (2) of thrust centred on it (stated convention): nose turned along Δv during
+  `turn` s before, engines firing exactly from `at − seconds/2` to `at + seconds/2` (0.25 s up, 0.4 s
+  down), then back; thrusters puff at each turn (`burnWindows`, `throttleAt`, `burnWeight`). The
+  turn and burn keep Δv's prograde / radial / normal parts in the flight's own axes at their
+  instant (`_thrustAt`), so a prograde burn stays prograde under any speed-up; `seconds` and `turn`
+  stay scene seconds (visible at any speed-up); the orbit keeps its exact impulsive Δv.
+- Wings face the sun (`trackAngle`); dishes aim at `target` (`aimAngles`, within 100° of rest); a
+  ring habitat turns at its rate × t; lights blink by the clock (`blink`, `LIGHTS`). `throttle`,
+  `rcs`, `lights` take a number or a function of t.
 
-| Kind | What | Size | Triangles near / far (seed 1) |
-|---|---|---|---|
-| `probe` | foil bus, fixed high-gain dish (the nose: point it with attitude `"target"`), power units on a lattice boom, a magnetometer boom, a scan platform, a tank and an engine | bus 2 m, dish 2.7 to 3.7 m, 11 to 17 m between the booms' tips | 28,562 / 8,458 |
-| `satellite` | foil box bus, two tracking wings, reflectors on arms, feed horns, an engine | bus 2 × 2 × 3 m, 16 to 28 m across the wings | 27,844 / 8,458 |
-| `station` | modules round a node, a cupola, an airlock, a truss with tracking wings and radiators, docking ports; `ring: true`: a turning ring habitat | modules 4.2 m across, 25 m long, the truss 46 to 64 m | 68,814 / 18,508 |
-| `ship` | windowed habitat with a docking nose, a truss spine with propellant tanks and radiators, a ring of 3 to 5 engines; `ring: true` | 42 to 58 m long, habitat 5 to 6 m across | 83,754 / 21,000 |
-| `lander` | (nose up) foil descent stage on four legs, tanks, one engine, an ascent cabin | 7 to 9 m across the pads, 5 to 6 m tall | 29,406 / 9,150 |
-| `tug` | crew pod, truss spine with rows of cargo boxes, a tank cluster, two engines | 19 to 32 m long | 44,004 / 13,130 |
+**Hiding the sun.** `craft.occluders`: a few balls in every solid part's box (not trusses, booms,
+antennas), children of the parts; `craft.shade(star)` adds them to `star.occluders` once.
 
-A seed changes proportions, the number of tanks, panels, engines and power units, the
-antennas, a tank's skin, the foil's tone and the accent colour; the same seed is always the
-same craft (tested: the same vertices), at both details. `fleet(kind, {count, seed})` makes
-`count` craft with seeds seed, seed + 1, ... at the `"far"` detail in a loose seeded formation.
+**Small in the frame.** Under 4.5 px radius a point fades in; under 1.6 px the meshes are hidden: a
+gaussian ≥ 0.7 px keeping the craft's light, plus a flash when a flat face mirrors the sun to the
+camera (`GLINT`: cos^500). Needs `camera` and `height`. `marker` (default 0, stated): the least
+light the point shows at any distance.
 
-**Light.** One hard sun and planet-shine come from `spaceLight` (§122.8): `at: craft.object`,
-`shadows: craft.shadows` (a box of the craft's size; 2048 px). The craft's own shadows (a
-dish's rim and struts across the dish, a truss on a module) cost 0.05 to 0.1 s a frame
-(measured below). With shadows off, a shading baked into the vertices' colours remains
-(`occlusion`, 0.55): how much of the open sky each vertex loses to the other parts, worked out
-from the balls below (it darkens the joints; it does not know where the sun is).
-**Reflections** matter most for metal: `craftEnvironment(renderer, scene, {at})` draws the
-scene once as seen from the craft (sky, worlds; craft, stars and glare left out: the sun is a
-light, not a reflection) into a 128 px cube and blurs it for every roughness (PMREM): 0.1 s,
-made once, `update()` to draw it again after the craft or the worlds have moved far. The foil in
-the sun's shadow then shows the planet. It is not drawn every frame: a reflection does not
-follow a world that crosses the sky within a shot. `paintedEnvironment(renderer, {worlds,
-sky})` is the same without a scene (soft discs; a contact sheet, deep space).
+**Interface** (misspelt option, kind, surface or point throws with the closest known one).
+`craft(kind, options)` → `Craft`: `object`, `update(t, {sun, target, velocity, radial, thrust,
+attitude, throttle, rcs, lights, camera, height, deploy, spin})`, `fly(space, {body, attitude, burn,
+target, sun, parent, camera, height, throttle, marker})`, `shade(star)`, `occluders`, `shadows`,
+`size`, `info`, `engines`, `thrusters`, `lights`, `wings`, `dishes`, `burns`, `state`, `materials`,
+`glint`, `dispose()`. `CraftKit`: the parts, `craft(root, {fore})`, `materials`, `bins()`.
+`attach(parent, at, child, mount, {roll, gap})`, `around(parent, make, {count, angle, span, along,
+out, mount, roll, gap})`, `mirror`, `pointOf`; `fleet` → `{object, craft, update, dispose}`.
+Constants `CRAFT`, `SKINS`, `ACCENTS`, `FOILS`, `HULL_SHAPES`, `DETAILS`, `PLUMES`, `LIGHTS`,
+`ATTITUDES`, `WINDOW_LIGHT`, `GLARE`, `GLINT`, `VERSION`. Parts (`data/web/parts/space-craft.js`):
+kinds `craft` and `craft-part`.
 
-**Engines.** A plume is light summed along the view ray through an exhaust that widens into
-the vacuum (`PLUMES`): a narrow white-hot core that fades within a few exit radii and a faint
-flare of the kind's colour whose width grows with the distance (brightness per volume falling
-as 1 / width²). The convention: in vacuum there are no shock diamonds; `air` (an engine firing
-in air, a lander near the ground) is a narrow jet with them. `chemical` amber, `vacuum` (a
-hydrogen engine) pale blue and wide, `ion` a narrow blue beam from a glowing grid, `rcs` a
-short white puff. Ten samples a ray, crowded where the ray passes nearest the axis (evenly
-spaced samples drew the core as a row of blobs). `throttle` 0..1 scales light and length;
-`flicker(t, i)` is a sum of fixed sines (±10 %); the bell's inside glows, hottest at the throat.
-A plume is drawn on its bounding cone's far side with the depth test: a part of the craft
-standing inside the plume hides it wrongly from some angles (a lander's legs: slight).
-
-**Motion: a function of t.** `craft.update(t, {...})` sets everything from t and what it is
-given; nothing is kept between frames.
-
-- *Attitude* (`ATTITUDES`; the nose is +z, the top +y): `prograde`, `retrograde` (the nose
-  along or against the velocity relative to the body it orbits, the top away from that body),
-  `radial`, `nadir` (the belly to the body, the nose forward: a station), `sun` (`axis`,
-  default the top, to the sun), `target` (`axis`, default the nose, to a body: a probe's dish to
-  the Earth), `thrust` (the nose along a burn), `inertial` (`forward`, `up`). A list `[{mode},
-  {at, turn, mode}, ...]` turns from `at` over `turn` seconds (default 3), eased at both ends
-  (a spherical interpolation with smootherstep); each mode is worked out for t itself, so the
-  attitude is a pure function (`attitudeAt`).
-- *A burn of `ctx.orbits`* is an instant (§122.3). `fly(space, {body, burn: {seconds, turn}})`
-  shows it as `seconds` (2) of thrust centred on that instant (a stated convention): the craft
-  turns its nose along the burn's change of velocity during the `turn` seconds before, the
-  engines fire exactly from `at − seconds / 2` to `at + seconds / 2` (0.25 s up, 0.4 s down),
-  and it turns back. The plume therefore points against the thrust. Attitude thrusters puff
-  at the start and the end of every turn.
-- *Wings* turn about their length to face the sun (`trackAngle`); *gimballed dishes* point at
-  `target` (`aimAngles`, held within 100° of their rest direction); a *ring habitat* turns at
-  its rate × t; *lights* blink by the clock (`blink`: steady port red and starboard green, a
-  white strobe of two flashes every 1.6 s, a beacon once a second, a slow pulse).
-- *Music*: `throttle`, `rcs` and `lights` take a number or a function of t, so
-  `ship.update(t, {throttle: (t) => level(t), rcs: kick(t), lights: (t, i) => 0.4 + pulse(t)})`
-  follows `ctx.music` through `vidgen/music-time`.
-
-**Hiding the sun.** Step 372's glare is hidden by balls. A finished craft carries its own:
-`craft.occluders`, a few balls in every solid part's box (not in trusses, booms and antennas:
-they are mostly holes), children of the parts, so they follow a wing that turns.
-`craft.shade(star)` adds them to `star.occluders`. A tug before the sun: the glare's share goes
-from 1 to 0 as the boxes cover the disc (still 10). Thin panels seen edge-on hide a little too
-much (a ball is as thick as it is wide), and a lattice hides nothing. The instanced rocks of
-Step 373's fields still do not hide the glare.
-
-**Small in the frame.** Under 4.5 px of radius a point of light fades in, and under 1.6 px
-the meshes are hidden: the point is a gaussian 0.7 px wide (never smaller, so it does not
-flicker between pixels) that keeps the craft's light, plus a flash when a flat face (a wing, a
-dish, a face of a box or prism bus) mirrors the sun to the camera (`GLINT`: cos^500 of the
-angle between the face and the half-way direction; it rises and falls over about ten frames
-for a craft turning at 1 rad/s). It needs `camera` and `height` (the frame's, in pixels).
-`marker` (default 0) is a stated choice like "sizes not to scale": the least light the point
-shows at any distance, for a ship that must be seen on its path from 70,000 km (still 11).
-
-**Measured** (2 cores, SwiftShader, 1280x720, through `vidgen/three-finish` with a bloom, the
-sky, an Earth-like world and a far sun: 0.29 s a frame without a craft; spread about ±0.05 s):
-
-| Shot | s a frame | without shadows |
-|---|---|---|
-| probe filling the frame (hero still) | 0.82 | 0.74 |
-| satellite, whole | 0.43 | |
-| station, whole / a third of the frame high / the same at `"far"` | 0.71 / 0.38 / 0.35 | 0.66 |
-| ship, whole / a third of the frame high / the same at `"far"` | 0.60 / 0.41 / 0.34 | 0.53 |
-| lander, whole | 0.65 | |
-| tug filling the frame (the worst case: plating over every pixel) | 0.88 | 0.82 |
-| six ships (`fleet`, `"far"`, 124,000 triangles, throttle 0.6) | 0.57 | |
-| ship from behind, five engines at full throttle filling the frame | 1.25 (0.58 with the engines off) | |
-
-Making a craft: 1.3 to 1.6 s for the first on a page (1 s of it the maps), 0.05 to 0.15 s for
-every later one; the environment 0.1 s. What a frame-filling craft's time goes to (the tug):
-the environment's reflections 0.3 s, the maps 0.3 s, shadows 0.2 s, the lighting itself
-0.05 s; the triangles hardly count. Anisotropic filtering at 4 cost 0.18 s more than at 1; it
-is 2. So: a craft in a wide shot costs 0.05 to 0.15 s, a close-up 0.3 to 0.6 s, as much as a
-world; `scene.environment = null` or `shadows: false` buy 0.3 and 0.1 s back when a shot must be
-cheap. One clip (640x360, 30 fps, 6.2 s: a tug in a nadir attitude turning to a plane-change
-burn of `orbit_data`, burning, turning back; then a far satellite as a point with a flash and a
-station with blinking lights; 85 s to render): `vidgen motion check` 0 errors, 0 warnings, 1
-info (the scene's own fade at the cut).
-
-**Found on the way.** `vidgen/space-scale` drew no shadows at all when a sky was in the scene:
-shadow maps were updated in the sky's pass, where everything that casts one is hidden. Fixed
-there (`_draw`: the shadow maps are drawn in the first pass that draws the world); its pages
-are drawn again. three's cube camera has a field of view of −90°, which the worlds of
-`vidgen/space-bodies` read as a negative pixel size (the world became a blurred spot in the
-environment): `craftEnvironment` sets the faces' angle to 90 without touching their projection.
-A path line of `SpaceView.path` vanishes near the camera in software GL when one of its
-segments is much longer than its distance (a 52 km chord passing 300 m from the camera, the
-ends far outside the frame, is not drawn at all): a craft's path can be shown from afar, not
-in a close-up; recorded for Step 378.
-
-**Parts** (`data/web/parts/space-craft.js`): kind `craft` (10): `craft-probe`,
-`craft-satellite`, `craft-station`, `craft-station-ring`, `craft-ship`, `craft-ship-burn`,
-`craft-lander`, `craft-tug`, `craft-fleet`, `craft-seeds`; the new kind `craft-part` (21):
-`part-hulls`, `part-tanks`, `part-truss`, `part-solar-wing`, `part-solar-wing-folding`,
-`part-radiator`, `part-dish`, `part-antennas`, `part-instruments`, `part-docking`,
-`part-engine`, `part-thrusters-leg`, `part-ring-habitat`, `part-cargo-lights`, `surface-foil`,
-`surface-plating`, `surface-cells-glass`, `plume-chemical`, `plume-vacuum`, `plume-ion`,
-`plume-air`. The 31 tiles take 50 s.
-
-**Public interface.** `craft(kind, options)` → `Craft` (`object`, `update(t, {sun, target,
-velocity, radial, thrust, attitude, throttle, rcs, lights, camera, height, deploy, spin})`,
-`fly(space, {body, attitude, burn, target, sun, parent, camera, height, throttle, marker})`,
-`shade(star)`, `occluders`, `shadows`, `size`, `info`, `engines`, `thrusters`, `lights`,
-`wings`, `dishes`, `burns`, `state`, `materials`, `glint`, `dispose()`; options: the kit's, the
-kind's own (`CRAFT[kind].options`), `occlusion`, `camera`, `height`, `sun`, `target`, `lights`,
-`marker`, `name`). `craftKit(options)` → `CraftKit` (the parts above, `craft(root, {fore})`,
-`materials`, `bins()`). `attach(parent, at, child, mount, {roll, gap})`, `around(parent, make,
-{count, angle, span, along, out, mount, roll, gap})`, `mirror`, `pointOf`. `fleet(kind,
-options)` → `{object, craft, update, dispose}`. `craftEnvironment(renderer, scene, {at, size,
-hide, near, far})` → `{texture, update(), dispose()}`; `paintedEnvironment(renderer, {sky,
-worlds, size})`. Pure helpers (tested in Node): `attitudeQuaternion`, `attitudeAt`,
-`burnWindows`, `throttleAt`, `burnWeight`, `trackAngle`, `aimAngles`, `blink`, `flicker`,
-`foilMaps`, `platingMaps`, `cellMaps`; constants `CRAFT`, `SKINS`, `ACCENTS`, `FOILS`,
-`HULL_SHAPES`, `DETAILS`, `PLUMES`, `LIGHTS`, `ATTITUDES`, `WINDOW_LIGHT`, `GLARE`, `GLINT`,
-`VERSION`. A misspelt option, kind, surface or point stops with the closest known one.
-
-**Earlier modules.** `vidgen/space-scale` (the shadow fix above: its bytes changed, so pages
-that import it are drawn again; no released film does) and `vidgen/parts` with
-`vidgen/web/parts.py` (the kind `craft-part`; no page imports the registry). `web/loaded.py`
-gained the import name. Nothing shipped before Phase AN changed; no cache key of an existing
-page changes (the import map is in no key; `engine_id` and `runtime.js` are untouched).
-
-**Limits.** The designs are six; a craft is rigid apart from its wings, dishes, ring and
-deployable panels (no arm, no opening hatch, no stage that separates, no legs that fold). The
-maps are the same for every craft (a seed changes shapes and colours). Close enough to see
-single texels (under about 2 mm a pixel) the foil's creases soften. Shadows are one 2048 px
-map over the craft's box: on a 60 m station a shadow's edge has steps of 3 cm, visible in a
-close-up of a detail. The baked shading is coarse on large flat faces (it lives in the
-vertices). A plume is not lit by the sun, casts no light on the craft beyond its bell, and its
-depth is its cone's. The environment is still for a shot. The probe's dish is fixed to the bus
-(the craft points it); landing legs do not touch a ground: there is no ground yet (§122.4).
-No anti-aliasing of thin struts beyond the picture's own (space scenes run three-finish
-without FXAA for the stars' sake): at middle distances a truss shimmers a little in motion
-unless the shot has motion blur.
-
-**Tests** (`tests/test_web_space_craft.py`): served by its import name with its three
-imports; the 31 parts and their kinds; in Node: parts join at their points, every attitude
-mode points where it says, a turn is eased and the same for the same t, burns become
-stretches of thrust (the data's axes turned to three's), throttle and turn weights, wing and
-dish angles, blinking by the clock, the maps are the same twice and differ by seed; `slow`:
-every craft builds, the same seed the same vertices, another seed others, `"far"` under 45 %
-of the triangles with the same size and accent, a ring's turning, a fleet's seeds, eight
-mistakes named; wings facing the sun, a dish its target, plumes only under throttle, a craft
-flown from orbit data (the nose along the velocity, along the burn before it starts, the
-plume only inside the stretch, back after), a far craft hidden behind a steady point with a
-flash that rises and falls over several frames, `shade` adding the balls once; in Chromium a
-probe's gold foil before a black sky, the same frame twice, shadows that only darken, the
-environment changing the metal, an amber plume and a blue beam that only add light and
-flicker by the clock, the glare hidden behind a tug and not without `shade`, and shadows
-inside `vidgen/space-scale`'s slices. Stills: `/home/claude/work/scratch/an374/stills/`.
+**Limits.** Rigid apart from wings, dishes, ring and panels; maps shared by all craft; one 2048 px
+shadow map over the craft's box; a plume is unlit and lights nothing beyond its bell; no
+anti-aliasing of thin struts (space scenes run without FXAA), so a truss shimmers a little in motion
+without motion blur. Tests: `tests/test_web_space_craft.py`.
 
 ### 122.11 Camera moves for space scenes: `vidgen/space-camera` (Step 375)
 
-A space shot is made by where the camera stands relative to the sun, how close it passes, and
-when a light breaks over an edge; writing that as raw positions is slow and easy to get wrong.
-The module `data/web/modules/space-camera.js` (import name `vidgen/space-camera`; it imports
-only shaping functions of `vidgen/music-time`, no three.js, so all of it runs in Node) gives
-the moves a cinematographer names, each as a function of time.
+`data/web/modules/space-camera.js` (`vidgen/space-camera`; imports only shaping functions of
+`vidgen/music-time`, no three.js, so it all runs in Node): the moves a cinematographer names, each a
+function of time. Moves, their options and defaults, views, lenses: docs/CONFIG.md (`web`, "Camera
+moves for space scenes").
 
 ```js
-import {spaceCamera} from "vidgen/space-camera";
 const cam = spaceCamera({space, camera});                   // on a SpaceView; or {camera, up: [0, 1, 0], sun, bodies}
-const view = (t) => cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}, distance: {radii: 7}});   // a crescent, the sun just off the limb
-const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); light.update(t); };   // Finish's update: motion blur works
+const view = (t) => cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}, distance: {radii: 7}});
+const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); light.update(t); };
 ```
 
-**Shots.** A move returns a shot: `{from, right, up, forward, fov, aspect, focus, subject,
-...}`, float64 arrays in the frame of its subjects (the orbit data's with a `SpaceView`: z
-north; three.js's without one: y up). `cam.apply(t, shot)` sets the camera's field of view and
-hands the shot to `space.update(t, {from: {offset}, quaternion})`, so the camera's place is
-subtracted from every body in double precision (§122.4), or sets a plain three.js camera.
-`shot.focus` is the subject's distance along the view (three-finish's `dof.focus`, `SpaceView`'s
-`dofFocus`). Nothing is kept between calls: the same time gives the same shot in any order
-(tested), so scenes render in any order, a cut between two scenes on one clock shows one move,
-and three-finish's motion blur calls the move at its sub-frame times.
+**Shots are plain data; the rig holds no state.** A move returns `{from, right, up, forward, fov,
+aspect, focus, subject, ...}`, float64 arrays in its subjects' frame (orbit data's, z north, with a
+`SpaceView`; y up without). `cam.apply(t, shot)` sets the fov and calls `space.update(t, {from:
+{offset}, quaternion})` (double precision, §122.4), or sets a plain camera's fields. `shot.focus` is
+the subject's distance along the view (`dof.focus` / `dofFocus`). The same time gives the same shot
+in any order, so scenes render in any order, a cut on one clock shows one move, and motion-blur
+sub-frames work. Built on `vidgen/space-scale`, not `vidgen/music-time`'s `orbit` / `flyThrough`
+(kept for music videos), because the moves need the sun, radii and double precision.
 
-**Time.** `progress` (0..1), or `over: [start, end]` in seconds of `time` (default t). An
-author gives bar lines with the existing helpers: `over: [8 * bar, 12 * bar]`, `time:
-ctx.music.time(t)`. `eased(u, ease)` blends an even speed (0: for a cut into and out of
-motion) with the quintic ease (1: starts and ends at rest); the moves default to 0.4 to 0.6.
+**Inputs.** Time: `progress` (0..1) or `over: [start, end]` in seconds of `time` (default t);
+`eased(u, ease)` blends even speed (0) with the quintic ease (1). Subjects: a body name, `[x, y, z]`,
+`{at, radius, name}` (`at` may be a function of t), `{body, offset}`, a world / star / craft of the
+space modules (a flown craft is its `flight.body`), a top-level three.js object (read by
+`position`), or a function of t. Distances: metres from the middle, `{radii}`, `{altitude}`. The sun:
+the rig's `sun` (direction, subject, or a `vidgen/space-light` star turned into the data frame) or
+the data's `"Sun"`.
 
-**Subjects.** A body's name (with a `SpaceView`), `[x, y, z]`, `{at, radius, name}` (`at` may
-be a function of t), `{body, offset}`, a world / star / craft of the space modules (a flown
-craft is its `flight.body`), a three.js object, or a function of t. A distance is metres from
-the subject's middle, `{radii: k}` or `{altitude: m}`. The sun: the rig's `sun` (a direction, a
-subject, a star of `vidgen/space-light`: its three.js direction is turned into the data's
-frame) or the data's `"Sun"`.
+**Composition.** `shotAt(eye, target, {up, fov, aspect, place, roll})` puts the target exactly at
+`place` (−1..1) with a level horizon: a = x tan(fov/2) aspect, b = y tan(fov/2), n = √(1 + a² + b²),
+pitch = asin(n sin E / √(1 + b²)) − atan b, heading turned by atan(a / (cos θ − b sin θ)). Only the
+zoom centres its subject. `level: body` levels a world's horizon; fly-bys and craft views do so for a
+world a data subject flies within three radii of.
 
-**Composition.** `shotAt(eye, target, {up, fov, aspect, place, roll})` puts the target at
-`place` (`[x, y]`, −1..1, x right, y up) with the camera's right square to `up` (a level
-horizon), exactly: with a = x tan(fov/2) aspect and b = y tan(fov/2), the pitch is asin(n sin E
-/ √(1 + b²)) − atan b (E the target's height over the level, n = √(1 + a² + b²)) and the
-heading is turned by atan(a / (cos θ − b sin θ)). No move puts its subject in the middle by
-default except the zoom (its axis must be the middle, or everything slides). `level: body`
-levels a world's horizon (up is away from its middle); fly-bys and craft views do so by
-themselves for the world a subject of the orbit data flies close over (within three radii).
+**Moves.** `flyBy` (a straight line in the subject's frame; a true hyperbola belongs to the orbit
+data, `follow` a `flyby` body; `linger` blends even speed along the line (0) and even turning of the
+bearing (1)), `pass` (a fly-by against the craft's velocity), `arc` (a phase angle: `PHASES` name,
+degrees, or `{limb: k}` = 180° − (1 + k) asin(R/d)), `arrive` (height falls by a constant factor per
+unit of eased progress; `sunAhead` measured from the limb, default day side), `reveal`, `follow`
+(`VIEWS`; `lock` `"velocity"` / `"craft"` / `"stars"`; `side` `left` / `right` / `sun`; with `lock:
+"velocity"` a named view loses the world on a radial flight, so give a view vector with a large up
+share, §122.13), `zoom`.
+- **Reveal timing.** On a circle of radius r round the world (radius R), in the plane holding the
+  subject direction and square to `plane` (default `up`), a far sun's upper edge meets the limb at
+  θ* = asin(R/r) − σ (σ its angular radius); the camera is at θ* + `rate` × (time − `at`); for a
+  subject at a finite distance θ* is bisected (60 steps). `air` (degrees, given by the author) adds
+  the air's hold-back to the limb; `airMargin(radius, distance, height)` gives one scale height's
+  angle.
+- **Zoom.** `zoomPlan(distances, {rate | seconds, hold, ease})` → legs and rests; `zoomAt(plan,
+  time)` → `{distance, power, leg, share, resting, speed}`. log distance is the integral of a speed
+  rising as a smoothstep over `ease` s at eased ends, constant between (closed form): mid-leg d(t +
+  1)/d(t) = `rate` exactly; a leg lasts ln(d₁/d₀)/ln(rate) + ease/2 per eased end; `over` solves for
+  the rate. The middle between landing points is A₀ + (A₁ − A₀) smoothstep((d − d₀)/(d₁ − d₀)),
+  linear in distance, not its log, so it moves with the scale without a kink. Closer than
+  `GROUND_SHARE` (10⁻³ radius) above ground `problems` warns (§122.4).
 
-**The moves.**
+**Lenses.** `LENSES` (16–600 mm): vertical fov of a 36 × 24 mm frame, 2 atan(12/mm).
+`frameShare(radius, distance, fov)`, `distanceFor(radius, share, fov)`, `loomLens({craft, world,
+gap, craftShare, worldShare})` (the lens and distance for a craft and a world behind it at given
+frame shares, plus the world's share at 24 mm).
 
-| Move | What it does | Defaults that carry the look |
-|---|---|---|
-| `flyBy(t, {subject, closest, side, along, before, after, linger, place, roll, track})` | a straight line past the subject in the subject's own frame, the closest pass at `closest` on `side` (`left`, `right`, `above`, `below`, `sunlit`, `dark`, a vector); the subject glides from one side of the frame to the third it leaves by | `linger` 0.6: between an even speed along the line (0: the bearing whips round at the pass) and an even turning of the bearing (1: fast in, slow at the pass, fast out); `before`, `after` 6 closest distances; `roll` a bank that peaks at the pass |
-| `pass(t, {subject, ...})` | the craft passes the camera: a fly-by against the craft's velocity | a 16 mm lens (it holds the world's limb under the craft), the craft in the upper frame, `closest` 2.5 radii; `track: false` locks the frame |
-| `arc(t, {subject, phase, around, distance, place})` | the camera at a phase angle (sun, subject, camera): a name of `PHASES` (`front` 0, `gibbous` 35, `three-quarter` 55, `half` 90, `crescent` 135, `thin-crescent` 158, `backlit` 180), degrees, or `{limb: k}`: the sun k subject radii off the limb (phase 180° − (1 + k) asin(R / d)); pairs move through the move | the subject on the third away from the sun's side; without progress one held frame |
-| `arrive(t, {subject, from, altitude, sweep, plane, sunAhead, horizon, tilt})` | from 14 radii, the world small at (0.3, 0.12), round it by `sweep` 110° down to 0.07 radii (446 km over the Earth); the height above the ground falls by a constant factor per unit of eased progress; the camera tilts from the world's middle up to the flight's direction | the limb at `horizon` −0.42 with the camera's right along the orbit's axis (level); `sunAhead` 140 (day side) or 9 (a sunrise at the end) |
-| `reveal(t, {behind, of, at, rate, distance, plane, horizon, place, air, follow})` | rides round the world `behind` so that `of` (the sun; a moon, a craft, a ringed world) comes out over its limb | first light exactly at `at`; `rate` 1°/s; the limb at −0.4, the light at x 0.18 |
-| `follow(t, {subject, view, lock, distance, around, target, drift, push})` | stands in the craft's frame: `lock: "velocity"` (forward the flight, up away from the world), `"craft"` (its own axes), `"stars"` | `VIEWS`: `chase`, `lead`, `three-quarter`, `side`, `shoulder` (toward `target`), `small` (6 % of the frame over the world), `horizon` (a 300 mm lens along the line that grazes the limb behind the craft); `drift` 1: `breathe` |
-| `zoom(t, {stops, rate, over, hold, ease, direction})` | powers of ten: the distance is multiplied by `rate` (√10) every second through landing points `{subject, distance, hold}` | the middle glides between subjects by a smoothstep of the distance's share of the leg; rests ease in and out over 0.6 s |
+**Checks.** `cam.problems(t, shot, {subject, box, minPixels, height, ground})` returns sentences:
+camera inside a world or within `GROUND_SHARE` of its ground; subject behind the camera, outside the
+frame or `box` (a subject larger than the frame counts while any of its disc is in), under
+`minPixels` (3), hidden behind a world; a craft (not a world: a crescent is meant) in a world's
+shadow cylinder or seen from its unlit side (phase over `UNLIT_PHASE` 150°), with what to do.
+`cam.check(move, {from, to, steps})` samples a move for the same, a path through a world between
+samples, and a jump (a turn over 8× the move's median, over 3° and over 3× both neighbours: a whip
+pan is not a jump).
 
-**Reveal: the timing.** The camera is at angle θ from the point opposite the subject, on a
-circle of radius r round the world (radius R), in the plane that holds the subject's direction
-and is square to `plane` (default `up`: the ride of an equatorial orbit). A far sun's upper edge
-meets the limb when θ = asin(R / r) − σ (σ its angular radius, 0.2665°); the camera is at θ*
-+ `rate` × (time − `at`). For a subject at a finite distance θ* is found by bisection (60
-steps) for where the subject is at `at`. Measured against Step 372's glare on the Earth-like
-world from 446 km, `at: 4`, 0.5°/s: the disc is wholly covered a frame before 4 s (covered
-0.9998), 0.995 at 4.000 s, 0.985 a frame after: the geometry is on time. The glare's light is
-held back by the air at grazing height: its red share is 0.1 % when the sun's edge is 0.10° over
-the hard limb and 2 % at 0.25°. `air` (degrees) adds that to the limb, so `air: 0.1` puts the
-first glimmer on the time; `airMargin(radius, distance, height)` gives the angle of a scale
-height (0.196° there).
+**Cuts** (each one curve read by both scenes from their own time): `discOf(shot, at, radius)` +
+`matchDisc(disc, radius, fov)` → `{distance, place}`; `flashCut(time, cut, {amount, rise, fall})`;
+`warpCut(time, cut, {seconds, split})` (progress for §122.9's `warpAt`).
 
-**The zoom.** `zoomPlan(distances, {rate | seconds, hold, ease})` lays out legs and rests;
-`zoomAt(plan, time)` gives `{distance, power, leg, share, resting, speed}`. On a leg the
-logarithm of the distance is the integral of a speed that rises as a smoothstep over `ease`
-seconds at an eased end and is constant between (closed form), so in the middle of a leg d(t +
-1) / d(t) is exactly `rate` (tested), a leg lasts ln(d₁/d₀) / ln(rate) + ease/2 per eased end,
-and `over` solves for the rate. Between two landing points the middle is A₀ + (A₁ − A₀)
-smoothstep((d − d₀) / (d₁ − d₀)): linear in the distance, not its logarithm, so the middle moves
-in step with the scale and the camera leaves and reaches each landing point along `direction`
-with no kink. `direction` defaults to 40° off `up`: over a world on the side away from it (a
-craft is never behind its world), else toward the first subject's sunlit side. Limit: closer
-than `GROUND_SHARE` (10⁻³) of a world's radius above its ground a sphere is no ground (§122.4);
-`problems` says so. One camera of `vidgen/space-scale` was drawn from 130 m off a ship to 2.6 ×
-10⁹ m and from 4 Earth radii to 3.2 × 10¹² m.
-
-**Lenses.** `LENSES` by name (`ultra-wide` 16 mm, `wide` 24, `wide-normal` 35, `normal` 50,
-`portrait` 85, `long` 135, `tele` 300, `long-tele` 600): the vertical field of view of a 36 ×
-24 mm frame, 2 atan(12 / mm) (50 mm: 27.0°). `frameShare(radius, distance, fov)`,
-`distanceFor(radius, share, fov)`. `loomLens({craft, world, gap, craftShare, worldShare})`
-solves the classic long-lens shot: the lens and the distance at which a craft fills
-`craftShare` of the frame's height and the world `gap` behind it `worldShare`; it also returns
-the world's share with a 24 mm lens at the same craft size (a 15 m craft at 0.2 before the
-Earth 40,000 km behind it at 1.2: a 15.3° lens (89 mm) from 558 m; with 24 mm the Earth is
-0.32).
-
-**Checks.** `cam.problems(t, shot, {subject, box, minPixels, height, ground})` returns
-sentences: the camera inside a world or within `GROUND_SHARE` of its ground; the subject behind
-the camera, outside the frame or its `box` (a subject larger than the frame counts while any of
-its disc is in it), under `minPixels` (3) in radius, or hidden behind a world. `cam.check(move,
-{from, to, steps})` samples a whole move: the same, a path that goes through a world between
-two samples, and a jump (a turn over 8 times the move's median, over 3°, and over 3 times both
-neighbours: a whip pan is not a jump).
-
-**Cuts.** `discOf(shot, at, radius)` and `matchDisc(disc, radius, fov)` → `{distance, place}`: a
-match cut on a disc (a planet to the next shot's sun or porthole, equal in place and size;
-tested to 10⁻⁹). `flashCut(time, cut, {amount, rise, fall})`: three-finish's `flash` amount,
-one curve across a cut on a bar line. `warpCut(time, cut, {seconds, split})`: the progress for
-Step 373's `warpAt`, the cut falling at `split` of the jump. Each is one curve read by both
-scenes from their own time.
-
-**Parts** (`data/web/parts/space-camera.js`, the new kind `camera`, 5): `camera-three-quarter`,
-`camera-crescent`, `camera-fly-by`, `camera-arrival`, `camera-sunrise`: each a move at its key
-moment in a plain three.js scene (the rig without a `SpaceView`). The craft views are shown in
-the guide's words and the step's stills, not as tiles (a tile with a `SpaceView` would leave its
-wrapper on the sheet's shared renderer).
-
-**Measured** (2 cores, SwiftShader). The rig's arithmetic is not measurable beside a frame's
-drawing (a move is some hundred float operations; the reveal of a moon 60 bisection steps).
-Three clips at 640x360, 30 fps: a fly-by of the Earth-like world with a bank and 3-sample motion
-blur (3.6 s), a chase of the ship at 900 km with a push-in (3.6 s; 0.32 s a frame), a zoom from
-130 m off the ship to 4.5 Earth radii (4 s); 11.2 s rendered in 177 s. `vidgen motion check`: 0
-errors, 2 warnings, 2 info: `shimmer` on the fly-by's stars while the camera pans (the same
-warnings without motion blur: the sky's stars at 360 lines, not the move), and the scenes' own
-fades at the cuts. The five tiles: 22 s. In Node: step-to-step change of the camera's speed
-under 5 % of its peak for every move at 400 steps; the subject within its stated place to 10⁻⁹.
-
-**Decisions.** A shot is plain data and the rig holds no state, so a move can be tested in Node
-and called at any time. No three.js import: `apply` only sets fields of the camera it is
-given. The existing `orbit` / `flyThrough` of `vidgen/music-time` stay for music videos' own
-spaces; the space moves need the sun's direction, radii and double precision, so they are
-built on `vidgen/space-scale` and reuse only the shaping functions. The fly-by is a straight
-line in the subject's frame (a true hyperbola belongs to the orbit data: follow a body of a
-`flyby` with `follow`). `sunAhead` is measured from the limb, the thing in the frame. The
-arrival's default is the day side (the first strip, over the night side, showed a black disc
-for six seconds).
-
-**Limits.** With a 300 mm lens the sky of `vidgen/space-sky` is its cube map enlarged (soft
-streaks). A path line of the orbit data is a polyline: at 256 `path_samples` over nine hours a
-craft is up to 14 km off its line in a close-up (give more samples). `follow` with `lock:
-"velocity"` follows the flight, not the craft's turn before a burn. The reveal's `air` is a
-number the author gives, not read from the world. The zoom's default direction can look at a
-world's night side when no sun is known. A subject given as a three.js object is read by its
-`position` (a top-level object).
-
-**Tests**: `tests/test_web_space_camera.py`: 8 default tests (1 s; Node for six): served by its
-import name with one import; the parts; shots, lenses, `loomLens`, the cuts and errors with a
-did-you-mean; every move a function of its time, continuous, its subject in the frame, the
-camera outside the world; the moves' numbers (phase, the sun 0.15 radii off the limb, the
-arrival's level limb at `horizon`, first light at `at` for the sun and a moon, the views, the
-pass); the zoom's constant ratio, rests and `over`, and every sentence of the checks; the rig on
-a stand-in `SpaceView` (float64 `from`, the data-frame quaternion, a flown craft, the held frames
-after the data's end) and on a plain camera; `nearCuts` of `vidgen/space-scale`. One `slow`
-Chromium test draws the five framings (20 s). Stills: `/home/claude/work/scratch/an375/stills/`.
+Parts (`data/web/parts/space-camera.js`, kind `camera`): five framings in plain three.js scenes
+(craft views have no tile: a `SpaceView` tile would leave its wrapper on the sheet's shared
+renderer). Limits: a 300 mm lens shows the sky's cube enlarged; orbit-data paths are polylines (more
+`path_samples` for close-ups); the zoom's default direction can face a night side when no sun is
+known. Tests: `tests/test_web_space_camera.py`.
 
 ### 122.12 Space scenes without code: the `space` scene (Step 376)
 
-The front for everything of Steps 367–375: a built-in scene type `space` that an author or an
-agent writes in `video.yaml` alone. The name fits the types that say what they show (`orbit`,
-`map`, `molecule`) and clashes with nothing (the orbit guide topic's alias `space` stays; the new
-topic is `space-scenes`).
+A built-in scene type `space` written in `video.yaml` alone, the front for §122.3–122.11 (and
+§123.14's additions). Every key, the vocabulary and what YAML does not reach: docs/CONFIG.md#space.
+Guide topic `space-scenes` (the orbit topic keeps its alias `space`).
 
-**How it is built.** `Space` subclasses `Web` (`scenes/space.py`), so everything that treats a
-`web` scene's page treats it the same (`is_web_type`: the render fingerprint's loaded files,
-`vidgen still`, `--jobs`, `--draft`, `vidgen motion check`, the clip cache). Its params are the
-vocabulary below; `page_clip_args` writes the page from them (`scenes/space_page.py`,
-`page_source(params, scene_id)`) to `build/space/<id>.js` (rewritten only when its text changes)
-and hands `make_web_clip` the params of a `script:` scene: `{script: build/space/<id>.js, data:
-{...data, scene_seconds}}`, with `music` / `orbits` exactly as a `web` scene with `music_data` /
-`orbit_data`. So the clip's key holds the page's SHA-256 (every param that changes the picture
-changes the page: tested param by param), `ctx.data`, the orbit and music data; nothing else
-changes for other scenes. `scene_seconds` is the scene's own length (frames less the fade and the
-two spare frames), the end of a single move. No heading is drawn by vidgen (`title:` is the
-page's card); `fade: false` (`outro_seconds`, as `video_clip`'s) cuts without the 0.5 s fade,
-which the music plan's drafts use, so no `space_cut` extension is needed.
+**How it is built.** `Space` subclasses `Web` (`scenes/space.py`), so everything that treats a `web`
+page treats it the same (`is_web_type`: fingerprint's loaded files, `vidgen still`, `--jobs`,
+`--draft`, `vidgen motion check`, the clip cache). `page_clip_args` writes the page
+(`scenes/space_page.py`, `page_source(params, scene_id)`) to `build/space/<id>.js` (only when its
+text changes; written to a temporary file and moved into place, since a `--jobs` render may be
+serving it) and hands `make_web_clip` the params of a `script:` scene: `{script: build/space/<id>.js,
+data: {...data, scene_seconds}}`, with `music` / `orbits` as a `web` scene with `music_data` /
+`orbit_data`. So the clip key holds the page's SHA-256 (every picture-changing param changes the
+page), `ctx.data`, the orbit and music data; other scenes' keys are unchanged. `scene_seconds` = the
+scene's frames less the fade and the two spare frames. vidgen draws no heading (`title:` is the
+page's card); `fade: false` (`outro_seconds`) cuts without the 0.5 s fade.
 
-**The page is plain code.** Generated, not interpreted: each sky, star, world, craft, phenomenon
-and move is a line calling the module's own function with its options as a JSON literal (floats
-written exactly), so the page reads like a hand-written one and `vidgen space-page` can hand it
-over. It keeps everything in one exported object `S` (by name: `S.bodies.Saturn`, `S.craft.Ship`,
-`S.phenomena.Hole`, `S.subjects`, `S.cam`, `S.moves`, `S.view`, `S.step`, `S.finish`); `S.step(t)`
-sets everything to scene time t (the camera first, then reactions, phenomena, worlds, sun, craft,
-light: a function of t alone; three-finish calls it at sub-frame times), `frame(t)` draws through
-three-finish. It imports only shipped modules and one new helper, `vidgen/space-scene`
-(`data/web/modules/space-scene.js`, no three.js): `sceneTime` (seconds or `{bar, beat}` of the
-song → scene seconds, from `ctx.music.score` and `ctx.music.t0`), `moveTrack` (moves one after
-another, the join check), `checkMoves` (vidgen/space-camera's `check` on every frame of every
-move, as notes), `reaction` (a track's hits, notes or level as a function of t, built on
-`vidgen/music-time`), `freeSubject` (a thing standing without orbit data, for the camera),
-`pageNote`. No shipped module before it changed (bytes of three-kit, three-finish, music-time,
-title-cards and the space modules untouched); only the import map gained a name.
+**The page is plain code**, generated, not interpreted: each sky, star, world, craft, phenomenon and
+move is a line calling the module's function with its options as a JSON literal (floats exact), so
+`vidgen space-page` can hand it over. One exported object `S` (`S.bodies.<name>`, `S.craft.<name>`,
+`S.phenomena.<name>`, `S.subjects`, `S.cam`, `S.moves`, `S.view`, `S.step`, `S.finish`); `S.step(t)`
+sets everything to scene time t (camera, reactions, phenomena, worlds, sun, craft, light; a function
+of t alone), `frame(t)` draws through three-finish (FXAA off by default). Every world of the orbit
+data, and a camera's data body that nothing draws, is entered in `S.subjects`. It imports only
+shipped modules plus `vidgen/space-scene` (`data/web/modules/space-scene.js`, no three.js):
+`sceneTime` (seconds or `{bar, beat}` → scene seconds from `ctx.music.score` / `ctx.music.t0`),
+`moveTrack` (moves in sequence, join check), `checkMoves` (space-camera's `check` on every frame of
+every move, as notes; sparse samples report false fly-throughs under large speed-ups), `reaction`,
+`freeSubject`, `pageNote`.
 
-**Two kinds of scene.** With `orbits:` (the `orbit_data` vocabulary, `OrbitData` as it is) every
-world and craft is a body of the data placed by `vidgen/space-scale`'s `SpaceView` (`planet(...,
-{space, body})`, `craft(...).fly(space, {body})`), `scale:` chooses `true` / `enlarged` / `log`
-and, when not true, the page says `space.note()` in a corner (`note: false` leaves it to the
-narration). Without orbits, things stand where `at:` says (metres or lengths with units, the
-data's axes: z up) and are added to the same `SpaceView` (`space.add(object, {at, size})`), so
-depth slices and the floating origin work at any scale (a 10 km black hole and a 60,000 km
-world in one frame). The camera rig is `spaceCamera({space, sun, bodies})`; a free thing is a
-`freeSubject` ({at(t), radius}), a craft that flies the data is its `Craft` (follow can lock to
-it). The sun: the data's Sun when it has one, else a sun far away (`star({direction})`) whose
-default direction, for orbit data around a planet (or the Moon), is where the Sun really is on
-the date (−heliocentric position of the planet, JPL's approximate elements; held for the scene:
-the Earth's moves about 1° a day), else `[1, 0.25, 0.35]` with a note.
+**Two kinds of scene.** With `orbits:` (`OrbitData` as is) every world and craft is a body of the
+data placed by `SpaceView`; `scale:` `true` / `enlarged` / `log`, and when not true the page shows
+`space.note()` (`note: false` leaves it to the narration). Without orbits, things stand at `at:`
+(metres or lengths with units, z up), added to the same `SpaceView` (`space.add(object, {at,
+size})`), so slices and floating origin work at any scale. Rig: `spaceCamera({space, sun, bodies})`.
+The sun: the data's Sun, else a far `star({direction})` whose default, for orbit data around a planet
+(or the Moon), is the Sun's real direction on the date (−heliocentric position of the planet, JPL
+approximate elements, held for the scene; for a `flyby` via `flyby_axes`, §122.3), else `[1, 0.25,
+0.35]` with a note.
 
-**The vocabulary** (CONFIG "`space`" has every key): `seed`, `sky`, `sun`, `orbits`, `scale`,
-`bodies`, `light`, `craft`, `phenomena`, `camera`, `finish`, `music`, `music_data`, `title`,
-`end_card`, `script`, `data`, `fade`. Each section has a few keys of its own (names, where, what
-it is) and takes the options of the module it drives as they are, in snake_case or the module's
-camelCase (`milky_way` → `milkyWay`). Values that name a thing of the module accept `_` for `-`
-(`three_quarter`). Two words were chosen against YAML: a reaction's key is `track:` and an
-aurora's `world:`, because `on:` is the boolean true in YAML 1.1 (PyYAML read `{on: kick}` as
-`{true: kick}`: found on the first music plan draft).
+**Words.** Sections pass the driven module's options as they are, in snake_case or camelCase
+(`milky_way` → `milkyWay`); names accept `_` for `-`. A reaction's key is `track:` and an aurora's
+`world:`, not `on:`, because YAML 1.1 reads `on` as true. **One source of truth:**
+`vidgen/web/space_names.py` reads the modules' own constants from their shipped source (a small
+reader of JS literals: names or quoted keys, method shorthand, `...SPREAD` of another constant in the
+file, nested objects, strings, comments) — worlds, types and options, airs, sky, stars, light,
+exposures, `*_DEFAULTS`, craft, attitudes, each move's `known("<move> options", options, [...])`
+list (`pass` takes `flyBy`'s plus `side`), phases, lenses, views, three-finish and title-card
+options — so a name added to a module is known to `vidgen validate` with nothing copied (a test
+compares camera and title-card lists with Node's).
 
-**One source of truth.** `vidgen/web/space_names.py` reads the modules' own constants from their
-shipped source (a small reader of JS literals: names or quoted keys, method shorthand, `...SPREAD`
-of another constant of the file, nested objects, strings, comments): worlds (`PRESETS`), surface
-types and each type's options (`KINDS[*].defaults` + `COMMON`), airs, ring keys, sky options and
-looks, nebula and galaxy kinds, star kinds and options, light options, exposures, each phenomenon's
-`*_DEFAULTS`, craft kinds with their own options, the kit's and craft's options, attitudes,
-details, every move's option list (its `known("<move> options", options, [...])` call; `pass`
-takes `flyBy`'s and `side`), phases, lenses, views, three-finish's options and groups, and the
-title cards'. A test compares camera and title-card lists with what Node imports. So a world or an
-option added to a module is known to `vidgen validate` with nothing copied.
+**Checks.** `vidgen validate` (did-you-mean): keys and names; with orbits, worlds and craft are data
+bodies (no `at`, `radius`, `tilt`; `fly:` needs orbits); unique names; moves in order, not
+overlapping, each with `over` when there are several, subjects known; lengths in move options (`2.6e9`
+read as text is metres); bars only with `music_data`; reaction targets (the Sun's glare, the sky, a
+black hole's disc, a warp, a craft's lights / throttle / rcs; never a world, which reflects the sun,
+nor the camera); the script file. What the page builder refuses later is a `VidgenError`. `vidgen
+lint`: `space_scene` (`lint/space_rule.py`, warning, `degrees` 12: a globe turning over 12° a frame,
+an enlarged body past another's middle, free worlds inside each other); `orbit_scale` reads `scale:`.
+At load the page leaves what only it knows in `globalThis.__vidgenNotes`, which `WebPage` reads after
+`load` (`WebPage.notes`) and logs as warnings (any page may use it; no key changes). A move not
+starting where the previous left the camera (1 % of the distance, 1°, 0.5° of fov) stops the page
+with both names unless it says `cut: true`.
 
-**Checks.** At `vidgen validate` (pydantic, did-you-mean): every key and name; what goes with
-orbits (a world or craft is a body of the data; no `at`, `radius` or `tilt` there; `fly:` needs
-orbits); unique names; the camera's moves in order, not overlapping, each with `over` when there
-are several, subjects known; times in bars only with `music_data`; reaction targets (the Sun's
-glare, the sky, a black hole's disc, a warp, a craft's lights / throttle / rcs; a world is
-refused: it reflects the sun; never the camera); the script file. In `vidgen lint`: the new rule
-`space_scene` (`lint/space_rule.py`, warning; `degrees` 12): a globe turning more than 12° a frame
-(from the orbit data's first two frames and the rotation periods, or a stated `spin`), an enlarged
-body reaching past another's middle, free worlds inside each other; and `orbit_scale` now reads a
-space scene's `scale:` (narration saying "to scale" while bodies are enlarged or distances logged).
-When the page loads it leaves what only it can know in `globalThis.__vidgenNotes`, which
-`WebPage` reads after `load` and logs as warnings (`scene 'x': camera[1] (fly-by): at 0.00 s: Hole
-is 2.5 px in radius, under 3 ...`), in `vidgen still` and when a clip is drawn (a channel any page
-may use; nothing in a key changes). A move that does not start where the one before left the
-camera (1 % of the distance, 1°, 0.5° of field of view) stops the page with both names unless it
-says `cut: true`: a jump is never drawn by accident. `checkMoves` samples every frame: at 25 steps
-a chase under a speed-up of 6000 was reported as flying through the Earth (a chord between two far
-samples).
+**Music.** `music_data` as on a `web` scene (kept explicit: the fingerprint and music-data
+preparation read it from the raw params). Reactions `{track, pulse | glow | glint: THING, as, amount,
+decay}`: pulse = `hitEnvelope`, glint = `noteEnvelope`, glow = `signalLevel` (or `ctx.music.level`
+for `track: level`); brightness → `base × (1 + amount × v)`, throttle `min(1, amount × v)`, lights `1
++ amount × v`. Bars (`over: ['bar 9', 'bar 13 beat 3']`) count from 1 in song time, so a move stays
+on the music however the film is cut.
 
-**Music.** `music_data` as on a `web` scene (kept explicit: the render fingerprint and the music
-data's preparation read it from the raw params). Reactions `{track, pulse | glow | glint: THING,
-as, amount, decay}`: pulse = `hitEnvelope` of the track's hits, glint = `noteEnvelope` of its
-notes, glow = `signalLevel` (or `ctx.music.level` for `track: level`); brightness becomes
-`base × (1 + amount × v)`, a craft's throttle `min(1, amount × v)` and lights `1 + amount × v`.
-Bars: `over: ['bar 9', 'bar 13 beat 3']`, bars and beats counted from 1 as the plan prints them,
-in song time, so a move stays on the music however the film is cut.
+**Escape hatches.** `script:` (a project module imported by absolute URL): `setup(S)` once after
+build, `frame(t, S)` at the end of each `S.step`. `vidgen space-page PROJECT --scene ID [--out]
+[--force] [--json]` (MCP `space_page`: `scene`, `project`, `out`, `force`; `--out` stays in the
+project folder) writes `extensions/<id>.js` (its first two lines say it is the author's now) and
+prints the replacing `web` scene (`script`, `data: {scene_seconds}`, `orbit_data`, `music_data`);
+stills of both are identical.
 
-**Escape hatches.** `script:` (a module of the project, imported by absolute URL): `setup(S)` once
-after everything is built (it may add objects, replace `S.view` or a world), `frame(t, S)` at the
-end of each `S.step`. `vidgen space-page PROJECT --scene ID [--out] [--force] [--json]` writes the
-page as `extensions/<id>.js` (its first two lines say it is the author's now) and prints the
-`web` scene that replaces it (`script`, `data: {scene_seconds}`, `orbit_data`, `music_data`): a
-still of the space scene and of that web scene are identical, pixel for pixel (checked on demo
-(a)). The command sits beside `vidgen still` as a command of its own; `vidgen music plan`'s
-starter pages are a different thing (pages to edit from the start).
-
-**`vidgen music plan --style space`** (`music_space_plan.py`; the default `--style web` output is
-byte-identical to before: the three examples' drafts diffed against the starting commit's module).
-The plan is the same; each cut becomes a `space` scene by rules, deterministic from the score and
-`--seed`: role → move (quiet: arc to a crescent, the first quiet scene a sunrise whose first light
-is on the first section start inside it, else its last phrase line; build: arrive; verse: a chase
-of a craft passing the world; drop / climax: fly-by, pass or warp, never two warps running); the
-scene's base colour → a family (gold, red, violet, blue, green, pale by hue and saturation) → a
-ready-made world of those colours; one sky seed for the film, its look by role; the plan's grade;
-the pulse track pulses the sun (or the warp), glow and glint drive the craft. `fade: false`, the
-move over the scene's bars, an opening title and an end card. For pass and chase, `around:` the
-world (a free scene has no parent to level on: without it the first draft's pass did not show
-Jupiter). The three film scores give 12, 13 and 3 scenes that validate.
-
-**Measured** (2 cores, SwiftShader; `vidgen still`, a frame after the first): (a) Saturn and a
-moon through the finish, 1280x720, 1.0 s a frame (480x270: 0.2 s), page ready 12 s at 720p
-(5 s at 480x270: the maps' bake); (b) a ship on its transfer with Earth, 0.7 s (page 13 s); (c) a
-black hole filling the frame, 1.8 s (page 8 s); a still includes the PNG. `--draft` of (c)
-(426x240, 8 fps, 6 s): 21 s for the scene; `vidgen motion check`: 0 errors, 2 warnings (stars
-shimmer at 8 fps; the warp's own entry flash). Writing the page: a few ms (the reader of the
-module constants runs once a process, about 0.1 s).
-
-**Found on the way.** Step 374's burn is shown for `seconds` of the scene and turned to over
-`turn` seconds, not scaled by the speed-up: at 6000× a 3 s turn is half an orbit, and the ship
-points along a burn while it is on the other side of the Earth (demo (b) gives `burn: {seconds:
-0.6, turn: 0.4}`); for Step 378. The black hole, the warp and the asteroid field work through
-`SpaceView` (placed camera-relative; drawn: (c)).
-
-**Not reached from YAML yet** (the modules have them; `script:` or `vidgen space-page`): the kit's
-own parts (`craftKit`, `attach`), a wormhole passage, `spiralGalaxy` in the foreground, a belt
-round a world of the orbit data at a size of its own, a comet's scale with orbit data (taken as
-`size`, default 1e8 m, not looked at), `flashCut` / `warpCut` / `matchDisc`, `craftEnvironment`
-updates, the sun's `occluders` beyond craft, `light.directional` tuning.
-
-**Tests** (`tests/test_space_scene.py`, 63 default, about 4 s; Node for three): the JS-literal
-reader; the names against the modules and Node; the demos validate; 33 mistakes each named with
-the closest word; what goes with orbits; the page stable and its contents; 16 params each
-changing the page; exact floats; only shipped imports; `node --check` of four pages; the helpers
-in Node (bars, the join error, cuts, order, checks as notes, reactions); validate of `script:`;
-`vidgen space-page` (text, JSON, errors); the lint (fast globe, enlarged cover, "to scale", worlds
-inside each other, a calm scene clean); the music plan (deterministic, seed, validates, no
-extensions). `slow`: a space scene drawn in Chromium at 160x90 (9 s).
+**`vidgen music plan --style space`** (`music_space_plan.py`; the default `--style web` is
+unchanged): each cut of the plan becomes a `space` scene by rules, deterministic from the score and
+`--seed`: role → move (quiet: arc to a crescent, the first quiet scene a sunrise on its first section
+start, else its last phrase line; build: arrive; verse: a chase; drop / climax: fly-by, pass or warp,
+never two warps running); base colour → a colour family → a ready-made world; one sky seed, look by
+role; the plan's grade; pulse → the sun (or the warp), glow and glint → the craft; `fade: false`;
+title and end card; pass and chase get `around:` the world. Tests: `tests/test_space_scene.py`.
 
 ### 122.13 The example film: `examples/outbound` (Step 377)
 
-"Outbound" shows how little a space film needs: `video.yaml` (five `space` scenes, no `script:`),
-one score file and a README. 1280x720, 30 fps, 18 bars at 75 BPM = 57.6 s.
+`video.yaml` (five `space` scenes, no `script:`), one score (`assets/music/outbound.yaml`, 17
+tracks) and a README; 1280x720, 30 fps, 18 bars at 75 BPM = 57.6 s. A beat is 24 frames and a bar 96
+(3.2 s), so scene lengths (16, 9.6, 9.6, 3.2, 19.2 s) are whole frames and every cut is a bar line
+(`fade: false`). Times inside a scene are bars of the song counted from 1 (`at: 'bar 4'`); the end
+card's `start` is seconds of its scene.
 
-**Bars and frames.** 75 BPM makes a beat 24 frames and a bar 96 frames (3.2 s), so scene lengths
-(16, 9.6, 9.6, 3.2 and 19.2 s) are whole frames and every cut is a bar line (`fade: false`). Times
-inside a scene are written in bars of the song counted from 1 (`at: 'bar 4'`, `over: ['bar 9',
-'bar 10']`); the end card's `start` is seconds of its scene (12.8 = four bars).
-
-| Bars | Scene | Parts | What is timed to the music |
+| Bars | Scene | Parts | Timed to the music |
 |---|---|---|---|
-| 1–5 | `01_dawn` | sky, Earth-like world, the default sun, `reveal`, `title` | first light on bar 4 (`air: 0.1`); `pulse: Sun` on the taikos |
-| 6–8 | `02_depart` | `orbits:` (an orbit 2,000 km up, a burn, a date, 150×), craft `ship`, `follow` with a view of its own | the burn at "8 min" = 3.2 s = bar 7 |
+| 1–5 | `01_dawn` | sky, Earth-like world, default sun, `reveal`, `title` | first light on bar 4 (`air: 0.1`); `pulse: Sun` on the taikos |
+| 6–8 | `02_depart` | `orbits:` (orbit 2,000 km up, a burn, a date, 150×), `ship`, `follow` with its own view vector | the burn at bar 7 |
 | 9–11 | `03_rings` | `orbits:` with `flyby`, Saturn, craft, `arc` then `follow` after `cut: true` | the cut on bar 10 |
-| 12 | `04_jump` | a free craft with `throttle`, `warp`, chase view | `glow: Jump` on the timpani roll |
-| 13–18 | `05_horizon` | `black-hole`, `fly-by` (`before: 3`, `after: 6`: closest a third of the way in), `end_card` | `pulse: Hole` on the taikos; the card on bar 17 |
+| 12 | `04_jump` | free craft with `throttle`, `warp`, chase view | `glow: Jump` on the timpani roll |
+| 13–18 | `05_horizon` | `black-hole`, `fly-by` (`before: 3`, `after: 6`), `end_card` | `pulse: Hole` on the taikos; the card on bar 17 |
 
-**True and chosen.** The burn's size is computed, not picked: `orbits.hohmann` from the Earth's to
-Saturn's orbit gives 10.289 km/s over the Earth's speed at departure and 5.443 km/s under Saturn's
-at arrival; from a circular orbit at 2,000 km, √(v∞² + 2μ/r) − √(μ/r) = 7.280 km/s (the example's
-test recomputes both). After the burn the ship is on the hyperbola the orbit model gives. The
-fly-by is the model's hyperbola with that arrival speed. Chosen and said so in the README: where on
-the orbit the burn happens (for the light and bar 7), the sun's direction in the fly-by scene, the
-jump and the black hole.
-
-**Light.** Every shot was checked for a lit subject (Step 376's chase view was nearly black). The
-departure starts 17° past the dawn line with the sun ahead of and above the ship and is seen from
-above and ahead, so the camera looks at lit surfaces with the day side behind them; the fly-by's
-sun stands 18° from the direction of the closest pass, so the camera on the side away from the
-planet has it behind; the jump has its sun behind and above the chase camera.
-
-**Why `follow` has a view of its own.** With the default `lock: velocity`, a named view loses the
-world once the flight turns radial (after an escape burn, on a hyperbola's arms): "up" is the part
-of "away from the world" square to the flight. A direction with a large share of up and some of
-forward (`[0.4, 1.0, 0.7]`) keeps the world behind the craft through the burn and after it. On the
-fly-by the world is in the frame only near the pass, hence `reach: 1.6` (the smallest allowed) and
-the establishing `arc` before the cut.
-
-**The fix.** `space_page.py` did not enter a world of the orbit data in `S.subjects`, so a move with
-such a world as its subject stopped the page at load. It now writes `S.subjects["Saturn"] =
-"Saturn";` (a body's name is a subject for the rig on a `SpaceView`). Pages of scenes with
-`orbits:` and `bodies:` change by that line (their clips are drawn again).
-
-**The score** (`assets/music/outbound.yaml`, 17 tracks): dawn 3 | light 2 | depart 3 | rings 3 |
-jump 1 | horizon 4 | end 2. One theme for four horns in unison (D4 up to A4, down by step), no
-note above D5, a men's choir (`mm`, `ooh`, `oh`, `aah`), no solo voice, no organ, no bells.
-Measured on the rendered score (48 kHz, before the film's normalisation of +14 dB to −14 LUFS):
-
-| Section | Loudness (LUFS, approx.) | Peak (dBFS) | L/R correlation | Share under 250 Hz |
-|---|---|---|---|---|
-| dawn | −39.3 | −23.5 | 0.69 | 83 % |
-| light | −32.0 | −19.3 | 0.64 | 48 % |
-| depart | −33.0 | −17.2 | 0.67 | 59 % |
-| rings | −28.0 | −15.5 | 0.67 | 43 % |
-| jump | −28.6 | −14.1 | 0.62 | 34 % |
-| horizon | −24.0 | −13.1 | 0.66 | 33 % |
-| end | −31.1 | −14.8 | 0.60 | 36 % |
-
-Whole piece: true peak −13.1 dBTP at −28 LUFS (so about +0.9 dBTP of room is needed at −14: the
-film's limiter holds −1.5 dBTP; the draft's mix measured −14.1 LUFS, −1.9 dBTP); summed to mono the
-level falls by 0.8 to 1.0 dB; the 2–5 kHz band is 14 dB under the whole in the climax and 11 dB in
-the jump (the snare roll and cymbal). The low share is high in the quiet sections by design (basses,
-low brass and a men's choir carry them); nobody has listened.
-
-**Measured pictures** (2 cores, software GL). Single frames at 1280x720 with `vidgen still`: dawn
-1.0 s, departure 1.1 to 1.6, rings 0.7 to 1.6, jump 1.0, black hole 1.0 to 1.7; pages ready in 8 to
-14 s. The film was not rendered at full size: 1,728 frames are estimated at 35 to 45 minutes. One
-draft (426x240, 8 fps): 2 min 58 s; `vidgen motion check --draft --subject all`: 0 errors, 4
-warnings (stars shimmer at 8 fps in three scenes; the warp's entry flash), 1 info, nothing lost or
-blank.
-
-**Tests**: `tests/test_outbound_example.py` (4, no render): the folder is source only and
-validates; five `space` scenes without `script`, each starting on a bar line, 18 bars in all, the
-sunrise on bar 4, the title without a link, the end card's credit and link; the burn and the
-fly-by speed recomputed with `orbits.hohmann`; the score's hash, 17 tracks, no range warnings, the
-tracks the scenes name. `tests/test_space_scene.py` checks the subject line of the fix.
+**True and chosen.** The burn's size is computed with `orbits.hohmann` (Earth → Saturn: v∞ at
+departure; from a 2,000 km circular orbit √(v∞² + 2μ/r) − √(μ/r) = 7.280 km/s); the fly-by is the
+model's hyperbola with the arrival speed (the example's test recomputes both). Chosen and said in
+the README: where on the orbit the burn happens, the jump and the black hole. Every shot has a lit
+subject (departure seen from above and ahead with the day side behind; jump with the sun behind
+the chase camera). `follow` uses a view vector (`[0.4, 1.0, 0.7]`) because with `lock: velocity` a
+named view loses the world once the flight turns radial; the fly-by uses `reach: 1.6` (the
+smallest allowed) and an establishing `arc` before the cut. Tests:
+`tests/test_outbound_example.py` (no render).
 
 ### 122.14 Review of Phase AN (Step 378)
 
-The code of Steps 367–377 was read again with the faults the coordinator collected from the stills
-(`an378-review-notes.md` in the step's scratch folder). What was found, what changed, and why.
-
-**Fixed (with tests).**
-
-- **A long lens's sky** (`vidgen/space-sky`, `VERSION` 2). Under a 300 mm lens a texel of the 1024
-  cube spans 14 px: the faint stars baked into the cube became soft blobs and the band's clouds
-  (noise squeezed across the band, so long along it) vertical streaks behind a craft. The sky's
-  shader measures a texel in pixels (`fwidth` of the view direction) and past `LENS_PIXELS` 2.5
-  reads the cube at level `LENS_SOFT` × log2(texels / 2.5) (1.5): at 1280x720 a normal or wider lens
-  reads level 0 as before, a portrait lens about 1, a 300 mm lens 3.7 (1.1° texels: a smooth glow);
-  the stars are points and stay sharp. Same light (a level is the mean). A larger cube chosen by
-  lens was not taken: 2048 costs 20 s and 270 MB and still blurs at 300 mm.
-- **An unlit subject said** (`vidgen/space-camera`). Step 376's demo (b), a black ship on stars,
-  was honest: the ship was in the Earth's shadow from 0.6 s. `problems()` (so `checkMoves`, every
-  frame of each move) now says when a craft (not a world: a crescent is meant) is in a world's
-  shadow (the shadow's cylinder) or seen from its unlit side (phase over `UNLIT_PHASE` 150°), with
-  what to do. `follow` takes `side` (`left`, `right`, `sun`: the view's right component turned to
-  the sun's side of the flight). The default side was not changed (it would change shots already
-  liked, and does not help in a shadow).
-- **Burns under a speed-up** (`vidgen/space-craft`). A burn shown for `seconds` and turned to over
-  `turn` seconds of the scene pointed along the burn's instant's fixed Δv, so at 6000× the nose
-  pointed along the burn from half an orbit away. The turn and the burn now keep the Δv's parts in
-  the flight's own axes (along the velocity, out from the parent, across the plane) at their
-  instant (`_thrustAt`): a prograde burn stays prograde. The orbit keeps its exact impulsive Δv;
-  seconds and turn stay scene seconds (a stated choice: visible at any speed-up).
-- **`shimmer` warnings** (`motion_check`). Evidence: 16 lossless frames (`vidgen still --frame`)
-  of a fly-by's pan at 640x360: the stars moved 12–30 px a frame; the meter, which looks for a
-  star within 4 px, compared unrelated stars (median "shimmer" 0.44); followed with the pan's
-  shift, the same stars' light changed by 6–13 %. A warp's streaks (2,200 peaks a frame) gave 0.21.
-  The check was wrong, not the sky. `_shared_shift` takes the shift most of the 300 brightest
-  stars share between frames (a vote of their displacements within `shimmer_reach` 48 px) out
-  before looking; only point stars count (`shimmer_point`: 60 % of the light within 3 px lies
-  within 1 px); a frame is judged only when most stars are found again as stars there. The pan now
-  measures 0.06–0.13 and the warp is not judged. On Outbound's 8 fps draft the three `shimmer`
-  warnings are gone (the warp's own flash stays: it is the effect). An 8 fps draft needs no rule of
-  its own: its pans are followed like any pan. Synthetic tests: a 12 px pan is quiet, aliasing in
-  that pan is found, streaks flying out are quiet.
-- **A fly-by's frame** (`orbit_data`, `ORBIT_DATA_VERSION` 2; `orbits.ephemeris.flyby_axes`). The
-  fly-by's positions are in the planet's frame (x along its motion round the Sun), but its pole
-  (its rings) and the space scene's default sun were in the ecliptic frame. Both are now turned
-  into the fly-by's frame from the planet's motion on the date (JPL's elements): the Sun stands on
-  +y (Saturn in 2033: [−0.004, 1, 0]), the rings tilted to it as they are that day. Outbound's
-  `03_rings` drops its hand-set sun.
-- **A transfer's departure alone** (`orbit_parts`). A scene whose span ends between the two burns
-  was refused; it now shows the departure (refused only when the first burn is late, with
-  `transfer.depart` named as the way out). The flat `orbit` scene accepts the same.
-- **Dated speed-ups** (`orbit_data`). `OrbitData`'s validation built the model over its default
-  span (one period of the first body) and refused Halley's comet on 1986-02-09 at 200,000× ("the
-  scene ends on 2061"). With a speed-up the stand-in span's dates are not checked
-  (`check_dates`); the data made for the scene's length is.
-- **The space page** (`scenes/space_page.py`, `space.py`). A camera naming a body of the orbit data
-  that nothing draws (a comet's body) had no subject (the page stopped); it is now one. Lengths in
-  a move's options (`zoom` stops) are checked at `vidgen validate`, a number YAML reads as text
-  (`2.6e9`) is metres, and a value the checks let through is the scene's `VidgenError`, not a
-  traceback. `build/space/<id>.js` is written to a temporary file and moved into place (a render
-  of `--jobs` may be serving it).
-- **Page load** (`web/page.py`): `LOAD_TIMEOUT_S` 30 → 90 s. A 2048 world map takes 30.4 s to bake
-  on 2 cores (measured), 1024 7.8 s, 512 1.0 s (Earth-like; a cratered moon 1024 13.6 s).
-- **The crewed ship's tanks** (`vidgen/space-craft`): foil (gold twice as often as silver), never
-  plain white paint, which read flat (an374 still 05). The station was looked at again and left:
-  panel lines, windows, shadows and foil already break it up.
-- **The `space` gallery entry** and `gallery.py`: a star field under a moving camera changes every
-  pixel every frame, so its GIF and stills were three times an entry's share. A still heavier than
-  `STILL_MAX_BYTES` (80 kB) is saved with fewer colours (64, 32, 16), a GIF that needs fewer colours
-  is held to `CLIP_NOISY_MAX_BYTES` (95 kB); no existing entry reaches either. The guide's sample
-  says `finish: {grain: 0}`. Entry 0.31 MB; budget 16.5 → 17 MB.
-- **MCP** `space_page` (`scene`, `project`, `out`, `force`); `vidgen space-page --out` stays in the
-  project folder.
-
-**Decided and documented.** Burn seconds stay scene seconds (above). The bake is not cached between
-pages: a cache needs a channel from the page to vidgen for 50 MB a 1024 world, keyed by GPU and
-module, and the bake is a few per cent of a render chunk; the load limit was raised instead. The
-star catalogue: the owner's decision is in §122.6 and every doc. FXAA stays off in space scenes by
-the `space` scene's default; three-finish was not changed (it would re-key the earlier films'
-pages).
-
-**Left** (tasklist, Phase AN leftovers): a spiral galaxy from YAML (tried: it has no turn or
-exposure of its own; the one still was edge-on and burnt out), the kit's own parts, a wormhole
-passage and flash, warp and match cuts from YAML; the follow view that keeps a world behind a
-craft on a radial flight (Outbound's departure rolls); the other leftovers of Steps 368–375.
-
-**Cache keys.** Pages importing `vidgen/space-sky`, `vidgen/space-camera` or `vidgen/space-craft`
-draw again (their bytes changed; no released film uses them), as do scenes with `orbit_data`
-(`ORBIT_DATA_VERSION` 2 and the orbit code's digest). No module shipped before Phase AN changed
-(three-finish, three-kit, music-time, title-cards); the earlier films' pages and score audio keep
-their keys (the scene fingerprint of `vidgen storyboard`, which holds vidgen's whole source, changes with any step).
-
+The review's fixes are folded into the sections above: the long-lens sky (§122.6), unlit-craft
+checks and `follow` `side` (§122.11), burns under a speed-up (§122.10), `shimmer` following a pan
+(§122.5), the fly-by frame and dated speed-ups (§122.3), the space page's subjects, length checks
+and atomic write, MCP `space_page` (§122.12). Others:
+- **A transfer's departure alone** (`orbit_parts`): a span ending between the two burns shows the
+  departure; refused only when the first burn is late, naming `transfer.depart` as the way out.
+  The flat `orbit` scene accepts the same.
+- **Page load** (`web/page.py`): `LOAD_TIMEOUT_S` 90 s (a 2048 world map bakes in ~30 s on 2 cores).
+  The bake is not cached between pages: a cache would need a page → vidgen channel for ~50 MB per
+  1024 world, keyed by GPU and module, while the bake is a few per cent of a render chunk.
+- **Gallery** (`gallery.py`): a still heavier than `STILL_MAX_BYTES` (80 kB) is saved with fewer
+  colours (64, 32, 16); a GIF that needs fewer colours is held to `CLIP_NOISY_MAX_BYTES` (95 kB) (a
+  star field under a moving camera changes every pixel every frame). The `space` gallery sample
+  uses `finish: {grain: 0}`.
+- three-finish is unchanged by Phase AN (changing it would re-key the earlier films' pages); FXAA
+  stays off in space scenes by the `space` scene's default.
 ## 123. Air, planes and giant ships (Phase AO, Steps 379–394)
 
 Flight inside atmospheres (sky from inside, ocean, cloud decks and gas giants, terrain; no
